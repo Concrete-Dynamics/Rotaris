@@ -1,10 +1,12 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { RUN_AGENT_ID, type AgentRecord, type QuestionPrompt, type TranscriptRow } from '@rotaris/contracts';
+import { RUN_AGENT_ID, skillListing, skillListingBody, type AgentRecord, type QuestionPrompt, type SkillRow, type TranscriptRow } from '@rotaris/contracts';
 import { trailerRows } from './transcript/project.js';
 import {
   compactTask, defaultExpanded, delegationSummary, expansionKey, groupDurationMs, groupSeverity, groupSummary, isLiveTerminalRow,
-  personaColourToken, placements, reasoningSummary, rowKey, rowMenuEntries, rowRole, rowTask, rowTime, stalledLabel, stripOutcomeGlyph,
-  THINKING_LIVE_CUTOFF_MS, toolOutcome, trailerText, type DisplayRow,
+  personaColourToken, placements, reasoningSummary, Row, rowKey, rowMenuEntries, rowRole, rowTask, rowTime, stalledLabel, stripOutcomeGlyph,
+  THINKING_LIVE_CUTOFF_MS, toolOutcome, trailerText, TranscriptSurfaceProvider, type DisplayRow,
 } from './transcript/Row.js';
 import { RUN_OWNED_KINDS, SCOPE_NO_AGENT, scopedRows } from './TranscriptSurface.js';
 
@@ -298,5 +300,40 @@ describe('rows — REQ-CHAT-068/069, delegation and scope', () => {
       row({ index: 2, kind: 'agent', name: 'helper', persona: 'coding-agent' }),
     ];
     expect(scopedRows(rows, runLevel).map((r) => r.index)).toEqual([0, 1]);
+  });
+});
+
+describe('rows — REQ-CHAT-162 / REQ-CHAT-076, the `/skills` listing keeps a bare URL activatable', () => {
+  // The one drawing asserted here rather than only in a launch: whether a link element exists at all is a fact of the
+  // static markup, and the listing is the one system row that stopped going through `PlainText` whole.
+  const skill = (over: Partial<SkillRow>): SkillRow => ({
+    name: 'pdf', declaredName: 'pdf', description: '', path: '/ws/.agents/skills/pdf/SKILL.md', directory: '/ws/.agents/skills/pdf',
+    scope: 'project', triggers: [], shadowed: [], loadMode: 'name-only', invocationMode: 'default', forcedThisSession: false, userInvocable: true,
+    ...over,
+  });
+  const drawn = (body: string, openLink: ((href: string) => void) | undefined) => renderToStaticMarkup(createElement(TranscriptSurfaceProvider, {
+    value: { showReasoning: false, autoCollapseTools: false, runActive: false, nowMs: 0, openLink },
+    children: createElement(Row, { display: display(row({ kind: 'system', body })), expanded: false, onToggle: () => undefined, match: null }),
+  }));
+
+  it('draws a URL in a description as the one link form, its trailing punctuation left out of the target', () => {
+    const body = skillListingBody(skillListing([skill({ description: 'Renders PDFs, see https://example.com/docs.' })]));
+    const markup = drawn(body, () => undefined);
+    expect(markup).toContain('data-testid="skill-listing"');
+    const description = markup.slice(markup.indexOf('skill-listing__description'), markup.indexOf('skill-listing__path'));
+    expect(description).toContain('md__link');
+    expect(description).toContain('data-href="https://example.com/docs"');
+    expect(description).not.toContain('data-href="https://example.com/docs."');
+    expect(description).not.toMatch(/<button[^>]*disabled/);
+  });
+
+  it('with no opener the link is drawn inert, exactly as a plain notice draws one (ADR-0051)', () => {
+    const body = skillListingBody(skillListing([skill({ description: 'See https://example.com/docs' })]));
+    expect(drawn(body, undefined)).toMatch(/<button[^>]*disabled[^>]*data-href="https:\/\/example.com\/docs"|<button[^>]*data-href="https:\/\/example.com\/docs"[^>]*disabled/);
+  });
+
+  it('a listing whose fields hold no URL draws no link at all', () => {
+    const body = skillListingBody(skillListing([skill({ description: 'Renders PDFs.' })]));
+    expect(drawn(body, () => undefined)).not.toContain('md__link');
   });
 });

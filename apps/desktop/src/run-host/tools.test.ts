@@ -6,7 +6,7 @@ import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
 import { TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset } from '@rotaris/contracts';
 import { loadConfiguration } from '@rotaris/config';
 import { anySchema, gitReadTool, permissivePolicyRead, simpleExecutor, TodoList, todoTool, type ToolExecutor } from '@rotaris/agent-tools';
-import { SessionWriter, type ToolPortContext } from '@rotaris/engine';
+import { SessionWriter, UserPresence, type ToolPortContext } from '@rotaris/engine';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { personaResolverFor, runtimeFromConfiguration, type ConfiguredRun } from './configuration.js';
 import type { McpHost } from './mcp.js';
@@ -113,15 +113,18 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
   const presented: ApprovalPayload[] = [];
-  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor'> = {}, surface: { tools?: string; mcp?: readonly ToolExecutor[] } = {}) {
+  /** The port's clocks, advanced by the PD-TOOLS-005 case to expire an approval wait. */
+  let portClock = new FakeClock();
+  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor' | 'planGateHeld' | 'presence'> = {}, surface: { tools?: string; mcp?: readonly ToolExecutor[] } = {}) {
     mkdirSync(join(dir, '.rotaris'), { recursive: true });
     writeFileSync(join(dir, '.rotaris', 'agents.yaml'), yaml(pin, surface.tools ?? null));
     const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
     if (!loaded.ok) throw new Error('configuration');
     const cfg = loaded.value;
     const resolver = personaResolverFor(cfg, true, (m) => warnings.push(m));
+    portClock = new FakeClock();
     const deps: ToolPortDeps = {
-      clocks: new FakeClock(), runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver,
+      clocks: portClock, runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver,
       presenter: { present: async (p) => { presented.push(p); return { ok: true }; }, close: () => undefined },
       nextSequence: () => 1, fileStates: new Map(), terminal: null,
       egress: () => permissivePolicyRead,
@@ -136,6 +139,40 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
       requestedMode: 'ask', modeOverride, attended: () => true, warn: (m) => warnings.push(m), abortRun: () => undefined, ...extra,
     }, deps);
   }
+
+  /**
+   * PD-TOOLS-005 through the real port: the engine's away holder reaches the gate, which marks it when the configured
+   * wait (`runtime.approval_timeout_seconds`, 300 s here) expires unanswered and, while it is marked, resolves the next
+   * ask at once with the directive's reason and presents nothing. The return is the engine's (`sessions.ts`); here the
+   * holder is cleared directly, and the following ask is brokered again.
+   */
+  it('PD-TOOLS-005: the run\'s away holder reaches the gate — marked by the expired wait, read before the next prompt, brokered again after the return', async () => {
+    const lines: string[] = [];
+    const presence = new UserPresence({ record: (m) => lines.push(m) });
+    const port = portFor(null, null, { presence });
+    const call = (id: string, path: string) => ({ callId: id, name: 'write_file', rawArgs: JSON.stringify({ operation: 'create', path, content: 'x' }), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' });
+    const first = port.dispatch(call('c1', 'a.txt'), new AbortController().signal);
+    await vi.waitFor(() => expect(presented).toHaveLength(1));
+    portClock.advance(299_999);
+    expect(presence.away()).toBeNull();
+    portClock.advance(1);
+    const r1 = await first;
+    expect(r1).toMatchObject({ status: 'blocked', isError: true });
+    expect(r1.blockedReason).toMatch(/Denied because no answer arrived within 300 seconds\.$/);
+    expect(presence.away()).toEqual({ afterSeconds: 300 });
+    expect(lines[0]).toMatch(/^user away: an approval in this run went unanswered for 300 seconds/);
+    const r2 = await port.dispatch(call('c2', 'b.txt'), new AbortController().signal);
+    expect(presented).toHaveLength(1);
+    expect(r2.status).toBe('blocked');
+    expect(r2.blockedReason).toBe("No rule matched; permission mode 'ask' defaults to ask. The user is treated as away because an earlier approval in this run went unanswered for 300 seconds, so the request was denied.");
+    expect(existsSync(join(dir, 'b.txt'))).toBe(false);
+    presence.returned();
+    const third = port.dispatch(call('c3', 'c.txt'), new AbortController().signal);
+    await vi.waitFor(() => expect(presented).toHaveLength(2));
+    expect(port.answerApproval(presented[1]!.request_id, 'once')).toBe(true);
+    expect((await third).status).toBe('ok');
+    expect(existsSync(join(dir, 'c.txt'))).toBe(true);
+  });
 
   it('PD-TOOLS-006: the engine\'s write-claim predicate reaches the gate, which refuses a claimed write before it runs', async () => {
     const asked: string[] = [];
@@ -217,6 +254,45 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     // another operation and content on the same path: no dialog, whatever the executor then makes of it
     await again(publicPort, { operation: 'overwrite', path: 'mine.md', content: 'two' });
     expect(presented).toHaveLength(3);
+  });
+
+  /**
+   * An MCP tool offered under a public name is not that public tool (REQ-TOOLS-001 as ADR-0016 reads it): the surface
+   * prefixes a server's tool only when its name is taken, so a server's `read_file` reaches a persona whose public set
+   * lacks one under the plain name, and until 2026-09-28 the policy's class rules and the plan gate's two enforcement
+   * points knew it by that name alone (`docs/defects/fixed/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`).
+   */
+  it('a server\'s own read_file is withheld at the plan gate like any undeclared tool, and is not granted by ask:read-only-tool (REQ-ORCH-153, REQ-TOOLS-043)', async () => {
+    const reads: unknown[] = [];
+    const serverRead = simpleExecutor('read_file', 'a server\'s read_file', anySchema, async (a) => { reads.push(a); return { text: 'read', isError: false }; });
+    const call = { callId: 'r1', name: 'read_file', rawArgs: JSON.stringify({ path: 'notes.md' }), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' };
+
+    const held = portFor(null, 'autonomous', { planGateHeld: () => true }, { tools: '[grep]', mcp: [serverRead] });
+    await held.ready?.();
+    expect(held.specs().map((s) => s.name)).not.toContain('read_file');
+    expect(warnings.some((w) => w.includes("'read_file' is withheld while this run is held at the plan gate"))).toBe(true);
+    const refused = await held.dispatch(call, new AbortController().signal);
+    expect(refused).toMatchObject({ status: 'blocked', isError: true });
+    expect(refused.text).toContain('held at the plan gate');
+    expect(reads).toEqual([]);
+
+    // The same server tool on a run that is not held, under `ask`: the read-only class is the public tools', so it asks.
+    const open = portFor(null, null, {}, { tools: '[grep]', mcp: [serverRead] });
+    await open.ready?.();
+    expect(open.specs().map((s) => s.name)).toContain('read_file');
+    const asked = open.dispatch(call, new AbortController().signal);
+    await vi.waitFor(() => expect(presented).toHaveLength(1));
+    expect(presented[0]).toMatchObject({ tool_name: 'read_file', rule_id: 'preset:ask' });
+    expect(open.answerApproval(presented[0]!.request_id, 'deny')).toBe(true);
+    expect((await asked).status).toBe('blocked');
+    expect(reads).toEqual([]);
+
+    // The public read_file of another persona's port under the same preset is allowed by ask:read-only-tool, no dialog.
+    const publicPort = portFor(null, null, {}, { tools: '[read_file]' });
+    await publicPort.ready?.();
+    writeFileSync(join(dir, 'notes.md'), 'x\n');
+    expect((await publicPort.dispatch(call, new AbortController().signal)).status).toBe('ok');
+    expect(presented).toHaveLength(1);
   });
 
   it('an agent built after a mid-run switch takes the session override, not the start-of-run mode', () => {

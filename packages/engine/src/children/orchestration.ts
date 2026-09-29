@@ -11,7 +11,7 @@ import type { AttachmentOutcome, BackgroundOutput, DelegateOutcome, DelegateRequ
 import { fullContextBlock, siblingIndexBlock, type AttachedResolution } from '../artifacts/context.js';
 import type { ArtifactStore } from '../artifacts/store.js';
 import { ChildLedger, storeChildReport, userCancellation, type Budget } from './ledger.js';
-import { childPayload, completionNotification, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
+import { childPayload, completionNotification, inheritedContextBlock, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
 import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, type CutOff } from './cut-off.js';
 import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver, type RoleName } from './personas.js';
 import { fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
@@ -160,6 +160,12 @@ export class IterationChildren implements DelegationOps {
   private readonly resumeWaiters = new Map<string, () => void>();
   /** REQ-LIBRARY-098: the artifacts each launch attached explicitly, by reference, for as long as the run lives. */
   private readonly attached = new Map<string, readonly string[]>();
+  /**
+   * REQ-TOOLS-152: the inherited-context block of each child that named a completed sibling, rendered at the call
+   * from the reports as they stood then, for as long as the run lives — the same terms as `attached`. The ids
+   * themselves are on the row (`children.inherited_context`); what is remembered here is which of them counted.
+   */
+  private readonly inherited = new Map<string, string>();
   /** PD-TOOLS-006: the live write scopes' claims, in acceptance order, and each child's disclosure as fixed at its acceptance. */
   private readonly claims = new WriteClaims();
   private readonly disclosures = new Map<string, ScopeDisclosure>();
@@ -231,10 +237,14 @@ export class IterationChildren implements DelegationOps {
       ...(scope.patterns.length > 0 ? { writeScope: scope.patterns } : {}),
     });
     if (!r.ok) return { status: 'rejected', canonicalName: req.taskName, message: r.error.reason };
-    const { row, held, aliasResolved } = r.value;
+    const { row, held, aliasResolved, inherited } = r.value;
     // REQ-LIBRARY-098: the attachment list belongs to THIS launch, not to the record — a child does not outlive
     // the run that spawned it, so it is remembered here for the moment the child's payload is assembled.
     const attachments = this.rememberAttachments(row.task_id, req.attachArtifacts ?? []);
+    // REQ-TOOLS-152 / REQ-TOOLS-154 (5): the completed siblings' reports the ledger admitted, rendered now — a terminal
+    // child's report does not change — and read when the payload is assembled, before the pass below can start the child.
+    const inheritedBlock = inheritedContextBlock(inherited);
+    if (inheritedBlock !== '') this.inherited.set(row.task_id, inheritedBlock);
     // PD-TOOLS-006: the claim starts at acceptance, and the disclosure is fixed now — before the pass below, which
     // may start the child and assemble its payload before this call returns.
     this.acceptScope(row, scope.patterns);
@@ -589,7 +599,7 @@ export class IterationChildren implements DelegationOps {
     // store as it stands at launch — a newly created agent is given them, so they are built when its payload is, and a
     // resumed agent, whose payload is already in its record, is given them only if REQ-ORCH-088's retry restarts it.
     let artifactBlocks: readonly string[] | null = null;
-    const payload = (): string => childPayload(deps.workspaceRoot, row.task, prior, artifactBlocks ??= this.artifactContext(row), writeScopeBlock(this.disclosures.get(row.task_id)));
+    const payload = (): string => childPayload(deps.workspaceRoot, row.task, prior, artifactBlocks ??= this.artifactContext(row), writeScopeBlock(this.disclosures.get(row.task_id)), this.inherited.get(row.task_id) ?? '');
     // PD-ORCH-005 clause 4: a resumed child's first attempt starts from its record; a retry starts from its payload.
     let start: TurnStart | null = resume ? resumedStart(resume.history) : null;
     // The column is written at a rest or a settle, and a crash writes neither, so the record's own calls count too (found

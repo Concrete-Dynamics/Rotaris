@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "The single naming authority for release artifacts (REQ-STARTUP-031), shared by electron-builder, the updater and the portable's assembly step (ADR-0054, ADR-0056).",
+  "description": "The single naming authority for releases: the artifact names (REQ-STARTUP-031) shared by electron-builder, the updater and the portable's assembly step, and the release-tag grammar with its channel (REQ-STARTUP-027, REQ-STARTUP-029) read by the pre-build guard and the updater (ADR-0054, ADR-0056).",
   "exports": {
     ".": "./src/index.ts"
   },

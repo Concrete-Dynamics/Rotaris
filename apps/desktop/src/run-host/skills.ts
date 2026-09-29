@@ -1,5 +1,6 @@
 import { homedir } from 'node:os';
-import type { SkillsState, SkillRow } from '@rotaris/contracts';
+import { skillListing, skillListingBody, type SkillsState, type SkillRow } from '@rotaris/contracts';
+import type { SessionWriter } from '@rotaris/engine';
 import type { MonotonicClock } from '@rotaris/kernel';
 import {
   discoverInstructionFiles, discoverSkills, enabledInstructionFiles, loadManualSkill, mergeInstructionContext,
@@ -7,6 +8,13 @@ import {
   skillBodyBlock, skillCatalogBlock, skillReadRoots,
   type DiscoveredSkill, type DiscoveryPorts, type InstructionFileEntry, type InstructionsSection, type SkillDiscovery, type SkillSessionState, type SkillsSection,
 } from '@rotaris/config';
+
+/** PD-WORKSPACE-002 — what one saved-configuration read answers for the instruction files: the section, the master switch, the global base. */
+export interface InstructionPolicy {
+  readonly section: InstructionsSection;
+  readonly master: boolean;
+  readonly globalDir: string;
+}
 
 /**
  * ADR-0063 — the portable-skill catalog, owned by the run host.
@@ -30,6 +38,13 @@ import {
 export interface SkillHostDeps {
   /** The user's home; injectable so the proof can point discovery at a scratch tree. */
   readonly home?: string;
+  /**
+   * The machine-wide directory both discoveries read under, `/etc/codex` when absent: `PD-WORKSPACE-002`'s
+   * machine-wide instruction base is the directory itself, and REQ-WORKSPACE-051's fourth user-scope skill root is
+   * its `skills` child. Injectable on the same terms as `home`, so a proof lays a file down at that base, and the
+   * catalog tests stage a skill under it, without reading or touching the machine's own.
+   */
+  readonly machineDir?: string | undefined;
   readonly platform?: NodeJS.Platform;
   readonly ports?: DiscoveryPorts;
   /** The SAVED `skills:` section for a workspace — see `forceLoad` on why it is read per gesture. */
@@ -39,7 +54,7 @@ export interface SkillHostDeps {
    * the instruction-file discovery reads its `global` base from. Absent means the workspace pair alone
    * reaches an agent, which is what a build with no configuration layer would give it.
    */
-  readonly instructions?: ((workspaceRoot: string) => { section: InstructionsSection; master: boolean; globalDir: string }) | undefined;
+  readonly instructions?: ((workspaceRoot: string) => InstructionPolicy) | undefined;
   /** ADR-0006: the monotonic clock port. Absent means the discovery log carries no duration, never a global read. */
   readonly monotonic?: MonotonicClock | undefined;
   readonly log: (message: string, level?: 'info' | 'warn') => void;
@@ -94,7 +109,7 @@ export class SkillHost {
     if (held) return held;
     const started = this.deps.monotonic?.now() ?? null;
     const discovery = discoverSkills(
-      { workspaceRoot, home: this.home, platform: this.deps.platform ?? process.platform, exists: (p) => this.ports.isDirectory(p) || this.ports.isFile(p) },
+      { workspaceRoot, home: this.home, platform: this.deps.platform ?? process.platform, machineDir: this.deps.machineDir, exists: (p) => this.ports.isDirectory(p) || this.ports.isFile(p) },
       this.ports,
     );
     this.catalogs.set(workspaceRoot, discovery);
@@ -161,10 +176,28 @@ export class SkillHost {
     const readRoot = executionRoot === undefined || executionRoot === '' ? workspaceRoot : executionRoot;
     const held = this.contexts.get(workspaceRoot)?.get(readRoot);
     if (held !== undefined) return held;
-    const enabled = this.instructionFiles(workspaceRoot, readRoot, 'workspace context');
+    /*
+     * REQ-WORKSPACE-049: the cold path is what the 200 ms bound is stated over, so it is timed here, on the
+     * monotonic clock port, in the three parts it is made of — the saved policy read, the discovery over the
+     * bases, the merge of the enabled set — and said in one line a proof can read back. The policy read is
+     * inside the figure on purpose: `PD-WORKSPACE-002` made the per-file policy part of deciding which files
+     * are merged at all, so a figure without it would bound less than the injection does. A cache hit above
+     * reads no file and is not timed. No clock, no line: never a global read (ADR-0006).
+     */
+    const clock = this.deps.monotonic;
+    const started = clock?.now() ?? null;
+    const policy = this.deps.instructions?.(workspaceRoot);
+    const policyRead = clock?.now() ?? null;
+    const enabled = this.enabledUnder(policy, workspaceRoot, readRoot, 'workspace context');
+    const discovered = clock?.now() ?? null;
     const merged = enabled.length === 0
       ? ''
       : mergeInstructionContext(enabled, this.ports, (m) => this.deps.log(`workspace context: ${m}`, 'warn'));
+    if (clock !== undefined && started !== null && policyRead !== null && discovered !== null) {
+      const ended = clock.now();
+      const ms = (from: number, to: number): string => (to - from).toFixed(2);
+      this.deps.log(`workspace context: the enabled set of ${enabled.length} instruction file(s) merged into ${Buffer.byteLength(merged, 'utf8')} bytes in ${ms(started, ended)} ms (policy read ${ms(started, policyRead)} ms, discovery ${ms(policyRead, discovered)} ms, merge ${ms(discovered, ended)} ms) for ${readRoot}`);
+    }
     const byRoot = this.contexts.get(workspaceRoot) ?? new Map<string, string>();
     byRoot.set(readRoot, merged);
     this.contexts.set(workspaceRoot, byRoot);
@@ -184,12 +217,16 @@ export class SkillHost {
    */
   instructionFiles(workspaceRoot: string, executionRoot?: string, forLog = 'instruction files'): readonly InstructionFileEntry[] {
     const readRoot = executionRoot === undefined || executionRoot === '' ? workspaceRoot : executionRoot;
-    const policy = this.deps.instructions?.(workspaceRoot);
+    return this.enabledUnder(this.deps.instructions?.(workspaceRoot), workspaceRoot, readRoot, forLog);
+  }
+
+  /** The discovery and the decision under a policy already read — split out so `workspaceContext` can time the read apart. */
+  private enabledUnder(policy: InstructionPolicy | undefined, workspaceRoot: string, readRoot: string, forLog: string): readonly InstructionFileEntry[] {
     if (policy !== undefined && !policy.master) {
       this.deps.log(`${forLog}: injection is switched off for ${workspaceRoot}; no instruction file was read`);
       return [];
     }
-    const env = { workspaceRoot: readRoot, globalDir: policy?.globalDir ?? '', home: this.home, platform: this.deps.platform ?? process.platform };
+    const env = { workspaceRoot: readRoot, globalDir: policy?.globalDir ?? '', home: this.home, platform: this.deps.platform ?? process.platform, machineDir: this.deps.machineDir };
     const present = discoverInstructionFiles(env, (p) => this.ports.isFile(p));
     const enabled = enabledInstructionFiles(present, true, policy?.section.overrides ?? {});
     this.deps.log(`${forLog}: ${enabled.length} of ${present.length} instruction file(s) enabled for ${readRoot}${readRoot === workspaceRoot ? '' : ` (the worktree of ${workspaceRoot}, REQ-WORKSPACE-050)`}${enabled.length === 0 ? '' : ` (${enabled.map((f) => f.id).join(', ')})`}`);
@@ -310,4 +347,34 @@ export class SkillHost {
     }
     return units;
   }
+}
+
+/**
+ * REQ-CHAT-162 — `/skills`: the session's catalog, listed into its transcript as **one system row** and saved with
+ * it. The row goes through the session's own writer, the one every other row of that session goes through, so the
+ * three things the requirement and the plan ask of it are what that writer already guarantees rather than three
+ * paths of this module's: the row and its `transcript.row` event commit in one transaction (saved with the session,
+ * and in the trajectory export, which reads those events), the projection owner is fed on commit (drawn in every
+ * window following the session), and a reopened session reads it back from the store like any other row.
+ *
+ * `writer` is `Sessions.writer(sessionId)`: present exactly while the session is loaded in this process, which a
+ * session a window follows is (`session.subscribe` attaches, `session.resume` loads). A live run's writer and a
+ * loaded idle session's are the same object — REQ-CHAT-084's clear relies on the same fact — so the listing lands
+ * in order whether or not a run is going. An absent writer is refused rather than written around: a row appended
+ * under the store alone would skip the event record, the projection and the session's lock.
+ *
+ * The `state` is `SkillHost.state` for that session, so a skill loaded by hand for it (REQ-WORKSPACE-057, scope
+ * `manual`) is listed and one loaded for another session is not. Every discovered skill is listed whatever its load
+ * or invocation policy and whether or not `skills.enabled` is on: the requirement lists "the discovered skills",
+ * and the Settings table lists the same set.
+ */
+export function writeSkillListing(
+  writer: Pick<SessionWriter, 'appendRow'> | undefined,
+  state: SkillsState,
+): { ok: true; count: number; index: number } | { ok: false; code: 'session.not-loaded' | 'skills.list-failed'; reason: string } {
+  if (writer === undefined) return { ok: false, code: 'session.not-loaded', reason: 'The session this window follows is not loaded, so its transcript cannot be written.' };
+  const listing = skillListing(state.skills);
+  const r = writer.appendRow('system', skillListingBody(listing), true);
+  if (!r.ok) return { ok: false, code: 'skills.list-failed', reason: 'reason' in r.error ? r.error.reason : r.error.code };
+  return { ok: true, count: listing.count, index: r.value.index };
 }

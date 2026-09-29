@@ -76,17 +76,63 @@ bridge.onSessionSnapshot((p) => {
  *  - the replica's counters, both sets: ADR-0043's seven publication classes and ADR-0046 step 3's six row ops.
  *  - ADR-0045's structural counts, read from the ONE definition in `@rotaris/ui` rather than restated here.
  */
-const applySamples: { seq: number; rows: number; ms: number }[] = [];
+/**
+ * One apply-to-paint sample. `ms` is REQ-CHAT-055's figure and is unchanged; the rest was added by the measurement
+ * round the defect note `appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript` authorized (R-048), so
+ * that the proof can say WHERE inside the sample the time goes rather than only how much there is:
+ *
+ *  - `sync` — from the increment's arrival to the microtask queued after the replica applied it. React flushes an
+ *    external-store update synchronously in a microtask it queued first, so this covers the render, the commit, the
+ *    layout effects (the tail pin reads `scrollHeight`, a forced layout) and the passive effects that follow them;
+ *  - `frame1` — to the first animation-frame callback: the frame whose rendering steps (style, layout, the
+ *    `ResizeObserver` delivery, paint) show the update;
+ *  - `ms` — to the second, the frame after the showing frame has been committed: the measurement point.
+ *
+ * `kind` says what the increment did to the rows held — `attach` (the resident set arriving after a whole read),
+ * `append` (rows this surface did not hold), `tail` (the last held row alone, grown or settled), `update` (an earlier
+ * row changed) — so the append clause can be read on appends alone. `at` is the arrival on the renderer's own clock,
+ * so the proof can tell an increment that arrived while the previous one was still being shown (a burst, whose figure
+ * includes the queue in front of it) from one that arrived to a quiet surface. The two user-timing marks bracket the
+ * same interval in a Chromium trace (`blink.user_timing`), which is how the proof attributes a sample's frames to style
+ * recalculation, layout, paint or script; a mark is cleared with the sample it belongs to, so the timeline holds at most
+ * 400 pairs.
+ */
+interface ApplySample {
+  readonly seq: number;
+  readonly rows: number;
+  readonly kind: 'attach' | 'append' | 'tail' | 'update';
+  readonly at: number;
+  readonly ms: number;
+  readonly sync: number;
+  readonly frame1: number;
+}
+const applySamples: ApplySample[] = [];
+const APPLY_SAMPLES_HELD = 400;
 bridge.onTranscriptIncrement((p) => {
   const t0 = performance.now();
+  const held = replica.getState().rows;
+  const lastHeld = held.length === 0 ? -1 : held[held.length - 1]!.index;
   const outcome = replica.getState().applyIncrement(p);
   const seq = (p as { seq?: number }).seq ?? 0;
-  const rows = ((p as { rows?: unknown[] }).rows ?? []).length;
+  const incoming = (p as { rows?: unknown[] }).rows ?? [];
+  const earliest = (p as { earliestChanged?: number }).earliestChanged ?? 0;
   if (outcome !== 'applied') return;
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    applySamples.push({ seq, rows, ms: performance.now() - t0 });
-    if (applySamples.length > 400) applySamples.shift();
-  }));
+  const kind: ApplySample['kind'] = held.length === 0 ? 'attach' : earliest > lastHeld ? 'append' : earliest === lastHeld && incoming.length === 1 ? 'tail' : 'update';
+  performance.mark(`rotaris:apply:${seq}`, { startTime: t0 });
+  let sync = 0;
+  queueMicrotask(() => { sync = performance.now() - t0; });
+  requestAnimationFrame(() => {
+    const frame1 = performance.now() - t0;
+    requestAnimationFrame(() => {
+      performance.mark(`rotaris:shown:${seq}`);
+      applySamples.push({ seq, rows: incoming.length, kind, at: t0, ms: performance.now() - t0, sync, frame1 });
+      if (applySamples.length > APPLY_SAMPLES_HELD) {
+        const dropped = applySamples.shift()!;
+        performance.clearMarks(`rotaris:apply:${dropped.seq}`);
+        performance.clearMarks(`rotaris:shown:${dropped.seq}`);
+      }
+    });
+  });
 });
 Object.assign(window as unknown as Record<string, unknown>, {
   __rotarisCounts: () => readTranscriptCounts(),

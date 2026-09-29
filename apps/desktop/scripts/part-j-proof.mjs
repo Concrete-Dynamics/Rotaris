@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment, findDatabases, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 
 /**
  * The control channel's first execution in the built app (Part J step 3): a queued message consumed at the
@@ -49,7 +49,7 @@ function scenario(name, agentsYaml) {
 }
 function launch(name, s, extra, opts = {}) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), s.workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
     cwd: app, encoding: 'utf8', timeout: 120_000, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local: s.local, preferences: join(s.root, 'preferences') }),

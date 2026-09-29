@@ -47,9 +47,43 @@ amendment (R-049), and OQ-62's configured-rate branch with it; OQ-62's discovery
 2026-09-21 by building `PD-WORKSPACE-002`'s per-file switches: OQ-64** (whether an instruction override
 suppresses its base when the override is itself switched off — a third state REQ-WORKSPACE-042's "given
 both exist" has no word for). **OQ-64 was ruled on 2026-09-27** as built (R-052), together with ESC-37,
-ESC-38 and ESC-39. **One more was raised on 2026-09-27 by building `PD-ORCH-004`: OQ-66** (how `delegate` names the
+ESC-38 and ESC-39. **One more was raised on 2026-09-22 by repairing the retrospective's reads: OQ-65** (whether the
+instruction-file switches reach the retrospective as well as the agents). **One more was raised on 2026-09-27 by building `PD-ORCH-004`: OQ-66** (how `delegate` names the
 child a continuation continues, which REQ-TOOLS-152's fields do not provide and the directive does not name), **ruled
-on 2026-09-27** as recommended by `PD-ORCH-004` revision 2 ([R-058](../product/requests.md#r-058)). **More were raised on
+on 2026-09-27** as recommended by `PD-ORCH-004` revision 2 ([R-058](../product/requests.md#r-058)). **One more was raised on 2026-09-27 by building the `/skills` listing: OQ-67**
+(where the listing goes when there is no transcript to write it into — from the Settings Skills tab, whose
+header actions REQ-WORKSPACE-067 fixes at two, and from a window following no session; raised as OQ-66, and
+every question from OQ-67 to OQ-75 moved up by one when the first-release work reached `main`, where OQ-66 was already taken), **and one the same day by building
+REQ-WORKSPACE-049's fixture: OQ-68** (what "up to 20 context files" measures when discovery can reach fourteen; raised as
+OQ-66 on its own branch and renumbered when it reached `main` after the `/skills` listing's). **Two more were raised on 2026-09-27 by building the version guard** (first-release plan §4.1):
+**OQ-69** (whether a default entry shipped switched off counts as one the default configuration launches, which
+REQ-STARTUP-059 and REQ-MCP-095 read one way and REQ-STARTUP-064 the other) **and OQ-70** (whether a release tag's
+numbers are canonical decimals), each with the reading the guard is built under, **and OQ-71** (whether the running
+desktop with no version metadata reports `dev` or `0+unknown`, which REQ-STARTUP-007 and REQ-STARTUP-004 fix
+differently), raised by the gate round that reviewed it; the three were raised as OQ-66 to OQ-68 on their own branch and renumbered when they reached `main` after the
+`/skills` listing's and the injection proof's. **Three more were raised on 2026-09-27 by building the notices generator
+(`first-release-plan.md` §4.3): OQ-72** (whether an entry of `THIRD-PARTY-LICENSES.txt` is a package or everything
+compiled into one — Electron's 779 credited components carry no version and no identifier), **OQ-73** (REQ-STARTUP-142
+names Manrope and a machine-tool manifest, neither of which the first release carries) **and OQ-74** (whether the
+reviewed-exceptions table may supply an identifier a dependency does not declare — `dotenv` 0.9.9 in the bundled
+runtime). **One more was raised the same day by that generator's gate review: OQ-75** (when a component carries "its
+full license text": a licence file that only pointed elsewhere, or only carried a licence's per-file notice, had
+counted as the text, and 4 components without text became 12); the four were raised as OQ-66 to OQ-69 on their own branch and renumbered when they reached `main`
+after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **Two more were raised on 2026-09-28 by building `PD-TOOLS-005` (R-062): OQ-76** (which timeline word records a run's user going away and returning — REQ-ORCH-139 closes the vocabulary and it has none, so the build writes both transitions to the session log) **and OQ-77** (whether the away state resolves the approval an `ask_questions` call itself needs under the `ask` preset, which keeps every question from an away user under the default preset), **and one by its verification: OQ-78** (whether an approval already outstanding when the first wait expires keeps its own full wait, as built, or is ended with the directive's reason). **And one more the same day by repairing REQ-WORKSPACE-045's decoding half: OQ-79** (whether a `SKILL.md` that cannot be decoded as UTF-8 is an "unreadable file"
+under REQ-WORKSPACE-053, which names the reason without saying what encoding a skill file has; built as one, skipped with the
+decoder's error — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-78 having been taken on `main`). **And one more the same day by repairing the prerelease naming defect (R-062): OQ-80** (whether REQ-STARTUP-158 reaches the Windows
+installer's own version metadata — `DisplayVersion`, `ProductVersion` and the uninstall display name, which electron-builder
+writes from its normalised `0.1.0-rc1` while the artifact's name carries the declared `0.1.0rc1` — raised as OQ-76 on its branch
+and renumbered at the merge, OQ-76 to OQ-79 having been taken on `main`). **And one more the same day by repairing `inherited_context`'s path to the child (R-062): OQ-81** (what an `inherited_context` id naming another parent's, or an earlier
+iteration's, completed task is — refused for ownership, as built, on REQ-TOOLS-155's scoping — and whether the caller is told
+which ids were ignored — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-80 having been taken on `main`). **Three more were raised on 2026-09-28 by building
+the updater (`first-release-plan.md` §4.6, R-062): OQ-83** (whether the record fixes the manifest signature's algorithm and the forms of the key and
+the signature — built as Ed25519, raw, over the manifest's exact bytes, SPKI PEM keys), **OQ-84** (a packaged Windows build with neither a
+registry match nor the launcher's variable: ADR-0054 says not updatable, REQ-STARTUP-106's copied-tree sentence says portable) **and OQ-85**
+(REQ-STARTUP-118 against REQ-SHELL-118 on the download notice's title, persistence and the pause before the apply); **one more by that
+item's verification the same day: OQ-86** (whether the installer's auto-close and the restart's close ask REQ-STARTUP-046's active-run
+confirmation) — the four raised as OQ-76 to OQ-79 on their branch and renumbered at the merge, OQ-76 to OQ-82 having been taken on `main`. **One more was raised on 2026-09-28 by building the setup manifest (`first-release-plan.md` §4.1): OQ-87** (what a machine tool's "archive layout" comprises, and what path its expected executables are relative to — MinGit's entries sit at the archive root and ripgrep's under one directory). **And OQ-88**, raised by the same item's independent verification (whether a manifest may key an archive under REQ-STARTUP-060's raw `<os>-<machine>` fallback); the two were raised as OQ-76 and OQ-77 on their branch and renumbered at the merge, OQ-76 to OQ-86 having been taken on `main`. **And one more the same day by REQ-CHAT-055's measurement round (R-048's order under R-062): OQ-89** (how the append comparison is read when updates arrive faster than frames — each one's shown-update time then holds the
+queue in front of it — and what "an empty transcript" is compared against once the appended rows are on it — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-88 having been taken on `main`). **And one more the same day by repairing the artifact variables' reach into the product's children (R-062): OQ-90** (whether the variables naming a launch's artifact are removed from what its children inherit — built so — and which of REQ-STARTUP-147 and REQ-HOOKS-032 says so). **And OQ-91**, raised the same day by repairing REQ-CHAT-048's duplicate-reasoning hygiene under R-062 (whether "per agent" scopes the comparison — each agent's own previous thinking row, the reading built — or only the row dropped), raised as OQ-90 on its branch and renumbered at the merge, OQ-90 having been taken on `main`. **And OQ-92**, raised the same day by repairing the notices file's tools section under R-062 (where the file reports the tool-server package versions REQ-STARTUP-152 asks of it, which REQ-STARTUP-142's section names no place for — built as a third sub-heading after the language servers), raised as OQ-90 on its branch and renumbered at the merge, OQ-90 and OQ-91 having been taken on `main`. **And OQ-93** (whether a text field is spell-checked — the runtime's spellchecker fetched a dictionary no requirement names; built as none), raised 2026-09-28 by the repair of the updater proof's runtime connection, raised as OQ-91 on its branch and renumbered at the merge, OQ-90 to OQ-92 having been taken on `main`. **More were raised on
 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3: OQ-94** (how a `paused` agent presents, and whether it is settled
 for display with a session at rest, which four requirements the directive does not name would do), **OQ-95** (whether
 the transcript is drawn from the conversation record, and what of a model exchange the record holds), **OQ-96** (which
@@ -68,7 +102,7 @@ to resume), **OQ-104** (where the plan gate holds a run that resumed an iteratio
 **OQ-105** (what an agent's fingerprint is taken of, when it is compared and where the warning is stated), **OQ-106** (whose
 root the handoff's artifact is taken from), **OQ-107** (which offers a later iteration's root is told, and where) **and
 OQ-108** (what the audit of clause 15, clause 19, `PD-CHAT-001` revision 4 and `PD-CHAT-002` revision 2 leaves
-undecided), each stating the reading the build proceeds under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+undecided), each stating the reading the build proceeds under. The fifteen were raised as OQ-67 to OQ-81 on their branch and renumbered at the merge, OQ-67 to OQ-93 having been taken on `main`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2897,6 +2931,696 @@ which carries the back-pointer. The two limits named above are not settled by th
 offer after the iteration that raised it has ended belongs to the run-continuation policy the same request opened, and
 until that is ruled the build keeps the same-iteration reading.
 
+**OQ-67 — Where does the `/skills` listing go when there is no transcript to write it into?** *(REQ-CHAT-162 with REQ-WORKSPACE-067 and REQ-WORKSPACE-151; OQ-58. Raised 2026-09-27 by building the listing, `first-release-plan.md` §2.2; raised as OQ-66 and renumbered OQ-67 when it reached `main`, where OQ-66 had been taken by the question `PD-ORCH-004` revision 2 rules.)*
+
+REQ-CHAT-162 makes the listing "a single system row" in the transcript and requires that "a system row a skill
+command writes MUST be saved with the session". Two routes to the capability have no session transcript to
+write into, and the requirement does not say what either does.
+
+**(a) The settings surface.** "Both capabilities MUST also be reachable from the settings surface that manages
+skills, so neither depends on the user knowing a command name." For *loading* the surface has its own route —
+REQ-WORKSPACE-151's "Load skill file…", which loads into the session exactly as `/skill <path>` does. For
+*listing* it does not: the Settings Skills tab is not a transcript, and REQ-WORKSPACE-067 fixes that tab's
+contents, including "two header actions, 'Rescan skills' … and 'Load skill file…'". A third action writing the
+row into the followed session would contradict that count; no action leaves the listing reachable from Settings
+only in the sense that the tab's table shows every fact the listing carries — Skill (the normalized name),
+Source (the scope), Path, Trigger and Description, unclipped — without the count stated as a sentence and without
+writing a row.
+
+**(b) A window following no session.** OQ-58 already records that "the current session" can have no referent
+when a gesture is made from a window showing none, and answers it for session *state* with a pending bucket the
+next session adopts. A transcript row cannot wait in a bucket: it is a row of a session or it is not saved.
+
+**What the build proceeds under.** (a) The tab's table is read as the listing capability's reach from the
+settings surface, and nothing is added to the tab: the requirement that fixes the tab's actions is specific and
+the one that asks for reachability is general, and the facts a user needs are all on the tab. (b) `/skills` from
+a window following no session fails, and says why — "Open or start a session first: /skills writes its listing
+into that session's transcript." (`SKILL_LISTING_NO_SESSION`) — rather than creating a session nobody asked for
+or drawing a row nothing saves. A followed session that is not loaded in the run host is refused the same way
+rather than written to under the store alone, which would skip its event record, its projection and its lock.
+
+**What a ruling decides.** (a) Whether the Skills tab gains a third header action that lists the skills into the
+followed session's transcript — amending REQ-WORKSPACE-067's two to three — or REQ-CHAT-162's reachability clause
+is read as met by the table; and if the latter, whether the tab should state the count. (b) Whether `/skills`
+with no session refuses (built), starts a session, or lists into the next session created in the window.
+
+**Readings the listing was also built under, named here so a ruling can reach them** *(added 2026-09-27, gate
+round 1 of the same change; each was stated only in a code comment or the plan's note before)*:
+
+- **(c) Which skills are listed.** Every discovered skill — auto-only ones, ones whose load mode is `off`
+  ("hidden"), and all of them while `skills.enabled` is off. REQ-CHAT-162 lists "the discovered skills" and the
+  Settings table lists the same set; `/skill <path>` is not refused while skills are off either. The contrary
+  reading: the requirement's last sentence calls these "skill commands", and REQ-CHAT-034 fails a skill command
+  with "Skills are disabled. Enable them in Settings." while the switch is off. *(`writeSkillListing`,
+  `apps/desktop/src/run-host/skills.ts`.)*
+- **(d) When a refusal is stated.** `/skills` is always listed as available and states the no-session refusal of
+  (b) only once invoked. REQ-CHAT-025 and REQ-CHAT-029/030 already allow "listed but unavailable, with the reason"
+  before invocation; the composer's context carries no "a session is followed" fact today, so the build did not
+  add one. *(`skillsListCommand`, `packages/ui/src/slash/skills.ts`.)*
+- **(e) How the 120 is counted.** At most 120 characters, the last of them the ellipsis where the text was cut,
+  after whitespace runs collapse to one space — REQ-CHAT-068's `compactTask` reading of the same kind of clause.
+  Counted in code points, so a cut can separate a combining mark or a joined emoji from its base.
+  *(`clipSkillDescription`, `packages/contracts/src/skills.ts`.)*
+- **(f) Which badge the two fixed commands carry.** `skill`, as ADR-0063 chose for `/skill`; REQ-CHAT-025 names the
+  set and does not say. `slash-proof` asserts the other reading, and has been red on it since ADR-0063
+  (`../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md`).
+- **(g) Who else reads the row.** The row is a system row, and the improvement analyst takes every recent row's
+  text as evidence (`packages/engine/src/improvements/capture.ts`), so a listing carries the names, descriptions
+  and paths of skills set to "hidden" to that model. The agent path does not (it keeps user and agent rows only).
+  Whether "hidden" (REQ-WORKSPACE-062) reaches that far is not stated; nothing withholds them today.
+
+**OQ-68 — What does REQ-WORKSPACE-049's "up to 20 context files" measure, when discovery can reach fourteen?** *(REQ-WORKSPACE-049 with REQ-WORKSPACE-041/042, both narrowed by `PD-WORKSPACE-002`; first-release-plan §3.2. Raised 2026-09-27 by building the fixture "at exactly that bound"; raised as OQ-66 and renumbered OQ-68 when it reached `main`, the `/skills` listing's OQ-67 having reached it first.)*
+
+REQ-WORKSPACE-049 states its 200 ms figure over "a workspace holding up to 20 context files totalling 1 MiB". No
+discovery rule the record has held can present twenty. REQ-WORKSPACE-041 as written read one file. `PD-WORKSPACE-002`
+names four at the workspace root and two at each of five further bases: **fourteen** on a platform with an `/etc`
+hierarchy and **twelve** on Windows, which has no machine-wide base. The merge reads fewer still. An override that
+is on suppresses its base, and one that is off is not read, so each workspace pair gives the merge one file: **twelve**
+read where there is an `/etc` hierarchy, **ten** on Windows. The byte half of the bound is reachable. The count half
+is not, on any platform.
+
+"Up to" makes twenty a ceiling, so a fourteen-file fixture is inside the reference conditions, and a reading taken
+over one is a conforming reading. Two things are left undecided. The first is what the plan's "a fixture at exactly
+that bound" means when the bound's count cannot be built. The second is whether twenty was meant to be reachable: a
+scheme with ancestors or several levels would reach it, and `PD-WORKSPACE-002` expressly declines one.
+
+**What the build proceeds under.** The count is read as the ceiling it says it is. The fixture fills every slot
+discovery can reach (fourteen here), with exactly 1,048,576 bytes across them. The two workspace bases that the on
+overrides suppress hold one line each, so the bytes the merge actually reads are as close to 1 MiB as the rule allows
+(`pnpm injection-proof`'s latency section). A Windows reading on the same fixture has twelve files and reads ten.
+
+**What a ruling decides.** Whether REQ-WORKSPACE-049's count is restated as the reachable maximum (an amendment
+naming fourteen and twelve, or "every instruction file discovery can reach"), or left as a ceiling that nothing
+reaches. And if the count is ever to be reached, what discovery rule reaches it.
+
+**OQ-69 — Does a default entry shipped switched off count as one the default configuration "launches"?** *(REQ-STARTUP-059 with REQ-MCP-095 and REQ-STARTUP-064; REQ-MCP-010, REQ-CONFIG-181. Raised 2026-09-27 by building the version guard, first-release plan §4.1; raised as OQ-66 and renumbered OQ-69 when it reached `main` after the `/skills` listing's OQ-67 and the injection proof's OQ-68.)*
+
+REQ-STARTUP-059 has the setup manifest pin "every package that the built-in default tool-server configuration of that
+same build launches through `npx` or `uvx`". The one such default is `browser`, `npx -y @playwright/mcp@0.0.80
+--headless`, and it ships `enabled: false`. Two requirements read the word "launches" in opposite ways against it.
+REQ-STARTUP-064 gives an `enabled: false` entry no warm-up step "because nothing will ever launch it". On that reading
+the switched-off default launches nothing, so the pin guard has nothing to check on this build and passes with no
+manifest at all. REQ-MCP-095 instead requires the release-pinned setup manifest to carry the `browser` package's
+version string character for character, with the build checking the two against each other, whatever the entry's
+switch says.
+
+**What the build proceeds under.** The entry counts. The shipped `enabled: false` is the entry's default state and not
+its launch, a user who switches it on launches exactly that specification, and REQ-MCP-095 already requires this pin.
+The stricter reading can only stop a release the looser one would let through, never the reverse.
+`tools/release-guard/src/pins.ts` (`defaultLaunches`) says so in place.
+
+**What a ruling decides.** Whether REQ-STARTUP-059's pin agreement covers every default entry whose launch goes through
+a runner, or only those enabled by default. If the second, the guard stops checking `browser` under REQ-STARTUP-059,
+and REQ-MCP-095's own cross-check still requires the pin.
+
+**OQ-70 — Are the numbers in a release tag canonical decimals?** *(REQ-STARTUP-027, REQ-STARTUP-029, REQ-STARTUP-031, REQ-STARTUP-109. Raised 2026-09-27 by building the version guard, first-release plan §4.1; raised as OQ-67 and renumbered OQ-70 when it reached `main` after the `/skills` listing's OQ-67 and the injection proof's OQ-68.)*
+
+REQ-STARTUP-027 fixes the shape `v<major>.<minor>.<patch>` with an optional PEP 440 suffix, and its counter-examples
+say nothing about leading zeros. PEP 440 permits them and normalises them away, so `v01.2.3` would be the same release
+as `v1.2.3`. This product never normalises the text: the guard compares the tag's version with the declared one as text,
+and every artifact name renders it as text (REQ-STARTUP-031). A permitted `v01.2.3` would therefore be a second spelling
+of one numeric tuple, carrying a second set of artifact names. REQ-STARTUP-109 would order the two as equal.
+
+**What the build proceeds under.** The numbers are canonical decimals, with no leading zero, in all three places and
+in the suffix number. `v01.2.3` and `v1.2.3rc01` are refused with REQ-STARTUP-027's message (`tools/release-naming`,
+`parseReleaseTag`). `v0.1.0` and every tag the plan names parse unchanged.
+
+**What a ruling decides.** Whether a leading zero is outside the grammar, which is the reading built, or inside it and
+normalised. If it is normalised, the grammar must also say which spelling the artifact names and the declared version
+carry.
+
+**OQ-71 — With no version metadata, does the running desktop report `dev` or `0+unknown`?** *(REQ-STARTUP-004, REQ-STARTUP-007; REQ-STARTUP-109, REQ-STARTUP-158, REQ-STARTUP-159, REQ-SHELL-140. Raised 2026-09-27 by the review of the version guard, first-release plan §4.1; raised as OQ-68 and renumbered OQ-71 when it reached `main` after the `/skills` listing's OQ-67 and the injection proof's OQ-68.)*
+
+Both requirements govern the same value and fix different literals for the same case. REQ-STARTUP-004: the product
+reports its version from its own installation metadata, and "when that metadata is absent, the reported version SHALL
+be the literal string `0+unknown`". REQ-STARTUP-007: the running desktop treats as its version the one that metadata
+declares, "else the literal `dev` when no such metadata is present", and that value is the one the About surface
+presents and the one compared against the release feed. REQ-STARTUP-007 cites REQ-STARTUP-004 for the first branch, so
+the two are meant to agree, and do not. Before 2026-09-27 the code had no absent-metadata branch to disagree with:
+`app.getVersion()` always answered something, Electron's own version for the unpacked entry. Reading the application's
+manifest (`@rotaris/platform`, `version.ts`) gave the question a place to be answered.
+
+**What the build proceeds under.** `dev`. REQ-STARTUP-007 is the requirement written for the running desktop and for
+the two consumers of the value (the About surface, REQ-SHELL-140, and the update comparison); REQ-STARTUP-109's
+unanswerable comparison names `dev` as its example; and `0+unknown` is not a version REQ-STARTUP-027's grammar parses
+either, so nothing downstream distinguishes the two. `VERSION_WITHOUT_METADATA` in `packages/platform/src/version.ts`
+carries the literal and cites this question. Neither literal can reach an installed build: REQ-STARTUP-004's own last
+sentence and REQ-STARTUP-159's About observation forbid it, and electron-builder always packs the manifest.
+
+**What a ruling decides.** Which literal the running desktop reports without metadata. If `0+unknown`, the constant
+changes and nothing else does; if `dev`, REQ-STARTUP-004's second sentence is amended to agree.
+
+**OQ-72 — What is one entry of the notices file: a package, or everything compiled into one?** *(REQ-STARTUP-142, REQ-STARTUP-143. Raised 2026-09-27 by building the notices generator, `first-release-plan.md` §4.3; raised as OQ-66 and renumbered OQ-72 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71.)*
+
+REQ-STARTUP-142 wants "one entry for every dependency present in the shipped artifact", each naming "the component,
+its version, its license identifier, and its full license text", and REQ-STARTUP-143 fails the release on a
+dependency that "declares no license identifier". Three kinds of thing are present in the artifact and are not
+packages a package manager lists, and none of them can meet all four fields:
+
+- **What is compiled into Electron.** The runtime's binaries carry 779 components — Chromium's third-party code,
+  Node.js, V8 and ffmpeg, which is under the LGPL, among them. Electron's own credits file, `LICENSES.chromium.html`, gives each a
+  title, a homepage and a licence text, and **no version and no identifier**. Read as 779 entries, the release could
+  not pass REQ-STARTUP-143 until someone supplied 779 identifiers the credits do not carry, and the reviewed table
+  has no route for a missing identifier (OQ-74).
+- **What this build compiles into its own native modules.** SQLite into `better-sqlite3`, and winpty into
+  `node-pty` on Windows, from sources the host packages vendor. `electron-builder.yml` strips those sources and their
+  licence files from the archive (ADR-0056 rule 1).
+- **What the bundled interpreter links.** The code-intelligence runtime's CPython (python-build-standalone, install-only)
+  carries OpenSSL, SQLite and zlib linked in (the interpreter answers OpenSSL 3.5.7, SQLite 3.53.1, zlib 1.3.2) and
+  Tcl/Tk beside it. Its `LICENSE.txt` names only the software incorporated into CPython itself, and never mentions
+  OpenSSL. The install-only tree has no record of the rest that could be read offline.
+
+**What the build proceeds under.** The entry is what a package manager enumerates — an npm package, a Python
+distribution, the interpreter, a font — and what is compiled into one is that component's own disclosure:
+
+- Electron is one entry (MIT, its `LICENSE`), and its credits are reproduced whole, in plain text, as the file's last
+  section, each under its title and homepage, stated as "as compiled into Electron 44.1.1". That section is 19.8 MB
+  of the file's 20.4 MB.
+- SQLite and winpty are listed as entries of their own, read from the installed host package: the version from the
+  sources, the identifier from the text (`blessing`, `MIT`), and "Contained in" naming the host. This is because the
+  packager removes the only other place their notices would be.
+- The interpreter's linked libraries are **not listed**. That is a known gap, not a reading, and it is stated here so
+  it is not mistaken for coverage. The file says so too, at the head of its runtime section, and its header claims
+  "the third-party components" of the build rather than every one.
+- *Added 2026-09-27 by the gate review.* Two consequences of reading the closure from production edges:
+  - The icon set appears twice: as `@phosphor-icons/web` 2.1.1, a production dependency of the application, and as
+    "Phosphor Icons", which REQ-STARTUP-142 names on its own.
+  - Two type-only packages are listed that no artifact carries: `json-schema` 0.4.0 and `@standard-schema/spec`
+    1.1.0, production dependencies of `@ai-sdk/provider` and `@ai-sdk/provider-utils`. The review read a scratch
+    build's sourcemaps and found that the bundler inlines neither.
+
+  Both errors list more than ships, never less.
+
+**What a ruling decides.** Whether the credits of a component the build takes whole (Electron's, and any other
+bundled distribution's) satisfy REQ-STARTUP-142 when they are reproduced beneath it, or whether each credited
+component must be an entry with a version and an identifier. And whether the interpreter's linked libraries must be
+enumerated, which would mean building the runtime from a python-build-standalone archive that carries its licence
+records (the full archive, not the install-only one) or declaring them by hand in a reviewed table.
+
+**OQ-73 — REQ-STARTUP-142 names two things the first release does not carry: Manrope, and Git and ripgrep.** *(REQ-STARTUP-142 with REQ-STARTUP-040, REQ-STARTUP-058, `PD-STARTUP-001`. Raised 2026-09-27 by building the notices generator; raised as OQ-67 and renumbered OQ-73 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71.)*
+
+REQ-STARTUP-142 states the file "SHALL further contain the license texts of the bundled fonts JetBrains Mono,
+Manrope and Space Grotesk", and that its tools section is "generated from the setup manifest of that same build,
+listing for Git and for ripgrep the name, provisioned version, source URL and license identifier the manifest
+pins". Both clauses assume something about the build that is not true of this one.
+
+- **Manrope is not bundled.** The design import carried no Manrope file, so `packages/ui/src/fonts.css` declares two
+  faces and the body text falls back to the system face (the file says so). REQ-STARTUP-040's "register bundled font
+  families so branded fonts render from first paint" is short one family for the same reason.
+- **No setup manifest in this build pins a machine tool.** Machine setup — REQ-STARTUP-058's first list, REQ-STARTUP-060
+  onward — is not built, and it is not in the first-release plan. The only manifest the build carries is the
+  code-intelligence pins (`apps/desktop/scripts/code-intelligence/pins.json`), whose `languageServers` is the second
+  list of REQ-STARTUP-058. Nothing in this build downloads Git or ripgrep.
+
+**What the build proceeds under.** The file tells the truth about the artifact and keeps each clause's text where
+it can:
+
+- Manrope's OFL-1.1 text is reproduced, as the requirement names it. Its entry's version reads "not contained in this
+  build", so no reader takes the licence for a file that is not there. When the design material supplies the face and
+  `fonts.css` declares it, the table beside the generator gains the file and nothing else changes.
+- The tools section reads the manifest the build has. Under "Machine tools" it says the setup manifest of this build
+  pins none, so this build downloads neither Git nor ripgrep. It then lists the language servers with their four
+  fields, as IC-7 requires. When machine setup is built its manifest carries `machineTools`, and the section lists them
+  as downloaded and not contained. The generator already renders that shape, and it is tested with ripgrep.
+  *Added 2026-09-27 by the gate review:* that shape is the generator's own assumption: one `{name, version, source,
+  license}` object per tool, under a `machineTools` key. REQ-STARTUP-058 describes the machine-tool manifest per
+  platform, with archives, digests and layouts. Neither the key nor its shape is decided anywhere yet. Machine setup
+  decides both, and the generator's reader follows.
+  *Added 2026-09-28 (R-062), a report and not a ruling:* the setup manifest now exists
+  (`apps/desktop/resources/setup-manifest.json`, `SetupManifestSchema`), so the shape is decided and the reader has
+  followed it: `machineTools[]` with `provisionedVersion` as the version. The section lists Git 2.55.0 and ripgrep 15.2.0
+  with their four fields. Machine setup is still not built, so the file does not say "downloaded after installation" as
+  a fact: it says the tools are to be downloaded after installation by machine setup, which this build does not yet
+  carry, so this build downloads none of them. What the file says once machine setup ships, or is ruled out of the
+  first release, is still this question's ruling. The "pins no machine tools" sentence stays for a manifest that pins
+  none (`../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`).
+
+**What a ruling decides.** Whether the first release ships without Manrope, and if so whether REQ-STARTUP-142's
+font clause is narrowed to the faces the build carries; and whether machine setup belongs in the first release —
+without it REQ-STARTUP-058's first list is unmet, which is a larger question than the notices file.
+
+**OQ-74 — May the reviewed-exceptions table supply a licence identifier a dependency does not declare?** *(REQ-STARTUP-143. Raised 2026-09-27 by the notices generator's first run against the bundled runtime; raised as OQ-68 and renumbered OQ-74 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71.)*
+
+REQ-STARTUP-143 fails the release on "a dependency in the shipped closure declares no license identifier", and
+separately on "a dependency carries no license text and is not covered by the ... maintainer-review table". The
+table's entries each carry "the license identifier claimed for it", but the requirement gives the table only the
+second failure to excuse.
+
+The first run found the case the requirement does not route: `dotenv` 0.9.9, a shim `serena-agent` 1.7.0 requires in
+the code-intelligence runtime. It declares `License: UNKNOWN` and no classifier, and it ships an MIT `LICENSE`. It has
+text and no identifier. No change a maintainer can make lets it pass, short of removing it from the runtime, which
+would break the tool server.
+
+**What the build proceeds under.** The requirement as worded: a missing identifier fails validation, and an
+exception in the table does not excuse it (tested). The generator reads an identifier from what a component
+declares, most specific first: `License-Expression`, a one-line `License`, the licence classifiers, the first line of
+a `License` field that holds a whole text. `UNKNOWN` declares nothing. It never infers an identifier from a licence
+text a dependency ships. The one place it reads a text for an identifier is a component that states its licence by
+name inside it: the interpreter, SQLite and winpty.
+
+**What a ruling decides.** Whether a table entry, being a reviewed and expiring claim of an identifier, may also
+cover a dependency that declares none. That ruling would change REQ-STARTUP-143's wording and one condition in
+`collectNotices`. Until then the first release is blocked on `dotenv` as surely as on O-3.
+
+*Added 2026-09-27 by the generator's gate review:* an identifier is copied as the component declares it and is never
+normalised. The runtime's distributions declare `BSD License` (`itsdangerous`, `Jinja2`, `pywebview`), `MIT License`,
+`Apache Software License 2.0`, `LGPLv2+` and `BSD 3-Clause`. REQ-STARTUP-142 does not ask for an SPDX identifier, but
+`BSD License` names a family rather than one licence. Whether an identifier must be an SPDX expression, and who
+supplies one where the component does not, belongs to the same ruling.
+
+**OQ-75 — When does a component carry "its full license text"?** *(REQ-STARTUP-142, REQ-STARTUP-143. Raised 2026-09-27 by the notices generator's gate review; raised as OQ-69 and renumbered OQ-75 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71.)*
+
+REQ-STARTUP-142 wants each entry to carry the component's "full license text", and REQ-STARTUP-143 fails a release on
+a dependency that "carries no license text" unless a reviewed exception covers it. Neither says what a licence file
+that does not carry the licence counts as. The first build counted any non-empty licence-named file as the text. The
+gate review found `@workflow/serde` 4.1.0, which the main bundle inlines. Its only licence file reads, in full, "Apache
+License 2.0" and "See the LICENSE file in the root of this repository.", and the package ships no such file.
+Reading the rest of the closure found three more kinds:
+
+- **A licence's per-file notice, and nothing else.** The notice is what a licence asks to be applied to each file
+  with. Apache-2.0's reads "You may obtain a copy of the License at …". Five npm packages carry only that: `ai` 7.0.92,
+  `@ai-sdk/gateway`, `@ai-sdk/openai`, `@ai-sdk/openai-compatible` and `@ai-sdk/provider`. So does `mslex` 1.3.0 in
+  the runtime. `certifi` 2026.7.22 carries only MPL-2.0's Exhibit A.
+- **An attribution declared as a licence file:** `mslex`'s `AUTHORS.rst`, beside its notice.
+- **A short file that sends the reader to its siblings:** "the licenses found in LICENSE.APACHE or LICENSE.BSD"
+  (`cryptography`, `sniffio`, and pip's vendored `packaging`). Their siblings carry the texts.
+
+**What the build proceeds under.** A licence file is one of three things (`licenseTextKind` in
+`tools/notices/notices.mjs`), and only the first is the component's licence text:
+
+- **text**: it carries a licence;
+- **a reference**: it only names a licence on one line. Or it is at most 2,000 characters, it sends the reader
+  elsewhere, and it carries no grant of its own. "Sends elsewhere" is one of: "see the LICENSE" (a markdown link,
+  "see the `[LICENSE](LICENSE)`", included), "found in LICENSE", "obtain a copy of the License", "can obtain one at",
+  "should have received a copy of the". The grants checked are those of the licences short enough to sit beside such
+  words: MIT and Boost, ISC and 0BSD, the BSD family, zlib, the Unlicense and SQLite's blessing. Every full text
+  that quotes its own notice in an appendix (Apache-2.0, the GPL family, MPL-2.0) is far longer than the bound;
+- **an attribution**: a file named NOTICE, AUTHORS, CONTRIBUTORS or CREDITS.
+
+References and attributions are still reproduced with the component, because they carry its copyright and
+attribution notices; Apache-2.0's NOTICE must travel with the work. A component that carries no text fails
+validation, and the message names each file and what it does instead. Only a reviewed exception lets it pass, as for
+a component that ships no file at all.
+
+Electron, the interpreter, a compiled-in library and a bundled asset each have one named licence file. If that file
+is only a reference, validation fails and no reviewed exception can cover it. REQ-STARTUP-143 gives the table to "a
+dependency" in general, so this is stricter than the requirement. It is recorded here as a reading. No such case
+exists in the first release.
+
+Over this tree the rule leaves 12 shipped components without licence text. The first run counted 4.
+
+Three limits are stated here, so that none is read as coverage:
+
+- The classifier reads words, so a pointer worded differently from the phrases above passes as text.
+- A file that carries one licence's text and refers elsewhere for another counts as text. `tqdm` 4.67.1 declares
+  `MPL-2.0 AND MIT` and carries the MIT text in full beside MPL-2.0's Exhibit A, so its entry has no MPL-2.0 text.
+  The generator does not match the texts a component carries against the expression it declares.
+- The pass is per component, and a component's vendored libraries are not components of their own (OQ-72). pip
+  26.2.1 passes on its own MIT text. Its vendored `certifi` ships only MPL-2.0's Exhibit A, so pip's entry carries no
+  MPL-2.0 text. Its vendored `cachecontrol` and `msgpack` ship only Apache-2.0's per-file notice. The Apache-2.0 text
+  is in pip's entry only because its vendored `packaging` happens to ship it as `LICENSE.APACHE`. This is `tqdm`'s gap
+  one level down. The ruling below would close it only together with OQ-72's granularity. *Added 2026-09-27 by the
+  gate review's second round, checked against the bundled runtime.*
+
+**What a ruling decides.** Whether a component that ships only a licence's notice should instead get the canonical
+text of the identifier it declares, reproduced by the generator from a version-controlled copy beside it (as
+`bundled-assets.json` does for the fonts). The reviewed table asks "why no license text is obtainable". For
+Apache-2.0 or MPL-2.0 the honest answer is that the text is obtainable and the package left it out. That ruling
+would change REQ-STARTUP-143's route for such a component, and it would close `tqdm`'s gap as well. Until then,
+eight of O-11's twelve reviews are for a notice or a pointer.
+
+
+**Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
+
+The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
+
+**OQ-76 — Which timeline word records that a run's user went away, and came back?** *(REQ-ORCH-139, REQ-SESSION-142,
+`PD-TOOLS-005`. Raised 2026-09-28 by building `PD-TOOLS-005` under [R-062](../product/requests.md#r-062).)*
+
+`PD-TOOLS-005` makes a run treat the user as away once an approval wait has expired unanswered, and present again on
+their next input to the session. An autopsy of such a run wants both instants: every approval ask between them was
+refused without a prompt, and the stretch is what explains a row of `permission_denied` issues. REQ-ORCH-139 closes
+the timeline-event vocabulary to the list in domain 01's Data & Formats, and domain 05's own Data & Formats names the
+only other timeline events a permission mechanism may write (`permission_approved`, `permission_mode_changed`,
+`permission_mode_downgraded`). Neither has a word for the user's presence, and the directive mints none.
+
+**What the build proceeds under.** Both transitions are written to the session log (REQ-SESSION-142) at `WARNING` —
+the default level, so that the end of a stretch is visible wherever its start is — in the words `user away: an approval
+in this run went unanswered for <N> seconds …` and `user returned: input reached this session …`
+(`packages/engine/src/run/presence.ts`). The denials themselves carry the cause in the decision's reason, which the
+`permission_denied` issue records, so an autopsy reading the store alone still sees why each ask was refused; what it
+cannot read from the store is the instant the user returned.
+
+**What a ruling decides.** Whether the timeline gains two names for the transitions, and in which domain's list, or
+whether the log line is the record. Recommendation: two names in domain 05's list, because the timeline is what an
+autopsy reads first and is among the records the export reaches (REQ-SESSION-199), and the session log is neither.
+
+**OQ-77 — Does the away state resolve the approval an `ask_questions` call itself needs under the `ask` preset?**
+*(`PD-TOOLS-005`, REQ-TOOLS-007, REQ-TOOLS-158, REQ-TOOLS-178. Raised 2026-09-28 by building `PD-TOOLS-005` under
+[R-062](../product/requests.md#r-062).)*
+
+The directive keeps questions prompting and waiting while the user is away: "questions put to the user (REQ-TOOLS-158,
+REQ-TOOLS-178) still prompt and wait". But `ask_questions` is outside REQ-TOOLS-007's read-only class, so under the
+`ask` preset — the default — its dispatch resolves to the preset's default decision, `ask`, and the call needs an
+approval before the question exists. That approval is an ask that would prompt, so while the user is away it is
+resolved at once and denied: under the default preset no question reaches an away user, and the clause is reachable
+only where the call is permitted outright — `autonomous`, a rule, or a session approval of the tool.
+
+**What the build proceeds under.** The literal reading: the away state resolves every approval ask, the question
+tool's own included, and the clause governs the question the executor raises, which still prompts and waits wherever
+the call is permitted. A gate case pins both halves (`gate.test.ts`, "a question still prompts and waits while the user
+is away").
+
+**What a ruling decides.** Whether `ask_questions`'s own dispatch is exempt from the away resolution — or from the
+preset default altogether, as the loop-control tools are under REQ-TOOLS-014 — so that a question can reach a user
+who is away in the approval sense and may still answer one. Recommendation: exempt the question tool's own dispatch
+from the away resolution and nothing else; a question is the one prompt the directive means to keep, and the preset's
+decision on the call otherwise stands.
+
+**OQ-78 — Does an approval already queued when the first wait expires still get its own full wait?**
+*(`PD-TOOLS-005`, REQ-TOOLS-052, REQ-TOOLS-055. Raised 2026-09-28 by the verification of the `PD-TOOLS-005` build under
+[R-062](../product/requests.md#r-062).)*
+
+The directive says every further approval that would prompt in the run resolves at once once one wait has ended by
+timeout. The gate consults the away state when it brokers an ask, before a wait exists. An ask brokered *before* the
+first wait expired already has its wait running: it was put to the user (published, and shown or queued behind the
+first dialog in main), so the build does not cut it short, and its own expiry is not a second transition. With several
+agents asking concurrently, each such ask can still cost a full `runtime.approval_timeout_seconds` after the first —
+the cost the directive exists to remove, reduced from one per ask to one per ask *already outstanding* at the first
+expiry.
+
+**What the build proceeds under.** The reading stated in the directive's first-execution note: a wait already running
+when the user was marked away runs to its own end; only asks brokered afterwards resolve at once.
+
+**What a ruling decides.** Whether marking the user away also ends the waits already outstanding in that run (each
+resolved under `runtime.headless_approval_policy` with the directive's reason, its dialog withdrawn), or whether a
+request that has reached the user keeps its own full wait. Recommendation: end the outstanding waits too, with the
+directive's reason — a request queued behind an unanswered dialog was never seen, and the directive's intent is that
+one unanswered approval costs one timeout.
+
+**OQ-79 — Is a `SKILL.md` that cannot be decoded as UTF-8 an "unreadable file"?** *(REQ-WORKSPACE-053, with REQ-WORKSPACE-045 and REQ-WORKSPACE-044. Raised 2026-09-28 by repairing REQ-WORKSPACE-045's decoding half, R-062. Raised as OQ-76 on its branch; renumbered OQ-79 at the merge, because OQ-76 to OQ-78 were already on `main`.)*
+
+REQ-WORKSPACE-045 names two ways a context file can be unreadable — "I/O or decoding error" — and REQ-WORKSPACE-044
+measures every limit "as UTF-8 bytes", so for an instruction file the encoding is settled: it is UTF-8, and a file that is
+not is skipped with a warning. REQ-WORKSPACE-053 lists "unreadable file" among the reasons a `SKILL.md` is skipped, but
+names no encoding for the file, and the format it does name — YAML frontmatter — is one whose own specification admits
+UTF-16 and UTF-32 as well as UTF-8. Nothing in the corpus says whether a skill file saved in one of those, or holding a
+byte sequence no UTF-8 decoder accepts, is "unreadable" (skipped with a logged reason) or is to be read leniently, each
+undecodable sequence standing as U+FFFD, and parsed.
+
+The question is live because one port serves both walks. `NODE_DISCOVERY_PORTS.readFile` reads instruction files for
+REQ-WORKSPACE-045's merge, `SKILL.md` files for REQ-WORKSPACE-053's walk, a force-loaded body for REQ-WORKSPACE-062,
+the disable manifest for REQ-WORKSPACE-052 and a `SKILL.md` loaded by hand for REQ-WORKSPACE-057/151, and until 2026-09-28 it decoded leniently, so the decoding half of
+REQ-WORKSPACE-045 was unmet (`docs/defects/fixed/an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md`).
+Making it strict for the instruction files makes it strict for the skill files in the same line.
+
+**What the build proceeds under.** A `SKILL.md` that cannot be decoded as UTF-8 is an unreadable file: it is skipped
+with the reason `unreadable file: <the decoder's error>`, discovery continues, and the skip is listed and logged like
+every other (REQ-WORKSPACE-053). The reasons: a file parsed with replacement characters standing in for what its author
+wrote is not the file the author wrote, and a skill's `name` or `description` read that way would be silently wrong in a
+catalog a model acts on; the sibling walk that shares the port says "decoding error" outright; and REQ-WORKSPACE-044
+already fixes UTF-8 as the encoding these files are measured in. The cost is stated too: a `SKILL.md` saved in UTF-16 or
+UTF-32 — encodings YAML admits — was previously parsed as mojibake and is now skipped with a reason that names the
+path, which is the better of the two failures but is still a file the product declines. A force-loaded body and the
+disable manifest take the same arm through the same port, and so does a `SKILL.md` loaded by hand: `loadManualSkill`
+now fails with REQ-WORKSPACE-057's "SKILL.md not found: {raw}" and the decoder's reason in parentheses, the arm its I/O
+half already used, where it used to load the skill with U+FFFD in its text. If the owner rules the other way, only the port changes:
+the walk's skip arm stays for the I/O half, and the decode becomes lenient for `SKILL.md` alone. The cases are pinned in
+`packages/config/src/skills/skills.test.ts` ("REQ-WORKSPACE-053 — a SKILL.md that is not UTF-8, through the real port
+(OQ-79)"), the walk's and the hand-loaded one's.
+
+**OQ-80 — Does REQ-STARTUP-158's "every artifact … SHALL declare … that same version" reach the Windows installer's own version metadata?** *(REQ-STARTUP-158, REQ-STARTUP-018, REQ-STARTUP-027, REQ-STARTUP-031. Raised 2026-09-28 by repairing the prerelease naming defect, R-062; `docs/defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md` Raised as OQ-76 on its branch; renumbered OQ-80 at the merge, because OQ-76 to OQ-79 were already on `main`.)*
+
+A prerelease is written without a separator (`0.1.0rc1`, REQ-STARTUP-027), and after the repair every published filename
+carries that text and the running application reports it. electron-builder still normalises the manifest's version through
+loose SemVer when it reads it, and the NSIS installer's own metadata is written from that normalised value: the `VERSION`
+define, which becomes the per-user uninstall entry's `DisplayVersion` that REQ-STARTUP-018 names and the uninstall display
+name `Rotaris 0.1.0-rc1`; the `ProductVersion` version key; and `VIProductVersion`, which Windows fixes as four numbers
+(`0.1.0.0`) and so can carry no suffix in any spelling. A stable version is identical in every place.
+
+**What the build proceeds under.** The installer's Windows metadata carries electron-builder's normalised value, stated in
+`electron-builder.yml`'s header and in ADR-0054; the artifact's name and its run-time report carry the declared text, which
+is what REQ-STARTUP-158 points at (REQ-STARTUP-031 "is where the version appears in each artifact's name") and what the
+guard of REQ-STARTUP-028 compares. `extraMetadata.version` was not used to force the text through: ADR-0054 decided that
+either it or `buildVersion` would be a second place a version is declared.
+
+**What a ruling decides.** Whether `DisplayVersion` and `ProductVersion` are "declaring" the release's version in
+REQ-STARTUP-158's sense. If they are, the pipeline must write the declared text over them — a custom NSIS include with a
+`WriteRegStr` of `DisplayVersion` and a `VIAddVersionKey ProductVersion`, which electron-builder allows — and the guard
+gains a place to check in the produced installer; if they are not, the spelling Windows shows in "Installed apps" for a
+prerelease is `0.1.0-rc1` and the record says so.
+
+**OQ-81 — What is another parent's completed task to a `delegate` call's `inherited_context`?** *(REQ-TOOLS-152 with
+REQ-TOOLS-155, REQ-ORCH-032 and REQ-ORCH-072; REQ-ORCH-046. Raised 2026-09-28 by repairing
+`the-inherited-context-reports-never-reach-the-child` under [R-062](../product/requests.md#r-062). Raised as OQ-76 on its branch; renumbered OQ-81 at the merge, because OQ-76 to OQ-80 were already on `main`.)*
+
+REQ-TOOLS-152 handles an `inherited_context` id by field: one "that names no task at all refuses the call", one "naming a
+task that failed or has not finished is ignored without refusing", and the field carries "the reports of already-completed
+**sibling** tasks". It does not say what an id is that names a *completed* task which exists but is not the caller's child —
+another agent's child in the same run, or a child of an earlier iteration. (A task that exists and has not completed
+is not in question, whoever owns it: the requirement ignores it. Nor is the root execution record: REQ-ORCH-072 puts
+its id in the children's namespace, so a lookup naming it resolves to it, and an agent is never told it does not exist.) REQ-TOOLS-155 scopes `background_output` to the
+caller's own children ("a task whose parent is not the caller reads as `not_found`"), REQ-TOOLS-156 lets an agent wait
+only for its direct children, and REQ-ORCH-046 refuses a `depends_on` naming another parent's child with a reason that
+names the owner; none of the three is written for `inherited_context`.
+
+**What the build proceeds under.** Existence is asked of the session's child records and the root execution record:
+an id no task has refuses with `inherited_context id '<id>' refers to nothing: no task has that id`, and an id naming a
+task that has not completed is ignored. A completed task that is not the caller's own child refuses, for ownership, with
+`inherited_context id '<id>' is not a sibling's: it is owned by parent '<owner>', not '<caller>'` — the shape of
+REQ-ORCH-046's dependency refusal. That it refuses at all is REQ-TOOLS-155's scoping applied to the one delegation lookup
+it does not name, and it keeps a child from reading a report its parent could not have read itself. (The first build of
+this repair refused every id outside the caller's own children as referring to nothing, the root's and the caller's own
+included; verification the same day showed that contradicts REQ-TOOLS-152 and REQ-ORCH-072, and it was corrected before
+merge — ADR-0012 keeps that reading beside its replacement.) "Completed" is read as REQ-ORCH-047 reads it for a dependency — `succeeded` with the report stored —
+since the report is what is carried; a cancelled sibling, and a succeeded one whose report is not yet stored, are
+ignored with the failed. The ids that were ignored are not reported to the caller: REQ-TOOLS-153 fixes the message's
+content to the alias resolution and the attachment warning, and adding a third item there is a change to that
+requirement rather than a reading of this one.
+
+**What a ruling decides.** Whether another parent's completed task should be refused at all, or ignored as the text
+ignores an unfinished one, or carried — "no task at all" favours existence anywhere, and naming the owner tells the caller
+that the id is real and not its own, a fact REQ-TOOLS-155 withholds from `background_output`; whether an id of an earlier
+iteration's completed child should be carried rather than refused, which would need the carrying to leave the
+per-iteration ledger; and whether the caller should be told which ids were ignored, which is REQ-TOOLS-153's to widen.
+An earlier iteration's *root* is held in memory by the run and not in the store, so an id naming one finds no task and
+refuses as referring to nothing; whether it must be found is part of the same ruling. Until then the field carries the
+reports of the caller's own completed children, ignores every task that has not completed, and refuses a completed task
+it may not carry for that reason.
+
+**OQ-82 — Does the reserved token's launch of the application's own executable carry the parent's Chromium switches?** *(REQ-MCP-033, REQ-STARTUP-002, REQ-STARTUP-015. Raised 2026-09-28 by repairing `the-code-intelligence-server-dies-when-the-app-runs-as-root.md` (R-062). Raised as OQ-76 on its branch; renumbered OQ-82 at the merge, because OQ-76 to OQ-81 were already on `main`.)*
+
+REQ-MCP-033 fixes that a `stdio` entry carrying the token launches the application's own executable "with the same
+token `builtin:code-intelligence` as its first argument", and that "a process started with that first argument SHALL
+answer the MCP protocol"; REQ-STARTUP-002 that this child is the one exception to the single entry point; and
+REQ-STARTUP-015 what the launch is observable as: started from what the user installed, "the reserved token is a
+sentinel for a child process the product starts internally, not a user-facing invocation, and no argument vocabulary
+beyond it is defined for the shipped executable", no user interface, no window. **Where the token stands is fixed —
+first.** None says whether anything else of the parent's stands on the child's command line after it. The executable is a Chromium, and Chromium refuses to start as root with its
+sandbox on, so an operator who runs the application as root starts it with `--no-sandbox`; the child launched bare is a
+fresh Chromium, does not inherit that, and died with SIGTRAP before its sentinel ran (2026-09-27, a Linux container).
+Running as root is not a supported configuration anyone has ruled on, and Linux artifacts are withheld under IC-3, so
+the question is narrower than it looks: whether the launch is the parent's own line or a fresh one.
+
+**The reading built.** The launch carries exactly the sandbox switch the parent was started with (`--no-sandbox`), and
+nothing else of the parent's command line — the sandbox is a property of the host the parent has already measured,
+and a child of the same executable cannot measure it differently; every other switch (`--enable-logging`, a device
+scale factor, a capture seam) is the parent's business. **The token stays the first argument; the switch stands
+between it and the branch's `--` separator** (`rotaris builtin:code-intelligence --no-sandbox -- …`; in development
+`electron out/main/index.js builtin:code-intelligence --no-sandbox -- …`). Chromium reads switches anywhere before
+`--`, so the child starts (measured as root 2026-09-28: that line reaches the sentinel, the bare
+`builtin:code-intelligence --` dies with SIGTRAP), and the sentinel drops the switch before the separator so the runtime
+never receives it (a stand-in runtime received `start-mcp-server --transport stdio` and nothing else). The switch is
+Chromium's own and defines nothing of the product's: no argument vocabulary is added beyond the token. One consequence
+stated plainly: a line typed by hand as `rotaris builtin:code-intelligence --no-sandbox -- …` is treated the same way —
+Chromium honours the switch and the sentinel drops it — and nothing is skipped anywhere else; a switch after `--` is the
+runtime's. `@rotaris/platform`'s `chromium-switches.ts` holds the definition, and the launch builder, the sentinel and
+main's fork of the run host all read it.
+*Superseded placement (first build, 2026-09-28, kept beside its replacement):* the switch stood immediately BEFORE the
+token and "the token as its first argument" was read as "the first argument that is not that switch", the sentinel
+skipping the switch to find the token. The verifier found that a reinterpretation of a clause REQ-MCP-033 states, not a
+reading where it is silent, and measured the placement above; it replaced the first on the same branch. **A ruling the other way** — the launch carries nothing of the parent's — leaves the
+product unable to host its own tool server on a host that needs the switch, and would want REQ-MCP-033 to say so.
+
+**OQ-83 — Should the record fix the manifest signature's algorithm and the forms of the key and the signature?** *(REQ-STARTUP-032, REQ-STARTUP-167, REQ-STARTUP-168; ADR-0054 "The updater". Raised 2026-09-28 by building the updater, first-release-plan.md §4.6, under R-062. Raised as OQ-76 on its branch; renumbered OQ-83 at the merge, because OQ-76 to OQ-82 were already on `main`.)*
+
+Domain 11's Data & Formats says "the form of a key, the form of a signature, and how many keys a build carries are implementation choices and no surface of the product reports them", and REQ-STARTUP-168 says how a key is generated, held or transferred "is an architecture decision and is fixed nowhere in this document". ADR-0054 decided the mechanism (a detached signature, a compiled-in set) and named no algorithm. The build had to choose one, because a verifier cannot verify an unnamed form, and it chose **Ed25519 (RFC 8032) through Node's `crypto`**: `SHA256SUMS.txt.sig` is the raw 64-byte signature over the manifest's exact published bytes, and a carried key is an SPKI PEM block — the forms `openssl genpkey -algorithm ed25519`, `openssl pkey -pubout` and `openssl pkeyutl -sign -rawin` produce, so O-2 and §4.7's pipeline need no tool of ours. The choice is stated in `apps/desktop/src/main/updater/keys.ts` and in ADR-0054, and a test key pair exercises it.
+
+**What the build proceeds under.** That reading. **What a ruling decides.** Whether the record should fix the algorithm and both forms as a decision (an ADR consequence the pipeline's §4.7 and O-2 are bound by) rather than leave them as a reading a later builder of the pipeline could choose differently — a signature the verifier cannot read is refused as not verifying, which strands nothing but installs nothing either. The residue is one line in ADR-0054 either way; the question is whether it is a decision or an implementation note.
+
+**OQ-84 — Is a packaged Windows build outside `InstallDir` and without the launcher's variable portable, or not updatable?** *(REQ-STARTUP-106, REQ-STARTUP-125, REQ-STARTUP-147; ADR-0054 "How the artifact is identified for the update path" and "The updater". Raised 2026-09-28 by building the classification, first-release-plan.md §4.6, under R-062. Raised as OQ-77 on its branch; renumbered OQ-84 at the merge, because OQ-76 to OQ-82 were already on `main`.)*
+
+REQ-STARTUP-106 says "every other Windows standalone build is classified portable", and its last sentence reads a copied installed tree as portable, "and the portable strategy of REQ-STARTUP-125 replaces it with a self-contained executable that runs from any location". ADR-0054, having moved the artifact's identity to the launcher's declared variable (measured: `process.execPath` points into the preparation in 149 of 149 launches), reads the absent variable the other way: "someone who runs the payload's executable directly out of a preparation is not running from a released artifact, so REQ-STARTUP-106 classifies the build not updatable and no request is issued at all". REQ-STARTUP-147 bears on the same case from the other side: "a variable naming the artifact a launch started from decides which file an update replaces and decides nothing about whether, when, or where the check happens" — and under ADR-0054's reading the absence of `ROTARIS_PORTABLE_ARTIFACT` is exactly what decides whether a packaged Windows build outside `InstallDir` checks at all. A ruling therefore settles both texts. The two cases — a copied tree and a payload run directly — are indistinguishable to the process, which sees a packaged executable, no registry match and no variable, and the two texts give them opposite outcomes. Following the requirement's sentence would also replace a `win-unpacked` tree's executable with a single-file portable in place, leaving the tree's support files beside a file that no longer needs them.
+
+**What the build proceeds under.** ADR-0054's reading: **not updatable**, no request, one `info` line naming this question (`classify.ts`). **What a ruling decides.** Whether REQ-STARTUP-106's copied-tree sentence describes a consequence the product must produce (then the target is the running executable and the portable strategy replaces it, as the sentence says) or a consequence the discriminator would have had before the artifact's identity moved to the launcher's variable, in which case the sentence wants amending to ADR-0054's reading — and REQ-STARTUP-147's sentence with it, since under ADR-0054's reading the variable decides whether the check happens. *(REQ-STARTUP-147 added to this entry 2026-09-28 by the item's verification.)*
+
+**OQ-85 — Which requirement governs the update notice while the download runs: REQ-STARTUP-118 or REQ-SHELL-118?** *(REQ-STARTUP-118, REQ-STARTUP-119, REQ-STARTUP-120, REQ-STARTUP-122; REQ-SHELL-114, REQ-SHELL-118. Raised 2026-09-28 by building the updater's notices, first-release-plan.md §4.6, under R-062. Raised as OQ-78 on its branch; renumbered OQ-85 at the merge, because OQ-76 to OQ-82 were already on `main`.)*
+
+REQ-STARTUP-118: "a non-persistent notice titled `Downloading Rotaris {version}` SHALL show the message `{measured} — verifying against the published checksum when it finishes.`". REQ-SHELL-118: "While the download runs the notice keeps that title [`Rotaris {version} is available`] and its identity — it is updated in place, never replaced — and its message SHALL convey two things and no more: that the update is downloading, and how far it has got … When the download completes the message SHALL convey that the update is ready to install and the action SHALL be enabled again, performing the install action of REQ-SHELL-115". The two disagree on the title, on persistence (a non-persistent notice against the persistent offer's identity), on the message's content (a fixed three-part sentence against two things and no more) and on whether the apply waits for a second click, where REQ-STARTUP-122 runs download → verify → apply in one sequence.
+
+**What the build proceeds under.** The identity is kept and the notice updated in place (REQ-SHELL-118 and ADR-0054's "the same notice by identity, never by replacement"); the title and message are REQ-STARTUP-118's, because Distribution owns the words and Shell the surface (`CONTEXT-MAP.md`); the notice is not persistent while the download runs, so no dismissal can wave off a version whose install is in flight; the action is disabled with an accessible description; and the apply follows the verified download without a pause, so the "ready to install" state stands only for the length of the apply. The failure becomes REQ-STARTUP-120's `Update not installed` in place. **What a ruling decides.** Which of the two texts is amended to the other on the title, the persistence, the message and the pause. Nothing in the mechanism moves with the answer beyond the words and one boolean.
+
+**OQ-86 — Does the update's own close ask REQ-STARTUP-046's active-run confirmation?** *(REQ-STARTUP-046, REQ-STARTUP-119, REQ-STARTUP-121; ADR-0054 "The updater". Raised 2026-09-28 by the verification of the updater, first-release-plan.md §4.6, under R-062. Raised as OQ-79 on its branch; renumbered OQ-86 at the merge, because OQ-76 to OQ-82 were already on `main`.)*
+
+REQ-STARTUP-046: "When a run is active, a confirmation SHALL be presented before anything is torn down; declining it SHALL abort the close, leaving the window open and accepting input and the run still executing." REQ-STARTUP-119: "when the hand-off requires quitting (Windows installer), the window SHALL auto-close after a 1200 ms single delay." REQ-STARTUP-121: "the current window closes only after the successor has started". The installer's auto-close and the restart's close are closes of a window, and a run may be active in it when the user chooses `Update now` or `Restart now`. If the confirmation is asked and declined, the installer is already running against the tree the window runs from, and after a restart the record has already passed to the successor, so the declining instance would stay beside the one that now holds the record.
+
+**What the build proceeds under.** ADR-0054's stated reading: both closes destroy the main windows without the confirmation (`mainWindows.dispose()`), because the user chose the action and, after the record has passed, the predecessor must not stay. **What a ruling decides.** Whether REQ-STARTUP-046's confirmation governs these two closes — then it has to be asked *before* the installer is spawned and before the successor is started, which moves it from the close to the action — or whether REQ-STARTUP-119/121 are exceptions REQ-STARTUP-046 should name.
+
+**OQ-87 — What does a machine tool's "archive layout" comprise, and what are its expected executables relative to?** *(REQ-STARTUP-058 with REQ-STARTUP-085, REQ-STARTUP-086 and REQ-STARTUP-088. Raised 2026-09-28 by building the setup manifest, first-release plan §4.1. Raised as OQ-76 on its branch; renumbered OQ-87 at the merge, because OQ-76 to OQ-86 were already on `main`.)*
+
+REQ-STARTUP-058 has each per-platform archive artifact declare "archive layout, expected executables" and says no more
+about either. REQ-STARTUP-085 fixes the three archive formats extraction accepts and normalises entry names;
+REQ-STARTUP-086 requires every expected executable to exist in staging before the tree is promoted, but names no base
+the paths are relative to. The archives the manifest pins differ in exactly this respect: MinGit's entries sit at the
+archive root (`cmd/git.exe`, `mingw64/bin/git.exe`), ripgrep's under one directory named after the archive
+(`ripgrep-15.2.0-x86_64-pc-windows-msvc/rg.exe`). Whether the managed tool directory (`tools/<tool>/<provisioned_version>/`,
+REQ-STARTUP-070) holds that directory or its contents decides which paths REQ-STARTUP-088 can prepend.
+
+**What the build proceeds under.** `layout` is two things (`ArchiveSchema` in `packages/config/src/setup-manifest.ts`):
+the archive `format`, one of REQ-STARTUP-085's three, and `topLevelDirectory`, the one directory every entry sits under,
+or `null` when entries sit at the archive root. `executables` are written relative to that directory when one is
+declared and to the archive root otherwise — `rg.exe` and `cmd/git.exe`, never `ripgrep-15.2.0-…/rg.exe` — which reads
+the consumer as promoting the directory's contents, so a managed tool directory holds the executables at the same
+paths whatever the archive did. Which subdirectory of a tool's managed directory is prepended to PATH is the consumer's
+(REQ-STARTUP-088); the manifest names executables and nothing about PATH.
+
+**What a ruling decides.** Whether "archive layout" is the format alone, the format with the top-level directory, or
+something else (a list of entries to keep, a strip depth); and whether expected executables are relative to the archive
+root or to the promoted tree. A different reading changes the schema's `layout` object and the shipped file, and the
+fingerprint of REQ-STARTUP-061 with them, so it is cheapest before the first release ships a manifest that installations
+have set up from.
+
+**OQ-88 — May a setup manifest key an archive under REQ-STARTUP-060's raw `<os>-<machine>` fallback?** *(REQ-STARTUP-060 with REQ-STARTUP-058. Raised 2026-09-28 by the independent verification of the setup manifest, first-release plan §4.1. Raised as OQ-77 on its branch; renumbered OQ-88 at the merge, because OQ-76 to OQ-86 were already on `main`.)*
+
+REQ-STARTUP-060 names three platform keys, "with a raw `<os>-<machine>` fallback for anything else", and says the keys
+are shared between release artifact naming, updater asset selection and manifest artifact selection. It does not say
+whether the fallback is a key a manifest may *write* an archive under, or only one a host may *compute* and then find
+nothing under. The first reading makes the manifest's key set open-ended (any `<os>-<machine>` string); the second keeps
+it to the three, which is what artifact naming (`PLATFORM_KEYS` in `tools/release-naming`) already does.
+
+**What the build proceeds under.** The second. `SetupManifestSchema` (`packages/config/src/setup-manifest.ts`) admits an
+archive only under one of the three keys, and `tools/release-guard/src/pins.test.ts` pins that an archive under
+`freebsd-x86_64` is refused and that `config`'s key list equals release naming's. A host whose key is a fallback finds
+no archive to select; what machine setup then does (REQ-STARTUP-060 onward, REQ-MCP-112's setup half) is the consumer's,
+not built.
+
+**What a ruling decides.** Whether a manifest may carry an archive for a platform outside the three. A ruling for the
+first reading widens the schema's key to a pattern and changes nothing in the shipped file; either reading leaves the
+consumer to state what a host with no matching archive is told.
+
+**OQ-89 — Under a burst, is REQ-CHAT-055's append comparison read on the update as it arrived, or on an update that arrived alone?** *(REQ-CHAT-055, REQ-CHAT-154, REQ-CHAT-157; ADR-0045's measurement point. Raised 2026-09-28 by the measurement round R-048 authorized, taken under [R-062](../product/requests.md#r-062); the note is `docs/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`. Raised as OQ-76 on its branch; renumbered OQ-89 at the merge, because OQ-76 to OQ-88 were already on `main`.)*
+
+REQ-CHAT-055 fixes "cost" as the time from an update's application to the frame that shows it, and compares that
+figure for an appended row at a thousand rows with the same figure on an empty transcript. The round found the proof's
+scripted run to be a burst: thirty increments arriving 4–13 ms apart, faster than the renderer shows them, so 57 of 62
+samples a side measured the queue in front of them and the median stood at five to seven frames on BOTH sides while an
+increment that arrived alone showed in two. The requirement does not say which of these the comparison is made on:
+
+- **the update as it arrived**, queue included — what the reader waits, and the reading under which any work the
+  product does per increment is multiplied by the increments queued in front of the one measured; or
+- **an update that arrived to a quiet surface** — the cost of showing one row and nothing else, which in a scripted
+  run is a handful of samples a launch, too few for a verdict on their own.
+
+A second reading is bound up with it. The requirement's first sentence permits work proportional to **how many rows
+are visible**, and its third compares against **an empty transcript** — which, once the run has appended to it, shows
+eight rows where the loaded transcript shows a full viewport of nineteen. Work the first sentence permits therefore
+moves the comparison the third sentence makes, and the requirement does not say by how much it may.
+
+**What the build proceeds under.** `transcript-proof` reads the comparison **both ways and requires both to hold**
+with one frame of slack at the cadence it measured: on every update as it arrived (pooled, sixty-two a side,
+alternating launches) and on the row appends among them; it reports the samples that arrived alone and the isolated
+ones beside them without a verdict of their own, because their count does not carry one. The burst is the same on
+both sides, so the first reading is a fair comparison of per-increment cost; the repair made that cost independent
+of the rows held (one bounded projection per increment, no row re-rendered for a value it could not see change), and
+the residual difference — a full viewport of rows moving under the tail pin against a part-empty one — is inside the
+slack. **A ruling would decide** whether a conformance harness must construct the quiet-surface case (spacing its
+updates so each is shown before the next arrives, which the benchmark domain's phases do not do), and whether a
+visible-row term is within the requirement while the third sentence's comparison holds, or is itself the thing the
+third sentence forbids. Recommended: the first reading, as the one a reader experiences and the one the benchmark's
+phases can measure, with the third sentence read at one frame of slack as the proof reads it.
+
+**OQ-90 — Are the variables that name a launch's artifact removed from what the product's children inherit, and which requirement says so?** *(REQ-STARTUP-147, REQ-STARTUP-106, REQ-HOOKS-032; ADR-0054, "The updater", item (6). Raised 2026-09-28 by repairing `docs/defects/fixed/the-artifact-variables-reach-the-products-own-child-processes.md` under [R-062](../product/requests.md#r-062).)*
+
+REQ-STARTUP-147 says a variable naming the artifact a launch started from is "set by the artifact's own runtime rather
+than by a user" and "decides which file an update replaces", and REQ-STARTUP-106 takes the classification from "the
+artifact the launch started from". Neither says what the product's own children receive. REQ-STARTUP-147's closing
+sentence lists the "Variables written for child processes" — `PATH`/`Path`, `UV_CACHE_DIR`, `npm_config_cache` — and
+names none removed; REQ-HOOKS-032 says a run started from the desktop application "sees exactly the environment the
+application itself was started with", which read literally includes `APPIMAGE` and the portable launcher's
+`ROTARIS_PORTABLE_ARTIFACT`.
+
+**What the build proceeds under.** Main takes both names out of its own environment before it starts any child, so no
+run host, workspace service, tool, terminal, hook, MCP server or code-intelligence branch carries them: a copy a child
+inherits names an artifact that is not the child's launch, and a Rotaris started from inside one would otherwise
+classify itself from the other's file. A hook therefore sees the application's environment less those two names.
+**A ruling would decide** whether REQ-STARTUP-147 gains the removal beside the variables it writes for child
+processes, and whether REQ-HOOKS-032's "exactly" is read over the environment less the artifact's own variables.
+Recommended: both, as one sentence in REQ-STARTUP-147 that REQ-HOOKS-032 cites.
+
+**OQ-91 — Does REQ-CHAT-048's "per agent" scope the comparison, or only the row that is dropped?** *(REQ-CHAT-048;
+ADR-0046 step 4, the lookback its bounded form preserves. Raised 2026-09-28 by repairing
+`docs/defects/fixed/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md` under
+[R-062](../product/requests.md#r-062); raised as OQ-90 on its branch and renumbered at the merge, OQ-90 having been taken on `main`.)*
+
+REQ-CHAT-048 reads: "per agent, an unstamped (no duration) thinking row whose content equals the immediately previous
+thinking row's content MUST project to zero rows". When two agents' reasoning interleaves — agent A's burst, then
+agent B's, then an unstamped repeat of A's — the sentence has two readings:
+
+- **"per agent" scopes the whole rule**: "the immediately previous thinking row" is A's own, so A's repeat is dropped
+  whatever other agents reasoned in between, and an agent's burst is never compared with another agent's; or
+- **"per agent" scopes only the dropped row**: "the immediately previous thinking row" is the transcript's, so the
+  repeat is compared with B's row, is not equal to it (or names another agent), and is kept — A's duplicated burst
+  is displayed twice whenever any other agent reasoned between the two copies.
+
+**What the build proceeds under.** The first reading: the requirement's purpose clause — "so sessions recorded with
+duplicated streamed reasoning display each burst once" — is met by it for every interleaving and by the second only
+when no other agent reasons between the copies, which is the common case once children run in parallel. The
+projection keeps, per agent, that agent's immediately previous thinking row (`previousThinkingByAgent` in
+`packages/ui/src/transcript/project.ts`), and the bounded form of ADR-0046 step 4 looks each agent's row up lazily
+below its cut, so the two forms agree (`projector.test.ts`'s seeded walk). Agent identity is the row's `name`, as the
+comparison always read it. **A ruling for the second reading** would restore the any-agent lookback
+(`lastThinkingBefore`, one scan below the cut) and turn the interleaved cases in `transcript.test.ts` around; nothing
+else depends on it.
+
+**OQ-92 — Where does `THIRD-PARTY-LICENSES.txt` report the tool-server package versions REQ-STARTUP-152 asks it to?** *(REQ-STARTUP-152 with REQ-STARTUP-142 and REQ-STARTUP-058. Raised 2026-09-28 by repairing the notices file's tools section under [R-062](../product/requests.md#r-062); the note is `../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`; raised as OQ-90 on its branch and renumbered at the merge, OQ-90 and OQ-91 having been taken on `main`.)*
+
+REQ-STARTUP-152 requires "the tool and MCP package versions a build provisions and warms" to be "the same versions its
+`THIRD-PARTY-LICENSES.txt` reports". REQ-STARTUP-142 says what the file's `Tools provisioned after installation`
+section contains. It holds Git and ripgrep, then a sub-heading naming the bundled code-intelligence runtime with its
+language servers. It names no place for the MCP packages REQ-STARTUP-058 pins, `@playwright/mcp` 0.0.80 in this
+build. Nor are they "dependencies present in the shipped artifact": the built-in configuration launches them through
+`npx`, which fetches them.
+
+**What the build proceeds under.** A third sub-heading of the same section, `Tool-server packages`, after the language
+servers, lists each package the manifest's `toolServerPackages` pins with REQ-STARTUP-142's four fields. It states
+that a tool server of the built-in configuration launches each through its package runner, which downloads it when
+that tool server is first started, and that none is contained in the artifact. The sub-heading is left out for a
+manifest that pins no package. REQ-STARTUP-142's order, machine tools then the runtime's sub-heading, is kept.
+
+**What a ruling decides.** Whether REQ-STARTUP-142 gains the sub-heading, with its wording, or the versions belong
+somewhere else in the file.
+
+**OQ-93 — Is a text field spell-checked, and if so, from what?** *(REQ-STARTUP-160, REQ-SHELL-005, REQ-STARTUP-159. Raised 2026-09-28 by the repair of `docs/defects/fixed/the-built-app-opens-a-connection-to-chromiums-component-updater.md`, under [R-062](../product/requests.md#r-062). Numbered OQ-91 on its branch because OQ-90 was already taken on a branch in flight beside it; renumbered OQ-93 at the merge, OQ-91 and OQ-92 having been taken on `main`.)*
+
+The specification says nothing about spell-checking the composer or any other text field. The runtime's built-in
+spellchecker, left at its default, fetches a Hunspell dictionary for the OS locale from `redirector.gvt1.com` whenever a
+session is created — on Linux measured, on Windows owed to the next package (IC-3); on macOS the OS spellchecker is used
+and nothing is fetched. That request is one REQ-STARTUP-160's disclosure may not name ("SHALL name no host, endpoint, or
+request this document does not require"), one REQ-SHELL-005's demo mode forbids for the whole lifetime, and one the
+offline launch of REQ-STARTUP-159 would attempt and fail. Three readings:
+
+- **no text field is spell-checked** — the dictionary list is emptied and the spellchecker turned off for every session,
+  on every platform, so the product's behaviour is one and its network activity is exactly what the document names;
+- **spell-checking from what was installed** — dictionaries carried inside the artifact (REQ-STARTUP-159's "resolves
+  from within what was installed"), which adds payload and a licence line under REQ-STARTUP-142, and a choice of
+  languages the specification does not make; or
+- **the OS spellchecker where the platform has one** — macOS's (and Windows' if the runtime uses it there), none on
+  Linux, so the behaviour differs by platform.
+
+**What the build proceeds under:** the first reading (`apps/desktop/src/main/runtime-requests.ts`), because it is the
+only one that needs no requirement the specification lacks and adds no request. **A ruling would decide** whether
+spell-checking is a behaviour the product owes; either of the other readings is additive to this build.
+
 **OQ-94 — How does a `paused` agent present, and is it settled with its session?** *(`PD-ORCH-005` over REQ-MONITOR-300; REQ-MONITOR-014, REQ-MONITOR-046, REQ-MONITOR-211, REQ-MONITOR-213, REQ-SESSION-078 and REQ-SESSION-180, none of which the directive names. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061). Numbered OQ-67 while it was built; renumbered when it reached `main`, where OQ-67 had been taken meanwhile.)*
 
 `PD-ORCH-005` adds `paused` to the states REQ-MONITOR-300 governs. Three families of requirements it does not name meet
@@ -3382,10 +4106,6 @@ Building it raised OQ-106 and OQ-107.
 
 Until they are built, the artifact is the latest of any kind, and a later iteration of the same run is told of no
 offer.
-
-**Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
-
-The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
 
 **OQ-100 — How does the counters' line spell the `paused` count clause 13 decides, where does the run-level agent that clause 13 does not name present, what does a live agent's cancel state for its paused descendants, and may the agents a crash left present `paused` before it is recorded, against clause 13's last sentence?** *(`PD-ORCH-005` clause 13, revision 4 — including its last sentence, "every other unfinished agent of a session at rest is settled as before", which the third reading below departs from — with clauses 8, 18 and 19; REQ-MONITOR-211/213, which that sentence keeps for every agent not `paused` and the third reading also departs from; REQ-MONITOR-169, whose count the clause's "the counters" decides and whose line's wording it does not; REQ-MONITOR-064 and REQ-MONITOR-128, which the directive does not name for a live agent's cancel and which the reading below departs from by counting and listing its paused descendants where they count and list live ones only; REQ-CHAT-069 and REQ-MONITOR-111, which it does not name and which the reading below departs from by showing a paused agent's state in "This task" without its elapsed time; REQ-MONITOR-043/057, REQ-MONITOR-045, REQ-SHELL-036, REQ-SESSION-171 and REQ-CHAT-008, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-065](../product/requests.md#r-065). Numbered OQ-73 while it was built; renumbered when it reached `main`, where OQ-73 had been taken meanwhile.)*
 
@@ -4274,6 +4994,7 @@ quit, final and never resumed. Whether a persona window's "Cancel the run?" at r
 as clause 15 reads, or be withheld (OQ-101). Whether the "Command not run" notice and the refusal line should
 move into the notices row, a layout change. Whether a stop during a plan cycle should persist a status and a summary of
 its own rather than a stop's `paused` and "came to rest".
+
 
 ## Design-reference dependencies
 

@@ -47,9 +47,16 @@ let open: ResolvedStore | null = null;
  * process before it paints on Windows (measured on the skills proof's first run, 2026-09-14).
  * A user-driven launch never sets it and takes `homedir()`.
  */
-function instructionEnv(): { home: string; platform: NodeJS.Platform } {
+function instructionEnv(): { home: string; platform: NodeJS.Platform; machineDir?: string } {
   const home = process.env['ROTARIS_CAPTURE_INSTRUCTIONS_HOME'];
-  return { home: home === undefined || home === '' ? homedir() : home, platform: process.platform };
+  /*
+   * `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`: the same seam for the machine-wide base, so the inventory a proof reads
+   * and the injection the run host builds (which honours the same variable) name one directory. The run host reads
+   * `ROTARIS_CAPTURE_SKILLS_MACHINE` ahead of it, so a proof that sets that one sets this one to the same directory
+   * (`skills-proof` does). Compiled out of a packaged build, where the base is always `/etc/codex`.
+   */
+  const machine = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE'] : undefined;
+  return { home: home === undefined || home === '' ? homedir() : home, platform: process.platform, ...(machine === undefined || machine === '' ? {} : { machineDir: machine }) };
 }
 
 function send(m: ProcessMessage | ServiceAskEnvelope): void {

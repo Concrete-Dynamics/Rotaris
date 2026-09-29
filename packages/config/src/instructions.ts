@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { hasEtcHierarchy } from './skills/roots.js';
+import { hasEtcHierarchy, machineCodexDir } from './skills/roots.js';
 
 /**
  * PD-WORKSPACE-002 — instruction-file discovery: the presence check the Instructions inventory draws.
@@ -36,6 +36,17 @@ export interface InstructionDiscoveryEnv {
   readonly globalDir: string;
   readonly home: string;
   readonly platform: NodeJS.Platform;
+  /**
+   * Where the machine-wide base is read from: `/etc/codex` unless given. It moves the directory and nothing
+   * else — the base keeps its identity (`machine-codex:`), its label and its platform rule, so a platform with
+   * no `/etc` hierarchy still reads no machine-wide file whatever this names.
+   *
+   * It exists for the same reason `home` is injectable: a built-app proof that lays instruction files down at
+   * every base must not write into, or read from, the operator's real `/etc/codex`
+   * (`ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, compiled out of a packaged build). It is the same directory the skill
+   * search's fourth user-scope root sits under (`SkillRootsEnv.machineDir`, `MACHINE_CODEX_DIR`), so one value moves both.
+   */
+  readonly machineDir?: string | undefined;
 }
 
 function fileIfPresent(entries: InstructionFileEntry[], id: string, name: string, path: string, source: string, isFile: (p: string) => boolean): void {
@@ -70,7 +81,7 @@ export function discoverInstructionFiles(env: InstructionDiscoveryEnv, isFile: (
     { idPrefix: 'user-openhands', dir: join(env.home, '.openhands'), source: 'user (~/.openhands)' },
   );
   if (hasEtcHierarchy(env.platform)) {
-    bases.push({ idPrefix: 'machine-codex', dir: join('/etc', 'codex'), source: 'machine (/etc/codex)' });
+    bases.push({ idPrefix: 'machine-codex', dir: machineCodexDir(env.machineDir), source: 'machine (/etc/codex)' });
   }
   for (const base of bases) {
     if (base.dir.trim() === '') continue;

@@ -92,6 +92,52 @@ describe('the ledger and the scheduler against a real store (ADR-0012)', () => {
     expect(dal.eventsOfKind(sid, 'child.spawn')).toHaveLength(4);
   });
 
+  it('REQ-TOOLS-152: an inherited-context id naming no task at all refuses the call with no record; one naming a failed or unfinished task is ignored; a completed sibling with its report is carried once', () => {
+    const l = ledger();
+    const done = spawn(l, 'done'); const idDone = done.ok ? done.value.row.task_id : '';
+    const failed = spawn(l, 'failed'); const idFailed = failed.ok ? failed.value.row.task_id : '';
+    const queued = spawn(l, 'queued'); const idQueued = queued.ok ? queued.value.row.task_id : '';
+    const noReport = spawn(l, 'no-report'); const idNoReport = noReport.ok ? noReport.value.row.task_id : '';
+    for (const id of [idDone, idFailed, idNoReport]) { l.claimStart(id); l.transition(id, 'running'); }
+    l.transition(idDone, 'succeeded'); l.storeReport(idDone, { status: 'succeeded', summary: 's', final_response: 'The module is small.' });
+    l.transition(idFailed, 'failed'); l.storeReport(idFailed, { status: 'failed', summary: 'f' });
+    l.transition(idNoReport, 'succeeded');
+    const other = spawn(l, 'other', { parentId: 'someone-else' }); const idOther = other.ok ? other.value.row.task_id : '';
+    const otherDone = spawn(l, 'other-done', { parentId: 'someone-else' }); const idOtherDone = otherDone.ok ? otherDone.value.row.task_id : '';
+    l.claimStart(idOtherDone); l.transition(idOtherDone, 'running'); l.transition(idOtherDone, 'succeeded'); l.storeReport(idOtherDone, { status: 'succeeded', summary: 'o' });
+    const before = dal.childrenOf(sid).length;
+    // "an id … that names no task at all refuses the call": no record, no id, the reason names the id.
+    expect(spawn(l, 'x', { inheritedContext: [idDone, 'bg_00000000'] })).toMatchObject({ ok: false, error: { reason: "inherited_context id 'bg_00000000' refers to nothing: no task has that id" } });
+    // Another parent's COMPLETED task exists and is not a sibling: refused for ownership, never as nonexistent (OQ-81).
+    expect(spawn(l, 'x', { inheritedContext: [idOtherDone] })).toMatchObject({ ok: false, error: { reason: `inherited_context id '${idOtherDone}' is not a sibling's: it is owned by parent 'someone-else', not '${l.root.taskId}'` } });
+    expect(spawn(l, 'x', { inheritedContext: [' '] })).toMatchObject({ ok: false, error: { reason: 'A malformed inherited-context entry (empty) was rejected' } });
+    expect(dal.childrenOf(sid)).toHaveLength(before);
+    // "an id … naming a task that failed or has not finished is ignored without refusing"; a report is what is carried, so succeeded-without-report is not yet complete either.
+    // The root execution record is a task in the same namespace that has not finished (REQ-ORCH-072), and so is another parent's unfinished task.
+    const r = spawn(l, 'reader', { inheritedContext: [idFailed, idDone, idQueued, idNoReport, l.root.taskId, idOther, idDone] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.inherited.map((c) => c.task_id)).toEqual([idDone]);
+    expect(r.value.row.state).toBe('queued');
+    expect(JSON.parse(r.value.row.inherited_context)).toEqual([idFailed, idDone, idQueued, idNoReport, l.root.taskId, idOther, idDone]);
+    // Inheriting imposes no ordering: the reader does not wait on anything (REQ-ORCH-032).
+    expect(JSON.parse(r.value.row.depends_on)).toEqual([]);
+  });
+
+  it('REQ-TOOLS-152 with REQ-ORCH-072: a child naming the root or its own task in inherited_context is ignored, not told the task does not exist', () => {
+    const l = ledger();
+    const a = spawn(l, 'a'); const idA = a.ok ? a.value.row.task_id : '';
+    l.claimStart(idA); l.transition(idA, 'running');
+    // The root delegating with its own id: the root is running, so the id is ignored.
+    const fromRoot = spawn(l, 'r', { inheritedContext: [l.root.taskId] });
+    expect(fromRoot.ok && fromRoot.value.inherited).toEqual([]);
+    // Child `a` delegating (one level deeper) naming the root, and naming its own task: both exist and neither has finished.
+    const fromA = spawn(l, 'b', { parentId: idA, parentDepth: 1, inheritedContext: [l.root.taskId, idA] });
+    expect(fromA.ok).toBe(true);
+    expect(fromA.ok && fromA.value.inherited).toEqual([]);
+    expect(fromA.ok && fromA.value.row.parent_id).toBe(idA);
+  });
+
   it('REQ-MONITOR-016: an illegal move is refused naming both states, the record untouched, no event; a legal terminal move stamps completed_at', () => {
     const l = ledger();
     const a = spawn(l, 'a');
@@ -209,22 +255,25 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
-  /** A tool the test answers itself, in place of the gate's executors; undefined leaves the call to the delegation tools. */
-  /** A test's own tool, dispatched before the delegation tools; `builtIn` runs the delegation tool of that name, so a test can hold one. */
-  type TestTool = (name: string, args: Record<string, unknown>, builtIn: () => Promise<PortToolResult>) => Promise<PortToolResult> | undefined;
+  /**
+   * A tool the test answers itself, in place of the gate's executors; undefined leaves the call to the delegation tools.
+   * The third argument is the calling agent's port context, for a stand-in that reads what the run handed the port;
+   * the fourth, `builtIn`, runs the delegation tool of that name, so a test can hold one.
+   */
+  type TestTool = (name: string, args: Record<string, unknown>, ctx: ToolPortContext, builtIn: () => Promise<PortToolResult>) => Promise<PortToolResult> | undefined;
 
   /** A tool port whose only tools are the three delegation tools, dispatched straight to the ops (the gate is Part A's, tested there). */
-  function delegationPort(ops: DelegationOps, parentId: string, tool?: TestTool): ToolPort {
+  function delegationPort(ops: DelegationOps, parentId: string, tool?: TestTool, ctx?: ToolPortContext): ToolPort {
     const dispatch = async (name: string, raw: string): Promise<PortToolResult> => {
       const a = JSON.parse(raw) as Record<string, unknown>;
       const ok = (text: string): PortToolResult => ({ text, isError: false, status: 'ok', durationMs: 1, label: name, args: a });
-      const own = tool?.(name, a, () => builtIn(name, a, ok));
+      const own = ctx ? tool?.(name, a, ctx, () => builtIn(name, a, ok)) : undefined;
       if (own) return own;
       return builtIn(name, a, ok);
     };
     const builtIn = async (name: string, a: Record<string, unknown>, ok: (text: string) => PortToolResult): Promise<PortToolResult> => {
       if (name === 'delegate') {
-        const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: [], category: '', runInBackground: a['run_in_background'] !== false, writeScope: (a['write_scope'] as string[] | undefined) ?? [], ...(typeof a['continuation_of'] === 'string' ? { continuationOf: a['continuation_of'] } : {}) });
+        const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: (a['inherited_context'] as string[] | undefined) ?? [], category: '', runInBackground: a['run_in_background'] !== false, writeScope: (a['write_scope'] as string[] | undefined) ?? [], ...(typeof a['continuation_of'] === 'string' ? { continuationOf: a['continuation_of'] } : {}) });
         if (r.status === 'rejected') return { ...ok(`Task '${r.canonicalName}': rejected — ${r.message}`), isError: true, status: 'failed' };
         let text = `Task '${r.canonicalName}': ${r.status} — ${r.message}\ntask_id: ${r.taskId}`;
         if (a['run_in_background'] === false) { const w = await ops.waitForTasks(parentId, [r.taskId]); text += `\n\n${'refused' in w ? w.refused : 'interrupted' in w ? w.interrupted : w.text}`; }
@@ -243,9 +292,10 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
   /**
    * `deaf`: the personas whose calls ignore their abort — a provider that does not honour it — so a test can have a call
    * outlive a stop. `hooks`, `drainTimeoutMs` and `publisher` reach the session as their names say; `images` has the
-   * model accept image input.
+   * model accept image input. `pending`: request ids every port reports as its own live approval or question set, so an
+   * id-routed answer finds a holder.
    */
-  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher } = {}) {
+  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string> } = {}) {
     // The scripted client answers by persona and by the number of calls that persona has made.
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
@@ -274,9 +324,10 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         built.push({ persona: ctx.persona, mode: selected });
         contexts.set(ctx.agentName, ctx);
         let mode: PermissionPreset = selected;
-        const base = { cancelPending: () => 0, setMode: (m: string) => { const previous = mode; mode = m as PermissionPreset; return { requested: mode, effective: mode, downgraded: false, reason: '', previous }; }, currentMode: () => mode, answerApproval: () => false };
+        const held = (id: string): boolean => over.pending?.has(id) ?? false;
+        const base = { cancelPending: () => 0, setMode: (m: string) => { const previous = mode; mode = m as PermissionPreset; return { requested: mode, effective: mode, downgraded: false, reason: '', previous }; }, currentMode: () => mode, answerApproval: held, answerQuestions: held, cancelQuestions: held };
         return ctx.delegation
-          ? { ...delegationPort(ctx.delegation, ctx.parentId ?? 'root', over.tool), ...base }
+          ? { ...delegationPort(ctx.delegation, ctx.parentId ?? 'root', over.tool, ctx), ...base }
           : { specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }), ...base };
       },
       attended: () => true,
@@ -454,6 +505,60 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     });
   });
 
+  describe('REQ-TOOLS-152 / REQ-TOOLS-154 (5): inherited context reaches the child', () => {
+    const textOf = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('')).join('\n');
+
+    it('the named completed sibling\'s report is item (5) of the child\'s payload: after the workspace root, immediately before the task, as the block the parent read', async () => {
+      const payloads = new Map<string, string>();
+      const { sessions, client } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: survey', run_in_background: false } }], 'Surveying.');
+          if (turn === 2) {
+            const surveyId = /task_id: (bg_[0-9a-f]{8})/.exec(textOf(req))![1]!;
+            return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coder', task_name: 'build', task: 'TASK: build', inherited_context: [surveyId], run_in_background: false } }], 'Building.');
+          }
+          return answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        const text = textOf(req);
+        const name = text.includes('TASK: build') ? 'build' : 'survey';
+        if (!payloads.has(name)) payloads.set(name, text);
+        return answer(name === 'survey' ? 'The module is small.' : 'Built it.');
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'survey then build') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const rows = children(sid);
+      expect(rows.map((c) => c.canonical_name).sort()).toEqual(['build', 'survey']);
+      const survey = rows.find((c) => c.canonical_name === 'survey')!;
+      const build = rows.find((c) => c.canonical_name === 'build')!;
+      expect(JSON.parse(build.inherited_context)).toEqual([survey.task_id]);
+      // (1) the root, (3) the sibling-artifact index the survey's report became, (5) the same report block the parent
+      // was handed, (6) the task — in REQ-TOOLS-154's order, with nothing between (5) and (6).
+      expect(payloads.get('build')).toMatch(/Workspace root: C:\/ws\.[^\n]*\n\nPRIOR SIBLING ARTIFACT INDEX\n[^\n]*survey[^\n]*\n\n\[Inherited context — [^\n]*\]\n\n### survey \(codebase-analyst\) — succeeded\nThe module is small\.\n\nTASK: build$/);
+      const parentRead = textOf(client.requests.find((r) => textOf(r).includes('TASK: build'))!);
+      expect(parentRead).toContain('### survey (codebase-analyst) — succeeded\nThe module is small.');
+      // The survey's own payload carried no such block: nothing had been named for it.
+      expect(payloads.get('survey')).not.toContain('[Inherited context');
+      // The delegation itself was ordinary: accepted, no wait on the sibling (REQ-ORCH-032).
+      expect(JSON.parse(build.depends_on)).toEqual([]);
+    });
+
+    it('an id naming no task refuses the delegation: no child, no task id, the reason names the id (REQ-TOOLS-153)', async () => {
+      const { sessions, client } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coder', task_name: 'build', task: 'TASK: x', inherited_context: ['bg_00000000'] } }], 'Delegating.') : answer('Understood.');
+        }
+        return answer('unreachable');
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'try it') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(children(sid)).toEqual([]);
+      const resumed = textOf(client.requests.at(-1)!);
+      expect(resumed).toContain("Task 'build': rejected — inherited_context id 'bg_00000000' refers to nothing: no task has that id");
+      expect(resumed).not.toContain('task_id:');
+    });
+  });
+
   it('REQ-TOOLS-030/073 (PD-TOOLS-002): a mid-run switch to autonomous reaches the children built after it', async () => {
     const ref: { sid?: SessionId } = {};
     const { sessions, built } = sessionsWith((persona, turn) => {
@@ -473,6 +578,130 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     // The entry agent was built before the switch; the child was built after it and must carry the new mode.
     expect(built[0]).toMatchObject({ persona: 'orchestrator', mode: 'ask' });
     expect(built.slice(1).map((b) => b.mode)).not.toContain('ask');
+  });
+
+  /**
+   * PD-TOOLS-005, the engine's half: ONE away holder per run reaches every agent's port context, delegated children
+   * included; the user's input to the run's session — a mode change, a message, an answer — clears it; and a later run of
+   * the session starts with the user present. The gate's half (marking on the expired wait, resolving at once with the
+   * directive's reason) is `gate.test.ts`'s and `run-host/tools.test.ts`'s; here a stand-in reads the holder as the gate does.
+   */
+  describe('PD-TOOLS-005: the run\'s away state reaches every agent, ends on the user\'s input, and does not outlive the run', () => {
+    const tick = () => new Promise((r) => setTimeout(r, 10));
+    const gate = () => { let open!: () => void; const p = new Promise<void>((r) => { open = r; }); return { p, open }; };
+    /** The gate's consultation, stood in: a `write_file` ask is denied at once while away, and "times out" (marks away) when the path says so. */
+    const asks: { agent: string; away: { afterSeconds: number } | null }[] = [];
+    const gateStandIn = (name: string, a: Record<string, unknown>, ctx: ToolPortContext): Promise<PortToolResult> | undefined => {
+      if (name !== 'write_file') return undefined;
+      const away = ctx.presence?.away() ?? null;
+      asks.push({ agent: ctx.agentName, away });
+      if (away !== null) return Promise.resolve({ text: `Permission denied. The user is treated as away because an earlier approval in this run went unanswered for ${away.afterSeconds} seconds, so the request was denied.`, isError: true, status: 'blocked', durationMs: 0, label: name, args: a });
+      if (String(a['path']) === 'unanswered.ts') { ctx.presence?.markAway(5); return Promise.resolve({ text: 'Permission denied. Denied because no answer arrived within 5 seconds.', isError: true, status: 'blocked', durationMs: 5_000, label: name, args: a }); }
+      return Promise.resolve({ text: 'ok', isError: false, status: 'ok', durationMs: 1, label: name, args: a });
+    };
+
+    it('a child\'s ask in an away run reads the mark the root\'s expired wait set, on the one holder the run hands every port', async () => {
+      asks.length = 0;
+      const { sessions, contexts } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'w0', name: 'write_file', args: { path: 'unanswered.ts', content: 'a' } }]);
+          if (turn === 2) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coder', task_name: 'implement', task: 'TASK: write it', run_in_background: false } }]);
+          return answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        return turn === 1 ? toolCalls([{ callId: 'w1', name: 'write_file', args: { path: 'child.ts', content: 'b' } }]) : answer('I could not write.');
+      }, { tool: gateStandIn });
+      const sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const root = contexts.get('orchestrator')!;
+      const child = contexts.get('implement')!;
+      expect(root.presence).toBeDefined();
+      expect(child.presence).toBe(root.presence);
+      expect(asks).toEqual([{ agent: 'orchestrator', away: null }, { agent: 'implement', away: { afterSeconds: 5 } }]);
+      // The transition is in the session log's words, once.
+      expect(warnings.filter((w) => w.startsWith('user away: an approval in this run went unanswered for 5 seconds'))).toHaveLength(1);
+      // The run ended: the holder is the run's, and a later run of this session starts present (below).
+      expect(root.presence!.away()).toEqual({ afterSeconds: 5 });
+    });
+
+    it('the user returns on a permission-mode change, a message or an answer; shutdown is not the user; a new run starts present', async () => {
+      asks.length = 0;
+      const hold = gate();
+      let sid = '' as SessionId;
+      const { sessions, contexts } = sessionsWith((persona, turn) => {
+        if (persona !== 'orchestrator') return answer('unused');
+        if (turn === 1) return toolCalls([{ callId: 'w0', name: 'write_file', args: { path: 'unanswered.ts', content: 'a' } }, { callId: 'r1', name: 'read_file', args: { path: 'hold' } }]);
+        return answer(`root turn ${turn}`);
+      }, { tool: (name, a, ctx) => (name === 'read_file' ? hold.p.then(() => ({ text: 'held', isError: false, status: 'ok' as const, durationMs: 1, label: name, args: a })) : gateStandIn(name, a, ctx)) });
+      sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+      // The run is live, parked on the held read, with the user marked away by the expired wait before it.
+      await tick();
+      const presence = contexts.get('orchestrator')!.presence!;
+      expect(presence.away()).toEqual({ afterSeconds: 5 });
+      // A permission-mode change returns the user …
+      expect(sessions.control({ op: 'setPermissionMode', sessionId: sid, args: { mode: 'autonomous' } })).toEqual({ ok: true });
+      expect(presence.away()).toBeNull();
+      expect(warnings.filter((w) => w.startsWith('user returned:'))).toHaveLength(1);
+      // … so does a message to the run, even one the operation then refuses (blank text) — the input is the user's.
+      presence.markAway(5);
+      expect(sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: '   ' } })).toEqual({ ok: false });
+      expect(presence.away()).toBeNull();
+      // An answer routed by request id returns the user of the session that held it; a stale id, held by none, returns nobody.
+      presence.markAway(5);
+      expect(sessions.answerApproval('no-such-request', 'once')).toBe(false);
+      expect(presence.away()).toEqual({ afterSeconds: 5 });
+      // The application's shutdown announcement is not the user's input; a run control is. (Shutdown is not sent here — it would stop the run.)
+      expect(sessions.control({ op: 'setReasoning', sessionId: sid, args: { level: 'low' } }).ok).toBe(true);
+      expect(presence.away()).toBeNull();
+      presence.markAway(5);
+      hold.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // A later run of the same session: a fresh holder, present, and the old one is not consulted.
+      contexts.clear();
+      const again = sessions.prompt(sid, 'and again');
+      expect(again.ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const next = contexts.get('orchestrator')!.presence!;
+      expect(next).not.toBe(presence);
+      expect(next.away()).toBeNull();
+      expect(presence.away()).toEqual({ afterSeconds: 5 });
+    });
+
+    it('the user returns on a confirmed transcript clear, a compression, and an approval or question answer the run holds', async () => {
+      const hold = gate();
+      const { sessions, contexts } = sessionsWith((persona, turn) => {
+        if (persona !== 'orchestrator') return answer('unused');
+        if (turn === 1) return toolCalls([{ callId: 'w0', name: 'write_file', args: { path: 'unanswered.ts', content: 'a' } }, { callId: 'r1', name: 'read_file', args: { path: 'hold' } }]);
+        return answer(`root turn ${turn}`);
+      }, {
+        tool: (name, a, ctx) => (name === 'read_file' ? hold.p.then(() => ({ text: 'held', isError: false, status: 'ok' as const, durationMs: 1, label: name, args: a })) : gateStandIn(name, a, ctx)),
+        pending: new Set(['live-approval', 'live-questions', 'cancelled-questions']),
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+      await tick();
+      const presence = contexts.get('orchestrator')!.presence!;
+      expect(presence.away()).toEqual({ afterSeconds: 5 });
+      // REQ-MONITOR-004 / REQ-CHAT-084: the confirmed clear is an operation on the live run, answered before `control`'s common line.
+      expect(sessions.control({ op: 'clearTranscript', sessionId: sid, args: {} }).ok).toBe(true);
+      expect(presence.away()).toBeNull();
+      // REQ-MONITOR-092: the compression the host awaits reaches `controlAsync`, never `control`; the return is taken before it settles.
+      presence.markAway(5);
+      const compressing = sessions.controlAsync({ op: 'forceCompression', sessionId: sid, args: {} });
+      expect(presence.away()).toBeNull();
+      await compressing;
+      // ADR-0013: answers routed by request id — the session whose run holds the id is the one whose user returns.
+      presence.markAway(5);
+      expect(sessions.answerApproval('live-approval', 'once')).toBe(true);
+      expect(presence.away()).toBeNull();
+      presence.markAway(5);
+      expect(sessions.answerQuestions('live-questions', {})).toBe(true);
+      expect(presence.away()).toBeNull();
+      presence.markAway(5);
+      expect(sessions.cancelQuestions('cancelled-questions')).toBe(true);
+      expect(presence.away()).toBeNull();
+      hold.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+    });
   });
 
   it('REQ-MONITOR-102: the persisted tool-call total is session-wide — the entry agent\'s calls AND its children\'s', async () => {
@@ -1208,7 +1437,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const { sessions, seen } = scriptedChild([() => answer('Finished.')], {
         root: (turn) => (turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : turn === 2 ? { parts: [{ hold: rootStep.hold }, ...answer('Delegated; waiting.').parts] } : answer('ok')),
         // The delegate call is in flight when the pause is accepted: it finishes, and its child is held unstarted.
-        tool: (name, _a, builtIn) => (name === 'delegate' ? delegating.hold.then(builtIn) : undefined),
+        tool: (name, _a, _ctx, builtIn) => (name === 'delegate' ? delegating.hold.then(builtIn) : undefined),
       });
       const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
       await pauseAt(sessions, sid, () => dal.residentRows(sid).some((r) => r.kind === 'tool' && r.tool_name === 'delegate'), delegating.open);

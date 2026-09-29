@@ -10,6 +10,7 @@ import { deleteSession, exportRecords, exportTrajectories, repairSessions, sessi
 import { CHECKPOINTS_DEFAULTS, type LiveState } from '@rotaris/config';
 import { improvementCollectorOf, retrospectiveOf } from './configuration.js';
 import { launchSession } from './launch.js';
+import { writeSkillListing } from './skills.js'; // REQ-CHAT-162
 import { randomUUID } from 'node:crypto';
 // The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network.
 
@@ -97,10 +98,11 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       return { kind: 'workspace.ack', workspaceId: req.workspaceId };
     }
     /*
-     * ADR-0063 — portable skills. All four answer with the same `skills.state` shape, so no caller has to ask
-     * again to redraw, and `loaded` names the skill for the toast. None persists anything: REQ-WORKSPACE-073
+     * ADR-0063 — portable skills. The first four answer with the same `skills.state` shape, so no caller has to
+     * ask again to redraw, and `loaded` names the skill for the toast. None persists anything: REQ-WORKSPACE-073
      * and REQ-WORKSPACE-151 both scope their effect to the session and leave `skills.overrides` exactly as it
-     * was, which is why the row a surface draws keeps showing the PERSISTED policy.
+     * was, which is why the row a surface draws keeps showing the PERSISTED policy. The fifth, `skills.list`
+     * (REQ-CHAT-162), persists exactly one thing — a transcript row — and changes no policy either.
      */
     case 'skills.read':
       return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId) };
@@ -122,6 +124,13 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       // REQ-WORKSPACE-151: a failure is reported with the reason REQ-WORKSPACE-057 gives and leaves the catalog unchanged.
       if (!r.ok) return { kind: 'refused', code: 'skills.load-failed', headline: r.reason };
       return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name };
+    }
+    case 'skills.list': {
+      // REQ-CHAT-162: one saved system row, through the followed session's own writer (`writeSkillListing` says why).
+      const r = writeSkillListing(sessions.writer(asSessionId(req.sessionId)), skills.state(req.workspaceRoot, req.sessionId));
+      if (!r.ok) return { kind: 'refused', code: r.code, headline: 'The skills could not be listed in the transcript', detail: r.reason };
+      log(`skills: listed ${r.count} skill(s) into session ${req.sessionId} as transcript row ${r.index}`);
+      return { kind: 'skills.listed', count: r.count, index: r.index };
     }
     case 'workspace.refuseRuns':
       lease.refuse(req.workspaceId as WorkspaceId, millis(req.leaseMs));

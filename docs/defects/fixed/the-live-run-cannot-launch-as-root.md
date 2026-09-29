@@ -23,5 +23,8 @@ unable to run on Linux as root.
 
 `launch` passes `hostSwitches` after the main entry, as `lib/driver.mjs` does, under the owner's permission (R-066).
 The next live run in the same container reached every scenario and passed. It then showed the application's own
-code-intelligence child failing the same way
-([`the-code-intelligence-server-cannot-start-as-root.md`](the-code-intelligence-server-cannot-start-as-root.md)).
+code-intelligence child failing the same way, which `main` had already recorded and repaired under OQ-82
+([`the-code-intelligence-server-dies-when-the-app-runs-as-root.md`](the-code-intelligence-server-dies-when-the-app-runs-as-root.md)).
+
+`main` reached the same line independently, in its sweep of the launch sites as root (`fix-proofs-linux`, R-062); when
+this branch reached `main` the two were identical, and `main`'s stands.

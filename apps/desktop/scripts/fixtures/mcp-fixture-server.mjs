@@ -14,6 +14,8 @@
  *                          probe exists for): what `'auto'` does to it over our in-place transport is measured.
  *   --pid-file <path>      append this process's pid and a line per launch (the proof counts processes).
  *   --request-file <path>  append the method of every request received, one per line (a test counts probes).
+ *   --client-file <path>   append the `clientInfo` of every `initialize` as one JSON line (who the client said it was,
+ *                          REQ-STARTUP-158: the product version, never a literal).
  *   --rename-after <ms>    after the first tools/list, wait then publish `notifications/tools/list_changed`
  *                          with `extra` withdrawn and `newcomer` introduced (REQ-MCP-060's narrowing).
  *   --crash-after <ms>     exit(3) that many ms after the first tools/call is received (REQ-MCP-069).
@@ -33,6 +35,7 @@ const has = (name) => args.includes(name);
 const era = opt('--era', '2025');
 const pidFile = opt('--pid-file');
 const requestFile = opt('--request-file');
+const clientFile = opt('--client-file');
 const renameAfter = Number(opt('--rename-after', '0'));
 const crashAfter = Number(opt('--crash-after', '0'));
 const initDelay = Number(opt('--init-delay', '0'));
@@ -89,6 +92,7 @@ function handle(msg) {
   if (method === undefined) return; // a response to something we sent; nothing is sent that expects one
   if (requestFile) appendFileSync(requestFile, `${method}\n`);
   if (method === 'initialize') {
+    if (clientFile) appendFileSync(clientFile, `${JSON.stringify(params?.clientInfo ?? null)}\n`);
     if (neverInit) return;
     if (era === '2026-only') return fail(id, -32601, 'Method not found');
     const offered = params?.protocolVersion;

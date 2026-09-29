@@ -15,7 +15,7 @@ is forwarded (ADR-0009/0010).
 | touching delegation | [§4 Children](#4-children-adr-0012) |
 | adding or changing a control operation | [§5 Controls reaching in](#5-controls-reaching-in-adr-0010-1-sessionscontrol) |
 | changing teardown, or acting on a session no run holds | [§6 End](#6-end) and [§6a](#6a-the-session-browsers-actions-reaching-a-record-no-run-holds-part-u) |
-| adding a table or a column | [§7 The store the run writes](#7-the-store-the-run-writes-packagesstoresrcschemats-v19) |
+| adding a table or a column | [§7 The store the run writes](#7-the-store-the-run-writes-packagesstoresrcschemats-v24) |
 | adding a configuration key | [§8 Configuration's three tiers](#8-configurations-three-tiers-adr-0037-as-they-touch-the-run) |
 | drawing something from a publication | [§9 What a surface does with a publication](#9-what-a-surface-does-with-a-publication-adr-0046-adr-0045-part-z) |
 
@@ -75,6 +75,27 @@ merges the enabled set into one block
 (`mergeInstructionContext` — a source comment per file, one blank line between blocks, both size limits) and
 caches it for as long as the session lasts (REQ-WORKSPACE-046), cleared by session creation and by a rescan, the
 two events that already clear the catalog.
+
+**The cold path is timed, and it runs after first input.** `workspaceContext` reads the monotonic clock port four
+times on a cache miss: before the saved-policy read, after it, after the discovery and after the merge. It then logs
+one line, `workspace context: the enabled set of N instruction file(s) merged into B bytes in T ms (policy read …,
+discovery …, merge …)`. That line is REQ-WORKSPACE-049's figure as the built app reports it, and `injection-proof`
+reads it back. The policy read counts towards the figure because `PD-WORKSPACE-002` made the per-file policy part of
+deciding what is merged. Nothing warms the merge at workspace open, as the catalog is warmed. The first read happens
+at the first agent built for a session, in the run host, after the typed prompt has been recorded as row 0. It
+therefore cannot delay the window's first input, and it never runs in the window's process. The first measurement
+(2026-09-27, Linux) is in `first-release-plan.md` §3.2. The machine-wide directory is injectable
+(`SkillHostDeps.machineDir`, `/etc/codex` when absent) and, since 2026-09-28, moves both discoveries at once: the
+instruction base is the directory itself and REQ-WORKSPACE-051's fourth user-scope skill root is its `skills` child
+(`SkillRootsEnv.machineDir`, `machineCodexDir` in `config/src/skills/roots.ts`, the one place the literal lives). It is
+a verification seam in the built app (`ROTARIS_CAPTURE_SKILLS_MACHINE ?? ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, compiled
+out of a packaged build) and never widens the platform rule. The port every read goes through
+(`NODE_DISCOVERY_PORTS.readFile`) decodes strictly since the same day: a file that is not UTF-8 throws, and the throw
+reaches the arm each walk already had for an unreadable file — REQ-WORKSPACE-045's warning naming the path and the
+error for an instruction file, REQ-WORKSPACE-053's skip with a reason for a `SKILL.md` (OQ-79), REQ-WORKSPACE-062's
+"no block" for a force-loaded body, the disable manifest's unreadable arm, and REQ-WORKSPACE-057's "SKILL.md not found"
+with the decoder's reason for a `SKILL.md` loaded by hand (`loadManualSkill`) — where the lenient decode had merged
+replacement characters with no warning.
 
 **The set is decided in one place because it has two readers.** `instructionFiles` is a method rather than a
 step inside the context because the retrospective consumes the same list (`PD-LIBRARY-002` over
@@ -347,7 +368,8 @@ makes a replayed event persist once and a ladder retry update the row in place r
 marks the live row `stalledSince`, the next output clears it, and neither publishes anything into the record
 (REQ-CHAT-164's detection half; the drawing half is the renderer's). After the step: the supervisor observes the
 message; each tool call is observed, written as a running `tool` row, dispatched through the **gate** (policy →
-approval when needed → executor; hooks in its two slots), settled with its outcome (and a `diff` row for an
+approval when needed — resolved at once under the headless policy while the run treats the user as **away**,
+`PD-TOOLS-005`, §5 → executor; hooks in its two slots), settled with its outcome (and a `diff` row for an
 edit); the results go back as one tool message; hook feedback follows as a user message. A reply with no tool call ends the turn — unless a steer is pending, in which case
 the agent takes another round; an empty reply with no call is the runtime's stuck report to the supervisor.
 
@@ -514,12 +536,15 @@ watchdog on the clock port) and the turn awaits the port's `ready()` before read
 collision prefix) and from it, in one place, the executors outside the registry (named by callable name, dispatching the
 reported name to the session's shared connection under the entry's allowance, 300 s by default), the model's listing and
 `## MCP servers` appended to the system prompt (REQ-MCP-101, byte-exact). Under `restricted` or `read_only` the MCP
-tools are withheld from the surface (ADR-0016's reading). The session's connections open on first demand under a keyed
+tools are withheld from the surface (ADR-0016's reading), and while the plan gate holds every server executor is withheld by identity — `withheldUnderPlanGate(name, false)` — rather than by the registry's answer for its name, which a server's tool offered under a free public name such as `read_file` would otherwise borrow (REQ-ORCH-153; the gate refuses the same call on dispatch through its `publicTool` predicate and the port's withheld set). The session's connections open on first demand under a keyed
 single-flight (one process per server per session, shared by every child), a per-call failure is that call's (no retry,
 no reconnect; the next call re-establishes; one `mcp_config` warning per server per session), a `tools/list_changed`
 recomputes and only narrows (the executor deleted, the prompt untouched). **Their lifetime:** the connections of a
 session live until the session's lock is released, which today is the run host's shutdown (`McpHost.closeAll`, after
-`Sessions.closeAll`; the discovery children are killed first so no outstanding discovery delays the exit).
+`Sessions.closeAll`; the discovery children are killed first so no outstanding discovery delays the exit). **Who the
+client says it is:** every handshake on all three paths names `rotaris` at the product version the run host read from
+the application manifest (`McpHost`'s `productVersion`, required as `clientVersion` by `ToolDiscovery`, `HealthProbe`,
+`SessionConnections` and `openClient`), never a literal (REQ-STARTUP-158; a literal `0.1.0` until 2026-09-27).
 
 **Code intelligence (Part T; ADR-0035).** The shipped `code_intelligence` entry is **enabled** (REQ-CONFIG-181; the
 2026-09-05 deviation reverted, its record kept in `config/src/mcp/defaults.ts`), so every run whose persona carries it —
@@ -604,6 +629,21 @@ fixed when `IterationChildren` is built) — and a child of that later iteration
 to the root; a plan cycle's root takes up none, OQ-99). The field itself is not in REQ-TOOLS-152, which the directive
 does not name: **OQ-66**.
 
+**Inherited context (REQ-TOOLS-152, REQ-TOOLS-154 item (5), REQ-ORCH-032; `children/ledger.ts`, `notify.ts`).** A
+`delegate` call may carry `inherited_context`, task ids of siblings whose reports the child is to read without waiting on
+them. `ChildLedger.spawn` resolves each after REQ-ORCH-046's dependency checks and before its cycle check. Existence is
+asked of the session's child records and the root execution record, which shares their namespace (REQ-ORCH-072): an id no
+task has refuses the call with no record and no id, reported as REQ-TOOLS-153's `rejected`; an id naming a task that exists
+and has not completed — the root, the caller's own task, any task that failed, was cancelled, has not finished, or
+succeeded without its report stored — is ignored; the caller's own children `succeeded` with a report stored are returned on
+`Spawned.inherited`, once each in the caller's order; a completed task that is not the caller's own child is refused for
+ownership, naming its parent as the `depends_on` refusal does, never as nonexistent (**OQ-81**). `IterationChildren.delegate` renders them at once — a heading saying
+the reports are context and not a dependency, then one REQ-ORCH-060 `reportBlock` per sibling, the same block the parent
+reads on a resume — and keeps the text per task id in memory for the life of the run, exactly as the attachment list is
+kept. `childPayload`'s sixth argument places it as item (5), after the artifact blocks and immediately before the task;
+`execute` passes what was remembered and nothing else of it changed. The ids stay on `children.inherited_context` for the
+agent surfaces (REQ-MONITOR-074); the run holds no other record of which of them counted.
+
 **The record the agent surfaces read (Part R; REQ-MONITOR-044).** Each child's `AgentRecord` carries, beside what Part B
 projected, `reasoning` (the persona's configured level, `medium` when none), `contextUsed` (the input count of its latest
 model step) and `contextLimit` — **from Part AH the model's own `max_input_tokens`** where the configuration states one
@@ -641,6 +681,25 @@ resumes with its agents (clause 19).
 | `forceCompression` | `run.forceCompression()` → the run's **`ConversationRegistry`** (`run/conversations.ts`, ADR-0060 decision 1's second reader) → each live turn's `CompressionRunner.manual` | **Part AO** (REQ-CHAT-078..081, REQ-MONITOR-090..096): every conversation live inside `runTurn` — the root's and each child's, registered for the span of the turn and unregistered on every exit — compresses CONCURRENTLY and the answer settles once ALL have; unconditional (neither the threshold nor the futility latch is read; the `context_compressed` entry carries `trigger: manual` and NO threshold field); one pass per conversation at a time, shared with the automatic trigger (a pass in flight is joined, `due()` answers false meanwhile); refused `no_run` ("No run is active.") or `no_active_conversations` ("No active agent contexts are available to compress."); the run host raises the count toast or the persistent "Context compression incomplete" with each failing agent and reason in the detail block. **The one asynchronous control:** `Sessions.controlAsync` is its entry and the run host awaits it; the synchronous `control` answers the `no_run` refusal |
 | `clearTranscript` | `SessionWriter.clearTranscript()` — the run's own writer, or the loaded idle session's | **Part AO** (REQ-CHAT-082..084, both routes): every transcript row, resident or released to a page, deleted in ONE transaction with the **`transcript_cleared`** timeline entry, so a reader sees the old rows or none; the writer's resident count and open response rows reset so the run's next write cannot resurrect a row, the row index counter NOT reset (the `events` history keeps REQ-EVENTS-052's contiguity, the next row takes the next index); the commit hand-off carries `clear` and the projection owner drops every held row, cancels a pending growth tick and republishes — an increment from 0 with no rows, then the record. Failures: the persistent "Could not clear transcript" with the store's reason as detail; "Transcript is busy and could not be cleared." is a toast whose condition the store's synchronous transactions make unreachable in this build (stated in `sessions.ts`) |
 | everything else in REQ-MONITOR-004 | — | answers `false` (no mechanism yet) |
+
+**Every operation above but `announceShutdown` is the user's input to the run, and the first of them after an approval
+wait expired unanswered *returns* the user (`PD-TOOLS-005`).** The run's away state is one holder per run,
+`UserPresence` (`engine/run/presence.ts`), installed by `start` and every continuation beside the mode override and
+handed to every agent's port through `ToolPortContext.presence` — a delegated child's included. The gate marks it when a
+brokered wait ends by timeout (the first ask still pays the full `runtime.approval_timeout_seconds`; a timeout of 0
+never marks it) and, while it is marked, resolves every ask that would prompt at once under
+`runtime.headless_approval_policy`, source `headless-policy`, with a reason naming the timeout that expired and never
+"no approval UI"; a session that has genuinely lost its presenter is still reported with REQ-TOOLS-065's own reason,
+checked first. The return is one line at the top of `control` — before the operation is judged, so a message the
+operation then refuses still returns the user — plus the `clearTranscript` branch, which `control` answers ahead of that
+line for both of REQ-CHAT-084's routes and which returns the user only when a run is live, `controlAsync`'s
+`forceCompression` and the id-routed `answerApproval` / `answerQuestions` / `cancelQuestions`, which return the user of
+the session that held the id. The terminal-stream operations (keystrokes, resize, interrupt, kill) reach
+`run-host/terminal.ts` by stream id and never `Sessions`, so they do not return the user — a reading, stated in the
+directive's note. A new run installs a fresh holder, so no run starts away. Both transitions are session-log lines at `WARNING`
+(REQ-SESSION-142); the timeline vocabulary has no word for them (REQ-ORCH-139, **OQ-76**). Questions (REQ-TOOLS-158)
+still prompt and wait where the call is permitted; under the `ask` preset the question tool's own dispatch is an
+approval ask, which the away state resolves (**OQ-77**).
 
 A session **waiting at the plan gate** likewise has no live run. `session.planEdit {text}` records the user's own
 text and moves nothing else; `session.planDecision {decision, changes?}` carries one of exactly three answers
@@ -713,6 +772,19 @@ is unscoped or scoped to that same session and no other (REQ-NOTIFY-029/058), an
 written to the session's timeline as a `notice` entry BEFORE it is broadcast (REQ-NOTIFY-268, `timeline.append` to the
 run host), so a notice replaced within the same turn is still readable afterwards.
 
+**The application's end, and the locks the run host holds (ADR-0014 "Main is gone only after the run host",
+2026-09-28).** A run's teardown releases its lock at the end of cleanup; the application's end reaches the same point
+from outside. The orderly quit (`window-all-closed`, `main/index.ts`) asks the run host to `shutdown` — every run asked
+to stop before any is waited on, then `Sessions.closeAll` releases every lock a finished session still holds — and races
+that request against the run host's exit (`shutdownAtQuit`); then the workspace services the same way; then
+**`endBeforeMain`** (`main/exit.ts`) waits at most `RUN_HOST_END_BOUND_MS` (2 000 ms) for the run host to exit by
+itself, ends it (`utilityProcess.kill()`) if it has not, and waits the bound again before `app.quit()`. An immediate
+exit (`exitCleanly`: the capture seam, the driver's `quit`) asks the run host nothing, ends it at once and waits the
+bound before `app.exit`. So main is gone only after the run host is: a lock left by a run host that was ended names a
+pid that is gone, the case REQ-SESSION-047 reaps on the next claim, and no launch meets a session "held by another run
+in this application" by a run host still exiting. The lock is never released early from inside a stopping run host and
+the liveness probe is unchanged (REQ-SESSION-049/050/056).
+
 ## 6a. The session browser's actions reaching a record no run holds (Part U)
 
 Three actions of REQ-SESSION-182 reach a session's record from OUTSIDE a run, all in the run host, none a control operation
@@ -745,7 +817,7 @@ of §5 and none a channel: each is a request answered once.
 | `plan_cycles` (**v17**, REQ-ORCH-154; cascade **v20**) | one row per plan cycle: `opened_at`, the role's `plan` VERBATIM (never rewritten after the insert), the classified `intent`, the `todo` the plan implies, the `changes` the user stated when choosing revise into it, the user's `edited` text (NULL until they edit � which is what makes "editing alone never approves it" structural), and the `decision` with `decided_at`. Keyed `(session_id, cycle)`, so an answer is recorded once and a second answer for the same cycle changes nothing. `session_id` carries `REFERENCES sessions(session_id) ON DELETE CASCADE` since v20 (REQ-SESSION-166: the VERBATIM plan text leaves with the session; rows already orphaned are dropped by the migration, which is the delete the user asked for) | `openPlanGate` (one durable transaction with the status and the `plan_gate_opened` entry), `recordPlanEdit`, `resolvePlanGate` |
 | `checkpoints` (v9) | REQ-GIT-016's record, one row per checkpoint keyed `(session_id, sequence)` — ref, commit, created_at, iteration, child_name, `files` as one JSON list, `kind` from REQ-GIT-067's vocabulary; `checkpoint_count` is a count over these rows, never stored (ADR-0039); the listing is `ORDER BY sequence` under the primary key (a plan the store test asserts) | `recordCheckpoint` (insert + the trim to `max_per_session`, one transaction with the timeline entry and the event) |
 | `session_locks` | `(session_id, pid, host, acquired_at)` — the capability token (ADR-0005) | `create`/`open` (INSERT OR IGNORE), `endRun`, release |
-| `transcript_rows` | the rows, resident or released to a page (REQ-SESSION-131/192). Part Z added derived `chars` and transient `streamId`. Part AE adds ordered image metadata in `attachments` (v14): original name, content-derived media type, size, session-relative path and SHA-256 digest; bytes remain under the session files directory and reopen verifies availability and digest (REQ-CHAT-046/153/173) | `appendRow`, `settleRow`, `upsertMessageRow` |
+| `transcript_rows` | the rows, resident or released to a page (REQ-SESSION-131/192). Part Z added derived `chars` and transient `streamId`. Part AE adds ordered image metadata in `attachments` (v14): original name, content-derived media type, size, session-relative path and SHA-256 digest; bytes remain under the session files directory and reopen verifies availability and digest (REQ-CHAT-046/153/173). **REQ-CHAT-162's `/skills` listing (2026-09-27) is one `system` row whose body is the listing** — the text `contracts/skills.ts` fixes and the row renderer reads back — appended outside any run through the loaded session's writer (`run-host/skills.ts`'s `writeSkillListing`), so it is saved, recorded as a `transcript.row` event and exported like any row; no column and no migration | `appendRow`, `settleRow`, `upsertMessageRow` |
 | `events` | the wire history: one line per event, ordinal per session, trimmed by the retention cap (ADR-0009) | every unit, in the same transaction as what it records |
 | `launch_audits` | one per session, the primary key the one-shot | `recordLaunchAudit` |
 | `timeline` | ordered named entries with actor and metadata, each carrying **`id`** (12 hex) and **`severity`** (`debug` \| `info` \| `warning` \| `error`, default `info`) as their own columns since **v10** — REQ-SESSION-134's shape, which the table held neither of until the repair of Part U's thirty-second defect; a row written before v10 keeps an empty id and the export omits the field rather than minting one (REQ-SESSION-199) — including Part Q's session-wide memory, `model_exhausted {provider, model}` and `model_override {provider, model, model_key}`, rehydrated on resume, and Part AH's **`context_compressed`** (REQ-CONFIG-135's four inputs and the trigger token number as separate fields, the count source, the before/after token and message counts, the latency) which a session opened again counts to seed REQ-MONITOR-086's per-agent figure (the wire-event catalogue is closed at 23 kinds, REQ-EVENTS-041, so no event carries them); `model_fallback`, `unresponsive_model_fallback`, `child_timeout_fallback` beside them; **Part AO's `transcript_cleared`** (`removed`, `next_index`) written in the clear's own transaction, and its `context_compressed` entries with `trigger: manual`, which carry the counts and the latency but NO threshold field because none was read (REQ-CHAT-081) | `appendTimeline`, the queue/pause/steering units, `recordCheckpoint` (`checkpoint_created`), `recordRestore` (`checkpoint_restored`, or the `issue` entry of the `checkpoint_restore` warning), the REQ-GIT-094 repair (`session.interrupted_recovered`), the ladder; PD-ORCH-005's **`child_paused`** (`task_id, interruption, from_state, resume_state`, in `restChild`'s transaction), **`iteration_paused`** (`iteration, interruption, paused_agents`), **`approval_withdrawn`** (`request_id, tool, persona, interruption`), **`question_withdrawn`** (`tool, persona, interruption`, the gate's) and **`run_pause_refused`** (a pause accepted in the pre-flight, refused once the plan hold is known) |
@@ -763,6 +835,13 @@ of §5 and none a channel: each is a request answered once.
 
 ## 8. Configuration's three tiers (ADR-0037) as they touch the run
 
+- **What no tier reaches — the update check (REQ-STARTUP-111, the updater of 2026-09-28).** Whether, when and
+  where a supported standalone build checks for an update is decided by no configuration value in any tier, no
+  preference, no environment variable and no control: the endpoint is a constant of `main/updater/feed.ts`, the
+  once-per-window trigger is `MainWindows`' post-show activation, and the one preference the updater reads,
+  `updates/dismissedVersion`, silences one version's offer and touches the check itself not at all. REQ-STARTUP-111's
+  acceptance criterion is a property of the four closed enumerations — this section's keys among them — carrying no
+  entry that names update checking, an endpoint, a release source or a channel; none does.
 - **Tier A** — Settings Save, the diagnostics toggle, the composer's permission-mode control: the workspace
   service writes through one of the four writers and loads again; main broadcasts `config:changed`.
 - **Tier B** — at every run start the run host loads the files — layer 3, the discovery snapshot, folded first
@@ -795,6 +874,11 @@ of §5 and none a channel: each is a request answered once.
   what is switched on, and the screen holds the second pending while the first is a fact about the disk. The
   discovery is **pure over an injected home and platform** (`ROTARIS_CAPTURE_INSTRUCTIONS_HOME` in the workspace
   service), the same seam the skills proof uses and for the same reason: overriding `HOME` kills Electron on Windows.
+  The machine-wide base's directory is injected too (`ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, read by the workspace
+  service and the run host alike, compiled out of a packaged build), so a proof can place a file at every base
+  without writing into the machine's own `/etc`; in the run host the same value moves the skill search's
+  `/etc/codex/skills` as well (`ROTARIS_CAPTURE_SKILLS_MACHINE` is read first there, as `ROTARIS_CAPTURE_SKILLS_HOME` is
+  for the home), so a driven run reads no skill of the operator's machine either.
 - **The MCP layer (Part S)** — the two `mcp.json` files are layer 2 of the load (defaults → discovered → global → workspace,
   REQ-MCP-025), the merged `mcp_servers` map is resolved at load (origin, command, availability, environment with secrets
   overlaid, the URL, the normalised description) and rides on `LoadedConfiguration.mcp`; Tier B resolves it again over the
@@ -862,7 +946,7 @@ reader's place is kept. Six steps, in order, on every publication:
 | 1 applicability | `replica.ts` | an earliest-changed index before the oldest row held is **declined** — one further whole read, the rows on display unchanged (REQ-SESSION-161) |
 | 2 reset | `replica.ts` | a whole-session update sets the expectation and classifies **`reset`** |
 | 3 row classification | `replica.ts` (`classifyRows`) | one `insert` per row added, one `remove` per row removed, one `update` per changed retained row; **one `noop` and no row counters** when nothing changed. Six cumulative counters, pure, byte-identical across two replays (REQ-UIBENCH-064/083) |
-| 4 projection | `ui/transcript/project.ts` | role-to-kind mapping, duplicate-reasoning and dead-session hygiene, edit-diff placement, folding, display caps, then the computed trailer rows — **one question trailer** reading `pendingQuestions[0]`'s own steps ("N step(s) — first title", the wording written once here, REQ-CHAT-168) and one per approval. **Bounded by what changed**: from the earliest-changed index back to the nearest group boundary, never over the resident window |
+| 4 projection | `ui/transcript/project.ts`, through `ui/transcript/projector.ts` | role-to-kind mapping, duplicate-reasoning and dead-session hygiene, edit-diff placement, folding, display caps, then the computed trailer rows — **one question trailer** reading `pendingQuestions[0]`'s own steps ("N step(s) — first title", the wording written once here, REQ-CHAT-168) and one per approval. **Bounded by what changed**: from the earliest-changed index back to the nearest group boundary, never over the resident window. **Run once per change of its inputs, not once per render** (2026-09-28, the R-048 measurement round): the pane holds one projector, keyed on every input step 4 reads, so the three or four renders one increment causes — its own, the measurement pass's, the tail pin's scroll event, a whole-session update's — project the window once; the bounded form is taken only for an append or a row replaced at its own index (a removal, an insertion — REQ-CHAT-069's scope switched — or a run member that no longer joins its run projects the window: R-062's fix round 1), and its clean cut reads runs on the rows hygiene keeps — REQ-CHAT-048's dropped reasoning skipped, REQ-CHAT-049's settle applied — with the reused prefix never reaching past the changed index (fix round 2). REQ-CHAT-048 compares an unstamped thinking row with **its own agent's** immediately previous thinking row (2026-09-28, OQ-91's reading): the walk keeps one per agent, and the bounded form looks an agent's up below the cut only when that agent's unstamped reasoning is in the suffix |
 | 5 present | `ui/transcript/TranscriptPane.tsx` | the displayed array, the preserved anchor and the expansion map to ADR-0045's recycler |
 
 **During a recovery episode** the surface is *reconciling* and the subscription handler **drops** further

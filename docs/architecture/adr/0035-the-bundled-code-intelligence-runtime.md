@@ -215,6 +215,30 @@ home segment is now pinned to `CODE_INTELLIGENCE_HOME_SEGMENT` by a test, which 
 on IC-7:** the notices generator's section (`REQ-STARTUP-141/142/143`), not built — the condition binds the
 release until it lists the servers.
 
+**IC-7 discharged — the notices generator lists the servers (2026-09-27, `first-release-plan.md` §4.3).**
+`pnpm notices` (`tools/notices/`) reads `pins.json` as the setup manifest this build carries *(since 2026-09-28 it reads
+the shipped `apps/desktop/resources/setup-manifest.json`, whose `languageServers` a test holds equal to `pins.json`;
+`pins.json` still names the runtime; ADR-0054, "The setup manifest")* and writes its
+`languageServers` into `THIRD-PARTY-LICENSES.txt`'s `Tools provisioned after installation` section. The sub-heading
+names this runtime (`serena-agent 1.7.0`), and each of the three packages appears with its language, version, source
+and licence. The generator also reads the runtime itself as part of the shipped closure: the interpreter (`CPython`
+3.13.15 from the bundle marker's own answer, `PSF-2.0` read from its `LICENSE.txt`) and every distribution in its
+site-packages, 73 on the Linux bundle, with the identifier each declares and its licence files. **What that first
+read found in this record's tree:** `dotenv` 0.9.9, which `serena-agent` requires, declares `License: UNKNOWN` (OQ-74),
+and `proxy_tools` 0.1.0, which `pywebview` requires, ships no licence text at all. Both fail notices validation until
+a ruling or a maintainer's review. The runtime's own `LICENSE`, the one copy this record's bundle note named, is now
+one entry among those. *Corrected the same day by the generator's gate review:* two more distributions carry no
+licence text. `certifi` 2026.7.22 carries only MPL-2.0's Exhibit A. `mslex` 1.3.0 carries only Apache-2.0's per-file
+notice, beside an `AUTHORS.rst`. Each file only refers to the licence. The first run had counted any non-empty licence
+file as the text (OQ-75). Both now wait on a maintainer's review (O-11), as `proxy_tools` does.
+
+REQ-STARTUP-015's "exactly one copy" of the tool server's licence text meets a second copy when first-release-plan.md
+§4.4 carries the notices file into the artifact. That step decides which copy stands. *Decided 2026-09-27 by §4.4: the
+notices file's copy stands, because REQ-STARTUP-142 requires it there, and the copy under `serena_agent`'s dist-info is
+filtered out of the artifact (`electron-builder.yml`). The runtime tree this record builds keeps it, because the
+generator reads it there. `afterPack` counts the copies in the artifact (ADR-0054, "The two bundled assets"). The
+runtime reads nothing from the file, so this record's mechanism is unchanged.*
+
 **The client's owed halves, alive** (ADR-0034's note beside this one): `code_intelligence` ships **enabled** —
 `REQ-CONFIG-181`'s deviation of 2026-09-05 reverted, its record kept in `defaults.ts`; the grant tiers on the built-in
 personas (12 or 19 names; the proof's discovery launch: the orchestrator's 12, the block present in the section, the
@@ -261,7 +285,8 @@ runtime's (the dashboard, the partial-configuration refusal, the auto-created ma
 fetched language servers). The tally stands.
 
 **Not built, said so:** the language servers beyond what the runtime provisions itself (IC-7); macOS and Linux bundles
-(IC-3; `bundle.mjs` refuses off Windows); the notices generator's section for the runtime (`REQ-STARTUP-142`); the
+(IC-3; `bundle.mjs` refuses off Windows); ~~the notices generator's section for the runtime (`REQ-STARTUP-142`)~~
+**built 2026-09-27** (IC-7 discharged, above); the
 machine-setup half of `REQ-MCP-112` and `REQ-MCP-095/096`; the ONBOARDING tier's persona; the dashboard and
 project-switching tools (never granted by design); the isolated-tree binding; nested `.gitignore` files in the
 contains-code walk (the root file only).
@@ -279,3 +304,42 @@ spike: the Bash tool resets its working directory to the main checkout, so a tok
 there took the token for a workspace path (REQ-STARTUP-163) and Windows's stream syntax made a directory of it —
 unreachable now that the sentinel precedes `workspaceFromArgv`; removed, not committed.
 
+**As root on Linux — 2026-09-28 (R-062).** The first execution of the launch on a host that needs Chromium's
+`--no-sandbox`: a cloud container, the development entry driven as root. The reserved token's launch was the executable
+with the token and `--` only, so the child — a fresh Chromium — inherited nothing and died with SIGTRAP before the
+sentinel ran; the project setup's `create` step failed, `index` and `memory` were not attempted
+(`../../defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md`). None of REQ-MCP-033,
+REQ-STARTUP-002 and REQ-STARTUP-015 says whether the launch carries the parent's switches: raised as **OQ-82**, built
+as "exactly the sandbox switch the parent was started with, immediately before the token, nothing else". Measured on
+the repaired build, driven as root under Xvfb against a scratch workspace holding one TypeScript file: the launch line
+reads `electron out/main/index.js --no-sandbox builtin:code-intelligence --`, and `create` now exits **127** with the
+sentinel's own "the bundled code-intelligence runtime is not present in this installation" — the child reached its
+JavaScript. Not shown: the runtime serving as root, because `apps/desktop/resources/code-intelligence/` is absent on
+this tree and `bundle.mjs` refuses off Windows (above), so `pnpm code-intel-proof` could not run. Nothing in the sentinel's
+own behaviour changed; it finds the token past the one switch.
+**Corrected the same day — the token stays first.** The placement above put the switch in front of the token and read
+REQ-MCP-033's "first argument" as the first argument that is not the switch; the verifier found that a stated clause
+reinterpreted. The launch is now the token first and the switch between it and `--`
+(`electron out/main/index.js builtin:code-intelligence --no-sandbox --`; packaged `Rotaris builtin:code-intelligence
+--no-sandbox --`): the sentinel reads the token at its fixed index again and drops the switch standing before the
+separator, so the runtime never receives it. Measured as root on this tree: `electron out/main/index.js
+builtin:code-intelligence --no-sandbox -- start-mcp-server` reaches the sentinel (exit 127, "not present"), the same line
+without the switch dies with SIGTRAP (exit 133); the driven app's `create` line reads
+`… builtin:code-intelligence --no-sandbox -- project create <root>` and exits 127 at the sentinel; and with a stand-in
+`bin/python3` (a shell script writing its arguments, placed under the git-ignored `apps/desktop/resources/` and removed
+after) the runtime received `-c <entry> start-mcp-server --transport stdio` — no switch — and its exit status 7 was
+propagated. **Unmeasured on Windows (IC-3):** the 2026-09-06 spike's quirk is a scheme-looking positional FOLLOWED BY
+another positional exiting before JavaScript; `--no-sandbox` is a switch, not a positional, and a packaged Windows
+parent does not normally carry it, but `Rotaris.exe builtin:code-intelligence --no-sandbox --` has not been run.
+
+**The proof's branch client — 2026-09-28 (R-062).** Consequence 1's observables are read by `code-intel-proof`'s launch 1
+through a raw JSON-RPC client, and that client resolved a request only when its answer arrived: a branch that exited
+without answering left section 1 waiting for ever (twice, 8 and 12 minutes, killed). The client is now
+`apps/desktop/scripts/lib/line-rpc-client.mjs`, which rejects every pending request on the child's exit, failure or
+guard kill with the exit status and standard error's tail (`line-rpc-client.test.ts`, 12 cases over a fake child;
+`../../defects/fixed/code-intel-proofs-branch-client-waits-forever-on-a-child-that-has-exited.md`). Its first execution
+against the built branch, as root under Xvfb on Linux, drove the token-first launch to the sentinel's exit **127** in
+192 ms with the sentinel's "not present" line in the rejection. It also found that the proof launches the token in the
+order this ADR's correction retired — `--no-sandbox` ahead of the token — so as root the proof starts the application,
+not the branch, and section 1 fails at the guard (`../../defects/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`,
+recorded, not repaired). Not shown: section 1 passing, which waits for that note and for a tree with the bundle.

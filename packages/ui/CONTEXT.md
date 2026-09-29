@@ -65,6 +65,12 @@ selected. — `REQ-SHELL` theming
 **Diagnostics capture**:
 The opt-in, bounded, content-free UI trace, at level `off`, `light`, or `deep`. — `REQ-SHELL-163`
 
+**Build identifier**:
+What the About surface's Build row shows, read from a bundled text asset ([Distribution](../shell/CONTEXT.md)'s
+**bundled asset**); when the asset is missing or unreadable there is none, and the row shows an em dash.
+— `REQ-SHELL-140`
+_Avoid_: build number, version (the Version row carries the release's single version; many builds may carry one)
+
 ### The conversation
 
 **Composer**:
@@ -85,6 +91,12 @@ The one in-progress composer text, persisted per workspace. Distinct from the
 
 **Slash command**:
 A typeable command invoked from the composer, with inline discovery and validation. — `REQ-CHAT-018`
+
+**Skill listing**:
+What `/skills` writes: the discovered skills listed into the transcript as a single system row, each with its
+normalized name, scope, trigger keywords, clipped description and `SKILL.md` path, and the count listed; saved
+with the session. It carries no in-context indicator. — `REQ-CHAT-162`
+_Avoid_: skill catalog (the model-facing block — [Workspace](../workspace/CONTEXT.md)'s term)
 
 **Transcript**:
 The live rendering of a session's rows. There is exactly one transcript store, on disk or anywhere

@@ -17,6 +17,8 @@ import {
   Table as DesignTable,
   Tag as DesignTag,
   TextArea as DesignTextArea,
+  layoutContractAttributes,
+  type UiLayoutContract,
 } from '../design-system/index.js';
 import { useShellState } from '../shell-state.js';
 import { startRetrospective } from '../workspace-host.js';
@@ -28,6 +30,12 @@ import { startRetrospective } from '../workspace-host.js';
  * configured, nothing in the workspace to read) arrives as the notice REQ-LIBRARY-037's shape fixes.
  */
 export const RETROSPECTIVE_LABEL = 'Run retrospective';
+
+/** The proposals surface stays inside the view and never scrolls the window; published by the one publisher. */
+export const PROPOSALS_LAYOUT: UiLayoutContract = {
+  id: 'library-proposals',
+  relations: [{ kind: 'containment' }, { kind: 'viewport-scroll', axis: 'both', expected: false }],
+};
 export const RETROSPECTIVE_DESCRIPTION = "Look back over this workspace's own history and propose improvements.";
 export const RETROSPECTIVE_BUSY_REASON = 'An improvement analysis is already running.';
 
@@ -273,7 +281,7 @@ export function ProposalsTab(props: ProposalsTabProps) {
   const selectedHistory = history?.versions.find((version) => version.version === selectedVersion) ?? null;
   const checkpoint = chosenRecord?.artifact.checkpoints.find((item) => item.kind === 'pre_improvement') ?? null;
   return (
-    <section className="library-proposals" aria-label="Improvement proposals" data-testid="library-proposals" data-ui="library-proposals" data-ui-contract='[{"kind":"containment"},{"kind":"viewport-scroll","axis":"both","expected":false}]'>
+    <section className="library-proposals" aria-label="Improvement proposals" data-testid="library-proposals" {...layoutContractAttributes(PROPOSALS_LAYOUT)}>
       <div className="library-proposals__toolbar">
         <span className="card-meta">Workspace-scoped review records stay available across sessions.</span>
         <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="library-retrospective"

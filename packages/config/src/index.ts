@@ -32,3 +32,4 @@ export * from './preferences.js';
 export * from './snapshot.js';
 export * from './launch-snapshot.js';
 export * from './project-settings.js';
+export * from './setup-manifest.js'; // REQ-STARTUP-058/059, first-release-plan.md §4.1

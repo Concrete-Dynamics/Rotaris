@@ -203,6 +203,14 @@ Two vocabularies, both closed. Widening either is a decision, not an edit.
 Invariants:
 
 - **One notice slot.** A second persistent notice replaces; it does not stack.
+- **The one exception is an update in place** (REQ-SHELL-118): `NoticeStore.update(noticeId, patch)` changes the
+  notice that is current — same id, on the same serialised chain — and answers false, drawing nothing, when that id is
+  no longer current (whatever replaced it stays, REQ-NOTIFY-024). A patch that raises the severity to `warning` or
+  `error`, or renames a notice at that severity, is recorded first, as a publication would be (REQ-NOTIFY-268). Only the
+  updater's offer uses it today (its download progress, its outcome, its failure); a new notice reaches for `report`.
+- **A disabled action carries its reason.** `action.disabled` in `packages/contracts/src/notices.ts` is the
+  accessible description REQ-SHELL-118 requires; its presence is the disabled state, and `Notice.tsx` renders the
+  control disabled with that text as its description. There is no disabled action without a reason.
 - A renderer that must raise a persistent notice sends `notice.report` — it does not draw one. That missing
   entry for a renderer was defect fifty-seven.
 - A transient acknowledgement may carry **exactly one** action, from a closed one-member type.
@@ -235,9 +243,9 @@ The design language's pair — consult before, match after (`docs/design/README.
 | 1 | `pnpm mockup`, read the surface | craft, **never** structure; structure is `docs/spec/` (`REQ-SHELL-023` governs) |
 | 2 | Build from `packages/ui/src/design-system/` | `tools/check-ui-language.mjs` refuses a design-equivalent control written anywhere else in `packages/ui/src` or `apps/desktop/src/renderer` |
 | 3 | Cite tokens by name | never a literal colour or pixel value |
-| 4 | Publish a contract on the root — `layoutContractAttributes` from `design-system/layout-contract.ts` | it marks the box with `data-ui` / `data-ui-contract`, which is what `pnpm ui-audit` evaluates against live geometry after layout settles |
+| 4 | Publish a contract on the root — `layoutContractAttributes` from `design-system/layout-contract.ts` | it marks the box with `data-ui` / `data-ui-contract` (the relations **array**), which is what `pnpm ui-audit` evaluates against live geometry after layout settles. It is the only publisher: `tools/check-ui-language.mjs` (`tools/ui-contract-publisher.mjs`) fails `pnpm lint` on a `data-ui-contract` written anywhere else in the drawing roots, the design system included — a hand-written object on the window controls once made the audit throw on every view |
 | 5 | `pnpm build`, then `pnpm app:drive shot` | a PNG an agent can read is the cheapest way to meet "match after drawing" |
-| 6 | `pnpm ui-audit`, then `pnpm ui-review` | `shrunkBoxes` (`apps/desktop/scripts/lib/layout-relations.mjs`) is the deterministic guard for UIR-014's whole class — a box standing smaller than its content on an axis that does not scroll — and it asks that of **every marked box**, not only of one that published a relation. The critic is report-only, at most three iterations |
+| 6 | `pnpm ui-audit`, then `pnpm ui-review` | `shrunkBoxes` (`apps/desktop/scripts/lib/layout-relations.mjs`) is the deterministic guard for UIR-014's whole class — a box standing smaller than its content on an axis that does not scroll — and it asks that of **every marked box**, not only of one that published a relation. An audit expression that throws in the renderer is reported as an **`AUDIT-ERROR`** finding naming the view, the size and the expression (`lib/audit-answer.mjs`), and the sweep goes on, so `report.json` is written for every view; a contract that is not a relations array is a `schema` finding for its own box. The critic is report-only, at most three iterations |
 
 Tokens alone are not compliance, and a plausible invention is not a third option where the design material
 decides.

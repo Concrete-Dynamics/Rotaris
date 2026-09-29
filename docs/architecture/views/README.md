@@ -45,11 +45,6 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
-**The code-intelligence server starts as root (REQ-MCP-033, R-066, 2026-09-29).** The run host builds the reserved
-token's launch in `run-host/code-intelligence-launch.ts`; run as root it puts `--no-sandbox` between the token and `--`,
-and the sentinel hands the runtime only what follows `--` (`runtimeArguments`). The **process view**'s code-intelligence
-paragraph says so; no package, edge, channel or store table changes.
-
 **A request queued behind an open approval dialog waits for its turn (REQ-TOOLS-063, 2026-09-28).** Main answers a
 present-request that waits behind the dialog already open in its window, or behind requests queued ahead of it, with
 the new run-host request `approval.queued` (`MainWindows.enqueueApproval` answers which). `RunHostPresenter` then stops
@@ -272,6 +267,177 @@ replacement) and `agent_terminals` (the background sessions an agent started). T
 and four rows, and §4's write-scope, paused-state and projection paragraphs; the **state-ownership view**'s write-scope
 row says the declared patterns are now stored. No package, edge, process, channel or message kind changed.
 
+**The notices generator reads the shipped setup manifest (2026-09-28, R-062).** `tools/notices/notices.mjs` reads
+`apps/desktop/resources/setup-manifest.json` rather than `pins.json` as REQ-STARTUP-142's manifest, by a copy of
+`SetupManifestSchema`'s field names that `notices.test.ts` holds to the schema; `pins.json` is read for the runtime's
+name only. The **component view**'s notices-generator and setup-manifest sections say so, and name the second test that
+crosses into a package. No package, edge, process, channel, message kind, store column or owner of state changed.
+
+**A session's lock ends with the application that held it (ADR-0014, 2026-09-28, R-062).** Main is gone only after
+the run host: the orderly quit waits, bounded, for the run host's exit after its `shutdown` and ends it if it has not
+come, and an immediate exit (`exitCleanly`) ends it at once (`endBeforeMain`, `main/exit.ts`). The **runtime view**'s §6
+gains *The application's end*; the **state-ownership view**'s lock row and the **process view**'s quit paragraph say
+so. No package, edge, process, channel, message kind or store column changed.
+
+**The artifact variables stay with the launch they describe (REQ-STARTUP-106/147, ADR-0054 "The updater" item 6,
+2026-09-28, R-062).** Main's first statement takes `APPIMAGE` and `ROTARIS_PORTABLE_ARTIFACT` out of its own
+environment and hands them to the updater's classification alone (`takeArtifactVariables` in `platform`), so the run
+host, the workspace services and everything the run host starts inherit neither. The **process view** gains *The
+environment a child is started with* beside the ownership table, and main's updater clause says where the classification's
+two variables come from. No package, edge, process, channel, message kind or store column changed; `platform` gains
+`artifact-environment.ts`.
+
+**REQ-CHAT-048's duplicate-reasoning hygiene compares per agent (2026-09-28, R-062; OQ-91).** Step 4 kept one lookback —
+the previous thinking row of any agent — so an agent's repeated burst survived whenever another agent reasoned between
+the copies. `ui/transcript/project.ts` now keeps each agent's own previous thinking row, and the bounded form looks one
+up below its cut only for an agent whose unstamped reasoning is in the suffix. The **runtime view**'s step-4 row says so.
+No package, edge, process, channel, message kind, store column or owner of state changed.
+
+**The layout contract has one publisher, and `ui-audit` survives a thrown expression (2026-09-28, R-062).** The window
+controls (`PD-SHELL-003`) wrote their `data-ui-contract` by hand as an object; the audit's CONTRACTS sweep iterates the
+relations array, threw in the renderer on every view carrying the title bar, and the script died on the driver's
+`{ error }` answer before any evidence pack. The controls and the Proposals tab now publish through
+`layoutContractAttributes`; `tools/check-ui-language.mjs` refuses a hand-written `data-ui-contract` anywhere in the drawing
+roots (`tools/ui-contract-publisher.mjs`); `ui-audit` reports a thrown audit expression as an `AUDIT-ERROR` finding and
+a non-array contract as a `schema` finding, and moves on. The **seams view** §8 steps 4 and 6 and the **component view**'s
+design-system paragraph say so. No package, edge, process, channel, message kind, store column or owner of state changed.
+
+**The update restart's record passes in two steps (REQ-STARTUP-121, REQ-STARTUP-161; ADR-0055 *Amended 2026-09-28*,
+R-062).** `packages/platform/src/instance.ts` now offers the record, waits on the timer port for the successor's
+acknowledgement within the hand-over interval, and rewrites it only then, so a successor that stopped waiting is never
+named by it. The **sequences view**'s `Restart now` diagram and prose gain the offer, the acknowledgement and the
+refusals they add. The ordinary hand-over of a second launch is unchanged. No package, edge, process, channel, command,
+store column or owner of state changed.
+
+**The runtime makes no request of its own (REQ-STARTUP-160, REQ-SHELL-005; repaired 2026-09-28 under R-062).** The
+connection `pnpm updater-proof` recorded at launch was Electron's spellchecker fetching a Hunspell dictionary, not
+Chromium's component updater; main now empties each session's dictionary list and turns its spellchecker off in
+`session-created` (`main/runtime-requests.ts`). The **process view** gains a paragraph under its diagram saying that
+Electron and Chromium add no host of their own to the ones the product reaches, and why — not that the endpoints drawn
+are all of those hosts, which they are not (corrected at verification). No package, edge, process, channel, message kind, store
+column or owner of state changed; OQ-93 raised (OQ-91 on its branch).
+
+**REQ-CHAT-055's measurement round: the transcript projects once per change, not once per render (2026-09-28, R-048's
+order under R-062).** The built app was traced appending to an empty transcript and to one of 1,200 rows, and the extra
+time at depth was script — three to four synchronous renders per increment, each re-running ADR-0046 step 4 over the
+whole resident window and each re-rendering every bound row through a context value rebuilt per render — not layout,
+paint or the `ResizeObserver` pass. `ui/transcript/projector.ts` now keys step 4 on every input it reads, takes the
+bounded form when the rows alone changed (the earliest-changed row read off the two arrays, no prop across the seam;
+only for an append or a row replaced at its own index — the fix round found a removal and a scope switch taken wrongly;
+fix round 2 found the bounded cut reading runs on raw rows where the fold reads the rows hygiene keeps, and repaired it),
+and the pane holds one (`TranscriptPane.tsx`); the offset table and the surface value rows read are built once per
+change of what they carry. The
+**runtime view**'s step-4 row and the **component view**'s `ui/transcript` module list gain the projector. The proof's
+side of the round is `apps/desktop/scripts/transcript-proof.mjs` and `lib/trace-summary.mjs`, which no view describes.
+No package, edge, process, channel, message kind, store column or owner of state changed.
+
+**The setup manifest (REQ-STARTUP-058/059, `first-release-plan.md` §4.1, built 2026-09-28).**
+`apps/desktop/resources/setup-manifest.json` exists — Git and ripgrep as the requirement pins them, the `@playwright/mcp`
+pin the guard checks, the language servers as `pins.json` declares them — and `electron-builder.yml` packs it. Its schema
+is `config`'s `setup-manifest.ts`, read by the pre-build guard now and by the machine-setup flow when that is built. The
+**component view** gains a section and its `config` node names the schema; the **process view**'s files-on-disk table gains
+the file's row (`process.resourcesPath/setup-manifest.json`, read by the guard and by nothing in the product yet). No package, edge, process, channel, message
+kind or store column changed; `config` gains the `zod` dependency `contracts` already carries.
+
+**The updater (first-release-plan.md §4.6, ADR-0054; built 2026-09-28, R-062).** ADR-0054's bespoke main-process
+updater exists: `apps/desktop/src/main/updater/` — the flavour classified once from the artifact the launch started
+from (REQ-STARTUP-106), the one endpoint and the offer rule (105/107–110/112), the compiled-in key set — EMPTY until
+O-2 — and the Ed25519 detached-signature format (167/168), REQ-STARTUP-122's strict sequence with the signature verified
+before the manifest is parsed, the 1 MiB download into a `rotaris-update-` staging directory (118/124), the portable
+and installer strategies (115/125/126; the dmg and AppImage ones wait for `PD-STARTUP-001`'s withdrawal), and the
+orchestrator holding the one offer and the one operation in flight (114/116–121, REQ-STARTUP-046). The **process view**
+gains the updater in main's row, the feed as an endpoint in the diagram, the `update.install`/`update.restart`
+commands, and three rows in the file table (the staging directory, the portable's `.update`/`.old` siblings, the
+`updates/dismissedVersion` key); the **sequences view**'s launch gains the post-show activation the check rides and a
+new section for `Update now` and `Restart now`, the latter ADR-0055's hand-over of the record to a successor started on
+the sentinel branch (`builtin:update-successor`, `inheritInstance`); the **runtime view**'s §8 states what no
+configuration tier reaches (REQ-STARTUP-111); the **state-ownership view** gains the held offer, the classification, the
+waved-off version and the key set; the **component view** names the `app-main → release-naming` edge as the updater's.
+`MainWindows` gains a post-show activation hook (REQ-STARTUP-043), the notice store an `update` in place (REQ-SHELL-118),
+the notice action a `disabled` description, and the preference table `updates/dismissedVersion`. No package, edge,
+process, channel or store column changed; two command kinds were added. Three questions were raised (OQ-83, OQ-84,
+OQ-85 — OQ-76 to OQ-78 on the branch, renumbered at the merge) and one defect noticed beside the mechanism (`redirector.gvt1.com`). **Repaired at verification the same day:**
+the **state-ownership view**'s instance-record row and the **sequences view**'s `Restart now` now say the record passes
+only while a restart this instance started waits for its successor (`acceptSuccessor`, REQ-STARTUP-161); the sequences
+view's launch and the process view's `.old` row say the backup cleanup runs at a launch's first check only and that an
+update already installed in this process is not offered again (REQ-STARTUP-115/119); OQ-86 raised (OQ-79 on the branch, renumbered at the merge). **Repaired at the
+second verification:** the **process view**'s main row names `updater/successor.ts`; the **sequences view**'s `Restart now` and the **state-ownership view**'s instance-record row
+say that an accepted successor the record cannot be passed to fails the waiting restart (`onRecordPassFailed`,
+`updater/successor.ts`, REQ-STARTUP-121) and that a refusal answers with its reason; the **seams view**'s §6 names the
+notice store's `update` in place and `action.disabled` as REQ-SHELL-118's exception to "a second notice replaces".
+
+**The reserved token's launch carries the parent's sandbox switch (2026-09-28, R-062).** Three defect notes repaired
+in `apps/desktop` and `packages/ui`; one moved a process fact. The reserved token's launch of the application's own
+executable (REQ-MCP-033) now carries `--no-sandbox` when the parent was started with it, between the token and `--`
+(the token stays first; a first build that put it before the token is superseded), and main forks the run host with the
+same switch so the launch builder reads it off its own argv; the sentinel drops it before the separator. `@rotaris/platform` gains `chromium-switches.ts` (no new edge: main and the run host already import
+platform). **OQ-82** holds the reading (OQ-76 on its branch, renumbered at the merge). The **process view**'s bundled-runtime paragraph names it; no package, channel,
+message kind, command or store column changed. The About caption's type token and `settings-proof`'s computed-size
+probe changed no view.
+
+**`inherited_context` reaches the child (REQ-TOOLS-152, REQ-TOOLS-154 item (5), REQ-ORCH-032; repaired 2026-09-28,
+R-062).** A `delegate` call's `inherited_context` ids were stored on the child's row and read by nothing. `ChildLedger.spawn`
+now resolves them: an id no task in the session has (the root execution record included, REQ-ORCH-072) refuses the call
+with no record (REQ-TOOLS-153's `rejected`), one naming a task that has not completed — the root, the caller's own task, a
+failed, cancelled, unfinished or report-less one — is ignored, and the caller's completed children come back on
+`Spawned.inherited`. `IterationChildren.delegate` renders their `reportBlock`s under one heading
+(`notify.ts`'s `inheritedContextBlock`) and remembers the text per task id on `attached`'s terms; `childPayload` takes it
+as a sixth argument and places it as item (5), after the artifact blocks and before the task. The **runtime view** §4
+gains a paragraph; the **state-ownership view** gains the remembered block as a volatile fact. Another parent's completed
+child refused for ownership is OQ-81 (OQ-76 on its branch, renumbered at the merge). No package, edge, process, channel, message kind or store column changed.
+
+**A prerelease's installer is named from the declared version (2026-09-28, R-062).** `pnpm package` now reads the manifest's
+`version` as written (`0.1.0rc1`), renders the installer's name through `tools/release-naming` and writes it as a literal into
+the configuration electron-builder runs with (`release/electron-builder.package.yml`); `electron-builder.yml` carries no
+`artifactName`, whose `${version}` was the normalised `0.1.0-rc1`. `build-hooks.cjs` compares the configured names and, in a
+new `artifactBuildCompleted` hook, the produced file against the same text. The **process view**'s row for the manifest's
+`version` gains `pnpm package` among its readers, and the **component view**'s section on the scripts' shared modules gains
+`scripts/lib/artifact-names.mjs`, which both scripts load and which reaches `tools/release-naming`. No package, edge,
+process, channel, message kind or store column changed.
+The installer's own Windows metadata stays normalised — OQ-80.
+
+**One machine-wide directory for both discoveries, and a strict decode at the port (REQ-WORKSPACE-045, 051, 053; built
+2026-09-28, R-062).** `SkillRootsEnv` gains `machineDir`, so REQ-WORKSPACE-051's fourth user-scope root is
+`<machineDir>/skills` where it was the literal `/etc/codex/skills`; the literal now lives once, in
+`config/src/skills/roots.ts` (`MACHINE_CODEX_DIR`, `machineCodexDir`), and `PD-WORKSPACE-002`'s instruction base reads
+it from there. The run host's existing `SkillHostDeps.machineDir` now reaches `discoverSkills` too, fed by
+`ROTARIS_CAPTURE_SKILLS_MACHINE ?? ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE` under `__ROTARIS_SEAMS__`. `NODE_DISCOVERY_PORTS.readFile`
+decodes with a fatal `TextDecoder`, so a file that is not UTF-8 reaches the unreadable-file arm of every walk that shares
+the port (OQ-79 for a `SKILL.md`). The **runtime view**'s §1 passage on the machine-wide base and its §7 Instructions
+bullet name both. No package, edge, process, channel, command, message kind or store column changed.
+
+**After one unanswered approval, a run treats the user as away (`PD-TOOLS-005`, built 2026-09-28, R-062).** One holder
+per run, `UserPresence` (`engine/run/presence.ts`), installed by `Sessions.start` and every continuation beside the mode
+override and handed to every agent's port through `ToolPortContext.presence`, a delegated child's included. The gate
+(`GateDeps.presence`, passed by `run-host/tools.ts`) marks it when a brokered wait ends by timeout and, while it is
+marked, resolves every ask that would prompt at once under the headless policy with a reason naming the timeout that
+expired; the user returns on the first input to the run's session, wired at the top of `Sessions.control` and in its
+`clearTranscript` branch, in `controlAsync` and in the id-routed answers. The **runtime view** gains a clause in §3 and a
+paragraph after §5's table; the **sequences view** gains one bullet in §2; the **state-ownership view** gains a volatile
+row for the run's away mark — owned by the run host, set only by the gate's timeout arm, cleared only by `Sessions`'
+input arms, never persisted. No package, edge, process, channel, message kind or store column changed;
+the two transitions are session-log lines because the timeline vocabulary has no word for them (OQ-76).
+
+**Hook faults reach the application log (defect repair, 2026-09-28, R-062).** `HookPortContext.log` and `HookSinks.log`
+were documented "the application log only" and wired by `Sessions` to the per-session log at `INFO`, where the
+`WARNING` default of `session_log_level` dropped them, so a hook fault that reduces to a log entry (REQ-HOOKS-079/128/129)
+and the run host's account of an unresolvable hook set (REQ-HOOKS-085) were recorded nowhere at the default
+configuration. `SessionsDeps` gains `log`, the application log at `info` (PD-MONITOR-002), which the run host fills with
+its `log` event; both hook-port construction sites write through it. `CheckpointPortContext.log` is decided the other
+way and says so: it stays the per-session log, since `run-host/checkpoints.ts` already writes every checkpoint line to
+the application log through `CheckpointRootDeps.log` as well. The **process view**'s application-log paragraph gains
+the sentence. No package, edge, process, channel, message kind or store column changed.
+**Three permission-gate defects repaired (2026-09-28, R-062).** The path scope of REQ-TOOLS-018 joins each path argument
+to the workspace root before the resolver, so a workspace-relative read no longer resolves against the run host's process
+directory; `realPathOf` rebuilds a relative path's missing tail with `basename` and drops no character; and PD-TOOLS-004's
+`publicTool` predicate now decides whether a rule's tool set holds a call (`toolSetHolds` in `agent-tools/src/policy.ts`)
+and whether the plan gate withholds it (`withheldUnderPlanGate(name, isPublicTool)`, passed `false` by the run host's MCP
+loop and by the gate for a name it serves with something other than the public tool or removed itself), so an MCP tool
+offered under a public name is ruled as the undeclared tool it is. The **sequences view** §2 gains two sentences on the
+approval bullet and the **runtime view**'s MCP-surface passage one clause; no package, edge, process, channel, message
+kind or store column changed.
+
+
 **A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by
 "approve for session" on a call of the public `write_file` or `haet_edit` (`haet` folded in) now stores the set of
 paths its REQ-TOOLS-018 path arguments resolved to, against the workspace root, when it was made, and matches a later
@@ -328,6 +494,70 @@ every completed request to the new `Run.countUsage`. `PreflightContext` gains `c
 `supervisor` factory a third argument, so the run host's two classifiers are wrapped where they are built. The
 **runtime view** moves: one passage in "What a step costs". No package, edge, process, channel, message kind or
 store column changed.
+
+**The `/skills` listing (REQ-CHAT-162, `first-release-plan.md` §2.2, built 2026-09-27).** One renderer command,
+`skills.list`, relayed by main's skills facet to the run host with the followed session named by main (a window
+following none is refused there, OQ-67); the run host writes the listing as ONE `system` row through that session's
+own writer (`run-host/skills.ts`'s `writeSkillListing`), and the one row renderer draws a system row whose text is
+the listing as the listing (`transcript/Row.tsx`, the text fixed once in `contracts/skills.ts`). The **process view**
+gains the command and its reply, and the run host's row says it writes the listing; the **component view**'s skills
+row names the three places; the **runtime view**'s `transcript_rows` line says the listing is a row like any other.
+No package, edge, channel, store column or state owner changed. The two repairs its gate asked for — the listing's
+fields drawn through the plain-text path so a URL stays a link, and the prompt-file registrar holding `/skill` and
+`/skills` — are below the depth any view describes, so no view changes beyond this entry.
+
+**Workspace-context injection, measured and proven in the built app (first-release-plan §3.2 and §3.3, 2026-09-27).**
+`SkillHost.workspaceContext` times its cold path on the monotonic clock port. It covers the policy read, the
+discovery and the merge, and logs one line, which is REQ-WORKSPACE-049's figure. The policy read moved **out** of
+the discovery step into its two callers, `workspaceContext` and `instructionFiles`, so that it can be timed apart;
+`enabledUnder`, a private step, now takes a policy already read. The machine-wide instruction base's directory is
+injectable (`machineDir`, `/etc/codex` when absent). Two verification seams, both compiled out of a packaged build,
+reach the built app: `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, read by the run host and the workspace service, and
+`ROTARIS_CAPTURE_MODEL_REQUESTS`, through which the scripted client alone appends what each call received. The
+**runtime view** gains the timing and the injectable base. The **process view**'s file table gains the instruction
+files, which it had never listed, and the capture file. No package, edge, process, channel, message kind or owner
+of state changed.
+
+**The version guard and the reported version (first-release plan §4.1, built 2026-09-27).** `tools/release-guard` is a
+new build-time package — `pnpm release:guard <tag>`, the pre-build guard of REQ-STARTUP-028 over the product version and
+REQ-STARTUP-059's package pins — and `tools/release-naming` gains the release-tag grammar (REQ-STARTUP-027/029). Tools sit
+outside the component view's runtime matrix (`boundaries/ignore` covers `tools/**`), so `module-map.md` names the package
+and no edge moves. In main, `shell.hello`'s version now comes from `main/version.ts`, which reads the application
+manifest beside the bundle, rather than from `app.getVersion()`, which answered Electron's own version for the unpacked
+entry. The gate round that reviewed it moved the reader into `@rotaris/platform` (`version.ts`, an existing edge for
+both roots) because the **run host** reads the same file: the MCP client's `clientInfo.version`, a literal `0.1.0`
+until then, is now the declared version on all three connection paths. The **process view** says so in the About
+paragraph and gains the manifest as a file main and the run host read; the **runtime view**'s MCP paragraph names who
+the client says it is. No process, channel, message kind or state owner changed.
+
+**The two bundled assets (first-release-plan.md §4.4, built 2026-09-27).** `tools/build-id/` joins `tools/notices/` as a
+build-time tool: `pnpm build-id` writes `apps/desktop/resources/build-id.txt`. `pnpm package` runs both tools before
+freezing, and `electron-builder.yml` carries both files to the root of `process.resourcesPath`. It leaves the tool
+server's dist-info licence out of the artifact (REQ-STARTUP-015). The **component view** gains a section for the writer
+and the two script modules, and the **process view** gains the identifier's row in "Files and directories on disk", an
+updated notices row and a corrected About paragraph. No package, edge, process, channel, command or message kind
+changed. `about.ts` reads what it read before. The gate review later that day renamed `lib/bundled-assets.mjs` to
+`lib/about-assets.mjs`, ~~because REQ-STARTUP-143's "bundled asset" is a font family or the icon set~~ because
+`tools/notices/bundled-assets.json` already holds the bundled assets that carry a licence file. It moved
+`package.mjs`'s closing lines into a third script module, `lib/package-verdict.mjs`. The **component view**'s section
+says both. The scripts now import two constants and `normalize` from the tools, which is not an edge the boundary rule
+governs. Nothing else in the views moved. *The review's second round struck the reason: the specification counts both
+About files among its bundled assets (domain 12's appendix, REQ-SHELL-140). The component view's sentence saying
+otherwise is corrected, and the section now names the flag's usage check and the proof's use of the writer's list of
+git's redirecting variables. The stash's ledger and removal branch stay inside its module. Nothing else in the views
+moved.*
+
+**The notices generator, and the About page's lookup (first-release-plan.md §4.3, built 2026-09-27).** `tools/notices/`
+is a build-time tool, not a package: `pnpm notices` computes the shipped closure offline and writes
+`apps/desktop/resources/THIRD-PARTY-LICENSES.txt` only when REQ-STARTUP-143's validation passes. Main's About reader now
+looks for the file under REQ-STARTUP-141's name; it had looked for a lowercase name. The **component view** gains a
+section for the tool, and the **process view** gains the file's row in "Files and directories on disk" and a corrected
+About paragraph. No package, edge, process, channel, command or message kind changed. The gate review later that day
+changed two things inside the tool. A licence file that only refers to the licence, or only attributes, is no longer
+counted as the text (OQ-75). The LGPL address must now have an address's shape. No view changed for either: both
+are internal to `notices.mjs`, and it still reads and writes what the component view says. The review's second round
+changed three more things inside the tool. The address check refuses the placeholders it still accepted. An input that
+is not a JSON object fails as unparsable. A directory where the output goes is a handled error. No view changed.
 
 **Product-drawn main-window chrome (`PD-SHELL-003`, built and revised 2026-09-24).** On Windows, Linux and macOS the main
 `BrowserWindow` is frameless with its native menu hidden. The existing title bar now ends in minimize,

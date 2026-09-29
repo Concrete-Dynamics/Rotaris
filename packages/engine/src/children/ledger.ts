@@ -71,7 +71,7 @@ export function storeChildReport(deps: { readonly writer: SessionWriter; readonl
  * ADR-0012: the ledger is the primary representation — one row per child, written through the session
  * writer, every state change one transaction with its event, every query carrying the session id
  * (REQ-ORCH-151). This class is the engine's view of it: admission (REQ-ORCH-046's five checks in order,
- * REQ-ORCH-038's rejections, REQ-ORCH-034's aliases, REQ-ORCH-044/045's naming), the transition function
+ * REQ-ORCH-038's rejections, REQ-ORCH-034's aliases, REQ-TOOLS-152's inherited-context rule, REQ-ORCH-044/045's naming), the transition function
  * (the writer's, the sole implementation of REQ-MONITOR-300), the start claim, the report.
  */
 export interface Budget {
@@ -114,6 +114,11 @@ export interface Spawned {
   readonly aliasResolved: string | null;
   /** REQ-ORCH-050: held behind the per-model cap at creation. */
   readonly held: boolean;
+  /**
+   * REQ-TOOLS-152: the siblings named in `inherited_context` that had completed with their report stored when the
+   * call was made, in the caller's order and once each; the ids naming a failed or unfinished sibling are not here.
+   */
+  readonly inherited: readonly ChildRow[];
 }
 
 export class ChildLedger {
@@ -234,17 +239,42 @@ export class ChildLedger {
       seen.add(from);
       return (edges.get(from) ?? []).some((d) => reaches(d, target));
     };
-    for (const inh of input.inheritedContext) if (inh.trim() === '') return { ok: false, error: { reason: 'A malformed inherited-context entry (empty) was rejected' } };
+    /*
+     * REQ-TOOLS-152: "an id in `inherited_context` that names no task at all refuses the call, an id … naming a task
+     * that failed or has not finished is ignored without refusing". Existence is asked of the whole session and the
+     * root execution record, which shares the children's id namespace (REQ-ORCH-072: a lookup naming the root resolves
+     * to it rather than reporting it unknown), so only an id no task has is refused as referring to nothing. A task that
+     * exists and has not completed — the root, the caller's own task, a sibling or any other task that failed, was
+     * cancelled or is still under way — is ignored. "Completed" is REQ-ORCH-047's notion: `succeeded` with the report
+     * stored, since it is the report that is carried. A completed task that is not the caller's own child (another
+     * parent's, or an earlier iteration's) is not a sibling; it is refused, for ownership and never as nonexistent, as
+     * the `depends_on` check above refuses one — that reading is OQ-81. This runs after the dependency checks and before
+     * the cycle check (5). A refusal creates no record and issues no id (REQ-TOOLS-153).
+     */
+    const siblings = this.childrenOf(input.parentId);
+    const inherited: ChildRow[] = [];
+    for (const inh of input.inheritedContext) {
+      if (inh.trim() === '') return { ok: false, error: { reason: 'A malformed inherited-context entry (empty) was rejected' } };
+      if (this.isRoot(inh)) continue;
+      const named = this.get(inh);
+      if (!named) return { ok: false, error: { reason: `inherited_context id '${inh}' refers to nothing: no task has that id` } };
+      if (named.state !== 'succeeded' || named.report_stored !== 1) continue;
+      if (!siblings.some((c) => c.task_id === inh)) {
+        const caller = this.isRoot(input.parentId) ? this.root.taskId : input.parentId;
+        return { ok: false, error: { reason: `inherited_context id '${inh}' is not a sibling's: it is owned by parent '${named.parent_id}', not '${caller}'` } };
+      }
+      if (!inherited.some((c) => c.task_id === inh)) inherited.push(named);
+    }
     // REQ-ORCH-036: unique within the SESSION — every child's and every recorded root's id (PD-ORCH-005), not this iteration's.
     const taken = takenTaskIds(this.deps.dal, this.deps.sessionId);
     taken.add(this.root.taskId);
     const taskId = mintTaskId(taken);
     for (const dep of input.dependsOn) if (reaches(dep, taskId)) return { ok: false, error: { reason: 'Dependency cycle detected' } };
-    const siblings = new Set(this.childrenOf(input.parentId).map((c) => c.canonical_name));
+    const siblingNames = new Set(siblings.map((c) => c.canonical_name));
     if (this.isRoot(input.parentId)) {
-      siblings.add(this.root.canonicalName);
+      siblingNames.add(this.root.canonicalName);
     }
-    const canonical = uniqueUnderParent(canonicaliseName(input.taskName), siblings);
+    const canonical = uniqueUnderParent(canonicaliseName(input.taskName), siblingNames);
     const held = input.dependsOn.length === 0 && !this.slotFree(input.modelKey);
     const state: ChildState = input.dependsOn.length > 0 ? 'waiting_on_dependencies' : held ? 'waiting_on_model_slot' : 'queued';
     const effectiveParentId = this.isRoot(input.parentId) ? this.root.taskId : input.parentId;
@@ -262,7 +292,7 @@ export class ChildLedger {
     const r = this.deps.writer.spawnChild(row);
     if (!r.ok) return { ok: false, error: { reason: `The child could not be recorded: ${r.error.code}` } };
     if (held) this.deps.dal.enqueueSlot(this.deps.sessionId, input.modelKey, taskId);
-    return { ok: true, value: { row: r.value, persona: role.persona, aliasResolved: role.alias, held } };
+    return { ok: true, value: { row: r.value, persona: role.persona, aliasResolved: role.alias, held, inherited } };
   }
 
   /** The one transition function; a refusal names both states and leaves the record untouched. */

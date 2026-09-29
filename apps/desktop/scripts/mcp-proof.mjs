@@ -5,7 +5,9 @@
  * denial and a rename, one stored secret, and nine launches against one scratch profile:
  *
  *   1. discovery   — the prompt's MCP section character-exact and equal to the callable set; the inert grant reported
- *                    once; gamma's unknown key warned once per load; the discovery file byte-identical after the run.
+ *                    once; gamma's unknown key warned once per load; the discovery file byte-identical after the run;
+ *                    every handshake tells the server `rotaris` at the version `apps/desktop/package.json` declares
+ *                    (REQ-STARTUP-158 — the client carried a literal `0.1.0` until 2026-09-27).
  *   2. call        — `echo` end to end (tool.start before tool.finish, the result text, the row succeeded); `slow` beyond
  *                    `request_timeout: 2` fails naming the server and the connection serves the following `echo` (003/069).
  *   3. one process — two children calling alpha concurrently share one connection and one fixture process; a third
@@ -16,7 +18,8 @@
  *                    Settings category → absent from the run, the row's wording, the child's recorded evidence; a
  *                    relaunch shows the override gone (115).
  *   7. settings    — Check status → checking then healthy/unreachable, the button disabled while probing, probed twice
- *                    → the fixture contacted twice (054); the secrets card masked and scoped; the PNG.
+ *                    → the fixture contacted twice (054); the secrets card masked and scoped; the PNG. The `.cmd`
+ *                    runner's health (REQ-MCP-113's wrap) is asserted on win32 only and stated not applicable elsewhere.
  *   8. fatal YAML  — a stdio entry without a command and a bad request_timeout: both reported, the load rejected; the
  *                    same defects in `.mcp.json` drop the entries and the run proceeds.
  *   9. exit bound  — a server that never answers initialize: discovery returns empty at ≤ 35 s and the application exits.
@@ -28,7 +31,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -53,7 +56,10 @@ if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${ele
 const root = join(output, 'profile');
 const workspace = join(root, 'workspace');
 const local = join(root, 'local');
-const configDir = join(local, 'rotaris', 'config');
+// By the platform that reads it (`configDirFor`), never the Windows spelling alone: off Windows the product reads
+// `<XDG_CONFIG_HOME>/rotaris`, so a file written at `<local>/rotaris/config` was never opened and launch 1 failed on
+// the shipped grant (`docs/defects/fixed/mcp-proof-writes-its-global-configuration-where-posix-never-reads-it.md`).
+const configDir = configDirFor(local);
 const preferences = join(root, 'preferences');
 const pids = join(output, 'pids');
 mkdirSync(join(workspace, '.rotaris'), { recursive: true });
@@ -117,7 +123,7 @@ function launch(name, extra, { files = {}, timeout = 150_000 } = {}) {
   resetPids();
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     cwd: app, encoding: 'utf8', timeout, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
@@ -151,7 +157,9 @@ const results = {};
 {
   writeFileSync(join(workspace, '.mcp.json'), MCP_JSON);
   const before = sha(join(workspace, '.mcp.json'));
-  const r = launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'call echo on alpha', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000' });
+  const clients = join(output, 'alpha.clients.jsonl');
+  writeFileSync(clients, '');
+  const r = launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'call echo on alpha', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000' }, { files: { global: globalYaml({ alphaFlags: ['--client-file', clients] }) } });
   if (sha(join(workspace, '.mcp.json')) !== before) throw new Error('the discovery file changed across the load (REQ-MCP-027)');
   const surface = lines(r.log, /mcp: surface for orchestrator/);
   if (surface.length === 0) throw new Error(`no surface line:\n${r.log}`);
@@ -179,7 +187,11 @@ const results = {};
   if (s.execution_status !== 'completed') throw new Error(`the run ended ${s.execution_status}`);
   if (echo.length !== 1 || echo[0].status !== 'ok' || !String(echo[0].entry.result ?? '').includes('hello from the scripted agent')) throw new Error(`echo did not succeed: ${JSON.stringify(echo)}`);
   const env = lines(r.log, /stderr/);
-  results.discovery = { section, callable, inertReports: inert.length, loads, unknownKeyWarnings: weird, discoveryMs: Object.fromEntries(disc.map((l) => [/discovery of '(\w+)'/.exec(l)[1], Number(/in (\d+) ms/.exec(l)?.[1])])), fileByteIdentical: true, stderrLines: env.length };
+  // REQ-STARTUP-158: the run host's handshakes (the discovery and the session's connection) name the declared version.
+  const declared = JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).version;
+  const told = readFileSync(clients, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l));
+  if (told.length < 2 || told.some((c) => c?.name !== 'rotaris' || c?.version !== declared)) throw new Error(`the MCP handshakes did not name rotaris ${declared} (REQ-STARTUP-158): ${JSON.stringify(told)}`);
+  results.discovery = { section, callable, inertReports: inert.length, loads, unknownKeyWarnings: weird, discoveryMs: Object.fromEntries(disc.map((l) => [/discovery of '(\w+)'/.exec(l)[1], Number(/in (\d+) ms/.exec(l)?.[1])])), fileByteIdentical: true, stderrLines: env.length, clientInfo: told };
 }
 
 // ---- 2. A call end to end, and the allowance ------------------------------------------------------------------
@@ -311,7 +323,14 @@ const results = {};
   const health = Object.fromEntries(rows.map((x) => [x.data['data-mcp-server'], x.data['data-health']]));
   if (health.alpha !== 'healthy' || health.beta !== 'healthy' || health.gamma !== 'healthy') throw new Error(`the fixtures should be healthy: ${JSON.stringify(health)}`);
   // REQ-MCP-113 through the built application: the `.cmd` runner standing in for `browser` is reached through cmd.exe and answers.
-  if (health.browser !== 'healthy') throw new Error(`the .cmd runner standing in for browser should probe healthy through the wrap: ${JSON.stringify(health)}`);
+  // The wrap is a Windows rule (a `.cmd` runner is what `npx` is there, and cmd.exe is what runs it), so off win32 this one
+  // check is NOT APPLICABLE and is stated so rather than failed: a POSIX kernel cannot execute `runner.cmd`, the row's health
+  // is recorded as observed, and the rest of the launch — the probing states, the masked secret, its scope — is measured.
+  const cmdRunner = process.platform === 'win32'
+    ? { applicable: true, health: health.browser }
+    : { applicable: false, health: health.browser, reason: `not applicable on ${process.platform}: REQ-MCP-113's .cmd wrap is a Windows rule and cmd.exe does not exist here; the row's health is recorded, not asserted` };
+  if (cmdRunner.applicable && health.browser !== 'healthy') throw new Error(`the .cmd runner standing in for browser should probe healthy through the wrap: ${JSON.stringify(health)}`);
+  if (!cmdRunner.applicable) console.log(`[mcp-proof] 7 settings: the .cmd runner check is ${cmdRunner.reason} (observed: ${health.browser})`);
   if (health.ghost !== 'unreachable' || health.off !== 'unreachable') throw new Error(`the unavailable and the not-installed servers should be unreachable: ${JSON.stringify(health)}`);
   const texts = JSON.parse((lines(r.log, /capture: probe tr\[data-mcp-server\] \[data-health-text\] →/)[0] ?? '').split(' → ')[1] ?? '[]').map((x) => x.text);
   if (!texts.some((t) => /Healthy · 5 tools/.test(t))) throw new Error(`no healthy row shows its tool count: ${JSON.stringify(texts)}`);
@@ -328,7 +347,7 @@ const results = {};
   if (linesShown.some((l) => /sk-proof-secret/.test(l))) throw new Error('a stored secret value reached a rendered line');
   if (/sk-proof-secret-value-1234/.test(r.log)) throw new Error('the stored secret value appeared in a log line');
   const unreachable = rows.find((x) => x.data['data-mcp-server'] === 'ghost');
-  results.settings = { health, healthTexts: texts, probesPerServer: pidLines('alpha').length, mask: masks[0], scope: scopes[0], expected, ghostDetail: unreachable?.text?.slice(0, 160) ?? '', png: r.png };
+  results.settings = { health, cmdRunner, healthTexts: texts, probesPerServer: pidLines('alpha').length, mask: masks[0], scope: scopes[0], expected, ghostDetail: unreachable?.text?.slice(0, 160) ?? '', png: r.png };
 }
 
 // ---- 8. Fatal YAML defects; the same in the discovery file --------------------------------------------------

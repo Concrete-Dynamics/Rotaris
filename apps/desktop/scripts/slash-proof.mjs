@@ -16,7 +16,8 @@
  *   Enter          on exactly `/model` submits; the popup was hidden and the composer cleared before the command ran,
  *                  the command failed "Usage: /model <name>", the exact text is back with the caret at its end, and a
  *                  PERSISTENT notice titled "Command not run" carries the message (REQ-CHAT-019/020/021/032);
- *   `/model nope`  "Unknown model 'nope'. Available: scripted, scripted-2" — the configured catalogue, in its order;
+ *   `/model nope`  "Unknown model 'nope'. Available: …" — the configured catalogue, in its order, as the model chip's
+ *                  picker lists it (the defaults' models and the scratch file's two): opened, read, closed by a real Escape;
  *   `/stop`        while idle: "No run is active.", text restored (REQ-CHAT-029);
  *   `/stash …`     twice: the stash count climbs to two and the composer empties (REQ-LIBRARY-142 / REQ-CHAT-042);
  *   `/pop`         opens the stash dialog with keyboard focus on Pop; Pop loads the newest entry into the emptied
@@ -36,8 +37,9 @@
  * Part C2 (wave 3) adds three launches of its own after that one, each with its own scratch profile:
  *
  *   palettes       `/theme` switches to each of REQ-SHELL-128's three built-in palettes in turn and REQ-CHAT-027's
- *                  four roles are measured on each — against the ground that palette actually paints, which is read
- *                  from the document root's `--rt-bg` at the same instant rather than written down here;
+ *                  four roles are measured on each — against the ground that palette actually paints (`GROUND`: the first
+ *                  opaque background from the input up), compared with the document root's `--rt-bg` at the same instant
+ *                  rather than written down here;
  *   theme-restart  the same preference root opened again: the theme `/theme` wrote is the theme the new window paints;
  *   wired          `/logout` against the real provider registry and credential store (a key written through
  *                  `providers.save`, signed out by the command, the store read back on both sides and the file gone),
@@ -48,7 +50,8 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
-import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { parseEvals, readEval } from './lib/capture-evals.mjs';
 import { spawn, spawnSync } from 'node:child_process'; // Part C2 — `spawn` writes a file WHILE a launch blocks this script.
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -73,7 +76,7 @@ const expect = (condition, message) => { if (!condition) throw new Error(message
 
 function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
@@ -89,11 +92,8 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000)
     const m = /capture: inspect-at (\d+) (.+?) → (\{.*\})\s*$/.exec(line);
     if (m) { try { inspects[`${m[2]}@${m[1]}`] = JSON.parse(m[3]); } catch { /* an unreadable inspect stays absent */ } }
   }
-  const evals = [];
-  for (const line of log.split('\n')) {
-    const m = /capture: eval-at (\d+) .+ → (.*)$/.exec(line);
-    if (m) { try { evals.push({ at: Number(m[1]), value: JSON.parse(m[2]) }); } catch { evals.push({ at: Number(m[1]), value: m[2] }); } }
-  }
+  // Kept with the text the seam logged after each offset, so a read names its probe (`lib/capture-evals.mjs`).
+  const evals = parseEvals(log);
   const texts = {};
   for (const line of log.split('\n')) {
     const m = /capture: text-at (\d+) "(.*)" → (true|false|error)\s*$/.exec(line);
@@ -104,7 +104,12 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000)
 const inspect = (r, selector, at) => r.inspects[`${selector}@${at}`] ?? null;
 const matches = (r, selector, at) => inspect(r, selector, at)?.matches ?? [];
 const match = (r, selector, at, index = 0) => matches(r, selector, at)[index] ?? null;
-const evalAt = (r, at) => r.evals.find((e) => e.at === at)?.value;
+/**
+ * The answer of the eval scheduled at `at` WITH `expression` — the exact text given to ROTARIS_CAPTURE_EVAL_AT. The
+ * offset alone does not name a probe: two evals at one instant both fire and both log, and reading the first one logged
+ * made the model chip's check read the usage notice. A read matching two logged evals throws (`lib/capture-evals.mjs`).
+ */
+const evalAt = (r, at, expression) => readEval(r.evals, at, expression);
 
 // ── WCAG 2.x contrast over the painted colour values the page reports, so the floor is measured on what was drawn. ──
 // Chromium reports a custom-property colour in the form it was declared — OKLCH for every theme token — so the
@@ -172,7 +177,15 @@ if (init.status !== 0) throw new Error(`git init failed: ${init.stderr}`);
 /** The composer's OWN change path — the native setter plus an `input` event — as the composer proof set its draft. */
 const setComposer = (text) => `(() => { const el = document.querySelector('.composer__input'); if (!el) return 'no composer'; const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; setter.call(el, ${JSON.stringify(text)}); el.dispatchEvent(new Event('input', { bubbles: true })); el.focus(); return el.value.length; })()`;
 const readComposer = `(() => { const el = document.querySelector('.composer__input'); return el ? { value: el.value, start: el.selectionStart, end: el.selectionEnd, focused: document.activeElement === el } : null; })()`;
-const readToken = `(() => { const t = document.querySelector('[data-testid="slash-token"]'); const a = document.querySelector('[data-testid="slash-argument"]'); const input = document.querySelector('.composer__input'); if (!t || !input) return { state: null }; const s = getComputedStyle(t); return { state: t.dataset.state, text: t.textContent, color: s.color, weight: s.fontWeight, argument: a ? getComputedStyle(a).color : null, argumentText: a ? a.textContent : null, surface: getComputedStyle(input).backgroundColor, inputColor: getComputedStyle(input).color, caret: getComputedStyle(input).caretColor, popup: document.querySelector('[data-testid="slash-popup"]') !== null }; })()`;
+/**
+ * The ground the token is painted on, as drawn: the input's own background if it paints one, otherwise the first
+ * ancestor's that does (alpha above zero), with the element it came from. Since 2026-09-18 (the composer dock, `9b7d3cb`) the
+ * composer's input is transparent inside `.composer__dock`, so reading the input's own `backgroundColor` returned
+ * a fully transparent colour — which the contrast arithmetic read as black, measuring REQ-CHAT-027's floor against a ground
+ * nobody sees. An expression (not a function) so it can be spliced into each probe; `input` must be in scope.
+ */
+const GROUND = `(() => { for (let n = input; n; n = n.parentElement) { const c = getComputedStyle(n).backgroundColor; const slash = /\\/\\s*([\\d.]+%?)\\s*\\)$/.exec(c); const rgba = /^rgba\\([^)]*,\\s*([\\d.]+)\\)$/.exec(c); const alpha = slash ? (slash[1].endsWith('%') ? Number(slash[1].slice(0, -1)) / 100 : Number(slash[1])) : rgba ? Number(rgba[1]) : 1; if (alpha > 0) return { colour: c, alpha, from: n === input ? 'input' : String(n.className || n.tagName.toLowerCase()) }; } return { colour: null, alpha: 0, from: null }; })()`;
+const readToken = `(() => { const t = document.querySelector('[data-testid="slash-token"]'); const a = document.querySelector('[data-testid="slash-argument"]'); const input = document.querySelector('.composer__input'); if (!t || !input) return { state: null }; const g = ${GROUND}; const s = getComputedStyle(t); return { state: t.dataset.state, text: t.textContent, color: s.color, weight: s.fontWeight, argument: a ? getComputedStyle(a).color : null, argumentText: a ? a.textContent : null, surface: g.colour, surfaceFrom: g.from, surfaceAlpha: g.alpha, inputBackground: getComputedStyle(input).backgroundColor, inputColor: getComputedStyle(input).color, caret: getComputedStyle(input).caretColor, popup: document.querySelector('[data-testid="slash-popup"]') !== null }; })()`;
 const readPopup = `(() => { const p = document.querySelector('[data-testid="slash-popup"]'); if (!p) return { open: false }; const l = p.querySelector('[data-testid="slash-popup-list"]'); const rows = [...l.querySelectorAll('[role="option"]')]; const pr = p.getBoundingClientRect(); const ir = document.querySelector('.composer__input').getBoundingClientRect(); return { open: true, rows: rows.length, unavailable: rows.filter((r) => r.dataset.available === '0').length, first: rows[0]?.dataset.command, active: rows.findIndex((r) => r.getAttribute('aria-selected') === 'true'), rowHeight: rows[0]?.offsetHeight, listClient: l.clientHeight, listScroll: l.scrollHeight, popup: { left: pr.left, width: pr.width, bottom: pr.bottom }, input: { left: ir.left, width: ir.width, top: ir.top }, focusInPopup: p.contains(document.activeElement), focusInComposer: document.activeElement === document.querySelector('.composer__input'), kinds: [...new Set(rows.map((r) => r.dataset.kind))], names: rows.map((r) => r.dataset.command) }; })()`;
 // Part AO: the notice is the shell's ONE persistent slot now (`notice.report`, ADR-0049's fourth execution) — the composer draws none of its own.
 const readNotice = `(() => { const n = document.querySelector('[data-testid="notice"]'); if (!n) return null; return { title: n.querySelector('[data-testid="notice-title"]')?.textContent, message: n.querySelector('[data-testid="notice-message"]')?.textContent, dismiss: n.querySelector('.notice__dismiss') !== null, severity: n.dataset.severity }; })()`;
@@ -183,11 +196,19 @@ const readActive = `(() => { const a = document.activeElement; return a ? { tag:
 /** The configured catalogue as the model chip offers it — the source REQ-CHAT-032's "Available:" clause must follow, in its order. Read from the opened searchable picker, whose listbox rows carry the bare ids. */
 const openChipModels = `(() => { const t = document.querySelector('[data-testid="chip-model"] [data-ui-component="SearchableSelect"]'); if (!t) return 'no chip'; t.click(); return 'opened'; })()`;
 const readChipModels = `[...document.querySelectorAll('[data-testid="searchable-select-list"] [role="option"]')].map((o) => o.getAttribute('data-value')).filter((v) => v !== '')`;
-const closeChipModels = `(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return document.querySelector('[data-testid="searchable-select-list"]') === null; })()`;
+/**
+ * The picker closed by a REAL Escape (ROTARIS_CAPTURE_KEYS at `T.modelsClose`, into whatever holds focus — the filter
+ * field the picker focuses on open), read until the list is gone, bounded, with the wait recorded. The first form
+ * dispatched a synthetic Escape on `document`, which never reaches the picker's own key handler (it sits on the trigger
+ * and the panel, below the document), and read the list in the same tick; it could not have passed.
+ */
+const readChipClosed = `(async () => { const started = performance.now(); while (true) { const open = document.querySelector('[data-testid="searchable-select-list"]') !== null; const waited = Math.round(performance.now() - started); if (!open || waited > 400) { const a = document.activeElement; return { closed: !open, waitedMs: waited, focus: a ? (a.getAttribute('data-ui-component') ?? a.tagName.toLowerCase()) : null }; } await new Promise((r) => requestAnimationFrame(() => r())); } })()`;
+/** The active theme's name as the document root carries it. */
+const DATASET_THEME = 'document.documentElement.dataset.theme';
 
 const T = {
   focus: 1600, slash: 1900, popup: 2400, mod: 2700, partial: 3100, el: 3300, resolved: 3700, tab: 3900, completed: 4200,
-  zzz: 4400, unknown: 4800, model: 5000, modelEnter: 5200, usage: 5800, modelsOpen: 5900, models: 5950, modelsClose: 5975, modelNope: 6000, modelNopeEnter: 6200, unknownModel: 6800,
+  zzz: 4400, unknown: 4800, model: 5000, modelEnter: 5200, usage: 5800, usageNotice: 5850, modelsOpen: 5900, models: 5950, modelsClose: 5975, modelsClosed: 5980, modelNope: 6000, modelNopeEnter: 6200, unknownModel: 6800,
   stop: 7000, stopEnter: 7200, noRun: 7800, stash1: 8000, stash1Enter: 8200, count1: 8700, stash2: 8900, stash2Enter: 9100, count2: 9600,
   pop: 9800, popEnter: 10000, dialog: 10500, popClick: 10700, popped: 11300, toolbar: 11500, popClick2: 12000, appended: 12600,
   popEmpty: 12800, popEmptyEnter: 13000, stashEmpty: 13600, setModel: 13800, setModelEnter: 14000, modelSet: 14700,
@@ -208,13 +229,13 @@ const run = launch('catalogue', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'wait:12000,answer',
   ROTARIS_CAPTURE_CHORDS: `Ctrl+L@${T.focus}`,
   ROTARIS_CAPTURE_TYPE_AT: `/@${T.slash};;mod@${T.mod};;el@${T.el};;/mo@${T.mo}`,
-  ROTARIS_CAPTURE_KEYS: `Tab@${T.tab};;Return@${T.modelEnter};;Return@${T.modelNopeEnter};;Return@${T.stopEnter};;Return@${T.stash1Enter};;Return@${T.stash2Enter};;Return@${T.popEnter};;Return@${T.popEmptyEnter};;Return@${T.setModelEnter};;Escape@${T.escape};;Return@${T.themeEnter};;Return@${T.themeBackEnter};;Return@${T.logoutEnter};;Return@${T.sessionsEnter};;Escape@${T.browserEscape};;Return@${T.newEnter};;Escape@${T.launchEscape};;Return@${T.worktreeEnter};;Escape@${T.worktreeEscape};;Return@${T.helloEnter};;Return@${T.compressEnter};;Return@${T.stop2Enter}`,
+  ROTARIS_CAPTURE_KEYS: `Tab@${T.tab};;Return@${T.modelEnter};;Escape@${T.modelsClose};;Return@${T.modelNopeEnter};;Return@${T.stopEnter};;Return@${T.stash1Enter};;Return@${T.stash2Enter};;Return@${T.popEnter};;Return@${T.popEmptyEnter};;Return@${T.setModelEnter};;Escape@${T.escape};;Return@${T.themeEnter};;Return@${T.themeBackEnter};;Return@${T.logoutEnter};;Return@${T.sessionsEnter};;Escape@${T.browserEscape};;Return@${T.newEnter};;Escape@${T.launchEscape};;Return@${T.worktreeEnter};;Escape@${T.worktreeEscape};;Return@${T.helloEnter};;Return@${T.compressEnter};;Return@${T.stop2Enter}`,
   ROTARIS_CAPTURE_CLICKS: `[data-testid="stash-dialog-pop"]@${T.popClick};;[data-testid="transcript-stash"]@${T.toolbar};;[data-testid="stash-dialog-pop"]@${T.popClick2}`,
   ROTARIS_CAPTURE_EVAL_AT: [
     `${readPopup}@${T.popup}`, `${readToken}@${T.partial}`, `${readPopup}@${T.partial + 100}`, `${readToken}@${T.resolved}`, `${readPopup}@${T.resolved + 100}`,
     `${readComposer}@${T.completed}`, `${readToken}@${T.completed + 100}`, `${setComposer('/zzz')}@${T.zzz}`, `${readToken}@${T.unknown}`,
-    `${setComposer('/model')}@${T.model}`, `${readComposer}@${T.usage}`, `${readNotice}@${T.usage + 100}`,
-    `${openChipModels}@${T.modelsOpen}`, `${readChipModels}@${T.models}`, `${closeChipModels}@${T.modelsClose}`, `${setComposer('/model nope')}@${T.modelNope}`, `${readNotice}@${T.unknownModel}`, `${readComposer}@${T.unknownModel + 100}`,
+    `${setComposer('/model')}@${T.model}`, `${readComposer}@${T.usage}`, `${readNotice}@${T.usageNotice}`,
+    `${openChipModels}@${T.modelsOpen}`, `${readChipModels}@${T.models}`, `${readChipClosed}@${T.modelsClosed}`, `${setComposer('/model nope')}@${T.modelNope}`, `${readNotice}@${T.unknownModel}`, `${readComposer}@${T.unknownModel + 100}`,
     `${setComposer('/stop')}@${T.stop}`, `${readNotice}@${T.noRun}`, `${readComposer}@${T.noRun + 100}`,
     `${setComposer('/stash keep this')}@${T.stash1}`, `${readComposer}@${T.count1}`, `${readNotice}@${T.count1 + 100}`,
     `${setComposer('/stash second one')}@${T.stash2}`,
@@ -223,8 +244,8 @@ const run = launch('catalogue', workspace, local, preferences, {
     `${setComposer('/pop')}@${T.popEmpty}`, `${readNotice}@${T.stashEmpty}`,
     `${setComposer('/model scripted-2')}@${T.setModel}`, `${readNotice}@${T.modelSet}`,
     `${setComposer('')}@${T.clear}`, `${readComposer}@${T.escaped}`, `${readPopup}@${T.escaped + 100}`,
-    `${setComposer('/theme NOCTURNE')}@${T.theme}`, `document.documentElement.dataset.theme@${T.themeApplied}`, `${readNotice}@${T.themeApplied + 50}`,
-    `${setComposer('/theme rotaris-dim')}@${T.themeBack}`, `document.documentElement.dataset.theme@${T.themeRestored}`,
+    `${setComposer('/theme NOCTURNE')}@${T.theme}`, `${DATASET_THEME}@${T.themeApplied}`, `${readNotice}@${T.themeApplied + 50}`,
+    `${setComposer('/theme rotaris-dim')}@${T.themeBack}`, `${DATASET_THEME}@${T.themeRestored}`,
     `${setComposer('/logout zzz')}@${T.logout}`, `${readNotice}@${T.logoutNotice}`,
     `${setComposer('/sessions')}@${T.sessions}`, `${readActive}@${T.browser}`,
     `${setComposer('/new')}@${T.newSession}`,
@@ -251,7 +272,7 @@ const run = launch('catalogue', workspace, local, preferences, {
 const results = {};
 
 // ── `/` opens the popup listing every command (REQ-CHAT-024/025) ──
-const popup = evalAt(run, T.popup);
+const popup = evalAt(run, T.popup, readPopup);
 expect(popup?.open === true, `the popup did not open on "/": ${JSON.stringify(popup)}`);
 const rows = matches(run, '[data-testid="slash-popup"] [role="option"]', T.popup + 100);
 expect(rows.length === popup.rows && popup.rows >= 27, `expected every command listed (≥ 27 rows: 15 built-ins + the palette mirrors); got ${popup.rows}`);
@@ -259,7 +280,21 @@ for (const name of ['stop', 'pause', 'compress', 'clear', 'search', 'new', 'resu
   expect(popup.names.includes(name), `/${name} is not listed: ${popup.names.join(' ')}`);
 }
 expect(popup.first === 'stop' && popup.active === 0, `the first row should be /stop and highlighted: ${popup.first} / ${popup.active}`);
-expect(popup.kinds.length === 1 && popup.kinds[0] === 'action', `every built-in and mirror carries the action badge: ${popup.kinds.join(',')}`);
+// REQ-CHAT-025 fixes the closed badge set `action`, `skill`, `prompt` and says only that `prompt` marks a prompt-file
+// entry. ADR-0063 (decision 5, `packages/ui/src/slash/skills.ts`) chose `skill` for the two fixed skill commands
+// REQ-CHAT-162 names — `/skill <path>` and `/skills` — beside the per-skill commands; the built-ins and the palette
+// mirrors carry `action`. This launch discovers no skill and has no prompt file, so the set is exactly those two, and the
+// `skill` badge sits on exactly those two rows. Until 2026-09-28 the assertion read every row as `action`, which
+// `/skill` stopped matching on 2026-09-15 (`docs/defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md`).
+// "Discovers no skill" rests on the launch's isolation: on a POSIX host a skill under the machine-wide
+// `/etc/codex/skills`, which this proof does not redirect (`ROTARIS_CAPTURE_SKILLS_MACHINE` exists since 2026-09-28
+// and is not set here), would add its own `skill` row and fail the exact set below
+// (`docs/defects/fixed/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`).
+const FIXED_SKILL_COMMANDS = ['skill', 'skills'];
+expect([...popup.kinds].sort().join(',') === 'action,skill', `the built-ins and mirrors carry the action badge and the two fixed skill commands the skill badge — no other kind: ${popup.kinds.join(',')}`);
+const skillBadged = rows.filter((r) => r.attrs['data-kind'] === 'skill').map((r) => r.attrs['data-command']).sort();
+expect(skillBadged.join(',') === FIXED_SKILL_COMMANDS.join(','), `exactly /skill and /skills carry the skill badge (ADR-0063): ${skillBadged.join(',')}`);
+for (const name of FIXED_SKILL_COMMANDS) expect(popup.names.includes(name), `/${name} is not listed (REQ-CHAT-162): ${popup.names.join(' ')}`);
 expect(popup.focusInComposer && !popup.focusInPopup, 'the popup took keyboard focus (REQ-CHAT-024)');
 // At most eight rows on screen; the rest behind a scroll.
 expect(popup.listClient <= popup.rowHeight * 8 + 1 && popup.listScroll > popup.listClient, `the list should show ≤ 8 rows (${popup.rowHeight} px each) and scroll beyond: client ${popup.listClient}, scroll ${popup.listScroll}`);
@@ -278,90 +313,93 @@ expect(worktreeRow !== undefined && (worktreeRow.attrs['data-available'] === '1'
 results.popup = { rows: popup.rows, unavailable: popup.unavailable, rowHeightPx: popup.rowHeight, listClientPx: popup.listClient, listScrollPx: popup.listScroll, width: popup.popup.width, inputWidth: popup.input.width, gapPx: popup.input.top - popup.popup.bottom, names: popup.names };
 
 // ── `/mod` partial, `/model` resolved, `/zzz` unknown — colour AND weight, 4.5:1 on the input's ground, all distinct (REQ-CHAT-027) ──
-const partial = evalAt(run, T.partial);
-const resolved = evalAt(run, T.resolved);
-const unknown = evalAt(run, T.unknown);
-const completed = evalAt(run, T.completed + 100);
+const partial = evalAt(run, T.partial, readToken);
+const resolved = evalAt(run, T.resolved, readToken);
+const unknown = evalAt(run, T.unknown, readToken);
+const completed = evalAt(run, T.completed + 100, readToken);
 expect(partial?.state === 'partial' && partial.text === '/mod', `"/mod" should be partial: ${JSON.stringify(partial)}`);
 expect(resolved?.state === 'resolved' && resolved.text === '/model', `"/model" should be resolved: ${JSON.stringify(resolved)}`);
 expect(unknown?.state === 'unknown' && unknown.text === '/zzz', `"/zzz" should be unknown: ${JSON.stringify(unknown)}`);
 expect(partial.weight === '400' && resolved.weight === '500' && unknown.weight === '500', `weights: partial ${partial.weight} (not bold), resolved ${resolved.weight}, unknown ${unknown.weight} (bold)`);
+// The ground is the painted one (GROUND above), and the contrast arithmetic assumes it is opaque.
+for (const read of [partial, resolved, unknown, completed]) expect(typeof read.surface === 'string' && read.surfaceAlpha === 1, `REQ-CHAT-027's ground must be an opaque painted colour to measure against: ${JSON.stringify({ surface: read.surface, from: read.surfaceFrom, alpha: read.surfaceAlpha })}`);
 const ratios = { partial: contrast(partial.color, partial.surface), resolved: contrast(resolved.color, resolved.surface), unknown: contrast(unknown.color, unknown.surface), argument: contrast(completed.argument, completed.surface) };
-for (const [role, ratio] of Object.entries(ratios)) expect(ratio >= 4.5, `${role} paints at ${ratio.toFixed(2)}:1 on the input, below 4.5:1`);
+for (const [role, ratio] of Object.entries(ratios)) expect(ratio >= 4.5, `REQ-CHAT-027: ${role} paints at ${ratio.toFixed(2)}:1 on the ground it is painted on (${partial.surface}, painted by ${partial.surfaceFrom}), below 4.5:1`);
 const painted = [partial.color, resolved.color, unknown.color, completed.argument];
 expect(new Set(painted).size === 4, `the four role colours must differ: ${painted.join(' | ')}`);
 expect(transparent(resolved.inputColor) && !transparent(resolved.caret), `while highlighted the field's own glyphs are transparent and the caret is not: ${resolved.inputColor} / ${resolved.caret}`);
 // The popup narrows with the token: "/mod" lists /model alone; "/zzz" lists nothing and the popup closes.
-const popupMod = evalAt(run, T.partial + 100);
+const popupMod = evalAt(run, T.partial + 100, readPopup);
 expect(popupMod?.open === true && popupMod.names.length === 1 && popupMod.names[0] === 'model', `"/mod" should list /model alone: ${JSON.stringify(popupMod?.names)}`);
 expect(unknown.popup === false, 'zero matches should close the popup (REQ-CHAT-024)');
 results.highlight = { partial: { color: partial.color, weight: partial.weight, ratio: ratios.partial }, resolved: { color: resolved.color, weight: resolved.weight, ratio: ratios.resolved }, unknown: { color: unknown.color, weight: unknown.weight, ratio: ratios.unknown }, argument: { color: completed.argument, ratio: ratios.argument }, surface: partial.surface };
 
 // ── Tab completes with one trailing space, caret after it, no submit (REQ-CHAT-026) ──
-const afterTab = evalAt(run, T.completed);
+const afterTab = evalAt(run, T.completed, readComposer);
 expect(afterTab?.value === '/model ' && afterTab.start === 7 && afterTab.end === 7 && afterTab.focused, `Tab should leave "/model " with the caret at 7: ${JSON.stringify(afterTab)}`);
 expect(completed?.popup === false && completed.argumentText === ' ', `after completion the popup is closed and the argument span holds the space: ${JSON.stringify(completed)}`);
 results.tab = afterTab;
 
 // ── Enter on exactly `/model` submits; the outcome is the usage failure, the text restored, the persistent notice raised (REQ-CHAT-019/020/021/032) ──
-const usageNotice = evalAt(run, T.usage + 100);
-const usageComposer = evalAt(run, T.usage);
+const usageNotice = evalAt(run, T.usageNotice, readNotice);
+const usageComposer = evalAt(run, T.usage, readComposer);
 expect(usageNotice?.title === 'Command not run' && usageNotice.message === 'Usage: /model <name>' && usageNotice.dismiss === true, `the usage notice: ${JSON.stringify(usageNotice)}`);
 expect(usageComposer?.value === '/model' && usageComposer.start === 6 && usageComposer.end === 6, `the exact text should be restored with the caret at its end: ${JSON.stringify(usageComposer)}`);
 results.usage = { notice: usageNotice, composer: usageComposer };
 
 // ── `/model <unknown>` lists the configured catalogue in order — the same list, in the same order, the model chip offers ──
-const chipOpened = evalAt(run, T.modelsOpen);
+const chipOpened = evalAt(run, T.modelsOpen, openChipModels);
 expect(chipOpened === 'opened', `the model chip did not open its picker: ${JSON.stringify(chipOpened)}`);
-const configured = evalAt(run, T.models);
+const configured = evalAt(run, T.models, readChipModels);
 expect(Array.isArray(configured) && configured.includes('scripted') && configured.includes('scripted-2') && configured.indexOf('scripted') < configured.indexOf('scripted-2'), `the configured catalogue should hold the two scripted models in file order: ${JSON.stringify(configured)}`);
-expect(evalAt(run, T.modelsClose) === true, 'the model chip picker did not close on Escape');
-const unknownModel = evalAt(run, T.unknownModel);
+const chipClosed = evalAt(run, T.modelsClosed, readChipClosed);
+expect(chipClosed?.closed === true, `the model chip picker did not close on Escape: ${JSON.stringify(chipClosed)}`);
+const unknownModel = evalAt(run, T.unknownModel, readNotice);
 expect(Array.isArray(configured) && configured.includes('scripted') && configured.includes('scripted-2') && configured.indexOf('scripted') < configured.indexOf('scripted-2'), `the configured catalogue should hold the two scripted models in file order: ${JSON.stringify(configured)}`);
 expect(unknownModel?.message === `Unknown model 'nope'. Available: ${configured.join(', ')}`, `the unknown-model message should name the configured catalogue in its order: ${JSON.stringify(unknownModel)} vs ${JSON.stringify(configured)}`);
-expect(evalAt(run, T.unknownModel + 100)?.value === '/model nope', 'the unknown-model text should be restored');
-results.unknownModel = { message: unknownModel.message, configured };
+expect(evalAt(run, T.unknownModel + 100, readComposer)?.value === '/model nope', 'the unknown-model text should be restored');
+results.unknownModel = { message: unknownModel.message, configured, chipClosed };
 
 // ── `/stop` while idle ──
-const noRun = evalAt(run, T.noRun);
+const noRun = evalAt(run, T.noRun, readNotice);
 expect(noRun?.message === 'No run is active.' && noRun.title === 'Command not run', `the idle /stop notice: ${JSON.stringify(noRun)}`);
-expect(evalAt(run, T.noRun + 100)?.value === '/stop', 'the /stop text should be restored');
+expect(evalAt(run, T.noRun + 100, readComposer)?.value === '/stop', 'the /stop text should be restored');
 results.stopIdle = noRun;
 
 // ── `/stash <prompt>` twice, `/pop` into the emptied composer, the toolbar's Pop into the non-empty one (REQ-LIBRARY-142, REQ-CHAT-042..044) ──
-expect(evalAt(run, T.count1)?.value === '' && sameNotice(evalAt(run, T.count1 + 100), noRun), `after /stash the composer is empty and no NEW notice is raised (Part AO: the last refusal stands in the one slot): ${JSON.stringify(evalAt(run, T.count1))} ${JSON.stringify(evalAt(run, T.count1 + 100))}`);
+expect(evalAt(run, T.count1, readComposer)?.value === '' && sameNotice(evalAt(run, T.count1 + 100, readNotice), noRun), `after /stash the composer is empty and no NEW notice is raised (Part AO: the last refusal stands in the one slot): ${JSON.stringify(evalAt(run, T.count1, readComposer))} ${JSON.stringify(evalAt(run, T.count1 + 100, readNotice))}`);
 expect(match(run, '[data-testid="transcript-stash"]', T.count1)?.attrs['data-count'] === '1', 'the stash count should be 1 after the first /stash');
 expect(match(run, '[data-testid="transcript-stash"]', T.count2)?.attrs['data-count'] === '2', 'the stash count should be 2 after the second /stash');
 expect(match(run, '[data-testid="stash-dialog"]', T.dialog) !== null, '/pop should open the stash dialog');
-const focusInDialog = evalAt(run, T.dialog);
+const focusInDialog = evalAt(run, T.dialog, readActive);
 expect(focusInDialog?.testId === 'stash-dialog-pop', `the dialog should take keyboard focus on Pop: ${JSON.stringify(focusInDialog)}`);
-const popped = evalAt(run, T.popped);
+const popped = evalAt(run, T.popped, readComposer);
 expect(popped?.value === 'second one' && popped.focused, `Pop should load the newest entry into the emptied composer and focus it: ${JSON.stringify(popped)}`);
 expect(match(run, '[data-testid="transcript-stash"]', T.popped)?.attrs['data-count'] === '1', 'Pop should remove the entry');
-const appended = evalAt(run, T.appended);
+const appended = evalAt(run, T.appended, readComposer);
 expect(appended?.value === 'second one\n\nkeep this', `popping into a non-empty composer should append after one blank line: ${JSON.stringify(appended?.value)}`);
 expect(match(run, '[data-testid="transcript-stash"]', T.appended)?.attrs['data-count'] === '0', 'the second Pop should empty the stash');
-const stashEmpty = evalAt(run, T.stashEmpty);
+const stashEmpty = evalAt(run, T.stashEmpty, readNotice);
 expect(stashEmpty?.message === 'No stashed prompts. Use Stash beside the composer first.', `/pop against an empty stash is unavailable with the dialog's own sentence: ${JSON.stringify(stashEmpty)}`);
 results.stash = { popped: popped.value, appended: appended.value, emptyReason: stashEmpty.message };
 
 // ── `/model scripted-2` succeeds: the chip shows the new name and the notice is shown ──
 const chip = match(run, '[data-testid="chip-model"] [data-ui-component="SearchableSelect"]', T.modelSet);
-expect(chip?.text?.includes('scripted-2') && sameNotice(evalAt(run, T.modelSet), stashEmpty), `the model chip should offer scripted-2 and no NEW failure notice be raised (Part AO): ${JSON.stringify(chip?.text)} ${JSON.stringify(evalAt(run, T.modelSet))}`);
+expect(chip?.text?.includes('scripted-2') && sameNotice(evalAt(run, T.modelSet, readNotice), stashEmpty), `the model chip should offer scripted-2 and no NEW failure notice be raised (Part AO): ${JSON.stringify(chip?.text)} ${JSON.stringify(evalAt(run, T.modelSet, readNotice))}`);
 expect(run.texts[`Model set to scripted-2.@${T.modelSet}`] === true, '"Model set to scripted-2." was not shown');
 results.modelSet = true;
 
 // ── Escape leaves `/mo` as typed and closes the popup (REQ-CHAT-026) ──
-const escaped = evalAt(run, T.escaped);
+const escaped = evalAt(run, T.escaped, readComposer);
 expect(escaped?.value === '/mo', `Escape should leave the text as typed: ${JSON.stringify(escaped)}`);
-expect(evalAt(run, T.escaped + 100)?.open === false, 'Escape should dismiss the popup');
+expect(evalAt(run, T.escaped + 100, readPopup)?.open === false, 'Escape should dismiss the popup');
 results.escape = escaped.value;
 
 // ── The renderer-wired commands: `/theme` (case-insensitive, applied), `/logout` (the provider domain's vocabulary), `/sessions`, `/new`, `/worktree` (REQ-CHAT-031, REQ-CHAT-159) ──
-expect(evalAt(run, T.themeApplied) === 'nocturne' && sameNotice(evalAt(run, T.themeApplied + 50), stashEmpty), `"/theme NOCTURNE" should apply nocturne with no NEW failure notice (Part AO): ${JSON.stringify(evalAt(run, T.themeApplied))} ${JSON.stringify(evalAt(run, T.themeApplied + 50))}`);
+expect(evalAt(run, T.themeApplied, DATASET_THEME) === 'nocturne' && sameNotice(evalAt(run, T.themeApplied + 50, readNotice), stashEmpty), `"/theme NOCTURNE" should apply nocturne with no NEW failure notice (Part AO): ${JSON.stringify(evalAt(run, T.themeApplied, DATASET_THEME))} ${JSON.stringify(evalAt(run, T.themeApplied + 50, readNotice))}`);
 expect(run.texts[`Theme set to nocturne.@${T.themeApplied}`] === true, '"Theme set to nocturne." was not shown');
-expect(evalAt(run, T.themeRestored) === 'rotaris-dim', `"/theme rotaris-dim" should restore the default theme: ${JSON.stringify(evalAt(run, T.themeRestored))}`);
-const logoutNotice = evalAt(run, T.logoutNotice);
+expect(evalAt(run, T.themeRestored, DATASET_THEME) === 'rotaris-dim', `"/theme rotaris-dim" should restore the default theme: ${JSON.stringify(evalAt(run, T.themeRestored, DATASET_THEME))}`);
+const logoutNotice = evalAt(run, T.logoutNotice, readNotice);
 expect(logoutNotice?.title === 'Command not run' && (logoutNotice.message.startsWith("Unknown provider 'zzz'. Available: ") || logoutNotice.message === 'No providers are configured. Choose one in Settings.'), `"/logout zzz" should name the rejected value and list the providers, or state that none are configured: ${JSON.stringify(logoutNotice)}`);
 expect(match(run, '.session-browser', T.browser) !== null, '/sessions should open the session browser');
 expect(match(run, '.session-browser', T.newSession) === null, 'Escape should have closed the session browser');
@@ -369,17 +407,17 @@ expect(match(run, '[data-testid="start-session-dialog"]', T.launch) !== null, '/
 expect(match(run, '[data-testid="start-session-dialog"]', T.worktree) === null, 'Escape should have closed the launch dialog');
 expect(match(run, '[data-testid="worktree-dialog"]', T.worktreeDialog) !== null, '/worktree should open the worktree dialog in a git workspace');
 expect(match(run, '[data-testid="worktree-dialog"]', T.hello) === null, 'Escape should have closed the worktree dialog');
-results.wired = { theme: evalAt(run, T.themeApplied), logout: logoutNotice.message, browser: true, launch: true, worktree: true };
+results.wired = { theme: evalAt(run, T.themeApplied, DATASET_THEME), logout: logoutNotice.message, browser: true, launch: true, worktree: true };
 
 // ── `/ hello` is a prompt: no highlighting, and it starts a run whose transcript shows the user's row (REQ-CHAT-018/023) ──
-expect(evalAt(run, T.hello + 100)?.state === null, 'the "/ " escape must receive no highlighting');
+expect(evalAt(run, T.hello + 100, readToken)?.state === null, 'the "/ " escape must receive no highlighting');
 const runState = match(run, '[data-testid="run-state"]', T.running)?.text;
 expect(runState === 'Run active', `"/ hello" should have started a run: run state ${JSON.stringify(runState)}`);
 expect(run.texts[`/ hello@${T.running}`] === true, 'the prompt "/ hello" should appear in the transcript');
 results.escapePrompt = { runState };
 
 // ── `/compress` during the run: Part AO armed it — the pass runs and raises no refusal (the count is a toast, measured in `chat-controls-proof`); `/stop` during the run: accepted, the run cancels, no notice ──
-const compress = evalAt(run, T.compressFailed);
+const compress = evalAt(run, T.compressFailed, readNotice);
 // This asked for two things at once and only one of them is the scenario's to decide. Whether an agent context has
 // registered by the moment `/compress` is typed is a race the harness cannot win: with two seconds more slack than it
 // first had, this passed once and failed once, and the failure carried the engine's own `No active agent contexts are
@@ -397,7 +435,7 @@ expect(typeof stopped === 'string' && stopped !== 'Run active' && /control cance
 // executed /stop raises no refusal of its own. What the ONE slot holds once the run rests is the RUN's own notice, "The run came to
 // rest because a person stopped it.", raised by the run host through main's notice store. A first reading had this read `=== null`,
 // which is the composer banner's rule and never the slot's; the falsified reading is kept in ADR-0049's fourth-execution note.
-const atRest = evalAt(run, T.stopped);
+const atRest = evalAt(run, T.stopped, readNotice);
 expect((atRest === null || atRest.title !== 'Command not run') && match(run, '[data-testid="composer-notice"]', T.stopped) === null,
   `an executed /stop raises no refusal and the composer draws no banner of its own; the slot may hold the run's own rest notice: ${JSON.stringify(atRest)}`);
 results.run = { compress: compress === null ? null : compress.message, afterStop: stopped, atRest: atRest === null ? null : atRest.title };
@@ -449,9 +487,9 @@ function writeDuringLaunch(path, contents, delayMs) {
 }
 
 /** The active theme and the ground it paints, read from the document root and the composer at one instant. */
-const readTheme = `(() => { const root = getComputedStyle(document.documentElement); const input = document.querySelector('.composer__input'); return { theme: document.documentElement.dataset.theme ?? null, dark: document.documentElement.dataset.dark ?? null, background: root.getPropertyValue('--rt-bg').trim(), surface: input ? getComputedStyle(input).backgroundColor : null }; })()`;
+const readTheme = `(() => { const root = getComputedStyle(document.documentElement); const input = document.querySelector('.composer__input'); const g = input ? ${GROUND} : null; return { theme: document.documentElement.dataset.theme ?? null, dark: document.documentElement.dataset.dark ?? null, background: root.getPropertyValue('--rt-bg').trim(), surface: g ? g.colour : null, surfaceFrom: g ? g.from : null }; })()`;
 /** REQ-CHAT-027's four roles as painted, with the theme and its ground beside them so each ratio names the palette it belongs to. */
-const readRole = `(() => { const t = document.querySelector('[data-testid="slash-token"]'); const a = document.querySelector('[data-testid="slash-argument"]'); const input = document.querySelector('.composer__input'); if (!input) return { state: null }; const s = t ? getComputedStyle(t) : null; return { theme: document.documentElement.dataset.theme ?? null, state: t ? t.dataset.state : null, text: t ? t.textContent : null, color: s ? s.color : null, weight: s ? s.fontWeight : null, argument: a ? getComputedStyle(a).color : null, argumentText: a ? a.textContent : null, surface: getComputedStyle(input).backgroundColor, background: getComputedStyle(document.documentElement).getPropertyValue('--rt-bg').trim() }; })()`;
+const readRole = `(() => { const t = document.querySelector('[data-testid="slash-token"]'); const a = document.querySelector('[data-testid="slash-argument"]'); const input = document.querySelector('.composer__input'); if (!input) return { state: null }; const g = ${GROUND}; const s = t ? getComputedStyle(t) : null; return { theme: document.documentElement.dataset.theme ?? null, state: t ? t.dataset.state : null, text: t ? t.textContent : null, color: s ? s.color : null, weight: s ? s.fontWeight : null, argument: a ? getComputedStyle(a).color : null, argumentText: a ? a.textContent : null, surface: g.colour, surfaceFrom: g.from, surfaceAlpha: g.alpha, inputBackground: getComputedStyle(input).backgroundColor, background: getComputedStyle(document.documentElement).getPropertyValue('--rt-bg').trim(), surfaceToken: getComputedStyle(document.documentElement).getPropertyValue('--rt-surface').trim() }; })()`;
 /** One popup row by name, with the availability and reason REQ-CHAT-025 requires it to carry. */
 const slashRow = (name) => `(() => { const p = document.querySelector('[data-testid="slash-popup"]'); if (!p) return { popup: false }; const rows = [...p.querySelectorAll('[role="option"]')]; const r = rows.find((x) => x.dataset.command === ${JSON.stringify(name)}); return { popup: true, rows: rows.length, row: r ? { kind: r.dataset.kind, available: r.dataset.available, title: r.getAttribute('title'), text: r.textContent.replace(/\\s+/g, ' ').trim() } : null }; })()`;
 /** The registrar's own signal (Part AO): what the prompt-file module has put on the registry the popup reads. */
@@ -492,11 +530,11 @@ const palettes = launch('palettes', paletteProfile.workspace, paletteProfile.loc
 });
 const paletteResults = {};
 for (const [name, at] of PALETTE_PLAN) {
-  const applied = evalAt(palettes, at + 600);
+  const applied = evalAt(palettes, at + 600, readTheme);
   expect(applied?.theme === name, `"/theme ${name}" should have applied that palette (REQ-CHAT-159): ${JSON.stringify(applied)}`);
-  const partialRole = evalAt(palettes, at + 1100);
-  const resolvedRole = evalAt(palettes, at + 1700);
-  const unknownRole = evalAt(palettes, at + 2300);
+  const partialRole = evalAt(palettes, at + 1100, readRole);
+  const resolvedRole = evalAt(palettes, at + 1700, readRole);
+  const unknownRole = evalAt(palettes, at + 2300, readRole);
   expect(partialRole?.state === 'partial' && resolvedRole?.state === 'resolved' && unknownRole?.state === 'unknown',
     `the three states on ${name}: ${JSON.stringify([partialRole?.state, resolvedRole?.state, unknownRole?.state])}`);
   expect(partialRole.weight === '400' && resolvedRole.weight === '500' && unknownRole.weight === '500',
@@ -504,7 +542,8 @@ for (const [name, at] of PALETTE_PLAN) {
   expect(resolvedRole.theme === name && partialRole.theme === name && unknownRole.theme === name, `every read must belong to ${name}: ${JSON.stringify([partialRole.theme, resolvedRole.theme, unknownRole.theme])}`);
   // The ground is the palette's own token as the document root resolves it — never a colour this script knows.
   const surface = resolvedRole.surface;
-  expect(sameColour(surface, resolvedRole.background), `the composer's painted ground on ${name} should be that palette's --rt-bg: ${surface} vs ${resolvedRole.background}`);
+  expect(typeof surface === 'string' && resolvedRole.surfaceAlpha === 1, `the composer's painted ground on ${name} must be an opaque colour to measure against: ${JSON.stringify({ surface, from: resolvedRole.surfaceFrom, alpha: resolvedRole.surfaceAlpha })}`);
+  expect(sameColour(surface, resolvedRole.background), `the composer's painted ground on ${name} should be that palette's --rt-bg: ${surface} (painted by ${resolvedRole.surfaceFrom}; --rt-surface is ${resolvedRole.surfaceToken}) vs ${resolvedRole.background}`);
   expect(resolvedRole.argumentText === ' x', `the argument span should hold the typed argument on ${name}: ${JSON.stringify(resolvedRole.argumentText)}`);
   const painted = { partial: partialRole.color, resolved: resolvedRole.color, unknown: unknownRole.color, argument: resolvedRole.argument };
   const ratios = {};
@@ -514,7 +553,7 @@ for (const [name, at] of PALETTE_PLAN) {
     expect(ratios[role] >= 4.5, `REQ-CHAT-027: ${role} paints at ${ratios[role].toFixed(2)}:1 on ${name}, below 4.5:1`);
   }
   expect(new Set(Object.values(painted)).size === 4, `the four role colours must differ on ${name}: ${Object.values(painted).join(' | ')}`);
-  paletteResults[name] = { surface, painted, ratios: Object.fromEntries(Object.entries(ratios).map(([role, r]) => [role, Number(r.toFixed(3))])) };
+  paletteResults[name] = { surface, surfaceFrom: resolvedRole.surfaceFrom, background: resolvedRole.background, painted, ratios: Object.fromEntries(Object.entries(ratios).map(([role, r]) => [role, Number(r.toFixed(3))])) };
 }
 // Three palettes, not one palette measured three times.
 const grounds = new Set(Object.values(paletteResults).map((p) => p.surface));
@@ -529,9 +568,13 @@ const restarted = launch('theme-restart', paletteProfile.workspace, paletteProfi
   ROTARIS_CAPTURE_EVAL_AT: `${readTheme}@2000`,
   ROTARIS_CAPTURE_AFTER_MS: '2600',
 });
-const restoredTheme = evalAt(restarted, 2000);
+const restoredTheme = evalAt(restarted, 2000, readTheme);
 expect(restoredTheme?.theme === 'high-contrast', `the theme "/theme" wrote should be the one a new launch paints: ${JSON.stringify(restoredTheme)}`);
-expect(sameColour(restoredTheme.background, paletteResults['high-contrast'].surface), `the restarted window should paint the same ground: ${restoredTheme.background} vs ${paletteResults['high-contrast'].surface}`);
+// Like with like: the ground each window PAINTS (GROUND, the same probe on both sides), and the palette's `--rt-bg` as
+// each document root resolves it. The first form compared the restart's `--rt-bg` with the palette launch's painted
+// ground, which are the same colour only while the composer paints on `--rt-bg`.
+expect(sameColour(restoredTheme.surface, paletteResults['high-contrast'].surface), `the restarted window should paint the same ground: ${restoredTheme.surface} (painted by ${restoredTheme.surfaceFrom}) vs ${paletteResults['high-contrast'].surface}`);
+expect(sameColour(restoredTheme.background, paletteResults['high-contrast'].background), `the restarted window should resolve the same --rt-bg: ${restoredTheme.background} vs ${paletteResults['high-contrast'].background}`);
 results.themeRestart = restoredTheme;
 
 // ── `/logout` against the real providers, and REQ-CHAT-028's two live rebuilds ────────────────────────────────────
@@ -564,17 +607,17 @@ const wired = launch('wired', wiredProfile.workspace, wiredProfile.local, wiredP
   ROTARIS_CAPTURE_AFTER_MS: String(W.end),
 });
 // `/logout`: the real catalogue, a real credential written and then removed by the command (REQ-CHAT-159).
-const providersBefore = evalAt(wired, W.listBefore);
+const providersBefore = evalAt(wired, W.listBefore, providersList);
 expect(Array.isArray(providersBefore) && providersBefore.some((p) => p.id === 'deepseek' && p.authenticated === false),
   `the real provider registry should list deepseek unauthenticated: ${JSON.stringify(providersBefore)}`);
-const saveAndList = evalAt(wired, W.saveAndList);
+const saveAndList = evalAt(wired, W.saveAndList, saveProviderKeyAndList);
 expect(saveAndList?.saved?.ok === true, `the credential store should have taken the key: ${JSON.stringify(saveAndList?.saved)}`);
 const providersAuthenticated = saveAndList.rows ?? [];
 expect(providersAuthenticated.find((p) => p.id === 'deepseek')?.authenticated === true, `deepseek should be authenticated once the key is stored: ${JSON.stringify(providersAuthenticated)}`);
 expect(wired.texts[`Signed out of deepseek.@${W.logoutToast}`] === true, 'REQ-CHAT-159: "/logout deepseek" must report what it signed out of');
-const logoutNoticeWired = evalAt(wired, W.notice);
+const logoutNoticeWired = evalAt(wired, W.notice, readNotice);
 expect(logoutNoticeWired === null || logoutNoticeWired.title !== 'Command not run', `a successful /logout raises no refusal: ${JSON.stringify(logoutNoticeWired)}`);
-const signedOutRead = evalAt(wired, W.listAfterOut);
+const signedOutRead = evalAt(wired, W.listAfterOut, listUntilSignedOut);
 const providersSignedOut = signedOutRead?.rows ?? [];
 expect(providersSignedOut.find((p) => p.id === 'deepseek')?.authenticated === false, `the command should have signed deepseek out (read back over ${signedOutRead?.waitedMs} ms): ${JSON.stringify(signedOutRead)}`);
 const credentialFiles = [];
@@ -588,27 +631,27 @@ const credentialFiles = [];
 })(wiredProfile.local);
 expect(credentialFiles.length === 0, `the credential file must be gone after /logout: ${credentialFiles.join(', ')}`);
 // REQ-CHAT-159's "available" clause names the provider registry's own rows, in its own order.
-const unknownProvider = evalAt(wired, W.unknownNotice);
+const unknownProvider = evalAt(wired, W.unknownNotice, readNotice);
 const providerIds = providersSignedOut.map((p) => p.id);
 expect(unknownProvider?.message === `Unknown provider 'zzz'. Available: ${providerIds.join(', ')}`,
   `the rejected value and the real providers in their source's order: ${JSON.stringify(unknownProvider)} vs ${JSON.stringify(providerIds)}`);
 // REQ-CHAT-028, trigger 1 — the LIBRARY: `/pop` is listed and unavailable while the stash is empty, and becomes
 // available once a stash row is written through `prompts.push`, with no restart (REQ-LIBRARY-142).
-const popBefore = evalAt(wired, W.popRow);
+const popBefore = evalAt(wired, W.popRow, slashRow('pop'));
 expect(popBefore?.popup === true && popBefore.row?.available === '0' && popBefore.row.title === 'No stashed prompts. Use Stash beside the composer first.',
   `with an empty stash /pop is listed and unavailable with its stated reason: ${JSON.stringify(popBefore)}`);
-const popAfter = evalAt(wired, W.popRow2);
+const popAfter = evalAt(wired, W.popRow2, slashRow('pop'));
 expect(popAfter?.popup === true && popAfter.row?.available === '1', `REQ-CHAT-028: a library change must rebuild the catalogue in place: ${JSON.stringify(popAfter)}`);
 // REQ-CHAT-028, trigger 2 — the SETTINGS: a prompt file that arrived after start-up is invisible until a settings
 // change, and is offered immediately after one. The first read is what makes the second mean anything.
-const signalBefore = evalAt(wired, W.signalBefore);
+const signalBefore = evalAt(wired, W.signalBefore, promptSignal);
 expect(signalBefore?.roots === 'read' && signalBefore.count === 0,
   `the file written during the launch must not be registered before the settings change: ${JSON.stringify(signalBefore)}`);
-const settingWritten = evalAt(wired, W.setField);
+const settingWritten = evalAt(wired, W.setField, writeSetting);
 expect(settingWritten?.ok === true, `the settings write should have been accepted: ${JSON.stringify(settingWritten)}`);
-const signalAfter = evalAt(wired, W.signalAfter);
+const signalAfter = evalAt(wired, W.signalAfter, promptSignalWhen(2));
 expect(signalAfter?.count === 2, `REQ-CHAT-028: the settings change must rebuild the catalogue from the roots (both names of the new file): ${JSON.stringify(signalAfter)}`);
-const promptRow = evalAt(wired, W.promptRow);
+const promptRow = evalAt(wired, W.promptRow, slashRow('late-arrival'));
 expect(promptRow?.popup === true && promptRow.row?.kind === 'prompt' && promptRow.row.text.includes('/late-arrival — Written while the window was open'),
   `the new prompt file must be usable without a restart: ${JSON.stringify(promptRow)}`);
 expect(existsSync(latePrompt), 'the prompt file was never written during the launch');

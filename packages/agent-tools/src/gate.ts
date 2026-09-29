@@ -91,6 +91,17 @@ export interface GateSink {
   warn(message: string): void;
 }
 
+/**
+ * PD-TOOLS-005: the run's away state as the gate sees it. The engine owns the holder (one per run, the same object on
+ * every agent's port, delegated children included) and clears it on the user's next input; the gate only reads it
+ * before it would prompt, and marks it when an approval wait ends by timeout.
+ */
+export interface PresencePort {
+  /** Non-null while the run treats the user as away: the timeout, in seconds, that expired unanswered. */
+  away(): { readonly afterSeconds: number } | null;
+  markAway(afterSeconds: number): void;
+}
+
 export interface GateDeps {
   readonly sessionId: string;
   readonly workspaceRoot: string;
@@ -137,6 +148,8 @@ export interface GateDeps {
    * POSIX path. Read at each dispatch of `write_file` and `haet_edit`; absent means no claim can reach this agent.
    */
   readonly writeClaimFor?: ((rel: string) => WriteClaimHolder | null) | undefined;
+  /** PD-TOOLS-005: the run's away state; absent means no run holds one, and every ask is brokered as before the directive. */
+  readonly presence?: PresencePort | undefined;
 }
 
 /** REQ-TOOLS-032's first repair: close the strings, objects and arrays still open at the cut. */
@@ -234,7 +247,17 @@ export class Gate {
      *    and `finish` settles it as `blocked` exactly as a permission denial does.
      * Meta tools are never gated (REQ-TOOLS-014, ADR-0016 c.4) and are checked first; they touch no workspace.
      */
-    if (!isMeta && deps.planGateHeld?.() === true && withheldUnderPlanGate(call.name)) {
+    /*
+     * Which tool the name reaches decides whether it is declared, not the name: a name this surface serves with
+     * something other than the public tool (a server's `read_file`, PD-TOOLS-004's `publicTool` answering false), or
+     * one this port removed at the gate (a server's `read_file` withheld from the listing is in no map at all), carries
+     * no declaration and is withheld whatever the registry says of the NAME. A name the surface neither serves nor
+     * removed is judged by the registry as before, so a public name the port never offered still takes the two
+     * branches below.
+     */
+    const removedHere = deps.planGateWithheldNames?.().has(call.name) === true;
+    const undeclared = removedHere || (executor !== undefined && !deps.publicTool(call.name));
+    if (!isMeta && deps.planGateHeld?.() === true && withheldUnderPlanGate(call.name, !undeclared)) {
       /*
        * …of a name that IS a tool. The fail-closed predicate answers `true` for every name outside the
        * registry, which is what the requirement asks for and also what made a misspelling read as a promise:
@@ -245,7 +268,7 @@ export class Gate {
        * REQ-TOOLS-032's unknown-tool refusal below, which is the true answer and the actionable one. Nothing is
        * relaxed: a name with an executor is still refused before the schema parse, the permission and the hooks.
        */
-      const isTool = executor !== undefined || isPublicToolName(canonicalToolName(call.name)) || deps.planGateWithheldNames?.().has(call.name) === true;
+      const isTool = executor !== undefined || isPublicToolName(canonicalToolName(call.name)) || removedHere;
       if (isTool) {
         const reason = planGateRefusal(call.name);
         return finish({ text: reason, isError: true, status: 'blocked', decision: null, observation: null, blockedReason: reason }, { failure_kind: 'plan_gate_withheld', error: 'withheld while the run is held at the plan gate' });
@@ -406,6 +429,19 @@ export class Gate {
         deps.sink.approvalRequested({ request_id: requestId, ...base, resolver: 'headless', timeout_seconds: null, unattended_reason: 'headless-policy' });
         return { requestId, decision: this.headless(asked) };
       }
+      /*
+       * PD-TOOLS-005: an earlier approval wait in this run expired unanswered, so the user is treated as away and this
+       * ask — one that WOULD prompt: a rule that resolved it never reaches here — is resolved at once exactly as the
+       * headless path resolves one, with no wait created and no dialog posted. The event is the headless shape
+       * REQ-EVENTS-049 fixes (`headless-policy` is its only defined `unattended_reason`); the DECISION's reason is
+       * where the cause is stated, and it names the timeout that expired rather than claiming no approval UI exists.
+       * The order matters: a session that has genuinely lost its presenter is still reported as such, above.
+       */
+      const away = deps.presence?.away() ?? null;
+      if (away !== null) {
+        deps.sink.approvalRequested({ request_id: requestId, ...base, resolver: 'headless', timeout_seconds: null, unattended_reason: 'headless-policy' });
+        return { requestId, decision: this.headless(asked, `The user is treated as away because an earlier approval in this run went unanswered for ${away.afterSeconds} seconds`) };
+      }
       const timeoutS = deps.approvalTimeoutMs > 0 ? deps.approvalTimeoutMs / 1000 : 0;
       deps.sink.approvalRequested({ request_id: requestId, ...base, resolver: 'brokered', timeout_seconds: timeoutS, unattended_reason: '' });
       const payload: ApprovalPayload = {
@@ -450,6 +486,8 @@ export class Gate {
   private outcomeDecision(call: ToolCall, req: PermissionRequest, asked: DecisionRecord, outcome: ApprovalOutcome): DecisionRecord {
     switch (outcome.kind) {
       case 'timed_out':
+        // PD-TOOLS-005: the first unanswered wait marks the run's user away; this decision keeps REQ-TOOLS-052's own reason.
+        this.deps.presence?.markAway(outcome.afterSeconds);
         return { decision: 'deny', ruleId: asked.ruleId, source: 'timeout', reason: `${asked.reason} Denied because no answer arrived within ${outcome.afterSeconds} seconds.`, description: asked.description };
       case 'cancelled':
       // A withdrawn wait never reaches here (`broker` answers it first); were it to, it would read as REQ-TOOLS-052's cancellation.
@@ -467,17 +505,20 @@ export class Gate {
     }
   }
 
-  /** REQ-TOOLS-065/066. */
-  private headless(asked: DecisionRecord): DecisionRecord {
+  /**
+   * REQ-TOOLS-065/066. `because` is the clause the reason opens with: REQ-TOOLS-065's own for a session with no
+   * presenter, and PD-TOOLS-005's — naming the timeout that expired — for a run whose user is treated as away.
+   */
+  private headless(asked: DecisionRecord, because = 'No approval UI is available in this host'): DecisionRecord {
     const { deps } = this;
     if (deps.headlessPolicy === 'abort') {
       if (deps.abortHook) {
         deps.abortHook();
-        return { decision: 'deny', ruleId: asked.ruleId, source: 'headless-policy', reason: `${asked.reason} No approval UI is available in this host, so the request was denied and the headless approval policy aborts the run.`, description: asked.description };
+        return { decision: 'deny', ruleId: asked.ruleId, source: 'headless-policy', reason: `${asked.reason} ${because}, so the request was denied and the headless approval policy aborts the run.`, description: asked.description };
       }
       deps.sink.warn(`headless approval policy 'abort' has no abort hook registered for ${deps.sessionId}; degrading to deny (REQ-TOOLS-065)`);
     }
-    return { decision: 'deny', ruleId: asked.ruleId, source: 'headless-policy', reason: `${asked.reason} No approval UI is available in this host, so the request was denied.`, description: asked.description };
+    return { decision: 'deny', ruleId: asked.ruleId, source: 'headless-policy', reason: `${asked.reason} ${because}, so the request was denied.`, description: asked.description };
   }
 }
 

@@ -18,7 +18,7 @@
 | Console-script launchers | trimmed: each `Scripts/*.exe` embeds the absolute path it was built at. The product enters through `python.exe -c "from serena.cli import top_level; top_level()"` (the distribution's declared entry point, `entry_points.txt`) |
 | Size | 143.7 MB in 7,523 files as installed; **175.4 MB in 10,602 files** after trimming (`Scripts`, `include`, `libs`, `Lib/idlelib`, `Lib/turtledemo`, `PyWin32.chm` — 4 MB) and `compileall` over `Lib` (+36 MB of bytecode, so an installation under Program Files, where the user cannot write, never compiles on import). Not A/B-measured: the cold start below is with the compiled tree |
 | Build time | 14.0 s with uv's caches warm; the first `uv python install` of the interpreter took 3.4 s, the wheel install 10.4 s on this connection |
-| Licence text | one copy inside the bundle: `Lib/site-packages/serena_agent-1.7.0.dist-info/licenses/LICENSE` (REQ-STARTUP-015/142); the notices generator is not built |
+| Licence text | one copy inside the bundle: `Lib/site-packages/serena_agent-1.7.0.dist-info/licenses/LICENSE` (REQ-STARTUP-015/142); the notices generator is not built. *2026-09-27 (first-release-plan.md §4.4): the artifact now carries the copy in `THIRD-PARTY-LICENSES.txt` instead, and this file stays in the built tree only, for the generator (ADR-0054, "The two bundled assets")* |
 | Marker | `bundle.json` beside `runtime/`: the pins' hash (a rebuild is skipped when it matches), the runtime's own answers for the Python and distribution versions (the evidence, ADR-0056's discipline), what was trimmed, the sizes |
 
 **The dashboard.** Serena starts a web dashboard by default (an HTTP server on `127.0.0.1:24283` and a browser tab —

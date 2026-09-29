@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment, findDatabases, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 
 /**
  * Part R's first execution in the built app — the agent surfaces: the Mission view (REQ-MONITOR-274..276), the per-agent
@@ -72,7 +72,7 @@ function setPreference(s, key, value) {
 function launch(name, s, extra, opts = {}) {
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), s.workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
     cwd: app, encoding: 'utf8', timeout: opts.timeout ?? 150_000, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local: s.local, preferences: s.preferences }),

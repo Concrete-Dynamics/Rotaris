@@ -27,6 +27,8 @@ export interface MainWindowAdapter<TWindow, TPersonaWindows, TTerminalWindows> {
   readonly destroy: (win: TWindow) => void;
   readonly onFocus: (win: TWindow, listener: () => void) => void;
   readonly onClosed: (win: TWindow, listener: () => void) => void;
+  /** Fires once, when the window becomes visible — the moment REQ-STARTUP-043's post-show activation may begin. */
+  readonly onShown: (win: TWindow, listener: () => void) => void;
   readonly ownsAuxiliary: (personaWindows: TPersonaWindows, terminalWindows: TTerminalWindows, senderId: number) => boolean;
   readonly disposeResources: (win: TWindow, wcId: number, personaWindows: TPersonaWindows, terminalWindows: TTerminalWindows) => void;
 }
@@ -75,6 +77,12 @@ export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWind
    * queued (`approval.queued`), so the run host no longer bounds its wait: main must say it was never shown, or it hangs.
    */
   readonly unshownApprovals?: (approvals: readonly TApproval[]) => void;
+  /**
+   * REQ-STARTUP-043 / REQ-STARTUP-114 / REQ-STARTUP-047: the post-show activation of ONE main window — where the update
+   * check is initiated, and the only place it is. Called once per window, after that window is shown and never during
+   * its construction, for every main window built here: the launch's, a replacement's, an added one's, a hand-over's.
+   */
+  readonly postShowActivation?: (window: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>) => void;
 }
 
 interface WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TDialog> {
@@ -120,6 +128,14 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     this.#rememberFocus(record.wcId);
     this.dependencies.adapter.onFocus(record.win, () => this.#rememberFocus(record.wcId));
     this.dependencies.adapter.onClosed(record.win, () => this.#forget(record.wcId));
+    // REQ-STARTUP-043: the update check is initiated from the post-show activation and never during construction —
+    // registered here, fired by the adapter when the window is shown, once for this window.
+    let activated = false;
+    this.dependencies.adapter.onShown(record.win, () => {
+      if (activated || this.dependencies.adapter.isDestroyed(record.win)) return;
+      activated = true;
+      this.dependencies.postShowActivation?.(this.#view(record));
+    });
     try {
       await built.load();
     } catch (error) {
@@ -749,6 +765,8 @@ export function createElectronMainWindowAdapter(
     destroy: (win) => win.destroy(),
     onFocus: (win, listener) => { win.on('focus', listener); },
     onClosed: (win, listener) => { win.on('closed', listener); },
+    // The window's own `show` event: fired by the `ready-to-show` show above and by `#replace`'s explicit show alike, once.
+    onShown: (win, listener) => { win.once('show', listener); },
     ownsAuxiliary: (personaWindows, terminalWindows, senderId) => Boolean(
       personaWindows.bySender(senderId) ?? terminalWindows.bySender(senderId),
     ),

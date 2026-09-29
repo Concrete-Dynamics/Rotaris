@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { resolveUserDirs } from '@rotaris/platform';
+import { resolveUserDirs, withoutInheritedSwitches } from '@rotaris/platform';
 
 /**
  * ADR-0035's pre-bootstrap branch (REQ-MCP-033, REQ-STARTUP-002/015; ADR-0055 — this precedes the instance claim).
@@ -91,18 +91,6 @@ function runtimeHome(python: string): string {
   return home;
 }
 
-/**
- * What the runtime is handed: the arguments after the separator. The launcher's own switches may stand between the token
- * and `--` — `--no-sandbox`, which Chromium needs to start as root (R-066,
- * `docs/defects/fixed/the-code-intelligence-server-cannot-start-as-root.md`) — and are Chromium's, never the runtime's.
- * With no separator the arguments pass as they are.
- */
-export function runtimeArguments(afterToken: readonly string[]): string[] {
-  let at = 0;
-  while (at < afterToken.length && afterToken[at] !== '--' && afterToken[at]!.startsWith('--')) at += 1;
-  return afterToken[at] === '--' ? afterToken.slice(at + 1) : [...afterToken];
-}
-
 const tokenAt = process.defaultApp || process.env['ELECTRON_RUN_AS_NODE'] ? 2 : 1;
 if (process.argv[tokenAt] === CODE_INTELLIGENCE_TOKEN) {
   const python = runtimeExecutable();
@@ -115,8 +103,12 @@ if (process.argv[tokenAt] === CODE_INTELLIGENCE_TOKEN) {
   // any JavaScript runs, when the command line holds a scheme-looking positional (the token's colon) FOLLOWED BY another
   // positional — `Rotaris.exe builtin:code-intelligence start-mcp-server` never reaches this file; the same line with `--`
   // after the token does, and the token is still the first argument. The launch of the token (packages/config) therefore
-  // puts `--` second; it is dropped here so the runtime sees its own arguments only.
-  const rest = runtimeArguments(process.argv.slice(tokenAt + 1));
+  // puts `--` second; it is dropped here so the runtime sees its own arguments only. Between the token and `--` the launch
+  // may carry the one Chromium switch it inherits from the parent (`--no-sandbox`, when the parent runs as root; REQ-MCP-033
+  // / OQ-82, `@rotaris/platform`'s `chromium-switches.ts`) — the child is a fresh Chromium and died before this line ran
+  // without it (2026-09-27); Chromium has read it by now, and it is dropped too.
+  const rest = withoutInheritedSwitches(process.argv.slice(tokenAt + 1));
+  if (rest[0] === '--') rest.shift();
   const env: Record<string, string> = { ...(process.env as Record<string, string>), SERENA_HOME: runtimeHome(python), PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', PYTHONDONTWRITEBYTECODE: '1' };
   delete env['ELECTRON_RUN_AS_NODE'];
   const r = spawnSync(python, ['-c', RUNTIME_ENTRY, ...rest], { stdio: 'inherit', env, windowsHide: true, maxBuffer: Number.MAX_SAFE_INTEGER });

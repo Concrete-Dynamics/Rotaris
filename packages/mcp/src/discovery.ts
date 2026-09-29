@@ -19,6 +19,8 @@ export interface DiscoveryDeps {
   readonly boundMs?: Millis;
   /** OQ-22's reading: what a stdio child inherits under the server's map; the run host supplies its environment. */
   readonly parentEnv?: Readonly<Record<string, string>>;
+  /** REQ-STARTUP-158: the product version, sent as `clientInfo.version` (`OpenOptions.clientVersion`). */
+  readonly clientVersion: string;
 }
 
 export interface DiscoverRequest {
@@ -112,7 +114,7 @@ export class ToolDiscovery {
       });
       void (async () => {
         try {
-          opened = await openClient({ parentEnv: this.deps.parentEnv, description: req.description, label: req.name, timers: clocks.timers, monotonic: clocks.monotonic, log, connectTimeoutMs: timeoutMs, signal: abort.signal });
+          opened = await openClient({ parentEnv: this.deps.parentEnv, clientVersion: this.deps.clientVersion, description: req.description, label: req.name, timers: clocks.timers, monotonic: clocks.monotonic, log, connectTimeoutMs: timeoutMs, signal: abort.signal });
           this.open.add(opened);
           const remaining = millis(Math.max(1_000, timeoutMs - (clocks.monotonic.now() - started)));
           const tools = await listTools(opened.client, remaining, abort.signal);

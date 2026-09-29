@@ -12,7 +12,7 @@ import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
 // ADR-0063 — portable skills: the catalog reader, the Settings tab's props and the composer's commands.
 import { bindSkillsReader } from '@rotaris/ui';
-import { EMPTY_SKILLS_STATE, type InstructionStateName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsState } from '@rotaris/contracts';
+import { EMPTY_SKILLS_STATE, type InstructionStateName, type SkillInvocationModeName, type SkillListingOutcome, type SkillLoadModeName, type SkillsState } from '@rotaris/contracts';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -251,6 +251,16 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
       if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
       const outcome = r.value as { cancelled: boolean; name?: string };
       return outcome.name === undefined ? { ok: false as const, reason: 'The skill was not loaded.' } : { ok: true as const, name: outcome.name };
+    },
+    /*
+     * REQ-CHAT-162 — `/skills`. Main names the followed session (a window following none is refused there, OQ-67);
+     * the run host writes the listing through that session's own writer, and the row reaches this window the way
+     * every other row does — on the session's transcript channel — so nothing is drawn from this answer.
+     */
+    listSkills: async () => {
+      const r = await bridge.command({ kind: 'skills.list' });
+      if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
+      return { ok: true as const, count: (r.value as SkillListingOutcome).count };
     },
     // REQ-CHAT-034: a rescan or a hand-loaded skill in Settings re-registers the typeable commands.
     skillsRevision,
@@ -942,13 +952,22 @@ function dispatchNoticeAction(action: NoticeAction): void {
       void bridge.command({ kind: 'improvements.undoReview', id: action.id });
       return;
     case 'install-update':
+      // The updater (first-release-plan.md §4.6, 2026-09-28): `Update now` on the offer notice and `Try again` on the
+      // failure notice (REQ-STARTUP-116/120). Main holds the offer and runs REQ-STARTUP-122's sequence; this window
+      // names no version, no asset and no URL.
+      void bridge.command({ kind: 'update.install' });
+      return;
     case 'restart':
+      // `Restart now`, offered on the `Update installed` notice alone (REQ-STARTUP-121): the hand-over to the updated
+      // installation is main's, through the instance record.
+      void bridge.command({ kind: 'update.restart' });
+      return;
     case 'open-cloud-account':
     case 'open-project-init':
     case 'retry-run':
     case 'save-settings':
-      // Each is a member REQ-NOTIFY-044 fixes whose target does not exist in this build (no updater, no hosted cloud,
-      // no project-initialization surface, no proposal store). Nothing is dispatched and the attempt is recorded.
+      // Each is a member REQ-NOTIFY-044 fixes whose target does not exist in this build (no hosted cloud, no
+      // project-initialization surface, no proposal store). Nothing is dispatched and the attempt is recorded.
       console.warn(`notice action "${action.kind}" has no target in this build`);
       return;
   }

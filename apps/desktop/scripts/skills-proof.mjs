@@ -3,8 +3,12 @@
  *
  * Six launches against the built product, with a scratch profile **and a scratch home directory**, so the
  * user-scope roots and the disable manifest are fixtures rather than whatever this machine happens to hold.
- * `HOME`, `USERPROFILE` and `HOMEPATH` are all set, because Node's `homedir()` reads a different one per
- * platform and a proof that set only one would silently read the operator's own skills on the other.
+ * User-scope discovery reads that home through the `ROTARIS_CAPTURE_SKILLS_HOME` seam on every platform, not through
+ * `HOME`/`USERPROFILE`: overriding those kills Electron before it paints on Windows (see `launch`). Off Windows the
+ * launch's `HOME` is the same scratch home too, because `proofIsolationEnv` sets it on every POSIX launch. The
+ * machine-wide root, `/etc/codex/skills` (REQ-WORKSPACE-051, off Windows only), is a fixture too: it is redirected
+ * into the scratch tree by `ROTARIS_CAPTURE_SKILLS_MACHINE` and holds one skill there, so the seam is exercised in
+ * the built app on every host that has an `/etc` hierarchy and the operator's own `/etc/codex` is never read.
  *
  *   1. discover   — a workspace inside a git repository with project, repository and user-scope skills, a
  *                   shadowed duplicate, an invalid file, a disabled one and a name that collides with a
@@ -19,13 +23,23 @@
  *                   dismissal changes nothing and a bad path reports REQ-WORKSPACE-057's own sentence.
  *   6. disabled   — `skills.enabled: false`: no catalog unit, nothing invocable, the switch off.
  *
+ * REQ-CHAT-162's `/skills` (first-release-plan §2.2) adds two launches after the commands launch, before the policy
+ * launch changes anything the listing reads:
+ *
+ *   1c. listing        — `/skills` typed into a session's composer: ONE system row drawn as the listing, carrying
+ *                        per skill the normalized name, the scope, the triggers, the description and the path, and
+ *                        the count; no in-context indicator anywhere (ESC-37); a bare URL in a description drawn as
+ *                        a link (REQ-CHAT-076). The run host logs the row it wrote.
+ *   1d. listing-reopen — the same session reopened from the session browser in a new launch: the row is still
+ *                        there, read back from the store, and nothing was listed again.
+ *
  * Evidence under `.proof/skills-proof/`: one PNG and one log per launch, plus `results.json`.
  * `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { app, buildDesktop, electron, evidenceDirectory, launchOptions, readProbes, repo } from './lib/harness.mjs';
+import { app, buildDesktop, configDirFor, electron, evidenceDirectory, hostSwitches, launchOptions, readProbes, repo } from './lib/harness.mjs';
 
 const output = evidenceDirectory('skills-proof');
 rmSync(output, { recursive: true, force: true });
@@ -45,6 +59,10 @@ const PROBES = [
   '[data-testid="transcript-clear"]',
   '.save-bar__status',
   '.slash-popup__row',
+  // REQ-CHAT-162: the listing as the one row renderer draws it, inside the system notice that carries it.
+  '[data-testid="row-system"] [data-testid="skill-listing"]',
+  '[data-testid="skill-listing-entry"]',
+  '[data-testid="skill-listing-entry"] .md__link',
 ];
 
 const results = [];
@@ -52,7 +70,7 @@ const fail = (message) => { writeFileSync(join(output, 'results.json'), JSON.str
 
 function launch(name, workspace, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
-  const args = [join(app, 'out', 'main', 'index.js')];
+  const args = [join(app, 'out', 'main', 'index.js'), ...hostSwitches];
   if (workspace !== null) args.push(workspace);
   const result = spawnSync(electron, args, {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
@@ -68,6 +86,15 @@ function launch(name, workspace, extra, timeoutMs = 120_000) {
        * exited 0. The seam is read only by the run host's skill host and only when it is set.
        */
       ROTARIS_CAPTURE_SKILLS_HOME: scratch.home,
+      /*
+       * The scratch machine-wide directory: the fourth user-scope skill root is its `skills` child, and PD-WORKSPACE-002's
+       * machine-wide instruction base is the directory itself, so the run host reads neither from the machine's own
+       * `/etc/codex`. The instruction seam names the same directory because the workspace service's inventory reads only
+       * that one, so no process of any launch here reads the machine's own. Both compiled out of a packaged build; inert
+       * on Windows, where the product declares no such root.
+       */
+      ROTARIS_CAPTURE_SKILLS_MACHINE: scratch.machine,
+      ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE: scratch.machine,
       ROTARIS_CAPTURE_PNG: png,
       ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
       ...extra,
@@ -90,13 +117,16 @@ const scratch = {
   local: join(output, 'scratch', 'local'),
   preferences: join(output, 'scratch', 'prefs'),
   home: join(output, 'scratch', 'home'),
+  machine: join(output, 'scratch', 'machine-codex'),
   repoRoot: join(output, 'scratch', 'repo'),
 };
+/** The platform rule the product applies to the machine-wide root (`hasEtcHierarchy`): every platform but Windows. */
+const hasMachineRoot = process.platform !== 'win32';
 const workspace = join(scratch.repoRoot, 'project');
 const skill = (name, description, extra = '') => `---\nname: ${name}\ndescription: ${description}\n${extra}---\n${name.toUpperCase().replace(/[^A-Z]/g, '_')}_BODY\n`;
 const write = (path, text) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text); };
 
-for (const dir of [scratch.local, scratch.preferences, scratch.home, workspace]) mkdirSync(dir, { recursive: true });
+for (const dir of [scratch.local, scratch.preferences, scratch.home, scratch.machine, workspace]) mkdirSync(dir, { recursive: true });
 // A `.git` FILE, not a directory — the linked-worktree shape REQ-WORKSPACE-051 names, and the one this
 // repository's own proofs run under.
 write(join(scratch.repoRoot, '.git'), 'gitdir: /elsewhere/.git/worktrees/repo\n');
@@ -109,10 +139,14 @@ write(join(workspace, '.agents', 'skills', 'broken', 'SKILL.md'), 'no frontmatte
 write(join(workspace, '.agents', 'skills', 'stop', 'SKILL.md'), skill('stop', 'A skill whose name a built-in holds.'));
 // REQ-WORKSPACE-056: `user-invocable: false` is auto-only — in the catalog, never a command.
 write(join(workspace, '.agents', 'skills', 'auto-only', 'SKILL.md'), skill('auto-only', 'Model-facing only.', 'user-invocable: false\n'));
-write(join(scratch.home, '.agents', 'skills', 'home-skill', 'SKILL.md'), skill('home-skill', 'A skill from the user scope.'));
+// A bare URL in a description, ending a sentence: REQ-CHAT-076 makes it activatable in any row's text, the `/skills`
+// listing's included, with the trailing full stop left out of the target (launch 1c).
+write(join(scratch.home, '.agents', 'skills', 'home-skill', 'SKILL.md'), skill('home-skill', 'A skill from the user scope, see https://skills-proof.invalid/home-skill.'));
 write(join(scratch.home, '.openhands', 'skills', 'installed', 'kept', 'SKILL.md'), skill('kept', 'An installed skill that stays.'));
 write(join(scratch.home, '.openhands', 'skills', 'installed', 'dropped', 'SKILL.md'), skill('dropped', 'An installed skill the manifest disables.'));
 write(join(scratch.home, '.openhands', 'skills', '.installed.json'), JSON.stringify({ disabled: ['dropped'] }));
+// REQ-WORKSPACE-051's fourth user-scope root, redirected into the scratch tree: listed off Windows, absent on it.
+write(join(scratch.machine, 'skills', 'machine-skill', 'SKILL.md'), skill('machine-skill', 'A skill from the machine-wide root.'));
 // A skill outside every search root, for the hand-loaded case.
 write(join(scratch.base, 'by-hand', 'SKILL.md'), skill('by-hand', 'Loaded by hand for this session.'));
 const agentsYaml = join(workspace, '.rotaris', 'agents.yaml');
@@ -120,7 +154,7 @@ const agentsYaml = join(workspace, '.rotaris', 'agents.yaml');
 // ── 1. discover ─────────────────────────────────────────────────────────────────────────────────────
 const discover = launch('discover', workspace, openSkills());
 const discovered = rows(discover.probes, '[data-testid="skill-row"]').map((r) => r.data['data-name']);
-const expected = ['auto-only', 'home-skill', 'kept', 'repo-wide', 'stop', 'ws-skill'];
+const expected = ['auto-only', 'home-skill', 'kept', ...(hasMachineRoot ? ['machine-skill'] : []), 'repo-wide', 'stop', 'ws-skill'];
 if (JSON.stringify(discovered) !== JSON.stringify(expected)) fail(`the table listed ${JSON.stringify(discovered)}, not ${JSON.stringify(expected)} in ascending name order`);
 results.push({ launch: 'discover', skills: discovered });
 
@@ -128,6 +162,8 @@ const byName = Object.fromEntries(rows(discover.probes, '[data-testid="skill-row
 // REQ-WORKSPACE-051: the scopes, and every project location outranking every user one.
 if (byName['ws-skill'].data['data-scope'] !== 'project') fail('the workspace skill did not read as project scope');
 if (byName['home-skill'].data['data-scope'] !== 'user') fail('the home skill did not read as user scope');
+// The machine-wide root is user scope too (its path is checked against the scratch directory in launch 1c, whose entries carry it whole).
+if (hasMachineRoot && byName['machine-skill'].data['data-scope'] !== 'user') fail('the machine-wide skill did not read as user scope');
 // REQ-WORKSPACE-052: the manifest's entry never appears, and is not listed as skipped either.
 if (discovered.includes('dropped')) fail('the disabled skill was listed');
 // REQ-WORKSPACE-053: the invalid file is skipped WITH its reason rather than silently absent.
@@ -135,7 +171,7 @@ const skipped = rows(discover.probes, '[data-testid="skill-skipped"]');
 if (skipped.length !== 1 || !skipped[0].data['data-path'].includes('broken')) fail(`the skipped list was ${JSON.stringify(skipped.map((s) => s.data['data-path']))}`);
 if (!discover.log.includes('skills: skipped')) fail('the run host logged no skip reason');
 // REQ-WORKSPACE-054: the shadowed duplicate is recorded against the winner and reportable per name.
-if (!discover.log.includes('6 discovered')) fail('the discovery log did not report six skills');
+if (!discover.log.includes(`${expected.length} discovered`)) fail(`the discovery log did not report ${expected.length} skills`);
 // REQ-WORKSPACE-056: `user-invocable: false` derives auto-only from the frontmatter alone.
 if (byName['auto-only'].data['data-invocation'] !== 'auto-only') fail('the frontmatter-derived invocation mode was not auto-only');
 // REQ-WORKSPACE-065: the default policy with nothing recorded is on-demand.
@@ -156,13 +192,73 @@ if (registered.includes('auto-only')) fail('an auto-only skill was offered as a 
 if (registered.includes('stop')) fail('a skill took the built-in /stop');
 results.push({ launch: 'commands', commands: registered });
 
+// ── 1c. /skills — REQ-CHAT-162's listing, one saved system row ─────────────────────────────────────────────
+// A session first, because the row is written into ITS transcript and saved with it (OQ-67 (b): a window following
+// no session is refused). Then `/skills` typed into the composer; the launch ends when the row is DRAWN, not at an
+// appointment, and the command is listed in the same popup the generated skill commands are.
+const listingWait = `js:document.querySelector('[data-testid="row-system"] [data-testid="skill-listing"]') !== null`;
+const listingLaunch = launch('listing', workspace, {
+  ROTARIS_CAPTURE_PROMPT: 'Say hello and stop.',
+  ROTARIS_CAPTURE_TYPE: '/skills>>composer@9000',
+  ROTARIS_CAPTURE_WAIT: listingWait,
+  ROTARIS_CAPTURE_WAIT_MS: '45000',
+  ROTARIS_CAPTURE_AFTER_MS: '900',
+}, 180_000);
+const listed = rows(listingLaunch.probes, '[data-testid="row-system"] [data-testid="skill-listing"]');
+if (listed.length !== 1) fail(`/skills drew ${listed.length} listing rows, not one system row: ${JSON.stringify(listed)}`);
+// REQ-CHAT-162: "MUST report how many skills were listed" — the same six the Settings table listed, in its order.
+if (listed[0].data['data-count'] !== String(expected.length)) fail(`the listing reported ${listed[0].data['data-count']} skills, not ${expected.length}`);
+if (listed[0].data['data-names'] !== expected.join(',')) fail(`the listing named ${listed[0].data['data-names']}, not ${expected.join(',')}`);
+if (!listed[0].text.startsWith(`${expected.length} skills listed`)) fail(`the row's text did not open with its count: ${listed[0].text.slice(0, 80)}`);
+const entries = Object.fromEntries(rows(listingLaunch.probes, '[data-testid="skill-listing-entry"]').map((r) => [r.data['data-name'], r.data]));
+const wsEntry = entries['ws-skill'];
+if (!wsEntry) fail(`the listing drew no entry for ws-skill: ${JSON.stringify(Object.keys(entries))}`);
+// REQ-WORKSPACE-051's machine-wide root, read from the scratch directory the seam names and never from `/etc/codex/skills`.
+if (hasMachineRoot && entries['machine-skill']?.['data-path'] !== join(scratch.machine, 'skills', 'machine-skill', 'SKILL.md')) fail(`the machine-wide skill was not read from the scratch root: ${JSON.stringify(entries['machine-skill'])}`);
+// The five facts per skill: normalized name (the key above), scope, trigger keywords, description, SKILL.md path.
+if (wsEntry['data-scope'] !== 'project' || entries['home-skill']?.['data-scope'] !== 'user') fail(`the scopes read ${wsEntry['data-scope']} / ${entries['home-skill']?.['data-scope']}`);
+if (wsEntry['data-triggers'] !== 'render, /pdf') fail(`ws-skill's triggers read ${JSON.stringify(wsEntry['data-triggers'])}`);
+if (wsEntry['data-description'] !== 'The workspace skill.') fail(`ws-skill's description read ${JSON.stringify(wsEntry['data-description'])}`);
+if (wsEntry['data-path'] !== join(workspace, '.agents', 'skills', 'ws-skill', 'SKILL.md')) fail(`ws-skill's path read ${wsEntry['data-path']}`);
+// REQ-CHAT-076: the URL in home-skill's description is the one link form, its trailing full stop outside the target,
+// and it is the only link the listing draws.
+const listingLinks = rows(listingLaunch.probes, '[data-testid="skill-listing-entry"] .md__link');
+if (listingLinks.length !== 1 || listingLinks[0].data['data-href'] !== 'https://skills-proof.invalid/home-skill') fail(`the listing drew links ${JSON.stringify(listingLinks.map((l) => l.data['data-href']))}, not home-skill's one`);
+if (entries['home-skill']?.['data-description'] !== 'A skill from the user scope, see https://skills-proof.invalid/home-skill.') fail(`home-skill's description read ${JSON.stringify(entries['home-skill']?.['data-description'])}`);
+// ESC-37, ruled, and the amended REQ-CHAT-162: no per-skill in-context indicator on the listing.
+if (Object.values(entries).some((e) => 'data-forced' in e || 'data-in-context' in e) || /in[ _-]?context/i.test(listed[0].text)) fail('the listing carries an in-context indicator');
+// The run host wrote it through the session's writer, and says which session and which row.
+const listedLine = /skills: listed (\d+) skill\(s\) into session (\S+) as transcript row (\d+)/.exec(listingLaunch.log);
+if (!listedLine) fail('the run host logged no listing row');
+if (listedLine[1] !== String(expected.length)) fail(`the run host listed ${listedLine[1]} skills`);
+const listingSession = listedLine[2];
+results.push({ launch: 'listing', session: listingSession, row: Number(listedLine[3]), count: listed[0].data['data-count'], names: listed[0].data['data-names'], wsSkill: wsEntry, link: listingLinks[0].data['data-href'] });
+
+// ── 1d. the session reopened: the row is read back, not written again ─────────────────────────────────────
+// A new launch reopens THAT session from the session browser (REQ-SHELL-126, REQ-SESSION-118); nothing is typed.
+const listingReopen = launch('listing-reopen', workspace, {
+  ROTARIS_CAPTURE_RESUME: listingSession,
+  ROTARIS_CAPTURE_WAIT: listingWait,
+  ROTARIS_CAPTURE_WAIT_MS: '30000',
+  ROTARIS_CAPTURE_AFTER_MS: '900',
+}, 120_000);
+const reread = rows(listingReopen.probes, '[data-testid="row-system"] [data-testid="skill-listing"]');
+if (reread.length !== 1) fail(`the reopened session drew ${reread.length} listing rows: ${JSON.stringify(reread)}`);
+if (reread[0].data['data-count'] !== listed[0].data['data-count'] || reread[0].data['data-names'] !== listed[0].data['data-names']) fail(`the reopened row differs: ${JSON.stringify(reread[0].data)} vs ${JSON.stringify(listed[0].data)}`);
+if (!listingReopen.log.includes(`capture: opened session "${listingSession}" from the browser`)) fail(`the launch did not reopen session ${listingSession}`);
+if (/skills: listed \d+ skill/.test(listingReopen.log)) fail('the reopened launch listed the skills again instead of reading the saved row');
+results.push({ launch: 'listing-reopen', session: listingSession, count: reread[0].data['data-count'] });
+
 // ── 2. policy ───────────────────────────────────────────────────────────────────────────────────────
 /*
  * A GLOBAL policy for one skill, so REQ-CONFIG-258's "write the baseline out explicitly" case is reachable at
- * all. The path is `resolveUserDirs().config`, which on Windows is `%LOCALAPPDATA%/rotaris/config` — the proof
- * points LOCALAPPDATA at the scratch tree, so this is that tree's own global scope and not the operator's.
+ * all. The path is `resolveUserDirs().config` by the platform that reads it (`configDirFor`): on Windows
+ * `%LOCALAPPDATA%/rotaris/config`, off Windows `<XDG_CONFIG_HOME>/rotaris` — the proof points both at the scratch
+ * tree, so this is that tree's own global scope and not the operator's. Spelled for Windows alone, the run host
+ * never read it off Windows and this launch failed at the explicit baseline
+ * (`docs/defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`).
  */
-const globalAgents = join(scratch.local, 'rotaris', 'config', 'agents.yaml');
+const globalAgents = join(configDirFor(scratch.local), 'agents.yaml');
 write(globalAgents, 'skills:\n  overrides:\n    home-skill: on\n');
 const policy = launch('policy', workspace, openSkills({
   // The Load selector for `ws-skill` to always, its Invocation to manual only, and `home-skill` back to the
@@ -209,7 +305,7 @@ const unitLine = run.log.split(/\r?\n/).find((l) => l.includes('skills: context 
 if (!unitLine) fail('the run host logged no context units, so nothing proves injection happened');
 if (!/force-loaded [^;]*ws-skill/.test(unitLine)) fail(`the always-load skill was not force-loaded: ${unitLine}`);
 if (/catalog [^;]*ws-skill/.test(unitLine)) fail(`a force-loaded skill was still listed in the catalog: ${unitLine}`);
-for (const name of ['home-skill', 'repo-wide', 'kept', 'auto-only']) {
+for (const name of ['home-skill', 'repo-wide', 'kept', 'auto-only', ...(hasMachineRoot ? ['machine-skill'] : [])]) {
   if (!unitLine.includes(name)) fail(`${name} was not in the injected catalog: ${unitLine}`);
 }
 results.push({ launch: 'run', units: unitLine.slice(unitLine.indexOf('skills:')) });
@@ -249,8 +345,9 @@ if (toggle.data['aria-checked'] === 'true') fail('the switch read on while the f
 results.push({ launch: 'disabled', commands: disabledCommands, toggle: toggle.data['aria-checked'] });
 
 writeFileSync(join(output, 'results.json'), JSON.stringify(results, null, 2));
-console.log(`skills-proof: ${results.length} checks over 7 launches, evidence in ${output}`);
+console.log(`skills-proof: ${results.length} checks over 9 launches, evidence in ${output}`);
 console.log(`  discovered ${expected.length} skills; commands ${JSON.stringify(registered)}`);
 console.log(`  policy written sparsely to ${agentsYaml}`);
 console.log(`  rescan found ${afterRescan.length}; with skills off the catalogue offers none`);
+console.log(`  /skills wrote one saved system row listing ${listed[0].data['data-count']} skills into ${listingSession}; reopened, it was still there`);
 if (!existsSync(join(repo, '.proof'))) fail('the evidence directory vanished');

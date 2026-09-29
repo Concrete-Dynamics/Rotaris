@@ -5,7 +5,7 @@ import type { RunState } from '../composer.js';
 import { NO_RUN_ACTIVE, TRANSCRIPT_EMPTY } from './catalogue.js';
 import { bindChatControls, chatControls, CLEAR_DESCRIPTION, CLEAR_DIALOG_BODY, CLEAR_DIALOG_CONFIRM, CLEAR_DIALOG_IMPACT, CLEAR_DIALOG_TITLE, CLEAR_LABEL, compressNow, NOTHING_TO_COMPRESS_TOAST, TRANSCRIPT_ALREADY_EMPTY_TOAST, type ChatAcknowledger, type ControlAnswer } from './host.js';
 import { cachedPromptRoots, readPromptRoots, registerPromptCommands } from './prompts.js';
-import { cachedSkills, readSkills, registerSkillCommands, skillPathCommand } from './skills.js'; // ADR-0063
+import { cachedSkills, readSkills, registerSkillCommands, skillPathCommand, skillsListCommand } from './skills.js'; // ADR-0063
 import type { Availability, SlashContext, SlashOutcome, SlashRegistry } from './types.js';
 import { Button as DesignButton } from '../design-system/index.js';
 
@@ -33,6 +33,8 @@ export interface ClearTranscriptControlProps {
   readonly skillsRevision?: number | undefined;
   /** REQ-CHAT-162: `/skill <path>`'s loader, answered by the run host through main. Absent means the command is not offered. */
   readonly loadSkillFile?: ((path: string) => Promise<{ ok: true; name: string } | { ok: false; reason: string }>) | undefined;
+  /** REQ-CHAT-162: `/skills`, the listing written as one saved system row by the run host. Absent means the command is not offered. */
+  readonly listSkills?: (() => Promise<{ ok: true; count: number } | { ok: false; reason: string }>) | undefined;
   readonly onError?: ((reason: string) => void) | undefined;
 }
 
@@ -43,7 +45,7 @@ export interface ClearTranscriptControlProps {
  * this row's controls as text since Part X's stash opener (the icon font exists — `ph ph-*` — and is not the reason), the
  * label is the specification's, and REQ-CHAT-082 fixes the accessible description.
  */
-export function ClearTranscriptControl({ runState, rowCount, control, onAcknowledge, registry, configKey, skillsRevision, loadSkillFile, onError }: ClearTranscriptControlProps) {
+export function ClearTranscriptControl({ runState, rowCount, control, onAcknowledge, registry, configKey, skillsRevision, loadSkillFile, listSkills, onError }: ClearTranscriptControlProps) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const acknowledge: ChatAcknowledger = onAcknowledge ?? (() => undefined);
@@ -184,6 +186,16 @@ export function ClearTranscriptControl({ runState, rowCount, control, onAcknowle
     if (!loadSkillFile) return;
     registry.register(skillPathCommand(loadSkillFile, () => { reloadSkills(); }));
   }, [registry, loadSkillFile]);
+  /*
+   * REQ-CHAT-162 — `/skills`: the listing, written by the run host into the followed session as one saved system
+   * row. Fixed, like `/skill`, and for the same reason registered on its own; a skill declaring the name `skills`
+   * is offered `skills-2` whichever of the two registers first, and a prompt file `skills.md` keeps only
+   * `/prompts:skills`, although it reaches this registry before this effect does (`FIXED_SKILL_COMMAND_NAMES`).
+   */
+  useEffect(() => {
+    if (!listSkills) return;
+    registry.register(skillsListCommand(listSkills));
+  }, [registry, listSkills]);
 
   useEffect(() => {
     // The composer's `onFocus` is not this part's to add; the focus is observed as it bubbles.

@@ -72,7 +72,13 @@ the four positions named and two of them stated empty.
 > would have read; nothing anywhere said the list described a mechanism that did not run. The owner asked
 > for switches over "the auto injection" on the reasonable assumption that there was one. A slot named in
 > a record is not a slot named in the product, and the second absent unit — persona memory — has the same
-> exposure today. `REQ-WORKSPACE-050`'s worktree half is still unbuilt and is recorded in `docs/defects/`.
+> exposure today. ~~`REQ-WORKSPACE-050`'s worktree half is still unbuilt and is recorded in `docs/defects/`.~~
+>
+> **Repaired, then executed in the built app.** The worktree half was built on 2026-09-22 (`0b3ebe3`) as the repair of
+> [`isolated-runs-read-instruction-files-from-the-base-workspace.md`](../../defects/fixed/isolated-runs-read-instruction-files-from-the-base-workspace.md)
+> (now under `fixed/`). On 2026-09-27 `pnpm injection-proof`'s isolated launch showed it in the built app: a run in
+> `.rotaris/worktrees/<sid>` received the worktree's committed text under the worktree's paths, while the catalog stayed
+> the base workspace's (first-release-plan §3.3; first-executions row 2026-09-27).
 
 ## The decision
 
@@ -159,7 +165,9 @@ lives there, which is the reason `REQ-CHAT-160`'s equivalent rules live there to
 1. **No new package and no new edge.** `config` gains a directory, the run host a module, `ui` two,
    `contracts` one file. Every import is on an edge the matrix already allows.
 2. **Two new message families** — renderer → main `skills.read/rescan/forceLoad/loadFile`, main → run
-   host the same four. No new channel, no new store table, no new control operation.
+   host the same four. No new channel, no new store table, no new control operation. *(Since 2026-09-27 a
+   fifth member each way, `skills.list` → `skills.listed`, for REQ-CHAT-162's `/skills` — still no channel,
+   no table and no control operation; see the report at the end of this record.)*
 3. **One new native dialog**, with its capture seam, on REQ-SHELL-164's terms.
 4. **`skills.enabled` is read from the SAVED configuration at force-load**, not from the run's captured
    Tier B snapshot, because `REQ-WORKSPACE-073` gates a user gesture happening now rather than a run
@@ -255,3 +263,32 @@ its baseline-over-a-lower-layer case, and the master switch were all built as wr
 first run. `pnpm skills-proof` passes at **8 checks over 7 launches**, and the repository's own three
 skills are discovered, listed and invocable — the claim `AGENTS.md` has made since 2026-09-12 is now
 observable rather than asserted, and a test in `packages/config/src/skills/skills.test.ts` keeps it so.
+
+## The `/skills` listing — built 2026-09-27, reported in place
+
+*`first-release-plan.md` §2.2 decided the path and holds the first-execution note; this record carries the part
+that changes what it said. One row in `first-executions.md`.*
+
+This record built everything REQ-CHAT-162 asks for except the listing, and said so where the command would register
+(`SKILLS_LISTING_NOT_BUILT`). It is built now, on the terms this record already set: the run host, which owns the
+catalog, writes the listing — as ONE `system` row through the followed session's own writer
+(`run-host/skills.ts`'s `writeSkillListing`) — and the renderer keeps the command's name and collision rule, as
+decision 5 puts them there. No new owner of state, no new package or edge, and no store change: REQ-CHAT-046/047 make
+the row a system notice whose text is the listing, fixed once in `contracts/skills.ts` and drawn as the listing by
+the one row renderer. No in-context column, as ESC-37's ruling requires.
+
+**Decision 5 needed one correction to take a second fixed command.** Its registrar read any holder of the `skill`
+kind badge as its own earlier work, and `/skill <path>` carries that badge — so a skill named `skill` took the
+command or lost its own depending on which effect ran first, against REQ-SHELL-056 both ways. `/skills` would have
+had the same exposure. The two fixed names are now always taken
+([`a-skill-named-skill-takes-the-skill-command.md`](../../defects/fixed/a-skill-named-skill-takes-the-skill-command.md)).
+The same change's gate found the prompt-file registrar holding the same hole from the other side — the fixed
+commands register by effect after the prompt files are on a rebuilt registry, and a re-read took `/skills` back for
+a `skills.md` — so both registrars now hold the two names
+([`a-prompt-file-named-skills-takes-the-skills-command.md`](../../defects/fixed/a-prompt-file-named-skills-takes-the-skills-command.md)).
+
+**One gap the specification leaves is logged as OQ-67**, with the reading built: REQ-CHAT-162 asks for the listing
+to be reachable from the Settings tab, whose header actions REQ-WORKSPACE-067 fixes at two, so the tab's table is
+read as that reach and nothing is added; and `/skills` from a window following no session is refused with a stated
+reason, because a row must be saved with a session and OQ-58's pending bucket cannot hold one.
+

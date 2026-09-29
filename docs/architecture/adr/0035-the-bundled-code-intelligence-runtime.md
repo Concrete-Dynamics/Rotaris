@@ -358,7 +358,8 @@ workspace file now records that task as skipped. Then the whole proof passed **t
 nothing else running on the host: the discovery grant of 12 and the memories block, both launch lines carrying
 `--project`, `get_symbols_overview` naming `Greeter`, `greet` and `Counter` after provisioning TypeScript 5.9.3 and
 typescript-language-server 5.1.3 through the host's proxy (the disclosure true to the runtime), the five setup launches,
-and the drift refused. **What it could not show:** the no-window check of consequence 1 is recorded as not applicable
-off Windows, because its sampler is `Get-Process` and this host has no window lister. The packaged half of section 1 and section 7
+and the drift refused. **What it could not show:** the no-window check of consequence 1 is recorded as not measured
+off Windows, because its sampler is `Get-Process` and this host has no window lister. A window opened on Linux would fail
+consequence 1 as surely as one on Windows; the instrument is what is missing. The packaged half of section 1 and section 7
 need `win-unpacked`, and no Linux artifact may be produced (IC-3), so IC-7's contained run is untouched. Nothing on
 Windows was run.

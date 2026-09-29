@@ -52,8 +52,9 @@ instead of hanging because of the branch client repaired before it.
 order from `code-intelligence-launch.ts`: the token at the sentinel's fixed index, then the switch, then the separator.
 Two more platform literals in the same script were repaired with it. The build step builds with `pnpm` off Windows, as
 `init-proof` does, where it had spelled `cmd.exe` alone. The window sampler, which reads `Get-Process` through
-`powershell.exe`, runs on Windows only. Elsewhere section 1 records its no-window check as **not applicable**, with that
-reason, in `results.json` and on its console line, where it had passed on an empty sample.
+`powershell.exe`, runs on Windows only. Elsewhere section 1 records its no-window check as **not measured**, with that
+reason, in `results.json` and on its console line, where it had passed on an empty sample. (The first wording said "not
+applicable"; a window opened on Linux would still fail consequence 1, so it was the instrument that did not apply.)
 
 **The test that pins it.** `apps/desktop/scripts/lib/launch-sites.test.ts` gains rule 3: a launch of the reserved token
 (`TOKEN` or the literal) keeps the token first, or right after the product's main entry. Its new case fails the proof's

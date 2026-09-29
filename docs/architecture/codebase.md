@@ -1086,7 +1086,7 @@ request rejects when the child exits, errors or is killed by the guard, with the
 so a branch that dies fails the launch in seconds instead of hanging it (`line-rpc-client.test.ts`, 12 cases). It launches the token first and the sandbox switch after it, the
 product's order, which `lib/launch-sites.test.ts` holds for every token launch; its workspace file records
 `code-intelligence-setup` as skipped so ADR-0064's background task does not collide with section 5; off Windows it builds
-with `pnpm` and records the no-window check not applicable (2026-09-28, R-062: green three runs in a row as root on Linux).
+with `pnpm` and records the no-window check not measured (2026-09-28, R-062: green three runs in a row as root on Linux).
 
 **What `pnpm config-proof` does.** It builds Electron and launches the app five times against commented files at
 both scopes: Settings → Runtime toggles "Allow outside workspace" through its confirmation and saves (every other

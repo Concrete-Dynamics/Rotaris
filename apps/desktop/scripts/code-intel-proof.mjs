@@ -181,7 +181,8 @@ async function branch({ exe, before, tail, ws, env, call = null, callTimeoutMs =
   const ps = `$since = [DateTime]::Parse('${launchedAt.toISOString()}').ToLocalTime(); Get-Process -Name electron,Rotaris,python,conhost,node -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -gt $since } | Select-Object Id,ProcessName,MainWindowHandle,MainWindowTitle | ConvertTo-Json -Compress`;
   const samples = [];
   // The window sampler reads `Get-Process`'s MainWindowHandle through `powershell.exe`: Windows only. Elsewhere the
-  // "no window" check is not applicable and is said so in the results, rather than passing on an empty sample.
+  // "no window" check is NOT MEASURED, and is said so in the results rather than passing on an empty sample. A branch
+  // that opened a window would fail consequence 1 on any platform; what is missing off Windows is the instrument.
   const sampling = sample && process.platform === 'win32';
   const sampler = sampling ? setInterval(() => {
     const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { encoding: 'utf8', windowsHide: true, timeout: 5_000 });
@@ -215,7 +216,7 @@ async function branch({ exe, before, tail, ws, env, call = null, callTimeoutMs =
   result.windowed = [...new Set(samples.flatMap((s) => s.processes.filter((p) => p.handle !== '0' && p.handle !== '')).map((p) => `${p.name}#${p.id} handle ${p.handle} "${p.title}"`))];
   result.postLaunchProcesses = [...new Set(samples.flatMap((s) => s.processes.filter((p) => p.name !== 'conhost').map((p) => p.name)))];
   result.samples = samples.length;
-  result.windowCheck = sampling ? `sampled ${samples.length} time(s)` : sample ? `not applicable on ${process.platform}: the sampler reads Get-Process's MainWindowHandle through powershell.exe, which exists on Windows only` : 'not sampled';
+  result.windowCheck = sampling ? `sampled ${samples.length} time(s)` : sample ? `not measured on this host (${process.platform}): the sampler reads Get-Process's MainWindowHandle through powershell.exe, which exists on Windows only, and no window lister stands in for it here, so a window this launch opened would go unseen` : 'not sampled';
   const stderr = rpc.stderr;
   result.fetchLines = stderr.split(/\r?\n/).filter((l) => /npm install|uvx|Failed to fetch|Could not find|not installed|download|Installing/i.test(l)).map((l) => l.replace(/^.*? - /, '').slice(0, 220)).slice(0, 12);
   result.stderrBytes = stderr.length;

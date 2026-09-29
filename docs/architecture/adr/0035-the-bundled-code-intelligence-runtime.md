@@ -341,5 +341,5 @@ guard kill with the exit status and standard error's tail (`line-rpc-client.test
 against the built branch, as root under Xvfb on Linux, drove the token-first launch to the sentinel's exit **127** in
 192 ms with the sentinel's "not present" line in the rejection. It also found that the proof launches the token in the
 order this ADR's correction retired — `--no-sandbox` ahead of the token — so as root the proof starts the application,
-not the branch, and section 1 fails at the guard (`../../defects/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`,
+not the branch, and section 1 fails at the guard (`../../defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`,
 recorded, not repaired). Not shown: section 1 passing, which waits for that note and for a tree with the bundle.

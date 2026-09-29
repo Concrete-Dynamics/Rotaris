@@ -72,7 +72,10 @@ if (!existsSync(marker)) {
 }
 const bundle = JSON.parse(readFileSync(marker, 'utf8'));
 if (!process.argv.includes('--skip-build')) {
-  const built = spawnSync('cmd.exe', ['/d', '/s', '/c', 'pnpm --filter @rotaris/desktop build'], { cwd: repo, encoding: 'utf8', timeout: 180_000 });
+  // By platform, as `init-proof` builds: `cmd.exe` alone could not build off Windows.
+  const built = process.platform === 'win32'
+    ? spawnSync('cmd.exe', ['/d', '/s', '/c', 'pnpm --filter @rotaris/desktop build'], { cwd: repo, encoding: 'utf8', timeout: 180_000 })
+    : spawnSync('pnpm', ['--filter', '@rotaris/desktop', 'build'], { cwd: repo, encoding: 'utf8', timeout: 180_000 });
   writeFileSync(join(output, 'build.log'), `${built.stdout ?? ''}\n${built.stderr ?? ''}`);
   if (built.status !== 0) throw new Error(`desktop build exited ${built.status ?? built.signal ?? 'unknown'}`);
 }
@@ -158,15 +161,21 @@ function launch(name, extra, { ws = workspace, global = GLOBAL, timeout = 150_00
 async function branch({ exe, before, tail, ws, env, call = null, callTimeoutMs = 120_000, sample = true }) {
   const t0 = Date.now();
   const launchedAt = new Date();
-  // `hostSwitches` ahead of the token: the branch is a Chromium process too, and as root it dies without them.
-  const child = spawn(exe, [...before, ...hostSwitches, TOKEN, '--', ...tail], { env, cwd: ws, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  // The product's own order (`code-intelligence-launch.ts`): the token FIRST, where the sentinel reads it at its fixed
+  // index (REQ-MCP-033), then `hostSwitches`, then `--`. The branch is a Chromium process too and as root it dies without
+  // the switch; ahead of the token the sentinel does not see the token and the whole application starts instead
+  // (`docs/defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`).
+  const child = spawn(exe, [...before, TOKEN, ...hostSwitches, '--', ...tail], { env, cwd: ws, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   // The client rejects every pending request when the child exits, errors or is killed by the guard, with the exit
   // status and standard error's tail — a branch that dies fails here in seconds instead of hanging (`lib/line-rpc-client.mjs`).
   const rpc = lineRpcClient(child, { guardMs: callTimeoutMs + 60_000, t0 });
   const send = (method, params) => rpc.send(method, params);
   const ps = `$since = [DateTime]::Parse('${launchedAt.toISOString()}').ToLocalTime(); Get-Process -Name electron,Rotaris,python,conhost,node -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -gt $since } | Select-Object Id,ProcessName,MainWindowHandle,MainWindowTitle | ConvertTo-Json -Compress`;
   const samples = [];
-  const sampler = sample ? setInterval(() => {
+  // The window sampler reads `Get-Process`'s MainWindowHandle through `powershell.exe`: Windows only. Elsewhere the
+  // "no window" check is not applicable and is said so in the results, rather than passing on an empty sample.
+  const sampling = sample && process.platform === 'win32';
+  const sampler = sampling ? setInterval(() => {
     const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { encoding: 'utf8', windowsHide: true, timeout: 5_000 });
     let procs = []; try { const parsed = JSON.parse(r.stdout.trim() || '[]'); procs = Array.isArray(parsed) ? parsed : [parsed]; } catch { procs = []; }
     samples.push({ atMs: Date.now() - t0, processes: procs.map((p) => ({ id: p.Id, name: p.ProcessName, handle: String(p.MainWindowHandle), title: p.MainWindowTitle ?? '' })) });
@@ -198,13 +207,14 @@ async function branch({ exe, before, tail, ws, env, call = null, callTimeoutMs =
   result.windowed = [...new Set(samples.flatMap((s) => s.processes.filter((p) => p.handle !== '0' && p.handle !== '')).map((p) => `${p.name}#${p.id} handle ${p.handle} "${p.title}"`))];
   result.postLaunchProcesses = [...new Set(samples.flatMap((s) => s.processes.filter((p) => p.name !== 'conhost').map((p) => p.name)))];
   result.samples = samples.length;
+  result.windowCheck = sampling ? `sampled ${samples.length} time(s)` : sample ? `not applicable on ${process.platform}: the sampler reads Get-Process's MainWindowHandle through powershell.exe, which exists on Windows only` : 'not sampled';
   const stderr = rpc.stderr;
   result.fetchLines = stderr.split(/\r?\n/).filter((l) => /npm install|uvx|Failed to fetch|Could not find|not installed|download|Installing/i.test(l)).map((l) => l.replace(/^.*? - /, '').slice(0, 220)).slice(0, 12);
   result.stderrBytes = stderr.length;
   return result;
 }
 async function exitStatus({ exe, before, env }) {
-  const r = spawnSync(exe, [...before, ...hostSwitches, TOKEN, '--', 'no-such-subcommand'], { env, encoding: 'utf8', windowsHide: true, timeout: 60_000 });
+  const r = spawnSync(exe, [...before, TOKEN, ...hostSwitches, '--', 'no-such-subcommand'], { env, encoding: 'utf8', windowsHide: true, timeout: 60_000 });
   return { code: r.status, stdout: r.stdout ?? '', stderrTail: (r.stderr ?? '').trim().split(/\r?\n/).at(-1) ?? '' };
 }
 const SERVER_TAIL = (ws) => ['start-mcp-server', '--transport', 'stdio', '--context', 'ide', '--project', ws];
@@ -233,7 +243,7 @@ if (want(1)) {
     if (pstatus.code !== 2) throw new Error(`branch (packaged): an unknown subcommand exited ${pstatus.code}`);
     results.branch.packaged = { ...pk, unknownSubcommandExit: pstatus.code };
   }
-  console.log(`[code-intel-proof] 1 branch: tools/list at ${dev.toolsListMs} ms (dev), ${dev.toolNames.length} tools, preamble ${dev.bytesBeforeFirstBrace || 'none'}, exit ${dev.exit.code}; unknown subcommand → ${status.code}${packaged ? `; packaged tools/list at ${results.branch.packaged.toolsListMs} ms` : ''}`);
+  console.log(`[code-intel-proof] 1 branch: tools/list at ${dev.toolsListMs} ms (dev), ${dev.toolNames.length} tools, preamble ${dev.bytesBeforeFirstBrace || 'none'}, exit ${dev.exit.code}; unknown subcommand → ${status.code}; window check ${dev.windowCheck}${packaged ? `; packaged tools/list at ${results.branch.packaged.toolsListMs} ms` : ''}`);
 }
 
 // ---- 2. discovery through the token, the grant, the block, the probe; 3. the binding -------------------------------

@@ -14,6 +14,12 @@
  *      bundle it forks. Chromium honours a switch anywhere before a bare `--`, so the rule is: before any `'--'`, and
  *      after every positional argument unless the entry is the product's own main, whose `workspaceFromArgv` skips a
  *      switch. A launch with `ELECTRON_RUN_AS_NODE` starts no Chromium and is exempt.
+ *   3. **A launch of the reserved token keeps the token first** (REQ-MCP-033): the sentinel (`src/main/sentinel.ts`)
+ *      reads it at one fixed index — the argument right after the entry on the development binary, the first on a
+ *      packaged one — so the switch goes between the token and `--`, the product's own order
+ *      (`src/run-host/code-intelligence-launch.ts`). Rule 2 admits the switch ahead of the token too, and
+ *      `code-intel-proof` put it there: as root the application started instead of the server
+ *      (`docs/defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`).
  *
  * This is a static scan, not a launch: it reads the scripts' text, so it is decidable on any host and in `pnpm check`.
  * What it does not measure is that Chromium honours the switch where the rule puts it; the proofs measure that.
@@ -115,8 +121,16 @@ function launchProblem(launch: Launch): string | null {
   if (launch.binary === 'electron' && !productMain(launch.args[0]!) && at !== launch.args.length - 1) {
     return `\`...hostSwitches\` precedes a positional argument of ${launch.args[0]}, which reads it as one`;
   }
+  // Rule 3: the reserved token sits at the sentinel's fixed index — first, or right after the product's main entry.
+  const token = launch.args.findIndex(isToken);
+  if (token > 0 && !(token === 1 && productMain(launch.args[0]!))) {
+    return `the reserved token follows ${launch.args[token - 1]}, not the entry; the sentinel reads it at one fixed index (REQ-MCP-033)`;
+  }
   return null;
 }
+
+/** The reserved token of REQ-MCP-033, spelled as the literal or as the scripts' `TOKEN` constant. */
+const isToken = (element: string): boolean => element === 'TOKEN' || element === "'builtin:code-intelligence'";
 
 const all = scripts(SCRIPTS);
 
@@ -145,5 +159,21 @@ describe('R-062: the proof harness platform rules, kept at every script', () => 
     expect(launchProblem(call("[join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace]"))).toBeNull();
     expect(launchProblem(call("[driver, join(app, 'out', 'main', 'workspace-service.js'), fixture, ...hostSwitches]"))).toBeNull();
     expect(launchProblem(launches('fixture.cjs', "spawnSync(exe, [probe, dir], { env: { ELECTRON_RUN_AS_NODE: '1' } });")[0]!)).toBeNull();
+  });
+
+  it('a launch of the reserved token keeps it at the sentinel\'s index, the switch after it, including code-intel-proof as it was (REQ-MCP-033)', () => {
+    const call = (binary: string, args: string) => launches('fixture.mjs', `spawn(${binary}, ${args}, { env });`)[0]!;
+    // code-intel-proof's branch launch before the repair: rule 2 passed it, and as root the application started instead.
+    expect(launchProblem(call('exe', "[...before, ...hostSwitches, TOKEN, '--', ...tail]"))).toMatch(/reserved token follows \.\.\.hostSwitches/);
+    expect(launchProblem(call('electron', "[mainEntry, ...hostSwitches, 'builtin:code-intelligence', '--', 'start-mcp-server']"))).toMatch(/reserved token follows/);
+    // The product's own order, on both binaries.
+    expect(launchProblem(call('exe', "[...before, TOKEN, ...hostSwitches, '--', ...tail]"))).toBeNull();
+    expect(launchProblem(call('electron', "[mainEntry, TOKEN, ...hostSwitches, '--', 'no-such-subcommand']"))).toBeNull();
+    expect(launchProblem(call('exe', "[TOKEN, ...hostSwitches, '--', ...tail]"))).toBeNull();
+    // And the scan reaches code-intel-proof's two token launches, so the rule is not vacuous there.
+    const text = readFileSync(join(SCRIPTS, 'code-intel-proof.mjs'), 'utf8');
+    const tokenLaunches = launches('code-intel-proof.mjs', text).filter((l) => l.args?.some(isToken));
+    expect(tokenLaunches).toHaveLength(2);
+    expect(tokenLaunches.map(launchProblem)).toEqual([null, null]);
   });
 });

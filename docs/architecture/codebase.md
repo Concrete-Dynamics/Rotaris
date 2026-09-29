@@ -1022,7 +1022,10 @@ notice); a session with no rows, a ref deleted from outside, a live run's refusa
 retention of two trimming rows and refs together; an isolated run whose checkpoints land in the shared repository and
 whose restore touches the worktree only; `enabled: false`. Figures — invocations and times per capture, preview and
 restore — land in `.proof/checkpoint-proof/results.json`. The Git proof's isolated launch now asserts one checkpoint row where it asserted the card's
-empty sentence: an isolated run records a checkpoint by REQ-GIT-044's default, which the merge found by failing that launch.
+empty sentence: an isolated run records a checkpoint by REQ-GIT-044's default, which the merge found by failing that launch. The live
+run's lock is probed dead the moment that launch returns, so a lock that outlived its application fails there, naming
+REQ-SESSION-047/056, and not one launch later as a failed repair (2026-09-28, R-062;
+[the note](../defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md)).
 
 **What `pnpm resilience-proof` does.** It builds Electron and launches the app nine times with scripted fault steps: a 429
 with `retry-after: 2` (the countdown, the auto-resume); a 429 with no header (the 60 s local wait, cancelled from the

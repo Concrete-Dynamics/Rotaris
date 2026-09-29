@@ -12,7 +12,7 @@ In the failing run, `live.log` ends at `main process exiting ... 23:46:15.057` w
 `repaired.log` opens with `instance claimed ... 23:46:15.285`, 0.22 s later, and has no repair line. The passing
 re-run's `live.log` has `run host exited (0)` before main's exit. The failing run is the signature of the
 product defect recorded and repaired the same day in
-[`a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`](fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md).
+[`a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`](a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md).
 Before that repair, main left before its run host, and Electron's teardown of the run host took 1.57 to 1.81 s in
 three launches of nine. Here, the next launch opened the session inside that window. The live launch's run host
 still answered to its pid, so the listing read the session as **live**, as REQ-GIT-093 requires, and made no repair.
@@ -48,3 +48,49 @@ written in both trees: a lock holder that answers is live, and a live session is
 - `packages/engine/src/sessions.ts`: `liveness` and `repairOne`, the probe and the repair step (d) measures.
 - `apps/desktop/scripts/sessions-proof.mjs`: the same `live`-then-repair pair (launches 2 and 3), with the same
   unchecked precondition.
+
+## Repaired — 2026-09-28 under R-062
+
+**The product needed no repair here.** The red was the lock-outlives-its-application defect, which `459e7c8` had
+already repaired. The repair made here is to the harness. Step (c) now checks the precondition the header states.
+Right after the `live` launch returns, the proof reads the pid in the session's lock and probes it once
+(`lockHolderAfterExit`, `apps/desktop/scripts/lib/lock-holder.mjs`). A holder that is still alive fails step (c) at
+once. The failure says how long the holder outlived main, up to a 10 s bound, and names REQ-SESSION-047/056 and
+REQ-GIT-093 (`describeLingeringHolder`).
+
+The helper **does not wait for the holder and then pass**. Since `endBeforeMain`, the product guarantees that main
+is gone only after its run host, so the proof asserts exactly that guarantee. Waiting would have hidden a regression
+of it. `results.json` now records the lock's pid (`live.lockPid`, `live.lockHolderGoneAtExit`). If step (d) still
+fails after a holder was dead, the failure says so and quotes the outcome of the session select, which is reported
+and not asserted.
+
+No assertion was weakened. Step (d)'s five checks are unchanged: status, lock released, timeline entry, the two log
+lines. The select offset stays at 3 000 ms. In all five logs read (the sweep's passing run, the reproduction and the
+three runs here), the repair came from the Git view's first listing, 1.3 to 1.6 s into the launch, before the select. So the offset is not
+what this proof depends on, and moving the launch onto the driver would not have changed this red.
+`sessions-proof`'s launches 2 and 3 are the same `live`-then-repair pair and gained the same check, under that
+proof's own note.
+
+**Pinned by** `apps/desktop/scripts/lib/lock-holder.test.ts`, 4 cases:
+
+- a holder already gone is read once, never waited on;
+- a holder that goes 1 750 ms later still fails, and its sentence names the time and the requirements;
+- a holder that never goes is bounded at 10 s;
+- over a real child process, the probe answers alive, then dead after the child's exit, and never probes a pid ≤ 0.
+
+**Shown on the built app**, `fa377e6` plus this change, as root under Xvfb, Node 24, after one `pnpm build`:
+`node apps/desktop/scripts/checkpoint-proof.mjs --skip-build` passed three times in a row, exit 0 each time. The
+runs took 166 s, 165 s and 168 s, at load 0.5 to 1.4. After runs 1 and 2, `ps` counted 8 Electron processes on the
+host, and after run 3 none. Which tree they belonged to was not recorded. The sweep's worktree may have been running
+proofs.
+
+| Run | Lock pid | `run host exited` → `main process exiting` | Next launch claimed | Repair logged at |
+|---|---|---|---|---|
+| 1 | 26303 | 2 ms | +200 ms | +1.52 s |
+| 2 | 30518 | 2 ms | +209 ms | +1.48 s |
+| 3 | 1389 | 4 ms | +263 ms | +1.81 s |
+
+Each `results.json` holds all twelve scenarios through `disabled`.
+
+**Not shown:** the new check failing on the built app. The window closed with `459e7c8`, and it was not reopened
+to watch the check fire. Its failure path is shown only by the unit cases above.

@@ -16,7 +16,8 @@
  *   no-rows     a fresh session on a clean tree (read,answer) → the empty sentence, Restore disabled with its reason.
  *   ref-gone    ref 4 deleted by hand → row 4 → Restore → gate 2's second sentence.
  *   live        resume + wait:20000,answer, Restore during the run → REQ-GIT-092's first text; the app exits mid-run,
- *               leaving a persisted-running session with a dead lock …
+ *               leaving a persisted-running session with a dead lock. The lock's pid is probed dead the moment the
+ *               launch returns (`lib/lock-holder.mjs`): the run host is gone before main (REQ-SESSION-047/056) …
  *   repaired    … which the next listing repairs (REQ-GIT-094): the notice `Session marked interrupted`.
  *   isolated    `checkpoints:` unset, a run through the launch dialog in a worktree → the ref in the shared repository's
  *               namespace, `.rotaris/` in no checkpoint tree; then a restore rewrites the worktree only.
@@ -30,6 +31,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { describeLingeringHolder, lockHolderAfterExit } from './lib/lock-holder.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -330,7 +332,18 @@ const live = launch('live', workspace, local, preferences, {
   if (!/checkpoint preview .* refused|liveness/.test(live.log) && !/checkpoints.list/.test(live.log)) { /* the refusal is a value, not a log line */ }
   const row = sessionRow(sid);
   if (row.execution_status !== 'running') throw new Error(`the session was left ${row.execution_status}; the repair scenario needs a persisted-running session`);
-  results.live = { refused: true, leftRunning: true, png: live.png };
+  // The header's "dead lock" is (d)'s precondition, and it is checked here, at the launch that left the lock.
+  // The lock names this launch's run host. Since `endBeforeMain`, main is gone only after the run host, so the pid
+  // must already probe dead. Before that repair, the holder outlived main by up to 1.8 s. (d) then read the session
+  // as live (REQ-GIT-093), made no repair, and this proof blamed REQ-GIT-094
+  // (`docs/defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`).
+  const db = openDb();
+  const lock = db.prepare('SELECT pid, host FROM session_locks WHERE session_id = ?').get(sid);
+  db.close();
+  if (!lock) throw new Error('the live launch left no lock behind; the repair scenario needs a persisted-running session behind a dead lock');
+  const holder = lockHolderAfterExit(lock.pid);
+  if (holder.aliveAtExit) throw new Error(describeLingeringHolder('live', holder));
+  results.live = { refused: true, leftRunning: true, lockPid: lock.pid, lockHolderGoneAtExit: true, png: live.png };
 }
 
 // (d) REQ-GIT-094: opening that session's checkpoints repairs it — interrupted, the lock released, the notice raised.
@@ -340,7 +353,13 @@ const repaired = launch('repaired', workspace, local, preferences, {
 });
 {
   const row = sessionRow(sid);
-  if (row.execution_status !== 'interrupted') throw new Error(`the stale session reads ${row.execution_status}, not interrupted`);
+  if (row.execution_status !== 'interrupted') {
+    // The holder was dead when (c) returned, so a session still `running` here is the repair's failure. The select
+    // outcome is reported but not asserted: in every run read so far, the Git view's first listing repaired the
+    // session before the select, and the select only re-chose the session that was already selected.
+    const select = /capture: select \[data-testid="git-checkpoint-session"\] = \S+ → (.+)$/m.exec(repaired.log)?.[1] ?? 'not logged';
+    throw new Error(`the stale session reads ${row.execution_status}, not interrupted (its lock's pid ${results.live.lockPid} was gone when 'live' returned; the session select ${select})`);
+  }
   const db = openDb();
   const lock = db.prepare('SELECT * FROM session_locks WHERE session_id = ?').get(sid);
   db.close();

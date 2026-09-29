@@ -6,7 +6,7 @@ paused descendants are cancelled with it:" above one line per paused descendant.
 be cancelled and will not resume. Cancelling cascades to 1 paused descendant." Both name the child, list one line per
 paused descendant and dismiss with "Keep it paused"; only the Mission view's leaves out that the cancel is final.
 
-Found 2026-09-28 by the built-app drive of the merged revision 4 build (R-064), comparing the two confirmations for the
+Found 2026-09-28 by the built-app drive of the merged revision 4 build (R-065), comparing the two confirmations for the
 same paused child with a paused descendant.
 
 ## Specs

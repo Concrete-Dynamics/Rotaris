@@ -9,7 +9,7 @@ after a hold that follows a resumed iteration, the last user row is the continue
 17 already made a task of its own (`complete`, or `pending` and taken up first), so the approved run would have worked
 that message a second time.
 
-Found 2026-09-28 by building `PD-ORCH-003` revision 2 under R-064, and reproduced by driving the engine (a plan-mode
+Found 2026-09-28 by building `PD-ORCH-003` revision 2 under R-065, and reproduced by driving the engine (a plan-mode
 session approved at its first cycle ran two iterations for one prompt).
 
 ## Specs

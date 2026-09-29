@@ -38,10 +38,10 @@ export function planRequestSection(): string {
  * launch content it is also given is the continue that resumed the iteration, so the work to plan for is the todo's
  * pending tasks, stated first and in the order the run takes them up — the first twenty, the count the handoff shows of
  * its todo (REQ-SESSION-115), each cut to 500 characters rather than the handoff's 80, since here a task's text is the
- * work to plan and not a display title (OQ-77). `message` is what became of the continues' messages the resumed iteration
+ * work to plan and not a display title (OQ-104). `message` is what became of the continues' messages the resumed iteration
  * held (PD-ORCH-005 clause 17): `done` when it succeeded, `pending` when it closed otherwise — they are then among the
  * pending tasks, taken up first — and `none` when it held none. The iteration is said to have been "left open", not by
- * what: a rest or a crash left it, and a crash-left session's continues take this path too (OQ-77).
+ * what: a rest or a crash left it, and a crash-left session's continues take this path too (OQ-104).
  */
 export function resumedWorkSection(iteration: number, pending: readonly string[], message: 'done' | 'pending' | 'none'): string {
   const shown = pending.slice(0, 20).map((text) => `- ${cut(text, 500)}`);

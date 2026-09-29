@@ -15,11 +15,11 @@ request's task still pending appended it a second time too.
 
 *(As written by the clause 17 build, and superseded by the repair below:)* The one route the clause 17 build closed is
 "continue without them" on an iteration that holds a continue's message: that decline appends nothing, since the message
-it leaves pending is the last request (OQ-75). The general case is not repaired, because what the Continue action should
+it leaves pending is the last request (OQ-102). The general case is not repaired, because what the Continue action should
 append when the last request is already a task is not decided: the task that carries the last user row is not recorded
 as such, and appending nothing would change what a Continue action on a session whose todo is complete does.
 
-Noticed 2026-09-28 while building `PD-ORCH-005` clause 17 under R-064; reproduced by driving the engine (a pause
+Noticed 2026-09-28 while building `PD-ORCH-005` clause 17 under R-065; reproduced by driving the engine (a pause
 during the resumed root's last model step, then `continueSession(sid, 'continue')`: the todo ends
 `[first, complete], [second, complete], [second, complete]`). Not driven in the built app.
 
@@ -44,7 +44,7 @@ clause 17: the message's task is to be taken up by the next iteration, once.
 held by the open iteration (`Todo.holdsUnfinished`), and the run takes that task up as it stands; a request whose task
 is complete or abandoned, or in progress with no open iteration holding it, is appended as before (the last narrowed by
 the lane's third review, since no selection takes an unheld task in progress up). This replaces the narrower guard the clause 17 build had in the `Run` constructor for "continue
-without them" on an iteration that holds a message. The reading is recorded in OQ-75 ("A continue that states no new
+without them" on an iteration that holds a message. The reading is recorded in OQ-102 ("A continue that states no new
 request appends no second task"). The handoff still reaches every iteration's root, because every iteration's first
 call is sent the launch content (the behaviour `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`
 records). Evidence: `run/message-task.test.ts` — the Continue action after a message was left pending works it once,

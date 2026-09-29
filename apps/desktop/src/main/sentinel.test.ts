@@ -5,7 +5,7 @@ describe('REQ-MCP-033 / ADR-0035: the arguments the sentinel hands the bundled r
   it('drops the separator the launch puts after the token', () => {
     expect(runtimeArguments(['--', 'start-mcp-server', '--project', '/w'])).toEqual(['start-mcp-server', '--project', '/w']);
   });
-  it("R-065: drops the launcher's own switches before the separator, which are Chromium's", () => {
+  it("R-066: drops the launcher's own switches before the separator, which are Chromium's", () => {
     expect(runtimeArguments(['--no-sandbox', '--', 'project', 'create', '/w'])).toEqual(['project', 'create', '/w']);
   });
   it("keeps a runtime's own `--` after the separator, and passes arguments with no separator as they are", () => {

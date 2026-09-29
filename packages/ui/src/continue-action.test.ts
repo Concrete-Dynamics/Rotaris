@@ -50,7 +50,7 @@ describe('PD-ORCH-005 clause 6: the Continue action states how many agents will 
   });
 
   /**
-   * PD-ORCH-005 clause 18 supersedes OQ-71's reading here ("offers no decline — its continue is a message"): a session a
+   * PD-ORCH-005 clause 18 supersedes OQ-98's reading here ("offers no decline — its continue is a message"): a session a
    * crash left offers the Continue action and "Continue without them" as a `paused` session does, with the same count.
    */
   const offersTheSameChoice = (html: string, agents: number) => {
@@ -60,7 +60,7 @@ describe('PD-ORCH-005 clause 6: the Continue action states how many agents will 
     expect(notices(html)).toContain(`>${resumeCountText(agents)}</span>`);
     expect(notices(html)).toMatch(/data-testid="composer-continue-without"[^>]*aria-describedby="composer-decline-hint"[^>]*>Continue without them</);
     expect(notices(html)).toContain(`<span id="composer-decline-hint" class="visually-hidden">${declineText(agents)}</span>`);
-    // It is not paused, and draws no pause statement (OQ-76).
+    // It is not paused, and draws no pause statement (OQ-103).
     expect(notices(html)).not.toContain('Paused.');
   };
 

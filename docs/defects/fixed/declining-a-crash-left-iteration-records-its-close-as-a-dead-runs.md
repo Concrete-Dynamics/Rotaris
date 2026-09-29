@@ -10,7 +10,7 @@ continued without this agent, which a crash had left paused." The user's choice 
 record, and the record contradicted itself. A decline of a rest read "the session was continued without the agents the
 pause had left paused", as it should.
 
-Found 2026-09-28 by the seventh review round of the merged revision 4 build of `PD-ORCH-005` (R-064). At the base the
+Found 2026-09-28 by the seventh review round of the merged revision 4 build of `PD-ORCH-005` (R-065). At the base the
 branch could not be reached by a user's decline: the continue refused an `interrupted` or busy session, and the decline
 was offered only for `paused`.
 
@@ -29,7 +29,7 @@ iteration left open closes as cancelled, its task anchored).
 
 ## Repaired — 2026-09-28
 
-By the seventh fix round of the merged revision 4 build (R-064). `closeLeftOpenIteration` chooses the summary by whether
+By the seventh fix round of the merged revision 4 build (R-065). `closeLeftOpenIteration` chooses the summary by whether
 this run declined the iteration (`openIteration.resume === false`), not by what left it open. A declined iteration reads
 "the session was continued without the agents … had left paused" with the recorded interruption's phrase (`a crash` on
 clause 18's route), matching its agents' reports. The seventh round kept the dead run's wording for a run told nothing

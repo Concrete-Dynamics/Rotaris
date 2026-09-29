@@ -27,4 +27,4 @@ state": every unfinished agent `paused` and the iteration open. The build persis
 forced. That keeps REQ-MONITOR-029 and REQ-SESSION-093 and leaves REQ-SESSION-186's `stopped` unmet, as before.
 REQ-SESSION-186 is not in the directive's Narrows list, so the contradiction is still the corpus's, and it still
 belongs to an ESC. A stop is told apart from a pause by `children.interruption` and `iterations.interruption` (`stop`),
-as well as by `stop_reason` and the timeline. OQ-69 records the reading.
+as well as by `stop_reason` and the timeline. OQ-96 records the reading.

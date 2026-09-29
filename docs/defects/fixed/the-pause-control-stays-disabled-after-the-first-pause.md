@@ -5,7 +5,7 @@ cleared. After one pause in a window, every later run of any session in that win
 the pending icon, and a click sent nothing. `/pause` still worked, because its path did not check the flag. The code
 predates revision 4 (introduced 2026-09-20).
 
-Found 2026-09-28 by the fourteenth review round of the merged revision 4 build of `PD-ORCH-005` (R-064), driving the
+Found 2026-09-28 by the fourteenth review round of the merged revision 4 build of `PD-ORCH-005` (R-065), driving the
 built app.
 
 ## Specs
@@ -21,7 +21,7 @@ allows it to disable Pause for a later one.
 
 ## Repaired — 2026-09-28
 
-By the fourteenth fix round of the merged revision 4 build (R-064). The mark is scoped to the session shown and whether
+By the fourteenth fix round of the merged revision 4 build (R-065). The mark is scoped to the session shown and whether
 its run is busy. `WorkspaceView` re-derives it during render when that scope changes (`pausePendingAfter`), so the mark
 ends when the run that accepted the pause leaves the busy states, or when another session is shown.
 

@@ -330,7 +330,7 @@ function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) 
   const snapshot = useConfigSnapshot(workspace);
   const refresh = useStore(refreshStats, (st) => st);
   const entry = useMemo(() => entryOf(snapshot, rows, session?.agents ?? []), [snapshot, rows, session]);
-  // PD-ORCH-005 clauses 13 and 16 (OQ-73, OQ-74): in REQ-CHAT-008's recovery state the run-level agent presents `paused`,
+  // PD-ORCH-005 clauses 13 and 16 (OQ-100, OQ-101): in REQ-CHAT-008's recovery state the run-level agent presents `paused`,
   // as its agents do, and a paused child offers "Cancel selection" while its session rests — both from `restingView`,
   // the one call the Workspace makes too.
   const needsRecovery = useNeedsRecovery(session?.id ?? null, session?.executionStatus ?? null);
@@ -1154,7 +1154,7 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   const status = useMemo<readonly StatusItem[]>(
     () => [
       // REQ-NOTIFY-048/049: the presentation vocabulary, never a raw persisted string; in REQ-CHAT-008's recovery state the
-      // synthetic label, as the run header and the Mission view read it (PD-ORCH-005 clause 13, OQ-73).
+      // synthetic label, as the run header and the Mission view read it (PD-ORCH-005 clause 13, OQ-100).
       statusStripRunItem(session?.executionStatus ?? null, needsRecovery),
       // REQ-SHELL-038 / REQ-GIT-122/161: the checked-out branch, the focused session's worktree branch first.
       { text: branchItem.text, name: 'Checked-out branch', title: branchItem.title, state: branchItem.state, testId: 'strip-branch' },

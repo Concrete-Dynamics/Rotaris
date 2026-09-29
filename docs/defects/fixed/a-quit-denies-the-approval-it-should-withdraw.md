@@ -42,7 +42,7 @@ By PD-ORCH-005's phase 7.
 The first repair covered the window close only. Phase 7's review found the `app.quit()` path and the dock, and the
 second repair covered both. The second review then found two main windows whose guards answered at different times:
 the faster window's dialog closed while the other still stayed. The third repair asks every guard before any window
-closes. OQ-69 records the departure from REQ-TOOLS-063 and REQ-CHAT-101.
+closes. OQ-96 records the departure from REQ-TOOLS-063 and REQ-CHAT-101.
 
 Evidence:
 - `exit.test.ts`: `QuitState` and the dialog rule.

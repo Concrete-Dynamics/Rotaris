@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { followCoalesced } from './coalesced-follow.js';
 
 /**
- * REQ-SHELL-076 with PD-ORCH-005 clause 13 (OQ-73): a persona window's replica reaches React through `followCoalesced`.
+ * REQ-SHELL-076 with PD-ORCH-005 clause 13 (OQ-100): a persona window's replica reaches React through `followCoalesced`.
  * The case that matters: in REQ-CHAT-008's recovery state the fourteenth review round saw a persona window show the
  * run-level agent `paused` with "0 rows". The one route found to that picture is a transcript applied to the replica
  * after the window's first render read it and before the effect subscribed, since a session at rest publishes nothing

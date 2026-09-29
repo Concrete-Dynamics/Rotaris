@@ -7,7 +7,7 @@ approval, a question, a dependency or a model slot, or one still queued, is draw
 reads `waiting` where it would read `waiting · 1m 3s`, and the table reads `—` — although it has a spawn timestamp and
 is live in REQ-MONITOR-045's sense (running, waiting or queued). The behaviour predates `PD-ORCH-005` revision 4. It was
 noticed while the merged revision 4 build's eleventh review round restricted the transcript's "This task" to dropping the
-time for a `paused` agent only (OQ-73), where a waiting or queued agent keeps its time as REQ-CHAT-069 asks. Not
+time for a `paused` agent only (OQ-100), where a waiting or queued agent keeps its time as REQ-CHAT-069 asks. Not
 repaired here: it is not the directive's, and which predicate should gate the clock (REQ-MONITOR-045's live set, or
 every non-terminal agent other than `paused`) is a reading the repair must make.
 

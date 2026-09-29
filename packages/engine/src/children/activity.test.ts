@@ -91,7 +91,7 @@ describe('toAgentRecord — the new fields of REQ-MONITOR-044 (Part R)', () => {
   });
 });
 
-describe('toAgentRecord — PD-ORCH-005 clauses 13 and 18 (OQ-73): an agent a crash left, the crash not yet recorded', () => {
+describe('toAgentRecord — PD-ORCH-005 clauses 13 and 18 (OQ-100): an agent a crash left, the crash not yet recorded', () => {
   it('presents as the crash record will leave it — `paused` by `crash`, its activity kept, no chip — where it would otherwise settle or show running', () => {
     const activity = new AgentActivity();
     activity.started('helper', 'c1', 'terminal');

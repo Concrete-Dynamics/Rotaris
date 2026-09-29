@@ -67,7 +67,7 @@ export function runStateLabel(state: RunState): string {
  * REQ-SHELL-038's status strip names the run's state in REQ-NOTIFY-048's presentation vocabulary (REQ-NOTIFY-049),
  * except in REQ-CHAT-008's synthetic recovery state. There it reads `Run needs recovery`, as the run header, the
  * Workspace badge and the Mission view do. It never reads "run Running" while no run exists and the run-level agent is
- * drawn `paused` (PD-ORCH-005 clause 13, OQ-73). The recovery test is `runStateOf`'s, so the strip and the header
+ * drawn `paused` (PD-ORCH-005 clause 13, OQ-100). The recovery test is `runStateOf`'s, so the strip and the header
  * cannot disagree about which statuses it covers.
  */
 export function statusStripRunItem(executionStatus: string | null, needsRecovery: boolean): string {

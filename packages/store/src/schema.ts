@@ -825,7 +825,7 @@ export const MIGRATIONS: readonly Migration[] = [
      * This migration lands ahead of most of its writers, which is the one exception to the rule stated at the top of
      * this file: PD-ORCH-005 is built in phases on one branch, the schema first, and every table and column here gains its
      * writer in a later phase of the same build, before the build reaches `main`. Its shape was settled against every
-     * clause before it was appended (OQ-68, on clause 1's record, aside), because once it ships it is never edited.
+     * clause before it was appended (OQ-95, on clause 1's record, aside), because once it ships it is never edited.
      *
      * On `children`: `interruption` is what left the agent `paused` (`pause | stop | quit | crash`, NULL for an agent that
      * is not paused), `resume_state` the state it moves back into when its iteration resumes (REQ-MONITOR-300 narrowed:
@@ -909,14 +909,14 @@ export const MIGRATIONS: readonly Migration[] = [
   {
     to: 24,
     /*
-     * PD-ORCH-005 revision 4 clause 14 (R-063, built under R-064): "Each agent's record SHALL also keep a fingerprint of the
+     * PD-ORCH-005 revision 4 clause 14 (R-064, built under R-065): "Each agent's record SHALL also keep a fingerprint of the
      * system instructions and the tool definitions the agent started with."
      *
      * `agent_fingerprints`: one row per agent, the root's and every child's, keyed as its conversation is in
      * `agent_messages` (session, task id), so the fingerprint sits beside the agent's record. `instructions` and `tools` are
      * SHA-256 digests (hex) of the system prompt and of the tool definitions the agent's first model request carried — a
      * digest, not a second copy of the instructions (REQ-SESSION-029). The first is kept: a resume compares against what
-     * the agent started with, and the writer never replaces a row (OQ-78). `iteration` is what clause 12's transcript clear
+     * the agent started with, and the writer never replaces a row (OQ-105). `iteration` is what clause 12's transcript clear
      * reads, as it is for the conversation: it removes the fingerprints of closed iterations with their records. An agent
      * recorded before this version has none, and a resume of it records one and states nothing (REQ-SESSION-132).
      *

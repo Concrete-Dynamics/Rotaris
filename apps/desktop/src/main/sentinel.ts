@@ -93,7 +93,7 @@ function runtimeHome(python: string): string {
 
 /**
  * What the runtime is handed: the arguments after the separator. The launcher's own switches may stand between the token
- * and `--` — `--no-sandbox`, which Chromium needs to start as root (R-065,
+ * and `--` — `--no-sandbox`, which Chromium needs to start as root (R-066,
  * `docs/defects/fixed/the-code-intelligence-server-cannot-start-as-root.md`) — and are Chromium's, never the runtime's.
  * With no separator the arguments pass as they are.
  */

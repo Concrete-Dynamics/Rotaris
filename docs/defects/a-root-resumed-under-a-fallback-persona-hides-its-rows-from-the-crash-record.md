@@ -1,7 +1,7 @@
 ## A root resumed under a fallback persona hides its rows from the crash record
 
 When the persona an open iteration's root ran as is no longer configured, the continue that resumes it sets the run up
-as the entry role (OQ-70), and the root's transcript rows are written under that role's name. The iteration row keeps
+as the entry role (OQ-97), and the root's transcript rows are written under that role's name. The iteration row keeps
 the persona it was opened with (`root_persona`). If that run then dies mid-step, the crash record looks the root's
 rows up by `root_persona` (`answerOpenCalls`), finds none, and answers a call that had completed as never started —
 the case phase 3's fourth review repaired for every other agent. It needs both a removed persona and a crash. Noticed

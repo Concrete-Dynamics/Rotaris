@@ -735,7 +735,7 @@ export class IterationChildren implements DelegationOps {
      * resumes into writing its report only when its turn truly finished — it answered, owes no re-prompt and is owed
      * nothing by children of its own; otherwise (its turn stopped where it stood, or the rest's abort cut its model step,
      * which reads as a failed step, or its execution raised, as the root's may) it resumes `running` from its record
-     * (OQ-69). A child whose limit expired is not stopped by the rest: it ends `failed` as REQ-ORCH-088 has it, and is
+     * (OQ-96). A child whose limit expired is not stopped by the rest: it ends `failed` as REQ-ORCH-088 has it, and is
      * never resumed (clause 5) — its report assembled with no summarising call, since no model call is made once the run
      * comes to rest.
      */

@@ -393,12 +393,12 @@ paused session a composer of its own. Two continues take the send pill's place, 
 the dock, the notices row holds the pause's statement, the count of agents a continue resumes and "Continue
 without them". The mockup draws no paused composer. The build follows the language: the row's quiet hint,
 and the compact ghost button the session tables draw for "Resume". On 2026-09-28 the owner asked for the
-state to be drawn ([R-063](../product/requests.md#r-063), OQ-71).
+state to be drawn ([R-064](../product/requests.md#r-064), OQ-98).
 
 **A paused agent — no design.** `PD-ORCH-005` clause 13 gives a `paused` agent a presentation state of its own on
 every agent surface. The mockup draws no paused agent. The build follows the language: its dot takes `--rt-wait`, the
 waiting family `REQ-SHELL-036` puts `paused` in, drawn at full opacity with no pulse, and the state text `paused` is what
-tells it from `queued` (OQ-73).
+tells it from `queued` (OQ-100).
 
 **All three themes but one.** `REQ-SHELL-128` requires three built-in themes in order —
 `rotaris-dim` (default), `nocturne`, `high-contrast` — each declaring a light/dark flag, seven token

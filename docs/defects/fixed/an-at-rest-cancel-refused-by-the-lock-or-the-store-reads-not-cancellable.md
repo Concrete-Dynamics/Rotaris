@@ -2,20 +2,20 @@
 
 `Sessions.cancelPausedAtRest` (`PD-ORCH-005` clause 16) answers `{ ok: false }` for refusals that did not exist before
 the revision 4 build. It refuses while another live process holds the session's lock (`lockForWrite`) and under a store
-failure (OQ-76). The renderer's `cancelAgent` turned every `{ ok: false }` into "That agent is not cancellable (unknown,
+failure (OQ-103). The renderer's `cancelAgent` turned every `{ ok: false }` into "That agent is not cancellable (unknown,
 or already finished).". The Workspace, the Mission view (through `confirmCancel`'s error) and a persona window all
 showed that sentence. For a paused child the surface itself still draws `paused`, so the sentence was false when the
 cancel was refused only because another process held the session or the store had failed.
 
-Found 2026-09-28 by the twelfth review round of the merged revision 4 build of `PD-ORCH-005` (R-064).
+Found 2026-09-28 by the twelfth review round of the merged revision 4 build of `PD-ORCH-005` (R-065).
 
 ## Specs
 
 REQ-MONITOR-128 has a refused cancel state that the agent is not cancellable. That is true of an unknown or finished
 agent. It is not true of a paused child whose cancel was stopped by the store or by the session's lock, which clause 16
-makes cancellable while its session rests. OQ-74 records the at-rest cancel's refusals. The repair's wording departs
+makes cancellable while its session rests. OQ-101 records the at-rest cancel's refusals. The repair's wording departs
 from REQ-MONITOR-128's refusal sentence, which clause 16 does not govern (the directive names the requirement for the
-confirmation only); OQ-74 records that departure and asks it (added at the merged build's thirteenth review round).
+confirmation only); OQ-101 records that departure and asks it (added at the merged build's thirteenth review round).
 
 ## Relevant files
 
@@ -25,7 +25,7 @@ confirmation only); OQ-74 records that departure and asks it (added at the merge
 
 ## Repaired — 2026-09-28
 
-By the twelfth fix round of the merged revision 4 build (R-064). The two refusals now carry a `ControlRefusal` of their
+By the twelfth fix round of the merged revision 4 build (R-065). The two refusals now carry a `ControlRefusal` of their
 own. `store_failed` reads "The workspace store requires recovery before an agent can be cancelled: …" and
 `session_locked` reads "Another process holds this session, so the agent was not cancelled.". The renderer's
 `cancelAgent` states the engine's message when there is one, as the `control` helper already did. It falls back to

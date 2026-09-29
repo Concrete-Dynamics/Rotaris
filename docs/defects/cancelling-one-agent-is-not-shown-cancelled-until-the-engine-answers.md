@@ -4,7 +4,7 @@ REQ-MONITOR-128 has a confirmed cancel of one agent show it and each descendant 
 with an activity line saying the user cancelled them, and restore the prior state on a refusal. No surface does: the
 inspector, the Mission view, the Workspace's agents header and a persona window send `cancelAgent` and wait for the
 engine's republished session record, which is what then shows the agents cancelled. The live cancel and the at-rest
-cancel of a paused child (`PD-ORCH-005` clause 16) behave alike. Noticed while building clause 16 (R-064, 2026-09-28);
+cancel of a paused child (`PD-ORCH-005` clause 16) behave alike. Noticed while building clause 16 (R-065, 2026-09-28);
 not repaired.
 
 ## Specs

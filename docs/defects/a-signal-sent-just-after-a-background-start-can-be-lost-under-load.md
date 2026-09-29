@@ -7,12 +7,12 @@ times in a row on its own. The likeliest reading, not established, is a race: un
 session before its shell has started the command, and nothing re-delivers it. Noticed while gating other work; not
 root-caused.
 
-It recurred on 2026-09-28 in at least three full gate runs of the merged revision 4 build of `PD-ORCH-005` (R-064),
+It recurred on 2026-09-28 in at least three full gate runs of the merged revision 4 build of `PD-ORCH-005` (R-065),
 which changed nothing under `packages/agent-tools`, listed each time as a new failure against the baseline: "Sent
 SIGINT" was reported and the session list still showed it `▶ … running` twenty seconds later. The test passed alone
 and its file passed 33 of 33. Still not reproduced in isolation and not repaired.
 
-On 2026-09-29 it failed in the gate of the live-run branch (R-065), which also changes nothing under
+On 2026-09-29 it failed in the gate of the live-run branch (R-066), which also changes nothing under
 `packages/agent-tools`, and then once in three runs of its file alone — the first failure in isolation. The race
 reading was tested outside the product and did not hold: `bash -c 'sleep 30'` spawned detached, as `spawnChild` spawns
 a background session, and sent SIGINT to its process group at once, ended 200 times out of 200, and 200 of 200 again with

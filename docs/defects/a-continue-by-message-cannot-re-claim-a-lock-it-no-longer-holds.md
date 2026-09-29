@@ -7,7 +7,7 @@ opening is how `resume` claims a lock (`SessionWriter.open` → `claimLockReapin
 re-claims nothing, and the continuation runs and
 writes the session's rows with no lock of its own. That can happen when another process repaired the session: its
 `withWriter` opens a writer, then releases the lock. Nothing tests the branch. Found 2026-09-28 while building
-`PD-ORCH-005` clause 18 (R-064). `continueSession` was to mirror the branch for a session a crash left, and a probe that
+`PD-ORCH-005` clause 18 (R-065). `continueSession` was to mirror the branch for a session a crash left, and a probe that
 threw inside it was never reached by any crash-left path, so it was not mirrored. Not repaired.
 
 The same root cause — a continue in a process that already holds the live entry claims no lock — is seen from the run's
@@ -28,5 +28,5 @@ itself.
 - `packages/engine/src/session-writer.ts` — `SessionWriter.open` and `SessionWriter.create`, which claim a lock with a
   writer, and `claimLockReaping`, the claim with its one dead-local-holder reap.
 - `packages/engine/src/sessions.ts` — `lockForWrite`, the at-rest cancel's claim without a writer (`PD-ORCH-005`
-  clause 16, OQ-74), through `claimLockReaping`, given back after its write. The repair chooses whether the continues
+  clause 16, OQ-101), through `claimLockReaping`, given back after its write. The repair chooses whether the continues
   reuse it, call `claimLockReaping` and hold the lock for the run, or reopen a writer.

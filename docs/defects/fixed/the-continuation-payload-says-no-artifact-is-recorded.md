@@ -21,7 +21,7 @@ By `PD-ORCH-005`'s phase 6, beside PD-ORCH-004 revision 3. `buildContinuationPay
 artifact from the session's own store (`latestArtifactText`): the latest artifact nothing has superseded, with its
 title, kind, status and id, its summary and its key findings, cut to the requirement's 6,000 characters. A session with
 none says so ("Artifact: (none recorded in this session)"). Which artifact "the latest orchestrator artifact" means is
-read in OQ-72.
+read in OQ-99.
 
 Evidence: `session-resume.test.ts`, "REQ-SESSION-115's artifact is the latest one the session holds…". It covers the
 empty store, the latest record, a superseded record never chosen, and the 6,000-character budget.

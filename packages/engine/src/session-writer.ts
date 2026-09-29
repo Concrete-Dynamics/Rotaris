@@ -295,7 +295,7 @@ export function toTranscriptRow(r: TranscriptRowRecord): TranscriptRow {
 /**
  * REQ-SESSION-047/083/112: claim a session's lock, reaping it once when its holder is a process of this machine that no
  * longer exists (a pid that is no positive integer is never reaped). The one copy of the rule: `SessionWriter.open` claims
- * through it, and so does PD-ORCH-005 clause 16's cancel while the session rests (`Sessions`, OQ-74).
+ * through it, and so does PD-ORCH-005 clause 16's cancel while the session rests (`Sessions`, OQ-101).
  */
 export function claimLockReaping(dal: StoreDal, sessionId: SessionId, pid: number, host: MachineId, now: string, isProcessAlive: (pid: number) => boolean): ReturnType<StoreDal['claimLock']> {
   const claimed = dal.claimLock(sessionId, pid, host, now);

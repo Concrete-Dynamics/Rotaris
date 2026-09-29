@@ -440,7 +440,7 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
       expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'closed', outcome: 'cancelled' }]);
     });
 
-    it('clause 10 (OQ-69): the explicit cancel is a stop for the background sessions — it ends them and records it', async () => {
+    it('clause 10 (OQ-96): the explicit cancel is a stop for the background sessions — it ends them and records it', async () => {
       const { terminals, ended } = withTerminals();
       const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
       const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('never')], port, { terminals });

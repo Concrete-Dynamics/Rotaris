@@ -12,7 +12,7 @@ write it, and it does not move to the top of the session's listing. Noticed by p
 
 `REQ-LIBRARY-092` (every terminal child report is materialised as an artifact, and a re-materialisation of the same
 report updates in place): the fallback to the canonical name treats two children's reports as one. It also meets
-`REQ-SESSION-115`'s "latest orchestrator artifact" as read in OQ-72, which cannot see the later report as the latest.
+`REQ-SESSION-115`'s "latest orchestrator artifact" as read in OQ-99, which cannot see the later report as the latest.
 
 ## Relevant files
 

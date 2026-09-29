@@ -1112,7 +1112,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   const stripNarrow = density === 'narrow';
   // Memoised so the derivations below (REQ-CHAT-069's scope, PD-CHAT-005's depth) do not see a new array every render.
   const agents = useMemo(() => session?.agents ?? [], [session]);
-  // PD-ORCH-005 clauses 6, 13 and 16 (OQ-71, OQ-73, OQ-74): the session rests with an iteration open — paused, left
+  // PD-ORCH-005 clauses 6, 13 and 16 (OQ-98, OQ-100, OQ-101): the session rests with an iteration open — paused, left
   // `interrupted` by a crash, or in REQ-CHAT-008's recovery state, where the run-level agent presents `paused` as its
   // agents do. One predicate decides the composer's count, the run-level agent's `paused` and a paused child's Cancel,
   // so the tree, the count and the offer agree.
@@ -1212,7 +1212,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
    * PD-ORCH-005 clause 18: a session a crash left — `interrupted` after a repair, or persisted busy with no run behind it
    * (REQ-CHAT-008's recovery state) — offers the Continue action and "Continue without them" as a `paused` session does,
    * with the same count; either choice records the crash first (clause 8), in the engine. It draws no pause statement:
-   * it is not paused, and its run state says so (OQ-76).
+   * it is not paused, and its run state says so (OQ-103).
    */
   const crashLeft = session !== null && (session.executionStatus === 'interrupted' || (sessionBusy && needsRecovery));
   // PD-ORCH-005 clauses 6, 18 and 19: a session at rest states what its continue resumes — the open iteration's root and
@@ -1292,7 +1292,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
             <span className="agents__title">Agents</span>
             <span className="agents__count mono" data-testid="agents-count">{agents.length} agent{agents.length === 1 ? '' : 's'}</span>
             <div className="agents__spacer" />
-            {/* A paused agent is not live (PD-ORCH-005 clause 13, OQ-73): it offers no Steer, as the inspector offers none. */}
+            {/* A paused agent is not live (PD-ORCH-005 clause 13, OQ-100): it offers no Steer, as the inspector offers none. */}
             {selected && steerOffered(selected, runActive) && onSteer && (
               <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setSteering({ id: selected.id, name: selected.name })}>Steer {selected.name}</DesignButton>
             )}
@@ -1561,7 +1561,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
                 * tooltip. At full labels the paused strip scrolled at every density but narrow (found by phase 5's
                 * second review). PD-CHAT-001 revision 4 ("The paused continues"): the continue by message reads
                 * `Send`, the word of the send pill it stands in for. That revision prescribes the two continues "on a
-                * paused session" only; drawing them on a crash-left one too is OQ-76's reading of clause 18's "as a
+                * paused session" only; drawing them on a crash-left one too is OQ-103's reading of clause 18's "as a
                 * `paused` session does". */}
               <DesignButton type="button" className="btn btn-primary composer__continue" onClick={() => { void continueRun(); }} aria-label="Continue run" title="Continue run" aria-describedby={resumable ? 'composer-resume-count' : undefined}>Continue</DesignButton>
               <DesignButton type="submit" className="btn btn-secondary composer__continue" disabled={busy} aria-label="Continue with a message" title="Continue with a message" aria-describedby={resumable ? 'composer-resume-count' : undefined}>Send</DesignButton>

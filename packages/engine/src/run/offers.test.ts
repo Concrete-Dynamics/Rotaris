@@ -215,7 +215,7 @@ describe('PD-ORCH-004 revision 4: a later iteration\'s root is told the open off
     await sessions.running(sid)!;
     expect(listsHeldBy(sid, 2)).toHaveLength(1);
     restIn(sid, 2);
-    // Resumed with nothing new to tell, the root's record ends on its answer and it takes no step (OQ-70).
+    // Resumed with nothing new to tell, the root's record ends on its answer and it takes no step (OQ-97).
     expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
     await sessions.running(sid)!;
     expect(listsHeldBy(sid, 2)).toHaveLength(1);
@@ -275,7 +275,7 @@ describe('PD-ORCH-004 revision 4: a later iteration\'s root is told the open off
     expect(listsHeldBy(sid, 1)).toEqual([`${OFFERS_HEADER}\n- c1 (bg_00000d01)`]);
   });
 
-  it('offersHeldIn: an offer raised in the same millisecond a list was recorded counts as held by it, and one raised a millisecond later does not (OQ-80; found by the iteration lane review)', () => {
+  it('offersHeldIn: an offer raised in the same millisecond a list was recorded counts as held by it, and one raised a millisecond later does not (OQ-107; found by the iteration lane review)', () => {
     const sid = asSessionId('S-same-ms');
     const at = new Date(clock.instant()).toISOString();
     dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });

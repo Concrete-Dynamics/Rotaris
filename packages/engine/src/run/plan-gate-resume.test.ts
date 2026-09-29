@@ -84,7 +84,7 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
   }
 
   for (const route of ['a message', 'the Continue action'] as const) it(`resumed by ${route}, the iteration runs unheld, and the run holds before its first new iteration`, async () => {
-    // A root whose record ends on its own answer, resumed with nothing new said to it, takes no model step (OQ-70).
+    // A root whose record ends on its own answer, resumed with nothing new said to it, takes no model step (OQ-97).
     const { sessions, client, sid } = await restedWithPending(route === 'a message' ? [answer('resumed, done'), answer('Plan: do later.')] : [answer('Plan: do later.')]);
     expect((route === 'a message' ? sessions.prompt(sid, 'go on') : sessions.continueSession(sid, 'continue')).ok).toBe(true);
     const result = await sessions.running(sid)!;
@@ -183,15 +183,15 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
   });
 
   /**
-   * OQ-76 "Nothing open to resume" and OQ-77 "What a cancel leaves": the third route to a `paused` session whose last
+   * OQ-103 "Nothing open to resume" and OQ-104 "What a cancel leaves": the third route to a `paused` session whose last
    * request is finished. The resumed iteration closes the continue's message `complete` (PD-ORCH-005 clause 17), the
    * run holds (PD-ORCH-003 revision 2), and a plan Cancel — or a stop or the application's quit during that plan cycle
    * (clause 15) — leaves `paused` with nothing open. The Continue action then finds no unfinished task of the last
-   * request's text (OQ-75), so it appends the finished message again beside the pending work, and the next plan cycle
+   * request's text (OQ-102), so it appends the finished message again beside the pending work, and the next plan cycle
    * is asked to plan it as the latest request; approved, it is worked a second time. Pinned as built, so a ruling
    * either way turns it red.
    */
-  for (const route of ['a plan Cancel', 'a stop during the plan cycle', 'a quit during the plan cycle'] as const) it(`after the hold that follows a resumed iteration, ${route} and then the Continue action append the finished message again (OQ-76, OQ-77)`, async () => {
+  for (const route of ['a plan Cancel', 'a stop during the plan cycle', 'a quit during the plan cycle'] as const) it(`after the hold that follows a resumed iteration, ${route} and then the Continue action append the finished message again (OQ-103, OQ-104)`, async () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
     const planned = route === 'a plan Cancel' ? answer('Plan: do later.') : { parts: [{ hold }, ...answer('Plan: do later.').parts] };
@@ -234,15 +234,15 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
   });
 
   /**
-   * OQ-76 "Nothing open to resume", the message limit's route (found by the merged build's tenth review). The limit is
+   * OQ-103 "Nothing open to resume", the message limit's route (found by the merged build's tenth review). The limit is
    * checked as each iteration closes, before the stop conditions and the gate (REQ-ORCH-085/087), so a limit reached as
    * the resumed iteration closes the continue's message `complete` (PD-ORCH-005 clause 17) leaves `paused_message_limit`
    * with nothing open and the last user row finished. The resolution's 'continue' and 'double' (REQ-SESSION-110) then
-   * find no unfinished task of its text (OQ-75), append it again beside the pending work, and a new iteration re-works
+   * find no unfinished task of its text (OQ-102), append it again beside the pending work, and a new iteration re-works
    * it. The same holds after any iteration that finishes the request its run was launched with as the limit is reached,
    * with no resume and no directive, as at the base. Pinned as built, so a ruling either way turns it red.
    */
-  for (const action of ['continue', 'double'] as const) it(`the message-limit resolution's '${action}' after a limit reached as the resumed iteration closed appends the finished message again (OQ-76)`, async () => {
+  for (const action of ['continue', 'double'] as const) it(`the message-limit resolution's '${action}' after a limit reached as the resumed iteration closed appends the finished message again (OQ-103)`, async () => {
     const { sessions, runtime, sid } = await restedWithPending([answer('resumed, done'), answer('later, done'), answer('go on, again'), answer('spare')]);
     runtime.runStartMode = 'auto';
     runtime.messageLimit = 1;
@@ -255,14 +255,14 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
     expect(sessions.continueSession(sid, action).ok).toBe(true);
     expect((await sessions.running(sid)!).execution_status).toBe('paused_message_limit');
     expect(tasksOf(sid).map((t) => [t.text, t.state])).toEqual([['first', 'complete'], ['later', 'complete'], ['go on', 'complete'], ['go on', 'pending']]);
-    // The next resolution takes it up as it stands (OQ-75), and a new iteration works the message a second time.
+    // The next resolution takes it up as it stands (OQ-102), and a new iteration works the message a second time.
     expect(sessions.continueSession(sid, 'double').ok).toBe(true);
     await sessions.running(sid)!;
     expect(tasksOf(sid).map((t) => [t.text, t.state])).toEqual([['first', 'complete'], ['later', 'complete'], ['go on', 'complete'], ['go on', 'complete']]);
     expect(dal.iterationsOf(sid).map((r) => r.outcome)).toEqual(['succeeded', 'succeeded', 'succeeded']);
   });
 
-  it('the message-limit resolution after a limit reached as a fresh run\'s only iteration finished its prompt appends that prompt again (OQ-76; as at the base)', async () => {
+  it('the message-limit resolution after a limit reached as a fresh run\'s only iteration finished its prompt appends that prompt again (OQ-103; as at the base)', async () => {
     const { sessions, runtime } = sessionsWith([answer('go, done'), answer('go, again'), answer('spare')]);
     runtime.messageLimit = 1;
     const sid = (sessions.start(dal, 'C:/ws', 'go') as { value: SessionId }).value;
@@ -336,7 +336,7 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
   });
 
   /**
-   * OQ-77 "The handoff after the preamble is the continue's" (found by the merged build's tenth review). The plan cycle
+   * OQ-104 "The handoff after the preamble is the continue's" (found by the merged build's tenth review). The plan cycle
    * held after a resumed iteration is sent the launch content the continue built at the continue — this session was
    * paused (a rest, no crash), so that is before clause 17 appended the message's task and before the resumed iteration
    * ran — the behaviour
@@ -345,7 +345,7 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
    * while the preamble, read from the live todo, says that iteration closed and carried the message out. Pinned as built,
    * so a repair or a ruling either way turns it red.
    */
-  it('the plan cycle held after a resumed iteration is sent the handoff the continue built before that iteration ran (OQ-77)', async () => {
+  it('the plan cycle held after a resumed iteration is sent the handoff the continue built before that iteration ran (OQ-104)', async () => {
     const { sessions, client, sid } = await restedWithPending([answer('resumed, done'), answer('Plan: do later.')]);
     expect(sessions.prompt(sid, 'go on').ok).toBe(true);
     expect((await sessions.running(sid)!).execution_status).toBe('awaiting_plan_decision');

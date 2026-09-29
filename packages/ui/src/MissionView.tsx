@@ -26,12 +26,12 @@ export interface MissionViewProps {
   readonly sessionLabel: string | null;
   readonly runLevel: AgentRecord | null;
   /**
-   * PD-ORCH-005 clause 16 (OQ-74): the session rests with an iteration open (`runLevelResting`, asked by the caller, which
+   * PD-ORCH-005 clause 16 (OQ-101): the session rests with an iteration open (`runLevelResting`, asked by the caller, which
    * alone knows REQ-CHAT-008's recovery state) — when a `paused` child offers "Cancel selection".
    */
   readonly resting: boolean;
   /**
-   * REQ-CHAT-008's recovery state (PD-ORCH-005 clause 13, OQ-73): the persisted status reads busy but no run is under way
+   * REQ-CHAT-008's recovery state (PD-ORCH-005 clause 13, OQ-100): the persisted status reads busy but no run is under way
    * here, so the run is not active — no Pause and no live Cancel beside a run-level agent drawn `paused`, as the Workspace
    * reads `runActive`.
    */
@@ -56,8 +56,8 @@ export const STRATEGY_NOTE = 'A change takes effect on the next run.';
 
 /**
  * REQ-MONITOR-055/064: the Mission view's confirmation of one agent's cancel names it, its persona and what cascades. A
- * paused child is final and says so, and counts its paused descendants (PD-ORCH-005 clauses 3 and 16, OQ-74); a live
- * one counts the paused descendants its cancel also ends (clause 13, OQ-73).
+ * paused child is final and says so, and counts its paused descendants (PD-ORCH-005 clauses 3 and 16, OQ-101); a live
+ * one counts the paused descendants its cancel also ends (clause 13, OQ-100).
  */
 export function missionCancelBody(agent: Pick<AgentRecord, 'name' | 'persona' | 'presentationState'>, cascade: readonly Pick<AgentRecord, 'presentationState'>[]): string {
   const paused = agent.presentationState === 'paused';
@@ -68,7 +68,7 @@ export function missionCancelBody(agent: Pick<AgentRecord, 'name' | 'persona' | 
  * REQ-MONITOR-055/126/128: what the Mission view's confirmation states for the agent it cancels — the run's own final
  * cancel, or one agent named with its persona and one line per agent cancelled with it. The title and both buttons are
  * `cancelConfirmation`'s, so the dismissal reads as every other surface's — "Keep it paused" for a paused child
- * (PD-ORCH-005 clause 16, OQ-74), "Keep running" otherwise.
+ * (PD-ORCH-005 clause 16, OQ-101), "Keep running" otherwise.
  */
 export function missionConfirmation(agent: AgentRecord, cascade: readonly AgentRecord[], agents: readonly AgentRecord[]): { title: string; body: string; lines: string[]; confirmLabel: string; cancelLabel: string } {
   const shared = cancelConfirmation(agent, agents);
@@ -78,7 +78,7 @@ export function missionConfirmation(agent: AgentRecord, cascade: readonly AgentR
 export function MissionView(props: MissionViewProps) {
   const { session, sessionLabel, runLevel, resting, recovery, selectedAgentId, onSelect, nowIso, strategy, maxDepth, onSetStrategy, onSetDepth, onPause, onCancelAgent, onCancelRun, onOpen, onPopOut, refresh = null } = props;
   const agents = session?.agents ?? [];
-  // PD-ORCH-005 clause 13 (OQ-73): a busy status in REQ-CHAT-008's recovery state is no active run (the Workspace's reading).
+  // PD-ORCH-005 clause 13 (OQ-100): a busy status in REQ-CHAT-008's recovery state is no active run (the Workspace's reading).
   const runActive = session !== null && isBusy(session.executionStatus) && !recovery;
   const pause = pauseAvailability(selectedAgentId, runActive, session?.executionStatus ?? null);
   const [message, setMessage] = useState<string | null>(null);
@@ -86,9 +86,9 @@ export function MissionView(props: MissionViewProps) {
   const [confirming, setConfirming] = useState<{ agent: AgentRecord; cascade: AgentRecord[] } | null>(null);
   const [pausePending, setPausePending] = useState(false);
   const selectedAgent = selectedAgentId === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgentId) ?? null;
-  // PD-ORCH-005 clause 16: a paused child is cancellable while its session rests (OQ-74); the run and a live agent while
+  // PD-ORCH-005 clause 16: a paused child is cancellable while its session rests (OQ-101); the run and a live agent while
   // the run is active — never the run-level agent presenting `paused`, which in REQ-CHAT-008's recovery state is a run the
-  // persisted status still calls busy (clause 13, OQ-73).
+  // persisted status still calls busy (clause 13, OQ-100).
   const cancelable = cancelOffered(selectedAgent, runActive, resting);
   const requestPause = async () => {
     // REQ-MONITOR-276: refused client-side with the explanation; the control is never sent.
@@ -105,7 +105,7 @@ export function MissionView(props: MissionViewProps) {
     setError(r.ok ? null : r.reason);
   };
   // REQ-CHAT-008: a busy status with no run here reads as the recovery state, as the Workspace's run header reads it, never
-  // as running beside a run-level agent drawn `paused` (PD-ORCH-005 clause 13, OQ-73).
+  // as running beside a run-level agent drawn `paused` (PD-ORCH-005 clause 13, OQ-100).
   const statusLabel = session === null ? null : recovery && isBusy(session.executionStatus) ? RUN_STATE_LABELS.recovery : STATUS_LABELS[presentationStatus(session.executionStatus)];
   const subtitle = session ? `delegation tree · ${sessionLabel ?? session.id.slice(0, 8)} · ${statusLabel}` : 'No session is active.';
   return (

@@ -6,7 +6,7 @@ is not built in this version." The plan gate has been built since ADR-0062 (a he
 does nothing. It also says nothing of the release: under `PD-ORCH-003` a session that holds an approved release is not
 held whatever the mode says, and a surface that offers the mode for such a session is to say so.
 
-Noticed 2026-09-28 by the read-only scout of `PD-ORCH-003` revision 2 under R-064, and confirmed in the source while
+Noticed 2026-09-28 by the read-only scout of `PD-ORCH-003` revision 2 under R-065, and confirmed in the source while
 building it; not repaired there, since the lane that built it draws no surface. Not driven in the built app.
 
 ## Specs

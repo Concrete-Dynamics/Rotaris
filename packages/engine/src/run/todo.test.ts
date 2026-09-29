@@ -71,7 +71,7 @@ describe('Todo — a task held by an open iteration (PD-ORCH-005 clause 17)', ()
     expect(t.selectNext()!.id).toBe('m');
   });
 
-  it('holdsUnfinished: a task carrying the text is pending, or in progress and held by the open iteration (OQ-75)', () => {
+  it('holdsUnfinished: a task carrying the text is pending, or in progress and held by the open iteration (OQ-102)', () => {
     const t = Todo.fresh('a', 'first');
     expect(t.holdsUnfinished('first', null)).toBe(true);
     expect(t.holdsUnfinished('other', null)).toBe(false);

@@ -10,7 +10,7 @@ interruption reads `stop`, and it ends the background sessions as a stop. A sess
 same quit, rests by `quit`. The doc comment on `cancelAll` also says every waiter "then finishes `cancelled`". That has
 been false since clause 9: a rest withdraws a waiting approval, it does not cancel it.
 
-Found 2026-09-28 by the audit of `PD-ORCH-005` clause 15 while building revision 4 (R-064).
+Found 2026-09-28 by the audit of `PD-ORCH-005` clause 15 while building revision 4 (R-065).
 
 ## Specs
 
@@ -28,7 +28,7 @@ approval at a rest; it does not cancel it.
 
 ## Repaired — 2026-09-28
 
-By the audit of `PD-ORCH-005` clause 15 (R-064). Main's board coordinator no longer sends the stop control's `cancel`
+By the audit of `PD-ORCH-005` clause 15 (R-065). Main's board coordinator no longer sends the stop control's `cancel`
 at the last window's close. It sends the run host's `session.control {op: 'announceShutdown'}` (REQ-MONITOR-131), the
 same request the run host's `shutdown` makes, so the first reason each board run receives is `application_shutdown`,
 and it comes to rest by `quit`. The method is renamed `quitAll`, and its doc comment says that a rest withdraws what

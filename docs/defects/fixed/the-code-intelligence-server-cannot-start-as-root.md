@@ -9,7 +9,7 @@ start without `--no-sandbox` and the child dies by SIGTRAP before the sentinel r
 code-intelligence tools. The application itself starts as root only because its launchers pass the switch; the children
 it spawns did not.
 
-Found 2026-09-29 by the first live run of the merged revision 4 build of `PD-ORCH-005` (R-064, R-065), in every
+Found 2026-09-29 by the first live run of the merged revision 4 build of `PD-ORCH-005` (R-065, R-066), in every
 scenario's issues.
 
 ## Specs
@@ -24,7 +24,7 @@ the only trace.
 
 ## Repaired — 2026-09-29
 
-With the owner's permission (R-065): run as root, the launch puts `--no-sandbox` between the token and `--`, and the
+With the owner's permission (R-066): run as root, the launch puts `--no-sandbox` between the token and `--`, and the
 sentinel drops every switch before `--`, so the runtime sees its own arguments only. Every other launch is unchanged.
 The child opens no window. Tests: `code-intelligence-launch.test.ts` and `sentinel.test.ts`, each red with its limb
 reverted. In the built app, as root: the child's command line without the switch dies by SIGTRAP, and with it reaches

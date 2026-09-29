@@ -80,7 +80,7 @@ one of exactly three answers — approve, revise, cancel. It withholds capabilit
 the run from starting, and approval installs the run's execution grants for the remainder of that run. A
 continue that resumes an iteration a rest left open, or a crash left open once the crash is recorded, runs it
 unheld, since it is work already under way; a gate that would hold that run holds before its first new
-iteration. — `REQ-ORCH-153`, `REQ-ORCH-154`, `PD-ORCH-003` (revision 2), `PD-ORCH-005` clause 18, OQ-77
+iteration. — `REQ-ORCH-153`, `REQ-ORCH-154`, `PD-ORCH-003` (revision 2), `PD-ORCH-005` clause 18, OQ-104
 _Avoid_: plan mode dialog, plan approval prompt
 
 **Planning grants**:
@@ -196,9 +196,9 @@ The run's work plan: phases holding tasks, created at run start with a single ph
 appended to on resume. A continue that resumes an open iteration appends its message as a task that iteration
 holds beside its own, closing with it — done when it succeeds, pending on any other close and then taken up by the
 next iteration before any other pending task, which is sent the message as its task (`PD-ORCH-005` clause 17). A
-continue that states no new request appends none while the last request is still to be worked — OQ-75's reading and
+continue that states no new request appends none while the last request is still to be worked — OQ-102's reading and
 the repair of `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`, which no directive
-governs. — `REQ-ORCH-004`, `PD-ORCH-005` clause 17, OQ-75
+governs. — `REQ-ORCH-004`, `PD-ORCH-005` clause 17, OQ-102
 _Avoid_: backlog (that is a delivery state on the requirements board), checklist
 
 ### Finishing work
@@ -273,12 +273,12 @@ crash, with its **interruption** recorded and its iteration left open. It is lef
 for the state the agent **resumes into**: where it waited if it had not started, `running` from its recorded
 conversation if it had, `summarizing` if it was writing its report. It presents as `paused`, a presentation state of its
 own, keeps its last activity, and is not settled for display with its session (`PD-ORCH-005` clause 13, revision 4); an
-agent a crash left unfinished presents so before the crash is recorded (OQ-73, a departure from clause 13's last
+agent a crash left unfinished presents so before the crash is recorded (OQ-100, a departure from clause 13's last
 sentence). One `paused` child may be cancelled while its session rests: it and its `paused` descendants end `cancelled`,
 and the rest resume (clause 16); a crash-left one is cancelled from the state it is stored in, the crash left for the
-next repair or continue to record (clauses 3 and 8, OQ-74); the cancel is made under the session's lock. A session a
-store failure left busy is not one a crash left (OQ-76). Any cancel ends every unfinished descendant, live or
-`paused`, and its confirmation names each one (OQ-73, OQ-74). Not a terminal state and not an outcome: a `paused`
+next repair or continue to record (clauses 3 and 8, OQ-101); the cancel is made under the session's lock. A session a
+store failure left busy is not one a crash left (OQ-103). Any cancel ends every unfinished descendant, live or
+`paused`, and its confirmation names each one (OQ-100, OQ-101). Not a terminal state and not an outcome: a `paused`
 agent has no report until it ends. — `PD-ORCH-005`, `REQ-MONITOR-300`
 _Avoid_: suspended, frozen, held (the **plan gate** and the **message-limit pause** hold a run; they leave no agent paused)
 
@@ -286,9 +286,9 @@ _Avoid_: suspended, frozen, held (the **plan gate** and the **message-limit paus
 What left an agent `paused` — exactly one of `pause`, `stop`, `quit` or `crash` — recorded on the agent and on its open
 iteration. A crash is recorded when the session is next repaired or continued, since nothing runs to record it at the
 time; the user's cancel of one child while the session rests records nothing of it but the cancelled agents' own calls
-the crash cut off, answered as interrupted, which no later record reaches (OQ-74). An explicit cancel is not an
+the crash cut off, answered as interrupted, which no later record reaches (OQ-101). An explicit cancel is not an
 interruption: it ends its agents `cancelled`, and those are never resumed — once it is carried out; one the host died
-before carrying out leaves the store as any crash does, and is taken as crash-left (OQ-76). — `PD-ORCH-005`
+before carrying out leaves the store as any crash does, and is taken as crash-left (OQ-103). — `PD-ORCH-005`
 _Avoid_: stop reason (that is the run's, `REQ-MONITOR-301`), cancellation
 
 **Comes to rest** (a run):
@@ -301,7 +301,7 @@ _Avoid_: suspend, park (a run **parks** at the plan gate, which is a durable hol
 Taken back because the run came to rest while a call waited on a person — or a stop or a quit landed during a plan
 cycle, whose agents end rather than rest: it leaves the pending list, the timeline records which interruption withdrew
 it, and the call is recorded as interrupted and never run. Never a denial, and no answer is replayed later. —
-`PD-ORCH-005` clauses 9 and 15, `PD-CHAT-002` revision 2, narrowing `REQ-TOOLS-054` and `REQ-SESSION-025` (OQ-81)
+`PD-ORCH-005` clauses 9 and 15, `PD-CHAT-002` revision 2, narrowing `REQ-TOOLS-054` and `REQ-SESSION-025` (OQ-108)
 _Avoid_: denied, cancelled (REQ-TOOLS-052's cancellation is a denial)
 
 **Resume** (an iteration):
@@ -315,7 +315,7 @@ _Avoid_: restart, replay, rerun
 **Explicit cancel**:
 REQ-MONITOR-126's confirmed control, which cancels the run by its reserved agent id: final — every agent it ends is
 `cancelled` and never resumed. Every confirmed "Cancel the run?" is it, whichever surface asks — except a persona
-window's on the run's own instance while the session rests, which is refused and does nothing (OQ-74). Distinct from
+window's on the run's own instance while the session rests, which is refused and does nothing (OQ-101). Distinct from
 the stop control, which a second activation forces and which stays a stop. — `PD-ORCH-005` clauses 3 and 15,
 `REQ-MONITOR-009`, `REQ-MONITOR-126`
 _Avoid_: stop (the stop control comes to rest)

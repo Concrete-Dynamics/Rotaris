@@ -8,8 +8,8 @@ claims it either. So every run after the first one in a process runs with no loc
 same workspace is not stopped from loading and continuing the session at the same time, because nothing in the app
 takes a single-instance lock. Two runs then write one session's rows.
 
-Noticed while repairing the at-rest cancel of `PD-ORCH-005` clause 16 (R-064, 2026-09-28). That cancel now takes the
-lock for its write and gives it back (`lockForWrite`, OQ-74). The continue paths are not repaired.
+Noticed while repairing the at-rest cancel of `PD-ORCH-005` clause 16 (R-065, 2026-09-28). That cancel now takes the
+lock for its write and gives it back (`lockForWrite`, OQ-101). The continue paths are not repaired.
 
 The same root cause is seen from `prompt`'s re-claim branch in
 [`a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`](a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md).

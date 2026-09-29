@@ -1171,7 +1171,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(moves.slice(moves.lastIndexOf('paused') + 1)).toEqual(['running', 'summarizing', 'succeeded']);
     });
 
-    it('clause 4 (OQ-70): a root that had answered and was waiting resumes into waiting, and its next message is its child\'s report — not its launch prompt', async () => {
+    it('clause 4 (OQ-97): a root that had answered and was waiting resumes into waiting, and its next message is its child\'s report — not its launch prompt', async () => {
       const g = gate();
       const delegate = toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]);
       const { sessions, seen, client } = scriptedChild([() => ({ parts: [{ hold: g.hold }, ...look().parts] }), () => answer('Finished.')], { root: (turn) => (turn === 1 ? delegate : answer(turn === 2 ? 'Delegated; waiting.' : 'Read the report.')) });
@@ -1353,7 +1353,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       await sessions.running(sid)!;
     });
 
-    it('PD-TOOLS-006 revision 2 (OQ-70): resumed children re-claim in the order they were first accepted, so the child accepted first still holds an overlap', async () => {
+    it('PD-TOOLS-006 revision 2 (OQ-97): resumed children re-claim in the order they were first accepted, so the child accepted first still holds an overlap', async () => {
       const first = gate();
       const second = gate();
       const steps = new Map<string, number>();
@@ -1663,7 +1663,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       await sessions.running(sid)!;
     });
 
-    it('OQ-69 (found by phase 3\'s second review): a child whose execution raises while the run comes to rest is left paused, as the root is', async () => {
+    it('OQ-96 (found by phase 3\'s second review): a child whose execution raises while the run comes to rest is left paused, as the root is', async () => {
       let raise!: () => void;
       const raised = new Promise<void>((r) => { raise = r; });
       const { sessions } = scriptedChild([() => toolCalls([{ callId: 'b1', name: 'boom', args: {} }], 'Trying.')], { tool: (name) => (name === 'boom' ? raised.then((): PortToolResult => { throw new Error('the tool host went away'); }) : undefined) });
@@ -1893,7 +1893,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     });
   });
 
-  describe('PD-ORCH-005 clause 16 (revision 4, OQ-74): one paused child is cancelled while its session rests', () => {
+  describe('PD-ORCH-005 clause 16 (revision 4, OQ-101): one paused child is cancelled while its session rests', () => {
     const userText = (req: ModelRequest): string => req.messages.filter((m) => m.role === 'user').map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n');
     const settle = async (until: () => boolean) => { for (let i = 0; i < 400 && !until(); i += 1) await new Promise((r) => setTimeout(r, 5)); };
     const byName = (sid: SessionId, name: string): ChildRow => children(sid).find((c) => c.canonical_name === name)!;
@@ -1978,7 +1978,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       // Nothing is left open, so nothing is cancellable at rest any more.
       expect(cancel(sessions, sid, byName(sid, 'two').task_id)).toEqual({ ok: false });
     });
-    describe('PD-ORCH-005 clause 16 (OQ-74): the cancel is made under the session\'s lock', () => {
+    describe('PD-ORCH-005 clause 16 (OQ-101): the cancel is made under the session\'s lock', () => {
       it('a session this process paused holds no lock: the cancel takes it for the write and gives it back; another live process holding it refuses the cancel, writing nothing', async () => {
         const { sessions, sid } = await restedFamily();
         expect(dal.getLock(sid)).toBeUndefined();
@@ -2072,7 +2072,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
   });
 });
 
-describe('PD-ORCH-005 clause 16 (OQ-74): the user\'s cancel writes one entry for both cancels, the at-rest one saying the session rested', () => {
+describe('PD-ORCH-005 clause 16 (OQ-101): the user\'s cancel writes one entry for both cancels, the at-rest one saying the session rested', () => {
   const t = { task_id: 'bg_00000002', canonical_name: 'grand', persona: 'coding-agent' };
   const chosen = { task_id: 'bg_00000001', canonical_name: 'one' };
   it('the live cancel\'s entry names the child and what it was cancelled with, and nothing more', () => {

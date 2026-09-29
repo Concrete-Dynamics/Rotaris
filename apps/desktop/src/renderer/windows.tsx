@@ -101,7 +101,7 @@ export function PersonaApp({ persona, initialSelect }: { persona: string; initia
   const snapshot = useConfigSnapshot('persona');
   // REQ-SHELL-076: one rebuild per 120 ms interval; a hidden window rebuilds nothing. What the replica applied between the
   // first render's read and this subscription is delivered as it is taken (`followCoalesced`): a session at rest
-  // publishes nothing more, so a missed transcript would stay missing (PD-ORCH-005 clause 13, OQ-73).
+  // publishes nothing more, so a missed transcript would stay missing (PD-ORCH-005 clause 13, OQ-100).
   useEffect(() => followCoalesced({
     subscribe: (listener) => replica.subscribe(listener),
     read: () => ({ session: replica.getState().session, rows: replica.getState().rows }),
@@ -133,7 +133,7 @@ export function PersonaApp({ persona, initialSelect }: { persona: string; initia
     return () => { document.removeEventListener('visibilitychange', onVisibility); delete (window as unknown as { __rotarisPersonaSelect?: unknown }).__rotarisPersonaSelect; };
   }, []);
   const entry = useMemo(() => entryOf(snapshot, state.rows, state.session?.agents ?? []), [snapshot, state]);
-  // PD-ORCH-005 clause 13 (OQ-73): in REQ-CHAT-008's recovery state the run-level agent presents `paused`, as in the main
+  // PD-ORCH-005 clause 13 (OQ-100): in REQ-CHAT-008's recovery state the run-level agent presents `paused`, as in the main
   // window — from `restingView`, the one call the Workspace and the Mission root make too.
   const needsRecovery = useNeedsRecovery(state.session?.id ?? null, state.session?.executionStatus ?? null);
   const { runLevel } = useMemo(() => restingView(state.session, entry, needsRecovery), [state.session, entry, needsRecovery]);

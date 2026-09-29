@@ -259,7 +259,7 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(dal.iterationsOf(sid).map((r) => tasksOf(sid).find((t) => t.id === r.todo_task_id)?.text)).toEqual(['first', 'LOST', 'next']);
   });
 
-  it('the Continue action after a message was left pending appends it no second time: it is worked once, taken up first (OQ-75)', async () => {
+  it('the Continue action after a message was left pending appends it no second time: it is worked once, taken up first (OQ-102)', async () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
     const { sessions, sid } = await restedSession([{ parts: [{ hold }, ...answer('second, answered').parts] }, answer('second, done'), answer('first, done again')]);
@@ -292,7 +292,7 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'cancelled'], [2, 'succeeded']]);
   });
 
-  it.each(['continue', 'double'] as const)('the message-limit resolution \'%s\' restates the last request too, so a request a pause put back is worked once (OQ-75, found by the iteration lane review)', async (action) => {
+  it.each(['continue', 'double'] as const)('the message-limit resolution \'%s\' restates the last request too, so a request a pause put back is worked once (OQ-102, found by the iteration lane review)', async (action) => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
     const h = sessionsWith([{ parts: [{ hold }, ...answer('first, answered').parts] }, answer('first, done'), answer('first, done again')]);
@@ -398,7 +398,7 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'succeeded'], [2, 'succeeded']]);
   });
 
-  it('a continue by message always appends its task, even when its text matches a request still pending: the user stated it again, so it is worked again (OQ-75, found by the iteration lane review)', async () => {
+  it('a continue by message always appends its task, even when its text matches a request still pending: the user stated it again, so it is worked again (OQ-102, found by the iteration lane review)', async () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
     const h = sessionsWith([{ parts: [{ hold }, ...answer('first, answered').parts] }, answer('first, done'), answer('first, done again')]);

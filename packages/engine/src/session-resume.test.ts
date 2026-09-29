@@ -193,7 +193,7 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     expect([...told].sort()).toEqual(['bg_0000aa01', 'bg_0000aa02', 'bg_0000aa03', 'bg_0000aa06']);
   });
 
-  it('PD-ORCH-004 revision 3: the handoff states every continuation offer no child has taken up, so a later run\'s root learns of it (OQ-72)', () => {
+  it('PD-ORCH-004 revision 3: the handoff states every continuation offer no child has taken up, so a later run\'s root learns of it (OQ-99)', () => {
     const sid = asSessionId('S-offers');
     const at = new Date(clock.instant()).toISOString();
     dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });
@@ -260,7 +260,7 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
 /**
  * PD-ORCH-005 clause 20 (revision 4): the handoff's artifact is the latest one the iteration's root published that
  * nothing supersedes and, when the root published none, the latest of any kind that nothing supersedes. The iteration is
- * the session's most recent recorded one (OQ-79), and its root is known by the task id its publishes carry.
+ * the session's most recent recorded one (OQ-106), and its root is known by the task id its publishes carry.
  */
 describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', () => {
   let dir: string;
@@ -315,7 +315,7 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
     expect(handoffArtifact(sid)).toBe('a0000002');
   });
 
-  it('the root is the most recent recorded iteration\'s: an earlier iteration\'s root publish counts only as "of any kind" (OQ-79)', () => {
+  it('the root is the most recent recorded iteration\'s: an earlier iteration\'s root publish counts only as "of any kind" (OQ-106)', () => {
     const sid = asSessionId('S-root-iterations');
     seed(sid);
     iteration(sid, 1, 'bg_root0001');
@@ -333,7 +333,7 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
     expect(handoffArtifact(sid)).toBe('a0000005');
   });
 
-  it('a plan cycle that ran after the latest iteration is what the new work follows: an earlier iteration\'s root document never outranks what the plan cycle produced (OQ-79)', () => {
+  it('a plan cycle that ran after the latest iteration is what the new work follows: an earlier iteration\'s root document never outranks what the plan cycle produced (OQ-106)', () => {
     const sid = asSessionId('S-root-plan-cycle');
     seed(sid);
     iteration(sid, 1, 'bg_root0001', '2026-09-27T00:00:00.000Z');
@@ -354,7 +354,7 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
     expect(handoffArtifact(sid)).toBe('a0000004');
   });
 
-  it('the plan cycle PD-ORCH-003 revision 2 holds after a resumed iteration is taken the same way: the resumed root\'s document counts only as "of any kind" (OQ-79)', () => {
+  it('the plan cycle PD-ORCH-003 revision 2 holds after a resumed iteration is taken the same way: the resumed root\'s document counts only as "of any kind" (OQ-106)', () => {
     const sid = asSessionId('S-root-resumed-hold');
     seed(sid);
     // Iteration 1 opens, its root publishes, a pause leaves it open; a continue resumes it (opened_at is never rewritten),

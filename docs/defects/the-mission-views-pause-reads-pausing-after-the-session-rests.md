@@ -8,7 +8,7 @@ revision 4 build repaired
 ([`fixed/the-pause-control-stays-disabled-after-the-first-pause.md`](fixed/the-pause-control-stays-disabled-after-the-first-pause.md)),
 which scoped the composer's mark to the run that accepted the pause (`pausePendingAfter`) and left this one as it was.
 
-Found 2026-09-28 by the built-app drive of the merged revision 4 build of `PD-ORCH-005` (R-064): with the run row
+Found 2026-09-28 by the built-app drive of the merged revision 4 build of `PD-ORCH-005` (R-065): with the run row
 selected, press Pause, stay on the view, wait for `paused`; `[data-testid=mission-pause]` reads `Pausing…`.
 
 ## Specs

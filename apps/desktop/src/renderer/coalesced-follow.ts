@@ -5,7 +5,7 @@
  * A session at rest (REQ-CHAT-008's recovery state, a paused session) publishes nothing more, so the window would keep
  * what its first render read, for example the session without its transcript. That is why the value is delivered once
  * as the subscription is taken. A persona window in the recovery state then shows the run-level agent's last activity,
- * which PD-ORCH-005 clause 13 keeps (OQ-73).
+ * which PD-ORCH-005 clause 13 keeps (OQ-100).
  */
 export interface CoalescedFollow<T> {
   readonly subscribe: (listener: () => void) => () => void;

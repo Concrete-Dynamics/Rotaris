@@ -189,7 +189,7 @@ export function scopedRows(rows: readonly TranscriptRow[], agent: AgentRecord | 
 
 /**
  * REQ-CHAT-069's state and elapsed time for "This task" (REQ-MONITOR-111). A `paused` agent — and only a `paused` one —
- * reads its state alone (PD-ORCH-005 clause 13, OQ-73): it is neither live nor ended, and in REQ-CHAT-008's recovery
+ * reads its state alone (PD-ORCH-005 clause 13, OQ-100): it is neither live nor ended, and in REQ-CHAT-008's recovery
  * state, whose busy status keeps the clock ticking, its figure would count up while nothing runs. Every other agent,
  * a waiting or queued one included, keeps its time as REQ-CHAT-069 asks.
  */

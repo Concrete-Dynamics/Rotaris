@@ -9,7 +9,7 @@ Established by reading the code; not driven.
 
 `PD-ORCH-005` clause 16 adds a route to it. A child cancelled while its session rests runs no cascade, so a paused
 agent whose `depends_on` names it is resumed by the Continue action and blocked by the resumed run's first pass, with
-no report (OQ-74, "A dependent of the cancelled child"). Found 2026-09-28 by the merged revision 4 build's ninth review
+no report (OQ-101, "A dependent of the cancelled child"). Found 2026-09-28 by the merged revision 4 build's ninth review
 round, driven in a scratch test over `crash.test.ts`'s harness.
 
 ## Specs

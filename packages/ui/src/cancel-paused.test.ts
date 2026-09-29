@@ -14,7 +14,7 @@ import type * as HostModule from './terminal/host.js';
 vi.mock('./terminal/host.js', async (importOriginal) => ({ ...(await importOriginal<typeof HostModule>()), TerminalToolbarControl: () => null }));
 
 /**
- * PD-ORCH-005 clause 16 (revision 4, OQ-74): "A `paused` child SHALL offer Cancel wherever a live agent offers it." What a
+ * PD-ORCH-005 clause 16 (revision 4, OQ-101): "A `paused` child SHALL offer Cancel wherever a live agent offers it." What a
  * unit test can prove is the markup — which Cancel is enabled for which agent of a resting session; the click, the
  * confirmation and the engine's answer are driven against the built product (`pnpm app:drive`), since vitest has no DOM.
  */
@@ -44,7 +44,7 @@ const mission = (selected: string, over: { resting?: boolean; recovery?: boolean
 /** The attributes of the one button a test id names. */
 const button = (html: string, testId: string) => html.match(new RegExp(`<button[^>]*data-testid="${testId}"[^>]*>`))?.[0] ?? '';
 
-describe('PD-ORCH-005 clause 16 (revision 4, OQ-74): a paused child offers Cancel wherever a live agent offers it', () => {
+describe('PD-ORCH-005 clause 16 (revision 4, OQ-101): a paused child offers Cancel wherever a live agent offers it', () => {
   it('the inspector enables Cancel for a paused child of a resting session and counts its paused descendant; a finished one stays disabled', () => {
     const html = inspector(paused.id);
     expect(button(html, 'inspector-cancel')).toMatch(/^<button/);
@@ -63,7 +63,7 @@ describe('PD-ORCH-005 clause 16 (revision 4, OQ-74): a paused child offers Cance
   });
 });
 
-describe('PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-73/OQ-74): the Mission view and the inspector offer a paused child\'s Cancel only while its session rests', () => {
+describe('PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-100/OQ-101): the Mission view and the inspector offer a paused child\'s Cancel only while its session rests', () => {
   /** The run-level agent as `runLevelAgent` presents it while the session rests (clause 13). */
   const restingRun = agent({ id: RUN_AGENT_ID, name: 'orchestrator', persona: 'orchestrator', parentId: '', depth: 0, interruption: null });
   it('in REQ-CHAT-008\'s recovery state the persisted status reads busy, yet the resting run-level agent offers no "Cancel selection" — the engine would refuse it', () => {
@@ -128,7 +128,7 @@ describe('PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-73/OQ-74): the Mission v
   });
 });
 
-describe('PD-ORCH-005 clause 13 (revision 4, OQ-73): a live agent\'s cancel names the paused descendants it also ends', () => {
+describe('PD-ORCH-005 clause 13 (revision 4, OQ-100): a live agent\'s cancel names the paused descendants it also ends', () => {
   it('in a `pausing` run, the inspector\'s note for a live parent counts its child already paused', () => {
     const live = agent({ state: 'running', presentationState: 'running', live: true, interruption: null });
     const pausing = session({ executionStatus: 'pausing', agents: [live, grand] });
@@ -140,11 +140,11 @@ describe('PD-ORCH-005 clause 13 (revision 4, OQ-73): a live agent\'s cancel name
 });
 
 /**
- * PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-73/OQ-74) on the Workspace, the main surface: what connects the helpers
+ * PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-100/OQ-101) on the Workspace, the main surface: what connects the helpers
  * pinned above to it — the agents header's Cancel, the `resting` its inspector is handed, and the REQ-CHAT-008 recovery
  * fact the run-level agent is drawn from (`restingView`, which the Mission root in the desktop renderer calls too).
  */
-describe('PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-73/OQ-74): the Workspace offers a paused child\'s Cancel and draws the resting root `paused`', () => {
+describe('PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-100/OQ-101): the Workspace offers a paused child\'s Cancel and draws the resting root `paused`', () => {
   const entry = { persona: 'orchestrator', model: 'm', reasoning: 'medium', tools: [] };
   const workspace = (selected: string, s: SessionRecord, needsRecovery = false) => {
     // A static render reads the store's initial state (zustand's server snapshot), so the selection is made there.

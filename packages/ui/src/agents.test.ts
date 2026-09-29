@@ -81,7 +81,7 @@ describe('agents — chips, enablement, cascade, pause (REQ-MONITOR-060/062/063/
     expect(inspectorEnablement('done')).toEqual({ steer: false, cancel: false, popOut: true });
     expect(inspectorEnablement(null)).toEqual({ steer: false, cancel: false, popOut: false });
   });
-  it('the cascade reaches unfinished descendants only, never a settled one, and the run cascades to every unfinished agent (its reach to a paused one, OQ-73, is pinned below)', () => {
+  it('the cascade reaches unfinished descendants only, never a settled one, and the run cascades to every unfinished agent (its reach to a paused one, OQ-100, is pinned below)', () => {
     const a = agent({ id: 'a', name: 'a', parentId: 'root:1' });
     const b = agent({ id: 'b', name: 'b', parentId: 'a', presentationState: 'queued', state: 'queued', live: false });
     const c = agent({ id: 'c', name: 'c', parentId: 'b', presentationState: 'done', state: 'succeeded', live: false });
@@ -153,7 +153,7 @@ describe('REQ-MONITOR-126 / REQ-MONITOR-128: what confirming a cancel states (PD
   });
 });
 
-describe('agents — PD-ORCH-005 clause 13 (revision 4): a paused agent presents as paused (OQ-73)', () => {
+describe('agents — PD-ORCH-005 clause 13 (revision 4): a paused agent presents as paused (OQ-100)', () => {
   const entry = { persona: 'orchestrator', model: 'm', reasoning: 'medium', tools: [] };
   const resumable = { iteration: 1, agents: 2 };
   it('the run-level agent of a session resting with an iteration open presents `paused`, not live and not ended — the root the Continue action counts', () => {
@@ -175,7 +175,7 @@ describe('agents — PD-ORCH-005 clause 13 (revision 4): a paused agent presents
   });
 });
 
-describe('agents — PD-ORCH-005 clause 16 (revision 4): one paused child is cancellable while its session rests (OQ-74)', () => {
+describe('agents — PD-ORCH-005 clause 16 (revision 4): one paused child is cancellable while its session rests (OQ-101)', () => {
   const one = agent({ id: 'one', name: 'one', parentId: 'root', state: 'paused', presentationState: 'paused', live: false });
   const done = agent({ id: 'done', name: 'done', parentId: 'one', state: 'succeeded', presentationState: 'done', live: false });
   const grand = agent({ id: 'grand', name: 'grand', parentId: 'done', state: 'paused', presentationState: 'paused', live: false });
@@ -212,7 +212,7 @@ describe('agents — PD-ORCH-005 clause 16 (revision 4): one paused child is can
   });
 });
 
-describe('agents — PD-ORCH-005 clause 13 (revision 4): a live agent\'s cancel still ends its paused descendants, and says so (OQ-73)', () => {
+describe('agents — PD-ORCH-005 clause 13 (revision 4): a live agent\'s cancel still ends its paused descendants, and says so (OQ-100)', () => {
   const one = agent({ id: 'one', name: 'one', parentId: 'root:1' });
   const grand = agent({ id: 'grand', name: 'grand', parentId: 'one', state: 'paused', presentationState: 'paused', live: false });
   const kid = agent({ id: 'kid', name: 'kid', parentId: 'one', presentationState: 'queued', state: 'queued', live: false });
@@ -239,7 +239,7 @@ describe('agents — PD-ORCH-005 clause 13 (revision 4): a live agent\'s cancel 
   });
 });
 
-describe('agents — PD-ORCH-005 clause 16 (revision 4): a paused child\'s confirmation names every descendant its cancel ends (OQ-74)', () => {
+describe('agents — PD-ORCH-005 clause 16 (revision 4): a paused child\'s confirmation names every descendant its cancel ends (OQ-101)', () => {
   const one = agent({ id: 'one', name: 'one', parentId: 'root:1', state: 'paused', presentationState: 'paused', live: false });
   const kid = agent({ id: 'kid', name: 'kid', parentId: 'one' });
   const grand = agent({ id: 'grand', name: 'grand', parentId: 'kid', state: 'paused', presentationState: 'paused', live: false });

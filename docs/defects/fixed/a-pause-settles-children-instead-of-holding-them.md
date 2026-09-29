@@ -45,9 +45,9 @@ The second review found three more gaps:
 - the status read `running` again once the pause released a wait;
 - the manual compression was still accepted.
 
-Each is repaired in the same phase, and the readings are in OQ-69.
+Each is repaired in the same phase, and the readings are in OQ-96.
 
-This does not make the pause REQ-SESSION-108's outer-loop pause. Clause 2 stops agents mid-iteration, and OQ-69 records
+This does not make the pause REQ-SESSION-108's outer-loop pause. Clause 2 stops agents mid-iteration, and OQ-96 records
 how the build reads REQ-SESSION-108 against it.
 
 Evidence:

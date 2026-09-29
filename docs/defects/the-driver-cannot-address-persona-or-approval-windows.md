@@ -3,7 +3,7 @@
 `pnpm app:drive` reaches main windows only: `windows` lists them, and `eval`, `probe`, `inspect` and `shot` act on the
 active main window's web contents. A persona window's DOM (`[data-testid=persona-agent-state]`, the state dot's
 computed style) and an approval dialog cannot be probed or captured. The built-app drive of the merged revision 4 build
-(R-064) read the persona windows' `paused` state from raw X11 captures, so that evidence is visual only; approvals are
+(R-065) read the persona windows' `paused` state from raw X11 captures, so that evidence is visual only; approvals are
 answered through `session.control`'s `answerApproval` command rather than in their dialog.
 
 ## Specs

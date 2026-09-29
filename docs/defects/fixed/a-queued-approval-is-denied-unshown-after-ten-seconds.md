@@ -6,7 +6,7 @@ the approval request could not be shown: main did not confirm the dialog within 
 stayed up for 10 s. So two concurrent asks could not both wait. In the reviewer's drive, the root's second `delegate` was
 denied while child one's `write_file` dialog was open, and the run lost its second child.
 
-Found 2026-09-28 by the fourteenth review round of the merged revision 4 build of `PD-ORCH-005` (R-064), driving the
+Found 2026-09-28 by the fourteenth review round of the merged revision 4 build of `PD-ORCH-005` (R-065), driving the
 built app. The code predates revision 4.
 
 ## Specs
@@ -25,7 +25,7 @@ closes", and a request is dropped from the queue only if it timed out or was can
 
 ## Repaired — 2026-09-28
 
-By the fourteenth fix round of the merged revision 4 build (R-064). A request that waits behind the open dialog, or
+By the fourteenth fix round of the merged revision 4 build (R-065). A request that waits behind the open dialog, or
 behind requests queued ahead of it, is acknowledged with `approval.queued`. After that, `RunHostPresenter` no longer
 bounds the wait for `approval.shown`. A request main never acknowledges is still a presenter error at 10 s. The gate
 races the presentation against its own wait. A queued request that times out or is cancelled is dropped unshown and

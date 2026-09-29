@@ -73,7 +73,7 @@ export function sparklinePath(samples: readonly (readonly [string, number])[], w
 
 /**
  * REQ-MONITOR-169: waiting = waiting + queued; failed = failed + cancelled (+ blocked, which presents as failed).
- * PD-ORCH-005 clause 13 (revision 4): a `paused` agent is counted as `paused` — never waiting, and never failed (OQ-73).
+ * PD-ORCH-005 clause 13 (revision 4): a `paused` agent is counted as `paused` — never waiting, and never failed (OQ-100).
  */
 export function agentCounts(agents: readonly AgentRecord[]): { running: number; waiting: number; paused: number; done: number; failed: number; depth: number } {
   const c = { running: 0, waiting: 0, paused: 0, done: 0, failed: 0, depth: 0 };
@@ -91,7 +91,7 @@ export function agentCounts(agents: readonly AgentRecord[]): { running: number; 
 
 /**
  * REQ-MONITOR-169's detail line. PD-ORCH-005 clause 13 puts the paused count on it between waiting and done, and only
- * while an agent is paused, so every session with none reads exactly as the requirement words it (OQ-73).
+ * while an agent is paused, so every session with none reads exactly as the requirement words it (OQ-100).
  */
 export function agentStatesLine(c: Pick<ReturnType<typeof agentCounts>, 'running' | 'waiting' | 'paused' | 'done' | 'failed'>): string {
   return `running ${c.running} · waiting ${c.waiting}${c.paused > 0 ? ` · paused ${c.paused}` : ''} · done ${c.done} · failed ${c.failed}`;

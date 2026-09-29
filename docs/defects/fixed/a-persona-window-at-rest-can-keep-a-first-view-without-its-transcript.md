@@ -3,7 +3,7 @@
 In REQ-CHAT-008's recovery state, the fourteenth review round popped out the run-level agent's persona window and it
 read `orchestrator paused`, `0 rows` and "No transcript activity for this agent yet.". Meanwhile the main transcript
 showed the root's rows from before the crash. After Continue, the same window showed them. The run-level agent's last
-activity, which clause 13 keeps (OQ-73), was missing from that window while the session rested.
+activity, which clause 13 keeps (OQ-100), was missing from that window while the session rested.
 
 This round did not reproduce the picture. Two drives on the same head showed the rows: one crash-left session with a
 single child and one with the reviewer's three-child script, the window each time opened from the inspector after the
@@ -14,7 +14,7 @@ kept its first view: the session, without the rows.
 
 ## Specs
 
-`PD-ORCH-005` clause 13 ("keep its last activity"), as OQ-73 extends it to the run-level agent. REQ-SHELL-076's
+`PD-ORCH-005` clause 13 ("keep its last activity"), as OQ-100 extends it to the run-level agent. REQ-SHELL-076's
 coalesced refresh of an auxiliary window.
 
 ## Relevant files
@@ -25,7 +25,7 @@ coalesced refresh of an auxiliary window.
 
 ## Repaired — 2026-09-28
 
-By the fourteenth fix round of the merged revision 4 build (R-064). `PersonaApp` follows the replica through
+By the fourteenth fix round of the merged revision 4 build (R-065). `PersonaApp` follows the replica through
 `followCoalesced`. It subscribes, delivers what the replica holds at that moment, and then keeps REQ-SHELL-076's
 single trailing delivery per 120 ms, with none while hidden. Whatever was applied between the first render and the
 subscription therefore reaches the window.

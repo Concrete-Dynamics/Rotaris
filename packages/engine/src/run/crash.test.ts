@@ -205,7 +205,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       expect(dal.getSession(sid)!.pending_approvals).not.toBe('[]');
     });
 
-    it('clause 8 (OQ-69): opening the session\'s checkpoints repairs its status (REQ-GIT-094) and records nothing of its agents', async () => {
+    it('clause 8 (OQ-96): opening the session\'s checkpoints repairs its status (REQ-GIT-094) and records nothing of its agents', async () => {
       const sid = await crashed();
       const listed = sessionsAs(88).checkpointListing(dal, 'C:/ws', sid);
       expect(listed.ok && listed.value.repaired).toBeTruthy();
@@ -292,7 +292,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       expect(its.filter((r) => r.messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text.startsWith('Carry out the task now'))))).toEqual([]);
     });
 
-    describe('PD-ORCH-005 clauses 13 and 18 (OQ-73): before the crash is recorded, what it left presents as the record will leave it', () => {
+    describe('PD-ORCH-005 clauses 13 and 18 (OQ-100): before the crash is recorded, what it left presents as the record will leave it', () => {
       it('crashLeftOf names the open iteration\'s unfinished agents only while no rest recorded an interruption, and only for a session no run is behind', () => {
         const sid = 'S-left' as SessionId;
         const writer = created(sid);
@@ -356,7 +356,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       });
     });
 
-    describe('PD-ORCH-005 clauses 3, 8 and 16 (OQ-74): cancelling one child a crash left ends it from its stored state, and leaves the crash for the next repair or continue to record', () => {
+    describe('PD-ORCH-005 clauses 3, 8 and 16 (OQ-101): cancelling one child a crash left ends it from its stored state, and leaves the crash for the next repair or continue to record', () => {
       const cancel = (s: Sessions, sid: SessionId, agentId: string) => s.control({ op: 'cancelAgent', sessionId: sid, args: { agentId } });
       /** What a crash record writes beyond the agents: the iteration's interruption, the approvals and the background sessions. */
       const crashWrites = (sid: SessionId) => ({ interruption: dal.getIteration(sid, 2)!.interruption, approvals: dal.getSession(sid)!.pending_approvals, terminals: dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state]), paused: dal.timelineOf(sid).filter((t) => t.name === 'iteration_paused').length });
@@ -420,7 +420,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         });
       }
 
-      it('OQ-76: a session the store\'s failure left busy is not one a crash left — its agents present as before, nothing is resumable, and the at-rest cancel is refused, writing and warning nothing', async () => {
+      it('OQ-103: a session the store\'s failure left busy is not one a crash left — its agents present as before, nothing is resumable, and the at-rest cancel is refused, writing and warning nothing', async () => {
         const sid = await crashed();
         const snapshots: SessionRecord[] = [];
         const warned: string[] = [];
@@ -452,7 +452,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
       });
     });
-    describe('PD-ORCH-005 clause 16 (revision 4, OQ-74): the at-rest cancel walks through a finished descendant, records nothing of the crash, and answers a failed move', () => {
+    describe('PD-ORCH-005 clause 16 (revision 4, OQ-101): the at-rest cancel walks through a finished descendant, records nothing of the crash, and answers a failed move', () => {
       const cancel = (s: Sessions, sid: SessionId, agentId: string) => s.control({ op: 'cancelAgent', sessionId: sid, args: { agentId } });
       /** c1, c2 and c3 brought to rest by a pause; `recorded` whether the rest also wrote the iteration's interruption. */
       const rested = (recorded: boolean) => (w: SessionWriter) => {
@@ -501,7 +501,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       });
 
       /**
-       * Clause 16 meets REQ-ORCH-048 (OQ-74's "A dependent of the cancelled child"): the at-rest cancel runs no cascade —
+       * Clause 16 meets REQ-ORCH-048 (OQ-101's "A dependent of the cancelled child"): the at-rest cancel runs no cascade —
        * clause 16's count "drops by as many as were cancelled" and "the rest of its agents resume with it" — so a paused
        * (or crash-left) sibling whose `depends_on` names the cancelled child stays unfinished and counted, is resumed by
        * the Continue action, and is blocked by the resumed run's first scheduler pass. A ruling that blocks it at the
@@ -529,7 +529,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         });
       }
 
-      it('when the chosen child\'s own move fails to be written, the cancel is refused store_failed in the engine\'s words and nothing below it is cancelled (OQ-74)', async () => {
+      it('when the chosen child\'s own move fails to be written, the cancel is refused store_failed in the engine\'s words and nothing below it is cancelled (OQ-101)', async () => {
         const sid = await crashed(rested(true), 'paused');
         const viewer = sessionsAs(88);
         expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
@@ -538,7 +538,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect([dal.getChild(sid, 'bg_000000c1')!.state, dal.getChild(sid, 'bg_000000c3')!.state]).toEqual(['paused', 'paused']);
       });
     });
-    describe('PD-ORCH-005 clause 16 (revision 4, OQ-74): the at-rest cancel writes under the session\'s lock, answers a session not loaded, and keeps a failed descendant paused', () => {
+    describe('PD-ORCH-005 clause 16 (revision 4, OQ-101): the at-rest cancel writes under the session\'s lock, answers a session not loaded, and keeps a failed descendant paused', () => {
       const cancel = (s: Sessions, sid: SessionId, agentId: string) => s.control({ op: 'cancelAgent', sessionId: sid, args: { agentId } });
       const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
       const at = () => new Date(Number(clock.instant())).toISOString();
@@ -592,7 +592,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 2, agents: 3 });
       });
     });
-    describe('PD-ORCH-005 clause 16 (OQ-74): the at-rest cancel\'s entry, a crash that left a sibling of a paused child, a refused move\'s republish, and a refusal that writes nothing', () => {
+    describe('PD-ORCH-005 clause 16 (OQ-101): the at-rest cancel\'s entry, a crash that left a sibling of a paused child, a refused move\'s republish, and a refusal that writes nothing', () => {
       const cancel = (s: Sessions, sid: SessionId, agentId: string) => s.control({ op: 'cancelAgent', sessionId: sid, args: { agentId } });
       const entries = (sid: SessionId) => dal.timelineOf(sid).filter((t) => t.name === 'child_user_cancelled').map((t) => t.message);
 
@@ -669,7 +669,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     /**
      * PD-ORCH-005 clause 18 (extending REQ-MONITOR-125): a session a crash left — in REQ-CHAT-008's recovery state before
      * any repair, or `interrupted` after one — offers the Continue action and "continue without them" as a `paused`
-     * session does, and either choice records the crash first, as any continue does (clause 8). Readings in OQ-76.
+     * session does, and either choice records the crash first, as any continue does (clause 8). Readings in OQ-103.
      */
     describe('PD-ORCH-005 clause 18: a crash offers the same choice', () => {
       const userRows = (sid: SessionId) => dal.residentRows(sid).filter((r) => r.kind === 'user').length;
@@ -715,14 +715,14 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       }
 
       /**
-       * OQ-76's undecided reading: a crash between an iteration closing `succeeded` and the run's teardown leaves the
+       * OQ-103's undecided reading: a crash between an iteration closing `succeeded` and the run's teardown leaves the
        * session busy with nothing open and the last request `complete`. The build continues the last request, as
-       * REQ-MONITOR-125 has it, and OQ-75's no-append covers only a request the todo holds unfinished — so the finished
+       * REQ-MONITOR-125 has it, and OQ-102's no-append covers only a request the todo holds unfinished — so the finished
        * request is appended again and a second iteration re-works it, as on the `paused` session below that reaches the
        * same state. Pinned so that a ruling either way turns this red.
        */
       for (const state of ['recovery', 'interrupted'] as const) {
-        it(`${state}, nothing open and the last request finished: the Continue action appends that request again and a new iteration re-works it (OQ-76)`, async () => {
+        it(`${state}, nothing open and the last request finished: the Continue action appends that request again and a new iteration re-works it (OQ-103)`, async () => {
           const first = sessionsAs(77);
           const sid = (first.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
           expect((await first.running(sid))!.status).toBe('completed');
@@ -752,13 +752,13 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
        * `succeeded` — while its checkpoint is captured, its `iteration_end` hooks fire or its events drain — is met at
        * the loop head, which comes to rest before the stop conditions run. Nothing is open, the last request is
        * `complete`, and the session is `paused`; only a pause accepted during the turn puts the task back to pending.
-       * So the Continue action re-works the finished request here too, and OQ-76's question covers every route (the
+       * So the Continue action re-works the finished request here too, and OQ-103's question covers every route (the
        * plan mode's third and the message limit's fourth are pinned in `plan-gate-resume.test.ts`). Pinned so that a
        * ruling either way turns this red.
        */
       const restingBy = { pause: 'pause', cancel: 'stop', announceShutdown: 'quit' } as const;
       for (const op of ['pause', 'cancel', 'announceShutdown'] as const) {
-        it(`a ${restingBy[op]} accepted after the iteration closed leaves a \`paused\` session in the same state, and the Continue action re-works the request there too (OQ-76)`, async () => {
+        it(`a ${restingBy[op]} accepted after the iteration closed leaves a \`paused\` session in the same state, and the Continue action re-works the request there too (OQ-103)`, async () => {
           let entered!: () => void;
           const capturing = new Promise<void>((r) => { entered = r; });
           let release!: () => void;

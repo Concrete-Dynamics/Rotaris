@@ -61,7 +61,7 @@ export function openOfferIds(dal: StoreDal, sessionId: SessionId): ReadonlySet<s
 
 /**
  * PD-ORCH-004 revision 3: the continuation offers the session holds that no child has taken up, which a later root may
- * take up — each by its child's name and task id, the newest ten, with the way to take one up (OQ-72). A new iteration's
+ * take up — each by its child's name and task id, the newest ten, with the way to take one up (OQ-99). A new iteration's
  * root reads it in the handoff's progress context, a resumed root at the continue (only those `include` admits).
  * Empty when there is none.
  */
@@ -101,7 +101,7 @@ function elidedBeforeIn(parts: readonly ContentPart[]): string[] {
  * first iteration therefore reads them all in its handoff and is told nothing more, and so is every later iteration it
  * re-sends that handoff to, but for the offers raised since — whichever child raised one, however early it was spawned;
  * a later continue that resumes one of them finds its lists in its record (`offersHeldIn`), so each root is told once
- * (OQ-80).
+ * (OQ-107).
  */
 export function offersForFirstMessage(dal: StoreDal, sessionId: SessionId, first: readonly ContentPart[], covered: ReadonlySet<string> = new Set()): ContentPart | null {
   const held = offersToldIn([{ role: 'user', content: first }]);
@@ -116,7 +116,7 @@ export function offersForFirstMessage(dal: StoreDal, sessionId: SessionId, first
  * before the oldest one that list names, which the record shows raised no later than the list was recorded — a child's
  * offer is raised as it ends (`completed_at`), and one that has none recorded counts as raised before. An offer raised
  * after the list was recorded is not held by it, however early its child was spawned. A list a compression carried into
- * the conversation holds only what it names, as the compression's summary of a list holds nothing (OQ-80).
+ * the conversation holds only what it names, as the compression's summary of a list holds nothing (OQ-107).
  */
 export function offersHeldIn(dal: StoreDal, sessionId: SessionId, rows: readonly AgentMessageRow[]): ReadonlySet<string> {
   const held = new Set(offersToldIn(conversationOf(rows)));

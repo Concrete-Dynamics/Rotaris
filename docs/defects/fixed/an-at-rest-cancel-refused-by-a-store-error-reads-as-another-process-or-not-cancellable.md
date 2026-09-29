@@ -10,12 +10,12 @@ process holds this session, so the agent was not cancelled." In the same way `ca
 write, so a failed write still read "That agent is not cancellable (unknown, or already finished).", the falsehood the
 twelfth round's note describes. No test reached either path.
 
-Found 2026-09-28 by the thirteenth review round of the merged revision 4 build of `PD-ORCH-005` (R-064).
+Found 2026-09-28 by the thirteenth review round of the merged revision 4 build of `PD-ORCH-005` (R-065).
 
 ## Specs
 
-None directly. OQ-74 says `session_locked` is refused "while another live process holds it", which the store error
-contradicted. REQ-MONITOR-128's "no longer cancellable" is false of a paused child whose write failed; OQ-74 records the
+None directly. OQ-101 says `session_locked` is refused "while another live process holds it", which the store error
+contradicted. REQ-MONITOR-128's "no longer cancellable" is false of a paused child whose write failed; OQ-101 records the
 departure from that sentence for the refusals that say nothing of the agent.
 
 ## Relevant files
@@ -27,7 +27,7 @@ departure from that sentence for the refusals that say nothing of the agent.
 
 ## Repaired — 2026-09-28
 
-By the thirteenth fix round of the merged revision 4 build (R-064). `lockForWrite` now answers the refusal itself:
+By the thirteenth fix round of the merged revision 4 build (R-065). `lockForWrite` now answers the refusal itself:
 `session_locked` only when the claim finds another live holder, and `store_failed`, "The workspace store could not take
 this session's lock, so the agent was not cancelled: …", when reading or claiming the lock throws. A chosen child's move
 that fails to be written (anything but `illegal-move`) is refused `store_failed`, "The workspace store requires recovery

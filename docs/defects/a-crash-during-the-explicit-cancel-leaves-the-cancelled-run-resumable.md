@@ -9,7 +9,7 @@ settles, or the process being killed — the store is identical to an ordinary m
 iteration's interruption NULL, and the unfinished agents where they stood.
 
 Every revision 4 consumer then treats the cancelled run as crash-left. `crashLeftOf` names its agents, and every surface
-presents them `paused` by `crash` (OQ-73). `resumableOf` counts them for the Continue action and the decline (clauses 6
+presents them `paused` by `crash` (OQ-100). `resumableOf` counts them for the Continue action and the decline (clauses 6
 and 19). `continueSession` accepts the session (clause 18), and the repair or the continue records the crash, which
 pauses them, so the Continue action resumes work the user confirmed as final. At the base this was reachable only by a
 continue by message; revision 4 puts it on every agent surface, in the count and behind the Continue action.
@@ -18,8 +18,8 @@ The stop (`cancel` op, "Stop the active run") writes `cancelling` at once, but t
 so it cannot tell the two apart either. A single child's cancel is durable at once (`IterationChildren.cancel` moves it
 `cancelled` in the store), so this is the run-level cancel alone.
 
-Found 2026-09-28 by the thirteenth review round of the merged revision 4 build of `PD-ORCH-005` (R-064). Not repaired:
-which clause governs is the owner's to rule, and OQ-76 records the reading and asks it.
+Found 2026-09-28 by the thirteenth review round of the merged revision 4 build of `PD-ORCH-005` (R-065). Not repaired:
+which clause governs is the owner's to rule, and OQ-103 records the reading and asks it.
 
 ## Specs
 

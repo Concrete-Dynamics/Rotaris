@@ -34,7 +34,7 @@ By PD-ORCH-005 phase 5's second repair.
 The second repair had left the persona window's unconfirmed Cancel as the stop. Phase 5's third review found that a
 false choice.
 
-The readings are in OQ-69, beside the one this defect falsified.
+The readings are in OQ-96, beside the one this defect falsified.
 
 Evidence:
 - `apps/desktop/src/renderer/session-actions.test.ts`, "PD-ORCH-005 clause 3…": the stop is `cancel`, graceful and

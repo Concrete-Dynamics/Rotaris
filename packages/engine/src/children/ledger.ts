@@ -29,7 +29,7 @@ export function commandsForArtifact(v: unknown): RanCommand[] {
 /**
  * REQ-ORCH-133 / REQ-MONITOR-128: what the user's cancel of one child writes for each agent it ends — the report and the
  * timeline entry — shared by the live cancel (`IterationChildren.cancel`) and PD-ORCH-005 clause 16's cancel while the
- * session rests (`Sessions`, OQ-74), so the two cannot drift. `whileResting` adds that clause's words to the entry.
+ * session rests (`Sessions`, OQ-101), so the two cannot drift. `whileResting` adds that clause's words to the entry.
  */
 export function userCancellation(t: Pick<ChildRow, 'task_id' | 'canonical_name' | 'persona'>, chosen: Pick<ChildRow, 'task_id' | 'canonical_name'>, whileResting = false): { readonly report: Record<string, unknown>; readonly message: string; readonly metadata: Record<string, unknown> } {
   const own = t.task_id === chosen.task_id;

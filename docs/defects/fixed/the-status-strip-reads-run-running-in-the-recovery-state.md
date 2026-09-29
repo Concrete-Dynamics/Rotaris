@@ -5,14 +5,14 @@ all read `Run needs recovery`, but the window's bottom status strip read `run Ru
 from `presentationStatus(session.executionStatus)` alone and did not consult the recovery fact. It said a run was active
 when none existed, beside a run-level agent drawn `paused`.
 
-Found 2026-09-28 by the fourteenth review round of the merged revision 4 build of `PD-ORCH-005` (R-064), driving the
+Found 2026-09-28 by the fourteenth review round of the merged revision 4 build of `PD-ORCH-005` (R-065), driving the
 built app: a scripted delegating run killed with SIGKILL, relaunched on the same profile, the session opened from
 Sessions without repair. Reproduced by this round the same way.
 
 ## Specs
 
 REQ-CHAT-008's synthetic `Run needs recovery` label for a busy session with no local run, and the presentation that
-`PD-ORCH-005` clause 13 (OQ-73) and clause 18 give that state on the other surfaces. REQ-SHELL-038 names the strip.
+`PD-ORCH-005` clause 13 (OQ-100) and clause 18 give that state on the other surfaces. REQ-SHELL-038 names the strip.
 
 ## Relevant files
 
@@ -22,7 +22,7 @@ REQ-CHAT-008's synthetic `Run needs recovery` label for a busy session with no l
 
 ## Repaired — 2026-09-28
 
-By the fourteenth fix round of the merged revision 4 build (R-064). The window root reads the recovery fact from
+By the fourteenth fix round of the merged revision 4 build (R-065). The window root reads the recovery fact from
 `useNeedsRecovery`, the same liveness predicate the Workspace and Mission roots read, and names the strip's run item
 through `statusStripRunItem`. That function answers `Run needs recovery` exactly where `runStateOf` answers `recovery`,
 and otherwise gives the presentation vocabulary as before.

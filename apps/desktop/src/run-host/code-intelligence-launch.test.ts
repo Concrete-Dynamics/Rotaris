@@ -10,7 +10,7 @@ describe('REQ-MCP-033 / ADR-0035: what the reserved token launches', () => {
   it('in development: the main bundle before the token', () => {
     expect(codeIntelligenceLaunch({ ...at, packaged: false, root: false })).toEqual({ command: at.execPath, args: [join(at.bundleDir, 'index.js'), 'builtin:code-intelligence', '--'] });
   });
-  it('R-065: as root, `--no-sandbox` stands between the token and the separator, where the sentinel drops it', () => {
+  it('R-066: as root, `--no-sandbox` stands between the token and the separator, where the sentinel drops it', () => {
     expect(codeIntelligenceLaunch({ ...at, packaged: true, root: true }).args).toEqual(['builtin:code-intelligence', '--no-sandbox', '--']);
     expect(codeIntelligenceLaunch({ ...at, packaged: false, root: true }).args).toEqual([join(at.bundleDir, 'index.js'), 'builtin:code-intelligence', '--no-sandbox', '--']);
   });

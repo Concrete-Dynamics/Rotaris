@@ -536,7 +536,7 @@ describe('engine/run — the run loop end to end against a real store and a scri
  * PD-ORCH-005 clause 18 (found by the second review of its build): the Continue action and its decline are offered to a session a
  * crash left — one persisted busy that no process runs (`not-live`). A session the store's failure left busy in THIS
  * process reads the same (OQ-42), but it did not crash and nothing can be recorded of it: every continue is refused
- * `store-failed`, as the continue by message is, until the reopen rebuilds the writer (OQ-76). The guard stands first,
+ * `store-failed`, as the continue by message is, until the reopen rebuilds the writer (OQ-103). The guard stands first,
  * so a `paused` session under a store failure is refused the same way.
  */
 describe('PD-ORCH-005 clause 18: a session under a store failure is refused every continue', () => {
@@ -579,7 +579,7 @@ describe('PD-ORCH-005 clause 18: a session under a store failure is refused ever
     await sessions.closeAll();
   });
 
-  it('a paused session under a store failure is refused the Continue action and the decline too, and nothing is recorded (OQ-76)', async () => {
+  it('a paused session under a store failure is refused the Continue action and the decline too, and nothing is recorded (OQ-103)', async () => {
     const backend = new DefaultAgentBackend(new ScriptedModelClient(Array.from({ length: 4 }, (_, n) => answer(`answer ${n + 1}`, { input: 5, output: 2 }))));
     const sessions = new Sessions({
       clocks: new FakeClock(), publisher: recorder(), pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S1',

@@ -11,7 +11,7 @@ import { CODE_INTELLIGENCE_TOKEN, type BuiltinLaunch } from '@rotaris/config';
  * SIGTRAP before the sentinel ran, so every agent lost the code-intelligence tools
  * (`docs/defects/fixed/the-code-intelligence-server-cannot-start-as-root.md`). As root the switch stands between the
  * token and `--`, where the sentinel drops it (`runtimeArguments`); the child opens no window, and the owner permits it
- * (R-065). Every other launch is unchanged.
+ * (R-066). Every other launch is unchanged.
  */
 export function codeIntelligenceLaunch(input: { readonly execPath: string; readonly bundleDir: string; readonly packaged: boolean; readonly root: boolean }): BuiltinLaunch {
   const switches = input.root ? ['--no-sandbox'] : [];

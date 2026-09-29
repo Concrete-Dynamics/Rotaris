@@ -7,13 +7,13 @@ condition, so it named that session's unfinished agents as crash-left. `toAgentR
 guard, so a Cancel sent for one of them — a persona window offers Cancel always (REQ-SHELL-075(g)) — judged it
 crash-left, took the lock and called `recordCrashOf` against the failed writer. That logged the crash record's failed
 writes and a failed move per agent before it refused. `continueSession` refuses every continue on such a session
-`store-failed`, so the cancel and the presentation disagreed with the engine's own reading that it did not crash (OQ-76).
+`store-failed`, so the cancel and the presentation disagreed with the engine's own reading that it did not crash (OQ-103).
 
-Found 2026-09-28 by the review of the merged revision 4 build of `PD-ORCH-005` (R-064).
+Found 2026-09-28 by the review of the merged revision 4 build of `PD-ORCH-005` (R-065).
 
 ## Specs
 
-`PD-ORCH-005` clause 18 names the sessions a crash left, and OQ-76 reads a session a store failure left busy as not one
+`PD-ORCH-005` clause 18 names the sessions a crash left, and OQ-103 reads a session a store failure left busy as not one
 of them. OQ-42's recovery is the reopen, which rebuilds the writer.
 
 ## Relevant files
@@ -23,14 +23,14 @@ of them. OQ-42's recovery is the reopen, which rebuilds the writer.
 
 ## Repaired — 2026-09-28
 
-By the first fix round of the merged revision 4 build (R-064). `crashLeftOf` takes `storeFailed` and names no agent of a
+By the first fix round of the merged revision 4 build (R-065). `crashLeftOf` takes `storeFailed` and names no agent of a
 busy session under a store failure. The projections read through `Sessions.restingOf`, which also states nothing to
 resume for such a session, so its tree, its run-level agent and the composer's count present it as before.
 `cancelPausedAtRest` refuses under a store failure first, writing nothing and warning nothing, as `continueSession` does.
 In the process whose run failed the projection is frozen at the run's last live record anyway (OQ-42). There the
-renderer still draws the count and the decline beside the two continues, and all of them are refused (OQ-76).
+renderer still draws the count and the decline beside the two continues, and all of them are refused (OQ-103).
 
 Evidence:
-- `packages/engine/src/run/crash.test.ts`, "OQ-76: a session the store's failure left busy is not one a crash left":
+- `packages/engine/src/run/crash.test.ts`, "OQ-103: a session the store's failure left busy is not one a crash left":
   the agent presents `running` with no interruption, `resumable` is null, and the cancel is refused with nothing written
   and nothing warned. Removing the `crashLeftOf` guard, the `resumable` guard or the cancel's guard each turns it red.

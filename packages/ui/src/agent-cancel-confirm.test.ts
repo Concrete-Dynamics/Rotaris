@@ -7,7 +7,7 @@ import { CANCEL_RUN_TEXT } from './agents.js';
 import { AgentCancelConfirm } from './AgentCancelConfirm.js';
 
 /**
- * PD-ORCH-005 clause 16 (OQ-74): the Workspace's and a persona window's agent cancel is `AgentCancelConfirm`, whose
+ * PD-ORCH-005 clause 16 (OQ-101): the Workspace's and a persona window's agent cancel is `AgentCancelConfirm`, whose
  * dismissal is `cancelConfirmation`'s — a paused child is kept with "Keep it paused", a live agent and the run with "Keep
  * running". Its props take no label, so a call site that put its own "Keep running" back would not typecheck (found by
  * the merged revision 4 build's fourth review: both sites once spread the helper and overrode its label).

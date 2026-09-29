@@ -236,7 +236,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(summaries).toBe(0);
   });
 
-  it('PD-ORCH-005 (OQ-70): a resumed child that times out is retried on its fallback from its payload, not from its record', async () => {
+  it('PD-ORCH-005 (OQ-97): a resumed child that times out is retried on its fallback from its payload, not from its record', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
     let release!: () => void;
     const held = new Promise<void>((r) => { release = r; });

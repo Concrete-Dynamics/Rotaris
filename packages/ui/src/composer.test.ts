@@ -39,7 +39,7 @@ describe('composer — REQ-CHAT-008: the run-state label vocabulary', () => {
 
 describe('REQ-SHELL-038 with REQ-CHAT-008: the status strip names the recovery state as the run header does', () => {
   it('reads "Run needs recovery" for a busy session with no run here, and the presentation vocabulary otherwise', () => {
-    // PD-ORCH-005 clause 13 (OQ-73): the strip never says a run is active beside a run-level agent drawn `paused`.
+    // PD-ORCH-005 clause 13 (OQ-100): the strip never says a run is active beside a run-level agent drawn `paused`.
     expect(statusStripRunItem('running', true)).toBe('Run needs recovery');
     expect(statusStripRunItem('waiting', true)).toBe('Run needs recovery');
     expect(statusStripRunItem('pausing', true)).toBe('Run needs recovery');

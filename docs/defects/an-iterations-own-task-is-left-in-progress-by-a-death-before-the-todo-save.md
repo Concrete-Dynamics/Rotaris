@@ -10,7 +10,7 @@ tasks a closed iteration *held* (`Todo.releaseStale`, `PD-ORCH-005` clause 17) â
 therefore stays `in_progress` for good, is never worked again, and the session's todo shows it as active at rest. A
 request left this way is done again only because a continue that states no new request appends it a second time.
 
-Noticed 2026-09-28 by the third review of the iteration lane under R-064 (the same window the first review found for a
+Noticed 2026-09-28 by the third review of the iteration lane under R-065 (the same window the first review found for a
 held message), and confirmed in the source; present at the base `ff6671c`. Not repaired there: the lane narrowed its own
 guard so that such a task no longer stops a Continue action appending the request (`Todo.holdsUnfinished` counts only a
 task the open iteration holds), and left the stranded task as it was. Not driven in the built app.

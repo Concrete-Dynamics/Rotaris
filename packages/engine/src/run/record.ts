@@ -42,7 +42,7 @@ export class ConversationRecord {
    * prompt and the tool definitions that step's request carries. An agent with no fingerprint recorded has it recorded —
    * what it started with. An agent that has one is being resumed (a task id is never executed twice otherwise), and when
    * either digest differs the run states, as a warning, which agent resumed under changed instructions: an issue at
-   * warning severity with its timeline entry, and a line in the transcript (OQ-78). Only the first call of an execution
+   * warning severity with its timeline entry, and a line in the transcript (OQ-105). Only the first call of an execution
    * acts, so REQ-ORCH-088's retry and REQ-ORCH-095's re-prompt, which run within it, compare nothing. Nothing with no store.
    */
   fingerprint(taskId: string, agentName: string, iteration: number): FingerprintCheck {

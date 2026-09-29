@@ -6,7 +6,7 @@ is not supported") and exits by SIGTRAP, so the first scenario, `sign-in`, faile
 after it ran. The driver's launch has passed the switch for exactly this since it was written (`hostSwitches` in
 `apps/desktop/scripts/lib/harness.mjs`); the live run's launcher never took it.
 
-Found 2026-09-29 by the first live run of the merged revision 4 build of `PD-ORCH-005` (R-064), against the owner's
+Found 2026-09-29 by the first live run of the merged revision 4 build of `PD-ORCH-005` (R-065), against the owner's
 self-hosted endpoint, in the Linux container the build ran in.
 
 ## Specs
@@ -21,7 +21,7 @@ unable to run on Linux as root.
 
 ## Repaired — 2026-09-29
 
-`launch` passes `hostSwitches` after the main entry, as `lib/driver.mjs` does, under the owner's permission (R-065).
+`launch` passes `hostSwitches` after the main entry, as `lib/driver.mjs` does, under the owner's permission (R-066).
 The next live run in the same container reached every scenario and passed. It then showed the application's own
 code-intelligence child failing the same way
 ([`the-code-intelligence-server-cannot-start-as-root.md`](the-code-intelligence-server-cannot-start-as-root.md)).

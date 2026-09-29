@@ -361,7 +361,7 @@ export function parseBinding(json: string | null): WorktreeBinding | null {
 }
 
 /**
- * OQ-42, and OQ-76's "the same state the same way": why the workspace store refuses to record for this session — the
+ * OQ-42, and OQ-103's "the same state the same way": why the workspace store refuses to record for this session — the
  * store's own failure or the writer's — or null when it records. Every entry point that would write (the continue by
  * message, the Continue action and the decline, the plan decision, the at-rest cancel) and the projection that states
  * what a continue would resume ask this one question.
@@ -446,18 +446,18 @@ function continuedTaskId(dal: StoreDal, sessionId: SessionId, todo: TodoDocument
  * root published that nothing supersedes and, when the root published none, the latest artifact of any kind that
  * nothing supersedes — the child reports and the documents its agents published are where a run's work is recorded —
  * cut to the requirement's 6,000 characters. The iteration is the session's most recent recorded one, the iteration the
- * new one follows (OQ-79). Its root is known by the task id its publishes carry as their conversation, which only its
+ * new one follows (OQ-106). Its root is known by the task id its publishes carry as their conversation, which only its
  * own tool port writes (a child's report carries the child's), never by `created_by`, which every root shares. A plan
  * cycle's root is not an iteration's (REQ-ORCH-153), so its publishes count only as "of any kind"; and when a plan
  * cycle opened its gate after the latest iteration opened (the plan gate's approve and revise, a prompt after a
  * declined plan), the new work follows that plan cycle, not the iteration, so no iteration's root is preferred and the
  * handoff takes the latest of any kind — an earlier piece of work's document never outranks what the plan cycle
- * produced (OQ-79). The plan cycle PD-ORCH-003 revision 2 holds after a resumed iteration is taken the same way,
+ * produced (OQ-106). The plan cycle PD-ORCH-003 revision 2 holds after a resumed iteration is taken the same way,
  * although that iteration is of the same run: a resume never rewrites `opened_at`, so the resumed root's document
- * counts only as "of any kind" on the approve and revise (OQ-79). The two times are the writer's own ISO instants, so
+ * counts only as "of any kind" on the approve and revise (OQ-106). The two times are the writer's own ISO instants, so
  * they compare as text. Its id leads, so no cut reaches it (REQ-SESSION-194). A published document's summary is its
  * body's first line and its key findings its body (REQ-LIBRARY-093), so it is stated once, as its body. The repair of
- * `the-continuation-payload-says-no-artifact-is-recorded.md` (OQ-72).
+ * `the-continuation-payload-says-no-artifact-is-recorded.md` (OQ-99).
  */
 export function latestArtifactText(dal: StoreDal, sessionId: SessionId): string {
   const records = dal.artifactsOf(sessionId).flatMap((r) => { const a = toArtifactRecord(r); return a && a.supersededBy === null ? [a] : []; });
@@ -747,7 +747,7 @@ export interface AgentFacts {
    */
   readonly session?: { readonly executionStatus: string; readonly updatedAt: string } | undefined;
   /**
-   * PD-ORCH-005 clauses 13 and 18 (OQ-73): the task ids of the agents a crash left unfinished in the open iteration, before
+   * PD-ORCH-005 clauses 13 and 18 (OQ-100): the task ids of the agents a crash left unfinished in the open iteration, before
    * the crash is recorded (`crashLeftOf`). Each is presented as the crash record will leave it — `paused`, by `crash` —
    * so every agent surface agrees with the Continue action's count (`resumableOf`); reading the session records
    * nothing (clause 8).
@@ -765,7 +765,7 @@ export function toAgentRecord(c: ChildRow, clocks: Clocks, facts: AgentFacts = {
   // PD-ORCH-005 clause 13 (revision 4, narrowing REQ-MONITOR-046/211/213 and REQ-SESSION-078/180): a `paused` agent is
   // not a leftover of a run that ended — it waits in its open iteration to be resumed, so it presents as `paused`, keeps
   // its last activity, and is never settled to the run's outcome. Nothing runs for it, so it shows no active tool (a
-  // crash can leave one). An agent a crash left unfinished, the crash not yet recorded, presents the same (OQ-73).
+  // crash can leave one). An agent a crash left unfinished, the crash not yet recorded, presents the same (OQ-100).
   const crashLeft = !isTerminalChildState(state) && state !== 'paused' && facts.crashLeft?.has(c.task_id) === true;
   const paused = state === 'paused' || crashLeft;
   const reconcile = status !== null && status !== 'idle' && !isActiveStatus(status) && !isTerminalChildState(state) && !paused;
@@ -795,17 +795,17 @@ export function toAgentRecord(c: ChildRow, clocks: Clocks, facts: AgentFacts = {
 }
 
 /**
- * PD-ORCH-005 clauses 13 and 18 (OQ-73): the agents a crash left unfinished in the open iteration, the crash not yet
+ * PD-ORCH-005 clauses 13 and 18 (OQ-100): the agents a crash left unfinished in the open iteration, the crash not yet
  * recorded — every agent of that iteration neither terminal nor `paused`, which is exactly what `recordCrash` will pause.
  * A crash left them where no rest records an interruption, so the open iteration's is still NULL, and the session is
- * either `interrupted` by a repair that recorded no crash (a checkpoint listing's, OQ-69) or still claims a run no
+ * either `interrupted` by a repair that recorded no crash (a checkpoint listing's, OQ-96) or still claims a run no
  * process is behind — REQ-CHAT-008's recovery state, which `notLive` confirms by the one liveness predicate
  * (REQ-SESSION-171), asked only then. Empty for every other session, a live run above all. Reads the store and
  * records nothing (clause 8).
  *
- * `storeFailed` (OQ-76): a session the store's failure left busy (OQ-42) reads `not-live` too — its run ended in this
+ * `storeFailed` (OQ-103): a session the store's failure left busy (OQ-42) reads `not-live` too — its run ended in this
  * process — but it did not crash, and nothing can be recorded of it, so it names none: its agents present as before,
- * and none of them is offered the at-rest cancel (OQ-73, OQ-74).
+ * and none of them is offered the at-rest cancel (OQ-100, OQ-101).
  */
 export function crashLeftOf(dal: StoreDal, r: SessionRow, notLive: () => boolean, storeFailed = false): ReadonlySet<string> {
   const status = r.execution_status;
@@ -1199,7 +1199,7 @@ export class Sessions {
        * handoff it is not sent (found by phase 6's second review) — only those its conversation does not already hold:
        * its own children's reports carry theirs, and an offer told once is not told again, so a root that had answered
        * and waits takes no step for a list it has read (found by phase 6's third and fourth reviews). PD-ORCH-004 revision
-       * 4: an offer a list it holds left out as earlier is held too, so it is not named in a second list (OQ-80).
+       * 4: an offer a list it holds left out as earlier is held too, so it is not named in a second list (OQ-107).
        */
       const told = offersHeldIn(s.dal, sessionId, recorded);
       const offers = openOffersText(s.dal, sessionId, (taskId) => !told.has(taskId));
@@ -1207,7 +1207,7 @@ export class Sessions {
       if (openIteration.message !== null && openIteration.message.length > 0) tell({ role: 'user', content: [...openIteration.message] });
     }
     /*
-     * OQ-75's reading beside PD-ORCH-005 clause 17, which governs only a continue that delivers a message, and the repair
+     * OQ-102's reading beside PD-ORCH-005 clause 17, which governs only a continue that delivers a message, and the repair
      * of `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md` (departing from REQ-ORCH-004,
      * which no directive governs for these continues): a continue that delivers no
      * message — the Continue action, "continue without them", and the message-limit resolution's 'continue' and
@@ -1562,24 +1562,24 @@ export class Sessions {
   }
 
   /**
-   * PD-ORCH-005 clause 16 (revision 4, narrowing REQ-MONITOR-063; OQ-74): the user cancels one `paused` child while its
+   * PD-ORCH-005 clause 16 (revision 4, narrowing REQ-MONITOR-063; OQ-101): the user cancels one `paused` child while its
    * session rests. It and each of its `paused` descendants end `cancelled` — final, as clause 3 says — each with the
    * report, the timeline entry and the artifact a live cancel writes (REQ-ORCH-133, REQ-LIBRARY-092). Nothing else moves:
    * the open iteration stays open, the rest of its agents resume with it, and `resumableOf` counts as many fewer. A
    * parent learns of it when it resumes, as of any child that ended unobserved (REQ-ORCH-054). Unlike the live cancel,
    * it runs no scheduler pass, so an agent whose `depends_on` names a cancelled child is left where it stood, counted,
-   * and blocked by the resumed run's first pass (REQ-ORCH-048; OQ-74's "A dependent of the cancelled child").
+   * and blocked by the resumed run's first pass (REQ-ORCH-048; OQ-101's "A dependent of the cancelled child").
    *
    * Refused — `{ok: false}`, which the renderer states as "not cancellable" (REQ-MONITOR-128) — for the run itself (a
    * rest's whole-iteration equivalent is clause 6's "Continue without them"), an id that is no agent of the open
    * iteration, one neither `paused` nor left unfinished by a crash, and a chosen child whose move is illegal. The refusals
-   * that say nothing of the agent carry the engine's words instead (OQ-74): `session_locked` while another live process
+   * that say nothing of the agent carry the engine's words instead (OQ-101): `session_locked` while another live process
    * holds the session's lock, and `store_failed` under a store failure, as every continue is refused (`store-failed`,
-   * OQ-76: nothing can be recorded of the session until the reopen rebuilds the writer), when the store could not be read
+   * OQ-103: nothing can be recorded of the session until the reopen rebuilds the writer), when the store could not be read
    * or written to take the lock (`lockForWrite`), and when the chosen child's own move fails to be written. A paused
-   * descendant whose move fails is warned of and left paused, and the cancel of the chosen child still stands (OQ-74).
+   * descendant whose move fails is warned of and left paused, and the cancel of the chosen child still stands (OQ-101).
    *
-   * A child a crash not yet recorded left unfinished (`crashLeftOf`), which presents `paused` (OQ-73), is cancelled from
+   * A child a crash not yet recorded left unfinished (`crashLeftOf`), which presents `paused` (OQ-100), is cancelled from
    * the state it is stored in, as clause 3's cancellation of one agent ends its agents `cancelled`; so is each such
    * descendant. The crash is not recorded here: clause 3 records it "when the session is next repaired or continued" and
    * clause 8 records interruptions "only when a run of the session is about to start", so the iteration's interruption,
@@ -1603,7 +1603,7 @@ export class Sessions {
     // The run's id and the root's are no child of the iteration, so the lookup below refuses them.
     if (!row || !open) return { ok: false };
     // A refusal writes nothing, the lock included: the target is judged before the lock is taken, so the run's id, the
-    // root's, an unknown id and an agent neither paused nor crash-left never reap or claim it (OQ-74). The judgement is
+    // root's, an unknown id and an agent neither paused nor crash-left never reap or claim it (OQ-101). The judgement is
     // made again under the lock, which is what the write rests on.
     if (!this.cancellableAtRest(s.dal, sid, agentId, row, open, () => this.liveness(s.dal, sid) === 'not-live')) return { ok: false };
     const warn = (m: string) => { s.log?.warn(m); this.deps.warn(m); };
@@ -1611,7 +1611,7 @@ export class Sessions {
     // in this process holds none; the cancel takes it for the write and gives it back after, keeps it when this process
     // already holds it (a loaded session), reaps a dead local holder as `SessionWriter.open` does (`claimLockReaping`, the
     // one copy of that rule), and refuses while another live process holds it — one that has loaded or is resuming the
-    // session (OQ-74).
+    // session (OQ-101).
     const lock = this.lockForWrite(s.dal, sid, warn);
     if ('refusal' in lock) return { ok: false, refusal: lock.refusal };
     try { return this.cancelPausedUnderLock(s, sid, agentId, row, open, warn); }
@@ -1627,7 +1627,7 @@ export class Sessions {
 
   /**
    * The lock `cancelPausedAtRest` writes under: taken (and given back), already this process's (kept), or refused with
-   * the words that say why (PD-ORCH-005 clause 16, OQ-74) — `session_locked` only while another live process holds it,
+   * the words that say why (PD-ORCH-005 clause 16, OQ-101) — `session_locked` only while another live process holds it,
    * and `store_failed` when the store could not be read or written to take it, where no other process is involved.
    */
   private lockForWrite(dal: StoreDal, sid: SessionId, warn: (m: string) => void): { readonly release: () => void } | { readonly refusal: ControlRefusal } {
@@ -1670,10 +1670,10 @@ export class Sessions {
         // The chosen child is first; a failed move of it leaves it where it stood and cancels nothing below it, and the
         // renderer is answered rather than shown a cancel that did not happen. Nothing was written before it, so nothing
         // needs republishing. An illegal move is REQ-MONITOR-128's "no longer cancellable"; a failed write says nothing of
-        // the agent, so it is refused `store_failed` in the engine's words, as a store failure found first is (OQ-74).
+        // the agent, so it is refused `store_failed` in the engine's words, as a store failure found first is (OQ-101).
         if (own) return r.error.code === 'illegal-move' ? { ok: false } : { ok: false, refusal: { code: 'store_failed', message: `The workspace store requires recovery before an agent can be cancelled: ${'reason' in r.error ? r.error.reason : r.error.code}` } };
         // A descendant whose move fails is left where it stood — paused, or left by the crash for its record to pause — and
-        // resumes; the chosen child's cancel stands (OQ-74).
+        // resumes; the chosen child's cancel stands (OQ-101).
         continue;
       }
       // A crash-left agent's calls the crash cut off: no crash record reaches a cancelled agent, so they are answered now.
@@ -1701,11 +1701,11 @@ export class Sessions {
    * REQ-CHAT-008's recovery state, which REQ-GIT-093's one liveness predicate decides (`not-live`). A busy session whose
    * process is live, or whose liveness is unknown, is refused: another process may still be running it. Either choice
    * records the crash first, as any continue does (clause 8), because `launchContinuation` records it before it resumes
-   * or declines the open iteration. Readings in OQ-76.
+   * or declines the open iteration. Readings in OQ-103.
    *
    * A session the store's failure left busy (OQ-42) reads `not-live` too — its run ended in this process — but it did not
    * crash, and nothing can be recorded of it: every continue is refused `store-failed` until the reopen rebuilds the
-   * writer, as the continue by message (`prompt`) and the plan decision are (OQ-76).
+   * writer, as the continue by message (`prompt`) and the plan decision are (OQ-103).
    */
   continueSession(sessionId: SessionId, action: 'continue' | 'double' | 'cancel', opts: { readonly withoutPaused?: boolean } = {}): Result<{ readonly resumed: boolean; readonly messageLimit: number | null }, { readonly code: string; readonly reason: string }> {
     const s = this.live.get(sessionId);
@@ -1748,9 +1748,9 @@ export class Sessions {
     // A session with nothing open and that request finished — crash-left (clause 18), `paused` by a pause, a stop or
     // the application's quit accepted after its iteration closed, `paused` by a plan Cancel, a stop or a quit of the
     // plan cycle held after a resumed iteration that carried out the continue's message (PD-ORCH-003 revision 2,
-    // OQ-77), or `paused_message_limit` by a limit reached as the iteration that finished it closed (this resolution's
-    // 'continue' and 'double') — appends it to the todo again (REQ-ORCH-004; OQ-75's no-append covers only a request
-    // held unfinished): the undecided case of OQ-76's "Nothing open to resume".
+    // OQ-104), or `paused_message_limit` by a limit reached as the iteration that finished it closed (this resolution's
+    // 'continue' and 'double') — appends it to the todo again (REQ-ORCH-004; OQ-102's no-append covers only a request
+    // held unfinished): the undecided case of OQ-103's "Nothing open to resume".
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, opts.withoutPaused === true));
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user')?.body ?? stored.session_id;
@@ -1871,7 +1871,7 @@ export class Sessions {
     if (!resolved.ok) return err({ code: resolved.error.code, reason: 'reason' in resolved.error ? resolved.error.reason : resolved.error.code });
     const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((r) => r.kind === 'user')?.body ?? stored.session_id;
     const payload = `${buildContinuationPayload(s.dal, s.dal.getSession(sessionId)!, lastPrompt, todo.value)}\n\n${planSection(decision, text, changes)}`;
-    // REQ-ORCH-004 / REQ-ORCH-154 (OQ-77): a plan decision states no new top-level task — the held run's todo already
+    // REQ-ORCH-004 / REQ-ORCH-154 (OQ-104): a plan decision states no new top-level task — the held run's todo already
     // carries the gated work — so the relaunch appends none; appending the last request again would duplicate it. After
     // a hold that followed a resumed iteration (PD-ORCH-003 revision 2) that todo also carries the continue's message,
     // complete, or pending and taken up first.
@@ -1886,7 +1886,7 @@ export class Sessions {
   }
 
   /**
-   * PD-ORCH-005 clauses 6, 13 and 18 (OQ-73, OQ-76): what a projection states of a session at rest — the agents a crash
+   * PD-ORCH-005 clauses 6, 13 and 18 (OQ-100, OQ-103): what a projection states of a session at rest — the agents a crash
    * left, the crash not yet recorded (`crashLeftOf`), and what the Continue action would resume (`resumableOf`). A
    * session the store's failure left busy (OQ-42) is not one a crash left, and every continue on it is refused
    * `store-failed` (`continueSession`): it names no crash-left agent and states nothing to resume, so the tree, the
@@ -1935,7 +1935,7 @@ export class Sessions {
     if (!row || row.workspace_root !== workspaceRoot) return err({ code: 'no-session', reason: `The session store holds no session under ${sessionId}, so nothing can be previewed or restored for it.` });
     const { root, binding } = effectiveRootOf(row);
     // Part U: the repair is the one unit REQ-SESSION-060 fixes, shared with the browser's explicit Repair. PD-ORCH-005
-    // clause 8: opening a session's checkpoints is viewing it, so this repair records no crash on its agents (OQ-69).
+    // clause 8: opening a session's checkpoints is viewing it, so this repair records no crash on its agents (OQ-96).
     const r = this.repairOne(dal, sessionId, false);
     const repaired: CheckpointListPayload['repaired'] = r.repaired ? { previous: r.repaired.from, reason: r.repaired.reason } : null;
     const rows = dal.listCheckpoints(sessionId).map(toCheckpointPayload);

@@ -199,9 +199,9 @@ export interface RunDeps {
   /**
    * REQ-ORCH-004 / REQ-ORCH-154: false for a plan decision's relaunch, which states no new task — the held run's stored
    * todo already carries every task, the gated work and any continue's message among them (complete, or pending and
-   * taken up first), so appending the last request again would duplicate it (OQ-77, the reading kept under PD-ORCH-003
+   * taken up first), so appending the last request again would duplicate it (OQ-104, the reading kept under PD-ORCH-003
    * revision 2's hold). False too for a continue that states no new request while the todo still holds the last one
-   * unfinished: OQ-75's reading, a departure from REQ-ORCH-004 that no directive governs, since PD-ORCH-005 clause 17
+   * unfinished: OQ-102's reading, a departure from REQ-ORCH-004 that no directive governs, since PD-ORCH-005 clause 17
    * speaks only of the message a continue delivers. Absent means a continuation appends its prompt (REQ-ORCH-004).
    */
   readonly appendsTask?: boolean | undefined;
@@ -416,12 +416,12 @@ export class Run {
   private iterationTask: { readonly id: string; readonly text: string } | null = null;
   /**
    * PD-ORCH-005 clause 17: the tasks the resumed iteration holds — the message this run's continue delivered, and any an
-   * earlier continue delivered to it before it came to rest again — which close with it (OQ-77).
+   * earlier continue delivered to it before it came to rest again — which close with it (OQ-104).
    */
   private resumedMessageIds: readonly string[] = [];
   /**
    * PD-ORCH-005 clause 17 ("so the next iteration takes it up"): the text of a continue's message the current iteration
-   * selected when the launch content's request is another — sent to its fresh root as the task to work on (OQ-75).
+   * selected when the launch content's request is another — sent to its fresh root as the task to work on (OQ-102).
    */
   private messageTakenUp: string | null = null;
   private appliedEntryModel: ModelRef | null = null;
@@ -450,12 +450,12 @@ export class Run {
     /*
      * PD-ORCH-005 clause 17: a continue that resumes an open iteration delivers its message to the resumed root (clause 4)
      * and appends it as a task that iteration holds, closing with it — done when it succeeds, pending otherwise. A continue
-     * that resumes and delivers no message (the Continue action) adds no task for a message. Beyond the clause, by OQ-75's
+     * that resumes and delivers no message (the Continue action) adds no task for a message. Beyond the clause, by OQ-102's
      * reading (a departure from REQ-ORCH-004 no directive governs): a continue that states no new request while the todo
      * holds the last one unfinished — the Continue action, "continue without them" or the message-limit resolution, after
      * a message was left pending or while the open iteration holds it — adds none either (`appendsTask`, set by the session
      * manager). A plan decision resumes nothing (the iteration closed before the hold) and states no new task, so it
-     * appends nothing (`appendsTask`, REQ-ORCH-004 / REQ-ORCH-154, OQ-77).
+     * appends nothing (`appendsTask`, REQ-ORCH-004 / REQ-ORCH-154, OQ-104).
      */
     if (deps.resumeTodo && this.resumeFrom !== null && deps.openIteration?.delivered === true) {
       this.todo.appendHeld('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task, this.resumeFrom.iteration);
@@ -770,7 +770,7 @@ export class Run {
     const iteration = resume?.iteration ?? this.iterationsCompleted + 1;
     this.iterationTask = { id: task.id, text: task.text };
     // PD-ORCH-005 clause 17: a continue's message this iteration takes up is its task even when the run was launched by
-    // another request — the launch content names that one as the latest, so the message is sent beside it (OQ-75). A
+    // another request — the launch content names that one as the latest, so the message is sent beside it (OQ-102). A
     // resumed root carries on from its record and is sent no launch content, so for it this is never read.
     this.messageTakenUp = task.message === true && task.text !== (this.deps.taskLabel ?? this.deps.task) ? task.text : null;
     if (resume) {
@@ -881,8 +881,8 @@ export class Run {
    * (REQ-ORCH-153: a plan cycle is not an iteration and takes up no offer or task) — PD-ORCH-004 revision 4's list of the
    * open continuation offers that content does not already hold, as a text part after it. A continuation's first
    * iteration holds them all in its handoff — those it names and those it left out (`handoffOffers`); each later
-   * iteration of the same run is told those raised since (OQ-80). Between the two, PD-ORCH-005 clause 17's message the
-   * iteration takes up, when the launch content's request is another (`messageTakenUp`, OQ-75).
+   * iteration of the same run is told those raised since (OQ-107). Between the two, PD-ORCH-005 clause 17's message the
+   * iteration takes up, when the launch content's request is another (`messageTakenUp`, OQ-102).
    */
   private firstMessage(task: string, launch: readonly ContentPart[] | undefined, execution: boolean): readonly ContentPart[] | undefined {
     const base = launch ?? [{ kind: 'text', text: task }];
@@ -1481,10 +1481,10 @@ export class Run {
        * PD-ORCH-003 revision 2: a plan cycle after a resumed iteration plans the work still pending — the launch content
        * is the continue that resumed the iteration — so the tasks the next iteration would take up, in that order, lead,
        * and the launch content follows as the session's context, said to be carried out only when the resumed iteration
-       * closed the messages it held as done (PD-ORCH-005 clause 17; OQ-77) — this continue's, or an earlier one's that the
+       * closed the messages it held as done (PD-ORCH-005 clause 17; OQ-104) — this continue's, or an earlier one's that the
        * Continue action resumed it with (found by the iteration lane review). That launch content is the payload the
        * continue built before the resumed iteration ran, so its handoff predates the close the preamble states; nothing
-       * rebuilds it here (OQ-77, "The handoff after the preamble is the continue's";
+       * rebuilds it here (OQ-104, "The handoff after the preamble is the continue's";
        * every-iteration-is-sent-the-prompt-the-run-was-launched-with.md).
        */
       const held = this.resumedMessageIds.map((id) => this.todo.task(id)?.state);
@@ -1600,7 +1600,7 @@ export class Run {
    * by `stop` and a quit by `quit` whether or not a plan cycle holds the run: clause 15 has the quit withdraw an approval
    * its dialog closes and PD-CHAT-002 revision 2 a question, in every case the directive decides, a plan cycle among
    * them. The withdrawal's cause is its own, so the plan hold is never read here; a cycle's agents still end and no
-   * interruption is recorded of them (`restCause`, clause 15). Readings in OQ-81.
+   * interruption is recorded of them (`restCause`, clause 15). Readings in OQ-108.
    */
   private get waitsWithdrawnBy(): Interruption | null {
     if (this.stop.final) return null;
@@ -1704,7 +1704,7 @@ export class Run {
   private async teardown(reasonIn: StopReason): Promise<RunResult> {
     const { writer, owner, bus, clocks } = this.deps;
     // PD-ORCH-005 clause 10: a run that comes to rest records its agents' background sessions — a stop and a quit end them,
-    // and so does the explicit cancel, which is a stop the user made final (OQ-69). Guarded like every teardown step.
+    // and so does the explicit cancel, which is a stop the user made final (OQ-96). Guarded like every teardown step.
     const ended = this.terminalsEndedBy();
     if (ended !== null) {
       try { await this.restTerminals(ended); } catch (cause) { this.deps.warn(`recording the background sessions of ${this.sessionId} failed: ${String(cause)}`); }
@@ -1815,7 +1815,7 @@ export function succeededIterationsOf(dal: StoreDal, sessionId: SessionId): Read
 /**
  * PD-ORCH-005 clause 17 ("so the next iteration takes it up"): what a fresh root is told when the todo task its iteration
  * selected is a continue's message and the launch content's request is another — the message, as the task to work on.
- * Its attachments are not carried: the task holds the message's text only (OQ-75).
+ * Its attachments are not carried: the task holds the message's text only (OQ-102).
  */
 function messageTakenUpText(message: string): string {
   return `The task for this iteration is an earlier message from the user, which the iteration it was sent to did not finish. Work on it now; the latest user request above is a separate task.\n\n${message}`;

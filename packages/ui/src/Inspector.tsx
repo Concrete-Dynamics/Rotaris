@@ -38,7 +38,7 @@ export interface InspectorProps {
   readonly compressionThresholdPercent: number;
   readonly runActive: boolean;
   /**
-   * PD-ORCH-005 clause 16 (OQ-74): the session rests with an iteration open (`runLevelResting`, which only the caller can
+   * PD-ORCH-005 clause 16 (OQ-101): the session rests with an iteration open (`runLevelResting`, which only the caller can
    * ask, since REQ-CHAT-008's recovery state is the renderer's to know) — when a `paused` child offers Cancel.
    */
   readonly resting: boolean;

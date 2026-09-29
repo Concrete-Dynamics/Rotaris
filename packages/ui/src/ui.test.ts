@@ -91,7 +91,7 @@ describe('ui — the Overview view (REQ-MONITOR-165..171)', () => {
     const a = (state: string, depth: number) => ({ id: state + depth, name: 'n', givenName: 'n', persona: 'p', state, presentationState: 'running', parentId: '', dependencies: [], activity: '', model: 'm', depth, background: true, category: '', spawnedAt: 't', completedAt: null, toolCalls: 0, delegationTask: '', live: false }) as unknown as AgentRecord;
     expect(agentCounts([a('running', 1), a('queued', 1), a('waiting_on_dependencies', 2), a('succeeded', 1), a('cancelled', 3), a('blocked', 1), a('failed', 1)])).toEqual({ running: 1, waiting: 2, paused: 0, done: 1, failed: 3, depth: 3 });
   });
-  it('PD-ORCH-005 clause 13 (OQ-73): a paused agent is counted paused — never waiting or failed — and the line names the count only while one is paused', () => {
+  it('PD-ORCH-005 clause 13 (OQ-100): a paused agent is counted paused — never waiting or failed — and the line names the count only while one is paused', () => {
     const a = (state: string) => ({ id: state, name: 'n', givenName: 'n', persona: 'p', state, presentationState: 'running', parentId: '', dependencies: [], activity: '', model: 'm', depth: 1, background: true, category: '', spawnedAt: 't', completedAt: null, toolCalls: 0, delegationTask: '', live: false }) as unknown as AgentRecord;
     const counts = agentCounts([a('paused'), a('paused'), a('queued'), a('succeeded')]);
     expect(counts).toMatchObject({ running: 0, waiting: 1, paused: 2, done: 1, failed: 0 });

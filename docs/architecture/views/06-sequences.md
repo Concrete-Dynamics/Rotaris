@@ -126,7 +126,7 @@ The parts that are easy to get wrong:
 - **Closing the dialog answers Deny** while the application stays: the user closed the dialog, or one main window
   of several. A request already answered or cancelled asks nothing more. A dialog that the application's quit closes
   answers nothing (`QuitState`, `main/exit.ts`). The quit's `shutdown` then withdraws the approval — at a rest,
-  and during a plan cycle too, where the cycle's agents end rather than rest (PD-ORCH-005 clauses 9 and 15; OQ-81). The question
+  and during a plan cycle too, where the cycle's agents end rather than rest (PD-ORCH-005 clauses 9 and 15; OQ-108). The question
   dock's cancellation is held back at a quit the same way. *Until phase 7 the quit's close sent a Deny first, and the
   agent stepped on it: `docs/defects/fixed/a-quit-denies-the-approval-it-should-withdraw.md`.*
 - Presentation order is **oldest first by the published sequence**, and that sequence orders presentation
@@ -254,16 +254,16 @@ sequenceDiagram
   open row, its unfinished agents paused, a dead run's unanswered calls answered, its approvals withdrawn, its
   background sessions ended. Loading the session writes nothing, and the user's cancel of one crash-left child while the
   session rests records none of it but the cancelled agents' own cut-off calls, which no later record reaches (answered
-  as interrupted, `answerOpenCalls`): it cancels that child from where it stood (`Sessions.cancelPausedAtRest`, OQ-74).
+  as interrupted, `answerOpenCalls`): it cancels that child from where it stood (`Sessions.cancelPausedAtRest`, OQ-101).
 - **The explicit cancel is not a rest.** The reserved run id's final stop cancels the waits, drains and finalizes as
   before: every agent `cancelled`, the iteration closed — including when it arrives while a pause or a stop is still
   coming to rest, or later while teardown runs (the iteration this run left open then closes before the run's result is
   built; a cancel after that is refused). It ends the agents' background sessions as a stop does, and lets a child
-  summarising during REQ-ORCH-080's drain finish (OQ-69).
+  summarising during REQ-ORCH-080's drain finish (OQ-96).
 - **The next continue resumes it** (`03-runtime-view.md` §2): the open iteration first, the same root and task, every
   paused agent moved back and carrying on from its record, told of its background sessions, the root handed a new
   message as its next. At its first model step each resumed agent's instructions and tools are compared with the
-  fingerprint its record kept (PD-ORCH-005 clause 14, OQ-78); when they differ the run writes a
+  fingerprint its record kept (PD-ORCH-005 clause 14, OQ-105); when they differ the run writes a
   `resumed_under_changed_instructions` warning issue and a transcript `system` row naming the agent. Declined
   ("continue without them"), its paused agents end `cancelled` and it closes before the new run's first iteration
   (`closeLeftOpenIteration`).

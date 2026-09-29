@@ -358,7 +358,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
 /**
  * PD-ORCH-005 revision 4 clause 14: each agent's record keeps a fingerprint of the system instructions and the tool
  * definitions it started with; a resumed agent runs with its persona's current ones, and when they differ the run states,
- * as a warning, which agent resumed under changed instructions (OQ-78).
+ * as a warning, which agent resumed under changed instructions (OQ-105).
  */
 describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
   const spec = (name: string, parameters: Record<string, unknown> = { type: 'object' }, description = name) => ({ name, description, parameters });

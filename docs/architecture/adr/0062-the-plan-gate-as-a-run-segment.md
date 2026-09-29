@@ -64,7 +64,7 @@ the listing and the callable set would diverge — the model would be told it ma
 thing the gate withholds, and is never cleared in place.
 
 > **Amended by [`PD-ORCH-003`](../../product/directives.md#pd-orch-003) revision 2, 2026-09-28.** A run that resumes
-> an iteration a rest left open (`PD-ORCH-005` clause 4) — or, by OQ-77's reading, one a crash left open once the
+> an iteration a rest left open (`PD-ORCH-005` clause 4) — or, by OQ-104's reading, one a crash left open once the
 > crash is recorded (clause 18) — runs it unheld, and when the gate would hold the run it holds once that iteration
 > has closed and the stop conditions found work left, before the first new iteration. So a segment boundary can now
 > fall inside a run: the resumed iteration is work already under way — usually of an execution that was already

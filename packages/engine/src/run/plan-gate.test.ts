@@ -557,7 +557,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
    * PD-ORCH-005 clause 15 (revision 4), last bullet: "an approval dialog the application's quit closes SHALL answer
    * nothing, and the quit withdraws the approval (clause 9)"; PD-CHAT-002 revision 2: a question the quit dismisses is
    * withdrawn, never cancelled. The directive decides this "in each case", a plan cycle among them: the cycle's agents end
-   * and no interruption is recorded of them, but what waits on a person is withdrawn by the stop or the quit (OQ-81).
+   * and no interruption is recorded of them, but what waits on a person is withdrawn by the stop or the quit (OQ-108).
    * The explicit cancel is final (clause 3), and a stop the run raises itself (`agent_session_aborted`: a recording
    * failure, the headless abort hook, an escalation) is neither: both still cancel the wait (REQ-TOOLS-052).
    */

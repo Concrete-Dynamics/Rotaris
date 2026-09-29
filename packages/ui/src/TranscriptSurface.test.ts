@@ -8,7 +8,7 @@ const agent = (over: Partial<AgentRecord>): AgentRecord => ({
   grantedTools: ['read_file', 'grep'], calledTools: ['grep'], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, ...over,
 });
 
-describe('TranscriptSurface — PD-ORCH-005 clause 13 (revision 4): "This task" shows no elapsed time for a paused agent (REQ-CHAT-069, OQ-73)', () => {
+describe('TranscriptSurface — PD-ORCH-005 clause 13 (revision 4): "This task" shows no elapsed time for a paused agent (REQ-CHAT-069, OQ-100)', () => {
   it('a paused agent — in REQ-CHAT-008\'s recovery state the clock still ticks — reads its state alone; a live or ended one keeps its time', () => {
     const later = '2026-09-05T10:03:12.000Z';
     expect(scopeDetail(agent({ state: 'paused', presentationState: 'paused', live: false }), later)).toBe('paused');

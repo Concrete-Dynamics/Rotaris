@@ -67,3 +67,14 @@ session total when it is repaired…" and "a continue after the crash counts wha
 resume counts only the calls it adds"; `packages/store/src/store.test.ts` — the v25 → v26 migration. All five engine cases
 failed on the code before the repair (totals 0, 1 or 6 where 4, 3 and 9 were due).
 
+**Measured live, 2026-09-29.** `pnpm live-run --confirm --skip-build --only=duress` on the repaired branch against the
+unmetered `katalyst` endpoint, pack `.live-run/runs/2026-09-29T12-40-51-800Z/` (the `fix-turn-accounting` worktree;
+git-ignored), session `c0066cc5`. The run met its 40-minute deadline as the first did — the harness's immediate exit, a
+crash — and its store read as D4's did: `sessions.tool_calls` **178** against **247** `tool_calls` rows, the orchestrator's
+**36** and the running child `d2`'s **33** not yet counted (the lag, OQ-116's, unchanged by design), the iteration's
+`root_tool_calls` **0**. A repair of a copy of that store (`Sessions.repair` from the workspace source, through a
+throwaway harness not committed) recorded the crash and brought the total to **247**, equal to the rows, with
+`root_tool_calls` **36** and `d2`'s `tool_calls` **33**, `d2` paused. The built app itself never repaired the store: the
+live run ends at the crash and does not reopen the session. The same repair left the cut call's ring row `running`, a
+defect of its own: [`a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md`](../a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md).
+

@@ -66,7 +66,15 @@ export type ControlRequest = z.infer<typeof ControlRequestSchema>;
  * `refusal.message` through it is raised in Part AO's handoff as a ruling request rather than done in a file
  * this part does not own.
  */
-export const CONTROL_REFUSAL_CODES = ['no_run', 'no_active_conversations', 'transcript_busy', 'clear_failed'] as const;
+/**
+ * `run_coming_to_rest`: PD-ORCH-005 clause 2 — a pause or a stop was accepted, and no model call follows it.
+ * `store_failed` and `session_locked`: PD-ORCH-005 clause 16's cancel of a paused child while its session rests is
+ * refused because the workspace store failed — it requires recovery (OQ-103), it could not be read or written to take
+ * the session's lock, or the chosen child's move could not be written — or because another live process holds the
+ * session's lock (OQ-101). Refusals that say nothing of the agent, so the renderer states them rather than "not
+ * cancellable".
+ */
+export const CONTROL_REFUSAL_CODES = ['no_run', 'no_active_conversations', 'transcript_busy', 'clear_failed', 'run_coming_to_rest', 'store_failed', 'session_locked'] as const;
 export type ControlRefusalCode = (typeof CONTROL_REFUSAL_CODES)[number];
 export const ControlRefusalSchema = z.object({ code: z.enum(CONTROL_REFUSAL_CODES), message: z.string() });
 export type ControlRefusal = z.infer<typeof ControlRefusalSchema>;
@@ -124,6 +132,18 @@ export const PlanGateSchema = z.object({
   changes: z.string(),
 });
 export type PlanGatePayload = z.infer<typeof PlanGateSchema>;
+
+/**
+ * PD-ORCH-005 clause 6: what the Continue action resumes — the iteration a rest or a crash left open, and how many of its
+ * agents resume with it: its root and every agent of it not in a terminal state. It is read from the store, as the plan
+ * gate is, because a session at rest has no process behind it; a live run's session carries it too, and no surface
+ * states it there.
+ */
+export const ResumableSchema = z.object({
+  iteration: z.number().int().positive(),
+  agents: z.number().int().positive(),
+});
+export type ResumablePayload = z.infer<typeof ResumableSchema>;
 
 /** REQ-CHAT-038: a queued prompt's status series. */
 export const QUEUED_PROMPT_STATUSES = ['QUEUED', 'TRIGGERED', 'COMPLETED'] as const;

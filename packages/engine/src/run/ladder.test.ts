@@ -7,6 +7,7 @@ import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/stor
 import type { SessionSnapshot } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRef, type ScriptedCall } from '@rotaris/model';
 import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, toSessionRecord, type CatalogueEntry, type DelegationOps, type ModelChoice, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
+import { conversationOf } from './record.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000d') as MachineId;
 const ref = (providerId: string, modelId: string): ModelRef => ({ providerId, modelId, dialect: 'chat' });
@@ -164,6 +165,107 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(client.requests).toHaveLength(1);
     expect(dal.getSession(sid)!.execution_status).toBe('paused');
     expect(lastWait(pub)).toBeNull();
+  });
+
+  it('PD-ORCH-005 clause 2: a pause accepted during a provider-limit wait releases it at once — no request follows, and the wait was not the user\'s cancel', async () => {
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(rateLimit()) : answer('never')));
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    expect(lastWait(pub)).not.toBeNull();
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    // REQ-MONITOR-124 (found by phase 3's second review): releasing the wait does not read `running` again.
+    expect(dal.getSession(sid)!.execution_status).toBe('pausing');
+    const result = await sessions.running(sid)!;
+    expect(result.status).toBe('interrupted');
+    expect(result.error).toBeNull();
+    expect(client.requests).toHaveLength(1);
+    expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+    expect(lastWait(pub)).toBeNull();
+  });
+
+  it('PD-ORCH-005 clause 2: the step in flight when the pause is accepted meets a provider limit — its report stands, and nothing waits or retries', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? { parts: [{ hold: held }, { error: rateLimit() }] } : answer('never')));
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    const result = await sessions.running(sid)!;
+    expect(result.status).toBe('interrupted');
+    expect(client.requests).toHaveLength(1);
+    expect(issues(sid)).not.toContain('model_wait');
+    expect(lastWait(pub)).toBeNull();
+    expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+  });
+
+  it('PD-ORCH-005 clause 2: a pause accepted during a transient retry\'s backoff makes no retry', async () => {
+    const { sessions, client } = sessionsWith((_p, turn) => (turn === 1 ? failing(modelError({ code: 'http', status: 503, headline: 'Service Unavailable' })) : answer('never')));
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    expect(issues(sid)).toEqual(['transient_llm_error']);
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    clock.advance(1000);
+    const result = await sessions.running(sid)!;
+    expect(result.status).toBe('interrupted');
+    expect(client.requests).toHaveLength(1);
+    expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+  });
+
+  it('PD-ORCH-005 clause 5: a child whose limit expires while the run comes to rest ends failed with REQ-ORCH-088\'s report — never paused, never retried on the fallback, and not summarised', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    let summaries = 0;
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: be slow' } }]) : answer('never');
+      if (persona === 'summariser') { summaries += 1; return answer('{"summary":"done"}'); }
+      return hanging(NEVER);
+    };
+    const t = sessionsWith(script, { catalogue, roleFallback: F1, childTimeoutMs: 10_000, delegation: true });
+    const sid = (t.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    expect(t.sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    // The pause waits for the step in flight; the child's limit expires meanwhile, and the backstop ends the step.
+    clock.advance(10_000);
+    await tick();
+    clock.advance(30_000);
+    await t.sessions.running(sid)!;
+    const child = dal.childrenOf(sid)[0]!;
+    expect(child).toMatchObject({ state: 'failed', interruption: null });
+    expect(JSON.parse(child.report!)).toMatchObject({ status: 'failed', errors: [{ type: 'timeout', message: 'Child timed out after 10s' }, { type: 'summary_failure', message: 'the run was coming to rest, so no summarising call was made' }] });
+    expect(timeline(sid)).not.toContain('child_timeout_fallback');
+    expect(summaries).toBe(0);
+  });
+
+  it('PD-ORCH-005 (OQ-97): a resumed child that times out is retried on its fallback from its payload, not from its record', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: be slow' } }]) : answer('ok');
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      // The step in flight at the pause asks for a call that never runs; the resumed step hangs; the fallback answers.
+      if (turn === 1) return { parts: [{ hold: held }, ...toolCalls([{ callId: 'b1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Looking.').parts] };
+      return turn === 2 ? hanging(NEVER) : answer('done on the fallback');
+    };
+    const t = sessionsWith(script, { catalogue, roleFallback: F1, childTimeoutMs: 10_000, delegation: true });
+    const sid = (t.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && (t.counts.get('child') ?? 0) < 1; i++) await tick();
+    expect(t.sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await t.sessions.running(sid)!;
+    expect(t.sessions.continueSession(sid, 'continue').ok).toBe(true);
+    for (let i = 0; i < 40 && (t.counts.get('child') ?? 0) < 2; i++) await tick();
+    // The limit expires; the landing backstop then ends the hung step, and REQ-ORCH-088 retries on the fallback.
+    clock.advance(10_000);
+    await tick();
+    clock.advance(30_000);
+    await t.sessions.running(sid)!;
+    const onFallback = t.client.requests.filter((r) => r.model.modelId === F1.modelId);
+    expect(onFallback.length).toBeGreaterThan(0);
+    // The retry starts its conversation again from the payload: one user message, the task, and nothing of the record.
+    const conversation = onFallback[0]!.messages.filter((m) => m.role !== 'system');
+    expect(conversation).toHaveLength(1);
+    expect(conversation[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).toContain('TASK: be slow');
   });
 
   it('the second wait on the same agent doubles the local backoff (REQ-NOTIFY-085)', async () => {
@@ -387,6 +489,12 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(result.status).toBe('completed');
     const child = dal.childrenOf(sid)[0]!;
     expect(child.state).toBe('succeeded');
+    // PD-ORCH-005 clause 1: the retry starts the child's conversation again from its payload, and the record says so —
+    // the conversation a resume would send carries the payload once, while the full history keeps both attempts.
+    const recorded = conversationOf(dal.agentConversation(sid, child.task_id));
+    const payloads = (ms: readonly { role: string; content: readonly { kind: string; text?: string }[] }[]) => ms.filter((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && (p.text ?? '').includes('TASK: be slow'))).length;
+    expect(payloads(recorded)).toBe(1);
+    expect(payloads(dal.agentMessagesOf(sid, child.task_id).filter((r) => r.kind === 'message').map((r) => JSON.parse(r.body) as { role: string; content: { kind: string; text?: string }[] }))).toBe(2);
     expect(timeline(sid)).toContain('child_timeout_fallback');
     expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'child_timeout_fallback')!.metadata)).toMatchObject({ from_model: 'a1', to_model: 'f1', timeout_seconds: 10 });
     // a1 hung and timed out, f1 answered; REQ-ORCH-095's one re-prompt of a text-only implementer adds a third call, on f1 still.

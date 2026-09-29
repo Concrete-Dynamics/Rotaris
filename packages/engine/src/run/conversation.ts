@@ -14,11 +14,19 @@ import type { ChatMessage } from '@rotaris/model';
  * survive compression character for character, and after one compression it is no longer derivable from
  * position alone in any way this class would rather rely on.
  */
+/** PD-ORCH-005 clause 1: what observes a conversation as it changes — the conversation record (`run/record.ts`). */
+export interface ConversationRecorder {
+  appended(message: ChatMessage): void;
+  replaced(messages: readonly ChatMessage[]): void;
+}
+
 export class Conversation {
   private entries: ChatMessage[];
-  private readonly original: ChatMessage | null;
+  private original: ChatMessage | null;
+  /** PD-ORCH-005: set when its turn ends; a compression that finishes afterwards replaces nothing and records nothing. */
+  private closed = false;
 
-  constructor(initial: readonly ChatMessage[]) {
+  constructor(initial: readonly ChatMessage[], private readonly recorder?: ConversationRecorder) {
     this.entries = [...initial];
     this.original = this.entries.find((m) => m.role === 'user') ?? null;
   }
@@ -29,10 +37,24 @@ export class Conversation {
   }
   push(message: ChatMessage): void {
     this.entries.push(message);
+    if (this.original === null && message.role === 'user') this.original = message;
+    this.recorder?.appended(message);
   }
-  /** ADR-0060 decision 1: a NEW array, so an in-flight request keeps the old one. */
-  replace(messages: readonly ChatMessage[]): void {
+  /**
+   * ADR-0060 decision 1: a NEW array, so an in-flight request keeps the old one. False, and nothing replaced or recorded,
+   * once the conversation's turn has ended: a manual pass (Part AO) can finish after its turn, when the agent's next turn
+   * already works on a new conversation built from this one's history, and a replacement recorded then would put a
+   * conversation the agent never had into its record.
+   */
+  replace(messages: readonly ChatMessage[]): boolean {
+    if (this.closed) return false;
     this.entries = [...messages];
+    this.recorder?.replaced(this.entries);
+    return true;
+  }
+  /** Its turn has ended; a later `replace` is refused. */
+  close(): void {
+    this.closed = true;
   }
   get length(): number {
     return this.entries.length;

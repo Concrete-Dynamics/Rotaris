@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { errorObservation, observation, type ToolExecutor } from './types.js';
+import { errorObservation, INTERRUPTED_FAILURE_KIND, observation, type ToolExecutor } from './types.js';
 
 /**
  * REQ-TOOLS-152/153/155/156: the three delegation tools over a port the engine fills. What the caller
@@ -13,7 +13,8 @@ export interface DelegationPort {
     | { status: 'rejected'; canonicalName: string; message: string }
   >;
   backgroundOutput(parentId: string, taskId: string, detail: 'summary' | 'verbatim'): { status: 'ok' | 'still_running' | 'not_found'; state: string; text: string };
-  waitForTasks(parentId: string, taskIds: readonly string[]): Promise<{ immediate: boolean; requested: number; text: string } | { refused: string }>;
+  /** PD-ORCH-005: `interrupted` when the run came to rest while the caller waited — the tasks waited on were paused with it. */
+  waitForTasks(parentId: string, taskIds: readonly string[]): Promise<{ immediate: boolean; requested: number; text: string } | { refused: string } | { interrupted: string }>;
 }
 
 const delegateSchema = z.object({
@@ -60,7 +61,10 @@ export function delegateTool(port: DelegationPort, parentId: string): ToolExecut
       if (!a.run_in_background) {
         // REQ-TOOLS-153: the same mechanism as wait_for_tasks, over exactly this one task.
         const w = await port.waitForTasks(parentId, [r.taskId]);
-        text += `\n\n${'refused' in w ? w.refused : w.text}`;
+        // PD-ORCH-005: a wait cut short by the run coming to rest still delegated — the child exists and is paused with
+        // the run — so the call reports the task id and the interrupted wait, and is NOT marked interrupted: an agent told
+        // "not re-run" would delegate the same work twice.
+        text += `\n\n${'refused' in w ? w.refused : 'interrupted' in w ? w.interrupted : w.text}`;
       }
       return observation(text);
     },
@@ -95,6 +99,8 @@ export function waitForTasksTool(port: DelegationPort, parentId: string): ToolEx
     execute: async (a) => {
       const r = await port.waitForTasks(parentId, a.task_ids);
       if ('refused' in r) return errorObservation(r.refused);
+      // PD-ORCH-005: the run came to rest while this call waited; the wait is interrupted and never re-run.
+      if ('interrupted' in r) return errorObservation(r.interrupted, { failureKind: INTERRUPTED_FAILURE_KIND });
       return observation(r.text);
     },
   };

@@ -18,7 +18,13 @@ import type { ApprovalOption, ApprovalPayload } from '@rotaris/contracts';
 export type ApprovalOutcome =
   | { readonly kind: 'resolved'; readonly option: ApprovalOption }
   | { readonly kind: 'cancelled' }
-  | { readonly kind: 'timed_out'; readonly afterSeconds: number };
+  | { readonly kind: 'timed_out'; readonly afterSeconds: number }
+  /**
+   * PD-ORCH-005 clause 9 (narrowing REQ-TOOLS-054): the run came to rest — by a pause, a stop, a quit or a crash — while
+   * the call waited on a person. The wait is released as WITHDRAWN, never as cancelled: a cancelled wait is REQ-TOOLS-052's
+   * denial, and a withdrawn call is recorded as interrupted and never run, never as denied. `cause` names the rest.
+   */
+  | { readonly kind: 'withdrawn'; readonly cause: string };
 
 interface Waiter {
   readonly payload: ApprovalPayload;
@@ -66,6 +72,12 @@ export class PendingApprovals {
   cancelAll(): number {
     const ids = [...this.waiters.keys()];
     for (const id of ids) this.finish(id, { kind: 'cancelled' });
+    return ids.length;
+  }
+  /** PD-ORCH-005 clause 9: every waiter released as withdrawn by the rest `cause`; the count released. */
+  withdrawAll(cause: string): number {
+    const ids = [...this.waiters.keys()];
+    for (const id of ids) this.finish(id, { kind: 'withdrawn', cause });
     return ids.length;
   }
   has(id: string): boolean {

@@ -77,8 +77,10 @@ cycle with the plan as it stands and the changes the user stated, without limit.
 **Plan gate**:
 The hold a `plan`-mode run takes before any file-modifying work is done, where it waits indefinitely for
 one of exactly three answers — approve, revise, cancel. It withholds capability rather than preventing
-the run from starting, and approval installs the run's execution grants for the remainder of that run. —
-`REQ-ORCH-153`, `REQ-ORCH-154`
+the run from starting, and approval installs the run's execution grants for the remainder of that run. A
+continue that resumes an iteration a rest left open, or a crash left open once the crash is recorded, runs it
+unheld, since it is work already under way; a gate that would hold that run holds before its first new
+iteration. — `REQ-ORCH-153`, `REQ-ORCH-154`, `PD-ORCH-003` (revision 2), `PD-ORCH-005` clause 18, OQ-104
 _Avoid_: plan mode dialog, plan approval prompt
 
 **Planning grants**:
@@ -111,8 +113,8 @@ override. The constraints that bind it hold whatever instruction text is in forc
 _Avoid_: manager, supervisor (the **loop supervisor** is a different thing)
 
 **Child**:
-An agent spawned by a delegation, occupying one of ten states of which four are terminal and
-absorbing. — `REQ-ORCH-031`, `REQ-MONITOR-014`, `REQ-MONITOR-300`
+An agent spawned by a delegation, occupying one of eleven states of which four are terminal and
+absorbing. — `REQ-ORCH-031`, `REQ-MONITOR-014`, `REQ-MONITOR-300`, `PD-ORCH-005`
 _Avoid_: subagent, worker, sub-task
 
 **Delegation**:
@@ -153,8 +155,11 @@ carries the workspace paths it changed and, unless it is itself a continuation, 
 **Continuation** (of a child):
 A new child a parent delegates to take up the remaining work of a child whose report made a continuation offer; its
 record names the child it continues. A piece of work is continued once and a continuation is never offered one of its
-own. Not a resume: the timed-out child is never restarted and earns no corrective message (`REQ-NOTIFY-112`). —
-`PD-ORCH-004`
+own. An offer outlives its run: the agent that delegated the child takes it up while that agent runs, and the root of a
+later iteration or a later run takes up one the session left before — including a resumed iteration's own, from an
+earlier run — told of it once: in the handoff, at the continue that resumes it, or in the first message of a later
+iteration of the same run. Not a resume: the timed-out child is never restarted and earns no corrective message
+(`REQ-NOTIFY-112`). — `PD-ORCH-004` (revisions 3 and 4)
 _Avoid_: resume, retry (the one retry is REQ-ORCH-088's fallback model), and "continuation" alone where a session's
 next run is meant
 
@@ -188,7 +193,12 @@ and is never a role's own tier. — `REQ-ORCH-019`
 
 **Todo list**:
 The run's work plan: phases holding tasks, created at run start with a single phase named "main" and
-appended to on resume. — `REQ-ORCH-004`
+appended to on resume. A continue that resumes an open iteration appends its message as a task that iteration
+holds beside its own, closing with it — done when it succeeds, pending on any other close and then taken up by the
+next iteration before any other pending task, which is sent the message as its task (`PD-ORCH-005` clause 17). A
+continue that states no new request appends none while the last request is still to be worked — OQ-102's reading and
+the repair of `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`, which no directive
+governs. — `REQ-ORCH-004`, `PD-ORCH-005` clause 17, OQ-102
 _Avoid_: backlog (that is a delivery state on the requirements board), checklist
 
 ### Finishing work
@@ -254,9 +264,63 @@ _Avoid_: rate card, tariff
 
 **Agent state**:
 A delegated child's state: `queued`, `starting`, `running`, `summarizing`,
-`waiting_on_dependencies`, `waiting_on_model_slot`, `succeeded`, `failed`, `cancelled`, `blocked`.
-The last four are terminal. — `REQ-MONITOR-014`, `REQ-MONITOR-300`
+`waiting_on_dependencies`, `waiting_on_model_slot`, `succeeded`, `failed`, `cancelled`, `blocked`, `paused`.
+`succeeded`, `failed`, `cancelled` and `blocked` are terminal. — `REQ-MONITOR-014`, `REQ-MONITOR-300`, `PD-ORCH-005`
+
+**Paused** (an agent):
+The one non-terminal state a run leaves an unfinished agent in when it comes to rest by a pause, a stop, a quit or a
+crash, with its **interruption** recorded and its iteration left open. It is left again when the iteration resumes,
+for the state the agent **resumes into**: where it waited if it had not started, `running` from its recorded
+conversation if it had, `summarizing` if it was writing its report. It presents as `paused`, a presentation state of its
+own, keeps its last activity, and is not settled for display with its session (`PD-ORCH-005` clause 13, revision 4); an
+agent a crash left unfinished presents so before the crash is recorded (OQ-100, a departure from clause 13's last
+sentence). One `paused` child may be cancelled while its session rests: it and its `paused` descendants end `cancelled`,
+and the rest resume (clause 16); a crash-left one is cancelled from the state it is stored in, the crash left for the
+next repair or continue to record (clauses 3 and 8, OQ-101); the cancel is made under the session's lock. A session a
+store failure left busy is not one a crash left (OQ-103). Any cancel ends every unfinished descendant, live or
+`paused`, and its confirmation names each one (OQ-100, OQ-101). Not a terminal state and not an outcome: a `paused`
+agent has no report until it ends. — `PD-ORCH-005`, `REQ-MONITOR-300`
+_Avoid_: suspended, frozen, held (the **plan gate** and the **message-limit pause** hold a run; they leave no agent paused)
+
+**Interruption**:
+What left an agent `paused` — exactly one of `pause`, `stop`, `quit` or `crash` — recorded on the agent and on its open
+iteration. A crash is recorded when the session is next repaired or continued, since nothing runs to record it at the
+time; the user's cancel of one child while the session rests records nothing of it but the cancelled agents' own calls
+the crash cut off, answered as interrupted, which no later record reaches (OQ-101). An explicit cancel is not an
+interruption: it ends its agents `cancelled`, and those are never resumed — once it is carried out; one the host died
+before carrying out leaves the store as any crash does, and is taken as crash-left (OQ-103). — `PD-ORCH-005`
+_Avoid_: stop reason (that is the run's, `REQ-MONITOR-301`), cancellation
+
+**Comes to rest** (a run):
+A run stops by a pause, a stop (the stop control, graceful or forced) or a quit and leaves its unfinished agents
+`paused`, its iteration open; a crash leaves the same state once it is recorded. The explicit cancel, a stop the run
+raises on its own account, and a plan cycle never come to rest. — `PD-ORCH-005` clauses 2, 3 and 15
+_Avoid_: suspend, park (a run **parks** at the plan gate, which is a durable hold)
+
+**Withdrawn** (an approval or a question):
+Taken back because the run came to rest while a call waited on a person — or a stop or a quit landed during a plan
+cycle, whose agents end rather than rest: it leaves the pending list, the timeline records which interruption withdrew
+it, and the call is recorded as interrupted and never run. Never a denial, and no answer is replayed later. —
+`PD-ORCH-005` clauses 9 and 15, `PD-CHAT-002` revision 2, narrowing `REQ-TOOLS-054` and `REQ-SESSION-025` (OQ-108)
+_Avoid_: denied, cancelled (REQ-TOOLS-052's cancellation is a denial)
+
+**Resume** (an iteration):
+What a continue does with the iteration a rest left open, or a crash left open once the crash is recorded: the same
+iteration carries on before anything else runs, its root and every `paused` agent restored from its record with its
+identity, each from its last message. Declining it — "continue without them" — ends those agents `cancelled` and
+closes the iteration. A resume is never a **continuation** (PD-ORCH-004's new child that carries on a cut-off child's
+work). — `PD-ORCH-005` clauses 4, 6, 7 and 18
+_Avoid_: restart, replay, rerun
+
+**Explicit cancel**:
+REQ-MONITOR-126's confirmed control, which cancels the run by its reserved agent id: final — every agent it ends is
+`cancelled` and never resumed. Every confirmed "Cancel the run?" is it, whichever surface asks — except a persona
+window's on the run's own instance while the session rests, which is refused and does nothing (OQ-101). Distinct from
+the stop control, which a second activation forces and which stays a stop. — `PD-ORCH-005` clauses 3 and 15,
+`REQ-MONITOR-009`, `REQ-MONITOR-126`
+_Avoid_: stop (the stop control comes to rest)
 
 **Presentation agent state**:
 The smaller vocabulary an engine state is mapped onto for display — `running`, `waiting`, `queued`,
-`done`, `failed`, `cancelled`. Never store one of these. — `REQ-MONITOR-046`
+`done`, `failed`, `cancelled`, and `paused` for a paused agent. Never store one of these. — `REQ-MONITOR-046`,
+`PD-ORCH-005` clause 13

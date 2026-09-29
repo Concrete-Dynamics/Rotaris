@@ -109,6 +109,8 @@ export interface CommandContext {
   readonly raiseNotice: (severity: NoticeSeverity, headline: string, detail?: string, recovery?: Recovery, sessionId?: string) => void;
   readonly raiseNoticeKeyed: (key: string, severity: NoticeSeverity, headline: string, detail?: string, recovery?: Recovery, sessionId?: string) => boolean;
   readonly recoveryFor: (action: string | undefined, workspace?: string, sessionId?: string) => Recovery;
+  /** PD-ORCH-005 clause 9: the application is quitting — the process exiting, or no main window staying (`exit.ts`). */
+  readonly quitting: () => boolean;
   readonly announceRepairs: (repaired: readonly { readonly sessionId: string; readonly from: string; readonly reason: string }[]) => void;
   /**
    * The updater (first-release-plan.md §4.6, ADR-0054): the one held offer, the one operation in flight, and the

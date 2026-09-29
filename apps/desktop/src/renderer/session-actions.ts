@@ -1,4 +1,4 @@
-import type { CommandOutcome, CommandRequest, ImageAttachmentInput, PauseResolution, PermissionPreset, PlanDecision, QuestionAnswers, RendererBridge } from '@rotaris/contracts';
+import { RUN_AGENT_ID, type CommandOutcome, type CommandRequest, type ImageAttachmentInput, type PauseResolution, type PermissionPreset, type PlanDecision, type QuestionAnswers, type RendererBridge } from '@rotaris/contracts';
 import { useShellState } from '@rotaris/ui';
 
 /**
@@ -63,7 +63,12 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
     return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
   }
 
-  /** REQ-SESSION-186 / ADR-0013: the shell resolves focus to a session id, then sends the control. */
+  /**
+   * REQ-SESSION-186 / ADR-0013: the stop control — graceful, and forced on a second activation. The shell resolves focus
+   * to a session id, then sends the control. PD-ORCH-005 clause 3: a stop brings the run to rest, and its unfinished
+   * agents resume when the session is continued, so it is never the cancel below; forced or not, it is a stop
+   * (PD-ORCH-005 clause 15).
+   */
   async function stopRun(force: boolean): Promise<{ ok: true } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;
     if (!sessionId) return { ok: false, reason: 'No run is active.' };
@@ -85,13 +90,27 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
     return (r.value as { ok: boolean }).ok ? { ok: true } : { ok: false, reason: 'The run did not accept the mode change.' };
   }
 
-  /** REQ-MONITOR-009: cancel one child; the shell resolves the session, the run decides. */
-  async function cancelAgent(agentId: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+  /**
+   * REQ-MONITOR-126/127 and REQ-MONITOR-009: the confirmed cancel of the whole run, sent as the cancellation of the
+   * reserved run id. PD-ORCH-005 clause 3 keeps it final — every agent ends `cancelled` and none is resumed — which is
+   * what tells it apart from the stop above; every confirmed "Cancel the run?" sends it (clause 15). A refusal says the
+   * run is no longer cancellable (REQ-MONITOR-127).
+   */
+  async function cancelRun(): Promise<{ ok: true } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;
     if (!sessionId) return { ok: false, reason: 'No run is active.' };
-    const r = await send({ kind: 'session.control', request: { op: 'cancelAgent', sessionId, args: { agentId } } });
+    const r = await send({ kind: 'session.control', request: { op: 'cancelAgent', sessionId, args: { agentId: RUN_AGENT_ID } } });
     if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
-    return (r.value as { ok: boolean }).ok ? { ok: true } : { ok: false, reason: 'That agent is not cancellable (unknown, or already finished).' };
+    return (r.value as { ok: boolean }).ok ? { ok: true } : { ok: false, reason: 'The run is no longer cancellable.' };
+  }
+
+  /**
+   * REQ-MONITOR-009: cancel one child; the shell resolves the session, the run decides. A refusal carries the engine's
+   * words when it states them — PD-ORCH-005 clause 16's at-rest cancel refused by the store's failure or another
+   * process's lock, which say nothing of the agent — and otherwise says the agent is not cancellable (REQ-MONITOR-128).
+   */
+  async function cancelAgent(agentId: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+    return control('cancelAgent', { agentId }, 'That agent is not cancellable (unknown, or already finished).');
   }
 
   /** ADR-0010 channel 1: one control against the focused session, `false` named as a refusal (REQ-MONITOR-006). */
@@ -134,11 +153,15 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
     void send({ kind: 'session.control', request: { op: 'cancelQuestions', sessionId, args: { requestId } } });
   }
 
-  /** REQ-SESSION-110 / REQ-MONITOR-125: continue the focused session, or resolve its pause. */
-  async function continueSession(action: PauseResolution = 'continue'): Promise<{ ok: true } | { ok: false; reason: string }> {
+  /**
+   * REQ-SESSION-110 / REQ-MONITOR-125: continue the focused session, or resolve its pause. PD-ORCH-005 clause 6: the
+   * agents a rest left paused resume, unless `withoutPaused` asks to continue without them — on a session a crash left
+   * too (clause 18).
+   */
+  async function continueSession(action: PauseResolution = 'continue', opts: { readonly withoutPaused?: boolean } = {}): Promise<{ ok: true } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;
     if (!sessionId) return { ok: false, reason: 'No session is loaded.' };
-    const r = await send({ kind: 'session.continue', sessionId, action });
+    const r = await send({ kind: 'session.continue', sessionId, action, ...(opts.withoutPaused === true ? { withoutPaused: true } : {}) });
     return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
   }
 
@@ -183,5 +206,5 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
     return rearmed.ok ? { ok: true } : { ok: false, reason: rearmed.detail ?? rearmed.headline };
   }
 
-  return { answerQuestions, cancelAgent, cancelQuestions, continueSession, control, planDecision, planEdit, setMode, setRunStartMode, stopRun, submitPrompt };
+  return { answerQuestions, cancelAgent, cancelQuestions, cancelRun, continueSession, control, planDecision, planEdit, setMode, setRunStartMode, stopRun, submitPrompt };
 }

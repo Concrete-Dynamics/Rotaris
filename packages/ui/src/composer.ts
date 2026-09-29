@@ -1,4 +1,4 @@
-import { presentationStatus, PROJECT_SETUP_SEND_REASON, type PresentationStatus } from '@rotaris/contracts';
+import { presentationStatus, PROJECT_SETUP_SEND_REASON, STATUS_LABELS, type PresentationStatus } from '@rotaris/contracts';
 
 /**
  * Part AB — the composer's and the run header's rules, as values rather than as markup, so each is checkable
@@ -61,6 +61,35 @@ export function runStateOf(executionStatus: string | null, needsRecovery: boolea
 }
 export function runStateLabel(state: RunState): string {
   return RUN_STATE_LABELS[state];
+}
+
+/**
+ * REQ-SHELL-038's status strip names the run's state in REQ-NOTIFY-048's presentation vocabulary (REQ-NOTIFY-049),
+ * except in REQ-CHAT-008's synthetic recovery state. There it reads `Run needs recovery`, as the run header, the
+ * Workspace badge and the Mission view do. It never reads "run Running" while no run exists and the run-level agent is
+ * drawn `paused` (PD-ORCH-005 clause 13, OQ-100). The recovery test is `runStateOf`'s, so the strip and the header
+ * cannot disagree about which statuses it covers.
+ */
+export function statusStripRunItem(executionStatus: string | null, needsRecovery: boolean): string {
+  if (executionStatus === null) return 'no session';
+  if (runStateOf(executionStatus, needsRecovery) === 'recovery') return RUN_STATE_LABELS.recovery;
+  return `run ${STATUS_LABELS[presentationStatus(executionStatus)]}`;
+}
+
+/** What the Pause control's pending mark is scoped to: the session shown and whether its run is busy (REQ-NOTIFY-050). */
+export interface PauseScope {
+  readonly sessionId: string | null;
+  readonly busy: boolean;
+}
+/**
+ * REQ-MONITOR-296: the Pause control shows `pausing` only after the run accepted the pause, and that mark belongs to
+ * the run that accepted it. It ends when that run leaves the busy states (it paused, or ended first) or another session
+ * is shown, so a later run of any session starts with Pause offered. Before this rule the mark was never cleared, and
+ * every later run in the window drew Pause disabled.
+ */
+export function pausePendingAfter(pending: boolean, before: PauseScope, after: PauseScope): boolean {
+  if (!pending) return false;
+  return after.busy && after.sessionId === before.sessionId;
 }
 
 /**

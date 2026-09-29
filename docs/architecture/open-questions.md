@@ -102,7 +102,7 @@ to resume), **OQ-104** (where the plan gate holds a run that resumed an iteratio
 **OQ-105** (what an agent's fingerprint is taken of, when it is compared and where the warning is stated), **OQ-106** (whose
 root the handoff's artifact is taken from), **OQ-107** (which offers a later iteration's root is told, and where) **and
 OQ-108** (what the audit of clause 15, clause 19, `PD-CHAT-001` revision 4 and `PD-CHAT-002` revision 2 leaves
-undecided), each stating the reading the build proceeds under. The fifteen were raised as OQ-67 to OQ-81 on their branch and renumbered at the merge, OQ-67 to OQ-93 having been taken on `main`. **On 2026-09-29 the owner ruled eight decisions as recommended ([R-067](../product/requests.md#r-067))**: OQ-96's
+undecided), each stating the reading the build proceeds under. The fifteen were raised as OQ-67 to OQ-81 on their branch and renumbered at the merge, OQ-67 to OQ-93 having been taken on `main`. **And OQ-109** (whether a `code_intelligence` entry configured `enabled: false` still makes `code-intelligence-setup` applicable. It is built as applicable, availability alone), raised 2026-09-28 by the repair of `plan-gate-proof`'s fixture under R-062 — raised as OQ-94 on its branch and renumbered at the merge, OQ-94 to OQ-108 having been taken on `main`. **On 2026-09-29 the owner ruled eight decisions as recommended ([R-067](../product/requests.md#r-067))**: OQ-96's
 stop status, OQ-103's last question and OQ-66's open part among the questions already here, and ESC-42 in
 `owner-decisions.md`; and four were **raised and ruled in the same entry — OQ-110** (the dispatch layer's retries come
 before the ladder's), **OQ-111** (what the report summariser reads), **OQ-112** (a `write_scope` for a persona that cannot
@@ -5042,6 +5042,27 @@ as clause 15 reads, or be withheld (OQ-101). Whether the "Command not run" notic
 move into the notices row, a layout change. Whether a stop during a plan cycle should persist a status and a summary of
 its own rather than a stop's `paused` and "came to rest".
 
+**OQ-109 — Does a `code_intelligence` entry configured `enabled: false` still make `code-intelligence-setup` applicable?** *(REQ-WORKSPACE-090, REQ-MCP-037, REQ-CONFIG-465, REQ-MCP-040, REQ-WORKSPACE-083. Raised 2026-09-28 by the repair of [`plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md`](../defects/fixed/plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md), under [R-062](../product/requests.md#r-062). Raised as OQ-94 on its branch and renumbered at the merge, OQ-94 to OQ-108 having been taken on `main`.)*
+
+REQ-WORKSPACE-090 makes the initialization task applicable exactly when the resolved configuration holds a server
+named `code_intelligence` that is launchable, "judged by the one availability rule REQ-MCP-037 fixes", and it forbids
+this domain a second rule. REQ-MCP-037's rule looks at the transport and the command, and never at `enabled`. So a
+workspace whose entry is disabled still has the task pending on first open, and still runs the bundled runtime's
+`project create` in the background. Measured in `plan-gate-proof` on Linux, 1.8 to 10.4 s of work for a server no run
+will connect to. REQ-CONFIG-465 says of a disabled entry that "no connection to it is attempted". The setup launches
+the runtime's own command line, not a connection to the server, and so falls outside that sentence's letter. Two
+readings:
+
+- **availability alone** — `enabled` does not enter applicability. A disabled entry's workspace is still set up, so
+  enabling the entry later finds the project ready. This is the letter of REQ-WORKSPACE-090 and REQ-MCP-037.
+- **enabled and available** — a disabled entry makes the task inapplicable, like an unlaunchable one. Nothing runs for
+  a server the user turned off, which is the spirit of REQ-CONFIG-465 and REQ-MCP-040's "turning a server off is a
+  choice". But it is a second input to a rule REQ-WORKSPACE-090 says has only one.
+
+**What the build proceeds under:** the first reading (`apps/desktop/src/run-host/mcp.ts`, `setupApplicable`), because
+it is the one the requirements state. The proofs that disable the entry to keep run starts short are unaffected,
+because the setup does not delay a run start. **A ruling would decide** whether `enabled: false` is part of what
+"launchable" means for this task.
 
 **OQ-110 — Which retries come first when a model call fails: the dispatch layer's, or the ladder's?** *(REQ-CONFIG-086, whose `num_retries` "overrides the dispatch layer's default of **5**"; REQ-ORCH-091 (c), the suspended wait on a 429 without Retry-After, with its `model_wait` issue; REQ-ORCH-092, the transient budget (default 1), its delay min(2.0, n) and its `transient_llm_error` issue; REQ-SESSION-142, the session log. Raised 2026-09-29 from the first live run's finding L3 under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-109 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 

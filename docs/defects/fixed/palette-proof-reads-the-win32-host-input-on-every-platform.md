@@ -44,3 +44,30 @@ is Windows-only by construction.
 - `AGENTS.md`: the proof's row.
 
 Noticed 2026-09-28 from the proof sweep's red on Linux under R-062.
+
+## Outcome
+
+Repaired 2026-09-28 under R-062, in the proof only. The product and the capture seam are unchanged.
+`apps/desktop/scripts/palette-proof.mjs` now sends `ROTARIS_CAPTURE_OS_INPUT` and `ROTARIS_CAPTURE_OS_INPUT_SCRIPT`
+only when `process.platform === 'win32'`, and asserts the host's readings (`where` during and after, `click`'s
+`personaEnabled`, and the unchanged content under the blocked click) only there. On any other platform,
+`results.json` → `modality.hostInput` records `applicable: false`, the reason, and what is therefore not measured. It
+also keeps the persona window's content readings, marked unasserted. Everything else still runs and is still asserted
+on Linux:
+
+- the application's own reading: enabled before the palette, disabled while it is open, enabled after Escape;
+- the palette open and then closed at those instants;
+- main's modality log pair;
+- sections 1, 2, 4 and 5 unchanged.
+
+The Windows path is textually the same assertions it was. It was not re-run here, because no Windows host was
+available.
+
+Verified: `palette-proof` green three times in a row under Xvfb on Linux as root, Node 24
+(`xvfb-run -a -s "-screen 0 1600x1000x24" node apps/desktop/scripts/palette-proof.mjs --skip-build`, exit 0 each time,
+`PART W PROOF PASSED`). Another agent's Electron proofs were running in a second worktree during runs 2 and 3.
+
+**Still owed, and not something this repair could do:** the Linux form of the real-input check. That is an X11 driver
+for the `os-input` seam (XTEST, for example `xdotool` under Xvfb) with a positive control, meaning a click that does
+change the persona window while it is enabled. Without the control, "unchanged while disabled" cannot be told apart
+from a click that missed. That is new harness surface, not a repair of this one.

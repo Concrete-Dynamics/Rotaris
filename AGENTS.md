@@ -58,7 +58,7 @@ wrong.
 | | `composer-proof` | the composer's chips, drafts, history recall and run header |
 | | `slash-proof` | the composer's slash-command catalogue; every eval is read by offset AND expression (`lib/capture-evals.mjs`), and REQ-CHAT-027's ground is the first opaque background from the input up; **red on the product** since the composer dock: the partial shade is corrected against `--rt-bg` and painted on `--rt-surface` (`docs/defects/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`) |
 | | `chat-controls-proof` | manual compression, the transcript clear, the prompt-file commands |
-| | `palette-proof` | one action vocabulary reaching the screen three ways |
+| | `palette-proof` | one action vocabulary reaching the screen three ways. ADR-0048's **host-input** reading (`os-input.ps1`: a real Win32 click and keystrokes, and `IsWindowEnabled`) runs on `win32` only. Elsewhere `results.json` → `modality.hostInput` states it not applicable and why, and the application's own `isEnabled` reading is still asserted (`docs/defects/fixed/palette-proof-reads-the-win32-host-input-on-every-platform.md`) |
 | | `notice-proof` | the notice store and its chain (ADR-0049) |
 | | `library-proof` | the Library shell and its Prompts tab |
 | | `mission-proof` | the Mission view, the per-agent inspector, the persona windows |

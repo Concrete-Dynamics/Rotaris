@@ -162,10 +162,13 @@ const log3 = launch('consent', s3, {
   ROTARIS_CAPTURE_EVAL_AT: [
     // `visible` is not decoration: the dialog was in the DOM and off screen, and every DOM assertion
     // beside it passed on that. A box that exists and cannot be seen is UIR-014's class.
-    'JSON.stringify({probe:"dialog",headline:document.querySelector(\'[data-testid="project-setup-headline"]\')?.textContent??null,intro:document.querySelector(\'[data-testid="project-setup-intro"]\')?.textContent??null,word:document.querySelector(\'[data-setup-task-word]\')?.textContent??null,visible:(()=>{const d=document.querySelector(\'[data-testid="project-setup-dialog"]\');if(!d)return null;const r=d.getBoundingClientRect();return r.width>0&&r.height>0&&r.top<window.innerHeight&&r.bottom>0&&r.left<window.innerWidth&&r.right>0&&document.elementFromPoint(r.left+r.width/2,r.top+8)!==null&&d.contains(document.elementFromPoint(r.left+r.width/2,r.top+8));})(),send:document.querySelector(\'[data-testid="composer-send"]\')?.disabled??null,reason:document.querySelector(\'[data-testid="composer-send"]\')?.title??document.querySelector(\'.composer__refusal\')?.textContent??null})>>[data-testid="project-setup-dialog"]@~15000',
+    // The reading marks the document once taken, and the Escape below waits for that mark, so the dialog is read
+    // before it is answered rather than in whichever order two matches of one selector fall (a harness order, no
+    // assertion changed: `docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`).
+    '(()=>{const r=JSON.stringify({probe:"dialog",headline:document.querySelector(\'[data-testid="project-setup-headline"]\')?.textContent??null,intro:document.querySelector(\'[data-testid="project-setup-intro"]\')?.textContent??null,word:document.querySelector(\'[data-setup-task-word]\')?.textContent??null,visible:(()=>{const d=document.querySelector(\'[data-testid="project-setup-dialog"]\');if(!d)return null;const r=d.getBoundingClientRect();return r.width>0&&r.height>0&&r.top<window.innerHeight&&r.bottom>0&&r.left<window.innerWidth&&r.right>0&&document.elementFromPoint(r.left+r.width/2,r.top+8)!==null&&d.contains(document.elementFromPoint(r.left+r.width/2,r.top+8));})(),send:document.querySelector(\'[data-testid="composer-send"]\')?.disabled??null,reason:document.querySelector(\'[data-testid="composer-send"]\')?.title??document.querySelector(\'.composer__refusal\')?.textContent??null});document.documentElement.setAttribute(\'data-proof-read\',\'dialog\');return r;})()>>[data-testid="project-setup-dialog"]@~15000',
   ].join(';;'),
-  // Pressed as soon as the dialog exists, not at a clock: the run reaches it when it reaches it.
-  ROTARIS_CAPTURE_KEYS: 'Escape>>[data-testid="project-setup-dialog"]@~18000',
+  // Pressed as soon as the dialog has been read, not at a clock: the run reaches it when it reaches it.
+  ROTARIS_CAPTURE_KEYS: 'Escape>>[data-proof-read="dialog"] [data-testid="project-setup-dialog"]@~18000',
   ROTARIS_CAPTURE_AFTER_MS: '32000',
 }, 120_000);
 const dialog3 = JSON.parse(evalOf(log3, 'probe:"dialog"'));

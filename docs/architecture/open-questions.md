@@ -109,7 +109,7 @@ before the ladder's), **OQ-111** (what the report summariser reads), **OQ-112** 
 write is refused) **and OQ-113** (REQ-LIBRARY-092's fallback, answered by amendment). **Three more were raised the same day
 from the live runs and left open: OQ-114** (the specification's fixed figures on a reasoning model's critical path, and a
 continuation that starts from nothing), **OQ-115** (the code-intelligence server's imperative tool description, rendered
-verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-117** (what an iteration is told of a task it takes up that is not the run's own) was raised the same day by the repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` and left open. **OQ-119** (whether the task the report summariser keeps as its start may pass REQ-ORCH-110's 2,000 per event) **and OQ-120** (the size of the facts given to the report summariser) were raised the same day by the repair of D1 and left open, as OQ-118 and OQ-119 on their branch, renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-117** (what an iteration is told of a task it takes up that is not the run's own) was raised the same day by the repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` and left open. **OQ-119** (whether the task the report summariser keeps as its start may pass REQ-ORCH-110's 2,000 per event) **and OQ-120** (the size of the facts given to the report summariser) were raised the same day by the repair of D1 and left open, as OQ-118 and OQ-119 on their branch, renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. **And OQ-122** (whether the window may open the setup dialog before the open's resolution, and what a skip answered in that interval records — built as: the dialog opens on the values, and such a skip performs the open's one automatic resolution first), raised 2026-09-29 by repairing `init-proof`'s red on Linux under R-062. **And OQ-123** (which run REQ-WORKSPACE-105's "no run is in progress" means — built as a run the user started, so a background run neither withdraws the setup prompt nor is drawn in its dialog), raised the same day by the same repair's second round. The two were raised as OQ-109 and OQ-110 on their branch, renumbered there to OQ-118 and OQ-119 when OQ-109 to OQ-117 had been taken on `main`, and renumbered again at the merge, OQ-118 to OQ-121 having been taken on `main` meanwhile. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -5443,6 +5443,79 @@ stop, so its 30 s force exit is not met by a drain.
 given what is left of the grace, or the drain replaced by the grace for the cancel), or run after it as built; and
 whether REQ-ORCH-080's drain should still apply to the explicit cancel at all, now that `PD-ORCH-005` has a stop leave
 the background children paused rather than cancelled.
+
+**OQ-122 — May the window open the setup dialog before the open's resolution, and what does a skip answered in that interval record?** *(REQ-WORKSPACE-083, REQ-WORKSPACE-084, REQ-WORKSPACE-086, REQ-WORKSPACE-088, REQ-WORKSPACE-102, REQ-WORKSPACE-105, REQ-WORKSPACE-111, REQ-WORKSPACE-141; ADR-0064, "On Linux as root — 2026-09-28". Raised 2026-09-29 by repairing `../defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md` under [R-062](../product/requests.md#r-062). Raised as OQ-109 on its branch, then renumbered OQ-118 on the branch, OQ-109 to OQ-117 having been taken on `main` meanwhile, and renumbered OQ-122 at the merge, OQ-118 to OQ-121 having been taken on `main` by then.)*
+
+The window reads the initialization state as it mounts. REQ-WORKSPACE-105 makes the prompt due "exactly when at least
+one consent-requiring task is pending and no run is in progress", and the mount read's values say so, so the window
+opens the dialog. Main's one automatic resolution comes later, in REQ-WORKSPACE-141's interactive slot, 800 ms after the
+workspace is acknowledged. But REQ-WORKSPACE-083 makes the prompt request a **product of that resolution**, and the same
+resolution starts the background tasks "regardless of whether a prompt is also due". A skip answered between the two
+meets clauses that pull apart:
+
+- REQ-WORKSPACE-086 records "every given pending task id as skipped", and REQ-WORKSPACE-111 persists "the listed task
+  ids". The dialog lists the runnable tasks (REQ-WORKSPACE-083, REQ-WORKSPACE-106), `code-intelligence-setup` among them.
+- REQ-WORKSPACE-088 says that task "starts by itself when the workspace opens". A skip recorded before the resolution
+  leaves it resolved, so the resolution starts nothing, now or on any later open.
+- REQ-WORKSPACE-084 owes an **attempted** task exactly one outcome. ADR-0064's finding (2) leaves such a task out of a
+  skip on that ground. A task not yet started is not attempted.
+
+Readings:
+
+- **the dialog waits for the resolution**: the window auto-opens the dialog only once the open's resolution has produced
+  the prompt request. That needs a signal beside REQ-WORKSPACE-105's nine values, which that clause says are "exactly"
+  what the interface works from. The composer gate of REQ-WORKSPACE-112 would also stay off until then.
+- **the skip brings the resolution forward**: the dialog opens on the values. A skip that arrives before the open's one
+  automatic resolution performs that resolution first, or waits for the one under way. The background task it starts
+  is then attempted, and finding (2)'s reading applies. The slot then finds the resolution made (REQ-WORKSPACE-102).
+- **the skip withholds the owed task**: a pending background task is left out of the skip until the resolution has
+  started it. This contradicts REQ-WORKSPACE-086 and REQ-WORKSPACE-111 for an id that is given and listed. It was built
+  first on the repairing branch and withdrawn before it merged.
+- **literal**: the skip records every given id, and the background task never starts on that open or any later one.
+  This contradicts REQ-WORKSPACE-083 and REQ-WORKSPACE-088.
+
+**What the build proceeds under:** the second reading (`InitializationCoordinator.skip` and `resolve` in
+`apps/desktop/src/main/initialization.ts`). It keeps REQ-WORKSPACE-105's values as they are. It records every given
+id except one the live run is attempting, which is the exception ADR-0064 already rests on REQ-WORKSPACE-084, and one
+already recorded completed, which is not pending (REQ-WORKSPACE-086; added 2026-09-29 by the repair of
+`../defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`). It runs the
+open's resolution once, and only when the window has plainly accepted input, since the skip is the window's own
+answer (REQ-WORKSPACE-102). **A ruling would decide** whether the dialog may precede the resolution at all. If it may
+not, the first reading replaces the second, and the skip path then never meets an unresolved open.
+
+**OQ-123 — Which run does REQ-WORKSPACE-105's "no run is in progress" mean: any run, or one that answers the setup prompt?** *(REQ-WORKSPACE-083, REQ-WORKSPACE-103, REQ-WORKSPACE-105, REQ-WORKSPACE-106, REQ-WORKSPACE-107, REQ-WORKSPACE-110, REQ-WORKSPACE-112; ADR-0064, "On Linux as root — 2026-09-28". Raised 2026-09-29 by repairing `../defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md` under [R-062](../product/requests.md#r-062). Raised as OQ-110 on its branch, then renumbered OQ-119 on the branch, OQ-109 to OQ-117 having been taken on `main` meanwhile — `main`'s OQ-110 already stood when this one was raised under that number — and renumbered OQ-123 at the merge, OQ-118 to OQ-121 having been taken on `main` by then.)*
+
+REQ-WORKSPACE-105 makes the setup prompt due "exactly when at least one consent-requiring task is pending and no run is
+in progress", and its nine values carry one in-progress flag. On a fresh workspace with a consent task, the open's
+resolution produces the prompt request **and** starts the background tasks "regardless of whether a prompt is also due"
+(REQ-WORKSPACE-083). So a background run is in progress while the prompt it was raised beside is still unanswered. The
+clauses pull apart:
+
+- REQ-WORKSPACE-107 closes an auto-opened, unanswered dialog without a skip "when the underlying prompt request
+  disappears". REQ-WORKSPACE-112 gates the composer "while the setup prompt is unanswered".
+- REQ-WORKSPACE-110 says "Pressing Initialize while a run is already live SHALL start nothing and flip the dialog to its
+  in-progress state". That describes a dialog still in its prompt state, with Initialize to press, while a run is live.
+  On one window the only such run is a background run.
+- REQ-WORKSPACE-103: background tasks start "without any dialog and without blocking the interface; nothing renders
+  their progress live".
+
+Readings:
+
+- **any run**: while the background run is live the prompt is not due. An auto-opened dialog closes unanswered
+  (REQ-WORKSPACE-107), the composer gate lifts, and when the run ends the prompt is due again, but the dialog has
+  already had its one automatic opening (REQ-WORKSPACE-105). The user meets the gate with the dialog shut. This reading
+  leaves REQ-WORKSPACE-110's case unreachable.
+- **a run that answers the prompt**: a run the user started, which runs the listed consent tasks. A background run
+  answers nothing, so the prompt stays due beside it, the gate stays on, and the dialog stays in its prompt state until
+  the user skips, or presses Initialize and so flips it to the live run (REQ-WORKSPACE-110).
+
+**What the build proceeds under:** the second reading. The state carries `backgroundRun` beside the report and the
+nine values, unchanged (`packages/contracts/src/initialization.ts`). `setupPromptDue` (`packages/ui/src/ProjectSetupDialog.tsx`)
+is the one answer that the window's auto-open and the composer gate read. The dialog draws a background run's report
+only once Initialize has been pressed (`dialogReport`). Before this, the built product followed neither reading
+consistently: the window lifted the gate for any run, as the first reading does, but kept the dialog open and drew the
+background run inside it. **A ruling would decide** which run REQ-WORKSPACE-105 means. If it is any run, the dialog closes
+on the background start and the composer gate goes with it.
 
 **OQ-124 — Which agents' elapsed clocks advance: REQ-MONITOR-045's "live", or every agent neither ended nor paused?** *(REQ-MONITOR-107, "While the agent is live the figure advances"; REQ-MONITOR-045, "An agent is \"live\" exactly when its presentation state is running"; REQ-MONITOR-064, whose "live (running, waiting, or queued)" uses the word in a second, wider sense; REQ-MONITOR-110/111 with resolution item 25 of `docs/spec/resolutions/02-run-monitoring-steering.md`, "A surface holding a spawn timestamp and showing a fallback … is now a defect"; OQ-100, whose reading keeps a `paused` agent's figure off "This task". Raised 2026-09-29 by the repair of
 [`a-waiting-agents-elapsed-time-is-not-shown.md`](../defects/fixed/a-waiting-agents-elapsed-time-is-not-shown.md)

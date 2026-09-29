@@ -361,6 +361,24 @@ beginning or ending. The **runtime view**'s step-4 and step-5 rows and its pool 
 attribution), which no view describes. No package, edge, process, channel, message kind, store column or owner of state
 changed.
 
+**A skip before the open's resolution (2026-09-28, R-062).** The **process view**'s `initialization.*` paragraph says
+which listed ids a skip leaves out (only one the live run is attempting) and that a skip arriving before the open's
+one automatic resolution performs that resolution first (OQ-122). No package, edge, process, channel, message kind,
+store column or owner of state changed. **Its second round (2026-09-29):** the same paragraph now names the
+`backgroundRun` field the initialization state carries on its existing channel. The window reads it to keep a
+background run out of the setup dialog and to keep the prompt due beside it (REQ-WORKSPACE-103/110, OQ-123). It is one
+more field on an existing message; no message kind changed. **Its third round (2026-09-29):** the paragraph adds that a
+skip leaves an id already recorded completed where it is, and that a skip after the resolution reads nothing more before
+it records; nothing else in any view moved. **Its fourth round (2026-09-29):** the paragraph adds that main makes every
+marker write through one queue and builds each patch inside its turn from the file as it stands, and that a skip decides
+what it leaves out in that turn. No message, channel or owner of state changed; the writer is still main's coordinator.
+The **runtime view**'s `initialization:` / `project_init:` bullet still described the first execution's re-read before
+each recording, with the reason this round falsified; it was corrected in place in the repair round that followed, the
+old sentence kept and marked superseded beside a statement of the queue (`ExecuteDeps.commit` replaces `reread`).
+**Its fifth round (2026-09-29):** the queue is one per workspace root rather than one for the coordinator, so a
+workspace just opened does not wait behind the last marker write of the one it replaced (REQ-WORKSPACE-013); the
+process view's paragraph and the runtime view's bullet say so. Nothing else in any view moved.
+
 **The notices generator reads the shipped setup manifest (2026-09-28, R-062).** `tools/notices/notices.mjs` reads
 `apps/desktop/resources/setup-manifest.json` rather than `pins.json` as REQ-STARTUP-142's manifest, by a copy of
 `SetupManifestSchema`'s field names that `notices.test.ts` holds to the schema; `pins.json` is read for the runtime's

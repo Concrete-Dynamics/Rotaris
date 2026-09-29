@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chordEvent, matchProbe, parseSelectors, parseSteps, targetProbe } from './host.js';
+import { chordEvent, matchProbe, parseSelectors, parseSteps, selectWait, targetProbe } from './host.js';
 
 /**
  * The capture script's grammar, which every `*-proof` script writes and which — until this module
@@ -74,5 +74,18 @@ describe('the capture script grammar (verification seams)', () => {
     // The tilde is read off the TIME, never off the selector, so `~` inside a selector is just a character.
     expect(parseSteps('[data-x="~a"]@~50')[0]).toEqual({ selector: '[data-x="~a"]', arg: null, at: 50, until: true });
     expect(parseSteps('[data-x="~a"]@50')[0]!.until).toBe(false);
+  });
+
+  it('waits a select step on the control alone, keeping its deadline, because its argument is the value to choose', () => {
+    const [waiting] = parseSteps('select[aria-label="Egress policy"]>>deny@~6000');
+    // The waiting form survives: a select drawn late is chosen when it appears, not missed at an instant.
+    expect(selectWait(waiting!)).toEqual({ selector: 'select[aria-label="Egress policy"]', arg: null, at: 6000, until: true });
+    // Matching on `deny` as the control's TEXT would wait for a select that never exists.
+    expect(matchProbe(selectWait(waiting!).selector, selectWait(waiting!).arg)).toContain('=> true');
+    // The appointment form is unchanged: it still fires at its instant.
+    const [fixed] = parseSteps('select>>read-only@1800');
+    expect(selectWait(fixed!)).toEqual({ selector: 'select', arg: null, at: 1800, until: false });
+    // The value itself is not lost — the seam reads it from the original step.
+    expect(waiting!.arg).toBe('deny');
   });
 });

@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { type BrowserWindow, screen } from 'electron';
 import { millis } from '@rotaris/kernel';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION, type NoticeAction, type NoticeSeverity } from '@rotaris/contracts';
-import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, centreWhen, chordEvent, clickAt, doubleClickAt, onStep, parseSelectors, parseSteps, pause, releaseProbe, settleAt, targetProbe } from './host.js';
+import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, centreWhen, chordEvent, clickAt, doubleClickAt, onStep, parseSelectors, parseSteps, pause, releaseProbe, selectWait, settleAt, targetProbe } from './host.js';
 
 /**
  * THE SCRIPTABLE SEAMS — clicks, typed text, chords, renderer `eval`, notices, prompts, drags, OS input,
@@ -552,8 +552,9 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   // The reason this exists: `config-proof`'s models scenario named `select[aria-label="Model for …"]` and
   // the control had become a `SearchableSelect`, so the step logged `no such control`, the launch carried on,
   // and the proof failed five assertions later on a file that was missing the key nobody had chosen.
+  // `@ms` chooses at that instant; `@~ms` chooses as soon as the control is drawn, giving up at `ms` (`selectWait`).
   for (const step of steps(process.env['ROTARIS_CAPTURE_SELECT'])) {
-    clocks.timers.after(millis(step.at), async () => {
+    onStep(host, selectWait(step), async () => {
       const outcome = await win.webContents.executeJavaScript(`(async () => {
         const el = document.querySelector(${JSON.stringify(step.selector)});
         if (!el) return 'no such control';

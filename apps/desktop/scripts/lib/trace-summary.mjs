@@ -21,6 +21,13 @@
  *    script event ran because script read a layout-dependent property; those are summed apart, because the note's
  *    second candidate was exactly that — a pin-to-bottom scroll write forcing a synchronous layout.
  *
+ * The trace account says how long script ran and not WHICH script, because a `FunctionCall` event names only the entry
+ * point a task called into — React's scheduler, a microtask flush — and never the component or helper the time went to.
+ * The second half of this module reads the answer out of V8's own CPU profile, which the traced launches record under
+ * `disabled-by-default-v8.cpu_profiler` (`readCpuProfile`, `attributeProfile`, `summariseAppendProfile`): the sampled
+ * stacks, each sample's time charged either to the browser work open on the thread at that instant or to the sampled
+ * function's self time, and each function named by the source module the bundler says it came from.
+ *
  * Nothing here is product code. It runs only from the proofs.
  */
 
@@ -250,5 +257,228 @@ export function summariseAppendTrace(events, options = {}) {
     unfinished,
     aggregate,
     topFunctions,
+  };
+}
+
+// ── V8's CPU profile: which functions the script time went to ────────────────────────────────────────────────
+
+/**
+ * The two categories that make Chromium's tracing sample the renderer's JavaScript: the profiler, and its fine
+ * interval (V8 samples every 1 ms without the second and every 100 µs with it; about 170 µs was measured on the Linux
+ * host, 2026-09-29). A per-increment difference of a millisecond or two is a handful of samples at the coarse interval.
+ */
+export const CPU_PROFILE_CATEGORIES = Object.freeze(['disabled-by-default-v8.cpu_profiler', 'disabled-by-default-v8.cpu_profiler.hires']);
+
+/** The buckets whose time is the browser's own work, whatever script was on the stack when Blink did it. */
+const BROWSER_BUCKETS = new Set(['style', 'layout', 'prePaint', 'paint', 'commit', 'observers', 'hitTest']);
+
+/**
+ * One thread's sampled profile, as Chromium's tracing writes it: a `Profile` event on the profiled thread carrying the
+ * profile's `startTime`, and `ProfileChunk` events sharing its `id` — written from V8's profiler thread, so matched by
+ * process and id rather than by thread — each carrying the call-tree nodes first seen since the last chunk
+ * (`callFrame`, `parent`) and the samples taken since it (`samples`, node ids; `timeDeltas`, microseconds from the
+ * previous sample, on the trace's own clock).
+ *
+ * A delta can be negative (the profiler thread timestamps a sample a little out of order), so the samples are placed
+ * first and sorted after. A sample stands for the time to the next one, capped at `maxGapFactor` sampling intervals: a
+ * gap longer than that is the profiler thread not running, not the sampled function running on, and charging it to
+ * whichever leaf came before would name the wrong function. What the cap removed is reported (`cappedUs`), never hidden.
+ * Answers null for a thread the trace holds no profile of.
+ */
+export function readCpuProfile(events, thread, { maxGapFactor = 4 } = {}) {
+  if (thread === null) return null;
+  const profile = events.find((e) => e.name === 'Profile' && e.pid === thread.pid && e.tid === thread.tid);
+  if (profile === undefined) return null;
+  const chunks = events.filter((e) => e.name === 'ProfileChunk' && e.pid === thread.pid && e.id === profile.id).sort((a, b) => a.ts - b.ts);
+  const nodes = new Map();
+  const samples = [];
+  let t = Number(profile.args?.data?.startTime ?? profile.ts);
+  for (const chunk of chunks) {
+    const data = chunk.args?.data ?? {};
+    for (const node of data.cpuProfile?.nodes ?? []) nodes.set(node.id, { frame: node.callFrame ?? {}, parent: node.parent ?? null });
+    const ids = data.cpuProfile?.samples ?? [];
+    const deltas = data.timeDeltas ?? [];
+    for (let i = 0; i < ids.length; i += 1) {
+      t += Number(deltas[i] ?? 0);
+      samples.push({ t, node: ids[i], dur: 0 });
+    }
+  }
+  samples.sort((a, b) => a.t - b.t);
+  const gaps = [];
+  for (let i = 1; i < samples.length; i += 1) if (samples[i].t > samples[i - 1].t) gaps.push(samples[i].t - samples[i - 1].t);
+  const intervalUs = median(gaps) ?? 0;
+  const cap = intervalUs * maxGapFactor;
+  let cappedUs = 0;
+  for (let i = 0; i < samples.length; i += 1) {
+    const gap = i + 1 < samples.length ? samples[i + 1].t - samples[i].t : intervalUs;
+    samples[i].dur = Math.min(gap, cap);
+    cappedUs += gap - samples[i].dur;
+  }
+  return { nodes, samples, intervalUs, cappedUs };
+}
+
+/**
+ * The source module each line of a bundle came from, read off the region markers the bundler writes around every
+ * module it inlines (`//#region ../../packages/ui/src/transcript/pool.ts`), so that a sampled frame names the file it
+ * belongs to rather than a line of a seventy-thousand-line bundle. Lines are 0-based, as V8's call frames count them.
+ */
+export function bundleRegions(text) {
+  const lines = text.split('\n');
+  const regions = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const m = /^\/\/#region (.+)$/.exec(lines[i]);
+    // A virtual module is written with a literal `\0` before its name (`\0rolldown/runtime.js`); a path is relative to
+    // the renderer's root, so the `../` climbing out of it is dropped and a workspace file reads `packages/…`.
+    if (m) regions.push({ line: i, module: m[1].replace(/^\\0/, '').replace(/^(\.\.\/)+/, '') });
+  }
+  return { lines, regions };
+}
+
+/** The module a 0-based bundle line lies in, or null before the first region. */
+export function moduleAt(bundle, line) {
+  let lo = 0;
+  let hi = bundle.regions.length - 1;
+  let at = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (bundle.regions[mid].line <= line) { at = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  return at === -1 ? null : bundle.regions[at].module;
+}
+
+/**
+ * A sampled frame's name: its function (or `(anonymous)`), the module it came from when the frame is in `bundle`'s
+ * script, and its 1-based line in the bundle so two anonymous functions of one module stay apart. A frame V8 made up —
+ * `(program)`, `(idle)`, `(garbage collector)`, `(root)` — is its own name.
+ */
+export function frameName(frame, bundle = null, bundleUrl = null) {
+  const fn = frame.functionName || '(anonymous)';
+  if (!frame.url) return fn;
+  const line = Number(frame.lineNumber ?? -1);
+  if (bundle !== null && bundleUrl !== null && frame.url.endsWith(bundleUrl)) {
+    const module = moduleAt(bundle, line) ?? 'bundle';
+    return `${fn} ${module}:${line + 1}`;
+  }
+  return `${fn} ${frame.url.split('/').pop()}:${line + 1}`;
+}
+
+/**
+ * Where a profile's samples inside `span` went. `own` is the same thread's complete events (`selfTimes`), so each
+ * sample is charged by the trace account's own rule — the nearest bucketed ancestor-or-self of the deepest event open
+ * at the sample's instant — and the two accounts cannot disagree about what is script or what is idle:
+ *
+ *  - a sample with NO event open is the thread idle, whatever V8 labelled it;
+ *  - a sample inside style, layout, pre-paint, paint, the commit, the observer delivery's own time or hit testing is
+ *    the BROWSER's, whatever JavaScript was on the stack; a layout forced by script lands here, and `under` says which
+ *    function was on top of the stack when it was forced (`(idle)` when none was: the frame's own rendering);
+ *  - `(garbage collector)` is reported as itself, and `(program)` — native time — as `program`, together with the
+ *    samples V8 labels `(idle)` although a task is running (V8 marks the isolate idle whenever Blink is outside script,
+ *    so its `(idle)` cannot be read as the thread waiting: measured 2026-09-29, the frames' paint was sampled as it);
+ *  - every other sample is its leaf FUNCTION's self time.
+ *
+ * Every figure is in microseconds; `busy` is everything but idle.
+ */
+export function attributeProfile(profile, own, span, { name = (frame) => frameName(frame) } = {}) {
+  const functions = new Map();
+  const browser = Object.fromEntries([...BROWSER_BUCKETS].map((b) => [b, 0]));
+  const under = new Map();
+  let idle = 0;
+  let program = 0;
+  let gc = 0;
+  let script = 0;
+  let count = 0;
+  let next = 0;
+  const open = [];
+  const ends = (i) => own[i].ts + own[i].dur;
+  const nameOf = (id) => name(profile.nodes.get(id)?.frame ?? {});
+  for (const s of profile.samples) {
+    if (s.t < span.start) continue;
+    if (s.t >= span.end) break;
+    while (next < own.length && own[next].ts <= s.t) {
+      while (open.length > 0 && ends(open[open.length - 1]) <= own[next].ts) open.pop();
+      open.push(next);
+      next += 1;
+    }
+    while (open.length > 0 && ends(open[open.length - 1]) <= s.t) open.pop();
+    count += 1;
+    if (open.length === 0) { idle += s.dur; continue; }
+    const leaf = profile.nodes.get(s.node)?.frame?.functionName ?? '';
+    const bucket = chargeOf(own, open[open.length - 1]);
+    if (BROWSER_BUCKETS.has(bucket)) {
+      browser[bucket] += s.dur;
+      const key = `${bucket} under ${nameOf(s.node)}`;
+      under.set(key, (under.get(key) ?? 0) + s.dur);
+      continue;
+    }
+    if (leaf === '(garbage collector)') { gc += s.dur; continue; }
+    if (leaf === '(program)' || leaf === '(idle)' || leaf === '(root)') { program += s.dur; continue; }
+    const key = nameOf(s.node);
+    functions.set(key, (functions.get(key) ?? 0) + s.dur);
+    script += s.dur;
+  }
+  const browserTotal = Object.values(browser).reduce((a, b) => a + b, 0);
+  return { samples: count, idle, busy: script + browserTotal + gc + program, script, browser, gc, program, functions, under };
+}
+
+/** A function's module, read back out of `frameName`'s form; `(program)` and the other made-up frames have none. */
+export function moduleOfName(key) {
+  const m = / ([^ ]+):\d+$/.exec(key);
+  return m === null ? key : m[1];
+}
+
+/**
+ * The profile of a traced append launch, per increment: the increments are the windows whose sequence numbers the
+ * launch's own samples carry (`seqs` — the attach increment is not among them), and the span is theirs, from the
+ * first one's arrival to the last one's shown frame, which is the span the trace account's per-increment figures
+ * read too. `bundle`/`bundleUrl` name the modules; `top` bounds the lists. Figures are milliseconds per increment.
+ */
+export function summariseAppendProfile(events, { seqs = null, bundle = null, bundleUrl = null, top = 40 } = {}) {
+  const { thread, windows } = applyWindows(events);
+  const kept = windows.filter((w) => seqs === null || seqs.has(w.seq));
+  const profile = readCpuProfile(events, thread);
+  if (profile === null || kept.length === 0) return null;
+  const span = { start: Math.min(...kept.map((w) => w.start)), end: Math.max(...kept.map((w) => w.end)) };
+  const account = attributeProfile(profile, selfTimes(events, thread.pid, thread.tid), span, { name: (frame) => frameName(frame, bundle, bundleUrl) });
+  const n = kept.length;
+  const per = (us) => Math.round((us / n) * 1000) / 1_000_000;
+  const modules = new Map();
+  for (const [key, us] of account.functions) modules.set(moduleOfName(key), (modules.get(moduleOfName(key)) ?? 0) + us);
+  const ranked = (map) => [...map.entries()].sort((a, b) => b[1] - a[1]);
+  return {
+    increments: n,
+    spanMs: Math.round(span.end - span.start) / 1000,
+    samples: account.samples,
+    intervalUs: profile.intervalUs,
+    cappedMs: Math.round(profile.cappedUs) / 1000,
+    perIncrement: {
+      busy: per(account.busy), idle: per(account.idle), script: per(account.script), gc: per(account.gc), program: per(account.program),
+      browser: Object.fromEntries(Object.entries(account.browser).map(([k, v]) => [k, per(v)])),
+    },
+    functions: ranked(account.functions).slice(0, top).map(([name, us]) => ({ function: name, selfMs: per(us) })),
+    modules: ranked(modules).map(([module, us]) => ({ module, selfMs: per(us) })),
+    under: ranked(account.under).slice(0, top).map(([key, us]) => ({ what: key, ms: per(us) })),
+    // Every function, so two launches can be compared on all of them rather than on each one's top list.
+    all: Object.fromEntries([...account.functions.entries()].map(([k, us]) => [k, per(us)])),
+  };
+}
+
+/**
+ * Loaded minus empty, per increment, over the functions and the modules of two profiles — what the loaded transcript
+ * spends that the empty one does not, ranked, with both sides' figures beside the difference.
+ */
+export function profileDifference(empty, loaded, { top = 30 } = {}) {
+  if (empty === null || loaded === null) return null;
+  const rows = (a, b) => {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    return [...keys].map((k) => ({ name: k, emptyMs: a[k] ?? 0, loadedMs: b[k] ?? 0, differenceMs: Math.round(((b[k] ?? 0) - (a[k] ?? 0)) * 1000) / 1000 }))
+      .sort((x, y) => y.differenceMs - x.differenceMs);
+  };
+  const byModule = (s) => Object.fromEntries(s.modules.map((m) => [m.module, m.selfMs]));
+  const totals = (s) => ({ busy: s.perIncrement.busy, script: s.perIncrement.script, gc: s.perIncrement.gc, program: s.perIncrement.program, ...Object.fromEntries(Object.entries(s.perIncrement.browser).map(([k, v]) => [`browser.${k}`, v])) });
+  const functions = rows(empty.all, loaded.all);
+  return {
+    totals: rows(totals(empty), totals(loaded)),
+    modules: rows(byModule(empty), byModule(loaded)),
+    functions: [...functions.slice(0, top), ...functions.slice(-5)],
   };
 }

@@ -6,7 +6,10 @@ import {
 import { createMeasurementCache, createRenderCache, identityOf, measureKey, reuseKey, sourceTextOf, type TranscriptCacheStats } from './cache.js';
 import { CAP_DEFAULTS, isLive, rowKey, type DisplayCaps } from './project.js';
 import { createProjector } from './projector.js';
-import { buildOffsets, captureAnchor, estimateHeight, newUpdatesLabel, restoreAnchor, updateShape, visibleRange, type Anchor } from './pool.js';
+import {
+  beginMeasuring, buildOffsets, captureAnchor, commitTable, createMeasureLedger, estimateHeight, markMeasured, newUpdatesLabel, remeasuredSince,
+  restoreAnchor, reuseOffsets, updateShape, visibleRange, type Anchor,
+} from './pool.js';
 import { isOwnScroll } from './scroll.js';
 import { countLabel, indexAll, step as stepMatch, type Match } from './search.js';
 import { Row, TranscriptSurfaceProvider, isReasoningRow, rowMenuEntries, type RowMenuRequest, type TranscriptSurface } from './Row.js';
@@ -122,7 +125,12 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
 
   // REQ-CHAT-058's two bounded caches, and the slot nodes, held as VALUES rather than as refs so that reading a
   // measurement while laying out is an ordinary read of state rather than a ref read during render.
-  const [measurements] = useState(createMeasurementCache);
+  //
+  // The ledger hears which row identities the measurement pass re-measured (and which entries the bounds evicted), so the
+  // offset table below re-reads those rows and no others (`reuseOffsets`, REQ-CHAT-055); it also holds the last table
+  // React committed, the one the next is built against — as a value, like the caches.
+  const [ledger] = useState(createMeasureLedger);
+  const [measurements] = useState(() => createMeasurementCache((key) => markMeasured(ledger, identityOf(key))));
   /**
    * The last height each row IDENTITY measured, whatever its content was at the time. It is the fallback between
    * an exact measurement and an estimate, and it exists for the two cases where an exact one cannot arrive in
@@ -133,7 +141,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
    * jump twice per chunk — estimate, paint, observe, paint — and made two producing agents flicker against each
    * other (docs/defects/live-rows-are-never-measured.md).
    */
-  const [lastByIdentity] = useState(createMeasurementCache);
+  const [lastByIdentity] = useState(() => createMeasurementCache((identity) => markMeasured(ledger, identity)));
   const [renderings] = useState(createRenderCache<ReactElement>);
   const [attachmentBodies, setAttachmentBodies] = useState<ReadonlyMap<string, string>>(() => new Map());
   useEffect(() => {
@@ -277,13 +285,26 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   // four times an increment it was part of the script the R-048 measurement round traced the append cost to. The
   // measurement cache is mutated in place by the observer and `measuredVersion` is the signal that it has, which is
   // why the version is a dependency though nothing here reads its value.
-  const table = useMemo(() => buildOffsets(display.map((d) => {
-    const open = expanded.has(d.key);
-    const key = measureKey(d, viewport.width, open, null);
-    return measurements.peek(key) ?? lastByIdentity.peek(d.key) ?? estimateHeight(d, open, viewport.width);
-  })),
+  //
+  // And rebuilt only where it changed (`reuseOffsets`): a row that is the same object at the same position, and whose
+  // identity the measurement pass has not re-measured since the committed table was built, keeps its height and its
+  // offset. Rebuilt whole, the pass was still a thousand lookups and estimates two or three times an increment — the
+  // largest single term of the loaded side's extra script in V8's CPU profile of the built app (2026-09-29, the defect
+  // note's "CPU profile" section): about 0.3 ms an increment at 1,200 rows, and nothing on an empty transcript.
+  const table = useMemo(() => reuseOffsets(
+    ledger.committed,
+    { display, width: viewport.width, expanded, stamp: ledger.stamp },
+    ledger.marked.size === 0 ? null : (identity, since) => remeasuredSince(ledger, identity, since),
+    (d) => {
+      const open = expanded.has(d.key);
+      const key = measureKey(d, viewport.width, open, null);
+      return measurements.peek(key) ?? lastByIdentity.peek(d.key) ?? estimateHeight(d, open, viewport.width);
+    },
+  ),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `measuredVersion` is the observer's "the cache changed" signal
-  [display, expanded, viewport.width, measurements, lastByIdentity, measuredVersion]);
+  [display, expanded, viewport.width, measurements, lastByIdentity, ledger, measuredVersion]);
+  // The table the next one is built against is the one React committed; the ledger's marks it has read are forgotten.
+  useLayoutEffect(() => { commitTable(ledger, table); }, [table, ledger]);
 
   // ---- REQ-CHAT-074: the match set, indexed against DISPLAYED rows -----------------------------------------
   const matches: Match[] = searchOpen && query !== '' ? indexAll(display, query) : [];
@@ -342,24 +363,27 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver((entries) => {
       let changed = false;
+      // One stamp per delivery: every identity this delivery re-measures — and every entry a bound evicts meanwhile, which
+      // the caches report themselves — is marked with it, and the offset table re-reads exactly those rows.
+      beginMeasuring(ledger);
       for (const entry of entries) {
         const key = (entry.target as HTMLElement).dataset['measure'];
         const height = entry.contentRect.height;
         if (key === undefined || key === '' || height <= 0) continue;
+        const identity = identityOf(key);
         const held = measurements.peek(key);
-        if (held === undefined || Math.abs(held - height) > 0.5) { measurements.set(key, height, 0); changed = true; }
+        if (held === undefined || Math.abs(held - height) > 0.5) { measurements.set(key, height, 0); markMeasured(ledger, identity); changed = true; }
         // The same reading, filed under the row's identity, so the next content this row carries starts from
         // what it actually drew rather than from an estimate.
-        const identity = identityOf(key);
         const previous = lastByIdentity.peek(identity);
-        if (previous === undefined || Math.abs(previous - height) > 0.5) { lastByIdentity.set(identity, height, 0); changed = true; }
+        if (previous === undefined || Math.abs(previous - height) > 0.5) { lastByIdentity.set(identity, height, 0); markMeasured(ledger, identity); changed = true; }
       }
       if (changed) setMeasuredVersion((v) => v + 1);
     });
     for (const node of slotNodes.values()) observer.observe(node);
     return () => observer.disconnect();
     // Re-observing on every displayed change is what keeps a rebound slot measured under its NEW key.
-  }, [measurements, slotNodes, display, capacity]);
+  }, [measurements, lastByIdentity, ledger, slotNodes, display, capacity]);
 
   /** REQ-CHAT-053 / REQ-CHAT-071 / REQ-CHAT-072: what an update does to the reader's position. */
   useLayoutEffect(() => {

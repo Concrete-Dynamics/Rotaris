@@ -35,7 +35,7 @@ record already decides, and every ruling it needs is named as the owner's rather
   `delegate`'s `session_id` (OQ-66) and the graceful stop's status (OQ-96, whose note is settled) — and has directed that
   this workflow repair the open notes and the live runs' findings. Each note stays open until its repair lands; OQ-114 to
   OQ-116 are open against the live runs' figures and block nothing in this plan.*
-- The four red proofs: `transcript-proof`, `library-proof`, `part-h-proof`, and `theme-proof`'s contrast section
+- The ~~four~~ red proofs: ~~`transcript-proof`,~~ `library-proof`, `part-h-proof`, and `theme-proof`'s contrast section
   (OQ-56). *`transcript-proof` was recorded as passing on 2026-09-28 (REQ-CHAT-055's measurement round under R-062) and
   reopened the same day: its fix round passed four runs of six, never three in a row, on Linux, and fix round 2 two of six (nine passes in fifteen); ~~the per-increment cost
   no longer grows with depth, the pooled comparison stands about two thirds of a frame over at the median~~ *(fix round 1's
@@ -45,8 +45,11 @@ record already decides, and every ruling it needs is named as the owner's rather
   and a half over at the median (+24.1 ms); the verifier's three on that build read +9.0, +40.7 and +18.1 ms, and fix
   round 3 (record only) re-ran it three times on a quiet host, +2.9, +11.0 and +0.9 ms, three passes, with the loaded
   side's script still 1.2–4.2 ms higher per increment in each traced pair — six passes in twelve on that build, so the
-  note is not moved
-  ([note](../defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md), open; OQ-89 — OQ-76 on its branch, renumbered at the merge).* *Two more were measured red on 2026-09-27 while §2.2 was built, both before it and unchanged by it:*
+  note is not moved; the CPU-profile round of 2026-09-29 named the loaded side's extra script by function — the
+  transcript's own passes over every displayed row — and repaired them, after which twelve consecutive runs passed and sixteen of seventeen in all, the one red on a saturated host (a series on a host that stays quiet is still owed),
+  so the append comparison is green again on Linux and the note is moved
+  ([note](../defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md), repaired; OQ-89 — OQ-76 on its branch, renumbered at the merge — holds the
+  reading under a burst, with the round's evidence).* *Two more were measured red on 2026-09-27 while §2.2 was built, both before it and unchanged by it:*
   ~~`slash-proof` at its first catalogue assertion since ADR-0063
   ([note](../defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)), and `skills-proof`'s policy
   launch on Linux only ([note](../defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)).~~
@@ -71,6 +74,11 @@ record already decides, and every ruling it needs is named as the owner's rather
   backstop). `sandbox-proof` reads the host's own verdict since 2026-09-28 ([Windows verdict, fixed](../defects/fixed/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md)).
   It is green on Linux without `bwrap`. On Linux with `bwrap` it is red on a **product** defect that IC-8's first Linux
   execution found ([absent-subpath residue](../defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md)).
+  Measured red there on 2026-09-29, beside REQ-CHAT-055's CPU-profile round: ~~`terminal-proof` (112 of 116; its
+  live section's commands are PowerShell's,
+  [note](../defects/fixed/terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md))~~ *(measured at `fa377e6`, before `ef1540e`'s repair of the same defect on `main`)* and
+  `chat-controls-proof` in a checkout without the bundled code-intelligence runtime
+  ([note](../defects/chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md)).
 - The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005` (**built 2026-09-28**, R-062), `PD-ORCH-004` and `PD-MONITOR-002`.
 - The macOS and Linux artifacts, which are bound by IC-3 and IC-8 and now also by `PD-STARTUP-001`.
 

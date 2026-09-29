@@ -4752,7 +4752,10 @@ tests in `run/crash.test.ts` ("PD-ORCH-005 clause 3 with REQ-MONITOR-126 (OQ-103
 without them" and a continue by message from the recovery state and from `interrupted`) — found the repair holding on
 every path the note named, and one thing the ruling did not name: a paused agent the record cancels keeps its `interruption` and
 `resume_state`, as clause 6's decline leaves one (`Run.cancelPausedAgents`), which the runtime view's `children` row
-already records. Thirteen of its fourteen cases fail with the repair's reads and writes withdrawn.
+already records. Thirteen of its fourteen cases fail with the repair's reads and writes withdrawn. In the built app,
+`resilience-proof`'s `cancel` launch — "Cancel the run" confirmed from the wait header — wrote the mark on a store the app
+had migrated to v27, and the run's own close kept it; no proof kills the host between the cancel and its teardown, so
+the record's half is shown by the unit cases alone.
 
 **OQ-104 — Where does the gate hold a run that resumed an iteration, and what does that plan cycle plan?** *(`PD-ORCH-003` revision 2, with `PD-ORCH-005` clause 18; REQ-ORCH-152, which the directive narrows for an iteration a rest left open (`PD-ORCH-005` clause 4), and which the reading below that an iteration a crash left open resumes unheld too departs from for an iteration the directive does not govern; REQ-ORCH-153, whose gate that reading also departs from for the same iteration; and REQ-ORCH-021, REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-073, REQ-ORCH-085, REQ-ORCH-154, REQ-CHAT-040, REQ-SESSION-115 and REQ-TOOLS-010, which it does not name. Raised 2026-09-28 by building `PD-ORCH-003` revision 2 under [R-065](../product/requests.md#r-065). Numbered OQ-77 while it was built; renumbered when it reached `main`, where OQ-77 had been taken meanwhile.)*
 

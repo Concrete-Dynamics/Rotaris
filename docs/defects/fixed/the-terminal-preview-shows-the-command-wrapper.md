@@ -60,3 +60,7 @@ on a re-opened stream starts on the row after the closing text, …", which fail
 before the change. Also by `apps/desktop/src/main/terminal-display.test.ts`: two commands through the real terminal
 tool on the host's real shell, applied to the renderer's `TerminalStreamSet` over `@xterm/headless`. It failed the same
 way before the change and runs under `pnpm terminal-stream-proof` (`reopenedStreamStartsOnAFreshRow`).
+
+The live run of the corrected branch (pack `.live-run/runs/2026-09-29T22-46-43-191Z`, git-ignored) again showed no
+preview in its pictures: the commands ran in a child whose preview block none of the three PNGs caught. The fresh row
+is shown by the two cases above and the stream proof, not by a live picture.

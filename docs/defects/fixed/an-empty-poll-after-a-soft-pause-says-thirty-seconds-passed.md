@@ -50,3 +50,6 @@ empty command right after the wedge. On the built branch against `katalyst` (pac
 said "No new output in the 5.3 seconds since the previous observation, and none for 35.3 seconds"; 5,294 ms had passed
 since the wedge's pause. The model polled once more after 25 s and received the wedge's own exit code 0, which the first
 run's agent never saw. All checks passed. Repaired 2026-09-29 under R-067.
+
+With the truncation, on the built branch against `katalyst` (pack `.live-run/runs/2026-09-29T22-46-43-191Z`,
+git-ignored), the poll after the wedge stated 2.7 seconds where 2,772 ms had passed.

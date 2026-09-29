@@ -34,7 +34,7 @@ import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
 import { ConversationRecord } from './record.js';
 import { answerOpenCalls, iterationAgents } from './crash.js';
-import { interruptedResult } from './interruption.js';
+import { callsRun, interruptedResult } from './interruption.js';
 import { firstTurn, resumedStart, resumeNoticeOf, type TurnStart } from './resume.js';
 import { offersForFirstMessage } from './offers.js';
 import { randomUUID } from 'node:crypto';
@@ -1193,8 +1193,9 @@ export class Run {
         compressionFor: this.compressionFor,
         // REQ-ORCH-024: the BUDGET cell only narrows; with no pre-flight the configured policy stands unchanged.
         budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
-        // REQ-MONITOR-102: a child's tool calls are the session's too; the entry agent's own are added at the turn below.
-        countToolCalls: (n) => this.aggregates.addToolCalls(n),
+        // REQ-MONITOR-102: a child's tool calls are the session's too; the entry agent's own are added at the turn below. The
+        // child's own count is persisted with the total, in one transaction, so a crash leaves the two agreeing.
+        countToolCalls: (n, child) => { this.aggregates.addToolCalls(n); if (child) this.persistToolCalls({ children: [child] }); },
         // REQ-EVENTS-053, PD-MONITOR-001: a child's provider requests are the run's, counted where the entry agent's are.
         onRequestUsage: this.onRequestUsage,
         summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), ...(this.deps.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: this.deps.childStallTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
@@ -1268,6 +1269,13 @@ export class Run {
       }, text, history, this.abort.signal, content);
     };
     let outcome: TurnOutcome | null = null;
+    /**
+     * REQ-MONITOR-102: the calls the root's record held when this execution began — every one of them already counted, when
+     * its earlier execution returned or by the crash record — so a root given up on counts only what its record gained.
+     */
+    const recordedAtStart = resume ? callsRun(this.record.load(rootTaskId)) : 0;
+    /** An execution iteration's root has a count on its row (`iterations.root_tool_calls`); a plan cycle's has no row. */
+    const rootCount = iterationOverride === undefined ? iteration : null;
     try {
       const start: TurnStart = resume ? this.resumedRootStart(rootTaskId) : { kind: 'fresh', task };
       const running = children ? children.runWithChildren(this.rootId, turnFn, start, this.abort.signal) : firstTurn(turnFn, start);
@@ -1284,6 +1292,9 @@ export class Run {
       } else {
         outcome = settled;
         this.aggregates.addToolCalls(outcome.toolCallCount);
+        // REQ-MONITOR-102: the root's count on its iteration moves with the total, in one transaction (REQ-ORCH-097's
+        // cadence: when its turn returns).
+        this.persistToolCalls(rootCount === null ? {} : { root: { iteration: rootCount, add: outcome.toolCallCount } });
       }
       /*
        * REQ-ORCH-080: a stop with active background children drains before anything is cancelled — only a stop that
@@ -1340,7 +1351,29 @@ export class Run {
       // A root given up on that no rest paused — the explicit cancel — still leaves no call row running (REQ-SESSION-129):
       // its open call is recorded cut off, naming no rest (OQ-96, "A call cut by no rest").
       if (rootDetached && !answered && this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: config.persona }, iteration, null);
+      /*
+       * REQ-MONITOR-102 (the repair of `a-roots-calls-before-a-crash-never-reach-the-session-total.md`): a root given up on
+       * never returns its count, so its calls are counted from its record — once its open calls are answered, so a call it
+       * asked for and never started is not one — less what the record held when this execution began. Only a root that
+       * never returned: the grace's timer still sets `rootDetached` when it runs out after the root returned — while the
+       * rest waits for its children — and that root's calls were counted with its outcome above.
+       */
+      if (rootDetached && outcome === null && this.deps.dal) {
+        const gained = Math.max(0, callsRun(this.record.load(rootTaskId)) - recordedAtStart);
+        this.aggregates.addToolCalls(gained);
+        this.persistToolCalls(rootCount === null ? {} : { root: { iteration: rootCount, add: gained } });
+      }
     }
+  }
+
+  /**
+   * REQ-MONITOR-102: the run's tool-call total as its aggregates hold it, written with the per-agent counts that now hold
+   * the calls just added (`SessionWriter.countToolCalls`) — so a process death after this never finds a call one of them
+   * counts and the other does not. The next save publishes it.
+   */
+  private persistToolCalls(counts: Parameters<SessionWriter['countToolCalls']>[0]): void {
+    const r = this.deps.writer.countToolCalls(counts, this.aggregates.figures.toolCalls);
+    if (!r.ok) this.deps.warn(`the tool-call count of ${this.sessionId} was not persisted: ${r.error.code}`);
   }
 
   /**

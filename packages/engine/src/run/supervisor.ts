@@ -181,9 +181,16 @@ export class LoopSupervisor {
     return null;
   }
 
+  /**
+   * REQ-ORCH-104's raw-count fallback: "repeated identical assistant messages (last 3 normalized-equal) or ≥ 4 consecutive
+   * same-tool calls — never from counts alone". The turn observes every model step's text, `''` for a step that only called
+   * tools, so a message that normalises to nothing is no assistant message and never evidence: three tool-only steps are
+   * three steps with no message, not three identical ones (live-run finding D3, the repair of
+   * `tool-only-steps-read-as-three-identical-messages.md`). The last three messages are the last three with text.
+   */
   private rawFallbackHasEvidence(events: readonly SupervisorEvent[]): boolean {
-    const messages = events.filter((event): event is Extract<SupervisorEvent, { kind: 'message' }> => event.kind === 'message');
-    if (messages.length >= 3 && new Set(messages.slice(-3).map((event) => normaliseMessage(event.text))).size === 1) return true;
+    const messages = events.flatMap((event) => (event.kind === 'message' && normaliseMessage(event.text) !== '' ? [normaliseMessage(event.text)] : []));
+    if (messages.length >= 3 && new Set(messages.slice(-3)).size === 1) return true;
     const tools = events.filter((event): event is Extract<SupervisorEvent, { kind: 'tool' }> => event.kind === 'tool');
     return tools.length >= 4 && new Set(tools.slice(-4).map((event) => event.name)).size === 1;
   }

@@ -72,6 +72,15 @@ the **component view**'s `roles.ts` line name them; no package, edge, message ki
 At its verification the runtime view gained that a live run-level agent with no resolution yet lists nothing
 (`runLevelGrant`) rather than its declared tools.
 
+**A root's calls before a crash reach the session total (REQ-MONITOR-102, R-067, 2026-09-29).** The root had no persisted
+tool-call count, so a crash — which ends its turn without returning — lost its calls. `iterations.root_tool_calls` (store
+**v26**) holds the calls of the root the total holds; `SessionWriter.countToolCalls` writes the total with the root's or a
+child's count in one transaction; the crash record adds what the root's and each unfinished child's record hold beyond their
+counts, and a root the stop's grace gave up on — one that never returned — is counted from its record. REQ-ORCH-097's
+cadence is unchanged. The **runtime view**'s §2 crash paragraph (the counting step), its §7 `iterations` row and its §7
+`children` row (`countToolCalls` among the writers of `tool_calls`: a resumed child's credit, its settle or rest, and the
+crash record) and a **state-ownership view** row name it.
+
 **A child is recorded under its model's `models:` key (REQ-CONFIG-094, REQ-MONITOR-020/049, live-run finding D5, R-067,
 2026-09-29).** `children.model_key` was the model's bare id, so `modelCapFor` and `contextLimitFor`, keyed by the
 `models:` key, never matched a qualified key. `childModelKey` now records the role's `Persona.modelKey` (set by the run

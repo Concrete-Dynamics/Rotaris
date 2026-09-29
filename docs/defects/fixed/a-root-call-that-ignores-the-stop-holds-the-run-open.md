@@ -57,4 +57,4 @@ execution, and OQ-96's bullet "An execution the stop's grace gives up on" is rep
 The tool gate's own writes when the detached call returns were
 [`a-detached-call-still-writes-through-its-tool-gate.md`](a-detached-call-still-writes-through-its-tool-gate.md)'s,
 repaired the same day. What stays open: the root's calls before the detach join no session total, as a raise's did not before
-([`a-roots-calls-before-a-crash-never-reach-the-session-total.md`](../a-roots-calls-before-a-crash-never-reach-the-session-total.md)).
+([`a-roots-calls-before-a-crash-never-reach-the-session-total.md`](a-roots-calls-before-a-crash-never-reach-the-session-total.md), repaired the same day: a root given up on is now counted from its record).

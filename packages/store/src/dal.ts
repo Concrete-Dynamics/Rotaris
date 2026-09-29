@@ -282,6 +282,11 @@ export interface IterationRow {
   readonly interruption: string | null;
   readonly opened_at: string;
   readonly closed_at: string | null;
+  /**
+   * v26 — REQ-MONITOR-102: the calls of this iteration's root the session's `tool_calls` holds — raised with the total when
+   * the root's turn returns, and by the crash record. NULL on a row written before v26: not known.
+   */
+  readonly root_tool_calls: number | null;
 }
 export type IterationInsert = Pick<IterationRow, 'session_id' | 'iteration' | 'root_task_id' | 'root_canonical_name' | 'root_persona' | 'todo_task_id' | 'task' | 'opened_at'>;
 
@@ -551,13 +556,16 @@ export class StoreDal {
       pausedChildrenOfIteration: db.prepare("SELECT * FROM children WHERE session_id = ? AND iteration = ? AND state = 'paused' ORDER BY spawned_at, rowid"),
 
       // v23 — PD-ORCH-005: the iterations, each carrying its root's task id.
-      insertIteration: db.prepare(`INSERT INTO iterations (session_id, iteration, root_task_id, root_canonical_name, root_persona, todo_task_id, task, state, opened_at)
-        VALUES (@session_id, @iteration, @root_task_id, @root_canonical_name, @root_persona, @todo_task_id, @task, 'open', @opened_at)`),
+      // v26: an iteration opened from this version holds a root count, starting at 0 (REQ-MONITOR-102).
+      insertIteration: db.prepare(`INSERT INTO iterations (session_id, iteration, root_task_id, root_canonical_name, root_persona, todo_task_id, task, state, opened_at, root_tool_calls)
+        VALUES (@session_id, @iteration, @root_task_id, @root_canonical_name, @root_persona, @todo_task_id, @task, 'open', @opened_at, 0)`),
       getIteration: db.prepare('SELECT * FROM iterations WHERE session_id = ? AND iteration = ?'),
       openIterationOf: db.prepare("SELECT * FROM iterations WHERE session_id = ? AND state = 'open' ORDER BY iteration DESC LIMIT 1"),
       iterationsOf: db.prepare('SELECT * FROM iterations WHERE session_id = ? ORDER BY iteration'),
       closeIteration: db.prepare("UPDATE iterations SET state = 'closed', outcome = ?, closed_at = ? WHERE session_id = ? AND iteration = ? AND state = 'open'"),
       setIterationInterruption: db.prepare("UPDATE iterations SET interruption = ? WHERE session_id = ? AND iteration = ? AND state = 'open'"),
+      // v26 — REQ-MONITOR-102: a NULL count (a row older than v26) is not known and stays NULL.
+      addIterationRootCalls: db.prepare('UPDATE iterations SET root_tool_calls = root_tool_calls + ? WHERE session_id = ? AND iteration = ? AND root_tool_calls IS NOT NULL'),
 
       // v23 — PD-ORCH-005: the agents' conversations. The sequence is per agent and taken inside the insert, as the slot queue's is.
       insertAgentMessage: db.prepare(`INSERT INTO agent_messages (session_id, task_id, seq, iteration, kind, body, at)
@@ -728,6 +736,10 @@ export class StoreDal {
   /** The rest that left an open iteration open; a resume sets it back to NULL, so a later crash is not read as the earlier rest. */
   setIterationInterruption(id: SessionId, iteration: number, interruption: string | null): boolean {
     return this.stmts['setIterationInterruption']!.run(interruption, id, iteration).changes === 1;
+  }
+  /** v26 — REQ-MONITOR-102: `n` more of the root's calls held by the session total; false when the count is not known (NULL). */
+  addIterationRootCalls(id: SessionId, iteration: number, n: number): boolean {
+    return this.stmts['addIterationRootCalls']!.run(n, id, iteration).changes === 1;
   }
   insertAgentMessage(row: Omit<AgentMessageRow, 'seq'>): void {
     this.stmts['insertAgentMessage']!.run(row);

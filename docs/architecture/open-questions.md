@@ -5319,7 +5319,7 @@ deadline `sessions.tool_calls` read 240 against 309 `tool_calls` rows — the or
 to 309. REQ-ORCH-097's "after each successful execution pass" is met to the letter, and a surface following REQ-MONITOR-102
 shows a figure 69 calls behind the record for as long as the pass lasts. The crash half of the same finding — calls made
 before a crash that never reach the total — is a defect of its own,
-[`a-roots-calls-before-a-crash-never-reach-the-session-total.md`](../defects/a-roots-calls-before-a-crash-never-reach-the-session-total.md).
+[`a-roots-calls-before-a-crash-never-reach-the-session-total.md`](../defects/fixed/a-roots-calls-before-a-crash-never-reach-the-session-total.md), repaired 2026-09-29 without moving this cadence.
 
 **What the build proceeds under.** REQ-ORCH-097 as written: accumulated at the end of each pass.
 
@@ -5570,6 +5570,31 @@ superseded artifact is listed nowhere, as the Library's table lists it nowhere. 
 
 **What a ruling decides.** Whether a link should open the Library (as built in the main window), an inspector in place
 (as built in a persona window) or something else; and whether an agent's links should keep its superseded artifacts.
+
+**OQ-126 — Is a step that only called tools a message for REQ-ORCH-101's raw count?** *(REQ-ORCH-101, whose raw-count
+trigger counts "tool calls" and "messages" against their thresholds; REQ-ORCH-100, the message-count threshold 60;
+REQ-ORCH-104, whose raw-count fallback declares a loop from "repeated identical assistant messages". Raised 2026-09-29 by
+the repair of live-run finding D3,
+[`tool-only-steps-read-as-three-identical-messages.md`](../defects/fixed/tool-only-steps-read-as-three-identical-messages.md),
+under [R-067](../product/requests.md#r-067). Open. Raised as OQ-124 and renumbered
+OQ-126 at the merge, main having taken OQ-124 and OQ-125.)*
+
+The turn observes every model step as a message carrying its text, and a step that only called tools carries none
+(`runTurn`'s `observe({ kind: 'message', text: report.text })`). The repair of D3 reads such a step as **no assistant
+message** for REQ-ORCH-104's evidence — three tool-only steps are not three identical messages — which is what "never from
+counts alone" requires. The same event still counts toward the message threshold of REQ-ORCH-101's raw count, so the message
+count reaches sixty after sixty model steps whether or not any of them said anything. Neither requirement says whether a
+step with no text is a message.
+
+**The reading built.** Unchanged: every step counts toward the message count, a tool-only step included; only the fallback's
+evidence reads a message that normalises to nothing as none.
+
+**What a ruling decides.** Whether a step with no assistant text counts toward REQ-ORCH-101's message count (and so toward
+the `weighted` score), or only a step that said something does — which would make the reading the same in both places.
+And, for REQ-ORCH-104's "last 3" identical messages: whether a tool-only step between three identical texts breaks the
+run. The reading built says it does not — the last three messages that carry text are compared — so three identical texts
+with tool-only steps between them now declare a loop where the code before the repair, which compared the last three
+events whatever they held, did not.
 
 **OQ-127 — What counts as "an outcome that produced no output within `child_stall_timeout`" when the stall watchdog never cancels, and what does the watchdog count, write and call?** *(REQ-NOTIFY-111, REQ-NOTIFY-112, REQ-NOTIFY-100, REQ-NOTIFY-105, REQ-ORCH-089, REQ-MONITOR-117 to REQ-MONITOR-120, REQ-MONITOR-285, REQ-CONFIG-108, REQ-CONFIG-113, REQ-ORCH-144, REQ-ORCH-139 and REQ-SESSION-133. Raised 2026-09-29 by building the watchdog and the corrective message under R-067, the repair of [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../defects/fixed/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md). Raised as OQ-109 on its branch, renumbered there to OQ-126 when OQ-109 to OQ-125 had been taken on `main`, and renumbered OQ-127 at the merge, OQ-126 having been taken on `main` meanwhile.)*
 

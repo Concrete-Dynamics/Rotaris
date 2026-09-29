@@ -948,6 +948,25 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE children ADD COLUMN suppress_auto_context INTEGER NOT NULL DEFAULT 0 CHECK (suppress_auto_context IN (0, 1));
     `,
   },
+  {
+    to: 26,
+    /*
+     * REQ-MONITOR-102 (R-067, the repair of `a-roots-calls-before-a-crash-never-reach-the-session-total.md`): "Per-agent
+     * metrics are persisted with the session and comprise: tool-call count" — and a session-wide total "counts each call
+     * once". A child's count is its row's `tool_calls`; the root's had no persisted count of its own, so a crash, which ends
+     * the root's turn without returning, left no record of which of its recorded calls the total already held, and the
+     * crash record could not add the rest without counting some twice.
+     *
+     * `root_tool_calls` is that count: the calls of the iteration's root the session total holds. It is raised where the
+     * root's calls join the total — when its turn returns (REQ-ORCH-097's cadence, unchanged), in the same transaction as
+     * the total — and by the crash record, which adds the calls the root's record shows that the column does not. Every
+     * iteration inserted from this version starts at `0`. A row written before it is NULL — not known — and the crash
+     * record adds nothing for such a root, as before: it cannot tell which of its calls an earlier run counted.
+     */
+    sql: `
+      ALTER TABLE iterations ADD COLUMN root_tool_calls INTEGER CHECK (root_tool_calls IS NULL OR root_tool_calls >= 0);
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

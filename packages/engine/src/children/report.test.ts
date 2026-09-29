@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FakeClock } from '@rotaris/kernel';
 import type { ChatMessage } from '@rotaris/model';
-import { commandsFrom, deterministicTesterReport, editedFilesFrom, fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
+import { commandsFrom, deterministicTesterReport, editedFilesFrom, fallbackReport, produceReport, reportFacts, reportTranscript, TRANSCRIPT_CAP, transcriptText, type ReportInput, type SummariserDeps } from './report.js';
 import { commandsForArtifact } from './ledger.js';
 
 /**
@@ -210,5 +210,90 @@ describe('engine/children/report — every construction site carries them', () =
       expect(calls).toHaveLength(2);
       expect(r!.errors.at(-1)).toMatchObject({ type: 'summary_failure' });
     });
+  });
+});
+
+/**
+ * OQ-111 (the live-run finding D1): the duress run's child `d` read for thirty-odd calls before its first edit, and its
+ * summariser was handed the transcript cut to 12,000 characters from the head — the task and the first reads, ending
+ * `… [63288 characters omitted]` before any write. Five of seven stored reports then denied the edits their own
+ * `edited_files` listed. The shape below is that transcript's: the task as given (the write scopes, the sibling index,
+ * the instruction), many large reads, then the edits, the check, and the final answer.
+ */
+describe('engine/children/report — OQ-111: the pass reads the start and the most recent part, beside the facts (REQ-ORCH-110, REQ-ORCH-108, REQ-ORCH-109)', () => {
+  const TASK = "Write scopes:\n- Yours: 'docs/api.md', 'docs/overview.md'.\n\nPRIOR SIBLING ARTIFACT INDEX\n- a-document-exported-functions (art_k58dGC4C) persona=docs-writer status=succeeded\n\nReconcile docs/api.md and docs/overview.md: find EVERY disagreement between the two and fix it in both files.";
+  const file = (i: number) => Array.from({ length: 60 }, (_, l) => `${l + 1}: line ${l + 1} of source file ${i} with some content to read`).join('\n');
+  const duress = (): ChatMessage[] => {
+    const out: ChatMessage[] = [say('user', TASK)];
+    for (let i = 0; i < 34; i += 1) {
+      out.push(call(`r${i}`, 'read_file', { path: `src/f${i}.js` }), result(`r${i}`, 'read_file', file(i)));
+    }
+    out.push(
+      call('e1', 'haet_edit', { path: 'docs/api.md', edits: [{ find: 'addTodo(title)', replace: 'addTodo(todos, title)' }] }), result('e1', 'haet_edit', 'applied 1 edit to docs/api.md'),
+      call('e2', 'haet_edit', { path: 'docs/overview.md', edits: [{ find: 'five functions', replace: 'six functions' }] }), result('e2', 'haet_edit', 'applied 1 edit to docs/overview.md'),
+      call('t1', 'terminal', { command: 'node --test' }), result('t1', 'terminal', observation('ran node --test', '# pass 7\n# fail 0', { exit_code: 0, status: 'exited' })),
+      say('assistant', 'Reconciled the two documents: the addTodo signature and the function count now agree in both.'),
+    );
+    return out;
+  };
+
+  it('the head-only cut it replaces loses every edit of the duress shape (the finding, reproduced)', () => {
+    const old = transcriptText(duress());
+    expect(old).toContain('Reconcile docs/api.md');
+    expect(old).not.toContain('tool-call haet_edit');
+  });
+
+  it("keeps the task as given and the most recent part — the edits, the check and the final answer — within the 12,000 cap, the omission marked between them with its count", () => {
+    const messages = duress();
+    const t = reportTranscript(messages);
+    expect(t.length).toBeLessThanOrEqual(TRANSCRIPT_CAP);
+    expect(t.length).toBeGreaterThan(TRANSCRIPT_CAP - 10);
+    expect(t.startsWith(`user: ${TASK}`)).toBe(true);
+    expect(t).toContain('tool-call haet_edit: {"path":"docs/api.md"');
+    expect(t).toContain('tool-call haet_edit: {"path":"docs/overview.md"');
+    expect(t).toContain('tool-call terminal: {"command":"node --test"}');
+    expect(t.endsWith('assistant: Reconciled the two documents: the addTodo signature and the function count now agree in both.')).toBe(true);
+    const marker = /\n… \[(\d+) characters omitted\] …\n/.exec(t);
+    expect(marker).not.toBeNull();
+    // The count is exactly what was left out: the joined transcript (each event already cut to 2,000), less what is
+    // shown on either side of the marker and the one line break the marker stands in for.
+    const event = (x: string) => (x.length > 2_000 ? `${x.slice(0, 2_000)}… [${x.length - 2_000} characters omitted]` : x);
+    const full = messages.flatMap((m) => m.content.map((p) => event(p.kind === 'text' ? `${m.role}: ${p.text}` : p.kind === 'tool-call' ? `tool-call ${p.name}: ${p.args}` : p.kind === 'tool-result' ? `tool-result ${p.name}: ${p.result}` : ''))).join('\n');
+    expect(Number(marker![1])).toBe(full.length - (t.length - marker![0].length) - 1);
+  });
+
+  it('a transcript within the cap is given whole, unmarked', () => {
+    const short = [say('user', 'write docs/a.md'), call('w', 'write_file', { path: 'docs/a.md', content: 'x' }), result('w', 'write_file', 'ok'), say('assistant', 'done')];
+    const t = reportTranscript(short);
+    expect(t).toBe(transcriptText(short));
+    expect(t).not.toContain('omitted');
+  });
+
+  it("the facts are the report's own deterministic fields, from the WHOLE transcript: edited files, commands and their outcomes", () => {
+    expect(reportFacts(duress())).toBe('Edited files: docs/api.md, docs/overview.md\nCommands run:\n- node --test → exit code 0');
+    expect(reportFacts([say('user', 'look around'), say('assistant', 'nothing to change')])).toBe('Edited files: (none)\nCommands run: (none)');
+    expect(reportFacts([call('t', 'terminal', { command: 'npm run dev', background: true })])).toContain('- npm run dev → no exit code');
+  });
+
+  it('the summarising request carries the task, the late edits and the facts, so its summary cannot deny them (the duress shape through produceReport)', async () => {
+    const asked: string[] = [];
+    const backend = {
+      runTurn: async (req: { messages: { content: { text: string }[] }[] }) => {
+        asked.push(req.messages[0]!.content[0]!.text);
+        return { status: 'succeeded' as const, usage: { input: 1, output: 1 }, text: JSON.stringify({ summary: 'reconciled both documents', key_findings: [], next_actions: [], tags: ['implementation'], edited_files: [] }) };
+      },
+    };
+    const s: SummariserDeps = { backend: backend as never, model: { providerId: 'a', modelId: 'a1', dialect: 'chat' }, thinking: 'unset', timers: new FakeClock().timers, credentialFor: () => async () => 'k' };
+    const messages = duress();
+    const r = await produceReport(input({ messages, toolCallCount: 37, lastText: 'Reconciled the two documents.' }), s, new AbortController().signal);
+    expect(asked).toHaveLength(1);
+    const ask = asked[0]!;
+    expect(ask).toContain('Facts:\nEdited files: docs/api.md, docs/overview.md\nCommands run:\n- node --test → exit code 0');
+    expect(ask).toContain('never deny them');
+    const transcript = ask.slice(ask.indexOf('Transcript:\n') + 'Transcript:\n'.length);
+    expect(transcript).toBe(reportTranscript(messages));
+    expect(transcript).toContain('Reconcile docs/api.md and docs/overview.md');
+    expect(transcript).toContain('tool-call haet_edit: {"path":"docs/overview.md"');
+    expect(r!.edited_files).toEqual(['docs/api.md', 'docs/overview.md']);
   });
 });

@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**The report's pass reads the task and the most recent part, beside the facts (OQ-111, REQ-ORCH-110, 2026-09-29).**
+`produceReport` gives the summarising pass `reportTranscript`: the first event (the task as given) and the most recent
+part, within 12,000 characters, with `… [N characters omitted] …` between them. It also gives `reportFacts`, the
+edited files and each command with its exit code, derived from the whole transcript. The head-only `transcriptText`
+remains the compressor's alone. The **runtime view**'s children paragraph names it; no package, edge, message or store
+table changes.
+
 **A request queued behind an open approval dialog waits for its turn (REQ-TOOLS-063, 2026-09-28).** Main answers a
 present-request that waits behind the dialog already open in its window, or behind requests queued ahead of it, with
 the new run-host request `approval.queued` (`MainWindows.enqueueApproval` answers which). `RunHostPresenter` then stops

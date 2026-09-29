@@ -5104,6 +5104,12 @@ denies work the record shows. REQ-ORCH-110 fixes how much and not which part, so
 nothing; the facts are what REQ-ORCH-109 already keeps runner-owned, given to the pass to condense and never to
 overwrite. Nothing is built by the ruling; the repair is owed to the note that records D1.
 
+**Built 2026-09-29 under [R-067](../product/requests.md#r-067).** `produceReport` reads `reportTranscript` (the first
+event, the marker, the most recent part; 12,000 characters with the marker) and hands the pass `reportFacts` beside
+it; the note is [`a-long-childs-report-denies-the-edits-it-made`](../defects/fixed/a-long-childs-report-denies-the-edits-it-made.md),
+repaired. One reading of the build's own, stated there: the facts are bounded by REQ-ORCH-110's two figures (2,000 per
+command, 12,000 for the block), since the ruling gives them none and the pass must stay bounded.
+
 
 **OQ-112 — May `delegate` give a `write_scope` to a persona that holds no file-writing tool?** *(`PD-TOOLS-006` over REQ-TOOLS-152; REQ-ORCH-095, whose text-only completion let the child end `succeeded`. Raised 2026-09-29 from the duress live run's finding D6 under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-111 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 

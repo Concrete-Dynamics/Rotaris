@@ -67,8 +67,8 @@ function cut(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n)}… [${s.length - n} characters omitted]` : s;
 }
 
-/** The transcript as text, each event cut to 2,000 and the whole to 12,000. */
-export function transcriptText(messages: readonly ChatMessage[]): string {
+/** Each event as one line of text, cut to 2,000 characters. */
+function eventTexts(messages: readonly ChatMessage[]): string[] {
   const parts: string[] = [];
   for (const m of messages) {
     for (const p of m.content) {
@@ -76,7 +76,56 @@ export function transcriptText(messages: readonly ChatMessage[]): string {
       if (text) parts.push(cut(text, EVENT_CAP));
     }
   }
-  return cut(parts.join('\n'), TRANSCRIPT_CAP);
+  return parts;
+}
+
+/**
+ * The transcript as text, each event cut to 2,000 and the whole to 12,000 from its head. The compressor's reader
+ * (`run/compression.ts`); the report's pass reads `reportTranscript` below.
+ */
+export function transcriptText(messages: readonly ChatMessage[]): string {
+  return cut(eventTexts(messages).join('\n'), TRANSCRIPT_CAP);
+}
+
+/**
+ * REQ-ORCH-110 as OQ-111 rules it: the transcript the report's pass reads, each event cut to 2,000 characters and the
+ * whole held to 12,000 — the marker included — keeping its START (the first event: the task as given) and its MOST
+ * RECENT part, with the omission marked between them and saying how much was left out.
+ *
+ * The reason it did not, kept beside its replacement: it was cut to 12,000 from its head. For a long child that is
+ * the task and its first reads, and the edits come after the cut; in the duress live run of 2026-09-29 the request
+ * that summarised child `d` ended `… [63288 characters omitted]` before `d`'s first edit, and five of seven stored
+ * reports denied the edits their own `edited_files` listed.
+ */
+export function reportTranscript(messages: readonly ChatMessage[]): string {
+  const parts = eventTexts(messages);
+  const whole = parts.join('\n');
+  if (whole.length <= TRANSCRIPT_CAP || parts.length < 2) return cut(whole, TRANSCRIPT_CAP);
+  const head = parts[0]!;
+  const rest = parts.slice(1).join('\n');
+  const marker = (n: number): string => `… [${n} characters omitted] …`;
+  // The marker's length depends on the count it states, which is never more than `rest`'s own length: reserve that
+  // widest marker, so the whole never passes the cap whatever the count turns out to be.
+  const omitted = rest.length - (TRANSCRIPT_CAP - head.length - marker(rest.length).length - 2);
+  return `${head}\n${marker(omitted)}\n${rest.slice(omitted)}`;
+}
+
+/**
+ * OQ-111: the report's deterministic facts — the files the child edited and the commands it ran with their outcomes —
+ * given to the pass beside the transcript, so a summary written over a transcript whose middle is omitted cannot deny
+ * work the record shows. They are REQ-ORCH-109's runner-owned kind, derived from the WHOLE transcript by the same
+ * functions that fill the report's fields; the pass condenses them and never writes them. Each command is cut to 2,000
+ * characters and the block to 12,000, REQ-ORCH-110's two figures, so the pass stays bounded.
+ */
+export function reportFacts(messages: readonly ChatMessage[]): string {
+  const edited = editedFilesFrom(messages);
+  const ran = commandsFrom(messages);
+  const lines = [
+    `Edited files: ${edited.length > 0 ? edited.join(', ') : '(none)'}`,
+    `Commands run: ${ran.length > 0 ? '' : '(none)'}`.trimEnd(),
+    ...ran.map((c) => `- ${cut(c.command, EVENT_CAP)} → ${c.exit_code === null ? 'no exit code' : `exit code ${c.exit_code}`}`),
+  ];
+  return cut(lines.join('\n'), TRANSCRIPT_CAP);
 }
 
 /**
@@ -247,7 +296,8 @@ export async function produceReport(input: ReportInput, s: SummariserDeps | null
   const tester = deterministicTesterReport(input);
   if (tester) return tester;
   if (!s) return fallbackReport(input, unsummarised);
-  const transcript = transcriptText(input.messages);
+  const transcript = reportTranscript(input.messages);
+  const facts = reportFacts(input.messages);
   const timeout = s.timeoutMs ?? SUMMARY_TIMEOUT_MS;
   let complaint = '';
   for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -257,7 +307,7 @@ export async function produceReport(input: ReportInput, s: SummariserDeps | null
     signal.addEventListener('abort', onAbort, { once: true });
     const timer = s.timers.after(timeout, () => controller.abort());
     try {
-      const ask = `Condense the transcript below into a JSON object with exactly these keys: "summary" (one paragraph), "key_findings" (an array of short strings), "next_actions" (array of strings), "edited_files" (array of paths), "tags" (from: research, planning, implementation, review, verification, errors). Report only what happened; do not continue the task.${complaint ? `\n\nYour previous attempt was unusable: ${complaint}` : ''}\n\nTranscript:\n${transcript}`;
+      const ask = `Condense the transcript below into a JSON object with exactly these keys: "summary" (one paragraph), "key_findings" (an array of short strings), "next_actions" (array of strings), "edited_files" (array of paths), "tags" (from: research, planning, implementation, review, verification, errors). Report only what happened; do not continue the task. The facts below are the run's own record of what the agent did, taken from its whole transcript: your summary must agree with them and never deny them. The transcript keeps its start and its most recent part; where its middle is marked omitted, what is not shown there is not evidence that it did not happen.${complaint ? `\n\nYour previous attempt was unusable: ${complaint}` : ''}\n\nFacts:\n${facts}\n\nTranscript:\n${transcript}`;
       const r = await s.backend.runTurn(
         { persona: 'summariser', systemPrompt: 'You summarise a finished agent transcript. Output JSON only.', messages: [{ role: 'user', content: [{ kind: 'text', text: ask }] }], tools: [], model: s.model, thinking: s.thinking, timeoutMs: timeout, retries: 0, resolveCredential: s.credentialFor(s.model) },
         { delta: () => undefined, reasoning: () => undefined, usage: () => undefined },

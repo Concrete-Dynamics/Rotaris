@@ -572,7 +572,9 @@ a time, re-runnable, cancellable; the status held in the run host for the applic
 into the **ledger** (one row per child, every transition one transaction with its `child.transition` event);
 the **scheduler** is a pass to quiescence triggered by a state change, never a timer (cascade `blocked`, admit
 on `succeeded` + report stored, promote one held child per freed model slot, claim starts); a child runs its own
-turn loop under its persona's tools, model, credential and supervisor; its **report** comes from a bounded summarising pass on `default_summary_model` (REQ-CONFIG-065) or the entry model;
+turn loop under its persona's tools, model, credential and supervisor; its **report** comes from a bounded summarising pass on `default_summary_model` (REQ-CONFIG-065) or the entry model,
+which reads the task as given and the most recent part of the transcript within 12,000 characters, the omission
+marked between them, beside the report's deterministic facts — edited files, commands and exit codes (OQ-111);
 the parent resumes with the report. Every exit from an iteration leaves every child record terminal — except a rest
 (PD-ORCH-005), which leaves every unfinished child `paused`.
 

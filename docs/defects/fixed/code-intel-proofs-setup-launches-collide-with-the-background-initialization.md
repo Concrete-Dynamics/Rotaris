@@ -41,7 +41,11 @@ presses the MCP card's action is in the same position. `launch()` also fails a l
 task back fails with its cause and not as `[pending, pending, pending]`.
 
 **What pins it.** The proof itself: it is harness code with no unit beside it. The guard in `launch()` is what catches
-a regression. It was not exercised red here: the marker keeps the background task out of every launch.
+a regression. It was exercised red once on 2026-09-29, from a temporary copy of the proof with the marker lines
+removed, run as `--steps=5` and deleted afterwards. The first setup launch logged `running code-intelligence-setup …
+(background)`, and the proof failed after 91 s with `setup: the workspace's initialization started
+code-intelligence-setup in the background beside this launch's own; see setup.log`. The failure names the launch and
+its cause, not `[pending, pending, pending]`.
 
 **Measured** as root under Xvfb on Linux, Node 24, `--skip-build`, three consecutive runs of the whole proof in
 `/home/user/Rotaris-crw-wt-prfb5`, all passed (521 s, 522 s and 521 s; see ADR-0035, "The proof on Linux as root").

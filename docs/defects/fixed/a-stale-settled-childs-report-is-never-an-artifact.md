@@ -39,4 +39,9 @@ Evidence:
 
 A child REQ-ORCH-048's cascade blocks gets no report to materialise
 ([`a-child-blocked-by-its-dependency-gets-no-report.md`](a-child-blocked-by-its-dependency-gets-no-report.md), found by
-phase 7's review).
+phase 7's review). *Corrected 2026-09-29 (R-067): "gets no report to materialise" held until then. The cascade
+(`Scheduler.cascadeBlocked`) now stores each blocked child's `blocked` report through `ChildLedger.storeReport`. That
+goes through `storeChildReport` like every path above, so the `child_report` artifact is materialised with it. In
+`children.test.ts`, "REQ-ORCH-048 with REQ-ORCH-108 / REQ-ORCH-112: each child the cascade blocks …" pins the report,
+and "a dependent of the cancelled child (OQ-101) is blocked by the resumed run's first pass …" pins the report and its
+`blocked` artifact.*

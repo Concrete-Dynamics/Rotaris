@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { DELEGATION_STRATEGY_NAMES, isBusy, presentationStatus, RUN_AGENT_ID, STATUS_LABELS, type AgentRecord, type SessionRecord } from '@rotaris/contracts';
 import { AgentTable } from './AgentTable.js';
 import { AgentTree } from './AgentTree.js';
-import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cancelUnavailableReason, cascadeNote, pauseAvailability } from './agents.js';
+import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cancelUnavailableReason, cascadeKind, cascadeNote, PAUSED_CANCEL_ALONE, pauseAvailability, pausedCancelWith } from './agents.js';
 import { pausePendingAfter, RUN_STATE_LABELS, type PauseScope } from './composer.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { markMotionStart } from './motion.js';
@@ -55,13 +55,15 @@ export interface MissionViewProps {
 export const STRATEGY_NOTE = 'A change takes effect on the next run.';
 
 /**
- * REQ-MONITOR-055/064: the Mission view's confirmation of one agent's cancel names it, its persona and what cascades. A
- * paused child is final and says so, and counts its paused descendants (PD-ORCH-005 clauses 3 and 16, OQ-101); a live
- * one counts the paused descendants its cancel also ends (clause 13, OQ-100).
+ * REQ-MONITOR-055/064: the Mission view's confirmation of one agent's cancel names it, its persona and what cascades; a
+ * live one counts the paused descendants its cancel also ends (clause 13, OQ-100). A paused child's cancel is final
+ * (PD-ORCH-005 clauses 3 and 16, OQ-101), and the Mission view says so in the words the Workspace and a persona window
+ * use (`pausedCancelWith`, `PAUSED_CANCEL_ALONE`) — before, it read only "will be cancelled and will not resume", leaving
+ * out that the cancel cannot be undone. The lines under the body name each descendant cancelled with it (REQ-MONITOR-128).
  */
 export function missionCancelBody(agent: Pick<AgentRecord, 'name' | 'persona' | 'presentationState'>, cascade: readonly Pick<AgentRecord, 'presentationState'>[]): string {
-  const paused = agent.presentationState === 'paused';
-  return `${agent.name} (${agent.persona}) will be cancelled${paused ? ' and will not resume' : ''}. ${cascadeNote(cascade) || 'Nothing cascades.'}`;
+  if (agent.presentationState === 'paused') return `${agent.name} (${agent.persona}) will be cancelled. ${cascade.length > 0 ? pausedCancelWith(cascadeKind(cascade)) : PAUSED_CANCEL_ALONE}`;
+  return `${agent.name} (${agent.persona}) will be cancelled. ${cascadeNote(cascade) || 'Nothing cascades.'}`;
 }
 
 /**

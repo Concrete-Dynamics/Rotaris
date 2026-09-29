@@ -342,7 +342,7 @@ const live = launch('live', workspace, local, preferences, {
   db.close();
   if (!lock) throw new Error('the live launch left no lock behind; the repair scenario needs a persisted-running session behind a dead lock');
   const holder = lockHolderAfterExit(lock.pid);
-  if (holder.aliveAtExit) throw new Error(describeLingeringHolder('live', holder));
+  if (holder.aliveAtExit) throw new Error(describeLingeringHolder('live', holder, live.log));
   results.live = { refused: true, leftRunning: true, lockPid: lock.pid, lockHolderGoneAtExit: true, png: live.png };
 }
 

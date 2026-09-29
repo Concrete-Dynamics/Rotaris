@@ -75,11 +75,15 @@ what this proof depends on, and moving the launch onto the driver would not have
 `sessions-proof`'s launches 2 and 3 are the same `live`-then-repair pair and gained the same check, under that
 proof's own note.
 
-**Pinned by** `apps/desktop/scripts/lib/lock-holder.test.ts`, 4 cases:
+**Pinned by** `apps/desktop/scripts/lib/lock-holder.test.ts`, 5 cases:
 
 - a holder already gone is read once, never waited on;
 - a holder that goes 1 750 ms later still fails, and its sentence names the time and the requirements;
 - a holder that never goes is bounded at 10 s;
+- given the `live` launch's log, the sentence says whether main logged its run host still running when the 2 s
+  bound for its end (`RUN_HOST_END_BOUND_MS`) elapsed. The product guarantees the holder gone at main's exit only
+  within that bound, so on a host loaded enough to exceed it step (c) fails, truly, and the sentence tells that
+  case apart from a main that left without waiting;
 - over a real child process, the probe answers alive, then dead after the child's exit, and never probes a pid ≤ 0.
 
 **Shown on the built app**, `fa377e6` plus this change, as root under Xvfb, Node 24, after one `pnpm build`:

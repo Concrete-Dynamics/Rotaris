@@ -53,6 +53,17 @@ describe('the lock holder read when the launch that held it returns (REQ-SESSION
     expect(describeLingeringHolder('live', reading)).toContain('still alive 10000 ms later');
   });
 
+  it("given the launch's log, the sentence says whether main reported its run host still running past the bound", () => {
+    const reading = { pid: 4321, aliveAtExit: true, goneAfterMs: 2_400, boundMs: 10_000 };
+    const reported = describeLingeringHolder('live', reading, 'x\n[main 2026-09-28T23:46:15.050Z] error   quit: the run host (pid 4321) was still running 2000 ms after it was ended; a session it held is refused to the next launch until it exits\n');
+    expect(reported).toContain('Main logged that its run host was still running');
+    expect(reported).toMatch(/REQ-SESSION-047, REQ-SESSION-056/);
+    const silent = describeLingeringHolder('live', reading, '[main 2026-09-28T23:46:15.057Z] info    main process exiting with status 0\n');
+    expect(silent).toContain('Main logged no line saying its run host was still running');
+    expect(describeLingeringHolder('live', reading)).not.toMatch(/Main logged/);
+    expect(describeLingeringHolder('live', reading, 'quit: the run host (pid ?) was still running 2000 ms after it was ended')).toContain('Main logged that');
+  });
+
   it('the real probe: a running child exists, the same pid after its exit does not, and no pid ≤ 0 is probed', async () => {
     const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { stdio: 'ignore' });
     const pid = child.pid ?? -1;

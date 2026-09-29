@@ -65,12 +65,23 @@ export function lockHolderAfterExit(pid, { probe = pidExists, now = Date.now, pa
  * The failure a proof throws when the holder was alive at the first read. The sentence names the precondition that
  * failed and the requirement that breaks, so the red lands on the launch that left the lock held. Without it, the red
  * appears one launch later and is blamed on the repair.
+ *
+ * Given the launch's log, the sentence also says whether main logged that its run host was still running when the
+ * bound for its end elapsed (`runHostStillRunning`, `apps/desktop/src/main/index.ts`). That line tells a run host
+ * slower than the bound, which main reports and then leaves, apart from a main that left without waiting at all.
  * @param {string} launch the launch that held the lock and has returned
  * @param {HolderReading} reading
+ * @param {string} [appLog] that launch's output, when the proof kept it
  */
-export function describeLingeringHolder(launch, reading) {
+export function describeLingeringHolder(launch, reading, appLog) {
   const after = reading.goneAfterMs === null ? `and was still alive ${reading.boundMs} ms later` : `and went ${reading.goneAfterMs} ms later`;
-  return `the '${launch}' launch returned, but the process its session lock names (pid ${reading.pid}) was still alive ${after}. `
+  let said = '';
+  if (appLog !== undefined) {
+    said = /quit: the run host \(pid (?:\d+|\?)\) was still running \d+ ms after it was ended/.test(appLog)
+      ? ' Main logged that its run host was still running when the bound for its end elapsed, and left without it.'
+      : ' Main logged no line saying its run host was still running when the bound for its end elapsed.';
+  }
+  return `the '${launch}' launch returned, but the process its session lock names (pid ${reading.pid}) was still alive ${after}.${said} `
     + 'The lock outlived the application that held it (REQ-SESSION-047, REQ-SESSION-056: a pid that probes alive is live), '
     + 'so the next launch would read the session as live (REQ-GIT-093) and correctly repair nothing. The repair step would measure nothing.';
 }

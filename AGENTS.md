@@ -357,7 +357,12 @@ reached the model. One shape did not reach its question: the wedge **soft-paused
 **The `failed-word` guard has not run against a real endpoint**: it was written on 2026-09-27, after that run,
 and the next live run of `terminal` is its first.
 
-**`duress` has not been executed.** It owes its row in `docs/architecture/first-executions.md`.
+~~**`duress` has not been executed.** It owes its row in `docs/architecture/first-executions.md`.~~ **`duress` was
+executed against a real endpoint on 2026-09-29** (pack `.live-run/runs/2026-09-29T03-06-14-929Z`; its row is in
+`docs/architecture/first-executions.md`): eight children commissioned, 309 tool calls, and two checks failed. The deadline
+check is genuine — 2,406 s of 2,400 s, about 98 % of it the endpoint generating — and the "failed with nothing to say"
+check is the harness's false positive on a child cut off with a continuation offer. What the run let through is recorded
+as notes in `docs/defects/` carrying "Live-run finding: D…" and "H-…" lines.
 
 **The traffic is recorded through a loopback proxy**, so the sandbox's `base_url` is the proxy and the endpoint
 is one hop further on. Two consequences worth knowing before reading a pack: a `model request POST` line in

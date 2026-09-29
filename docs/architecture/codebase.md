@@ -830,8 +830,8 @@ positive half read from the product's own `issues` table — the stall must be s
 what it was classified as must not be fatal. Two smaller ones: the wedge **soft-paused before the hard cap**,
 so `hardMs`'s own question is still unmeasured live and now says so; and `duress`'s `zero cost with tokens`
 check would have reported a fault on an unmetered endpoint that has no cost to record, so it is conditioned on
-the accounting kind — caught before the forty-minute scenario was run rather than after. `duress` has not been
-executed; it owes its row.
+the accounting kind — caught before the forty-minute scenario was run rather than after. ~~`duress` has not been
+executed; it owes its row.~~ *`duress` was executed on 2026-09-29 and has its row in `first-executions.md`.*
 
 **What the board's live path found on its first execution — 2026-09-11, and the eighty-first defect.** The fifth
 scenario was written after a hand-driven precursor took the same path, and the precursor is what found the defect;

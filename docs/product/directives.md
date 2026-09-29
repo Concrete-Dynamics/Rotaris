@@ -1908,6 +1908,36 @@ so a child that genuinely loops is still stopped at the same point.
 > **What was not measured.** No built-app run: the scripted client cannot cut a child off while it is making progress
 > and then begin a second iteration. No live run was made. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **First live execution, 2026-09-29 — the duress scenario of `pnpm live-run`, under [R-066](requests.md#r-066), recorded
+> under [R-067](requests.md#r-067):** the built product at `fa377e6` (revisions 1 to 3 built; revision 4's `offers.ts` not
+> yet on that commit) against the owner's self-hosted endpoint (`qwen3.8-flash-next`, unmetered), pack
+> `.live-run/runs/2026-09-29T03-06-14-929Z/`, session `379f1490`. It is the first time a real model was cut off while
+> making progress, and every part of the directive held end to end:
+> - **The progress rule.** Child `d` (`bg_b8da141a`, `docs-writer`) reached its 1,200 s `child_timeout` at 03:34:25 with
+>   61 tool calls, the last of them inside the final stall window; its report says "Cut off while making progress: this child completed a tool
+>   call within the final 90s before its 1200s limit expired." It ended `failed` with the timeout error "Child timed out
+>   after 1200s", as REQ-ORCH-088 has it.
+> - **The changed paths, in order.** `cut_off.changed_paths` is `docs/api.md`, `docs/overview.md`, in the order first
+>   changed, and matches the report's deterministic `edited_files`.
+> - **The offer's text.** "Continuation offer: the remaining work may be delegated to a new child as a continuation of this
+>   one — call delegate with continuation_of: "bg_b8da141a". A piece of work is continued once; a continuation is not
+>   offered one of its own."
+> - **The continuation.** The orchestrator took the offer at tool call #242, 03:35:55, 22 s after `d` settled: `d2`
+>   (`bg_7d79e866`) carries `continuation_of` = `bg_b8da141a` in its record, was offered nothing of its own, and ended
+>   `succeeded` at 03:44:30 (515 s), finishing the reconciliation `d` had begun.
+>
+> **What it found beside the directive.** Nothing in the text was wrong. Two costs showed, each recorded elsewhere:
+> revision 2's "nothing of the continued child is injected" had `d2` make 34 reads before its first edit (6 min 40 s of
+> its 515 s), re-deriving what `d` knew — put to the owner as [OQ-113](../architecture/open-questions.md); and the first thing `d2` read was
+> `d`'s report artifact, whose summary denied the edits `d` had made, because the summariser read only the transcript's
+> head (`a-long-childs-report-denies-the-edits-it-made.md`, ruled as OQ-110). The duress run's own check "no child ended
+> failed with nothing to say" flagged `d`, a false positive of the harness
+> (`the-duress-silent-child-check-flags-a-cut-off-child.md`).
+>
+> **What was not measured.** An offer taken up by a later iteration's or a later run's root (revisions 3 and 4): this one
+> was taken within its iteration by the agent that delegated `d`. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-monitor-002"></a>
@@ -1969,7 +1999,13 @@ are not recorded, and cannot be recovered afterwards.
 > launch's own driving wrote. At `warning` a clean launch and quit writes nothing, its `quit:` lines included, which
 > is what a threshold above `info` costs: 24 launches driven to a last-window close at the default level wrote no
 > `warning` or `error` line and quit in 40–69 ms, and one ended by the driver's `app.exit` at `warning` wrote nothing
-> at all. The review's run of the same close found the first version of the unanswered-`shutdown` line firing on
+> at all. *Falsified 2026-09-29 for the immediate exit (the sentence above is kept as written): in the live run of that day
+> 7 of 9 launches ended through the capture seam's immediate exit (`exitCleanly`, `endRunHost` with a grace of 0) wrote
+> `error   CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit 15)` after "run host exited (0)" and "quit: exiting
+> with status 0" — main kills the run host itself and logs Electron's report of the kill at `error`. One such exit writing
+> nothing was the race going the other way. Recorded as
+> [`an-orderly-quit-logs-the-run-host-gone-at-error.md`](../defects/an-orderly-quit-logs-the-run-host-gone-at-error.md)
+> (live-run finding L13); the last-window close's 24 clean quits are not contradicted.* The review's run of the same close found the first version of the unanswered-`shutdown` line firing on
 > orderly quits (3 in 26, each waiting out the 30 s bound), because a child's answer can lose the race with its own
 > exit; the quit now races each `shutdown` against the child's exit, recorded as
 > [`a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md`](../defects/fixed/a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md).

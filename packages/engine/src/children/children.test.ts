@@ -396,6 +396,26 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     expect(updates.map((u) => u.cost.total)).toContain('0.0115');
   });
 
+  it("OQ-111 (live-run finding D1): the child-report summariser's transcript starts with the child's task as given, the payload's blocks ahead of it marked omitted (REQ-ORCH-110)", async () => {
+    const asked: string[] = [];
+    const { sessions } = sessionsWith((persona, turn, req) => {
+      if (persona === 'orchestrator') return turn === 1
+        ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: read it\nEXPECTED OUTCOME: what the module does', run_in_background: false } }], 'Delegating.')
+        : answer('All done.');
+      if (persona === 'summariser') {
+        asked.push(req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n'));
+        return answer('{"summary":"done","key_findings":[],"tags":[]}');
+      }
+      return answer('The module is small.');
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(asked).toHaveLength(1);
+    // REQ-TOOLS-154's payload puts the workspace root ahead of the task; the pass's start is the task itself.
+    expect(asked[0]).toMatch(/\nTranscript:\nuser: … \[\d+ characters omitted\] … TASK: read it\nEXPECTED OUTCOME: what the module does\nassistant: The module is small\.$/);
+    expect(asked[0]).not.toContain('Transcript:\nuser: Workspace root:');
+  });
+
   it('REQ-EVENTS-053 / PD-MONITOR-001: the child-report summariser\'s request counts against the run like any agent\'s', async () => {
     const { sessions } = sessionsWith((persona, turn) => {
       if (persona === 'orchestrator') return turn === 1
@@ -415,7 +435,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
 
   describe('PD-TOOLS-006: write scopes', () => {
     const textOf = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('')).join('\n');
-    const heldByApi = { canonicalName: 'api', persona: 'codebase-analyst', pattern: 'src/api/**' };
+    // PD-TOOLS-006 revision 3: a scope is for a persona that can write files, so the scoped child is a `docs-writer`.
+    const heldByApi = { canonicalName: 'api', persona: 'docs-writer', pattern: 'src/api/**' };
     /** Until `ready()` holds, yielding to the run between looks; the scripted children park on a hold meanwhile. */
     async function until(ready: () => boolean): Promise<void> {
       for (let i = 0; i < 500 && !ready(); i += 1) await new Promise((r) => setTimeout(r, 1));
@@ -429,7 +450,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const { sessions, contexts } = sessionsWith((persona, turn, req) => {
         if (persona === 'orchestrator') {
           return turn === 1 ? toolCalls([
-            { callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'api', task: 'TASK: api', write_scope: ['src/api/**'] } },
+            { callId: 'd1', name: 'delegate', args: { persona: 'docs-writer', task_name: 'api', task: 'TASK: api', write_scope: ['src/api/**'] } },
             { callId: 'd2', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'ui', task: 'TASK: ui' } },
           ], 'Delegating.') : answer('Done.');
         }
@@ -467,7 +488,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const calls = new Map<string, number>();
       const { sessions, contexts } = sessionsWith((persona, turn, req) => {
         if (persona === 'orchestrator') {
-          return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'api', task: 'TASK: api', write_scope: ['src/api/**'] } }], 'Delegating.') : answer('Done.');
+          return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'docs-writer', task_name: 'api', task: 'TASK: api', write_scope: ['src/api/**'] } }], 'Delegating.') : answer('Done.');
         }
         if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
         const text = textOf(req);
@@ -487,6 +508,37 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(payloads.get('deep')).toContain("  - api: 'src/api/**' (you work under this agent, so its scope does not fence you)");
       release();
       expect((await running).status).toBe('completed');
+    });
+
+    it('PD-TOOLS-006 revision 3 (OQ-112, live-run finding D6): a scope for a persona that cannot write files rejects the delegation — no child, no task id, the writers named', async () => {
+      const { sessions, client } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'c: write docs/overview.md', task: 'TASK: write it', write_scope: ['docs/overview.md'] } }], 'Delegating.') : answer('Understood.');
+        }
+        return answer('unreachable');
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'write the overview') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(children(sid)).toEqual([]);
+      const resumed = textOf(client.requests.at(-1)!);
+      expect(resumed).toContain("Task 'c: write docs/overview.md': rejected — write_scope was given to 'codebase-analyst', which cannot write files");
+      expect(resumed).toContain('Personas that can write files: coding-agent, tester, docs-writer, refactorer.');
+      expect(resumed).not.toContain('task_id:');
+    });
+
+    it('PD-TOOLS-006 revision 3 (OQ-112): an ALIAS of a persona that cannot write files is refused the same way — the persona the ledger would resolve', async () => {
+      const { sessions, client } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'playwright', task_name: 'ui: write docs/overview.md', task: 'TASK: write it', write_scope: ['docs/overview.md'] } }], 'Delegating.') : answer('Understood.');
+        }
+        return answer('unreachable');
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'write the overview') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(children(sid)).toEqual([]);
+      const resumed = textOf(client.requests.at(-1)!);
+      expect(resumed).toContain("Task 'ui: write docs/overview.md': rejected — write_scope was given to 'ui-verifier', which cannot write files");
+      expect(resumed).not.toContain('task_id:');
     });
 
     it('a scope reaching outside the workspace root rejects the delegation: no child, no task id, the reason names the pattern', async () => {

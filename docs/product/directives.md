@@ -2368,7 +2368,8 @@ revision 4 as [R-063](requests.md#r-063).*
 > - the strip at seven window sizes.
 >
 > **What was not measured.**
-> - No live run was made, so a real model has not yet resumed from its record.
+> - No live run was made, so a real model has not yet resumed from its record. The live run of 2026-09-29 measured
+>   one, recorded below revision 4's note.
 > - Only Linux under Xvfb was driven.
 > - The scripted model client restarts its script for every run
 >   ([`the-scripted-client-restarts-its-script-for-every-run.md`](../defects/the-scripted-client-restarts-its-script-for-every-run.md)),
@@ -2447,9 +2448,29 @@ revision 4 as [R-063](requests.md#r-063).*
 >   ([`the-driver-cannot-address-persona-or-approval-windows.md`](../defects/the-driver-cannot-address-persona-or-approval-windows.md)).
 > - Clause 14's orchestrator-instructions and tool-change variants were not driven.
 > - Clause 20 is not observable with the scripted client; its evidence is the tests.
-> - No live run was made, and only Linux under Xvfb was driven.
+> - No live run was made with the build, and only Linux under Xvfb was driven; the live run of 2026-09-29 follows.
 >
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **Measured by the live run, 2026-09-29, under [R-065](requests.md#r-065):** the built product against the owner's
+> self-hosted endpoint (`qwen3.8-flash-next`, registered unmetered), in `pnpm live-run`'s throwaway workspace.
+> - Every standard scenario passed. `edit` split its work between two children writing in parallel under declared
+>   write scopes, `requirements` carried a card from release to done in a worktree of its own, and the fault ladder
+>   and the stalled stream each ended `completed`.
+> - A scenario of its own, `resume`, measured this directive against a real model:
+>   - it paused a delegating run through the composer's Pause while two children ran, and the paused composer drew
+>     both `paused` with "3 agents will resume" (clauses 6, 13 and 19);
+>   - the Continue resumed the same iteration and both children under their own task ids, each record continuing
+>     across the pause (3 entries before it, 15 and 17 after), and each child's next request carried what it had
+>     recorded last (clauses 1 to 4);
+>   - one child's first `read_file` had been cut off by the pause and recorded "not run"; resumed, the model read that
+>     result in its own record, read the file again and wrote its note (clause 4);
+>   - the iteration closed `succeeded`, and both notes were read back from disk.
+> - It found two launches that fail as root, each repaired
+>   ([`the-live-run-cannot-launch-as-root.md`](../defects/fixed/the-live-run-cannot-launch-as-root.md),
+>   [`the-code-intelligence-server-cannot-start-as-root.md`](../defects/fixed/the-code-intelligence-server-cannot-start-as-root.md)).
+>
+> The evidence packs are under `.live-run/runs/`, outside the repository.
 
 ---
 

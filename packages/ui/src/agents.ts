@@ -1,4 +1,4 @@
-import { contextPercent, DEFAULT_CONTEXT_CAPACITY, isBusy, RUN_AGENT_ID, type AgentRecord, type SessionArtifactLink, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { contextPercent, DEFAULT_CONTEXT_CAPACITY, isBusy, RUN_AGENT_ID, type AgentRecord, type EntryRoot, type SessionArtifactLink, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { treeRows } from './AgentTree.js';
 
 /**
@@ -85,8 +85,9 @@ export function runLevelGrant(resolved: readonly string[], declared: readonly st
 
 /**
  * REQ-MONITOR-043/057: the run itself is never a tree row, but the inspector, the Mission view and the persona
- * windows present the entry role as the run-level agent — its rows are the transcript's `agent`/`tool` rows whose
- * name is the entry persona and no child's. Its latest prompt reading is Part AH's `entryContext` (REQ-MONITOR-089) —
+ * windows present the entry role as the run-level agent — its rows are the transcript's `agent`/`tool` rows named for
+ * the entry persona or for any of the session's roots (`ownRow` with `SessionRecord.entryRoots`: a root resumed as the
+ * entry role keeps its own persona's name, OQ-97). Its latest prompt reading is Part AH's `entryContext` (REQ-MONITOR-089) —
  * before that every root-level meter drew zero for a run that spawned no child, whatever the run had actually spent.
  * Its tools are `entryTools` (live-run finding K1, R-067): the set the live run's root port resolved, else — only with no
  * live instance — the entry persona's declared tools standing in (REQ-MONITOR-060, `runLevelGrant`), its called history and, while it runs, its active calls —
@@ -126,11 +127,26 @@ export function restingView(session: SessionRecord | null, entry: Parameters<typ
 const NOT_FOLLOWED_KINDS = new Set(['user', 'system', 'intent', 'verifier', 'diff']);
 
 /**
+ * REQ-MONITOR-071 / REQ-CHAT-069: whether `row` is `agent`'s own. A child's by its name. The run-level agent's by the entry
+ * persona a surface knows it by, and by the name any of the session's roots carries (`SessionRecord.entryRoots`, PD-ORCH-005
+ * clause 4 with OQ-97): a root resumed as the entry role keeps its own persona's name on its rows while the entry persona
+ * is another, and matched by the entry persona alone its rows were never the run-level agent's
+ * (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md). Never by a named row's persona: a child
+ * of the entry persona writes that persona too.
+ */
+export function ownRow(row: TranscriptRow, agent: AgentRecord, roots: readonly EntryRoot[] = []): boolean {
+  if (agent.id !== RUN_AGENT_ID) return row.name === agent.name;
+  if (row.name === undefined) return row.persona === agent.persona;
+  return row.name === agent.persona || roots.some((r) => r.name === row.name);
+}
+
+/**
  * REQ-MONITOR-053: with nothing selected, the agent that authored the latest row — scanning backwards past user,
  * intent, system and verifier rows and rows with unknown authorship. A row named for a child is that child; a row
- * named for the entry persona is the run-level agent when one exists.
+ * the run-level agent owns (`ownRow`, by the entry persona or any root's name in `roots`), or one of the entry persona
+ * no child is named for, is the run-level agent when one exists.
  */
-export function followedAgent(rows: readonly TranscriptRow[], agents: readonly AgentRecord[], runLevel: AgentRecord | null): AgentRecord | null {
+export function followedAgent(rows: readonly TranscriptRow[], agents: readonly AgentRecord[], runLevel: AgentRecord | null, roots: readonly EntryRoot[] = []): AgentRecord | null {
   const byName = new Map(agents.map((a) => [a.name, a]));
   for (let i = rows.length - 1; i >= 0; i -= 1) {
     const row = rows[i]!;
@@ -139,7 +155,7 @@ export function followedAgent(rows: readonly TranscriptRow[], agents: readonly A
     if (name === '') continue;
     const child = byName.get(name);
     if (child) return child;
-    if (runLevel && (name === runLevel.persona || row.persona === runLevel.persona)) return runLevel;
+    if (runLevel && (ownRow(row, runLevel, roots) || row.persona === runLevel.persona)) return runLevel;
   }
   return null;
 }
@@ -278,24 +294,37 @@ export function instancesOf(persona: string, agents: readonly AgentRecord[], run
   return runLevel && runLevel.persona === persona ? [runLevel, ...own] : own;
 }
 
-/** REQ-MONITOR-071: the transcript rows an instance authored — by its name; the run-level agent's by the entry persona. */
-export function rowsOf(rows: readonly TranscriptRow[], agent: AgentRecord): TranscriptRow[] {
-  if (agent.id === RUN_AGENT_ID) return rows.filter((r) => !NOT_FOLLOWED_KINDS.has(r.kind) && (r.name === agent.persona || (r.name === undefined && r.persona === agent.persona)));
-  return rows.filter((r) => r.name === agent.name && !NOT_FOLLOWED_KINDS.has(r.kind));
+/**
+ * REQ-MONITOR-071: the transcript rows an instance authored — by its name; the run-level agent's by the entry persona and
+ * every name the session's roots carry (`ownRow`).
+ */
+export function rowsOf(rows: readonly TranscriptRow[], agent: AgentRecord, roots: readonly EntryRoot[] = []): TranscriptRow[] {
+  return rows.filter((r) => !NOT_FOLLOWED_KINDS.has(r.kind) && ownRow(r, agent, roots));
+}
+
+/**
+ * The names an agent's artifacts record it by: a child's canonical name; the run-level agent's entry persona and, for each
+ * of the session's roots (`roots`), its persona and its canonical name — which its publishes and reads record
+ * (REQ-LIBRARY-093) and which is not the entry persona for a persona the canonicaliser rewrites
+ * (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
+ */
+function artifactNames(agent: Pick<AgentRecord, 'name'> & { readonly id?: string }, roots: readonly EntryRoot[]): string[] {
+  return agent.id === RUN_AGENT_ID ? [agent.name, ...roots.flatMap((r) => [r.name, r.canonical])] : [agent.name];
 }
 
 /**
  * REQ-MONITOR-044/052/069 (live-run finding K1, R-067): an agent's artifact links — the ones it PRODUCED (the artifact's
- * producer is the agent's name: a child's canonical name, the run-level agent's entry persona, which is the name the root
- * publishes and dispatches under) and the ones it RECEIVED (its name among the artifact's consumers), each in the session's
- * creation order. A pure reading of the session's list, so every surface draws the same links.
+ * producer is one of the names it is recorded by, `artifactNames`: a child's canonical name; the run-level agent's roots'
+ * names, which its publishes record) and the ones it RECEIVED (one of those names among the artifact's consumers), each in
+ * the session's creation order. A pure reading of the session's list, so every surface draws the same links.
  */
-export function agentArtifacts(agent: Pick<AgentRecord, 'name'>, artifacts: readonly SessionArtifactLink[]): { readonly produced: SessionArtifactLink[]; readonly received: SessionArtifactLink[] } {
-  return { produced: artifacts.filter((a) => a.producer === agent.name), received: artifacts.filter((a) => a.producer !== agent.name && a.consumedBy.includes(agent.name)) };
+export function agentArtifacts(agent: Pick<AgentRecord, 'name'> & { readonly id?: string }, artifacts: readonly SessionArtifactLink[], roots: readonly EntryRoot[] = []): { readonly produced: SessionArtifactLink[]; readonly received: SessionArtifactLink[] } {
+  const names = new Set(artifactNames(agent, roots));
+  return { produced: artifacts.filter((a) => names.has(a.producer)), received: artifacts.filter((a) => !names.has(a.producer) && a.consumedBy.some((c) => names.has(c))) };
 }
 /** REQ-MONITOR-068 (live-run finding K1): the persona-wide card — every artifact any instance of the persona produced. */
-export function personaArtifacts(instances: readonly Pick<AgentRecord, 'name'>[], artifacts: readonly SessionArtifactLink[]): SessionArtifactLink[] {
-  const names = new Set(instances.map((a) => a.name));
+export function personaArtifacts(instances: readonly (Pick<AgentRecord, 'name'> & { readonly id?: string })[], artifacts: readonly SessionArtifactLink[], roots: readonly EntryRoot[] = []): SessionArtifactLink[] {
+  const names = new Set(instances.flatMap((a) => artifactNames(a, roots)));
   return artifacts.filter((a) => names.has(a.producer));
 }
 

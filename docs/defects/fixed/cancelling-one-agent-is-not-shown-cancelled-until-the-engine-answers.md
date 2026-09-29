@@ -40,7 +40,7 @@ next delivery. Corrected the same day, before merge; the pin is the case "an acc
 drawing a record older than the one the engine answered over" in `cancel-overlay.test.ts`, red under the identity rule.*
 Every surface that cancels one agent comes through `cancelAgent`: the inspector, the agents header, the Mission view and
 a persona window. The Workspace, Mission and Overview roots read the session through `useShownSession`, and a persona
-window through `useCancelOverlaid`. The replica is never written (ADR-0043). OQ-128 records the reading: which line,
+window through `useCancelOverlaid`. The replica is never written (ADR-0043). OQ-129 records the reading: which line,
 which window, until when.
 
 The pins are:

@@ -45,7 +45,7 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
-**A confirmed cancel of one agent is shown at once (REQ-MONITOR-128/296, 2026-09-29, R-067; OQ-128).** The renderer's
+**A confirmed cancel of one agent is shown at once (REQ-MONITOR-128/296, 2026-09-29, R-067; OQ-129).** The renderer's
 `cancelAgent` lays a per-window overlay (`packages/ui/src/cancel-overlay.ts`, the store `cancelOverlays` in `shell.ts`)
 over the session before it sends `cancelAgent`. The agent and every unfinished descendant show `cancelled` with an
 activity line saying the user cancelled them. A refusal removes the overlay, and the first whole-session update the
@@ -54,6 +54,35 @@ persona window's coalesced copy, up to 120 ms behind, keeps the overlay until it
 `useCancelOverlaid`; the replica keeps its two writers. The **runtime view**'s `cancelAgent` row and the
 **state-ownership view**'s volatile table name it. No package, edge, process, message kind, channel, command or store
 table changes.
+
+**The run-level agent owns every row, call and artifact its roots carry (REQ-MONITOR-071, REQ-CHAT-069, REQ-MONITOR-053,
+REQ-MONITOR-060, REQ-MONITOR-044 with PD-ORCH-005 clause 4, OQ-97 and REQ-LIBRARY-093, 2026-09-29, R-067).**
+`SessionRecord` gains `entryRoots`: each root of the session once, by the name its rows and calls carry and its canonical
+name, every iteration's, then each root no iteration records that published — a plan cycle's, by its publish
+(`StoreDal.rootPublishersOf`, a new read at every snapshot; found by the repair's fifth review, since the session lets go
+of the run at the plan gate's park) — then the live run's (`entryRootsOf`, `Run.currentRoot`). The surfaces own a named row for the
+run-level agent by the entry persona or a root's name (`ownRow`, shared by `rowsOf`, `scopedRows` and `followedAgent`),
+and its artifact links by those or a root's canonical name; `Run.entryTools` reads the tracker under `rootName`. This
+repairs `the-run-level-agent-is-known-by-its-entry-persona-alone.md`. The **runtime view**'s §3 paragraph on the entry
+role's snapshot fields (`entryContext`, `entryTools`, `artifacts`) says so. No package, edge, process, channel, message
+kind, command or store column changed.
+
+**A steering prompt pending at a rest is kept (REQ-MONITOR-134 with PD-ORCH-005 clause 4, OQ-128, 2026-09-29, R-067).**
+`Run.turn`'s rest delivers every prompt still pending for a `paused` agent with a record into that record, as the marked
+message its next step would have injected, marked injected once (`deliverSteeringAtRest`); a child resumed `summarizing`
+whose record ends on one resumes `running` (`IterationChildren.resumePaused`). Steering closes once no agent takes another
+step — when the rest is recorded, when teardown begins, at the message-limit pause or at the plan-gate park (only a run
+that parks: a plan cycle stopped, quit or failed ends in teardown) — so a later steer is refused; that close records what
+is left as not delivered (`closeSteering`: a `steering_not_delivered` entry and a transcript line naming the end). This
+repairs `a-steering-prompt-pending-at-a-rest-is-lost.md`. The **runtime view**'s §5 steer row says so. No package, edge,
+process, channel, message kind or store column changed.
+
+**A root resumed as the entry role keeps its rows' name (PD-ORCH-005 clauses 3 and 4, OQ-97, 2026-09-29, R-067).**
+`Run.turn` names the root's rows, its tool port and its open calls by the persona its iteration was opened with
+(`rootName`: `iterations.root_persona` for a resumed root), not by the persona the run is set up as, so a root resumed as
+the entry role because its persona is no longer configured writes where `recordCrash` reads. This repairs
+`a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record.md`. The **runtime view**'s §6 crash
+paragraph says so. No package, edge, process, channel, message kind or store column changed.
 
 **A delegated child is watched for a stall, and one that produced no output gets its corrective message
 (REQ-ORCH-089, REQ-MONITOR-117..120, REQ-NOTIFY-111/112, 2026-09-29, R-067; OQ-127).** `children/stall.ts` is new in

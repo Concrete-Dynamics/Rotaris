@@ -1127,7 +1127,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   const todoPlan = selected !== null && selected.id !== RUN_AGENT_ID ? session?.childTodos[selected.id] ?? session?.todo ?? null : session?.todo ?? null;
   // REQ-CHAT-069: "This task" keeps the run-owned kinds plus the selected agent's rows; with no agent selected it is
   // unavailable with that as its stated reason, so the transcript is never filtered to nothing.
-  const shownRows = useMemo(() => (scope === 'task' && selected !== null ? scopedRows(rows, selected) : rows), [scope, selected, rows]);
+  // PD-ORCH-005 clause 4 with OQ-97: the run-level agent's rows include those its roots wrote under another persona's name.
+  const entryRoots = session?.entryRoots;
+  const shownRows = useMemo(() => (scope === 'task' && selected !== null ? scopedRows(rows, selected, entryRoots) : rows), [scope, selected, rows, entryRoots]);
   /**
    * PD-CHAT-005: how deep a row's agent sits in the delegation tree, which is what indents a delegated agent's
    * rows in the transcript. The tree is the run's (REQ-MONITOR-036/037) and the record already carries the

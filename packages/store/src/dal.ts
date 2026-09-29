@@ -621,6 +621,12 @@ export class StoreDal {
       artifactsOf: db.prepare('SELECT * FROM artifacts WHERE session_id = ? ORDER BY created_at, id'),
       // Live-run finding K1: the few columns an agent surface links by, read at every snapshot — never the bodies.
       artifactLinksOf: db.prepare('SELECT id, slug, title, status, created_by, canonical_name, consumed_by FROM artifacts WHERE session_id = ? AND superseded_by IS NULL ORDER BY created_at, id'),
+      // REQ-LIBRARY-093 with OQ-106: the publishes of a root no iteration row records (a plan cycle's), read at every snapshot.
+      rootPublishersOf: db.prepare(`SELECT a.source_persona, a.created_by FROM artifacts a
+        WHERE a.session_id = ? AND a.kind = 'agent_published' AND a.conversation_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM children c WHERE c.session_id = a.session_id AND c.task_id = a.conversation_id)
+          AND NOT EXISTS (SELECT 1 FROM iterations i WHERE i.session_id = a.session_id AND i.root_task_id = a.conversation_id)
+        ORDER BY a.created_at, a.id`),
       artifactById: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND id = ?'),
       artifactBySlug: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND slug = ?'),
       artifactByTask: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND source_task_id = ?'),
@@ -1217,6 +1223,15 @@ export class StoreDal {
    */
   artifactLinksOf(id: SessionId): Pick<ArtifactRow, 'id' | 'slug' | 'title' | 'status' | 'created_by' | 'canonical_name' | 'consumed_by'>[] {
     return this.stmts['artifactLinksOf']!.all(id) as Pick<ArtifactRow, 'id' | 'slug' | 'title' | 'status' | 'created_by' | 'canonical_name' | 'consumed_by'>[];
+  }
+  /**
+   * REQ-LIBRARY-093 with OQ-106: the persona and the instance name (`created_by`) of every publish whose conversation — the
+   * publishing agent's own task id — is no child's and no iteration's root, superseded or not, in creation order. Those are
+   * the publishes of a root no iteration row records: a plan cycle's (REQ-ORCH-153), or a root recorded before v23. A
+   * child's publish and its report carry the child's task id, and an iteration's root is known by its row.
+   */
+  rootPublishersOf(id: SessionId): Pick<ArtifactRow, 'source_persona' | 'created_by'>[] {
+    return this.stmts['rootPublishersOf']!.all(id) as Pick<ArtifactRow, 'source_persona' | 'created_by'>[];
   }
   /** REQ-LIBRARY-096: lookup accepts an id or a slug; the id is tried first, so a slug that looks like an id cannot shadow one. */
   artifactByRef(id: SessionId, ref: string): ArtifactRow | undefined {

@@ -2931,6 +2931,22 @@ which carries the back-pointer. The two limits named above are not settled by th
 offer after the iteration that raised it has ended belongs to the run-continuation policy the same request opened, and
 until that is ruled the build keeps the same-iteration reading.
 
+**Ruled 2026-09-29 — OQ-66's open part, `session_id`, by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 5
+(clause 22) and [`PD-TOOLS-006`](../product/directives.md#pd-tools-006) revision 3, [R-067](../product/requests.md#r-067).** The owner
+took the recommendation. `session_id` (REQ-TOOLS-152) names, by task id, a settled child of the caller: a direct child,
+by REQ-TOOLS-155's ownership test, that has reached a terminal state. A child its `child_timeout` cut off is not one; it
+keeps `continuation_of` (`PD-ORCH-004`), and a `session_id` naming it is refused with a reason naming that field. The
+follow-up resumes the named child from its recorded conversation (`PD-ORCH-005`'s record) under its own task id, with
+the call's `task` appended as its next user message, and the child ends and reports again as any child does. A
+`session_id` that names no such child is refused like REQ-TOOLS-152's other refusals: status `rejected`, no record, no
+task id. REQ-TOOLS-152 is narrowed by `PD-TOOLS-006`, the one directive that narrows it, and its back-pointer is amended
+in place; REQ-MONITOR-300's back-pointer from `PD-ORCH-005` names the one exit from a terminal state a follow-up takes.
+Nothing is built by this ruling: until
+[`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/delegate-drops-session-id-and-suppress-auto-context.md)
+is repaired the field is accepted and dropped. The first limit named above, which agent may take up an offer after its
+iteration ended, was ruled by `PD-ORCH-004` revision 3; `session_id` keeps the direct-child test, so a later
+iteration's root cannot follow up an earlier iteration's child.
+
 **OQ-67 — Where does the `/skills` listing go when there is no transcript to write it into?** *(REQ-CHAT-162 with REQ-WORKSPACE-067 and REQ-WORKSPACE-151; OQ-58. Raised 2026-09-27 by building the listing, `first-release-plan.md` §2.2; raised as OQ-66 and renumbered OQ-67 when it reached `main`, where OQ-66 had been taken by the question `PD-ORCH-004` revision 2 rules.)*
 
 REQ-CHAT-162 makes the listing "a single system row" in the transcript and requires that "a system row a skill
@@ -3870,6 +3886,15 @@ withdraws what waits on a person. One paused child is cancellable while its sess
 active run". Building it raised OQ-101 and OQ-108.
 
 Until they are built, a paused child is not cancellable at rest, and `/stop` keeps its old description.
+
+**Ruled 2026-09-29 — by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 5, [R-067](../product/requests.md#r-067).** The
+status a stop persists, which the build had read and not settled: a graceful user stop persists `paused`, as built, and
+so does a forced one (clause 21). REQ-SESSION-186's "A run stopped gracefully and cleanly by the user persists
+`stopped`" no longer governs a stop the user made; REQ-SESSION-186 joins the Narrows list and carries the back-pointer.
+REQ-MONITOR-029 and REQ-SESSION-093, which already persist `paused` for an interrupted or cancelled run, are unchanged.
+`a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md` is settled by this ruling and is in
+`docs/defects/fixed/`. Nothing is built by it: the code already persists `paused` (`statusForResult`,
+`packages/engine/src/run/stop-conditions.ts`).
 
 **OQ-97 — How does a resumed iteration carry on where the directive says what and not how?** *(`PD-ORCH-005` clauses 4, 5, 6, 7 and 10; PD-TOOLS-006 revision 2; REQ-ORCH-095, REQ-ORCH-088, REQ-ORCH-152, REQ-HOOKS-075 and REQ-MONITOR-125, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061). Numbered OQ-70 while it was built; renumbered when it reached `main`, where OQ-70 had been taken meanwhile.)*
 
@@ -4995,6 +5020,25 @@ as clause 15 reads, or be withheld (OQ-101). Whether the "Command not run" notic
 move into the notices row, a layout change. Whether a stop during a plan cycle should persist a status and a summary of
 its own rather than a stop's `paused` and "came to rest".
 
+
+**OQ-111 — May `delegate` give a `write_scope` to a persona that holds no file-writing tool?** *(`PD-TOOLS-006` over REQ-TOOLS-152; REQ-ORCH-095, whose text-only completion let the child end `succeeded`. Raised 2026-09-29 from the duress live run's finding D6 under [R-067](../product/requests.md#r-067), and ruled in the same entry.)*
+
+`PD-TOOLS-006` validates a `write_scope`'s patterns — empty, absolute, outside the root — and says nothing of the persona
+that declares it. In the duress live run of 2026-09-29 (pack `2026-09-29T03-06-14-929Z`, session `379f1490`, tool call
+#24) the orchestrator delegated `c: write docs/overview.md` to `codebase-analyst`, whose granted tools are read-only, with
+`write_scope: ["docs/overview.md"]`. The call was accepted (`queued`). The child ran for 2 min 47 s, answered that it had no
+file-writing tool, and its report read `succeeded` — REQ-ORCH-095 lets a text-only ending succeed after its one
+re-prompt. The orchestrator then commissioned `c2` for the same file. The scope claimed a path nobody the claim protected
+could write, and fenced the parent and every sibling out of it meanwhile.
+
+**Ruled 2026-09-29 — by [`PD-TOOLS-006`](../product/directives.md#pd-tools-006) revision 3, [R-067](../product/requests.md#r-067).** The
+owner took the recommendation. A delegation carrying a `write_scope` to a persona that holds no file-writing tool —
+neither `write_file` nor `haet_edit` (with its alias `haet`) — is refused beside REQ-TOOLS-152's other refusals: status
+`rejected`, before any record is created and with no task id. Its reason says that the persona cannot write files and,
+where the persona catalogue shows any, names the personas that can. A persona's tools are the ones it would be granted
+for the child, after REQ-TOOLS-006's controls. REQ-TOOLS-152 is narrowed by `PD-TOOLS-006`, and its back-pointer is
+amended in place. REQ-ORCH-095 is untouched: a child with no scope that answers in text still ends as that requirement
+says. Nothing is built by this ruling; the finding's note is D6's in `docs/defects/`.
 
 ## Design-reference dependencies
 

@@ -6,13 +6,13 @@ forced cancel, a pause and a quit. `REQ-SESSION-186` says a run the user stopped
 `REQ-SESSION-093` persists `paused` for "cancelled/interrupted". The code follows the second pair. The four ways a run
 comes to rest can be told apart only by `stop_reason` and the timeline.
 
-Noticed 2026-09-27 by the code survey for the run-continuation policy ([R-058](../product/requests.md#r-058)). Established by reading the code; not driven.
+Noticed 2026-09-27 by the code survey for the run-continuation policy ([R-058](../../product/requests.md#r-058)). Established by reading the code; not driven.
 
 ## Specs
 
 `REQ-SESSION-186` against `REQ-MONITOR-029` and `REQ-SESSION-093`, which cannot all hold for a graceful stop. This is
 a contradiction in the corpus and belongs to an ESC; recorded here so it is not lost. It bears on the run-continuation
-policy [R-058](../product/requests.md#r-058) asked for.
+policy [R-058](../../product/requests.md#r-058) asked for.
 
 ## Relevant files
 
@@ -28,3 +28,18 @@ forced. That keeps REQ-MONITOR-029 and REQ-SESSION-093 and leaves REQ-SESSION-18
 REQ-SESSION-186 is not in the directive's Narrows list, so the contradiction is still the corpus's, and it still
 belongs to an ESC. A stop is told apart from a pause by `children.interruption` and `iterations.interruption` (`stop`),
 as well as by `stop_reason` and the timeline. OQ-96 records the reading.
+
+## Settled 2026-09-29 by the owner's ruling (R-067)
+
+Settled 2026-09-29 by the owner's ruling ([R-067](../../product/requests.md#r-067)): a graceful user stop persists
+`paused`, as built. [`PD-ORCH-005`](../../product/directives.md#pd-orch-005) revision 5 adds clause 21 — a stop the user
+made, graceful and clean or forced, persists `paused` as a pause does and never `stopped` — and names `REQ-SESSION-186`
+among what it narrows; `REQ-SESSION-186` carries the back-pointer in `docs/spec/07-sessions-persistence.md`, in the same
+commit. The contradiction this note recorded is no longer ungoverned: `REQ-SESSION-186`'s `stopped` gives way where the
+directive reaches, and `REQ-MONITOR-029` and `REQ-SESSION-093` stand. OQ-96 carries the ruling.
+
+No code changed. `packages/engine/src/run/stop-conditions.ts` already persists `paused` for a user's stop (confirmed on
+origin/main 5c7de7c: `classifyStop('user_cancelled')` answers the result `interrupted`, lines 26-29, and
+`statusForResult('interrupted')` answers `paused`, lines 60-62), which is what the ruling keeps. The mapping is pinned by the existing
+case "REQ-SESSION-076 is total over REQ-SESSION-073 …" in `packages/engine/src/run/run-pure.test.ts`
+(`statusForResult('interrupted')` → `paused`), green on this branch. Settled, not repaired: there was nothing to repair once the requirement was narrowed.

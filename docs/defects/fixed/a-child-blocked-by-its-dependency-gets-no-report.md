@@ -53,3 +53,6 @@ A blocked child gets no `child_end`, `child_result` or `child_conversation_close
 started, so it never had a conversation to close, and REQ-ORCH-098's teardown is written where a child's execution
 ends. `Scheduler.finalizeIncomplete`'s cancel of a child that had not started behaves the same way, so this repair
 changes nothing there; the report and its artifact are what a blocked child is owed (REQ-ORCH-108, REQ-ORCH-112).
+That is a reading of REQ-ORCH-098's "whatever terminal state a child reaches", not a clause of it. The verifier's
+third round asked that it be recorded where a reading of a clause belongs, so it is also recorded in
+[`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](../a-child-that-never-started-gets-no-teardown-timeline-entries.md).

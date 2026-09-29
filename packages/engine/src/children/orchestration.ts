@@ -468,7 +468,8 @@ export class IterationChildren implements DelegationOps {
       // back to `running` with no execution behind it (the repair of `a-child-whose-execution-raises-before-its-turn-stays-running.md`).
       let history: ChatMessage[];
       try { history = this.resumedConversation(row.task_id, row.iteration, notice); }
-      catch (cause) { void this.settleRaised(row, cause, 'its record could not be loaded to resume it').catch((e) => this.deps.warn(`child ${row.task_id} could not be settled: ${String(e)}`)); continue; }
+      // Tracked as the fresh path's settle is (`runChild`), so a rest waits for it, its `child_completed` hook included.
+      catch (cause) { void this.track(this.settleRaised(row, cause, 'its record could not be loaded to resume it')).catch((e) => this.deps.warn(`child ${row.task_id} could not be settled: ${String(e)}`)); continue; }
       const resume: ChildResume = { history, assessed: summarising };
       // Started as the scheduler starts a child (`startOne`): a raise is warned, and its end is a pass, so a sibling held
       // on the model slot it frees, or on it as a dependency, starts then (found by phase 4's review).

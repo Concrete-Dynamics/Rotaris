@@ -2597,6 +2597,52 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       await sessions.running(sid);
       expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
     });
+
+    it('the resume path: the rest waits for the settle, its `child_completed` hook included, as it waits for a fresh child\'s (PD-ORCH-005 clause 2)', async () => {
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      let releaseTwo!: () => void;
+      const holdTwo = new Promise<void>((r) => { releaseTwo = r; });
+      let releaseHook!: () => void;
+      const hookHold = new Promise<void>((r) => { releaseHook = r; });
+      const state = { resumed: false, hookEntered: false, twoHeld: false };
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event, fields) => { if (event === 'child_completed' && state.resumed && fields['child_name'] === 'one') { state.hookEntered = true; await hookHold; } return []; }, advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'one', task: 'TASK: one' } }, { callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'two', task: 'TASK: two' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        // `two`, resumed, holds its step so the run is still live when the settle of `one` reaches its hook.
+        if (state.resumed) { state.twoHeld = true; return { parts: [{ hold: holdTwo }, ...answer('two: done').parts] }; }
+        return { parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Checking.').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'one')?.state === 'running' && byName(sid, 'two')?.state === 'running');
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      await sessions.running(sid)!;
+      const one = byName(sid, 'one')!;
+      expect([one.state, byName(sid, 'two')!.state]).toEqual(['paused', 'paused']);
+      dal.db.prepare('UPDATE agent_messages SET body = ? WHERE session_id = ? AND task_id = ?').run('{not json', sid, one.task_id);
+      state.resumed = true;
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await settle(() => state.hookEntered && state.twoHeld);
+      expect(byName(sid, 'one')?.state).toBe('failed');
+      const resting = sessions.running(sid)!;
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      let rested = false;
+      void resting.then(() => { rested = true; });
+      releaseTwo();
+      await settle(() => byName(sid, 'two')?.state !== 'running');
+      await new Promise((r) => setTimeout(r, 100));
+      // `two` has come to rest; the settle of `one` still holds in its hook, so the rest has not finished: the settle is
+      // one of the executions it waits for.
+      expect(rested).toBe(false);
+      releaseHook();
+      await resting;
+      expect(rested).toBe(true);
+    });
   });
 
   describe('PD-ORCH-005 clause 15: a forced stop is a stop, and a quit rests by quit', () => {

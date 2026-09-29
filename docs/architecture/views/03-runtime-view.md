@@ -599,7 +599,7 @@ finds its record terminal writes nothing further, so the cancellation's report s
 stores each blocked child's `blocked` report (`blockedReport`, naming the dependency and how it ended) with its
 artifact before the terminal callbacks resume its parent. Both start paths run a child through
 `IterationChildren.executeSettling`: the scheduler's `runChild`, and `resumePaused`, whose record load is guarded the
-same way. A raise that `execute`'s own `try` did not catch goes to `settleRaised`. That covers the stretch that builds
+same way and whose settle is tracked as `runChild`'s execution is, so a rest waits for it. A raise that `execute`'s own `try` did not catch goes to `settleRaised`. That covers the stretch that builds
 the turn's persona, tool port, compression and fingerprint, the settle after the turn, and a resumed record that does
 not decode. The child ends `failed` with a `child_exception` issue and a report naming the raise, and the teardown the
 settle in `execute` writes (REQ-ORCH-098): `child_end`, `child_result`, `child_conversation_closed` and

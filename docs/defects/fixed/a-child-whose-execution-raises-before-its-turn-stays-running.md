@@ -63,3 +63,10 @@ assert the three entries, and both fail with the two lines removed from `settleR
 - *A raise after the child's own terminal transition.* `settleRaised` leaves a terminal child as it is and does not call
   the scheduler's terminal callbacks, so a parent waiting on it is not released. Recorded in
   [`a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md`](../a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md).
+
+**Corrected by the verifier's third round, 2026-09-29.** The resume path's settle was started without being tracked,
+where the fresh path's is tracked through `runChild`. A pause or stop that came while its `child_completed` hook was
+still running did not wait for it, so the run could come to rest with the settle, and the scheduler's terminal
+callbacks after it, still in flight. `resumePaused` now tracks it as the fresh path does. `children.test.ts`'s "the
+resume path: the rest waits for the settle" holds a second child's resumed step and the settle's hook, pauses, and
+releases the step first; it fails without the tracking, because the rest ends while the hook still holds.

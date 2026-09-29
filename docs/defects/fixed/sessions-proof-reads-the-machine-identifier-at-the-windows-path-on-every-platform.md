@@ -44,11 +44,19 @@ beside `workspaces/`, and the proof looks for it elsewhere.
 - **The identifier's path.** `harness.mjs` gains `machineIdFileFor(local, platform, home)`, the product's
   `dataLayout().machineId` copied by the same rule as `workspacesRootFor` and `tokensDirFor`. `sessions-proof`'s
   `machineId()` reads it.
-- **The planted "dead" lock.** `C-deadlock`'s lock now names the pid of a child this script ran to completion and
-  checked with `pidExists`, where it used to name the literal `4242`. The report's expected sentence names that pid.
-  No Windows pid is 4 242, since those are multiples of 4, but on Linux and macOS any small number can be a live
-  process. On this host, pids wrapped during the day's runs (1 389 followed pids near 30 000). A live pid would make
-  `C-deadlock` live, not stale (REQ-SESSION-056), and fail the proof on the product.
+- **The planted "dead" lock.** `C-deadlock`'s lock names a pid chosen per platform by `plantedDeadPid`
+  (`lib/lock-holder.mjs`), and the report's expected sentence names that pid. A live pid would make `C-deadlock`
+  live, not stale (REQ-SESSION-056), and fail the proof on the product.
+  - On **Linux and macOS** it is the pid of a child this script ran to completion and checked with `pidExists`, where
+    it used to be the literal `4242`. Any small number can be a live process there. On this host, pids wrapped
+    during the day's runs (1 389 followed pids near 30 000). Those systems reuse a freed pid only after the counter
+    wraps, so the exited child's pid stays unused for the seconds the proof needs.
+  - On **Windows** it stays `4242`. No Windows pid is 4 242, since those are multiples of 4. An exited child's pid
+    would be the wrong choice there, because Windows reissues a freed id soon from its free list, and the
+    `repair-all` launch's own processes could be handed it before the product probes the lock.
+  - The first round of this repair used the exited child on every platform, including Windows. The verifier
+    reasoned that this brought a flake to Windows where there had been none. It was not observed, because
+    Windows was not run (IC-3). The second round made the choice per platform.
 - **Launch 2's dead lock.** Launch 2 now checks that the lock it leaves really is dead: the pid is probed the moment
   the launch returns (`lib/lock-holder.mjs`), as `checkpoint-proof`'s step (c) does
   ([its note](checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md)).
@@ -58,7 +66,8 @@ No assertion was weakened.
 **Pinned by** `apps/desktop/scripts/lib/proof-isolation.test.ts`. It checks `machineIdFileFor` against `dataLayout`
 on `win32`, `linux` and `darwin`, including a scratch home on `darwin`. It also pins the two spellings apart: Windows
 `…\rotaris\data\machine-id`, Linux `…/rotaris/data/rotaris/machine-id`. The dead-pid check is covered by
-`lib/lock-holder.test.ts`'s real-process case.
+`lib/lock-holder.test.ts`'s real-process case. Its per-platform case pins `plantedDeadPid`: `4242` on `win32`
+with no child run, and an exited child on `linux` and `darwin`, which probes dead on this host.
 
 **Shown on the built app**, `fa377e6` plus this branch, as root under Xvfb, Node 24, after one `pnpm build`.
 

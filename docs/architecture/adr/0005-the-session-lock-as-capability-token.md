@@ -595,10 +595,14 @@ the product's rule. `proof-isolation.test.ts` checks it against `dataLayout` on 
 Two further repairs came with it, to preconditions the proof stated and did not check:
 
 - **The dead lock.** The lock that launch 2 leaves is probed dead the moment that launch returns (`lib/lock-holder.mjs`).
-- **The planted "dead" lock.** The lock for `C-deadlock` now names a pid this script saw exit, where it used to name
-  the literal `4242`. No Windows pid is 4 242, since those are multiples of 4. On this Linux host, pids wrapped during
-  the runs (a lock pid of 1 389 followed pids near 30 000), so any small number can be a live process there. A live
-  pid would have made `C-deadlock` live and failed the proof on the product.
+- **The planted "dead" lock.** The lock for `C-deadlock` names a pid chosen per platform (`plantedDeadPid`,
+  `lib/lock-holder.mjs`). A live pid would have made `C-deadlock` live and failed the proof on the product.
+  - **Linux and macOS:** a pid this script saw exit, where it used to name the literal `4242`. On this Linux host,
+    pids wrapped during the runs (a lock pid of 1 389 followed pids near 30 000), so any small number can be a live
+    process there.
+  - **Windows:** still `4242`. No Windows pid is 4 242, since those are multiples of 4. A pid a child just gave back
+    is not safe there, because Windows reissues a freed id soon, and the next launch's own processes could take it.
+    The first round used the exited child on every platform, and that was corrected in review. Windows was not run.
 
 Recorded and repaired in
 [`sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`](../../defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md).

@@ -1076,8 +1076,8 @@ refs in the shared repository, a session whose repository moved, a live run refu
 capped audit and of an empty session, and the trajectory export of one, of two in reverse order, of a resumed and of a
 capped history — every file parsed by a SEPARATE node process holding no product code; an unreadable session listed
 and deleted; the backup disclosure panel. Evidence under `.proof/sessions-proof/`. The planted locks name this machine through the
-identifier where the product mints it on the running platform (`machineIdFileFor`), and a "dead" pid is one the script saw
-exit; until 2026-09-28 the Windows spelling made the proof crash at `repair-all` on Linux (R-062;
+identifier where the product mints it on the running platform (`machineIdFileFor`), and a "dead" pid is chosen per platform
+(`plantedDeadPid`: one the script saw exit on Linux and macOS, `4242` on Windows, where a freed pid is soon reissued); until 2026-09-28 the Windows spelling made the proof crash at `repair-all` on Linux (R-062;
 [the note](../defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md)).
 
 **What `pnpm code-intel-proof` does.** After `pnpm code-intel:bundle` (once per checkout; the tree is git-ignored), it

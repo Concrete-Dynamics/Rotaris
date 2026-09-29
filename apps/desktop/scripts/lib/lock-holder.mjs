@@ -18,6 +18,8 @@
  * Nothing here is product code. It runs only from the proofs.
  */
 
+import { spawnSync } from 'node:child_process';
+
 /**
  * The one question REQ-GIT-093 lets the product ask: does a process bearing this pid exist on this machine now.
  * `EPERM` means it exists and belongs to someone else.
@@ -32,6 +34,35 @@ export function pidExists(pid) {
   } catch (e) {
     return /** @type {NodeJS.ErrnoException} */ (e).code === 'EPERM';
   }
+}
+
+/**
+ * A pid for a lock a proof plants as DEAD, chosen per platform so it cannot name a live process while the next launch
+ * reads it (REQ-SESSION-056: a pid that probes alive makes the lock live, and the session is then correctly not stale).
+ *
+ * - `win32`: 4 242, which is never a Windows pid, since those are multiples of 4. A pid a child just gave back is NOT
+ *   used there: Windows reissues a freed id soon from its free list rather than after a counter wraps, so the next
+ *   launch's own processes (main, GPU, renderer, run host, workspace service) could be handed it before the probe.
+ * - `linux`, `darwin`: the pid of a child that has already exited. Those systems hand pids out in rising order and
+ *   reuse one only after the counter wraps, so the freed pid stays unused for the seconds the proof needs. A small
+ *   literal is not safe there: a wrapped counter hands out small numbers (pids near 1 400 followed pids near 30 000
+ *   on the Linux host of 2026-09-28).
+ * @param {NodeJS.Platform} [platform]
+ * @param {{ exitedChildPid?: () => number | undefined }} [seams]
+ * @returns {number}
+ */
+export function plantedDeadPid(platform = process.platform, { exitedChildPid = runExitedChild } = {}) {
+  if (platform === 'win32') return NEVER_A_WINDOWS_PID;
+  const pid = exitedChildPid();
+  if (!Number.isInteger(pid) || /** @type {number} */ (pid) <= 0) throw new Error(`the child run to give a dead pid reported pid ${pid}`);
+  return /** @type {number} */ (pid);
+}
+
+/** Not a multiple of 4, so never a Windows pid. */
+export const NEVER_A_WINDOWS_PID = 4242;
+
+function runExitedChild() {
+  return spawnSync(process.execPath, ['-e', ''], { stdio: 'ignore', windowsHide: true }).pid;
 }
 
 /** @param {number} ms */

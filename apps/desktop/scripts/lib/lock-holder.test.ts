@@ -7,7 +7,7 @@
 import { spawn } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the reader is plain ESM beside the scripts that run it.
-import { describeLingeringHolder, lockHolderAfterExit, pidExists } from './lock-holder.mjs';
+import { describeLingeringHolder, lockHolderAfterExit, NEVER_A_WINDOWS_PID, pidExists, plantedDeadPid } from './lock-holder.mjs';
 
 /** A scripted probe over a fake clock: the holder answers until `goneAt` ms. */
 function scripted(goneAt: number) {
@@ -73,5 +73,23 @@ describe('the lock holder read when the launch that held it returns (REQ-SESSION
     expect(lockHolderAfterExit(pid).aliveAtExit).toBe(false);
     expect(pidExists(0)).toBe(false);
     expect(pidExists(-1)).toBe(false);
+  });
+
+  it('a planted dead pid is chosen per platform: never a Windows pid on win32, an exited child elsewhere (REQ-SESSION-056)', () => {
+    let children = 0;
+    const exitedChildPid = () => { children++; return 31_337; };
+    // Windows reissues a freed pid soon, so no child is run there; 4 242 is not a multiple of 4, which every Windows pid is.
+    expect(plantedDeadPid('win32', { exitedChildPid })).toBe(4242);
+    expect(NEVER_A_WINDOWS_PID % 4).not.toBe(0);
+    expect(children).toBe(0);
+    expect(plantedDeadPid('linux', { exitedChildPid })).toBe(31_337);
+    expect(plantedDeadPid('darwin', { exitedChildPid })).toBe(31_337);
+    expect(children).toBe(2);
+    expect(() => plantedDeadPid('linux', { exitedChildPid: () => undefined })).toThrow(/reported pid undefined/);
+    if (process.platform !== 'win32') {
+      const real = plantedDeadPid();
+      expect(Number.isInteger(real) && real > 0).toBe(true);
+      expect(pidExists(real)).toBe(false);
+    }
   });
 });

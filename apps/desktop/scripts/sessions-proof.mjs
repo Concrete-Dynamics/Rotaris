@@ -33,7 +33,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, machineIdFileFor, proofIsolationEnv } from './lib/harness.mjs';
-import { describeLingeringHolder, lockHolderAfterExit, pidExists } from './lib/lock-holder.mjs';
+import { describeLingeringHolder, lockHolderAfterExit, pidExists, plantedDeadPid } from './lib/lock-holder.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -222,9 +222,10 @@ const repairOne = launch('repair-one', {
 const holder = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 300000)'], { stdio: 'ignore', windowsHide: true });
 try {
   plantSession('B-nolock', 'running');
-  // C's pid is one this script saw exit, not a literal: 4 242 is never a Windows pid (those are multiples of 4), but on
-  // Linux and macOS any small number can be a live process, and a live one would make C live, not stale (REQ-SESSION-056).
-  const deadPid = spawnSync(process.execPath, ['-e', ''], { stdio: 'ignore', windowsHide: true }).pid;
+  // C's pid is chosen per platform (`plantedDeadPid`): 4 242 on Windows, where it is never a pid and a freed one is soon
+  // reissued; a child this script saw exit on Linux and macOS, where a small literal can be a live process once pids wrap.
+  // A live one would make C live, not stale (REQ-SESSION-056).
+  const deadPid = plantedDeadPid();
   expect(Number.isInteger(deadPid) && deadPid > 0 && !pidExists(deadPid), `the pid planted as dead (${deadPid}) still probes alive`);
   plantSession('C-deadlock', 'running', { lock: { pid: deadPid } });
   plantSession('D-live', 'running', { lock: { pid: holder.pid } });

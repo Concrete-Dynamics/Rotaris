@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A delegated child is watched for a stall, and one that produced no output gets its corrective message
+(REQ-ORCH-089, REQ-MONITOR-117..120, REQ-NOTIFY-111/112, 2026-09-29, R-067; OQ-109).** `children/stall.ts` is new in
+`engine`. `TurnSink` gains an optional `event` for every streamed part, and `TurnDeps` gains `onModelEvent` and
+`onToolStarted`. The watch writes a `stall` issue and the `child_waiting_on_tools`, `child_stall_recovered` and
+`child_corrective_message` timeline entries. The **runtime view**'s §4 names it. No package, edge, process, channel,
+command or store table changes.
+
 **A child settled without its turn gets its report (REQ-ORCH-048 / REQ-ORCH-052 / REQ-ORCH-108, 2026-09-29, R-067).**
 The scheduler's blocking cascade stores each blocked child's `blocked` report and artifact before its parent is told.
 A child whose execution raises outside its turn, on either start path, is settled `failed` with its report by

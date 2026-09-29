@@ -1797,8 +1797,9 @@ so a child that genuinely loops is still stopped at the same point.
 > `stall_timeout` were loaded and validated and reached no run; the progress rule is their first reader. Both are now
 > handed to the run, and the role's value substitutes for the run's on that role's children (REQ-CONFIG-108). The
 > stall recovery REQ-NOTIFY-111/112 describe for the same window is not built, and that is recorded in
-> [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../defects/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md),
-> not changed. **(2) How a parent names a continuation.** REQ-TOOLS-152's fields have none. `session_id` reuses a
+> [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../defects/fixed/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md),
+> not changed. *(Built 2026-09-29 under R-067, with REQ-ORCH-089's watchdog over the same window; the readings are
+> OQ-109.)* **(2) How a parent names a continuation.** REQ-TOOLS-152's fields have none. `session_id` reuses a
 > delegation's session, and this directive asks for a new child and never a resume, so `delegate` takes one new
 > optional field, `continuation_of`, the task id of the child continued. It is recorded on the new child as
 > `children.continuation_of` (store v22). REQ-TOOLS-152 calls itself the whole of the `delegate` contract, and this

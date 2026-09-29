@@ -16,6 +16,7 @@ import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport,
 import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver, type RoleName } from './personas.js';
 import { fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
+import { correctiveInstruction, StallWatch, stallRecoveryDue, stallWarning } from './stall.js';
 import { validateWriteScope, WriteClaims, writeScopeBlock, type ClaimHit, type ScopeDisclosure } from './write-scope.js';
 import type { HookPort } from '../hooks-port.js';
 import { withContextUnits, withPlaybook } from '../run/run.js';
@@ -73,7 +74,10 @@ export interface ChildrenDeps {
   readonly toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => ToolPort | null;
   readonly summariser: SummariserDeps | null;
   readonly childTimeoutMs?: Millis;
-  /** PD-ORCH-004 / REQ-CONFIG-113: `runtime.child_stall_timeout`, the progress rule's window; absent means the engine's 90 s. */
+  /**
+   * PD-ORCH-004 / REQ-CONFIG-113: `runtime.child_stall_timeout`, the progress rule's window and the stall watch's threshold
+   * (REQ-ORCH-089); absent means the engine's 90 s.
+   */
   readonly childStallTimeoutMs?: Millis | undefined;
   readonly runSignal: AbortSignal;
   readonly warn: (m: string) => void;
@@ -625,6 +629,22 @@ export class IterationChildren implements DelegationOps {
     // `runtime.child_stall_timeout` — and the log it reads, kept across both attempts of REQ-ORCH-088's retry.
     const stallMs = millis(persona?.stallTimeoutMs ?? deps.childStallTimeoutMs ?? CHILD_STALL_TIMEOUT_MS);
     const progress = new ProgressLog(deps.workspaceRoot);
+    // REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch over the same window — visibility only, it cancels nothing. What
+    // it reports is written only while this execution still belongs to a live run (REQ-SESSION-094).
+    const stallWatch = new StallWatch(deps.clocks, stallMs, {
+      stalled: (s) => {
+        if (this.detached) return;
+        const message = stallWarning(row.canonical_name, row.task_id, s.silentS);
+        deps.warn(message);
+        deps.writer.recordIssue({ kind: 'stall', severity: 'warning', actor: row.canonical_name, message, metadata: { task_id: row.task_id, silent_seconds: s.silentS, active_tools: s.activeTools, recent_tool_calls: s.recentCalls, last_model_event: s.lastModelEvent } });
+      },
+      waiting: (w) => { if (!this.detached) deps.writer.appendTimeline('child_waiting_on_tools', 'rotaris', `${row.canonical_name} (${row.task_id}) is waiting on ${w.activeCalls} active tool call(s): no model event or token for ${w.silentS} seconds.`, { task_id: row.task_id, active_calls: w.activeCalls, silent_seconds: w.silentS }); },
+      recovered: () => { if (!this.detached) deps.writer.appendTimeline('child_stall_recovered', 'rotaris', `${row.canonical_name} (${row.task_id}) is active again after a stall.`, { task_id: row.task_id }); },
+      // REQ-ORCH-089's stall callback: no host listens yet, so no badge draws (`a-stalled-child-is-never-shown-stalled.md`).
+      evaluated: () => undefined,
+    });
+    /** REQ-NOTIFY-112: the one corrective message about its lack of progress, per child task, however often the outcome recurs. */
+    let corrected = false;
     // Part Q: the child's own cell — its model (an override of the session applied), its role's fallback, one fallback across both routes.
     const resilience = deps.resilience?.forChild(persona, { model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking }, childTimeoutMs) ?? null;
     // Part AH: this child's own capacity and its own plan — the ledger row is where a child's task plan lives.
@@ -678,6 +698,7 @@ export class IterationChildren implements DelegationOps {
       // A box rather than a `let`: the assignment happens inside the ceiling's callback, which the compiler
       // cannot see, and the cast that would otherwise be needed in the `finally` says less than this does.
       const backstop: { handle: TimerHandle | null } = { handle: null };
+      stallWatch.start();
       const timer = deps.clocks.timers.after(childTimeoutMs, () => {
         timedOut = true;
         landing = true;
@@ -702,7 +723,9 @@ export class IterationChildren implements DelegationOps {
         ...(resilience ? { resilience } : {}),
         ...(compression ? { compression } : {}),
         ...(deps.onRequestUsage ? { onRequestUsage: deps.onRequestUsage } : {}),
-        onToolCompleted: (call, result) => progress.completed(deps.clocks.monotonic.now(), call.name, result.args, result.status === 'ok' && !result.isError),
+        onToolCompleted: (call, result) => { stallWatch.toolCompleted(call.callId); progress.completed(deps.clocks.monotonic.now(), call.name, result.args, result.status === 'ok' && !result.isError); },
+        onToolStarted: (call) => stallWatch.toolStarted(call.callId, call.name),
+        onModelEvent: (kind) => stallWatch.modelEvent(kind),
         // PD-ORCH-005 clause 1: the child's conversation, recorded under its task id as it happens.
         ...(deps.record ? { recorder: deps.record.recorder(row.task_id, row.iteration) } : {}),
         ...(fingerprint ? { fingerprint } : {}),
@@ -715,6 +738,27 @@ export class IterationChildren implements DelegationOps {
       try {
         outcome = await this.runWithChildren(row.task_id, turn, start ?? { kind: 'fresh', task: payload() }, controller.signal);
         start = null;
+        /*
+         * REQ-NOTIFY-111/112: a child whose turn failed after it produced no output for the whole stall window does not end
+         * as a failure: it is given one corrective message and resumes from where it stopped, its conversation carrying on
+         * with the message (OQ-109). Once per child task; never on an answer-only route, after its own limit, a cancel, the
+         * rest, loop supervision's escalation, or an error no instruction can address.
+         */
+        const failedStep = outcome.report.status === 'failed' ? outcome.report.error : null;
+        if (stallRecoveryDue({ status: outcome.report.status, error: failedStep, escalated: outcome.escalation !== undefined, aborted: controller.signal.aborted, timedOut, resting: this.resting, paused: outcome.paused === true, answerRoute: deps.route === 'answer', corrected, quietMs: stallWatch.quietFor(), thresholdMs: stallMs, activeCalls: stallWatch.activeCalls })) {
+          corrected = true;
+          const quietS = Math.floor(stallWatch.quietFor() / 1000);
+          const instruction = correctiveInstruction({ quietS, windowS: stallMs / 1000, failure: failedStep?.headline ?? 'no reason was given' });
+          deps.writer.appendTimeline('child_corrective_message', 'rotaris', `${row.canonical_name} (${row.task_id}) produced no output for ${quietS} seconds and its model request failed; it was given its one corrective message and resumes (REQ-NOTIFY-111).`, { task_id: row.task_id, quiet_seconds: quietS, error: failedStep?.headline ?? '' });
+          stallWatch.activity();
+          const stopped = outcome;
+          let first = true;
+          // The corrective message is the next message of the conversation the failed turn left, and a delegation it
+          // leads to is waited for as any turn's is.
+          const resumeWith = (task: string | null, history: readonly ChatMessage[]): Promise<TurnOutcome> => { if (first) { first = false; return turn(instruction, stopped.messages); } return turn(task, history); };
+          const again = await this.runWithChildren(row.task_id, resumeWith, { kind: 'fresh', task: instruction }, controller.signal);
+          outcome = { ...again, toolCallCount: stopped.toolCallCount + again.toolCallCount };
+        }
         // REQ-ORCH-095: one re-prompt for a child that neither worked nor answered — and, on a work route, for an implementer
         // that produced text and acted on nothing; on the answer route the answered category is accepted at once (REQ-ORCH-015).
         // A resumed child's calls before the rest count: it worked, even if its resumed turn made no call.
@@ -736,6 +780,7 @@ export class IterationChildren implements DelegationOps {
         error = { type: 'child_exception', message: String(cause instanceof Error ? cause.message : cause) };
         deps.writer.recordIssue({ kind: 'child_exception', severity: 'error', actor: row.canonical_name, message: `Child ${row.canonical_name} raised: ${error.message}` });
       } finally {
+        stallWatch.stop();
         timer.cancel();
         backstop.handle?.cancel();
         deps.runSignal.removeEventListener('abort', onRunAbort);

@@ -638,6 +638,54 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     });
   });
 
+  describe('REQ-NOTIFY-111/112 with REQ-ORCH-088 and REQ-CONFIG-108: the corrective message across the retry, and the role\'s window', () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    const gate = () => { let open!: () => void; const p = new Promise<void>((r) => { open = r; }); return { p, open }; };
+    /** A model step that says nothing until `p` is released, and then fails. */
+    const silentThenFails = (p: Promise<void>): ScriptedCall => ({ parts: [{ hold: p }, { error: modelError({ code: 'unknown', headline: 'the stream ended with no answer', transient: false }) }] });
+    const script = (child: (turn: number) => ScriptedCall) => (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'quiet', task: 'TASK: quiet' } }]) : answer('finished');
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      return child(turn);
+    };
+    const childRequests = (s: ReturnType<typeof sessionsWith>) => s.client.requests.filter((r) => !/^You are the orchestrator|summarise/i.test(r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? ''));
+    const corrective = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages.some((m) => m.content.some((p) => p.kind === 'text' && (p.text ?? '').startsWith('[Corrective message]')));
+
+    it('once per child task: a child corrected on its first attempt is not corrected again on REQ-ORCH-088\'s fallback retry', async () => {
+      const g1 = gate(); const g2 = gate();
+      const s = sessionsWith(script((turn) => {
+        if (turn === 1) return silentThenFails(g1.p); // attempt 1, on a1: silent 3 s, then fails — its corrective message
+        if (turn === 2) return hanging(NEVER); // the corrected turn hangs to the limit; the backstop ends attempt 1
+        return silentThenFails(g2.p); // attempt 2, on f1: silent 3 s, then fails — no second message
+      }), { catalogue, roleFallback: F1, childTimeoutMs: 10_000, childStallTimeoutMs: 2_000, delegation: true });
+      const sid = (s.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      clock.advance(3_000); g1.open(); await tick();
+      clock.advance(7_000); await tick(); // attempt 1's limit
+      clock.advance(30_000); await tick(); // the backstop; the retry starts on f1
+      clock.advance(3_000); g2.open();
+      expect((await s.sessions.running(sid)!).status).toBe('completed');
+      expect(timeline(sid)).toContain('child_timeout_fallback');
+      const requests = childRequests(s);
+      expect(requests.map((r) => [r.model.modelId, corrective(r)])).toEqual([['a1', false], ['a1', true], ['f1', false]]);
+      expect(timeline(sid).filter((n) => n === 'child_corrective_message')).toHaveLength(1);
+      expect(dal.childrenOf(sid)[0]!.state).toBe('failed');
+    });
+
+    it('a role\'s stall_timeout is the watch\'s threshold and the message\'s window on that role\'s children', async () => {
+      const g = gate();
+      const s = sessionsWith(script((turn) => (turn === 1 ? silentThenFails(g.p) : answer('carried on'))), { childStallTimeoutMs: 60_000, roleStallTimeoutMs: 4_000, delegation: true });
+      const sid = (s.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      clock.advance(4_000);
+      // REQ-MONITOR-117: with a 4 s threshold the watch evaluates every second, and the stall is entered at 4 s.
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'stall').map((i) => i.message)).toEqual([expect.stringMatching(/^child appears stalled: no model event or token for 4 seconds/)]);
+      g.open();
+      expect((await s.sessions.running(sid)!).status).toBe('completed');
+      expect(corrective(childRequests(s)[1]!)).toBe(true);
+    });
+  });
+
   it('REQ-ORCH-092: a 503 is retried once from the transient budget and a 401 fails the agent at once; a validation failure uses its own budget', async () => {
     const transient = sessionsWith((_p, turn) => (turn === 1 ? failing(modelError({ code: 'http', status: 503, headline: 'Service Unavailable' })) : answer('ok')));
     const sid = (transient.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;

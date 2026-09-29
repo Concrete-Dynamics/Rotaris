@@ -604,6 +604,25 @@ the turn's persona, tool port, compression and fingerprint, the settle after the
 not decode. The child ends `failed` with a `child_exception` issue and a report naming the raise, `child_end` and
 `child_completed`. So no child is left `running` with no execution behind it.
 
+**The stall watch and the corrective message (REQ-ORCH-089, REQ-MONITOR-117..120, REQ-NOTIFY-111/112;
+`children/stall.ts`; OQ-109).** Each attempt of a child's execution runs a `StallWatch` on the clock port. Its
+threshold is the role's `stall_timeout`, else `runtime.child_stall_timeout`, 90 s by default, and it is the same window
+as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds and never cancels anything. It is fed:
+- every streamed part (`TurnSink.event`, then `TurnDeps.onModelEvent`);
+- each tool call's start and end (`onToolStarted`, `onToolCompleted`);
+- the corrective message.
+
+What it writes:
+- a silence of the threshold with no call in flight: a warning and a `stall` issue, at entry and then every
+  `max(threshold, 30)` s;
+- the same silence with calls in flight: `child_waiting_on_tools`;
+- activity resuming after a stall: `child_stall_recovered`.
+
+Its per-evaluation callback has no listener yet. A child's turn can end `failed` after no output for the whole window,
+with no call in flight. Unless the outcome is one REQ-NOTIFY-112 excludes, that child is given one corrective message
+(`child_corrective_message`): the next user message of the conversation the failed turn left, run through the resume
+loop. It is given once per child task, across the fallback retry too.
+
 **Write scopes (PD-TOOLS-006; `children/write-scope.ts`).** A `delegate` call may carry `write_scope`, path
 patterns in the `glob` tool's dialect (the one compiler, `kernel/glob.ts`). `IterationChildren.delegate` validates
 them before admission (an empty, absolute or root-escaping pattern is a `rejected` delegation with no record) and,

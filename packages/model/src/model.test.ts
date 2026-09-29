@@ -65,6 +65,13 @@ describe('model — the default backend over a scripted client (ADR-0026 alterna
     expect(s.deltas).toEqual(['a']);
     release();
   });
+  it('REQ-ORCH-089: every streamed part reaches the sink as a model event by its kind, an error part as `error`', async () => {
+    const e = modelError({ code: 'timeout', headline: 'no answer' });
+    const client = new ScriptedModelClient([{ parts: [{ part: { kind: 'reasoning', delta: 'r' } }, { part: { kind: 'tool-call', callId: 'c', name: 'n', argsDelta: '{}' } }, { part: { kind: 'text', delta: 't' } }, { part: { kind: 'usage', usage: { input: 1, output: 1 } } }, { error: e }] }]);
+    const kinds: string[] = [];
+    await new DefaultAgentBackend(client).runTurn(input('t'), { ...sink(), event: (k) => kinds.push(k) }, new AbortController().signal);
+    expect(kinds).toEqual(['reasoning', 'tool-call', 'text', 'usage', 'error']);
+  });
   it('a stream with no script left fails as unknown, never throws', async () => {
     const r = await new DefaultAgentBackend(new ScriptedModelClient([])).runTurn(input('t'), sink(), new AbortController().signal);
     expect(r.status).toBe('failed');

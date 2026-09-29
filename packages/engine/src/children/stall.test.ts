@@ -1,0 +1,143 @@
+import { describe, expect, it } from 'vitest';
+import { FakeClock, millis } from '@rotaris/kernel';
+import { modelError } from '@rotaris/model';
+import { correctiveInstruction, FIXED_CORRECTIVE_INSTRUCTION, stallCadence, stallRecoveryDue, stallRepeat, StallWatch, stallWarning, type StallRecoveryInput, type StallReport } from './stall.js';
+
+function watched(thresholdMs: number) {
+  const clock = new FakeClock();
+  const stalled: StallReport[] = [];
+  const waiting: { silentS: number; activeCalls: number }[] = [];
+  const evaluated: boolean[] = [];
+  let recovered = 0;
+  const watch = new StallWatch(clock, millis(thresholdMs), {
+    stalled: (r) => stalled.push(r), waiting: (w) => waiting.push(w), recovered: () => { recovered += 1; }, evaluated: (s) => evaluated.push(s),
+  });
+  return { clock, watch, stalled, waiting, evaluated, recovered: () => recovered };
+}
+
+describe('REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch', () => {
+  it('REQ-MONITOR-117: evaluates every sixth of the threshold, never under 1 s or over 5 s; REQ-MONITOR-120: repeats no sooner than the threshold or 30 s', () => {
+    expect([stallCadence(90_000), stallCadence(12_000), stallCadence(3_000)]).toEqual([5_000, 2_000, 1_000]);
+    expect([stallRepeat(90_000), stallRepeat(10_000)]).toEqual([90_000, 30_000]);
+  });
+
+  it('warns at stall entry with the diagnostics, fires the callback on every evaluation, and repeats only at the throttle', () => {
+    const w = watched(90_000);
+    w.watch.start();
+    w.watch.toolStarted('c1', 'read_file'); w.watch.toolCompleted('c1');
+    w.watch.modelEvent('usage');
+    w.clock.advance(85_000);
+    expect(w.stalled).toEqual([]);
+    expect(w.evaluated).toHaveLength(17);
+    expect(w.evaluated.every((s) => !s)).toBe(true);
+    w.clock.advance(5_000);
+    expect(w.stalled).toEqual([{ silentS: 90, entry: true, activeTools: [], recentCalls: ['read_file'], lastModelEvent: 'usage' }]);
+    expect(w.evaluated.at(-1)).toBe(true);
+    // Every evaluation still calls back, but the warning waits for max(90 s, 30 s).
+    w.clock.advance(85_000);
+    expect(w.stalled).toHaveLength(1);
+    expect(w.evaluated.slice(-17).every((s) => s)).toBe(true);
+    w.clock.advance(5_000);
+    expect(w.stalled.map((r) => [r.silentS, r.entry])).toEqual([[90, true], [180, false]]);
+  });
+
+  it('a model event ends the stall: the recovery is reported at the next evaluation and the callback reads not stalled', () => {
+    const w = watched(12_000);
+    w.watch.start();
+    w.clock.advance(12_000);
+    expect(w.stalled).toHaveLength(1);
+    w.watch.modelEvent('text');
+    w.clock.advance(2_000);
+    expect(w.recovered()).toBe(1);
+    expect(w.evaluated.at(-1)).toBe(false);
+    expect(w.watch.stalled).toBe(false);
+  });
+
+  it('REQ-MONITOR-118: with a tool call in flight the silence is waiting on N active calls, not a stall', () => {
+    const w = watched(30_000);
+    w.watch.start();
+    w.watch.toolStarted('a', 'terminal'); w.watch.toolStarted('b', 'terminal');
+    w.clock.advance(30_000);
+    expect(w.stalled).toEqual([]);
+    expect(w.waiting).toEqual([{ silentS: 30, activeCalls: 2 }]);
+    w.clock.advance(25_000);
+    expect(w.waiting).toHaveLength(1);
+    w.clock.advance(5_000);
+    expect(w.waiting.map((x) => x.silentS)).toEqual([30, 60]);
+    // The calls return: the model's next step starts then, so the silence is counted from there.
+    w.watch.toolCompleted('a'); w.watch.toolCompleted('b');
+    w.clock.advance(25_000);
+    expect(w.stalled).toEqual([]);
+    w.clock.advance(5_000);
+    expect(w.stalled.map((r) => r.silentS)).toEqual([30]);
+  });
+
+  it('the diagnostics carry the last 5 tool calls, the active ones (none, in a stall) and the last model event type', () => {
+    const w = watched(6_000);
+    w.watch.start();
+    for (const n of ['a', 'b', 'c', 'd', 'e', 'f']) { w.watch.toolStarted(`id-${n}`, n); w.watch.toolCompleted(`id-${n}`); }
+    w.watch.modelEvent('finish');
+    w.clock.advance(6_000);
+    expect(w.stalled).toEqual([{ silentS: 6, entry: true, activeTools: [], recentCalls: ['b', 'c', 'd', 'e', 'f'], lastModelEvent: 'finish' }]);
+  });
+
+  it('REQ-NOTIFY-112: output is a token; an error or a usage part is a model event and not output', () => {
+    const w = watched(90_000);
+    w.watch.start();
+    w.clock.advance(80_000);
+    w.watch.modelEvent('usage');
+    w.clock.advance(15_000);
+    w.watch.modelEvent('error');
+    expect(w.watch.quietFor()).toBe(95_000);
+    w.watch.modelEvent('reasoning');
+    expect(w.watch.quietFor()).toBe(0);
+    w.clock.advance(1_000);
+    w.watch.activity();
+    expect(w.watch.quietFor()).toBe(0);
+  });
+
+  it('a stopped watch evaluates nothing', () => {
+    const w = watched(6_000);
+    w.watch.start();
+    w.watch.stop();
+    w.clock.advance(60_000);
+    expect(w.evaluated).toEqual([]);
+    expect(w.stalled).toEqual([]);
+  });
+
+  it('the warning says what REQ-ORCH-089 and REQ-MONITOR-119 say', () => {
+    expect(stallWarning('build', 'bg_0000000a', 90)).toBe('child appears stalled: no model event or token for 90 seconds (build, bg_0000000a); the run is still waiting on it.');
+  });
+});
+
+describe('REQ-NOTIFY-111/112: the corrective message', () => {
+  const due: StallRecoveryInput = { status: 'failed', error: modelError({ code: 'unknown', headline: 'the stream ended' }), escalated: false, aborted: false, timedOut: false, resting: false, paused: false, answerRoute: false, corrected: false, quietMs: 90_000, thresholdMs: 90_000, activeCalls: 0 };
+
+  it('is due for a failed turn after no output for the whole window, the bound inclusive', () => {
+    expect(stallRecoveryDue(due)).toBe(true);
+    expect(stallRecoveryDue({ ...due, quietMs: 89_999 })).toBe(false);
+    expect(stallRecoveryDue({ ...due, error: modelError({ code: 'timeout', headline: 't' }) })).toBe(true);
+  });
+
+  it('is never due for an outcome REQ-NOTIFY-112 names as not recovery-eligible, a second time, on an answer-only route, or with a call in flight', () => {
+    const not: Partial<StallRecoveryInput>[] = [
+      { status: 'succeeded' }, { status: 'partial' },
+      { aborted: true }, { timedOut: true }, { escalated: true }, { resting: true }, { paused: true },
+      { answerRoute: true }, { corrected: true }, { activeCalls: 1 },
+      { error: modelError({ code: 'http', status: 401, headline: 'unauthorised' }) },
+      { error: modelError({ code: 'http', status: 403, headline: 'forbidden' }) },
+      { error: modelError({ code: 'http', status: 429, headline: 'quota' }) },
+      { error: modelError({ code: 'http', status: 402, headline: 'payment' }) },
+      { error: modelError({ code: 'validation', headline: 'bad request' }) },
+      { error: modelError({ code: 'aborted', headline: 'aborted' }) },
+    ];
+    for (const o of not) expect([o, stallRecoveryDue({ ...due, ...o })]).toEqual([o, false]);
+    expect(stallRecoveryDue({ ...due, error: modelError({ code: 'http', status: 503, headline: 'overloaded' }) })).toBe(true);
+  });
+
+  it('is composed from the condition, and the fixed read-then-edit instruction stands in where there is nothing to compose from', () => {
+    expect(correctiveInstruction({ quietS: 95, windowS: 90, failure: 'the stream ended' })).toBe('[Corrective message] You produced no output for 95 seconds (the stall window, runtime.child_stall_timeout, is 90 seconds), and your last model request then failed: the stream ended. Carry on from where you stopped: take the next step of your task with your tools, keep each step small so that output starts promptly, and answer with what you did.');
+    expect(correctiveInstruction(null)).toBe(FIXED_CORRECTIVE_INSTRUCTION);
+    expect(FIXED_CORRECTIVE_INSTRUCTION).toMatch(/reading files and editing them/);
+  });
+});

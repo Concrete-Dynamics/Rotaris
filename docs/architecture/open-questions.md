@@ -102,7 +102,7 @@ to resume), **OQ-104** (where the plan gate holds a run that resumed an iteratio
 **OQ-105** (what an agent's fingerprint is taken of, when it is compared and where the warning is stated), **OQ-106** (whose
 root the handoff's artifact is taken from), **OQ-107** (which offers a later iteration's root is told, and where) **and
 OQ-108** (what the audit of clause 15, clause 19, `PD-CHAT-001` revision 4 and `PD-CHAT-002` revision 2 leaves
-undecided), each stating the reading the build proceeds under. The fifteen were raised as OQ-67 to OQ-81 on their branch and renumbered at the merge, OQ-67 to OQ-93 having been taken on `main`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+undecided), each stating the reading the build proceeds under. The fifteen were raised as OQ-67 to OQ-81 on their branch and renumbered at the merge, OQ-67 to OQ-93 having been taken on `main`. **One more was raised on 2026-09-29 by building REQ-ORCH-089's stall watchdog and REQ-NOTIFY-111/112's corrective message under R-067: OQ-109** (what counts as "an outcome that produced no output within `child_stall_timeout`" when the watchdog never cancels, and what the watchdog counts, writes and calls). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -5716,3 +5716,76 @@ Electron binary that tree carries: run against `node_modules` in the checkout it
 asar unpacking, and run under the host Node it passes on exactly the artifact that fails. **A proof
 written the easy way is worse than none, because it reads as verified.** Somebody must establish that it
 is constructible on all three release runners before it is relied on as the only defence.
+
+**OQ-109 — What counts as "an outcome that produced no output within `child_stall_timeout`" when the stall watchdog never cancels, and what does the watchdog count, write and call?** *(REQ-NOTIFY-111, REQ-NOTIFY-112, REQ-NOTIFY-100, REQ-NOTIFY-105, REQ-ORCH-089, REQ-MONITOR-117 to REQ-MONITOR-120, REQ-MONITOR-285, REQ-CONFIG-108, REQ-CONFIG-113 and REQ-ORCH-144. Raised 2026-09-29 by building the watchdog and the corrective message under R-067, the repair of [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../defects/fixed/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md).)*
+
+The requirements pull two ways:
+- REQ-NOTIFY-100 names `runtime.child_stall_timeout` as the bound on "a child task producing no output". It says that
+  exceeding a bound "ends only the operation that bound governs".
+- REQ-ORCH-089 makes the stall watchdog "visibility only", and it never cancels work. REQ-MONITOR-285 says the stall
+  timeout "affects only what is reported and never terminates anything".
+- REQ-NOTIFY-112 makes "it produced no output within `runtime.child_stall_timeout`" a recovery-eligible **outcome**
+  of a child that "did not reach `succeeded`". REQ-NOTIFY-111 says such a child "does not end as a failure: it
+  receives a corrective instruction and resumes from where it stopped".
+
+None of them says what ends a silent child's step so that there is an outcome to recover from.
+
+**What the build proceeds under** (`packages/engine/src/children/stall.ts`, wired in `IterationChildren.execute`).
+
+- **Nothing is cancelled by the watch.** REQ-ORCH-089 and REQ-MONITOR-285 govern. A silent model step is ended by its
+  own bounds: the model-call timeout, REQ-ORCH-090's unresponsive timer, or the child's own `child_timeout`. No new
+  one is added.
+- **The outcome.** A child's turn that ended `failed` is eligible when:
+  - its failed model step came after no output for at least the threshold, the bound inclusive;
+  - no tool call was in flight.
+
+  *Output* is a token of an answer, of reasoning or of a tool call. An error the provider answered with, a usage figure
+  or a finish is a model event, which ends the watch's stall, but it is not output. The silence counts from the last
+  output, or from the latest of three events: the attempt's start, a tool call's result returning to the child, or the
+  corrective message.
+- **The outcomes that earn nothing, as a failed step carries them:**
+  - `cancelled`: the child's own abort or the run's;
+  - `blocked`: such a child never runs;
+  - an authentication failure: HTTP 401 or 403;
+  - a quota exhaustion: HTTP 402 or 429;
+  - a validation error: the `validation` code;
+  - the child's own `child_timeout` expired.
+
+  A refusal by the permission policy is a tool result and never fails a turn. Also excluded, as outside what an
+  instruction addresses:
+  - loop supervision's escalation (REQ-NOTIFY-112's "separately from loop supervision");
+  - a run coming to rest, since PD-ORCH-005 allows no model call then;
+  - an answer-only route (REQ-ORCH-015's `answer`).
+- **"Resumes from where it stopped".** The corrective message follows the conversation the failed turn left, as a user
+  message that the conversation record keeps. It is sent within the same execution, under the `child_timeout` already
+  running, and a delegation it leads to is waited for as any turn's is.
+- **The instruction.** It is composed from the condition: the silence, the window and the failure's headline, then a
+  request to carry on. REQ-NOTIFY-111's fixed read-then-edit instruction stands in only where there is no condition to
+  compose from. The stall condition always has one, so the fixed instruction is built and unit-tested and is never sent
+  by this build.
+- **Once per child task.** This holds across REQ-ORCH-088's fallback retry too, whose second attempt is the same child
+  task (`ladder.test.ts`).
+- **The third recovery (REQ-NOTIFY-105's escalation) is unreachable.** Of REQ-NOTIFY-112's four conditions, only the
+  stall is detected, and it is recovered once per child. The other three are not built:
+  - a single tool call or shell command exceeding its own bound while the child's own is unspent;
+  - incomplete work with the iteration allowance spent;
+  - a repeated read-then-edit cycle without a commit.
+
+  Nothing therefore counts to three.
+- **The watchdog.** The threshold is the role's `stall_timeout`, else `runtime.child_stall_timeout`, else 90 s. The
+  cadence is REQ-MONITOR-117's. At stall entry, and at each repeat REQ-MONITOR-120 allows, the watch writes two
+  things:
+  - a warning on the run's warning channel, in REQ-ORCH-089's words with REQ-MONITOR-119's "still waiting on it";
+  - a `stall` issue at warning severity, which writes its own timeline entry. It carries the active tools (none, by
+    REQ-MONITOR-119's own condition), the names of the last five tool calls and the last model event's type.
+
+  REQ-MONITOR-119 asks for the issue on "every stall evaluation", which is every 5 s at the default. The build writes it
+  with each warning instead, because an issue ring written every 5 s through a twenty-minute stall would evict the
+  session's other issues. REQ-MONITOR-118's informational message is a `child_waiting_on_tools` timeline entry at
+  `info`, throttled the same way, since the children have no informational log channel. The recovery is a
+  `child_stall_recovered` entry at the next evaluation after activity resumes. The corrective message is recorded as
+  `child_corrective_message`.
+- **The stall callback fires on every evaluation, and no host listens.** No badge, activity text or countdown is drawn
+  ([`a-stalled-child-is-never-shown-stalled.md`](../defects/a-stalled-child-is-never-shown-stalled.md)). The run's own root agent is not watched: REQ-MONITOR-117
+  says "each agent", and REQ-ORCH-089's threshold is a child's. Whether the root is watched, and against which
+  threshold, is left open in the same note.

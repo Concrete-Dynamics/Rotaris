@@ -27,6 +27,7 @@ export class DefaultAgentBackend implements AgentBackend {
     })) {
       // REQ-ORCH-090: any part — a delta, a tool call, an error the provider answered with — is a model event.
       if (!started) { started = true; sink.started?.(); }
+      sink.event?.(part.ok ? part.value.kind : 'error');
       if (!part.ok) return { status: 'failed', text, usage, error: part.error, toolCalls: [...calls].map(([callId, c]) => ({ callId, ...c })) };
       switch (part.value.kind) {
         case 'text':

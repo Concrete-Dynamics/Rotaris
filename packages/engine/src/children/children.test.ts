@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, millis, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type ChildRow } from '@rotaris/store';
-import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
+import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { CHILD_STATES, CHILD_TRANSITIONS, isLegalChildMove, RUN_AGENT_ID, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type PermissionPreset, type SessionRecord } from '@rotaris/contracts';
 import { canonicaliseName, ChildLedger, RUN_CONFIG_DEFAULTS, Scheduler, Sessions, SessionWriter, uniqueUnderParent, type DelegationOps, type PortToolResult, type Publisher, type RunConfig, type ToolPort, type ToolPortContext } from '../index.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -780,6 +780,133 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     const report = JSON.parse(c.report!) as { errors: { type: string; message: string }[] };
     expect(report.errors.map((e) => e.type)).toEqual(expect.arrayContaining(['timeout', 'summary_failure']));
     expect(dal.issuesOf(sid).map((i) => i.kind)).toContain('timeout');
+  });
+
+  describe('REQ-NOTIFY-111/112 with REQ-ORCH-089: a child that produces no output is given its one corrective message', () => {
+    const userText = (req: ModelRequest): string => req.messages.filter((m) => m.role === 'user').map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n');
+    const settle = async (until: () => boolean) => { for (let i = 0; i < 400 && !until(); i += 1) await new Promise((r) => setTimeout(r, 5)); };
+    const failed = modelError({ code: 'unknown', headline: 'the stream ended with no answer' });
+    /** Each child request is `silent` (held, then fails) or answers; `gates` releases the silent ones in order. */
+    function stalling(plan: readonly ('silent' | 'fails at once' | 'answers')[], over: { childStallTimeoutMs?: number } = {}) {
+      const gates: (() => void)[] = [];
+      const childAsked: string[] = [];
+      const made = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'quiet', task: 'TASK: be quiet' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        childAsked.push(userText(req));
+        const step = plan[turn - 1] ?? 'answers';
+        if (step === 'answers') return answer('I carried on and finished.');
+        if (step === 'fails at once') return { parts: [{ error: failed }] };
+        const hold = new Promise<void>((r) => { gates.push(r); });
+        return { parts: [{ hold }, { error: failed }] };
+      }, over);
+      return { ...made, gates, childAsked };
+    }
+    const child = (sid: SessionId) => children(sid)[0]!;
+
+    it('the step goes silent for the window and then fails: the stall is warned with its issue, the child is given one corrective message and resumes from where it stopped, and it succeeds', async () => {
+      const { sessions, gates, childAsked } = stalling(['silent', 'answers']);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => gates.length === 1);
+      clock.advance(90_000);
+      // REQ-MONITOR-119: the stall is reported while the child is still running — nothing is cancelled.
+      expect(child(sid).state).toBe('running');
+      const stall = dal.issuesOf(sid).filter((i) => i.kind === 'stall');
+      expect(stall.map((i) => [i.severity, i.message])).toEqual([['warning', `child appears stalled: no model event or token for 90 seconds (quiet, ${child(sid).task_id}); the run is still waiting on it.`]]);
+      expect(JSON.parse(stall[0]!.metadata)).toEqual({ task_id: child(sid).task_id, silent_seconds: 90, active_tools: [], recent_tool_calls: [], last_model_event: null });
+      expect(warnings).toContain(stall[0]!.message);
+      gates[0]!();
+      const result = await sessions.running(sid)!;
+      expect(result.status).toBe('completed');
+      // Its third request is REQ-ORCH-095's, a separate re-prompt: an implementer that answered without acting on anything.
+      expect(childAsked).toHaveLength(3);
+      expect(childAsked[2]).toContain('Carry out the task now');
+      // The corrective message follows the conversation the failed turn left: the task, then the message.
+      expect(childAsked[1]).toContain('TASK: be quiet');
+      expect(childAsked[1]).toContain('[Corrective message] You produced no output for 90 seconds (the stall window, runtime.child_stall_timeout, is 90 seconds), and your last model request then failed: the stream ended with no answer.');
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_corrective_message')).toHaveLength(1);
+      expect(child(sid).state).toBe('succeeded');
+      expect(JSON.parse(child(sid).report!)).toMatchObject({ status: 'succeeded' });
+    });
+
+    it('REQ-MONITOR-118/120: a tool call in flight is waited on, not a stall; a stall that ends in output is recorded as recovered', async () => {
+      let releaseTool!: () => void;
+      const toolHeld = new Promise<void>((r) => { releaseTool = r; });
+      let speak!: () => void;
+      const spoken = new Promise<void>((r) => { speak = r; });
+      let finish!: () => void;
+      const finished = new Promise<void>((r) => { finish = r; });
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'quiet', task: 'TASK: be quiet' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        if (turn === 1) return toolCalls([{ callId: 'r1', name: 'read_file', args: { path: 'a' } }]);
+        return { parts: [{ hold: spoken }, { part: { kind: 'text', delta: 'Read it; ' } }, { hold: finished }, { part: { kind: 'text', delta: 'done.' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+      }, { tool: (name, a) => (name === 'read_file' ? toolHeld.then(() => ({ text: 'contents', isError: false, status: 'ok' as const, durationMs: 1, label: name, args: a })) : undefined) });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.timelineOf(sid).length > 0 && child(sid)?.state === 'running');
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(90_000);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_waiting_on_tools').map((t) => t.message)).toEqual([`quiet (${child(sid).task_id}) is waiting on 1 active tool call(s): no model event or token for 90 seconds.`]);
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'stall')).toEqual([]);
+      releaseTool();
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(90_000);
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'stall')).toHaveLength(1);
+      speak();
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(5_000);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_stall_recovered').map((t) => t.message)).toEqual([`quiet (${child(sid).task_id}) is active again after a stall.`]);
+      finish();
+      await sessions.running(sid)!;
+      expect(child(sid).state).toBe('succeeded');
+    });
+
+    it('at most one corrective message per child: a second silent failure ends it failed', async () => {
+      const { sessions, gates, childAsked } = stalling(['silent', 'silent']);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => gates.length === 1);
+      clock.advance(90_000);
+      gates[0]!();
+      await settle(() => gates.length === 2);
+      clock.advance(90_000);
+      gates[1]!();
+      await sessions.running(sid)!;
+      expect(childAsked).toHaveLength(2);
+      expect(childAsked.filter((t) => t.includes('[Corrective message]'))).toHaveLength(1);
+      expect(child(sid).state).toBe('failed');
+      expect(JSON.parse(child(sid).report!)).toMatchObject({ status: 'failed', errors: [{ type: 'model', message: 'the stream ended with no answer' }] });
+    });
+
+    it('a failure inside the window is not the stall condition: no corrective message, and the child ends failed', async () => {
+      const { sessions, childAsked } = stalling(['fails at once']);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(childAsked).toHaveLength(1);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_corrective_message')).toEqual([]);
+      expect(child(sid).state).toBe('failed');
+    });
+
+    it('runtime.child_stall_timeout is the window: at 30 s, a failure 29 s into the silence earns nothing', async () => {
+      const { sessions, gates, childAsked } = stalling(['silent'], { childStallTimeoutMs: 30_000 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => gates.length === 1);
+      clock.advance(29_000);
+      gates[0]!();
+      await sessions.running(sid)!;
+      expect(childAsked).toHaveLength(1);
+      expect(child(sid).state).toBe('failed');
+    });
+
+    it('runtime.child_stall_timeout is the window: at 30 s, a failure 30 s into the silence earns its message', async () => {
+      const { sessions, gates, childAsked } = stalling(['silent', 'answers'], { childStallTimeoutMs: 30_000 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => gates.length === 1);
+      clock.advance(30_000);
+      gates[0]!();
+      await sessions.running(sid)!;
+      expect(childAsked[1]).toContain('[Corrective message] You produced no output for 30 seconds (the stall window, runtime.child_stall_timeout, is 30 seconds)');
+      expect(child(sid).state).toBe('succeeded');
+    });
   });
 
   it('REQ-ORCH-088: the ceiling asks the child to land, so the step in flight finishes and its words reach the report', async () => {

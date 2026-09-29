@@ -18,7 +18,9 @@ import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolat
  *                    states; then a 23-agent record (20 seeded) refreshed with Mission visible, the apply-to-paint time.
  *   3. pause       — a child selected → Pause refused with the explanation, no control sent; the run selected → accepted,
  *                    `pausing` then `paused`; at rest the still-mounted view's Pause reads `Pause`, not `Pausing…`.
- *   4. cancel      — a child with a live descendant: the confirmation names it and the cascade; the child cancelled, the run on.
+ *   4. cancel      — a child with a live descendant: the confirmation names it and the cascade; the child cancelled, the run on;
+ *                    the rows sampled just after the confirm (REQ-MONITOR-128's optimistic cancel) and overwritten by the
+ *                    engine's record at 9 s (REQ-MONITOR-296).
  *   5. open        — pop-out off: Open pins the agent in the Workspace inspector; on: one window per persona, 820×620,
  *                    reused for a second instance, hidden on close, shown again; a new session destroys it.
  *   6. inspector   — following the latest author, pinned on selection, chips in one order across a state change, Steer
@@ -261,7 +263,7 @@ const s4 = scenario('cancel', ['personas:', '  lead:', '    name: lead', '    mo
     ROTARIS_SCRIPT: 'delegate:lead:alpha,answer', ROTARIS_CHILD_SCRIPT: 'delegate:coding-agent:sub,wait:16000,answer,wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'cancel a child',
     ROTARIS_CAPTURE_VIEWS: '3@3500',
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row@7000;;[data-testid="mission-cancel"]@7400;;.dialog-actions .btn-danger@8200',
-    ROTARIS_CAPTURE_PROBE_AT: '.agent-table__row@6800;;[data-testid="mission-confirm"]@7900;;[data-testid="mission-confirm"] .btn-danger@7900;;.agent-table__row@9000',
+    ROTARIS_CAPTURE_PROBE_AT: '.agent-table__row@6800;;[data-testid="mission-confirm"]@7900;;[data-testid="mission-confirm"] .btn-danger@7900;;.agent-table__row@8205;;.agent-table__row@8215;;.agent-table__row@8240;;.agent-table__row@9000',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '1000',
   }, { timeout: 200_000 });
   const db = open(s4); const row = session(db); const kids = children(db, row.session_id); const names = timeline(db, row.session_id); db.close();
@@ -275,7 +277,15 @@ const s4 = scenario('cancel', ['personas:', '  lead:', '    name: lead', '    mo
   expect(alpha?.state === 'cancelled', `alpha ended ${alpha?.state}`);
   expect(row.execution_status === 'completed', `the run ended ${row.execution_status} (${row.stop_reason}) — it should have continued`);
   const after9 = (probesAt(r.log, 9000, '.agent-table__row') ?? []).map((p) => `${p.text.slice(0, 40)}:${p.data['data-state']}`);
-  results.cancel = { dialog, confirmLabel, alphaState: alpha?.state, descendants: kids.filter((k) => k.parent_id === alpha?.task_id).map((k) => `${k.canonical_name}:${k.state}`), rowsAfter: after9, runStatus: row.execution_status, cancelEntry: names.find((n) => n.name === 'child_user_cancelled')?.message ?? null };
+  // REQ-MONITOR-128 / REQ-MONITOR-296: sampled just after the confirm, before or as the engine answers. The activity line
+  // "The user cancelled this agent." is drawn only by the optimistic overlay (the engine's record keeps the task).
+  // Recorded, not asserted: whether a sample lands before the engine's own record depends on the host's timing (on
+  // 2026-09-29 the build without the overlay still read `running` 40 ms after the confirm, and the build with it read
+  // both agents cancelled with the user's activity lines). What is asserted is the overwrite by the authoritative read.
+  const justAfter = [8205, 8215, 8240].map((at) => ({ at, rows: (probesAt(r.log, at, '.agent-table__row') ?? []).map((p) => `${p.text.slice(0, 80)}:${p.data['data-state']}`) }));
+  const settled9 = probesAt(r.log, 9000, '.agent-table__row') ?? [];
+  expect(settled9.length >= 2 && settled9.every((p) => p.data['data-state'] === 'cancelled' && !/which the user cancelled|The user cancelled this agent/.test(p.text)), `at 9 s the rows were not the engine's cancelled record: ${JSON.stringify(settled9.map((p) => `${p.text.slice(0, 60)}:${p.data['data-state']}`))} (REQ-MONITOR-296)`);
+  results.cancel = { justAfterConfirm: justAfter, dialog, confirmLabel, alphaState: alpha?.state, descendants: kids.filter((k) => k.parent_id === alpha?.task_id).map((k) => `${k.canonical_name}:${k.state}`), rowsAfter: after9, runStatus: row.execution_status, cancelEntry: names.find((n) => n.name === 'child_user_cancelled')?.message ?? null };
 }
 
 // 5. Open an agent under both preferences; the window's lifecycle; a new session destroys it.

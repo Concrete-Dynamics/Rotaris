@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
-import { isBusy, type AgentRecord, type ConfigSnapshot, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
-import type { PersonaEntry } from '@rotaris/ui';
-import { bridge } from './shell.js';
+import { useEffect, useMemo, useState } from 'react';
+import { useStore } from 'zustand';
+import { isBusy, type AgentRecord, type ConfigSnapshot, type SessionListItemPayload, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { shownSession, type PersonaEntry } from '@rotaris/ui';
+import { bridge, cancelOverlays, replica } from './shell.js';
 
 /**
  * THE SESSION AS A SURFACE READS IT — the four small readings every transcript surface in every window makes, and
@@ -12,6 +13,19 @@ import { bridge } from './shell.js';
  * (REQ-MONITOR-057/058 names one). The configuration they read is the workspace's, re-read on every change main
  * announces; none of them holds session state, which is the replica's alone (ADR-0043).
  */
+/**
+ * REQ-MONITOR-128 / REQ-MONITOR-296: a session record as this window's surfaces show it — under the optimistic cancels
+ * this window has sent and the engine has not yet overwritten (`shownSession`). The persona window hands in its coalesced
+ * record; the main window's roots read the replica's through `useShownSession`.
+ */
+export function useCancelOverlaid(session: SessionRecord | null): SessionRecord | null {
+  const overlays = useStore(cancelOverlays, (s) => s.overlays);
+  return useMemo(() => shownSession(session, overlays), [session, overlays]);
+}
+/** The followed session as the main window's agent surfaces show it: the replica's record under the optimistic cancels. */
+export function useShownSession(): SessionRecord | null {
+  return useCancelOverlaid(useStore(replica, (s) => s.session));
+}
 /** ADR-0037: the configuration snapshot as the screen reads it — once on mount, again on every `config:changed`. */
 export function useConfigSnapshot(workspace: string): ConfigSnapshot | null {
   const [snapshot, setSnapshot] = useState<ConfigSnapshot | null>(null);

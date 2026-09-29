@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A confirmed cancel of one agent is shown at once (REQ-MONITOR-128/296, 2026-09-29, R-067; OQ-128).** The renderer's
+`cancelAgent` lays a per-window overlay (`packages/ui/src/cancel-overlay.ts`, the store `cancelOverlays` in `shell.ts`)
+over the session before it sends `cancelAgent`. The agent and every unfinished descendant show `cancelled` with an
+activity line saying the user cancelled them. A refusal removes the overlay, and the next whole-session update after
+an acceptance overwrites it. The Workspace, Mission and Overview roots read `useShownSession` and a persona window
+`useCancelOverlaid`; the replica keeps its two writers. The **runtime view**'s `cancelAgent` row and the
+**state-ownership view**'s volatile table name it. No package, edge, process, message kind, channel, command or store
+table changes.
+
 **A delegated child is watched for a stall, and one that produced no output gets its corrective message
 (REQ-ORCH-089, REQ-MONITOR-117..120, REQ-NOTIFY-111/112, 2026-09-29, R-067; OQ-127).** `children/stall.ts` is new in
 `engine`. `TurnSink` gains an optional `event` for every streamed part, and `TurnDeps` gains `onModelEvent` and

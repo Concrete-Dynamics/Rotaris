@@ -1,5 +1,5 @@
-import { RUN_AGENT_ID, type CommandOutcome, type CommandRequest, type ImageAttachmentInput, type PauseResolution, type PermissionPreset, type PlanDecision, type QuestionAnswers, type RendererBridge } from '@rotaris/contracts';
-import { useShellState } from '@rotaris/ui';
+import { RUN_AGENT_ID, type CommandOutcome, type CommandRequest, type ImageAttachmentInput, type PauseResolution, type PermissionPreset, type PlanDecision, type QuestionAnswers, type RendererBridge, type SessionRecord } from '@rotaris/contracts';
+import { useShellState, type CancelOverlayStore } from '@rotaris/ui';
 
 /**
  * SESSION ACTIONS — the gestures a surface makes against the session this window is following.
@@ -25,11 +25,18 @@ export interface SessionActionDeps {
    * real one (ADR-0043) satisfies it and so does `{ getState: () => ({ sessionId, follow }) }`, which is the point.
    */
   readonly replica: {
-    readonly getState: () => { readonly sessionId: string | null; readonly follow: (sessionId: string | null) => void };
+    readonly getState: () => { readonly sessionId: string | null; readonly follow: (sessionId: string | null) => void; readonly session?: SessionRecord | null };
   };
+  /**
+   * REQ-MONITOR-128 / REQ-MONITOR-296: the overlay a confirmed cancel of one agent is shown through before the engine
+   * answers (`cancel-overlay.ts`). The window's own; a test that does not exercise it hands none.
+   */
+  readonly cancels?: CancelOverlayStore;
+  /** The instant an optimistic cancel stamps as its agents' end. */
+  readonly now?: () => string;
 }
 
-export function createSessionActions({ bridge, replica }: SessionActionDeps) {
+export function createSessionActions({ bridge, replica, cancels, now = () => new Date().toISOString() }: SessionActionDeps) {
   /**
    * ADR-0019: `bridge.command` rejects when main's handler throws or the channel is gone
    * (`ipcRenderer.invoke`), and every answer of this module is never-throw — so a rejection is a
@@ -107,10 +114,22 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
   /**
    * REQ-MONITOR-009: cancel one child; the shell resolves the session, the run decides. A refusal carries the engine's
    * words when it states them — PD-ORCH-005 clause 16's at-rest cancel refused by the store's failure or another
-   * process's lock, which say nothing of the agent — and otherwise says the agent is not cancellable (REQ-MONITOR-128).
+   * process's lock, which say nothing of the agent — and otherwise says the agent is no longer cancellable (REQ-MONITOR-128).
+   *
+   * REQ-MONITOR-128 / REQ-MONITOR-296: the agent and each descendant cancelled with it are shown cancelled from the moment
+   * the cancel is sent — every surface of this window reads the session through the overlay — and the prior state is
+   * shown again on a refusal; an acceptance leaves the overlay to the next authoritative read. Every surface that cancels
+   * one agent (the inspector, the Workspace's agents header, the Mission view, a persona window) comes here, the live
+   * cancel and the at-rest cancel of a paused child (PD-ORCH-005 clause 16) alike.
    */
   async function cancelAgent(agentId: string): Promise<{ ok: true } | { ok: false; reason: string }> {
-    return control('cancelAgent', { agentId }, 'That agent is not cancellable (unknown, or already finished).');
+    const token = cancels?.getState().begin(replica.getState().session ?? null, agentId, now()) ?? null;
+    const r = await control('cancelAgent', { agentId }, 'That agent is no longer cancellable.');
+    if (cancels && token !== null) {
+      if (r.ok) cancels.getState().accept(token, replica.getState().session ?? null);
+      else cancels.getState().refuse(token);
+    }
+    return r.ok ? { ok: true } : r;
   }
 
   /** ADR-0010 channel 1: one control against the focused session, `false` named as a refusal (REQ-MONITOR-006). */

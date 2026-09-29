@@ -23,7 +23,7 @@ import '@phosphor-icons/web/fill';
 // the theme — everything this window has before a surface mounts (`shell.ts`).
 import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, setMode, setRunStartMode, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
 // What a transcript surface reads about the session it is following, shared with the persona window (`session-view.ts`).
-import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery } from './session-view.js';
+import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery, useShownSession } from './session-view.js';
 // The other windows this same bundle is the root of, each one a role on the route (`windows.tsx`, ADR-0056).
 import { bootApproval, bootHookReview, bootPause, bootPersona, bootProvider, bootTerminal } from './windows.js';
 /**
@@ -177,7 +177,8 @@ bindRetrospectiveStarter(() => { void bridge.command({ kind: 'improvements.retro
 const slashOpeners: { newSession?: () => Promise<{ ok: true } | { ok: false; reason: string }>; openSessions?: () => void } = {};
 
 function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenStash, groupTools, layout, onLayout, onOpenTrailer }: { models: readonly string[]; modelsLoaded: boolean; workspace: string; popOut: boolean; prompts: PromptsApi; onOpenStash: () => void; groupTools: boolean; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void; onOpenTrailer: (trailer: TrailerRow) => void }) {
-  const session = useStore(replica, (s) => s.session);
+  // REQ-MONITOR-128 / REQ-MONITOR-296: the record under this window's optimistic cancels of one agent.
+  const session = useShownSession();
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
   const reachedOldest = useStore(replica, (s) => s.reachedOldest);
   const snapshot = useConfigSnapshot(workspace);
@@ -334,7 +335,8 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
  * the per-field path (REQ-CONFIG-321, REQ-CONFIG-112); pause is the existing `pause` control, and cancel is `cancelAgent` — for the run row the reserved run id, final (`cancelRun`, PD-ORCH-005 clause 15).
  */
 function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) {
-  const session = useStore(replica, (s) => s.session);
+  // REQ-MONITOR-128 / REQ-MONITOR-296: the record under this window's optimistic cancels of one agent.
+  const session = useShownSession();
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
   const selectedAgentId = useShellState((st) => st.selectedAgentId);
   const selectAgent = useShellState((st) => st.selectAgent);
@@ -378,7 +380,8 @@ function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) 
  */
 const UNREAD_REPOSITORY: RepositoryState = { gitAvailable: false, isRepository: false, branch: null, base: null, ahead: 0, behind: 0, touched: 0, uncommitted: 0, failed: ['request'], readMs: 0 };
 function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, onOpenSession, onNewSession, libraryRevision }: { workspace: string; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void; reducedMotion: boolean; onListSessions: () => void; onOpenSession: (id: string) => Promise<{ ok: true } | { ok: false; reason: string }>; onNewSession: () => Promise<{ ok: true } | { ok: false; reason: string }>; libraryRevision: number }) {
-  const session = useStore(replica, (s) => s.session);
+  // REQ-MONITOR-128 / REQ-MONITOR-296: the record under this window's optimistic cancels of one agent.
+  const session = useShownSession();
   const [sessions, setSessions] = useState<readonly SessionListItemPayload[]>([]);
   const [sessionsState, setSessionsState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [sessionsError, setSessionsError] = useState<string | null>(null);

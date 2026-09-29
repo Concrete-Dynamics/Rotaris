@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { CommandOutcome, CommandRequest } from '@rotaris/contracts';
+import type { AgentRecord, CommandOutcome, CommandRequest, SessionRecord } from '@rotaris/contracts';
+import { createCancelOverlayStore, shownSession } from '@rotaris/ui';
 import { createSessionActions, type SessionActionDeps } from './session-actions.js';
+
+const agentRecord = (over: Partial<AgentRecord>): AgentRecord => ({ id: 'bg_00000001', name: 'one', parentId: 'bg_0000root', state: 'running', presentationState: 'running', activity: 'TASK: one', activeTools: [], live: true, completedAt: null, ...over } as AgentRecord);
 
 /**
  * The first tests of renderer code, and they exist because the actions stopped being closures over two module-scope
@@ -165,11 +168,40 @@ describe('PD-ORCH-005 clauses 3 and 15: the stop comes to rest, and the confirme
     expect(await actions([], null).cancelRun()).toEqual({ ok: false, reason: 'No run is active.' });
   });
 
-  it('PD-ORCH-005 clause 16: a child\'s cancel refused by the store or another process\'s lock states the engine\'s words, and "not cancellable" only when it states none (REQ-MONITOR-128)', async () => {
+  it('PD-ORCH-005 clause 16: a child\'s cancel refused by the store or another process\'s lock states the engine\'s words, and "no longer cancellable" only when it states none (REQ-MONITOR-128)', async () => {
     const locked = { code: 'session_locked', message: 'Another process holds this session, so the agent was not cancelled.' } as const;
     const a = actions([{ ok: true, value: { ok: false, refusal: locked } }, { ok: true, value: { ok: false } }, { ok: true, value: { ok: true } }]);
     expect(await a.cancelAgent('bg_000000c1')).toEqual({ ok: false, reason: locked.message });
-    expect(await a.cancelAgent('bg_000000c1')).toEqual({ ok: false, reason: 'That agent is not cancellable (unknown, or already finished).' });
+    expect(await a.cancelAgent('bg_000000c1')).toEqual({ ok: false, reason: 'That agent is no longer cancellable.' });
     expect(await a.cancelAgent('bg_000000c1')).toEqual({ ok: true });
+  });
+
+  /*
+   * REQ-MONITOR-128 / REQ-MONITOR-296 (the note "cancelling one agent is not shown cancelled until the engine answers"):
+   * the agent and its descendants are shown cancelled while the control is still in flight, the prior state again on a
+   * refusal, and on an acceptance the overlay is left to the next authoritative read.
+   */
+  it('REQ-MONITOR-128: a confirmed cancel of one agent is shown cancelled before the engine answers, and restored on its refusal', async () => {
+    const parent = agentRecord({ id: 'bg_000000c1', name: 'alpha' });
+    const child = agentRecord({ id: 'bg_000000c2', name: 'sub', parentId: 'bg_000000c1' });
+    const record = { id: 'S1', agents: [parent, child], resumable: null } as unknown as SessionRecord;
+    const cancels = createCancelOverlayStore();
+    const seen: (string | undefined)[][] = [];
+    const replies: CommandOutcome[] = [{ ok: true, value: { ok: false } }, { ok: true, value: { ok: true } }];
+    let n = 0;
+    const a = createSessionActions({
+      bridge: { command: async () => { seen.push(shownSession(record, cancels.getState().overlays)!.agents.map((x) => x.presentationState)); return replies[n++]!; } },
+      replica: { getState: () => ({ sessionId: 'S1', follow: () => undefined, session: record }) },
+      cancels, now: () => '2026-09-29T10:00:00.000Z',
+    });
+    expect(await a.cancelAgent('bg_000000c1')).toEqual({ ok: false, reason: 'That agent is no longer cancellable.' });
+    expect(seen[0]).toEqual(['cancelled', 'cancelled']);
+    expect(shownSession(record, cancels.getState().overlays)).toBe(record);
+    expect(await a.cancelAgent('bg_000000c1')).toEqual({ ok: true });
+    expect(seen[1]).toEqual(['cancelled', 'cancelled']);
+    // Accepted: still shown over the record held when the engine answered, until a newer record replaces it.
+    expect(shownSession(record, cancels.getState().overlays)!.agents.map((x) => x.presentationState)).toEqual(['cancelled', 'cancelled']);
+    const next = { ...record, agents: [{ ...parent, presentationState: 'cancelled' }, { ...child, presentationState: 'cancelled' }] } as SessionRecord;
+    expect(shownSession(next, cancels.getState().overlays)).toBe(next);
   });
 });

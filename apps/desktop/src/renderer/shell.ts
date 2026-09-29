@@ -1,7 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 import { BRIDGE_KEY, resolveTheme, TERMINAL_WINDOW_ROLE, type DisplayView, type RendererBridge, type TerminalFrame, type Theme, type ThemeName } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-import { applyTheme, headlessEmulator, readTranscriptCounts, TerminalStreamSet, useShellState, type TerminalHost } from '@rotaris/ui';
+import { applyTheme, createCancelOverlayStore, headlessEmulator, readTranscriptCounts, TerminalStreamSet, useShellState, type CancelOverlayStore, type TerminalHost } from '@rotaris/ui';
 import { createSessionActions } from './session-actions.js';
 
 /**
@@ -41,7 +41,12 @@ export const replica: ReplicaStore = createReplicaStore({
  * The gestures every surface in this window makes against the session it is following — made once, here, because
  * the bridge and the replica they are made against are this window's and there is exactly one of each.
  */
-export const { answerQuestions, cancelAgent, cancelQuestions, cancelRun, continueSession, control, planDecision, planEdit, setMode, setRunStartMode, stopRun, submitPrompt } = createSessionActions({ bridge, replica });
+/**
+ * REQ-MONITOR-128 / REQ-MONITOR-296: this window's optimistic cancels of one agent, laid over the replica's record where a
+ * surface reads it (`useShownSession`) and never written into the replica (ADR-0043's two writers).
+ */
+export const cancelOverlays: CancelOverlayStore = createCancelOverlayStore();
+export const { answerQuestions, cancelAgent, cancelQuestions, cancelRun, continueSession, control, planDecision, planEdit, setMode, setRunStartMode, stopRun, submitPrompt } = createSessionActions({ bridge, replica, cancels: cancelOverlays });
 
 export const notices: NoticeStore = createNoticeStore();
 /** REQ-NOTIFY-013 / REQ-SHELL-112: this window's ONE transient stack; main pushes to it over channel 8. */

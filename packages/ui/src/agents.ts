@@ -96,7 +96,10 @@ export function runLevelGrant(resolved: readonly string[], declared: readonly st
 export function runLevelAgent(session: SessionRecord | null, entry: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }, recovery: boolean): AgentRecord | null {
   if (!session || session.runStartedAt === null) return null;
   const resting = runLevelResting(session, recovery);
-  const busy = isBusy(session.executionStatus) && !resting;
+  // REQ-CHAT-008's recovery state with nothing to resume — a crash between iterations, or an explicit cancel accepted and
+  // never carried out (OQ-103, R-067) — has no process behind its busy status: it is presented as the repair will leave
+  // it (`interrupted` with nothing open, below), ended and not live, never as a live run offered Steer and Cancel.
+  const busy = isBusy(session.executionStatus) && !resting && !recovery;
   const status = session.executionStatus;
   const presentationState: AgentRecord['presentationState'] = resting ? 'paused' : busy ? 'running' : status === 'completed' ? 'done' : status === 'failed' ? 'failed' : status === 'waiting' ? 'running' : 'cancelled';
   const childCalls = session.agents.reduce((n, a) => n + a.toolCalls, 0);

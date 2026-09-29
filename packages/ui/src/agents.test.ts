@@ -192,6 +192,19 @@ describe('agents — PD-ORCH-005 clause 13 (revision 4): a paused agent presents
     expect(runLevelAgent(session({ executionStatus: 'paused', resumable: null }), entry, false)?.presentationState).toBe('cancelled');
     expect(runLevelAgent(session({ executionStatus: 'completed', resumable }), entry, false)?.presentationState).toBe('done');
   });
+  it('OQ-103 (R-067): in REQ-CHAT-008\'s recovery state with nothing to resume — an accepted explicit cancel the host died before carrying out — the run-level agent is presented ended as the repair will leave it, not live, and offered neither Steer nor Cancel', () => {
+    for (const executionStatus of ['running', 'starting', 'cancelling']) {
+      const shown = runLevelAgent(session({ executionStatus, resumable: null, entryTools: { resolved: ['delegate'], called: [], active: ['delegate'] } }), entry, true)!;
+      expect(shown, executionStatus).toMatchObject({ state: 'cancelled', presentationState: 'cancelled', live: false, activeTools: [] });
+      expect(shown.completedAt, executionStatus).not.toBeNull();
+      expect(inspectorEnablement(shown.presentationState), executionStatus).toEqual({ steer: false, cancel: false, popOut: true });
+      expect(cancelOffered(shown, false, false), executionStatus).toBe(false);
+      // What the repair then writes — `interrupted`, nothing open — presents the same.
+      expect(runLevelAgent(session({ executionStatus: 'interrupted', resumable: null }), entry, false)).toMatchObject({ presentationState: 'cancelled', live: false });
+    }
+    // A live run with nothing open — no recovery — is still running.
+    expect(runLevelAgent(session({ executionStatus: 'running', resumable: null }), entry, false)).toMatchObject({ presentationState: 'running', live: true });
+  });
   it('the inspector\'s meta line names it; it is not live, so it offers no steer, and its Cancel is clause 16\'s alone', () => {
     const paused = agent({ id: 'bg_00000002', parentId: 'bg_00000001', state: 'paused', presentationState: 'paused', live: false, interruption: 'stop' });
     expect(metaLine(paused, null)).toBe('paused · — · 2 tool calls');

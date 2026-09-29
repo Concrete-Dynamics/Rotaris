@@ -1217,6 +1217,8 @@ export class Run {
     if (iterationOverride === undefined && resume === undefined) {
       const opened = writer.openIteration({ iteration, root_task_id: rootTaskId, root_canonical_name: rootCanonical, root_persona: config.persona, todo_task_id: this.iterationTask?.id ?? '', task });
       if (opened.ok && !opened.value) this.deps.warn(`iteration ${iteration} of ${this.sessionId} was not recorded open: its number is taken or another iteration is open`);
+      // OQ-103 (R-067): a cancel accepted before this iteration was recorded open marks it as well.
+      if (opened.ok && opened.value && this.stop.final) this.markCancelAccepted();
     }
     const children = this.deps.toolsFor && this.deps.dal
       ? new IterationChildren({
@@ -1832,9 +1834,23 @@ export class Run {
       // Clause 3: a cancel that lands after teardown can no longer close what the rest left open is refused, not lost.
       if (this.cancelWindowClosed) return false;
       this.stop.request('user_cancelled', false, true);
+      // OQ-103's last question, ruled (R-067): the cancel is made durable when it is accepted, so a host that dies before
+      // this run carries it out leaves the next repair or continue to end its agents `cancelled`, never to resume them.
+      this.markCancelAccepted();
       return true;
     }
     return this.children?.cancel(taskId) ?? false;
+  }
+
+  /**
+   * PD-ORCH-005 clause 3 (OQ-103, R-067): the explicit cancel's durable mark, on the iteration open in the store — the one
+   * this run works in, or resumes, or an earlier run left open for it to resume. Written again when this run opens an
+   * iteration after the cancel was accepted (`turn`), so no iteration the cancel ends is left open unmarked. A failed write
+   * is warned of: the cancel itself stands, and only its durability across a crash is lost.
+   */
+  private markCancelAccepted(): void {
+    const r = this.deps.writer.recordCancelAccepted();
+    if (!r.ok) this.deps.warn(`the explicit cancel of ${this.sessionId} was accepted but could not be recorded durably: ${r.error.code}`);
   }
 
   /**

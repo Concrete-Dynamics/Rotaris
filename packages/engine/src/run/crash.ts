@@ -2,8 +2,11 @@ import { ApprovalPayloadSchema, interruptionPhrase, isTerminalChildState, resume
 import type { SessionId } from '@rotaris/kernel';
 import type { ChildRow, IterationRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
-import { treeOf } from '../children/ledger.js';
+import type { ArtifactStore } from '../artifacts/store.js';
+import { storeChildReport, treeOf } from '../children/ledger.js';
+import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
 import { conversationOf } from './record.js';
+import { Todo } from './todo.js';
 import { answerUnanswered, callsRun, interruptedResult } from './interruption.js';
 
 /** The children of a stored iteration: every child descending from its root, as the live ledger would hold them. */
@@ -59,6 +62,11 @@ export interface CrashRecord {
   readonly iteration: number | null;
   /** The agents it left `paused` with interruption `crash`. */
   readonly paused: number;
+  /**
+   * The agents it ended `cancelled` because the run's explicit cancel was accepted and never carried out (OQ-103, R-067):
+   * the iteration is then closed `cancelled`, and none of them is paused.
+   */
+  readonly cancelled: number;
   /** The approvals it withdrew. */
   readonly withdrawn: number;
   /** The background terminal sessions it recorded as ended by the crash. */
@@ -80,15 +88,25 @@ export interface CrashRecord {
  * - every background terminal session still recorded as running, and not held by this process, is recorded as ended by
  *   the crash (clause 10: a crash ends them).
  *
- * Idempotent: a second call finds the interruption recorded, nothing pending and nothing running. It must be called
- * before the stale-child settle (REQ-ORCH-053), which would otherwise cancel what the crash leaves unfinished. Loading a
- * session to view it never calls it (clause 8).
+ * An open iteration that carries the explicit cancel's mark (`cancel_accepted_at`, store v27) is not paused: the cancel was
+ * accepted and its host died before carrying it out, and clause 3's "those are never resumed" governs it (OQ-103's last
+ * question, ruled under R-067). The record carries the cancel out instead (`recordAcceptedCancel`) — whether or not a rest
+ * had left the iteration open before the cancel landed.
+ *
+ * Idempotent: a second call finds the interruption recorded (or the iteration closed), nothing pending and nothing
+ * running. It must be called before the stale-child settle (REQ-ORCH-053), which would otherwise cancel what the crash
+ * leaves unfinished. Loading a session to view it never calls it (clause 8). `artifacts` materialises the reports of the
+ * agents an accepted cancel ends (REQ-LIBRARY-092); without it they are stored on their rows only.
  */
-export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, liveTerminals: ReadonlySet<string>, warn: (m: string) => void): CrashRecord {
+export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, liveTerminals: ReadonlySet<string>, warn: (m: string) => void, artifacts?: ArtifactStore): CrashRecord {
   let iteration: number | null = null;
   let paused = 0;
+  let cancelled = 0;
   const open = dal.openIterationOf(sessionId);
-  if (open && open.interruption === null) {
+  if (open && open.cancel_accepted_at !== null) {
+    iteration = open.iteration;
+    cancelled = recordAcceptedCancel(dal, writer, sessionId, open, warn, artifacts);
+  } else if (open && open.interruption === null) {
     iteration = open.iteration;
     writer.recordIterationInterruption(open.iteration, 'crash');
     const agents = iterationAgents(dal, sessionId, open);
@@ -114,7 +132,56 @@ export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: Ses
     const r = writer.recordAgentTerminal({ terminal_id: t.terminal_id, task_id: t.task_id, command: t.command, started_at: t.started_at, state: 'crash', exit_code: t.exit_code, output_tail: t.output_tail });
     if (r.ok && r.value) terminals += 1;
   }
-  return { iteration, paused, withdrawn, terminals };
+  return { iteration, paused, cancelled, withdrawn, terminals };
+}
+
+/** The report of an agent the record of an accepted cancel ends (REQ-ORCH-108's shape, as every cancelled agent's). */
+export const ACCEPTED_CANCEL_REPORT = 'Cancelled: the user cancelled the run, and the process running it ended before the cancel was carried out.';
+
+/**
+ * PD-ORCH-005 clause 3 with REQ-MONITOR-126 (OQ-103's last question, ruled under R-067; the repair of
+ * `a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`): the explicit cancel was accepted while `open`
+ * was open (its mark) and the run host died before its teardown ended the agents and closed the iteration. From the store
+ * alone, this writes what that teardown would have:
+ *
+ * - the calls a dead step left without results are answered, as the crash record answers them, so no row is left
+ *   `running` (REQ-SESSION-129), and the calls the root and each unfinished agent made join the session total once
+ *   (REQ-MONITOR-102);
+ * - every agent of the iteration not in a terminal state — `paused` by a rest the cancel overtook, or where the crash left
+ *   it — ends `cancelled`, with its report stored and materialised (REQ-LIBRARY-092), and never `paused`;
+ * - the iteration closes `cancelled` (REQ-ORCH-135): `iteration.end` and the row's close in one transaction with the todo
+ *   its task goes back to `pending` in ("the task stays anchored"), and a continue's message it held with it (clause 17);
+ * - the session's count moves past it, as the run's close of a cancelled iteration moves it.
+ *
+ * It writes no timeline entry of its own: REQ-ORCH-139's vocabulary is closed and names none for this record. The close
+ * is the vocabulary's `iteration.end` event above, and the caller warns it to the session log (OQ-76's channel).
+ *
+ * No checkpoint is captured: the record runs from a repair, which has no Git port, or before a continue's run exists
+ * (OQ-130). The pending approvals and the background sessions are the crash's to record, as for any dead run.
+ */
+function recordAcceptedCancel(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, open: IterationRow, warn: (m: string) => void, artifacts: ArtifactStore | undefined): number {
+  const unfinished = iterationAgents(dal, sessionId, open).filter((c) => !isTerminalChildState(c.state));
+  const agents = unfinished.map((c) => ({ taskId: c.task_id, name: c.canonical_name }));
+  for (const agent of [{ taskId: open.root_task_id, name: open.root_persona }, ...agents]) answerOpenCalls(dal, writer, sessionId, agent, open.iteration, 'crash');
+  countCrashedCalls(dal, writer, sessionId, open, agents.map((a) => a.taskId), warn);
+  let cancelled = 0;
+  for (const c of unfinished) {
+    const r = writer.transitionChild(c.task_id, 'cancelled', 'cancellation');
+    if (!r.ok) { warn(r.error.code === 'illegal-move' ? r.error.reason : `recording ${c.task_id} cancelled by the accepted cancel failed: ${r.error.code}`); continue; }
+    cancelled += 1;
+    storeChildReport({ writer, artifacts, warn }, c.task_id, c, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: ACCEPTED_CANCEL_REPORT, key_findings: [], last_response: '', final_response: '', errors: [] });
+  }
+  const stored = decodeStoredTodo(dal.getSession(sessionId)?.todo ?? null);
+  const todo = stored.planner === null ? null : Todo.fromDocument(stored.planner);
+  todo?.reopen(open.todo_task_id);
+  todo?.releaseHeld(open.iteration, false);
+  const task = todo?.textOf(open.todo_task_id) ?? open.task;
+  const summary = 'the run was cancelled before the agent finished, and the process running it ended before the cancel was carried out';
+  const closed = writer.endIteration(open.iteration, { task, outcome: 'cancelled', summary }, 'cancelled', todo === null ? undefined : encodeStoredTodo({ ...stored, planner: todo.toDocument() }) ?? undefined);
+  if (!closed.ok) { warn(`closing iteration ${open.iteration} of ${sessionId} as the accepted cancel failed: ${closed.error.code}`); return cancelled; }
+  const completed = dal.getSession(sessionId)?.iterations_completed ?? 0;
+  if (completed < open.iteration) writer.save(writer.currentStatus, { iterations_completed: open.iteration });
+  return cancelled;
 }
 
 /**

@@ -30,9 +30,25 @@ The stale settle and "continue without them" now materialise their reports (REQ-
 REQ-LIBRARY-092's own ("falling back to the canonical agent name"), so narrowing it is a question for the owner. One
 narrowing would use the fallback only for a record that carries no task id. It is not repaired here.
 
-## Ruled 2026-09-29 (R-067), not repaired
+## Ruled 2026-09-29 (R-067)
 
-The fallback is ruled as OQ-113 ([R-067](../product/requests.md#r-067)) and answered by amendment: materialisation falls
+The fallback is ruled as OQ-113 ([R-067](../../product/requests.md#r-067)) and answered by amendment: materialisation falls
 back to the canonical name only for a record that carries no task id, and two children with different task ids never
-share or overwrite an artifact. `REQ-LIBRARY-092` carries the amendment. This note stays open until
-`materialiseChildReport` is repaired.
+share or overwrite an artifact. `REQ-LIBRARY-092` carries the amendment. This note stayed open until
+`materialiseChildReport` was repaired.
+
+## Outcome — Repaired 2026-09-29 under R-067
+
+`ArtifactStore.materialiseChildReport` (`packages/engine/src/artifacts/store.ts`) keys a materialisation on the task id
+alone whenever the record carries one; the canonical name keys only a record that carries no task id, and
+`StoreDal.artifactByCanonical` (`packages/store/src/dal.ts`) now finds only a child report no task wrote. So a later
+iteration's child that reuses an earlier child's canonical name — a second `build`, a declined `writer`'s stub report, a
+stale settle's — materialises an artifact of its own, which is the latest in the session's listing (REQ-SESSION-115's
+reading in OQ-99), and the earlier report's artifact keeps its summary, findings, status, task id and creation time. A
+record with no task id never takes over, nor is taken over by, an artifact a task wrote.
+
+Pinned by `packages/engine/src/artifacts/artifacts.test.ts`, "REQ-LIBRARY-092 (OQ-113): a later child that reuses an
+earlier child's canonical name materialises its own artifact, …" and "… the canonical name keys only a record that carries
+no task id, …", both red on the code before the repair; the fallback half of the old idempotence case, which pinned the
+overwrite as the key, is removed from it. The first execution is reported in OQ-113 and in
+`docs/architecture/first-executions.md`.

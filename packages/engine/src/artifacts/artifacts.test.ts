@@ -311,10 +311,50 @@ describe('engine/artifacts — the session artifact store', () => {
     // The status and the derived importance did move: a report that succeeded is no longer high.
     expect(again.value.record.status).toBe('succeeded');
     expect(again.value.record.importance).toBe('normal');
-    // The fallback key: the same agent under a new task id updates its own record rather than duplicating.
-    const byName = store.materialiseChildReport({ taskId: 'bg_2', canonicalName: 'tester-1', persona: 'tester', status: 'succeeded', summary: 'again', keyFindings: [], editedFiles: [], createdFiles: [], commands: [], highlightPaths: [], snippets: [], tags: [] });
-    expect(byName.ok && byName.value.created).toBe(false);
+  });
+
+  /**
+   * REQ-LIBRARY-092 as amended 2026-09-29 (OQ-113, R-067): the canonical name keys a materialisation only for a record that
+   * carries no task id, so two children with different task ids never share or overwrite one artifact. The repair of
+   * docs/defects/fixed/a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md.
+   */
+  it('REQ-LIBRARY-092 (OQ-113): a later child that reuses an earlier child\'s canonical name materialises its own artifact, and the earlier report is left as it was', () => {
+    const store = storeFor();
+    const earlier = store.materialiseChildReport({ taskId: 'bg_1', canonicalName: 'build', persona: 'coding-agent', status: 'succeeded', summary: 'iteration 1 built it', keyFindings: ['one'], editedFiles: [], createdFiles: [], commands: [], highlightPaths: [], snippets: [], tags: [] });
+    if (!earlier.ok) throw new Error('earlier');
+    clock.advance(1000);
+    // A second `build` in a later iteration — a fresh task id, the same canonical name — here a stub report that ends cancelled.
+    const later = store.materialiseChildReport({ taskId: 'bg_2', canonicalName: 'build', persona: 'coding-agent', status: 'cancelled', summary: 'iteration 2 was declined', keyFindings: [], editedFiles: [], createdFiles: [], commands: [], highlightPaths: [], snippets: [], tags: [] });
+    if (!later.ok) throw new Error('later');
+    expect(later.value.created).toBe(true);
+    expect(later.value.record.id).not.toBe(earlier.value.record.id);
+    expect(dal.artifactCount(sid)).toBe(2);
+    const rows = dal.artifactsOf(sid);
+    expect(rows.map((r) => [r.source_task_id, r.status, r.summary])).toEqual([['bg_1', 'succeeded', 'iteration 1 built it'], ['bg_2', 'cancelled', 'iteration 2 was declined']]);
+    // Each keeps its own identity: the later one is the newest in the session's listing, under a slug of its own.
+    expect(later.value.record.createdAt > earlier.value.record.createdAt).toBe(true);
+    expect(later.value.record.slug).not.toBe(earlier.value.record.slug);
+    // And each still updates in place on its own task id.
+    const again = store.materialiseChildReport({ taskId: 'bg_1', canonicalName: 'build', persona: 'coding-agent', status: 'failed', summary: 'iteration 1, again', keyFindings: [], editedFiles: [], createdFiles: [], commands: [], highlightPaths: [], snippets: [], tags: [] });
+    expect(again.ok && again.value.created).toBe(false);
+    expect(again.ok && again.value.record.id).toBe(earlier.value.record.id);
+    expect(dal.artifactsOf(sid).map((r) => [r.source_task_id, r.summary])).toEqual([['bg_1', 'iteration 1, again'], ['bg_2', 'iteration 2 was declined']]);
+  });
+
+  it('REQ-LIBRARY-092 (OQ-113): the canonical name keys only a record that carries no task id, and never an artifact another task wrote', () => {
+    const store = storeFor();
+    const report = (taskId: string, summary: string) => store.materialiseChildReport({ taskId, canonicalName: 'tester-1', persona: 'tester', status: 'succeeded', summary, keyFindings: [], editedFiles: [], createdFiles: [], commands: [], highlightPaths: [], snippets: [], tags: [] });
+    const bare = report('', 'no task id');
+    expect(bare.ok && bare.value.created).toBe(true);
+    const bareAgain = report('', 'no task id, again');
+    expect(bareAgain.ok && bareAgain.value.created).toBe(false);
     expect(dal.artifactCount(sid)).toBe(1);
+    // A record with a task id never takes the task-less artifact over by name, nor is it taken over.
+    const tasked = report('bg_7', 'a task of its own');
+    expect(tasked.ok && tasked.value.created).toBe(true);
+    const bareThird = report('', 'no task id, a third time');
+    expect(bareThird.ok && bareThird.value.created).toBe(false);
+    expect(dal.artifactsOf(sid).map((r) => [r.source_task_id || '', r.summary]).sort()).toEqual([['', 'no task id, a third time'], ['bg_7', 'a task of its own']]);
   });
 
   it('REQ-LIBRARY-092: the artifact_published entry is recorded once, and its id is linked back onto the record', () => {

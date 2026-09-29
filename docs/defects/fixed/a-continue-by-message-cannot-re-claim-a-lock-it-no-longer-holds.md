@@ -30,3 +30,16 @@ itself.
 - `packages/engine/src/sessions.ts` — `lockForWrite`, the at-rest cancel's claim without a writer (`PD-ORCH-005`
   clause 16, OQ-101), through `claimLockReaping`, given back after its write. The repair chooses whether the continues
   reuse it, call `claimLockReaping` and hold the lock for the run, or reopen a writer.
+
+## Repaired — 2026-09-29
+
+Repaired 2026-09-29 under R-067, by the one repair recorded on
+[`a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md`](a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md).
+`prompt`'s re-claim through `resume` is gone: it now claims the lock itself before it appends the user's row
+(`Sessions.holdForContinue`), as `continueSession` and `planDecision` do, so a lock another process's `withWriter`
+released is taken back, a dead local holder is reaped once, and a live holder refuses the continue by message with
+REQ-SESSION-048's words and no row appended. The branch this note found untested is pinned by
+`session-resume.test.ts` ("REQ-SESSION-048/083: a live holder in another process refuses a continue by message and the
+Continue action, naming it, and nothing is written"; "REQ-SESSION-047: a lock a dead local process left is reaped once,
+and the continue holds it for its run"), both failing on the code before the repair. OQ-103's bullet "The lock." is
+reported back in place.

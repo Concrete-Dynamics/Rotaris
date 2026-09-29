@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { Worker } from 'node:worker_threads';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 
 /**
@@ -63,8 +64,52 @@ function launch(name, s, extra, opts = {}) {
   return log;
 }
 function open(s) { return new Database(oneDatabase(s.local), { readonly: true }); }
+/*
+ * ADR-0005 (the repair of a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md, R-067): what the store
+ * says WHILE the app runs. The launch blocks this thread (`spawnSync`), so a worker thread samples the store every 50 ms
+ * and records each change of (status, lock holder, run starts, summary); the proof reads the record after the exit. A reading the
+ * store is busy for is skipped, not guessed.
+ */
+function sampleStore(local) {
+  const stop = new Int32Array(new SharedArrayBuffer(4));
+  const file = join(output, `samples-${Date.now()}.json`);
+  const worker = new Worker(`
+    const { workerData } = require('node:worker_threads');
+    const { existsSync, readdirSync, writeFileSync } = require('node:fs');
+    const { join } = require('node:path');
+    const Database = require(workerData.sqlite);
+    const find = (root) => { if (!existsSync(root)) return []; const out = []; for (const e of readdirSync(root, { withFileTypes: true })) { const p = join(root, e.name); if (e.isDirectory()) out.push(...find(p)); else if (e.name === 'workspace.db') out.push(p); } return out; };
+    const samples = []; let db = null; let last = '';
+    const tick = new Int32Array(new SharedArrayBuffer(4));
+    while (Atomics.load(workerData.stop, 0) === 0) {
+      try {
+        if (!db) { const found = find(workerData.local); if (found.length === 1 && existsSync(found[0] + '-shm')) db = new Database(found[0], { readonly: true, fileMustExist: true }); }
+        if (db) {
+          const row = db.prepare('SELECT execution_status AS s, summary_text AS t FROM sessions LIMIT 1').get();
+          const status = row?.s ?? null;
+          const summary = row?.t ?? null;
+          const lock = db.prepare('SELECT pid FROM session_locks LIMIT 1').get()?.pid ?? null;
+          const runStarts = db.prepare("SELECT count(*) AS c FROM timeline WHERE name = 'run_start'").get().c;
+          const key = JSON.stringify([status, lock, runStarts, summary]);
+          if (key !== last) { last = key; samples.push({ status, lock, runStarts, summary }); writeFileSync(workerData.file, JSON.stringify(samples)); }
+        }
+      } catch { /* the store is busy or not yet migrated: skipped */ }
+      Atomics.wait(tick, 0, 0, 50);
+    }
+    try { db?.close(); } catch { /* closing */ }
+  `, { eval: true, workerData: { local, file, stop, sqlite: require.resolve('better-sqlite3') } });
+  return {
+    async finish() {
+      Atomics.store(stop, 0, 1);
+      await new Promise((done) => { worker.once('exit', done); });
+      return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : [];
+    },
+  };
+}
 const names = (db, sid) => db.prepare('SELECT name FROM timeline WHERE session_id = ? ORDER BY ordinal').all(sid).map((r) => r.name);
 const results = {};
+// REQ-SESSION-055's six values that assert a run in progress (`packages/contracts/src/status.ts`).
+const ACTIVE = new Set(['starting', 'running', 'background', 'waiting', 'pausing', 'cancelling']);
 
 // 1. A message queued during the run is consumed at the iteration boundary as a "Queued Prompts" task, exactly once.
 const s1 = scenario('queue', []);
@@ -76,13 +121,25 @@ launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PROMPT: 
   const db = open(s1);
   const session = db.prepare('SELECT session_id, execution_status, iterations_completed, todo FROM sessions').get();
   const prompts = db.prepare('SELECT prompt_id, content, status FROM queued_prompts WHERE session_id = ?').all(session.session_id);
+  // REQ-CHAT-040 (the repair of every-iteration-is-sent-the-prompt-the-run-was-launched-with.md): the iteration that took
+  // the queued prompt up was SENT it — its root's first user message, in the conversation record (PD-ORCH-005 clause 1),
+  // carries the launch prompt and then the queued prompt as its task; the launch prompt's own iteration's does not.
+  const iterations = db.prepare('SELECT iteration, root_task_id, todo_task_id FROM iterations WHERE session_id = ? ORDER BY iteration').all(session.session_id);
+  const firstUser = (taskId) => {
+    const sent = db.prepare("SELECT body FROM agent_messages WHERE session_id = ? AND task_id = ? AND kind = 'message' ORDER BY seq").all(session.session_id, taskId).map((r) => JSON.parse(r.body)).find((m) => m.role === 'user');
+    return sent ? sent.content.filter((c) => c.kind === 'text').map((c) => c.text).join('\n') : '';
+  };
+  const sent = iterations.map((i) => ({ iteration: i.iteration, queued: i.todo_task_id === prompts[0]?.prompt_id, first: firstUser(i.root_task_id) }));
   db.close();
   if (session.execution_status !== 'completed' || session.iterations_completed < 2) throw new Error(`the queued run did not complete two iterations: ${JSON.stringify(session)}`);
   if (prompts.length !== 1 || prompts[0].content !== 'and then this' || prompts[0].status !== 'TRIGGERED') throw new Error(`the queued prompt was not consumed exactly once: ${JSON.stringify(prompts)}`);
   const todo = JSON.parse(session.todo);
   const phase = todo.phases.find((p) => p.name === 'Queued Prompts');
   if (!phase || phase.tasks[0].state !== 'complete') throw new Error(`the queued prompt did not become a completed task: ${session.todo}`);
-  results.queue = { iterations: session.iterations_completed, prompt: prompts[0] };
+  const took = sent.filter((s) => s.queued);
+  if (took.length !== 1 || !took[0].first.startsWith('first task') || !took[0].first.endsWith('\n\nand then this')) throw new Error(`the iteration that took the queued prompt up was not sent it: ${JSON.stringify(sent)}`);
+  if (sent.some((s) => !s.queued && s.first.includes('and then this'))) throw new Error(`an iteration whose task is the launch prompt was sent the queued prompt: ${JSON.stringify(sent)}`);
+  results.queue = { iterations: session.iterations_completed, prompt: prompts[0], sent };
 }
 
 // 2. A steer reaches the entry role at its next step.
@@ -101,6 +158,7 @@ launch('steer', s2, { ROTARIS_SCRIPT: 'read,read,read,read', ROTARIS_CAPTURE_PRO
 // (the `~` form) and the Continue waits for the paused strip — whose continue shows the pill's short
 // label `Continue` with `Continue run` as its accessible name (PD-ORCH-005 phase 5), so the lookup is that name.
 const s3 = scenario('pause', []);
+const pauseSamples = sampleStore(s3.local);
 launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'pause me', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Pause the run"]@~8000;;.composer__strip .btn-primary[aria-label="Continue run"]@~24000', ROTARIS_CAPTURE_AFTER_MS: '26000' });
 {
   const db = open(s3);
@@ -111,7 +169,18 @@ launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTUR
   if (!rows.some((b) => b.includes("paused at the user's request"))) throw new Error(`no pause row: ${rows.join(' | ')}`);
   if (!list.includes('run_pause_requested') || list.filter((n) => n === 'run_start').length < 2) throw new Error(`the pause and the continuation are not both recorded: ${list.join(',')}`);
   if (session.execution_status !== 'completed') throw new Error(`the continued run did not complete: ${JSON.stringify(session)}`);
-  results.pause = { status: session.execution_status, runStarts: list.filter((n) => n === 'run_start').length };
+  // ADR-0005, REQ-SESSION-083: the pause's teardown released the lock, and the Continue in the same process took it
+  // back — every sample of the continued run while it was active names a holder (it held none before the repair).
+  const samples = await pauseSamples.finish();
+  const continued = samples.filter((x) => x.runStarts >= 2 && ACTIVE.has(x.status));
+  if (continued.length === 0) throw new Error(`the sampler saw no active continued run: ${JSON.stringify(samples)}`);
+  if (continued.some((x) => x.lock === null)) throw new Error(`the continued run ran without the session's lock: ${JSON.stringify(samples)}`);
+  if (!samples.some((x) => x.runStarts === 1 && x.status === 'paused' && x.lock === null)) throw new Error(`the pause's teardown did not release the lock: ${JSON.stringify(samples)}`);
+  // REQ-ORCH-082 rule 1 (the repair of a-paused-runs-notice-says-a-person-stopped-it.md, R-067, OQ-118): the rest's summary,
+  // which the notice carries, names no stop beside the row that says the run paused — one message for every rest a person asks for.
+  const restSummary = samples.find((x) => x.runStarts === 1 && x.status === 'paused')?.summary ?? null;
+  if (restSummary !== "The run came to rest at the user's request.") throw new Error(`the paused session's summary reads ${JSON.stringify(restSummary)}`);
+  results.pause = { status: session.execution_status, runStarts: list.filter((n) => n === 'run_start').length, lockWhileContinued: [...new Set(continued.map((x) => x.lock))], restSummary, samples };
 }
 
 // 4. The message limit: paused durably with the dialog, "double" continues; a second launch finds the session paused and "cancel" resolves it.

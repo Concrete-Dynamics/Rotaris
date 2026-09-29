@@ -59,6 +59,32 @@ edited files and each command with its exit code, derived from the whole transcr
 remains the compressor's alone. The **runtime view**'s children paragraph names it; no package, edge, message or store
 table changes.
 
+**A continue in the process that ran the session takes the lock back (ADR-0005, REQ-SESSION-047/048/083, 2026-09-29,
+R-067).** `prompt`, `continueSession` and `planDecision` claim the session's lock before their first write
+(`holdForContinue`, through the one claim `claimHold` the at-rest cancel's `lockForWrite` now shares), and the run each
+launches holds it until its teardown; a continue that launches none gives back what it took, and a live holder in
+another process refuses it with REQ-SESSION-048's words. This repairs
+`a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md` and
+`a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`. The **runtime view**'s §6 gains the paragraph and
+its §7 `session_locks` row the writers; the **state-ownership view**'s lock row names the continue. No package, edge,
+process, channel, message kind or store column changed.
+
+**Every iteration is sent its own task (REQ-CHAT-040, REQ-ORCH-004 / REQ-ORCH-135, 2026-09-29, R-067).** The launch
+content stays the base of every execution iteration's first message, and the todo task the iteration selected, when it
+is not the run's own and its text is not the launch content's request, follows it as the task to work on
+(`Run.takenUp`, `takenUpText`, `Run.firstMessage`) — a queued prompt, a task put back, an improvement run's proposal,
+the task after a plan decision's gated one; PD-ORCH-005 clause 17's message keeps its own words. The handoff is not
+rebuilt per iteration (OQ-104, OQ-106). This repairs `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`.
+The **runtime view**'s §2 gains the paragraph. No package, edge, process, channel, message kind or store column changed.
+
+**An iteration's close commits the todo it leaves (REQ-ORCH-072/073/074/135, 2026-09-29, R-067).** `iterate()` and
+`closeOpenIteration` close their task and held messages first and pass the todo to `SessionWriter.endIteration`, which
+stores it in the transaction that records `iteration.end` and closes the row, ahead of the capture and the hooks. What
+an earlier build's death left is settled when a run is built and when a continue is judged (`settleClosedIterations`:
+`Todo.releaseStale`, and `Todo.settleStranded` for an iteration's own task, from the latest row naming it). This repairs
+`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`. The **runtime view**'s §2 says so. No
+package, edge, process, channel, message kind or store column changed.
+
 **A request queued behind an open approval dialog waits for its turn (REQ-TOOLS-063, 2026-09-28).** Main answers a
 present-request that waits behind the dialog already open in its window, or behind requests queued ahead of it, with
 the new run-host request `approval.queued` (`MainWindows.enqueueApproval` answers which). `RunHostPresenter` then stops
@@ -191,7 +217,8 @@ resumes an open iteration appends its message to the planner todo as a task that
 `heldBy` in the todo document), marked as a message for good (`Task.message`), which closes with it
 (`Todo.releaseHeld`): done when it succeeds, pending on any other close. A message left pending is taken up by the next
 iteration (`Task.nextUp`, `Todo.selectNext`), which is sent its text after the launch content when that names another
-request (`Run.firstMessage`). A held message a death left stale closes as the record says its iteration did
+request (`Run.firstMessage`; since 2026-09-29 every selected task that is not the run's own is, as the entry above
+records). A held message a death left stale closes as the record says its iteration did
 (`Todo.releaseStale`, against `succeededIterationsOf`, which the run's constructor shares). A continue that delivers no
 message — the Continue action, "continue without them", and the message-limit resolution's 'continue' and 'double' —
 judges the todo after that settle, and appends no task while the todo holds the last request unfinished — a task of
@@ -280,6 +307,18 @@ open or closed, one open per session), `agent_messages` (every agent's conversat
 replacement) and `agent_terminals` (the background sessions an agent started). The **runtime view** moves: §7's heading
 and four rows, and §4's write-scope, paused-state and projection paragraphs; the **state-ownership view**'s write-scope
 row says the declared patterns are now stored. No package, edge, process, channel or message kind changed.
+
+**REQ-CHAT-055's CPU-profile round: an increment re-reads only the rows it changed (2026-09-29, R-048's order continued
+under R-062).** V8's CPU profile of the built app named the loaded side's extra script per increment as the transcript's
+own passes over every displayed row. `ui/transcript/pool.ts` gains `reuseOffsets` and the `MeasureLedger` the pane rebuilds
+the offset table from (only the rows that changed, or whose identity the measurement pass re-measured — the caches report
+evictions to it through `cache.ts`'s new `onEvict`), and `updateShape` compares keys only past the shared rows;
+`Row.tsx` gains `placementsFrom`, which the projector carries the places forward with; `project.ts` finds the reusable prefix
+by bisection over a carried reach and exports `settlesWithRunning`, which lets `projector.ts`'s `changedFrom` bound a run
+beginning or ending. The **runtime view**'s step-4 and step-5 rows and its pool paragraph, and the **component view**'s
+`pool.ts` entry, say so. The proof's side is `transcript-proof.mjs` and `lib/trace-summary.mjs` (the CPU profile's
+attribution), which no view describes. No package, edge, process, channel, message kind, store column or owner of state
+changed.
 
 **The notices generator reads the shipped setup manifest (2026-09-28, R-062).** `tools/notices/notices.mjs` reads
 `apps/desktop/resources/setup-manifest.json` rather than `pins.json` as REQ-STARTUP-142's manifest, by a copy of

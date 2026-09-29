@@ -294,3 +294,15 @@ lines in the proof's log). **A gap surfaced by the binding coming alive, stated,
 resolved per *workspace* (`configureRun(workspaceRoot)`), so the path REQ-MCP-034 appends is the workspace root even for
 a run in an isolated working tree, where the requirement wants the tree's root; nothing exercised it (no proof starts an
 isolated session through this path) and it is owed to whoever next touches the isolated-run start.
+
+**Launches 6 and 7 driven — 2026-09-28, R-062.** The proof's toggle launch (REQ-MCP-115) and its Settings launch
+(REQ-MCP-054) are now driven through `scripts/lib/driver.mjs`: every click, choice and read waits for its condition
+instead of firing at an offset from the window's load. On a loaded Linux host the offsets had produced two
+REQ-MCP-115 reds the product had not earned, a toggle clicked before its row was drawn and a relaunch row probed
+before it was drawn ([note](../../defects/fixed/mcp-proofs-drop-rules-launch-clicks-at-a-fixed-offset.md)). The
+assertions are unchanged. Three runs in a row as root under Xvfb all passed every launch that applies on Linux; the
+`.cmd` runner check is stated not applicable off win32, as before. **Found nothing new about the mechanism:** the
+override's wording, its absence after a relaunch, the five fates, the granted set, the two contacts per two probes,
+the mask and the scope all read as the first execution recorded them. The steps finished in about 10 s (launch 6) and
+3 to 5 s (launch 7), against the 14 s and 19 s the offsets had reserved. **Could not show:** the loaded-host red itself
+on demand, and anything on Windows (IC-3).

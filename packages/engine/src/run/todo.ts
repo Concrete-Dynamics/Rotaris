@@ -105,6 +105,27 @@ export class Todo {
     }
   }
 
+  /**
+   * An iteration's own task left `in_progress` after its iteration closed — a death between the close and the save of the
+   * todo, which an earlier build made in two transactions — closes as `closedOutcome` says that iteration closed, as
+   * `Run.iterate()` would have closed it: `succeeded` complete (REQ-ORCH-069), `partial` requeued (REQ-ORCH-073/077),
+   * `failed` or `abandoned` abandoned (REQ-ORCH-074), and `cancelled` or no outcome back to pending (REQ-ORCH-135, "the
+   * task stays anchored"). `closedOutcome` answers `undefined` when no closed row is the latest to name the task, which is
+   * left as it is; so is the task the open iteration `openTaskId` works on, and every task a held message's `heldBy` names
+   * (`releaseStale` settles those). REQ-ORCH-072 flips a task to in progress only for the iteration that works it.
+   */
+  settleStranded(openTaskId: string | null, closedOutcome: (taskId: string) => string | null | undefined): void {
+    for (const task of this.all()) {
+      if (task.state !== 'in_progress' || task.heldBy !== undefined || task.id === openTaskId) continue;
+      const outcome = closedOutcome(task.id);
+      if (outcome === undefined) continue;
+      if (outcome === 'succeeded') this.complete(task);
+      else if (outcome === 'partial') this.requeue(task);
+      else if (outcome === 'failed' || outcome === 'abandoned') this.abandon(task);
+      else task.state = 'pending';
+    }
+  }
+
   /** PD-ORCH-005 clause 17: a held task closes with its iteration — done, or pending and taken up next. */
   private close(task: Task, done: boolean): void {
     delete task.heldBy;
@@ -119,8 +140,10 @@ export class Todo {
    * the open iteration `open` — its own task, or a message it holds — which closes it to pending before the run selects.
    * A task in progress that nothing open holds and no iteration holds either is no one's to take up (a selection takes
    * only pending tasks), so it does not count, and the request is appended again, as REQ-ORCH-004 states (found by the
-   * iteration lane review). A message a closed iteration still holds is not that case: the caller settles it first with `releaseStale`,
-   * as the run does before it selects, so it is judged pending or complete as it will be taken (found by the iteration lane review).
+   * iteration lane review). A message a closed iteration still holds is not that case, and nor is an iteration's own task
+   * its closed iteration left in progress: the caller settles both first (`settleClosedIterations`), as the run does
+   * before it selects, so each is judged as it will be taken (found by the iteration lane review; the second by the repair
+   * of `an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`).
    */
   holdsUnfinished(text: string, open: { readonly iteration: number; readonly taskId: string } | null): boolean {
     return this.all().some((t) => t.text === text && (t.state === 'pending'

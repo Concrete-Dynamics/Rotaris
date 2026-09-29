@@ -103,7 +103,7 @@ export function transcriptText(messages: readonly ChatMessage[]): string {
  * puts ahead of the task is replaced by a marker saying how many characters it held, so the first event reads
  * `user: … [N characters omitted] … <the task>`. Where it is not — a compression replaced the conversation — the task
  * is put ahead of the events as given. Either way the start is ONE event and is cut to REQ-ORCH-110's 2,000 from its
- * head: a task longer than that keeps its head, and OQ-118 asks whether it may be kept whole.
+ * head: a task longer than that keeps its head, and OQ-119 asks whether it may be kept whole.
  *
  * The reasons it did not, kept beside their replacement: (1) it was cut to 12,000 from its head. For a long child that
  * is the task and its first reads, and the edits come after the cut; in the duress live run of 2026-09-29 the request
@@ -144,7 +144,7 @@ function marker(n: number): string {
  * given to the pass beside the transcript, so a summary written over a transcript whose middle is omitted cannot deny
  * work the record shows. They are REQ-ORCH-109's runner-owned kind, derived from the WHOLE transcript by the same
  * functions that fill the report's fields; the pass condenses them and never writes them. Each command is cut to 2,000
- * characters and the block to 12,000, REQ-ORCH-110's two figures, so the pass stays bounded — the build's reading, asked as OQ-119.
+ * characters and the block to 12,000, REQ-ORCH-110's two figures, so the pass stays bounded — the build's reading, asked as OQ-120.
  */
 export function reportFacts(messages: readonly ChatMessage[]): string {
   const edited = editedFilesFrom(messages);

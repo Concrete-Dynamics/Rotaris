@@ -52,3 +52,27 @@ todo on; the task stays anchored) — a task that is selected and never sent is 
 - `packages/engine/src/run/todo.ts` — `appendTask`, which queued and continued prompts go through.
 - `packages/engine/src/run/run.ts` — `parkAtPlanGate`, whose content after a resumed iteration is `resumedWorkSection` and then `taskContent`.
 - `packages/engine/src/sessions.ts` — `planDecision`, `launchContinuation`, `buildContinuationPayload`; `apps/desktop/src/main/commands/improvements.ts` — the executor's launch prompt.
+
+## Repaired — 2026-09-29
+
+Repaired 2026-09-29 under R-067, along the reviewer's proposal. The launch content stays the base of every execution
+iteration's first message, and the todo task the iteration selected, when it is not the run's own (`RunDeps.taskId`) and
+its text is not the launch content's request, follows it as a text part naming it the task to work on:
+`iterate()` records it (`Run.takenUp`, which replaces `messageTakenUp`), and `Run.firstMessage` adds it after the launch
+content and before the offers list (`takenUpText`; a continue's message keeps clause 17's words). A plan cycle is sent
+none. The three flows keep the launch content: plan approval's relaunch sends every iteration the approved plan, the
+gated request's iteration nothing more and a later task's its own text after it; an improvement run's every iteration
+the executor's instructions and then its own proposal; a continue after a pause the handoff and then the older task it
+takes up, while the Continue action that restates a pending request is told nothing more. The handoff's staleness is
+built to the readings OQ-104 and OQ-106 record — nothing rebuilds it per iteration — and those readings, OQ-102's
+"Taking it up sends it" and OQ-107's "The re-sent handoff is left as it is" are corrected in place. What the build
+decided beyond the specification (the words, a task repeating the launch request, a renamed own task, attachments) is
+OQ-117.
+
+Evidence: `run/iteration-task.test.ts` — a queued prompt, a request a pause put back and taken up by a later message's
+run, an improvement run's two proposals, and a plan approval's gated and later task; the four that send a task fail on
+the code before the repair, and the Continue action's case pins that a restated request is told nothing more.
+`message-task.test.ts`, `record.test.ts` and `plan-gate-resume.test.ts` stay green (OQ-104's stale handoff still
+pinned). In the built app `part-j-proof`'s queue scenario now reads the conversation record: the iteration that took
+the queued prompt up was sent "first task" and then the queued prompt as its task, and the launch prompt's own
+iteration was not; `plan-gate-proof`, `part-h-proof` and `improvements-proof` were run beside it.

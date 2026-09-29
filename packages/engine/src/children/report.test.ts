@@ -291,7 +291,7 @@ describe('engine/children/report — OQ-111: the pass reads the start and the mo
     expect(Number(marker![1])).toBe(full.length - (t.length - marker![0].length) - 1);
   });
 
-  it("a task longer than REQ-ORCH-110's 2,000 per event keeps its head, cut and marked like any event (OQ-118)", () => {
+  it("a task longer than REQ-ORCH-110's 2,000 per event keeps its head, cut and marked like any event (OQ-119)", () => {
     const long = `${TASK}\nCONTEXT: ${'the documents were written by two different agents at different times. '.repeat(40)}`;
     const opening = childPayload('/ws', long, '', [INDEX], SCOPES, INHERITED);
     const t = reportTranscript(duress(say('user', opening)), long);

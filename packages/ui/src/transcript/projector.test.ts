@@ -12,6 +12,7 @@ import { projectIncrement } from '@rotaris/ui-core';
 import { scopedRows } from '../TranscriptSurface.js';
 import { CAP_DEFAULTS, projectDisplay, type ProjectOptions } from './project.js';
 import { changedFrom, createProjector } from './projector.js';
+import { placements } from './Row.js';
 import type { DisplayRow } from './types.js';
 
 function rows(total: number): TranscriptRow[] {
@@ -145,9 +146,34 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
       step([...rows(3).map((r) => ({ ...r, index: r.index - 3 }) as TranscriptRow), ...held], false); // older rows paged in above
       step(held.slice(0, 10), false);                                                       // a truncation
       step([...held, ...rows(11).slice(10)], true);                                         // appending again after it
-      step(held, false, { running: false });                                                // the run ends: another input
+      // The run ends. Until the 2026-09-29 round this was "another input" and projected the whole window; `settle` reads
+      // `running` for the rows still streaming or marked running and no others, so it is bounded from the first of them —
+      // here none remains, so only what follows the rows is projected again (REQ-CHAT-049, REQ-CHAT-055).
+      step(held, true, { running: false });
       expect(projector.projections).toBe(10);
-      expect(projector.incrementals).toBe(6);
+      expect(projector.incrementals).toBe(7);
+    });
+
+    it('REQ-CHAT-049 / REQ-CHAT-055: a run beginning or ending at 1,200 rows re-projects from the first row that settles with it, not the window', () => {
+      // V8's CPU profile of the built app (2026-09-29, the defect note's "CPU profile" section) named the two whole-window
+      // projections each run causes — `foldRuns` over every row when `running` flips — among the loaded side's extra
+      // script. Neither flip changes a row that is neither streaming nor marked running.
+      let calls = 0;
+      let bounded: number | null = null;
+      const projector = createProjector((o, incremental) => { calls += 1; bounded = incremental?.from ?? null; return projectDisplay(o, incremental); });
+      const held = [...rows(1_200), tool(1_200, 'running', false), tool(1_201, 'ok', true)];
+      const idle = options({ rows: held, running: false });
+      projector.project(idle);
+      const started = { ...idle, running: true };
+      expect(projector.project(started).display).toEqual(projectDisplay(started));
+      // The live call at 1,200 is the first row that settles with the run: the rows above it are projected as they were.
+      expect(bounded).toBe(1_200);
+      const settled = [...held.slice(0, 1_200), tool(1_200, 'ok', true), held[1_201]!];
+      const ended = { ...started, rows: settled, running: false };
+      expect(projector.project(ended).display).toEqual(projectDisplay(ended));
+      expect(bounded).toBe(1_200);
+      expect(calls).toBe(3);
+      expect(projector.incrementals).toBe(2);
     });
 
     // Fix round 1 of R-062: the first form of `changedFrom` returned the next array's row index at the first differing
@@ -297,6 +323,7 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
       let scope: AgentRecord | null = null;
       const projector = createProjector();
       const base = options(config);
+      let running = config.running;
       for (let step = 0; step < steps; step += 1) {
         const top = all[all.length - 1]!.index;
         const r = rand();
@@ -311,8 +338,14 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
         else if (r < 0.9 && all.length > 4) all = all.slice(0, all.length - 2);
         else if (r < 0.93) { const bottom = all[0]!.index; all = [{ ...make(bottom - 1), index: bottom - 1 } as TranscriptRow, ...all]; }
         else all = [...all, make(top + 1), make(top + 2)];
-        const o = { ...base, rows: scopedRows(all, scope) };
-        expect(projector.project(o).display, `seed ${initial.toString(16)} ${JSON.stringify(config)} step ${step}`).toEqual(projectDisplay(o));
+        // A run beginning or ending, beside whatever else the step did (REQ-CHAT-049; the 2026-09-29 round bounds it).
+        if (rand() < 0.08) running = !running;
+        const o = { ...base, running, rows: scopedRows(all, scope) };
+        const projection = projector.project(o);
+        expect(projection.display, `seed ${initial.toString(16)} ${JSON.stringify(config)} step ${step}`).toEqual(projectDisplay(o));
+        // The places ride with the projection and are built from the previous one's (`placementsFrom`, the
+        // 2026-09-29 round): whatever the step did, they are the places of the display computed from nothing.
+        expect(projection.places, `places: seed ${initial.toString(16)} ${JSON.stringify(config)} step ${step}`).toEqual(placements(projection.display));
       }
       return projector.incrementals;
     };

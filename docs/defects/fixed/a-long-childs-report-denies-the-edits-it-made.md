@@ -41,7 +41,7 @@ The child's first event is its REQ-TOOLS-154 payload, which puts the workspace r
 index, the attached artifacts and the inherited reports ahead of the task. Where that event is recognised, the blocks
 ahead of the task are replaced by `… [N characters omitted] …`, so the start reads `user: … [N characters omitted] …
 <the task>`. Where the conversation was replaced by a compression, the task is put ahead of the events. The start is
-one event, cut to REQ-ORCH-110's 2,000 characters; whether a longer task may be kept whole is asked as OQ-118. Between
+one event, cut to REQ-ORCH-110's 2,000 characters; whether a longer task may be kept whole is asked as OQ-119. Between
 the start and the most recent part stands `… [N characters omitted] …`, where N is the count left out. The whole,
 markers included, is held to REQ-ORCH-110's 12,000 characters. A transcript within the cap is given whole, its start
 being the task in the same way. The request also carries a `Facts:` block, `reportFacts`. It holds the edited files
@@ -49,7 +49,7 @@ and every command with its exit code (or "no exit code"), derived from the whole
 the report's own `edited_files` and `commands`. The ask tells the pass that its summary must agree with the facts, and
 that a middle marked omitted is not evidence that nothing happened there. Each command in the block is cut to 2,000
 characters and the block to 12,000, REQ-ORCH-110's two figures, so the pass stays bounded. The ruling gives the facts
-no bound of its own; this bound is the build's, asked as OQ-119. `transcriptText` keeps its head-only cut for its other
+no bound of its own; this bound is the build's, asked as OQ-120. `transcriptText` keeps its head-only cut for its other
 reader, the compressor
 ([`the-compressor-reads-only-the-head-of-what-it-compresses`](../the-compressor-reads-only-the-head-of-what-it-compresses.md)).
 
@@ -67,7 +67,7 @@ over 2,000 characters in all. Then come 34 reads of over 3,000 characters each, 
 and the final answer. Two cases reproduce the findings: the head-only cut holds no edit, and the first repair's start
 holds no task. The main case checks that the start is the whole task with the blocks ahead of it marked, that both
 edits, the check and the final answer are kept within the cap, and that the marker's count is exact. Others cover a
-task over 2,000 characters (its head kept, as OQ-118's reading states), a first event that is not the payload, a
+task over 2,000 characters (its head kept, as OQ-119's reading states), a first event that is not the payload, a
 transcript within the cap, and the facts block. The last runs the request through `produceReport` and checks that it
 carries the whole task and the facts. In `children.test.ts`, "OQ-111 (live-run finding D1)" runs a delegated child
 end to end and checks that the summariser's transcript starts with the task, the workspace-root line marked omitted.
@@ -91,4 +91,4 @@ Each start is 138 to 320 characters. Each transcript is 11,999 or 12,000 charact
 before the most recent part. Each request carries its facts. None of the six summaries denies the files its facts list.
 The reconciling child's request (#121) omitted 57,739 characters, and its summary begins "The agent reconciled
 docs/api.md and docs/overview.md". This run's tasks were shorter than the earlier run's, so no start was cut to
-2,000 (OQ-118).
+2,000 (OQ-119).

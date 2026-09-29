@@ -1062,8 +1062,9 @@ instead — an appointment moved to 300 ms reproduces the original error text ve
 screen 1.7 s into the run`, and the deadline form passes on the same machine in the same minute. An absence still
 cannot be waited FOR, so the one probe that reads the header GONE stays an appointment and was moved out to 9 s.
 
-**What `pnpm mission-proof` does.** It builds Electron and launches the app ten times for eight items: the Mission view
-painted with the run row, the tree and the table, elapsed advancing between two probes; the three trees' parity and a
+**What `pnpm mission-proof` does.** It builds Electron and launches the app eleven times for nine items: the Mission view
+painted with the run row, the tree and the table, elapsed advancing between two probes; two children waiting behind a
+model slot cap of one showing their elapsed time in the table and the tree, advancing (since 2026-09-29, OQ-122); the three trees' parity and a
 23-agent republish timed against the 250 ms budget; a pause refused with a child selected and honoured with the run
 selected; a cancel naming the agent and its cascade; open-agent under both preferences — the inspector pinned, then one
 persona window per persona reused, hidden on close, shown again, destroyed on a new session; the inspector following the

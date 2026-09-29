@@ -12,6 +12,8 @@ import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolat
  *
  *   1. painted     — Mission opened by Ctrl+3 during a run with three live children: the header, the run row, the tree,
  *                    the table with one row per agent and state text, elapsed advancing between two probes 1.5 s apart.
+ *   1b. waiting    — the model's slot cap one, two children waiting behind it: every row's Elapsed cell and tree meta
+ *                    carries a figure, and a waiting row's advances (REQ-MONITOR-107/111).
  *   2. parity      — the Mission tree, the Overview card and the Workspace sidebar probed in one run: identical ids and
  *                    states; then a 23-agent record (20 seeded) refreshed with Mission visible, the apply-to-paint time.
  *   3. pause       — a child selected → Pause refused with the explanation, no control sent; the run selected → accepted,
@@ -138,6 +140,38 @@ const s1 = scenario('painted');
   expect(endProbe(r.log, '.app-shell')?.[0]?.data?.['data-view'] === 'mission', 'the capture was not on Mission');
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
   results.painted = { subtitle, runRow, statesAt6s: states6, elapsedAt6s: e6, elapsedAt7_5s: e75, finalStates: endRows.map((p) => p.data['data-state']), png: join(output, 'mission.png') };
+}
+
+// 1b. A waiting agent's clock (REQ-MONITOR-107/111, resolution item 25; the note "a waiting agent's elapsed time is not
+// shown", R-067): the scripted model's slot cap is one, so two of the three children wait on the model slot while the first
+// runs; every row holds a spawn timestamp, so every Elapsed cell and every tree meta carries a figure, and a waiting row's
+// advances between the two probes as the running row's does. Before the repair a waiting row read an em-dash in the table
+// and its state alone in the tree.
+const s1b = scenario('waiting');
+{
+  const yaml = join(s1b.workspace, '.rotaris', 'agents.yaml');
+  writeFileSync(yaml, readFileSync(yaml, 'utf8').replace('model_id: scripted }', 'model_id: scripted, max_parallel: 1 }'));
+  const r = launch('waiting', s1b, {
+    ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:14000,read,answer', ROTARIS_CAPTURE_PROMPT: 'delegate to three agents behind one slot',
+    ROTARIS_CAPTURE_VIEWS: '3@3500',
+    ROTARIS_CAPTURE_PROBE_AT: '.agent-table__state-text@6000;;[data-testid="agent-elapsed"]@6000;;[data-testid="agent-elapsed"]@7500;;.mission__run-row + .agent-tree .agent-row__meta@6000;;.mission__run-row + .agent-tree .agent-row__meta@7500',
+    ROTARIS_CAPTURE_PNG_AT: `${join(output, 'mission-waiting.png')}@7000`,
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '1000',
+  });
+  const states6 = probesAt(r.log, 6000, '.agent-table__state-text')?.map((p) => p.text) ?? [];
+  const waitingAt6 = states6.map((t, i) => (t === 'waiting' || t === 'queued' ? i : -1)).filter((i) => i >= 0);
+  expect(states6.length === 3 && waitingAt6.length > 0, `no waiting or queued row at 6 s behind the slot cap: ${JSON.stringify(states6)}`);
+  const cells6 = (probesAt(r.log, 6000, '[data-testid="agent-elapsed"]') ?? []).map((p) => p.text);
+  const cells75 = (probesAt(r.log, 7500, '[data-testid="agent-elapsed"]') ?? []).map((p) => p.text);
+  const e6 = cells6.map(seconds); const e75 = cells75.map(seconds);
+  expect(e6.length === 3 && e75.length === 3 && e6.every((v) => v !== null), `an Elapsed cell showed the fallback although the agent holds a spawn timestamp: ${JSON.stringify(cells6)} at ${JSON.stringify(states6)} (REQ-MONITOR-111)`);
+  expect(waitingAt6.every((i) => e75[i] !== null && e75[i] > e6[i]), `a waiting row's elapsed did not advance: ${JSON.stringify(cells6)} → ${JSON.stringify(cells75)} at ${JSON.stringify(states6)} (REQ-MONITOR-107)`);
+  const meta6 = (probesAt(r.log, 6000, '.mission__run-row + .agent-tree .agent-row__meta') ?? []).map((p) => p.text);
+  const meta75 = (probesAt(r.log, 7500, '.mission__run-row + .agent-tree .agent-row__meta') ?? []).map((p) => p.text);
+  expect(meta6.length === 3 && meta6.every((t) => seconds(t) !== null), `a tree meta showed its state alone although the agent holds a spawn timestamp: ${JSON.stringify(meta6)} (REQ-MONITOR-111)`);
+  expect(meta6.some((t, i) => /^(waiting|queued) · /.test(t) && seconds(meta75[i] ?? '') > seconds(t)), `no waiting tree meta advanced: ${JSON.stringify(meta6)} → ${JSON.stringify(meta75)} (REQ-MONITOR-107)`);
+  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  results.waiting = { statesAt6s: states6, elapsedAt6s: cells6, elapsedAt7_5s: cells75, treeMetaAt6s: meta6, treeMetaAt7_5s: meta75, png: join(output, 'mission-waiting.png') };
 }
 
 // 2. Parity across the three trees, then the 23-agent refresh with Mission visible.

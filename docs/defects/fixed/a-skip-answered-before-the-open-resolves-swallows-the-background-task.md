@@ -35,9 +35,12 @@ the resolution wins the race.
 - **REQ-WORKSPACE-082**'s own reasoning, in the other direction: a background task's fate must not depend on a prompt
   answered beside it, just as finishing it "can never swallow a prompt still owed".
 
-REQ-WORKSPACE-111 ("the skip path SHALL persist the listed task ids as skipped") is read as ADR-0064 already reads it
-for a task under way: the user skips what the prompt asks about. A background task the open owes is not asked about
-(REQ-WORKSPACE-088).
+The skip itself did what REQ-WORKSPACE-086 ("Skipping SHALL record every given pending task id as skipped") and
+REQ-WORKSPACE-111 ("the skip path SHALL persist the listed task ids as skipped") say: the prompt listed the background
+task (REQ-WORKSPACE-083) and drew its card (REQ-WORKSPACE-106), and the skip recorded it. The fault is in the order.
+REQ-WORKSPACE-083 makes the prompt request a product of the open's resolution, and REQ-WORKSPACE-141 puts that
+resolution in the interactive slot, yet the skip was answered before the resolution had run. Whether the dialog may open
+before the resolution at all is OQ-109.
 
 ## Relevant files
 
@@ -49,29 +52,43 @@ for a task under way: the user skips what the prompt asks about. A background ta
 
 ## Repaired 2026-09-28 under R-062
 
-**What changed.** `InitializationCoordinator` (`apps/desktop/src/main/initialization.ts`) keeps one more fact per open
-workspace, `backgroundOwed`. It is true from the open until a resolution has started the background work it found,
-and cleared on every resolution path: after the start, when nothing is applicable, and when resolution fails. While it
-holds, `skip` leaves out a listed id whose registered task needs no consent and is not yet recorded, and logs
-`initialization: <id> starts by itself on this open, so the skip leaves it to the resolution`. The resolution then
-starts that task as REQ-WORKSPACE-083 requires. This is the same reading ADR-0064 already takes for a task the live
-run is attempting (REQ-WORKSPACE-084/085): the user skips what the prompt asks about, and REQ-WORKSPACE-088's task is
-not asked about. After the resolution, a background task that failed is pending and listed again, and a skip records
-it as listed (REQ-WORKSPACE-111). The window's mount read, the 800 ms slot of REQ-WORKSPACE-141 and the dialog are
-unchanged. `init-proof`'s scenario 3 now also asserts that the background task started beside the consent prompt and
-was recorded completed, so the proof pins the requirement and not the race.
+**What changed.** A skip that arrives before the open's one automatic resolution now performs that resolution first,
+or waits for the one already under way (`InitializationCoordinator.skip` and `resolve`,
+`apps/desktop/src/main/initialization.ts`). The open's automatic resolution is held as a promise from the moment it
+begins. The resolution starts `code-intelligence-setup` as REQ-WORKSPACE-083 requires. The task is then attempted, and
+ADR-0064's finding (2) leaves it out of the skip on REQ-WORKSPACE-084's ground. Every other given id is recorded as
+REQ-WORKSPACE-086 says, the background task included when the resolution started nothing. The 800 ms slot then finds
+the open's one automatic resolution made and makes no second one (REQ-WORKSPACE-102). The window's mount read, the slot
+and the dialog are unchanged. `init-proof`'s scenario 3 also asserts that the background task started beside the
+consent prompt and was recorded completed, so the proof pins the requirement and not the race. The reading is OQ-109's
+second.
 
-**The tests that pin it.** `apps/desktop/src/main/initialization.test.ts`, two new cases. (1) With a consent task
-registered, the mount read shows the prompt due; a skip of both listed ids before `resolve(true)` records only the
-consent task; the resolution then shows the background task pending and running, and its finish records it completed.
-This case fails on the previous coordinator (`skipped` read `[code-intelligence-setup, verification-consent]`).
-(2) Once the open has resolved and the background task has failed, a skip records it as listed.
+**A first repair was withdrawn before it merged.** It kept a per-workspace flag, `backgroundOwed`. While the flag held,
+the skip left out a listed, pending task that needed no consent. That read REQ-WORKSPACE-086 and REQ-WORKSPACE-111
+against their text for an id the prompt gives and lists. It also claimed ADR-0064's precedent, which rests on
+REQ-WORKSPACE-084 and covers only a task already attempted. The flag also withheld a task no resolution would start,
+one that was registered, needed no consent and was inapplicable.
 
-**Measured** as root under Xvfb on Linux, Node 24, after one `pnpm build` in `/home/user/Rotaris-crw-wt-prfb5`, with
-nothing else running: `init-proof --skip-build` passed three runs in a row (171 s, 170 s, 171 s), all five scenarios.
-In each run the Escape again came first, 1.1–1.2 s after the flag was registered, and still before the resolution:
-main logged the new line, then `skipped verification-consent`, then `1 pending (0 needing consent), 2 runnable`,
-`running code-intelligence-setup … (background)` and `→ success` 1.5–1.8 s later. The reopen's hint read "Not run yet:
-Verification consent task." So all three runs went through the repaired path, not the lucky order.
-**Not shown:** the Windows order, and a skip landing while `resolve` awaits the applicability check. The second is
-covered by the same flag, which is cleared only after the start, but no run here landed in that interval.
+**The tests that pin it.** `apps/desktop/src/main/initialization.test.ts`, three cases:
+1. With a consent task registered, the mount read shows the prompt due. A skip of both listed ids before
+   `resolve(true)` records only the consent task, and the published state shows the background run under way. The slot's
+   `resolve(true)` then publishes nothing new, and the task's finish records it completed.
+2. A skip that lands while the slot's resolution is still checking applicability records nothing until that resolution
+   has started the task, then records only the consent task.
+3. When the resolution a skip performs first starts nothing (the task inapplicable), the skip records both given ids.
+
+Cases 1 and 2 fail on the original coordinator and on the withdrawn one. Case 3 fails on the withdrawn one. The existing
+case for a skip once the open has resolved and nothing is running (REQ-WORKSPACE-086/111) still passes.
+
+**Measured** as root under Xvfb on Linux, Node 24, on 2026-09-29, after one `pnpm build` of the repaired coordinator in
+`/home/user/Rotaris-crw-wt-prfb5`: `init-proof --skip-build` passed three runs in a row (170 s, 170 s, 170 s), all
+five scenarios. Another agent's Electron proofs were running on the host during the first two runs (8 and 10 of its
+processes at their ends) and none during the third. In each run the Escape again came before the slot, about 1.1 s
+after the consent task was registered. Main logged `a skip arrived before … was resolved, so the open's resolution
+runs first`, then `2 pending (1 needing consent), 2 runnable`, then `running code-intelligence-setup … (background)`,
+then `code-intelligence-setup is already running, so the skip leaves its outcome to the run`, then `skipped
+verification-consent`. `→ success` followed 1.5–1.8 s later, and no second resolution was logged. The reopen's hint
+read "Not run yet: Verification consent task." The withdrawn repair had passed the same proof three times (171 s,
+170 s, 171 s), which is why the proof alone could not tell the two readings apart.
+**Not shown:** the Windows order. No proof run landed a skip while the slot's resolution was checking applicability;
+unit case 2 covers that interval.

@@ -179,10 +179,10 @@ results.consent = { headline: dialog3.headline, intro: dialog3.intro, word: dial
 /* 3b. REQ-WORKSPACE-111: once skipped, reopening the workspace never re-prompts. */
 const ws3 = readFileSync(s3.workspaceFile, 'utf8').replace(/\r/g, '');
 if (!/verification-consent/.test(ws3)) throw new Error(`Escape did not record the skip:\n${ws3}`);
-// REQ-WORKSPACE-083/088: the background task starts by itself whenever the prompt is answered, so Escape skips the
-// consent task only. Which came first — the dialog from the window's mount read, or the resolution 800 ms after the
-// workspace opens — is a race the product must not lose; on Linux the Escape used to win it and skip both
-// (`docs/defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
+// REQ-WORKSPACE-083/084/088: the background task starts by itself whenever the prompt is answered, so Escape skips the
+// consent task only. The dialog can open from the window's mount read before the resolution 800 ms after the workspace
+// opens; a skip answered first performs that resolution first (OQ-109). On Linux the Escape used to come first and skip
+// both (`docs/defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
 if (!/initialization: running code-intelligence-setup[^\n]*\(background\)/.test(log3)) throw new Error('the background task did not start by itself beside the consent prompt (REQ-WORKSPACE-083)');
 if (!/completed:\s*\n?\s*(-\s*code-intelligence-setup|\[\s*code-intelligence-setup\s*\])/.test(ws3)) throw new Error(`the background task beside the consent prompt was not recorded completed (REQ-WORKSPACE-088):\n${ws3}`);
 const log3b = launch('consent-reopen', s3, {

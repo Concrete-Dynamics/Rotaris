@@ -37,7 +37,7 @@ interface Harness {
   push(s: McpSetupStatus): void;
 }
 
-function harness(options: { applicable?: boolean; startFails?: boolean; writeFails?: string | null; modelReachable?: boolean } = {}): Harness {
+function harness(options: { applicable?: boolean; startFails?: boolean; writeFails?: string | null; modelReachable?: boolean; statusGate?: Promise<void> } = {}): Harness {
   const { root, agents } = workspace();
   const published: InitializationStateView[] = [];
   const banners: { headline: string; detail: string }[] = [];
@@ -56,7 +56,7 @@ function harness(options: { applicable?: boolean; startFails?: boolean; writeFai
     setup: {
       start: async () => (options.startFails ? { ok: false, reason: 'not a local launch' } : { ok: true, status: status() }),
       cancel: async () => undefined,
-      status: async () => status({ applicable: options.applicable !== false }),
+      status: async () => { await options.statusGate; return status({ applicable: options.applicable !== false }); },
     },
     publish: (s) => published.push(s),
     banner: (headline, detail) => banners.push({ headline, detail }),
@@ -198,29 +198,35 @@ describe('the skip path and the start refusals', () => {
     expect(after.skipped).toEqual(['verification-consent']);
   });
 
+  const consentTask = {
+    id: 'verification-consent', label: 'Verification consent task', description: 'asks first', requiresConsent: true,
+    applicable: () => true,
+    run: async () => ({ status: 'success' as const, steps: [], classification: null, error: '', retryable: false, summary: '' }),
+  };
+
   /**
-   * REQ-WORKSPACE-083/088: the window can open the dialog from its mount read before the open's resolution runs, and a
-   * skip answered then recorded the background task as skipped, so the resolution started nothing (`init-proof` on
-   * Linux, `docs/defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
+   * REQ-WORKSPACE-083/084/086/102: the window can open the dialog from its mount read before main's 800 ms slot, and a
+   * skip answered then recorded the background task as skipped before it had started, so the resolution started
+   * nothing (`init-proof` on Linux, `docs/defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
+   * The skip now performs the open's one resolution first, which starts the task, and the attempted task is owed its
+   * own outcome; the slot then finds the resolution made.
    */
-  it('leaves a background task the open has not started yet out of a skip, and the resolution then starts it (REQ-WORKSPACE-083, REQ-WORKSPACE-088)', async () => {
+  it('performs the open\'s resolution before a skip answered ahead of it, so the background task starts and is left its own outcome (REQ-WORKSPACE-083, REQ-WORKSPACE-084, REQ-WORKSPACE-086, REQ-WORKSPACE-102)', async () => {
     const h = harness();
-    h.coordinator.registry.register({
-      id: 'verification-consent', label: 'Verification consent task', description: 'asks first', requiresConsent: true,
-      applicable: () => true,
-      run: async () => ({ status: 'success', steps: [], classification: null, error: '', retryable: false, summary: '' }),
-    });
+    h.coordinator.registry.register(consentTask);
     // The mount read: a consent task pending and no run in progress, so the window opens the dialog.
     const mounted = await h.coordinator.read();
     expect(mounted.view.consentPending).toEqual(['verification-consent']);
     expect(mounted.view.running).toBe(false);
-    // Escape, before the resolution: the dialog listed both runnable tasks.
+    // Escape, before the slot: the dialog listed both runnable tasks.
     expect(await h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent'])).toEqual({ ok: true });
     expect(readInitializationState(h.agents).skipped).toEqual(['verification-consent']);
-    // The resolution still finds the background task pending and starts it.
-    const resolved = await h.coordinator.resolve(true);
-    expect(resolved.view.pending).toEqual([CODE_INTELLIGENCE_TASK_ID]);
-    expect(resolved.view.running).toBe(true);
+    expect(h.published.at(-1)!.view.running).toBe(true);
+    // The 800 ms slot: the one automatic resolution of this open has been made, so none is made again.
+    const publishedBefore = h.published.length;
+    const slot = await h.coordinator.resolve(true);
+    expect(h.published).toHaveLength(publishedBefore);
+    expect(slot.view.running).toBe(true);
     h.push(status({ state: 'finished', outcome: 'completed', containsCode: false, steps: [step('create', 'succeeded', 'made')] }));
     await new Promise((r) => setImmediate(r));
     await new Promise((r) => setImmediate(r));
@@ -229,8 +235,37 @@ describe('the skip path and the start refusals', () => {
     expect(after.skipped).toEqual(['verification-consent']);
   });
 
-  /** Once the open's resolution has run, the background task is the user's to skip again, as listed (REQ-WORKSPACE-111). */
-  it('records a listed background task as skipped once the open has resolved and nothing is running (REQ-WORKSPACE-111)', async () => {
+  /** The same, with the skip landing while the slot's resolution is still checking applicability: it waits for that one. */
+  it('waits for an automatic resolution already under way before recording a skip (REQ-WORKSPACE-083, REQ-WORKSPACE-084, REQ-WORKSPACE-102)', async () => {
+    let release: () => void = () => undefined;
+    const h = harness({ statusGate: new Promise<void>((r) => { release = r; }) });
+    h.coordinator.registry.register(consentTask);
+    const slot = h.coordinator.resolve(true);
+    const skipped = h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
+    await new Promise((r) => setImmediate(r));
+    // Nothing is recorded while the resolution has not decided what it starts.
+    expect(readInitializationState(h.agents).skipped).toEqual([]);
+    release();
+    await slot;
+    expect(await skipped).toEqual({ ok: true });
+    expect(readInitializationState(h.agents).skipped).toEqual(['verification-consent']);
+    h.push(status({ state: 'finished', outcome: 'completed', containsCode: false, steps: [step('create', 'succeeded', 'made')] }));
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+    expect(readInitializationState(h.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+  });
+
+  /** REQ-WORKSPACE-086: when the resolution a skip performs first starts nothing, the skip records every given id. */
+  it('records every given id when the resolution a skip performs first starts nothing (REQ-WORKSPACE-086)', async () => {
+    const h = harness({ applicable: false });
+    h.coordinator.registry.register(consentTask);
+    expect(await h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent'])).toEqual({ ok: true });
+    expect(h.published.at(-1)!.view.running).toBe(false);
+    expect(readInitializationState(h.agents).skipped).toEqual([CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
+  });
+
+  /** Once the open's resolution has run and nothing is running, a listed background task is skipped as listed (REQ-WORKSPACE-086/111). */
+  it('records a listed background task as skipped once the open has resolved and nothing is running (REQ-WORKSPACE-086, REQ-WORKSPACE-111)', async () => {
     const h = harness({ startFails: true });
     // The resolution starts the background task, which fails and records nothing, so it stays pending (REQ-WORKSPACE-084).
     await h.coordinator.resolve(true);

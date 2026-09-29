@@ -46,8 +46,9 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 ## Last reconciled with the code: **2026-09-28**
 
 **A skip before the open's resolution (2026-09-28, R-062).** The **process view**'s `initialization.*` paragraph says
-which listed ids a skip leaves out: one the live run is attempting, and a pending background task the open has not
-started yet. No package, edge, process, channel, message kind, store column or owner of state changed.
+which listed ids a skip leaves out (only one the live run is attempting) and that a skip arriving before the open's
+one automatic resolution performs that resolution first (OQ-109). No package, edge, process, channel, message kind,
+store column or owner of state changed.
 
 **The notices generator reads the shipped setup manifest (2026-09-28, R-062).** `tools/notices/notices.mjs` reads
 `apps/desktop/resources/setup-manifest.json` rather than `pins.json` as REQ-STARTUP-142's manifest, by a copy of

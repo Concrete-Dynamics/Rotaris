@@ -83,7 +83,7 @@ registry match nor the launcher's variable: ADR-0054 says not updatable, REQ-STA
 (REQ-STARTUP-118 against REQ-SHELL-118 on the download notice's title, persistence and the pause before the apply); **one more by that
 item's verification the same day: OQ-86** (whether the installer's auto-close and the restart's close ask REQ-STARTUP-046's active-run
 confirmation) — the four raised as OQ-76 to OQ-79 on their branch and renumbered at the merge, OQ-76 to OQ-82 having been taken on `main`. **One more was raised on 2026-09-28 by building the setup manifest (`first-release-plan.md` §4.1): OQ-87** (what a machine tool's "archive layout" comprises, and what path its expected executables are relative to — MinGit's entries sit at the archive root and ripgrep's under one directory). **And OQ-88**, raised by the same item's independent verification (whether a manifest may key an archive under REQ-STARTUP-060's raw `<os>-<machine>` fallback); the two were raised as OQ-76 and OQ-77 on their branch and renumbered at the merge, OQ-76 to OQ-86 having been taken on `main`. **And one more the same day by REQ-CHAT-055's measurement round (R-048's order under R-062): OQ-89** (how the append comparison is read when updates arrive faster than frames — each one's shown-update time then holds the
-queue in front of it — and what "an empty transcript" is compared against once the appended rows are on it — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-88 having been taken on `main`). **And one more the same day by repairing the artifact variables' reach into the product's children (R-062): OQ-90** (whether the variables naming a launch's artifact are removed from what its children inherit — built so — and which of REQ-STARTUP-147 and REQ-HOOKS-032 says so). **And OQ-91**, raised the same day by repairing REQ-CHAT-048's duplicate-reasoning hygiene under R-062 (whether "per agent" scopes the comparison — each agent's own previous thinking row, the reading built — or only the row dropped), raised as OQ-90 on its branch and renumbered at the merge, OQ-90 having been taken on `main`. **And OQ-92**, raised the same day by repairing the notices file's tools section under R-062 (where the file reports the tool-server package versions REQ-STARTUP-152 asks of it, which REQ-STARTUP-142's section names no place for — built as a third sub-heading after the language servers), raised as OQ-90 on its branch and renumbered at the merge, OQ-90 and OQ-91 having been taken on `main`. **And OQ-93** (whether a text field is spell-checked — the runtime's spellchecker fetched a dictionary no requirement names; built as none), raised 2026-09-28 by the repair of the updater proof's runtime connection, raised as OQ-91 on its branch and renumbered at the merge, OQ-90 to OQ-92 having been taken on `main`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+queue in front of it — and what "an empty transcript" is compared against once the appended rows are on it — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-88 having been taken on `main`). **And one more the same day by repairing the artifact variables' reach into the product's children (R-062): OQ-90** (whether the variables naming a launch's artifact are removed from what its children inherit — built so — and which of REQ-STARTUP-147 and REQ-HOOKS-032 says so). **And OQ-91**, raised the same day by repairing REQ-CHAT-048's duplicate-reasoning hygiene under R-062 (whether "per agent" scopes the comparison — each agent's own previous thinking row, the reading built — or only the row dropped), raised as OQ-90 on its branch and renumbered at the merge, OQ-90 having been taken on `main`. **And OQ-92**, raised the same day by repairing the notices file's tools section under R-062 (where the file reports the tool-server package versions REQ-STARTUP-152 asks of it, which REQ-STARTUP-142's section names no place for — built as a third sub-heading after the language servers), raised as OQ-90 on its branch and renumbered at the merge, OQ-90 and OQ-91 having been taken on `main`. **And OQ-93** (whether a text field is spell-checked — the runtime's spellchecker fetched a dictionary no requirement names; built as none), raised 2026-09-28 by the repair of the updater proof's runtime connection, raised as OQ-91 on its branch and renumbered at the merge, OQ-90 to OQ-92 having been taken on `main`. **And OQ-109** (whether the window may open the setup dialog before the open's resolution, and what a skip answered in that interval records — built as: the dialog opens on the values, and such a skip performs the open's one automatic resolution first), raised 2026-09-29 by repairing `init-proof`'s red on Linux under R-062. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3600,6 +3600,43 @@ offline launch of REQ-STARTUP-159 would attempt and fail. Three readings:
 **What the build proceeds under:** the first reading (`apps/desktop/src/main/runtime-requests.ts`), because it is the
 only one that needs no requirement the specification lacks and adds no request. **A ruling would decide** whether
 spell-checking is a behaviour the product owes; either of the other readings is additive to this build.
+
+**OQ-109 — May the window open the setup dialog before the open's resolution, and what does a skip answered in that interval record?** *(REQ-WORKSPACE-083, REQ-WORKSPACE-084, REQ-WORKSPACE-086, REQ-WORKSPACE-088, REQ-WORKSPACE-102, REQ-WORKSPACE-105, REQ-WORKSPACE-111, REQ-WORKSPACE-141; ADR-0064, "On Linux as root — 2026-09-28". Raised 2026-09-29 by repairing `../defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md` under [R-062](../product/requests.md#r-062). Numbered from `main`, where OQ-108 was the last taken.)*
+
+The window reads the initialization state as it mounts. REQ-WORKSPACE-105 makes the prompt due "exactly when at least
+one consent-requiring task is pending and no run is in progress", and the mount read's values say so, so the window
+opens the dialog. Main's one automatic resolution comes later, in REQ-WORKSPACE-141's interactive slot, 800 ms after the
+workspace is acknowledged. But REQ-WORKSPACE-083 makes the prompt request a **product of that resolution**, and the same
+resolution starts the background tasks "regardless of whether a prompt is also due". A skip answered between the two
+meets clauses that pull apart:
+
+- REQ-WORKSPACE-086 records "every given pending task id as skipped", and REQ-WORKSPACE-111 persists "the listed task
+  ids". The dialog lists the runnable tasks (REQ-WORKSPACE-083, REQ-WORKSPACE-106), `code-intelligence-setup` among them.
+- REQ-WORKSPACE-088 says that task "starts by itself when the workspace opens". A skip recorded before the resolution
+  leaves it resolved, so the resolution starts nothing, now or on any later open.
+- REQ-WORKSPACE-084 owes an **attempted** task exactly one outcome. ADR-0064's finding (2) leaves such a task out of a
+  skip on that ground. A task not yet started is not attempted.
+
+Readings:
+
+- **the dialog waits for the resolution**: the window auto-opens the dialog only once the open's resolution has produced
+  the prompt request. That needs a signal beside REQ-WORKSPACE-105's nine values, which that clause says are "exactly"
+  what the interface works from. The composer gate of REQ-WORKSPACE-112 would also stay off until then.
+- **the skip brings the resolution forward**: the dialog opens on the values. A skip that arrives before the open's one
+  automatic resolution performs that resolution first, or waits for the one under way. The background task it starts
+  is then attempted, and finding (2)'s reading applies. The slot then finds the resolution made (REQ-WORKSPACE-102).
+- **the skip withholds the owed task**: a pending background task is left out of the skip until the resolution has
+  started it. This contradicts REQ-WORKSPACE-086 and REQ-WORKSPACE-111 for an id that is given and listed. It was built
+  first on the repairing branch and withdrawn before it merged.
+- **literal**: the skip records every given id, and the background task never starts on that open or any later one.
+  This contradicts REQ-WORKSPACE-083 and REQ-WORKSPACE-088.
+
+**What the build proceeds under:** the second reading (`InitializationCoordinator.skip` and `resolve` in
+`apps/desktop/src/main/initialization.ts`). It keeps REQ-WORKSPACE-105's values as they are. It records every given
+id except one the live run is attempting, which is the exception ADR-0064 already rests on REQ-WORKSPACE-084. It runs the
+open's resolution once, and only when the window has plainly accepted input, since the skip is the window's own
+answer (REQ-WORKSPACE-102). **A ruling would decide** whether the dialog may precede the resolution at all. If it may
+not, the first reading replaces the second, and the skip path then never meets an unresolved open.
 
 ## Design-reference dependencies
 

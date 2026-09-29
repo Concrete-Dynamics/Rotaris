@@ -183,14 +183,30 @@ pending, and `code-intelligence-setup` never started: against REQ-WORKSPACE-083'
 of whether a prompt is also due" and REQ-WORKSPACE-088's "starts by itself when the workspace opens". Scenario 3b caught
 it at the sidebar hint (`../../defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
 
-**The repair follows finding (2)'s reading, one step earlier.** A task the open still owes a start is not the user's
-to skip, any more than a task the live run is attempting: until a resolution has started the background work it
-found, `skip` leaves a pending task that needs no consent out of what it records, and says so in the log. The mount
-read and the resolution's slot are unchanged. A dialog raised before the resolution is not itself against a
-requirement: REQ-WORKSPACE-105's prompt is due on the values the read returns. What was wrong was what its answer did.
-`initialization.test.ts` pins both halves (the case fails on the previous coordinator). `init-proof` now also asserts
-that the background task started beside the consent prompt and was recorded completed. It passed three runs in a row
-as root under Xvfb, and in each the Escape still came first and went through the repaired path.
+**A first repair, withdrawn before it merged, read the specification against its text.** It kept the open's pending
+background task out of the skip until the resolution had started it. That is not finding (2)'s reading moved one step
+earlier. Finding (2) rests on REQ-WORKSPACE-084, which owes an **attempted** task one outcome, and a task that has not
+started is not attempted. REQ-WORKSPACE-086 ("Skipping SHALL record every given pending task id as skipped") and
+REQ-WORKSPACE-111 ("SHALL persist the listed task ids as skipped") both name that id, which the prompt of
+REQ-WORKSPACE-083 lists and REQ-WORKSPACE-106 draws a card for. The earlier text here also said a dialog raised before
+the resolution "is not itself against a requirement". That was a reading, not a finding: REQ-WORKSPACE-083 makes the
+prompt request a product of the resolution, and REQ-WORKSPACE-141 puts the resolution in the interactive slot.
+**OQ-109** now carries the question.
 
-**Not shown:** the Windows order after the change; a skip landing while the resolution awaits the applicability check
-(the same flag covers it, but no run landed there).
+**The repair built follows the specification's order (revised 2026-09-29).** The prompt a skip answers is a product
+of the open's resolution. So a skip that arrives before the open's one automatic resolution performs that resolution
+first, or waits for the one already under way. That resolution starts the background task as REQ-WORKSPACE-083
+requires. The task is then attempted, and finding (2)'s REQ-WORKSPACE-084 reading leaves it out of the skip. Every
+other given id is recorded as REQ-WORKSPACE-086 says, including the background task when the resolution started
+nothing. The 800 ms slot then finds the open's one automatic resolution made and makes no second one
+(REQ-WORKSPACE-102). A skip is the window's own answer, so the window is accepting input when it arrives. The mount
+read and the dialog are unchanged. `initialization.test.ts` pins three cases: a skip before the slot, a skip while
+the slot's resolution is checking applicability, and a skip whose resolution starts nothing. The first two fail on
+both earlier coordinators, and the third fails on the withdrawn one. `init-proof` asserts that the background task
+started beside the consent prompt and was recorded completed. It passed three runs in a row as root under Xvfb
+(170 s each). In each run the Escape again came before the slot, the log shows the resolution run first and the
+skip leaving the running task out, and no second resolution followed. The withdrawn repair had passed the same
+proof three times, so the proof alone could not tell the two readings apart; the unit cases can.
+
+**Not shown:** the Windows order after the change. No proof run landed a skip while the resolution awaits the
+applicability check; only the unit case covers that interval.

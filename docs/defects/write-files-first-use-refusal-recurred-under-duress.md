@@ -2,8 +2,10 @@
 
 Two children's first `write_file` call omitted `operation` and was refused "write_file requires an operation…"; each
 then regenerated its whole file in a second call. The refusal names the field and gives an example, as the earlier
-repair made it do, but the tool's description never names the `operation` field, so a model's first guess still has
-nothing to go on.
+repair made it do, but the tool's description never names the `operation` field. The JSON schema the model is sent does
+name it (a required enum, `files.ts:321`), so the model was not without the field; the prose it reads first says
+"Create, edit … overwrite, insert into, or undo" without saying these are the values of a required `operation`, and both
+children's first calls went without it.
 
 Live-run finding: WF1 (live runs of 2026-09-29)
 

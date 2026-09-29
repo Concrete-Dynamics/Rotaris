@@ -62,6 +62,8 @@ export interface ChildrenDeps {
   readonly backend: AgentBackend;
   readonly clocks: Clocks;
   readonly model: ModelRef;
+  /** REQ-CONFIG-094: the `models:` key of `model` (`RunConfig.modelKey`); absent means its id stands in. */
+  readonly modelKey?: string | undefined;
   readonly thinking: ThinkingLevel;
   readonly modelTimeoutMs: number;
   readonly modelRetries: number;
@@ -138,6 +140,19 @@ export interface ChildrenDeps {
   readonly rootRecord?: RootExecutionRecord | undefined;
   /** PD-ORCH-005 clause 1: the conversation record each child's turn appends to; absent means nothing is recorded. */
   readonly record?: ConversationRecord | undefined;
+}
+
+/**
+ * REQ-CONFIG-094 / REQ-MONITOR-049 / REQ-MONITOR-020 (live-run finding D5): the key a child is recorded under — its
+ * `model_key` — is the `models:` key of the model it runs on, the key configuration states `max_parallel` and
+ * `max_input_tokens` under. It was the model's bare id, which no configured key matched once a key was qualified
+ * (`openai-compatible--katalyst/qwen3.8-flash-next`), so every cap lookup found none and every context meter read
+ * REQ-MONITOR-080's default. The role's own key when it names a model; else the run's; the id stands in only where no
+ * configuration names a key.
+ */
+export function childModelKey(persona: Pick<Persona, 'modelRef' | 'modelKey'> | undefined, run: Pick<ChildrenDeps, 'model' | 'modelKey'>): string {
+  if (persona?.modelRef) return persona.modelKey ?? persona.modelRef.modelId;
+  return run.modelKey ?? run.model.modelId;
 }
 
 function personaOf(deps: ChildrenDeps, name: string): Persona | undefined {
@@ -243,9 +258,10 @@ export class IterationChildren implements DelegationOps {
     }
     const r = this.ledger.spawn({
       parentId, parentDepth, persona: req.persona, taskName: req.taskName, task: req.task, dependsOn: req.dependsOn, inheritedContext: req.inheritedContext,
-      category: req.category, background: req.runInBackground, modelKey: persona?.modelRef?.modelId ?? this.deps.model.modelId, grantedTools: persona?.tools ?? [],
+      category: req.category, background: req.runInBackground, modelKey: childModelKey(persona, this.deps), grantedTools: persona?.tools ?? [],
       ...(continuationOf !== '' ? { continuationOf } : {}),
       ...(scope.patterns.length > 0 ? { writeScope: scope.patterns } : {}),
+      ...(req.suppressAutoContext === true ? { suppressAutoContext: true } : {}),
     });
     if (!r.ok) return { status: 'rejected', canonicalName: req.taskName, message: r.error.reason };
     const { row, held, aliasResolved, inherited } = r.value;
@@ -863,7 +879,10 @@ export class IterationChildren implements DelegationOps {
     const store = this.deps.artifacts;
     if (!store) return [];
     const blocks: string[] = [];
-    const index = siblingIndexBlock(store.hydrate().records);
+    // REQ-TOOLS-152: the call's `suppress_auto_context`, stored on the row, or the role's `skip_auto_sibling_context`
+    // (REQ-CONFIG-107) omits the index; the attached artifacts are the caller's explicit choice and are carried either way.
+    const suppressed = row.suppress_auto_context === 1 || personaOf(this.deps, row.persona)?.skipAutoSiblingContext === true;
+    const index = suppressed ? { text: '', included: 0, elided: 0 } : siblingIndexBlock(store.hydrate().records);
     if (index.text !== '') blocks.push(index.text);
     const references = this.attached.get(row.task_id) ?? [];
     let full: ReturnType<typeof fullContextBlock> | null = null;
@@ -880,7 +899,7 @@ export class IterationChildren implements DelegationOps {
     if (blocks.length > 0) {
       this.deps.writer.appendTimeline('context_selection', 'rotaris', `${row.canonical_name} was given ${index.included} sibling artifact(s)${full ? ` and ${full.included} attached artifact(s)` : ''}.`, {
         task_id: row.task_id, canonical_name: row.canonical_name,
-        sibling_index_included: index.included, sibling_index_elided: index.elided,
+        sibling_index_included: index.included, sibling_index_elided: index.elided, sibling_index_suppressed: suppressed,
         attached_included: full?.included ?? 0, attached_elided: full?.elided ?? [], attached_unresolved: full?.unresolved ?? [],
       });
     }

@@ -61,6 +61,12 @@ export interface RunConfig {
   readonly persona: string;
   readonly systemPrompt: string;
   readonly model: ModelRef;
+  /**
+   * REQ-CONFIG-094 / REQ-MONITOR-049: the `models:` key `model` was resolved from — what a child that runs on the run's
+   * model is recorded under, so its cap and its context limit are found. Absent where no configuration names one (a
+   * test, the process-wide model); the model's id then stands in.
+   */
+  readonly modelKey?: string | undefined;
   readonly thinking: ThinkingLevel;
   readonly modelTimeoutMs: number;
   readonly modelRetries: number;
@@ -1167,7 +1173,7 @@ export class Run {
       ? new IterationChildren({
         rootRecord,
         // REQ-GIT-019: the children are told the root they work in — the worktree for an isolated run.
-        sessionId: this.sessionId, workspaceRoot: this.deps.effectiveRoot ?? this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, thinking: config.thinking,
+        sessionId: this.sessionId, workspaceRoot: this.deps.effectiveRoot ?? this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, ...(config.modelKey === undefined ? {} : { modelKey: config.modelKey }), thinking: config.thinking,
         modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn,
         // Part Q: each child gets its own cell over the shared memory, catalogue and wait registry.
         resilience: { forChild: (persona, current, bound) => { const effective = this.memory.effective(withSettings(this.catalogue, current), this.catalogue); return this.resilienceFor(agentCell(effective, this.fallbackFor(persona, effective)), bound); } },

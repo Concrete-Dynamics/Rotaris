@@ -27,3 +27,27 @@ describe('delegate — continuation_of (PD-ORCH-004)', () => {
     expect(capture().tool.description).toContain('continuation_of');
   });
 });
+
+/** REQ-TOOLS-152: `suppress_auto_context` omits the automatic sibling-artifact index; the call's flag reaches the engine's port. */
+describe('delegate — suppress_auto_context (REQ-TOOLS-152)', () => {
+  function capture() {
+    const seen: Parameters<DelegationPort['delegate']>[1][] = [];
+    const port: DelegationPort = {
+      delegate: async (_parent, req) => { seen.push(req); return { status: 'queued', canonicalName: req.taskName, taskId: 'bg_00000002', message: 'Accepted.' }; },
+      backgroundOutput: () => ({ status: 'not_found', state: '', text: '' }),
+      waitForTasks: async () => ({ immediate: true, requested: 0, text: '' }),
+    };
+    return { seen, tool: delegateTool(port, 'root:1') };
+  }
+  const ctx = {} as ToolContext;
+
+  it('REQ-TOOLS-152: a call that sets it carries it to the port; one that leaves it at its default (false) carries nothing', async () => {
+    const { seen, tool } = capture();
+    await tool.execute(tool.schema.parse({ persona: 'coder', task_name: 'quiet', task: 'TASK: x', suppress_auto_context: true }), ctx);
+    await tool.execute(tool.schema.parse({ persona: 'coder', task_name: 'plain', task: 'TASK: y' }), ctx);
+    await tool.execute(tool.schema.parse({ persona: 'coder', task_name: 'off', task: 'TASK: z', suppress_auto_context: false }), ctx);
+    expect(seen[0]!.suppressAutoContext).toBe(true);
+    expect('suppressAutoContext' in seen[1]!).toBe(false);
+    expect('suppressAutoContext' in seen[2]!).toBe(false);
+  });
+});

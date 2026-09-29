@@ -257,8 +257,10 @@ export interface ChildRow {
   readonly resume_state: string | null;
   /** v23 — PD-TOOLS-006 revision 2: the child's declared write scope, a JSON array of patterns; `'[]'` when it declared none. */
   readonly write_scope: string;
+  /** v25 — REQ-TOOLS-152: `1` when the `delegate` call set `suppress_auto_context`, so the child's payload omits the sibling index. */
+  readonly suppress_auto_context: number;
 }
-export type ChildInsert = Omit<ChildRow, 'completed_at' | 'report' | 'report_stored' | 'observed' | 'context_injected' | 'tool_calls' | 'launch_generation' | 'todo' | 'continuation_of' | 'interruption' | 'resume_state' | 'write_scope'> & { readonly todo?: string | null; readonly continuation_of?: string | null; readonly write_scope?: string };
+export type ChildInsert = Omit<ChildRow, 'completed_at' | 'report' | 'report_stored' | 'observed' | 'context_injected' | 'tool_calls' | 'launch_generation' | 'todo' | 'continuation_of' | 'interruption' | 'resume_state' | 'write_scope' | 'suppress_auto_context'> & { readonly todo?: string | null; readonly continuation_of?: string | null; readonly write_scope?: string; readonly suppress_auto_context?: number };
 
 /**
  * v23 — PD-ORCH-005 clause 1: one execution iteration and the task id of its root, open from the moment it begins until it
@@ -529,8 +531,8 @@ export class StoreDal {
       issuesOf: db.prepare('SELECT * FROM issues WHERE session_id = ? ORDER BY ordinal'),
 
       // ADR-0012: the child ledger. Every statement carries session_id (REQ-ORCH-151, asserted by a test over this text).
-      insertChild: db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, todo, spawned_at, continuation_of, write_scope)
-        VALUES (@session_id, @task_id, @canonical_name, @given_name, @persona, @state, @parent_id, @depth, @iteration, @model_key, @category, @background, @task, @depends_on, @inherited_context, @granted_tools, @granted_mcp, @todo, @spawned_at, @continuation_of, @write_scope)`),
+      insertChild: db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, todo, spawned_at, continuation_of, write_scope, suppress_auto_context)
+        VALUES (@session_id, @task_id, @canonical_name, @given_name, @persona, @state, @parent_id, @depth, @iteration, @model_key, @category, @background, @task, @depends_on, @inherited_context, @granted_tools, @granted_mcp, @todo, @spawned_at, @continuation_of, @write_scope, @suppress_auto_context)`),
       getChild: db.prepare('SELECT * FROM children WHERE session_id = ? AND task_id = ?'),
       // Acceptance order: children accepted in the same millisecond keep the order they were inserted in, which the
       // resume's re-claim of their write scopes depends on (PD-TOOLS-006 revision 2; found by phase 4's review).
@@ -664,7 +666,7 @@ export class StoreDal {
   }
 
   insertChild(row: ChildInsert): void {
-    this.stmts['insertChild']!.run({ ...row, todo: row.todo ?? null, continuation_of: row.continuation_of ?? null, write_scope: row.write_scope ?? '[]' });
+    this.stmts['insertChild']!.run({ ...row, todo: row.todo ?? null, continuation_of: row.continuation_of ?? null, write_scope: row.write_scope ?? '[]', suppress_auto_context: row.suppress_auto_context ?? 0 });
   }
   getChild(id: SessionId, taskId: string): ChildRow | undefined {
     return this.stmts['getChild']!.get(id, taskId) as ChildRow | undefined;

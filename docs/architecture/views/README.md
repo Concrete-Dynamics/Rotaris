@@ -45,6 +45,21 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A child is recorded under its model's `models:` key (REQ-CONFIG-094, REQ-MONITOR-020/049, live-run finding D5, R-067,
+2026-09-29).** `children.model_key` was the model's bare id, so `modelCapFor` and `contextLimitFor`, keyed by the
+`models:` key, never matched a qualified key. `childModelKey` now records the role's `Persona.modelKey` (set by the run
+host's persona resolver, a synthetic copy mapped to the key the loader recorded it was copied from —
+`LoadedConfiguration.syntheticOrigins`, never a guess by provider and model id, since two keys may name the same provider
+model) or the run's `RunConfig.modelKey`. The **runtime view**'s agent-record paragraph names it; no package, edge, message,
+column or process changes.
+
+**`delegate`'s `suppress_auto_context` reaches the child (REQ-TOOLS-152, REQ-CONFIG-107, R-067, 2026-09-29).** The tool
+forwards the flag, `ChildLedger.spawn` stores it (`children.suppress_auto_context`, store **v25**), and
+`IterationChildren.artifactContext` omits the sibling-artifact index when the row carries it or the role's
+`skip_auto_sibling_context` (now `Persona.skipAutoSiblingContext`, mapped by the run host) forces it. The **runtime view**'s
+§7 `children` row and its children section name it, and the **state-ownership view** has a row for the persisted flag
+beside the in-memory inherited-context block; no package, edge, message or process changes.
+
 **A detached call writes nothing through its tool gate or its stream (REQ-SESSION-094, 2026-09-29, R-067).** `ToolPort`
 gains `close(cutOff)`, and `Run.teardown` closes every port the run built before anything terminal is written: the
 run host's `writerSink` settles each call its gate still has open, as failed with the rest's interrupted statement, and

@@ -934,6 +934,20 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    to: 25,
+    /*
+     * REQ-TOOLS-152 (R-067): "`suppress_auto_context` — omits the automatic index of prior sibling artifacts". The flag a
+     * `delegate` call carried is stored with the child's record, as its `write_scope` is (PD-TOOLS-006 revision 2), so every
+     * assembly of the child's payload reads it: its first, REQ-ORCH-088's retry, and a resumed child's retry in a later run,
+     * whose launch-time memory is gone. `1` omits the index; `0` — every row written before this version, and true of them:
+     * no call before this version could set it — gives it. The persona-level setting (REQ-CONFIG-107,
+     * `skip_auto_sibling_context`) is configuration, read at each assembly, and is not copied here.
+     */
+    sql: `
+      ALTER TABLE children ADD COLUMN suppress_auto_context INTEGER NOT NULL DEFAULT 0 CHECK (suppress_auto_context IN (0, 1));
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

@@ -3,7 +3,7 @@ import { isAbsolute, join } from 'node:path';
 import type { Clocks, Result } from '@rotaris/kernel';
 import { err, ok } from '@rotaris/kernel';
 import { resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName } from '@rotaris/contracts';
-import { compressionTrigger, effectivePricing, isPlainMap, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
+import { compressionTrigger, effectivePricing, isPlainMap, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import { renderUnavailability, type AvailabilityVerdict, type PolicyRead } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type McpGrantEvidence, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
@@ -237,7 +237,9 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
       readOnly: stated(role, 'read_only') ? entry!.read_only : base?.readOnly ?? false,
       systemPrompt: prompt,
       implementer: tools.some((t) => ['write_file', 'haet_edit', 'haet', 'terminal'].includes(t)),
-      ...(modelRef ? { modelRef, thinking: thinkingOf(entry ? cfg.models[entry.model] : null) } : {}),
+      // REQ-CONFIG-094 (live-run finding D5): the `models:` key beside the reference, a synthetic copy (REQ-CONFIG-081)
+      // mapped to the entry the loader recorded it was copied from — the key a child of this role is recorded and capped under.
+      ...(modelRef && entry ? { modelRef, modelKey: syntheticOriginOf(entry.model, cfg.syntheticOrigins), thinking: thinkingOf(cfg.models[entry.model]) } : {}),
       ...(fallbackRef && entry?.fallback_model ? { fallbackModel: fallbackRef, fallbackThinking: thinkingOf(cfg.models[entry.fallback_model]) } : {}),
       // REQ-CONFIG-109 / REQ-TOOLS-048: the role's `permission_mode` pin, parsed by the loader and read at agent
       // construction and at every mid-session change (REQ-TOOLS-074). Absent means the role takes the session's mode.
@@ -245,6 +247,9 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
       // REQ-CONFIG-108: the role's `stall_timeout` substitutes for `runtime.child_stall_timeout` on its children
       // (PD-ORCH-004's progress rule is its reader); null or absent means the run's value.
       ...(typeof entry?.stall_timeout === 'number' ? { stallTimeoutMs: Math.round(entry.stall_timeout * 1000) } : {}),
+      // REQ-CONFIG-107 / REQ-TOOLS-152: the role's `skip_auto_sibling_context` forces the omission `suppress_auto_context`
+      // asks for; the engine reads it at each assembly of a child's payload. False or absent gives the index.
+      ...(entry?.skip_auto_sibling_context === true ? { skipAutoSiblingContext: true } : {}),
       // REQ-MCP-065 (Part S): the grant evidence the ledger records at spawn, read from the run host's memoised surface at that moment.
       ...(mcpEvidence ? { mcpEvidence: () => mcpEvidence(role) } : {}),
     };
@@ -582,6 +587,8 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
         persona: cfg.defaultPersona,
         systemPrompt: entryRole.persona.systemPrompt,
         model,
+        // REQ-CONFIG-094 (live-run finding D5): the run's model's `models:` key, which a child on the run's model is recorded under.
+        ...(entryRole.persona.modelKey !== undefined ? { modelKey: entryRole.persona.modelKey } : entryModelName !== null ? { modelKey: syntheticOriginOf(entryModelName, cfg.syntheticOrigins) } : {}),
         thinking: entryRole.persona.thinking ?? thinkingOf(entry),
         modelTimeoutMs: Math.round((entry?.timeout ?? runtime.modelTimeoutS) * 1000),
         modelRetries: entry?.num_retries ?? RUN_CONFIG_DEFAULTS.modelRetries,

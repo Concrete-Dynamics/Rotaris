@@ -30,6 +30,12 @@ export interface DelegateRequest {
    * as its continuation. Absent or empty delegates ordinary work.
    */
   readonly continuationOf?: string | undefined;
+  /**
+   * REQ-TOOLS-152: omit the automatic index of prior sibling artifacts (REQ-LIBRARY-097, item (3) of REQ-TOOLS-154) from
+   * the child's payload. Absent or false gives it, unless the persona's `skip_auto_sibling_context` (REQ-CONFIG-107) forces
+   * the same omission.
+   */
+  readonly suppressAutoContext?: boolean | undefined;
 }
 
 /** REQ-LIBRARY-098: what became of the caller's attachments, so the tool reports it rather than guessing. */

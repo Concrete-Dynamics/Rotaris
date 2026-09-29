@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A child main ended itself is not a loss in the application log (PD-MONITOR-002, R-067, live-run finding L13).** The
+run host's `kill` that `endBeforeMain` sends goes through `ChildrenEndedByMain` (`main/exit.ts`), which records it by
+service name, and the `child-process-gone` handler writes Electron's `killed` report of that end at `info`, saying main
+ended it; every other end but `clean-exit` stays `error`. This repairs `an-orderly-quit-logs-the-run-host-gone-at-error.md`.
+The **process view**'s application-log paragraph says so. No package, edge, process, message kind, channel, command or
+store column changed.
+
 **What is asked of a person in the quit's gap is held for the quit to withdraw (PD-ORCH-005 clause 9, R-067, OQ-132).**
 `presenter.revoke` gains an optional `quitting`, which main sets from `QuitState`; the run host's `PresenterRegistry.quitting`
 holds from such a revoke until a window registers. Meanwhile the gate holds an ask unshown in `pending_approvals` instead

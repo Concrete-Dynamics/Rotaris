@@ -2012,8 +2012,13 @@ are not recorded, and cannot be recovered afterwards.
 > `error   CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit 15)` after "run host exited (0)" and "quit: exiting
 > with status 0" — main kills the run host itself and logs Electron's report of the kill at `error`. One such exit writing
 > nothing was the race going the other way. Recorded as
-> [`an-orderly-quit-logs-the-run-host-gone-at-error.md`](../defects/an-orderly-quit-logs-the-run-host-gone-at-error.md)
-> (live-run finding L13); the last-window close's 24 clean quits are not contradicted.* The review's run of the same close found the first version of the unanswered-`shutdown` line firing on
+> [`an-orderly-quit-logs-the-run-host-gone-at-error.md`](../defects/fixed/an-orderly-quit-logs-the-run-host-gone-at-error.md)
+> (live-run finding L13); the last-window close's 24 clean quits are not contradicted. Repaired the same day under
+> [R-067](requests.md#r-067): main records the run host it ends itself (`ChildrenEndedByMain`, `main/exit.ts`), and
+> Electron's `killed` report of that end is written at `info`, saying main ended it — so "a child process gone for any
+> reason but `clean-exit`" above now reads "… but `clean-exit`, or `killed` by main's own end"; a child killed from
+> outside, one that crashed and one main never ended stay `error`. `pnpm live-run --only=ask` then ended both of its
+> launches through the immediate exit with that line at `info` and no `error` line of main's.* The review's run of the same close found the first version of the unanswered-`shutdown` line firing on
 > orderly quits (3 in 26, each waiting out the 30 s bound), because a child's answer can lose the race with its own
 > exit; the quit now races each `shutdown` against the child's exit, recorded as
 > [`a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md`](../defects/fixed/a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md).

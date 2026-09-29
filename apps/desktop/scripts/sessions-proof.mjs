@@ -180,7 +180,9 @@ const live = launch('live', {
   // "Dead" is checked, not assumed: the lock names this launch's run host, gone before main since `endBeforeMain`.
   // A holder still alive here would make launch 3 read A as live and repair nothing (REQ-SESSION-056)
   // (`docs/defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`).
-  const lockPid = withDb((db) => db.prepare('SELECT pid FROM session_locks WHERE session_id = ?').get(A)?.pid ?? 0);
+  const lockRow = withDb((db) => db.prepare('SELECT pid FROM session_locks WHERE session_id = ?').get(A));
+  if (!lockRow) throw new Error("the 'live' launch left no lock behind; the repair scenario needs a persisted-running session behind a dead lock");
+  const lockPid = lockRow.pid;
   const lockHolder = lockHolderAfterExit(lockPid);
   expect(!lockHolder.aliveAtExit, lockHolder.aliveAtExit ? describeLingeringHolder('live', lockHolder, live.log) : '');
   results.live = { refused: true, text: error, leftRunning: true, lockPid, lockHolderGoneAtExit: true, png: live.png, dialogPng: join(output, 'delete-confirm-live.png') };

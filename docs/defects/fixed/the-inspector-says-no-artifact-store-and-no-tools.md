@@ -83,3 +83,10 @@ Evidence:
 - **The proof's description.** Item 2 was described as reading the inspector at rest; it reads a running run (corrected
   above, in `AGENTS.md` and in the proof's comment). The at-rest reading is item 5's.
 - **ADR-0048** still said "Artifact links are empty (no artifact store)"; reported back in place.
+- **Re-run after the round.** `pnpm artifacts-proof` and `pnpm mission-proof` exit 0 on the built branch; item 5's chips
+  at rest are the orchestrator's declaration with `artifact_write:used`, and its produced link reads `scripted-plan`.
+  `pnpm live-run --confirm --only=ask` against `katalyst` passed again (pack `.live-run/runs/2026-09-29T13-21-18-407Z`,
+  `ask.png`): the completed run's inspector lists the root port's resolution (`read_file used`, `background_output`,
+  `wait_for_tasks`, no write, terminal or commit tool) and the new artifacts sentence. It was started only after another
+  workflow's live run had ended, since the sweep would otherwise have deleted that run's sandbox
+  ([`a-live-run-sweeps-a-concurrent-live-runs-sandbox`](../a-live-run-sweeps-a-concurrent-live-runs-sandbox.md)).

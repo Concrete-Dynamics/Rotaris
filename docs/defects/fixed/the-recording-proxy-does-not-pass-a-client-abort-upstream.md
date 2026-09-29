@@ -50,3 +50,12 @@ the record in the wrong file).
 
 Files: `apps/desktop/scripts/lib/model-traffic.mjs` (`write(target, …)`, `settle`, `release`, the `clientRes` close
 listener), `apps/desktop/scripts/lib/model-traffic.test.ts`.
+
+Shown live the same day, `pnpm live-run --confirm --skip-build --only=faults,edit` against `katalyst` (pack
+`.live-run/runs/2026-09-29T21-11-24-678Z`, git-ignored; passed). In `faults-stall` the stalled call is written twice —
+`stalled` at 555 ms and `aborted` at 120,529 ms, when the product's idle bound (REQ-CONFIG-115's 120 s) let go of it —
+so the endpoint was released at the product's bound rather than at the rule's 300 s hold. Each scenario's last call,
+open when its app exited, is written `aborted` in that scenario's own file (`edit` 1, `faults-ladder` 1, `faults-stall`
+1), and no scenario's file holds a record of another's. An earlier run of the same day (pack
+`2026-09-29T20-59-46-627Z`, whose store another worktree's live run swept — see `../a-live-run-sweeps-a-concurrent-live-runs-sandbox.md`)
+wrote the timed-out intent classifier `aborted` at 11,958 ms.

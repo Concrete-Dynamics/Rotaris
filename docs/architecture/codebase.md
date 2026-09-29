@@ -741,7 +741,9 @@ that made the call rather than the one current when it ended, and a call still o
 `in-flight at close`: the first live run had nine aborted calls finish upstream and land `complete` in the next scenario's
 file, and the duress pack was one record short of its log
 (`docs/defects/fixed/the-recording-proxy-does-not-pass-a-client-abort-upstream.md`,
-`docs/defects/fixed/the-recording-proxy-writes-nothing-for-a-call-in-flight-at-close.md`).*
+`docs/defects/fixed/the-recording-proxy-writes-nothing-for-a-call-in-flight-at-close.md`). Shown live the same day
+(pack `2026-09-29T21-11-24-678Z`): `faults-stall`'s stalled call was let go at 120.5 s, the product's own idle bound,
+not the rule's 300 s hold, and every scenario's records matched its log's `model request POST` lines.*
 
 **The proxy's own first execution found that it could not answer a single call, and the reason is kept beside
 its replacement.** The script launched every scenario with `spawnSync`, which blocks the Node event loop until

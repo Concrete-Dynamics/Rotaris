@@ -37,3 +37,8 @@ and the endpoint is let go" (red before the repair: no record) and "a call that 
 
 Files: `apps/desktop/scripts/lib/model-traffic.mjs` (`open`, `atClose`, `close`), `apps/desktop/scripts/live-run.mjs`
 (`finish`).
+
+Shown live the same day (pack `.live-run/runs/2026-09-29T21-11-24-678Z`, git-ignored; passed): every scenario's
+`model-traffic.jsonl` holds one record per `model request POST` line of its `app.log` — `edit` 52 of 52, `faults-ladder`
+6 of 6, `faults-stall` 5 calls in 6 records (the stall's two) — each scenario's last call, open when its app exited,
+written `aborted`. No call was still open when the proxy closed, so the `in-flight at close` path is unit-evidenced only.

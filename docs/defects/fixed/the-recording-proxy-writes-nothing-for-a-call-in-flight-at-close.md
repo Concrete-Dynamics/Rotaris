@@ -27,7 +27,8 @@ Repaired 2026-09-29 under R-067. The proxy keeps the calls still open, and `clos
 in-flight at close`, into the file of the scenario that made it, with the status and whatever had arrived — and lets its
 endpoint go, before it stops listening. The writes are synchronous, so the live run's exit paths, which do not await the
 close, still leave the record; `finish` in `apps/desktop/scripts/live-run.mjs` now closes the proxy before it reads
-`proxy.stats()`, so `results.json`'s `traffic.recorded` counts it. A call that has ended is not written again. The duress
+`proxy.totals()`, so `results.json`'s `traffic.recorded` counts it (`totals()` carries the same `recorded` count as
+`stats()`, with the run-wide fault figures the sibling repair of live-run finding H4 added beside it). A call that has ended is not written again. The duress
 shape — the app quit at the deadline with `f`'s request open — now reaches the pack by the client-abort path of the
 sibling note ([`the-recording-proxy-does-not-pass-a-client-abort-upstream.md`](the-recording-proxy-does-not-pass-a-client-abort-upstream.md)),
 written `aborted`, since the app's exit closes its connection before the harness closes the proxy.

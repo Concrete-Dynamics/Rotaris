@@ -310,7 +310,13 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'cancelled'], [2, 'succeeded']]);
   });
 
-  it('a task left in progress that no open iteration holds does not stop the Continue action appending the request, so it is done (found by the iteration lane review)', async () => {
+  /**
+   * The residue an earlier build's death between an iteration's close and the save of its todo left. Until the repair of
+   * `an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md` the task stayed in progress for good
+   * and the Continue action appended the request a second time (found by the iteration lane review); now it is settled
+   * first as its closed iteration says — cancelled, so back to pending — and the Continue action restates it: worked once.
+   */
+  it('a task its closed iteration left in progress is settled as that iteration closed, so the Continue action appends no second task and the request is worked once (REQ-ORCH-135)', async () => {
     const h = sessionsWith([answer('first, done'), answer('first, again')]);
     const sid = (h.sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
     await h.sessions.running(sid)!;
@@ -325,7 +331,8 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     const result = await h.sessions.running(sid)!;
     expect(result.status).toBe('completed');
     expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'cancelled'], [2, 'succeeded']]);
-    expect(tasksOf(sid).filter((t) => t.text === 'first' && t.state === 'complete')).toHaveLength(1);
+    expect(shape(sid)).toEqual([['first', 'complete', undefined]]);
+    expect(dal.iterationsOf(sid).map((r) => r.todo_task_id)).toEqual([tasksOf(sid)[0]!.id, tasksOf(sid)[0]!.id]);
   });
 
   it('a continue by message that resumes an iteration holding an earlier message: each message is sent to the iteration that takes it up (found by the iteration lane review)', async () => {

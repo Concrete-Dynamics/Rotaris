@@ -307,9 +307,11 @@ no task for it. A continue that delivers no message — the Continue action, "co
 resolution's 'continue' and 'double' (REQ-SESSION-110) — restates the last request, so `launchContinuation` passes `appendsTask: false` while the todo still holds that request unfinished
 (`Todo.holdsUnfinished`: a task of that text pending, or in progress and held by the open iteration — its own task or
 a message it holds), and the run takes that task up as it stands; a task in progress that no iteration holds does
-not count, since no selection would take it up. The todo is judged as the run will read it: a message a closed iteration
-still holds is settled first (`Todo.releaseStale` against `succeededIterationsOf`, as the run's constructor settles
-it), so one a death left held and the run returns to pending is not appended a second time. A continue by message always
+not count, since no selection would take it up. The todo is judged as the run will read it: what a death between an
+iteration's close and the save of its todo left is settled first (`settleClosedIterations`, which the run's constructor
+calls too) — a message a closed iteration still holds (`Todo.releaseStale` against `succeededIterationsOf`), and an
+iteration's own task left in progress (`Todo.settleStranded`, as the latest row naming it closed) — so one the run
+returns to pending is not appended a second time. A continue by message always
 appends its task, even beside a pending task of the same text: it states a request (REQ-ORCH-004, OQ-102). The plan cycle held after a resumed iteration is told what became of
 every message that iteration held (`Todo.heldIds`, read when the run is built): this continue's, or an earlier one's a
 Continue action resumed it with. A message is marked as one for good (`Task.message`), so the iteration that takes it up
@@ -331,14 +333,17 @@ after a resumed iteration).
 
 **An iteration a previous run left open, declined (PD-ORCH-005 clause 6; the repair of the crashed-iteration defect).**
 Every execution iteration has an `iterations` row from the moment its root is minted, and `iteration.end` and the row's
-close commit in one transaction (`endIteration`). A rest or a dead run host leaves that row open. **Declined** —
+close commit in one transaction (`endIteration`) — with the session's todo, its task and held messages already closed
+in it, so a death while the capture or the `iteration_end` hooks run leaves no task in progress with nothing open to
+hold it (the repair of `an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`, 2026-09-29;
+until then the todo was saved only after them). A rest or a dead run host leaves that row open. **Declined** —
 `continueSession(…, { withoutPaused: true })`, "continue without them" — before its first iteration a run ends every
 `paused` agent of the open iteration `cancelled` with a report saying so (`cancelPausedAgents`), closes the row `cancelled`
 (`closeLeftOpenIteration`, REQ-ORCH-135) — its `iteration.end` summary names the decline and what left the agents paused,
 a crash on clause 18's route included; every run that closes one was told to decline it —
 and attempts that iteration's one
 checkpoint capture (REQ-GIT-051, no child credited; its hooks' `iteration_end` is not fired — the hooks that saw it
-begin were the dead run's): the task it held goes back to `pending` (`Todo.reopen`), and the count moves past it, so
+begin were the dead run's): the task it held goes back to `pending` (`Todo.reopen`) in the close's transaction, and the count moves past it, so
 the run's own first iteration takes the next number rather than the dead one's. The count is also never below the
 highest iteration recorded closed, and a continuation's appended task id is numbered past the count, the highest row
 and every id the todo holds (`continuedTaskId`). The ledger

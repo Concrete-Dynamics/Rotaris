@@ -4455,15 +4455,18 @@ message.
   limit was reached as the iteration that finished it closed, a resumed one included (OQ-103, "Nothing open to resume";
   OQ-104, "What a cancel leaves") — and so is one whose task is in progress with no iteration holding it: a selection
   takes only pending tasks, so nothing would take that task up, and the run would end at once with the request not done.
-  A message a closed iteration still holds (see "What a death leaves") is judged as the run will take it: it is settled
-  first, as the run settles it before it selects, so one returned to pending is not appended a second time and one
-  completed is appended as any completed request is. A continue by message is never judged so: it states a request, so
+  A message a closed iteration still holds, and an iteration's own task its closed iteration left in progress (see "What
+  a death leaves"), are judged as the run will take them: each is settled first, as the run settles it before it
+  selects, so one returned to pending is not appended a second time and one completed is appended as any completed
+  request is. *Until 2026-09-29 only the message was settled, so an own task a death left in progress was appended
+  again beside itself and stayed in progress for good.* A continue by message is never judged so: it states a request, so
   it appends its task even when a task of the same text is still pending (REQ-ORCH-004), and the request is worked once
   for each time it was sent (pinned by the iteration lane's sixth review). *The fourth build judged such a message
   unheld, so a Continue action after the death appended it beside the task the run then returned to pending, and the run
   worked it twice (found by the iteration lane's fifth review).* *The second build counted any task in progress, which
-  ended such a continue `no_pending_tasks` (found by the iteration lane's third review); the stranded task itself is
-  [`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`](../defects/an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md).*
+  ended such a continue `no_pending_tasks` (found by the iteration lane's third review); the stranded task itself was
+  [`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`](../defects/fixed/an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md),
+  repaired 2026-09-29.*
   This repairs
   [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../defects/fixed/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md),
   which the clause had widened: a message left pending is the last user row, so a Continue action appended it beside its
@@ -4477,7 +4480,15 @@ message.
   a death between the iteration's close and the save that recorded the release — closes when the next run is built as
   the record says its iteration closed: `complete` when the iteration's row reads `succeeded`, since the clause's "done
   when the iteration succeeds" is decided by the outcome and not by which save landed, and `pending` otherwise, so it is
-  never left in progress with nothing to close it and a message its iteration carried out is never worked again.
+  never left in progress with nothing to close it and a message its iteration carried out is never worked again. Since
+  2026-09-29 the close no longer leaves that window: an iteration's close commits the todo its task and held messages
+  were closed in, in the transaction that records `iteration.end` (`SessionWriter.endIteration`), ahead of the capture
+  and the hooks, on both closes (`iterate()` and `closeOpenIteration`). A store an earlier build wrote is still settled,
+  and an iteration's own task such a death left in progress with it — as the latest row naming it closed: `succeeded`
+  complete, `partial` requeued, `failed` or `abandoned` abandoned, `cancelled` pending (`Todo.settleStranded`; the repair
+  of
+  [`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`](../defects/fixed/an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md)).
+  *Until then only a held message was settled, and the save came after the capture and the hooks.*
 
 **What a ruling decides.** Whether a `partial` resumed iteration should close the message as done, since the root
 answered it; whether leaving the message pending should count toward REQ-ORCH-077's limit, so a message no iteration

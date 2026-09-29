@@ -53,6 +53,14 @@ the task after a plan decision's gated one; PD-ORCH-005 clause 17's message keep
 rebuilt per iteration (OQ-104, OQ-106). This repairs `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`.
 The **runtime view**'s §2 gains the paragraph. No package, edge, process, channel, message kind or store column changed.
 
+**An iteration's close commits the todo it leaves (REQ-ORCH-072/073/074/135, 2026-09-29, R-067).** `iterate()` and
+`closeOpenIteration` close their task and held messages first and pass the todo to `SessionWriter.endIteration`, which
+stores it in the transaction that records `iteration.end` and closes the row, ahead of the capture and the hooks. What
+an earlier build's death left is settled when a run is built and when a continue is judged (`settleClosedIterations`:
+`Todo.releaseStale`, and `Todo.settleStranded` for an iteration's own task, from the latest row naming it). This repairs
+`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`. The **runtime view**'s §2 says so. No
+package, edge, process, channel, message kind or store column changed.
+
 **A request queued behind an open approval dialog waits for its turn (REQ-TOOLS-063, 2026-09-28).** Main answers a
 present-request that waits behind the dialog already open in its window, or behind requests queued ahead of it, with
 the new run-host request `approval.queued` (`MainWindows.enqueueApproval` answers which). `RunHostPresenter` then stops

@@ -445,8 +445,9 @@ export class Run {
         : Todo.fresh(deps.taskId, deps.taskLabel ?? deps.task, deps.config.consecutiveRetryLimit);
     const openRow = deps.dal?.openIterationOf(deps.sessionId) ?? null;
     // PD-ORCH-005 clause 17: a task held by an iteration that is no longer open closes as the record says that iteration
-    // did — done when it closed succeeded, pending otherwise — before anything reads the todo.
-    if (deps.dal) this.todo.releaseStale(openRow?.iteration ?? null, succeededIterationsOf(deps.dal, deps.sessionId));
+    // did — done when it closed succeeded, pending otherwise — before anything reads the todo; and so does an iteration's
+    // own task an earlier build's death left in progress after its iteration closed (`settleClosedIterations`).
+    if (deps.dal) settleClosedIterations(this.todo, deps.dal, deps.sessionId, openRow);
     const open = deps.openIteration === undefined ? null : openRow;
     this.resumeFrom = deps.openIteration?.resume === true ? open : null;
     this.restedIteration = open?.iteration ?? null;
@@ -848,8 +849,9 @@ export class Run {
       }
     }
     if (this.iterationRest !== null) return await this.leaveIterationOpen(iteration, this.iterationRest);
-    // PD-ORCH-005 clause 1: `iteration.end` and the iteration's record closing with its outcome, in one transaction.
-    writer.endIteration(iteration, { task: task.text, outcome, summary }, outcome);
+    // PD-ORCH-005 clause 1: `iteration.end` and the iteration's record closing with its outcome, in one transaction — with
+    // the todo its task and held messages were just closed in, so no death before the save below strands them in progress.
+    writer.endIteration(iteration, { task: task.text, outcome, summary }, outcome, this.todoJson());
     this.iterationTask = null;
     // ADR-0039 / REQ-GIT-051: exactly one capture per iteration that closes, at the moment it closes — after
     // `iteration.end` is recorded and BEFORE the hooks' `iteration_end`: the checkpoint records the iteration's work as
@@ -947,8 +949,9 @@ export class Run {
   }
 
   /**
-   * The open iteration closes `cancelled` with every agent it left paused, each with `agentReport`'s words: `iteration.end`
-   * and the row's close in one transaction, its capture, its todo task back to `pending`, and the count moved past it.
+   * The open iteration closes `cancelled` with every agent it left paused, each with `agentReport`'s words: its todo task
+   * back to `pending` and `iteration.end` and the row's close with that todo in one transaction, its capture, and the
+   * count moved past it.
    * `only` names the one iteration the caller may close. False when none is open, or the open one is not that one.
    */
   private async closeOpenIteration(summary: (open: IterationRow) => string, agentReport: (c: ChildRow) => string, only?: number | null): Promise<boolean> {
@@ -956,14 +959,15 @@ export class Run {
     const open = dal?.openIterationOf(this.sessionId);
     if (!dal || !open || (only !== undefined && open.iteration !== only)) return false;
     this.cancelPausedAgents(dal, open, agentReport);
-    this.deps.writer.endIteration(open.iteration, { task: this.todo.textOf(open.todo_task_id) ?? open.task, outcome: 'cancelled', summary: summary(open) }, 'cancelled');
+    this.todo.reopen(open.todo_task_id);
+    // PD-ORCH-005 clause 17: a continue's message the iteration held is left pending, so the next iteration takes it up.
+    this.todo.releaseHeld(open.iteration, false);
+    // The close and the todo it leaves in one transaction, as `iterate()`'s close is.
+    this.deps.writer.endIteration(open.iteration, { task: this.todo.textOf(open.todo_task_id) ?? open.task, outcome: 'cancelled', summary: summary(open) }, 'cancelled', this.todoJson());
     // REQ-GIT-051: the iteration closes here, so its one capture is attempted here — it records the work done in it. No
     // child is credited: none finished the iteration. Its hooks' `iteration_end` is not fired: an iteration left open by
     // an earlier run began under that run's hooks, and one this run left open ends with the run.
     await this.captureCheckpoint(open.iteration, '');
-    this.todo.reopen(open.todo_task_id);
-    // PD-ORCH-005 clause 17: a continue's message the iteration held is left pending, so the next iteration takes it up.
-    this.todo.releaseHeld(open.iteration, false);
     this.iterationsCompleted = Math.max(this.iterationsCompleted, open.iteration);
     return true;
   }
@@ -1816,6 +1820,23 @@ export class Run {
  */
 export function succeededIterationsOf(dal: StoreDal, sessionId: SessionId): ReadonlySet<number> {
   return new Set(dal.iterationsOf(sessionId).filter((i) => i.state === 'closed' && i.outcome === 'succeeded').map((i) => i.iteration));
+}
+
+/**
+ * What a death between an iteration's close and the save of its todo left, settled as the record says that iteration
+ * closed, before anything reads the todo — here and by the session manager before it judges what a continue restates:
+ * a task a closed iteration still holds (PD-ORCH-005 clause 17, `Todo.releaseStale`), and an iteration's own task left in
+ * progress (`Todo.settleStranded`), read from the latest row whose `todo_task_id` names it. Since the close and the todo
+ * commit together (`SessionWriter.endIteration`) neither is left by this build; a store an earlier build wrote can hold
+ * both (the repair of `an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`).
+ */
+export function settleClosedIterations(todo: Todo, dal: StoreDal, sessionId: SessionId, open: IterationRow | null | undefined): void {
+  const rows = dal.iterationsOf(sessionId);
+  todo.releaseStale(open?.iteration ?? null, succeededIterationsOf(dal, sessionId));
+  todo.settleStranded(open?.todo_task_id ?? null, (taskId) => {
+    const latest = rows.filter((r) => r.todo_task_id === taskId).at(-1);
+    return latest?.state === 'closed' ? latest.outcome : undefined;
+  });
 }
 
 /**

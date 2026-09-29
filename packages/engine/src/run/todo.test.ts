@@ -93,3 +93,37 @@ describe('Todo — a task held by an open iteration (PD-ORCH-005 clause 17)', ()
     expect(t.holdsUnfinished('second', null)).toBe(false);
   });
 });
+
+/** The repair of `an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md` (REQ-ORCH-072/073/074/135). */
+describe('Todo.settleStranded — an iteration\'s own task its closed iteration left in progress', () => {
+  const shape = (t: Todo) => t.toDocument().phases.flatMap((p) => p.tasks.map((x) => [x.id, x.state, x.consecutiveRetries]));
+  const stranded = (...ids: string[]) => {
+    const t = Todo.fresh(ids[0]!, ids[0]!, 2);
+    for (const id of ids.slice(1)) t.appendTask('main', id, id);
+    for (const id of ids) t.begin(t.task(id)!);
+    return t;
+  };
+
+  it('closes each as its iteration\'s outcome says: succeeded complete, partial requeued, failed or abandoned abandoned, cancelled or none pending', () => {
+    const outcomes: Record<string, string | null> = { s: 'succeeded', p: 'partial', f: 'failed', a: 'abandoned', c: 'cancelled', n: null };
+    const t = stranded('s', 'p', 'f', 'a', 'c', 'n');
+    t.settleStranded(null, (id) => outcomes[id]);
+    expect(shape(t)).toEqual([['s', 'complete', 0], ['p', 'pending', 1], ['f', 'abandoned', 0], ['a', 'abandoned', 0], ['c', 'pending', 0], ['n', 'pending', 0]]);
+  });
+
+  it('a partial close at the retry limit abandons it (REQ-ORCH-077)', () => {
+    const t = stranded('p');
+    t.task('p')!.consecutiveRetries = 1;
+    t.settleStranded(null, () => 'partial');
+    expect(shape(t)).toEqual([['p', 'abandoned', 2]]);
+  });
+
+  it('leaves the open iteration\'s task, a held message, and a task no closed row is the latest to name', () => {
+    const t = stranded('open', 'none');
+    t.appendHeld('Continued Prompts', 'm', 'message', 1);
+    const asked: string[] = [];
+    t.settleStranded('open', (id) => { asked.push(id); return undefined; });
+    expect(shape(t)).toEqual([['open', 'in_progress', 0], ['none', 'in_progress', 0], ['m', 'in_progress', 0]]);
+    expect(asked).toEqual(['none']);
+  });
+});

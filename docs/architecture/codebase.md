@@ -776,9 +776,13 @@ injected refusal, the session log's dispatch-layer line or the ladder's own issu
 
 **Two scenarios enter the gap this page names below** — "short tasks against an unmetered endpoint, so no
 generation near the model timeout, no multi-line command, and no re-spawn", where all seven of one session's
-defects lived. `terminal` issues **six commands the record names verbatim**: the multi-line here-string that lost
+defects lived. `terminal` issues **the commands the record names verbatim** (six when it was written; since
+2026-09-29 seven on Windows and eight elsewhere): the multi-line here-string that lost
 its newlines in the PTY, forty long lines for the concatenation the sixty runs missed and the VT strip the
-agent's capture was left out of, a wedge supplying no `timeout` for the `hardMs` that was read nowhere, an exit-0
+agent's capture was left out of, off Windows a bash-ism `/bin/sh` cannot expand (`${PIPESTATUS[0]}`), which lost
+its end marker live and read as a soft pause (live-run L1, 2026-09-29), a wedge supplying no `timeout` for the
+`hardMs` that was read nowhere, one empty poll of that wedge, whose answer once said thirty seconds had passed
+after under a millisecond (live-run L2, 2026-09-29), an exit-0
 output carrying `FAILED`, a `git diff` exiting 1 for ESC-41's carve-out, and a read-only pipeline through a pipe.
 The shapes, their patterns and the two readers live in `apps/desktop/scripts/lib/terminal-shapes.mjs` and are
 pinned by `terminal-shapes.test.ts` **because that is the part of the scenario that can be wrong silently**: a

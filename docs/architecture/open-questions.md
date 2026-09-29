@@ -6149,6 +6149,29 @@ recorded open in the note above, not repaired.
 **What a ruling decides.** Whether R-044's "stops" binds the product past delivery, and if so, which of the three
 repairs is acceptable, or whether the window is accepted as the shell's.
 
+**OQ-136 — How long does an empty poll wait for a soft-paused command?** *(REQ-TOOLS-096, whose empty `command`
+"polls for more output after a soft pause"; REQ-TOOLS-097, whose no-output window bounds the command's own call and
+does not name a poll; REQ-TOOLS-098, whose empty-capture observation states "the elapsed no-output window". Raised
+2026-09-29 by the repair of live-run finding L2 under [R-067](../product/requests.md#r-067),
+[`an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md`](../defects/fixed/an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md).
+Open.)*
+
+No requirement says how long a poll waits. The product's poll returns at once with what has arrived since the
+previous observation. Before this entry its empty answer repeated the soft pause's own sentence, "No output for 30
+seconds", although it had waited under a millisecond. In the first live run of 2026-09-29 the model counted thirty
+seconds a poll, polled five times in 21.6 s, tripped the loop supervisor, and interrupted a command that had already
+exited. An agent that wants to wait has no way to: the session's shell is busy, and a new command would be typed into
+the running command's input.
+
+**What the build proceeds under:** a poll returns at once, as before. An empty one states what it measured — the time
+since the previous observation of the command, the time since the command last wrote anything (the elapsed
+no-output window, REQ-TOOLS-098), and that a poll does not wait for output. The case "REQ-TOOLS-098 (live-run L2): …"
+in `terminal.test.ts` pins that reading.
+
+**What a ruling decides.** Whether a poll may wait — for new output, for the command's end, or up to the no-output
+window again, whichever comes first — before it answers. Waiting would make a poll loop cost time rather than turns;
+it would also make a poll a second soft pause, which REQ-TOOLS-097 does not name.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

@@ -323,6 +323,46 @@ describe('emulator — a character grid, not a log (REQ-SHELL-095), applied by s
     expect(e.snapshot().lines.slice(0, 3)).toEqual(['final', 'output', 'text']);
     expect(set.previewOf('fg:a')).toMatchObject({ lines: ['final', 'output', 'text'], running: false, exitCode: 0, command: 'demo', displayName: 'Coder 1' });
   });
+  it('REQ-TOOLS-127/REQ-SHELL-104 (live-run L9): the next command on a re-opened stream starts on the row after the closing text, never glued to its last line', async () => {
+    // The frame sequence the run host emits for two commands on one foreground PTY since L9's repair: the second
+    // command's first delta is its own first line, no longer the echoed wrapper that used to take the glued position.
+    const set = new TerminalStreamSet(headlessEmulator);
+    set.apply(frame(1, 'meta', '', { meta: META }));
+    set.apply(frame(2, 'delta', 'first-cmd\r\n'));
+    set.apply(frame(3, 'screen', 'first-cmd', { closing: true }));
+    set.apply(frame(4, 'meta', '', { meta: { ...META, running: false, exitCode: 0 } }));
+    set.apply(frame(5, 'meta', '', { meta: { ...META, running: true, command: 'second' } }));
+    set.apply(frame(6, 'delta', 'second-cmd\r\n'));
+    const e = set.get('fg:a')!.emulator;
+    await parsed(e);
+    expect(set.previewOf('fg:a')!.lines).toEqual(['first-cmd', 'second-cmd']);
+    // A closing text that is empty leaves the cursor at column 0 already: nothing is added, no blank row.
+    const empty = new TerminalStreamSet(headlessEmulator);
+    empty.apply(frame(1, 'meta', '', { meta: META }));
+    empty.apply(frame(2, 'screen', '', { closing: true, meta: { ...META, running: false, exitCode: 0 } }));
+    empty.apply(frame(3, 'meta', '', { meta: { ...META, running: true } }));
+    empty.apply(frame(4, 'delta', 'next'));
+    await parsed(empty.get('fg:a')!.emulator);
+    expect(empty.previewOf('fg:a')!.lines).toEqual(['next']);
+    // A late attacher's display is created from the ended stream's closing resync frame (`running: false` from the
+    // start, so it never saw the running → closed transition); the next command still starts on a fresh row.
+    const late = new TerminalStreamSet(headlessEmulator);
+    late.apply(frame(9, 'screen', 'earlier', { closing: true, meta: { ...META, running: false, exitCode: 0 } }));
+    late.apply(frame(10, 'meta', '', { meta: { ...META, running: true } }));
+    late.apply(frame(11, 'delta', 'later\r\n'));
+    await parsed(late.get('fg:a')!.emulator);
+    expect(late.previewOf('fg:a')!.lines).toEqual(['earlier', 'later']);
+    // The closing screen itself is unchanged until the next command opens: no row is added under the final text.
+    const closed = new TerminalStreamSet(headlessEmulator);
+    closed.apply(frame(1, 'screen', 'final\ntext', { closing: true, meta: { ...META, running: false, exitCode: 0 } }));
+    await parsed(closed.get('fg:a')!.emulator);
+    expect(closed.get('fg:a')!.emulator.snapshot().cursor).toEqual({ x: 4, y: 1 });
+    // A re-opening resync (a `screen` frame carrying `running: true`) replaces the screen, so it takes no separator either.
+    set.apply(frame(7, 'screen', 'third', { closing: true, meta: { ...META, running: false, exitCode: 0 } }));
+    set.apply(frame(8, 'screen', 'live\r\nscreen', { meta: { ...META, running: true } }));
+    await parsed(e);
+    expect(set.previewOf('fg:a')!.lines).toEqual(['live', 'screen']);
+  });
   it('an unknown stream displays "Terminal" until a meta frame names it; a stream exists only once a frame arrived; clear() empties everything', () => {
     const set = new TerminalStreamSet(headlessEmulator);
     expect(set.list()).toEqual([]);

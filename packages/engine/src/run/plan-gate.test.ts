@@ -442,7 +442,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
      */
     expect(row.summary_status).toBe('paused');
     expect(row.summary_severity).toBe('warning');
-    expect(row.summary_text).toBe('The run came to rest because a person stopped it.');
+    expect(row.summary_text).toBe("The run came to rest at the user's request.");
   });
 
   it('PD-ORCH-003: a follow-up prompt after an approval is NOT held — the release is the session\'s', async () => {

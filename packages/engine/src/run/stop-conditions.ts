@@ -95,9 +95,16 @@ export interface RunSummary {
   readonly message: string;
 }
 
-/** REQ-ORCH-082: five arms, in order, first match. The wording is the implementation's; the arms are not. */
+/**
+ * REQ-ORCH-082: five arms, in order, first match. The wording is the implementation's; the arms are not.
+ *
+ * Rule 1's words fit every rest a person asks for — a pause, a stop and the explicit cancel all record `user_cancelled`
+ * (PD-ORCH-005 clause 21) — and name none of them, as the rule requires: "a person stopped it" was read beside a paused
+ * session's own "Run paused" row as a stop (`a-paused-runs-notice-says-a-person-stopped-it.md`, R-067). Which rest it
+ * was, and what a continue resumes, are the transcript row's and the Continue action's to say (OQ-118).
+ */
 export function summarise(s: { stopReason: string | null; completed: number; abandoned: number; lastFailure: string | null }): RunSummary {
-  if (s.stopReason === 'user_cancelled') return { status: 'paused', severity: 'warning', message: 'The run came to rest because a person stopped it.' };
+  if (s.stopReason === 'user_cancelled') return { status: 'paused', severity: 'warning', message: "The run came to rest at the user's request." };
   if (s.completed === 0 && s.abandoned === 0) return { status: 'completed', severity: 'information', message: `The run ended without resolving any task (${s.stopReason ?? 'no stop reason recorded'}).` };
   if (s.abandoned === 0) return { status: 'completed', severity: 'information', message: 'The run completed.' };
   if (s.completed === 0) return { status: 'failed', severity: 'error', message: s.lastFailure ? `The run failed: ${s.lastFailure}` : `The run failed: ${s.abandoned} task(s) abandoned.` };

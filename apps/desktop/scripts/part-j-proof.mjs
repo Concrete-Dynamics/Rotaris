@@ -67,7 +67,7 @@ function open(s) { return new Database(oneDatabase(s.local), { readonly: true })
 /*
  * ADR-0005 (the repair of a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md, R-067): what the store
  * says WHILE the app runs. The launch blocks this thread (`spawnSync`), so a worker thread samples the store every 50 ms
- * and records each change of (status, lock holder, run starts); the proof reads the record after the exit. A reading the
+ * and records each change of (status, lock holder, run starts, summary); the proof reads the record after the exit. A reading the
  * store is busy for is skipped, not guessed.
  */
 function sampleStore(local) {
@@ -85,11 +85,13 @@ function sampleStore(local) {
       try {
         if (!db) { const found = find(workerData.local); if (found.length === 1 && existsSync(found[0] + '-shm')) db = new Database(found[0], { readonly: true, fileMustExist: true }); }
         if (db) {
-          const status = db.prepare('SELECT execution_status AS s FROM sessions LIMIT 1').get()?.s ?? null;
+          const row = db.prepare('SELECT execution_status AS s, summary_text AS t FROM sessions LIMIT 1').get();
+          const status = row?.s ?? null;
+          const summary = row?.t ?? null;
           const lock = db.prepare('SELECT pid FROM session_locks LIMIT 1').get()?.pid ?? null;
           const runStarts = db.prepare("SELECT count(*) AS c FROM timeline WHERE name = 'run_start'").get().c;
-          const key = JSON.stringify([status, lock, runStarts]);
-          if (key !== last) { last = key; samples.push({ status, lock, runStarts }); writeFileSync(workerData.file, JSON.stringify(samples)); }
+          const key = JSON.stringify([status, lock, runStarts, summary]);
+          if (key !== last) { last = key; samples.push({ status, lock, runStarts, summary }); writeFileSync(workerData.file, JSON.stringify(samples)); }
         }
       } catch { /* the store is busy or not yet migrated: skipped */ }
       Atomics.wait(tick, 0, 0, 50);
@@ -174,7 +176,11 @@ launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTUR
   if (continued.length === 0) throw new Error(`the sampler saw no active continued run: ${JSON.stringify(samples)}`);
   if (continued.some((x) => x.lock === null)) throw new Error(`the continued run ran without the session's lock: ${JSON.stringify(samples)}`);
   if (!samples.some((x) => x.runStarts === 1 && x.status === 'paused' && x.lock === null)) throw new Error(`the pause's teardown did not release the lock: ${JSON.stringify(samples)}`);
-  results.pause = { status: session.execution_status, runStarts: list.filter((n) => n === 'run_start').length, lockWhileContinued: [...new Set(continued.map((x) => x.lock))], samples };
+  // REQ-ORCH-082 rule 1 (the repair of a-paused-runs-notice-says-a-person-stopped-it.md, R-067, OQ-118): the rest's summary,
+  // which the notice carries, names no stop beside the row that says the run paused — one message for every rest a person asks for.
+  const restSummary = samples.find((x) => x.runStarts === 1 && x.status === 'paused')?.summary ?? null;
+  if (restSummary !== "The run came to rest at the user's request.") throw new Error(`the paused session's summary reads ${JSON.stringify(restSummary)}`);
+  results.pause = { status: session.execution_status, runStarts: list.filter((n) => n === 'run_start').length, lockWhileContinued: [...new Set(continued.map((x) => x.lock))], restSummary, samples };
 }
 
 // 4. The message limit: paused durably with the dialog, "double" continues; a second launch finds the session paused and "cancel" resolves it.

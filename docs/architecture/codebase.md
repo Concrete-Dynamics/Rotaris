@@ -1116,7 +1116,7 @@ set has no `paused`); the pause at the limit writes no terminal pair; operations
 message typed during a run is queued and consumed once as a completed task; a steer is submitted from the composer's
 card and injected; Pause then the composer's Continue run leave the pause row and two run starts, and a worker thread
 sampling the store while the app runs shows the pause released the lock and the continued run held it throughout
-(ADR-0005, 2026-09-29, R-067); a `message_limit`
+(ADR-0005, 2026-09-29, R-067) and the paused session's summary naming no stop (REQ-ORCH-082 rule 1, OQ-118); a `message_limit`
 of one pauses the run, the dialog answers "double" and the doubled limit persists; a session left paused at the limit
 is resumed on relaunch through the one reap and its dialog answers "cancel"; a user-initiated close during a run
 records `application_shutdown` with the terminal pair and no lock. Its evidence lands under `.proof/part-j-proof/`. The queue

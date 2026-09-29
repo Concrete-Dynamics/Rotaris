@@ -5027,7 +5027,9 @@ the build kept.
 - **A stop during a plan cycle, as the session shows it.** The cycle's agents end `cancelled` with their reports, no
   iteration row exists, and `plan_released` stays 0, so the next prompt or continue is held again. The session persists
   `paused` (REQ-SESSION-186's persisted status for a stop). Its result's summary reads "The run came to rest because a
-  person stopped it.", because the summary is classified from the stop reason alone. Both are kept. The status is what
+  person stopped it.", because the summary is classified from the stop reason alone. *Since 2026-09-29 (R-067, OQ-118)
+  it reads "The run came to rest at the user's request.", the one message every rest a person asked for gets.* Both are
+  kept. The status is what
   a stop persists, and the wording describes the run, not an agent left to resume.
 - **"No other control stands outside the dock."** The sentence governs the run-state notices it names and the strip's
   input controls. Three controls outside the dock and outside the notices row stay where they are, because each
@@ -5274,6 +5276,35 @@ task was marked done without ever reaching a model.
 REQ-CHAT-040's "Queued Prompt: <id>"; whether a task that repeats the launch content's request should still be told it;
 whether a renamed own task should be sent its new text; and whether a task taken up by a later run should carry the
 images its prompt was sent with, which needs a task to hold them.
+
+**OQ-118 — May the end-of-run summary say which rest a person asked for, and what a continue will resume?** *(REQ-ORCH-082
+rule 1, "not asserting which of the two person-stops it was" and "no rule of this list may distinguish the two";
+REQ-MONITOR-125, a paused session persists "with an interruption message"; `PD-ORCH-005` clauses 2, 3 and 21, under which
+a pause and a stop leave agents a continue resumes and the explicit cancel leaves none, and all three record the stop
+reason `user_cancelled`. Raised 2026-09-29 by the repair of
+[`a-paused-runs-notice-says-a-person-stopped-it.md`](../defects/fixed/a-paused-runs-notice-says-a-person-stopped-it.md)
+under [R-067](../product/requests.md#r-067). Open.)*
+
+The note asked for rule 1's message to say which rest it was — a pause, a stop or the explicit cancel — and whether a
+continue resumes the agents, since `PD-ORCH-005` made that matter. REQ-ORCH-082 forbids exactly that: its rule 1 conveys
+that "the run came to rest because a person stopped it" without "asserting which of the two person-stops it was", and "no
+rule of this list may distinguish the two, there being nothing on the stop-reason axis to distinguish them by". Clause 21
+confirms the axis is still empty (a stop and a pause "record the same stop reason"), and no directive names REQ-ORCH-082.
+Wording the arm by rest, as the triage proposed (passing `restCause`, the final stop and the pause request to
+`summarise`), would change a clause, so it was not built.
+
+**The reading built.** Rule 1's message is worded so it fits all three rests and names none: "The run came to rest at the
+user's request." It no longer says "stopped", which a paused session's banner set beside its own row "Run paused at the
+user's request" read as a stop. It bakes in no persisted status, so it stands whatever a rest persists (clause 21's
+`paused`, R-067's ruling 2). Which rest it was is told by the transcript's system row ("Run paused at the user's request;
+continue it from the composer." after a pause, "Run paused: interrupted by user." after a stop or a cancel) and by the
+timeline; what a continue resumes is told by the Continue action's count (`resumable`, clause 6 and clause 19), which
+reads nothing after the explicit cancel because nothing is left to resume.
+
+**What a ruling decides.** Whether REQ-ORCH-082 should gain a way to tell a pause, a stop and the explicit cancel apart
+in the summary (a directive naming it, or a stop reason of the pause's own in REQ-MONITOR-301's closed set), so that the
+one notice a rest raises can say which it was and whether a continue resumes its agents; or whether the neutral wording
+stands and the row and the Continue action are where the difference is told.
 
 ## Design-reference dependencies
 

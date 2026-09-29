@@ -263,3 +263,31 @@ ADR-0062's first execution in the built app proved the plan gate end to end acro
 - **Event specification contradiction:** A4 widened `REQ-HOOKS-126` to define `plan_gate` as a valid skip reason. `REQ-EVENTS-047` and the `hook.finish` row in `20-event-history-replay-export.md` still asserted `untrusted_workspace` was the only defined value. Recorded as a defect found by building (a defect note, removed once repaired).
 - **Surface layout and reachability:** Scripted clicks on *Approve* initially failed because flex children and layout sums pushed the buttons out of view or under dividers across varying heights. Repaired by making the three answers sticky (`position: sticky; bottom: 0`) inside the block.
 - **Synthesized events:** The harness verified that synthetic `blur` does not trigger React's `onBlur` delegation (which listens to `focusout`).
+
+## The first execution's proof on Linux with the code-intelligence bundle present — 2026-09-28 (R-062)
+
+On the Linux sweep, run as root under Xvfb with the bundled runtime in the tree, `pnpm plan-gate-proof` failed twice,
+at two different launches. **Neither failure was the gate's.** REQ-ORCH-152, REQ-ORCH-153 and REQ-ORCH-154 held on
+every launch that reached the gate.
+
+- **Launch 1 read the gate before the run had reached it.** The proof meant to turn `code_intelligence` off so its
+  discovery would not lengthen run starts, but it wrote the switch as a top-level `code_intelligence:` key, which no
+  section reads. Every run therefore discovered the server before the entry role's first call. On the sweep host that
+  took 11.1 s beside the workspace's background `project create` (10.4 s), and the plan came about a second after
+  the proof's fixed 12,000 to 12,400 ms readings. The launch's surface assertion, a test of the log for `plan-gate`,
+  could not fail, because the inspection line names the selector either way.
+- **Launch 2's relaunch was refused as held by the previous instance's run host.** That is the lock defect `459e7c8`
+  repaired on `main` (main exits only after its run host). The sweep tree predated it. On a tree with the repair,
+  every launch logs `run host exited` before `main process exiting`.
+
+The proof now disables the server as the configuration spells it (`mcp_servers:` / `code_intelligence: { enabled:
+false }`), and launch 1 fails if the server is discovered anyway. Launches 1 and 2 read the gate, its text and the
+edit on `@~` deadlines. Their captures wait for the plan and for the edit instead of for a clock. The surface
+assertion reads the inspection's matches. Any launch refused as held by another run fails naming the lock note.
+Recorded and repaired in
+[`plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md`](../../defects/fixed/plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md).
+**Found beside it:** with the entry disabled, the workspace's `code-intelligence-setup` still runs, because
+applicability is REQ-MCP-037's availability and that rule does not read `enabled` (OQ-94, built as the letter).
+**What it could not show:** launches 3 to 6 keep their fixed offsets (the revise at 6,000 and 6,600 ms, the approve
+at 6,000, the chip at 10,000 and 11,000, the prompts at 10,000 and 15,000). They were green on every run here and
+were not moved. Windows and macOS were not run (IC-3).

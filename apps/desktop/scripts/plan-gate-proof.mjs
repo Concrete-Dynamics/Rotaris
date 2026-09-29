@@ -3,6 +3,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import Database from 'better-sqlite3';
 import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { parseEvals, readEval } from './lib/capture-evals.mjs';
 
 /**
  * ADR-0062's first execution in the BUILT app: the plan gate driven end to end (REQ-ORCH-152/153/154).
@@ -47,7 +48,11 @@ if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${ele
 /**
  * The scripted dialect answers from a canned script; the entry role's first turn is the plan and its second is
  * the work. `code_intelligence` is turned OFF here because this proof measures run starts and its discovery
- * costs about 4.5 s of each one (ADR-0035's note, finding 6).
+ * costs about 4.5 s of each one (ADR-0035's note, finding 6) — 11 s on the Linux sweep of 2026-09-28, beside the
+ * workspace's background project setup. The entry is the `mcp_servers:` one: until 2026-09-28 this fixture wrote a
+ * top-level `code_intelligence:` key, which no section reads, so every run discovered the server anyway
+ * (docs/defects/fixed/plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md). Launch 1 now
+ * asserts the server was not discovered, so the fixture cannot silently stop meaning what it says again.
  */
 const GLOBAL = [
   'models:',
@@ -61,8 +66,8 @@ const GLOBAL = [
   '  run_start_mode: plan',
   '  max_iterations: 3',
   '',
-  'code_intelligence:',
-  '  enabled: false',
+  'mcp_servers:',
+  '  code_intelligence: { enabled: false }',
   '',
 ].join('\n');
 
@@ -93,7 +98,26 @@ function launch(name, extra, timeoutMs = 120_000) {
   writeFileSync(join(output, `${name}.log`), log);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
+  // A relaunch refused because the previous instance's run host still held the session is the product defect
+  // repaired by `459e7c8` (main exits only after its run host). Named here, so it cannot read as a gate that
+  // did not survive the restart.
+  if (/is held by another run in this application/.test(log)) throw new Error(`${name}: the session was refused as held by another run — the previous launch's run host outlived it (docs/defects/fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md); see ${name}.log`);
   return log;
+}
+
+/**
+ * The gate's readings are DEADLINES, not appointments. Each waits for the surface and reads it once it is there, and
+ * the capture waits for the surface too, so a slow run start delays them instead of falsifying them. The sweep of
+ * 2026-09-28 read the gate at a fixed 12,000 ms while the run was still discovering tools, and failed a launch whose
+ * gate came a second later.
+ */
+const GATE_DEADLINE_MS = 60_000;
+const GATE_TEXT = 'document.body.innerText.includes("Plan ready for your decision")';
+/** The `inspect-at` reading of `selector`, parsed; `null` when the launch logged none. */
+function inspected(log, selector) {
+  const line = log.split('\n').find((l) => l.includes(`capture: inspect-at ${GATE_DEADLINE_MS} ${selector} → `));
+  if (!line) return null;
+  try { return JSON.parse(line.slice(line.indexOf(' → ') + 3)); } catch { return null; }
 }
 
 /** The store the app wrote, opened read-only AFTER the process that owned it has exited (REQ-ORCH-153's restart clause). */
@@ -130,10 +154,13 @@ const PLANNED_FILE = join(workspace, 'planned.txt');
 // 1. The run starts in `plan` mode and holds. Nothing the plan names has been written.
 const log1 = launch('held', {
   ROTARIS_CAPTURE_PROMPT: 'create planned.txt with the word done in it',
-  ROTARIS_CAPTURE_AFTER_MS: '14000',
-  ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="plan-gate"]@12000;;[data-testid="plan-gate-plan"]@12200',
-  ROTARIS_CAPTURE_TEXT_AT: 'Plan ready for your decision@12400',
+  ROTARIS_CAPTURE_WAIT: 'js:document.querySelector(\'[data-testid="plan-gate-plan"]\') !== null',
+  ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
+  ROTARIS_CAPTURE_AFTER_MS: '1500',
+  ROTARIS_CAPTURE_INSPECT_AT: `[data-testid="plan-gate"]@~${GATE_DEADLINE_MS};;[data-testid="plan-gate-plan"]@~${GATE_DEADLINE_MS}`,
+  ROTARIS_CAPTURE_EVAL_AT: `${GATE_TEXT}>>[data-testid="plan-gate"]@~${GATE_DEADLINE_MS}`,
 });
+if (/discovery of 'code_intelligence'/.test(log1)) throw new Error(`the fixture did not turn code intelligence off — the run discovered it:\n${log1}`);
 if (existsSync(PLANNED_FILE)) throw new Error('a file the plan names was written while the gate was held (REQ-ORCH-153)');
 const held = readStore();
 if (held.session?.execution_status !== 'awaiting_plan_decision') throw new Error(`the session is ${held.session?.execution_status}, not awaiting_plan_decision:\n${log1}`);
@@ -141,7 +168,11 @@ if (held.session.plan_cycle !== 1) throw new Error(`no plan cycle is pending: ${
 if (held.cycles.length !== 1 || held.cycles[0].plan.trim() === '') throw new Error('the cycle carries no plan text');
 if (held.cycles[0].edited !== null) throw new Error('an unedited cycle carries an edit');
 if (!held.timeline.includes('plan_gate_opened')) throw new Error(`no plan_gate_opened entry:\n${held.timeline.join(', ')}`);
-if (!/plan-gate/.test(log1)) throw new Error('the gate surface was not found in the primary view');
+// Read from the inspection's MATCHES: the log line names the selector whether or not anything matched, so a test of
+// the log for "plan-gate" could never fail.
+if (!(inspected(log1, '[data-testid="plan-gate"]')?.matches?.length > 0)) throw new Error(`the gate surface was not found in the primary view:\n${log1}`);
+if (!(inspected(log1, '[data-testid="plan-gate-plan"]')?.matches?.length > 0)) throw new Error('the gate drew no plan');
+if (readEval(parseEvals(log1), GATE_DEADLINE_MS, GATE_TEXT) !== true) throw new Error('the gate does not say "Plan ready for your decision"');
 results.held = {
   status: held.session.execution_status, cycle: held.session.plan_cycle, released: held.session.plan_released,
   plan: held.cycles[0].plan.slice(0, 200), plannedFileExists: false,
@@ -149,15 +180,21 @@ results.held = {
 
 // 2. Reopened after the window is gone: the decision is still pending and still answerable (REQ-ORCH-153).
 const EDIT = 'Revised by the user: write planned.txt containing the word done.';
+// The edit goes through the product's own path: set the value the way React's tracker accepts and let the
+// blur write it through. React delegates `onBlur` from `focusout`, so a non-bubbling `blur` reaches nothing.
+const EDIT_PLAN = `(() => { const el = document.querySelector('[data-testid="plan-gate-plan"]'); if (!el) return 'absent'; const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; setter.call(el, ${JSON.stringify(EDIT)}); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); return 'edited'; })()`;
 const log2 = launch('reopened-and-edited', {
   ROTARIS_CAPTURE_RESUME: 'latest',
-  ROTARIS_CAPTURE_AFTER_MS: '12000',
-  ROTARIS_CAPTURE_TEXT_AT: 'Plan ready for your decision@6000',
-  // The edit goes through the product's own path: set the value the way React's tracker accepts and let the
-  // blur write it through. React delegates `onBlur` from `focusout`, so a non-bubbling `blur` reaches nothing.
-  ROTARIS_CAPTURE_EVAL_AT: `(() => { const el = document.querySelector('[data-testid="plan-gate-plan"]'); if (!el) return 'absent'; const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; setter.call(el, ${JSON.stringify(EDIT)}); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); return 'edited'; })()@7000`,
+  // Both readings wait for the reopened gate; the capture waits for the edit to stand in the field, then leaves the
+  // write-through its own few seconds before the process ends.
+  ROTARIS_CAPTURE_EVAL_AT: `${GATE_TEXT}>>[data-testid="plan-gate"]@~${GATE_DEADLINE_MS};;${EDIT_PLAN}>>[data-testid="plan-gate-plan"]@~${GATE_DEADLINE_MS}`,
+  ROTARIS_CAPTURE_WAIT: `js:document.querySelector('[data-testid="plan-gate-plan"]')?.value === ${JSON.stringify(EDIT)}`,
+  ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
+  ROTARIS_CAPTURE_AFTER_MS: '3000',
 });
-if (!/text-at 6000 "Plan ready for your decision" → true/.test(log2)) throw new Error(`the gate did not survive the restart:\n${log2}`);
+const evals2 = parseEvals(log2);
+if (readEval(evals2, GATE_DEADLINE_MS, GATE_TEXT) !== true) throw new Error(`the gate did not survive the restart:\n${log2}`);
+if (readEval(evals2, GATE_DEADLINE_MS, EDIT_PLAN) !== 'edited') throw new Error(`the plan could not be edited after the restart: ${JSON.stringify(readEval(evals2, GATE_DEADLINE_MS, EDIT_PLAN))}`);
 const edited = readStore();
 if (edited.session.execution_status !== 'awaiting_plan_decision') throw new Error('editing changed the status (REQ-ORCH-154: editing alone never approves it)');
 if (edited.session.plan_cycle !== 1) throw new Error('editing moved the pending cycle');

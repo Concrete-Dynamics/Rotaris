@@ -28,7 +28,7 @@ line, and that line names the selector `[data-testid="plan-gate"]` whether it ma
 The sweep's second run failed differently, and that failure is not this note's. The relaunch was refused with
 "Session … is held by another run in this application (pid 1360)", pid 1360 being the previous instance's run host.
 The sweep tree (392f681) predates `459e7c8`, which makes main exit only after its run host
-([the note](fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md)).
+([the note](a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md)).
 On a tree with that repair, every launch of this proof logs `run host exited` before `main process exiting`.
 
 ## Specs
@@ -39,7 +39,7 @@ assertion that can never fail.
 
 Beside it, an unanswered reading. With `code_intelligence` disabled, `code-intelligence-setup` is still applicable
 and still runs in the background. REQ-WORKSPACE-090 makes applicability exactly REQ-MCP-037's availability rule,
-and that rule never mentions `enabled`. Raised as an open question, not changed here.
+and that rule never mentions `enabled`. Raised as OQ-94, not changed here.
 
 ## Relevant files
 
@@ -50,3 +50,25 @@ and that rule never mentions `enabled`. Raised as an open question, not changed 
 - `apps/desktop/src/main/capture/seams.ts`: `INSPECT_AT` and `EVAL_AT` take the `@~` deadline form, and `TEXT_AT` does not.
 
 Noticed and diagnosed 2026-09-28, by the Linux proof sweep under R-062.
+
+## Repaired — 2026-09-28, under R-062
+
+Only the harness changed; the product was right. In `apps/desktop/scripts/plan-gate-proof.mjs`:
+
+- **The fixture disables the server as the configuration spells it:** `mcp_servers:` / `code_intelligence: { enabled:
+  false }`. Launch 1 fails if its log shows `discovery of 'code_intelligence'`, so the switch cannot go stale in silence
+  again. With it, the run logs the server skipped as disabled (REQ-CONFIG-465, REQ-MCP-040), and the orchestrator's
+  first call follows the classifier's by about 40 ms.
+- **Launches 1 and 2 read the gate on deadlines.** The inspections, the gate's text (now an `EVAL_AT` read through
+  `lib/capture-evals.mjs`, since `TEXT_AT` has no deadline form) and the edit all wait up to 60 s for the surface.
+  Each capture waits for its condition, the plan drawn or the edit standing in the field, and not for a clock.
+- **The surface assertion reads the inspection's matches,** for the gate and for its plan, where it had tested the
+  log for the string `plan-gate`.
+- **A launch refused as held by another run fails with that name,** pointing at the lock note. Before, the same
+  refusal read as "the gate did not survive the restart".
+
+Verified as root under Xvfb, Node 24, after one `pnpm build`, with the bundled code-intelligence runtime present,
+which is the sweep's condition. Three runs in a row were green, about 148 s each, the last two with another
+worktree's Electron proofs running beside them. Each run's first capture waited about 5.0 s for the plan and its
+second 1.5 s for the edit, and no run met the lock refusal or a discovery. Launches 3 to 6 keep their fixed offsets.
+They were green on every run and are not changed here. Reported back in ADR-0062.

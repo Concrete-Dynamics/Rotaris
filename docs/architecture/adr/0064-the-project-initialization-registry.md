@@ -305,4 +305,9 @@ as written above. The coordinator's harness now orders marker writes per root, a
 and a new case, "lets a newly opened workspace record while the previous workspace's marker write is still in flight",
 fails on the coordinator-wide queue and passes on the per-root one. The same round corrected the runtime view's
 `initialization:` bullet, which still gave the first execution's re-read and its falsified reason; the old sentence is
-kept there, marked superseded.
+kept there, marked superseded. **Measured** as root under Xvfb on Linux, Node 24, `--skip-build` after `pnpm symbols`,
+a green `pnpm check` and one `pnpm build` of the per-root queue, with `origin/main` already merged: `init-proof` passed
+two runs in a row (171 s and 172 s), all five scenarios, each ending with the skip's workspace file holding
+`completed: [code-intelligence-setup]` and a reopen reading "Not run yet: Verification consent task."; `code-intel-proof`
+passed twice (523 s and 525 s). Another agent's Electron processes (8 to 11) were on the host through all four runs.
+**Not shown:** a built-app run with two workspaces' marker writes in flight together; only the unit case holds it.

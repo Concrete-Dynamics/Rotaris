@@ -208,6 +208,14 @@ export const SessionArtifactLinkSchema = z.object({
   id: z.string(), slug: z.string(), title: z.string(), status: z.string(), producer: z.string(), ready: z.boolean(), consumedBy: z.array(z.string()),
 });
 export type SessionArtifactLink = z.infer<typeof SessionArtifactLinkSchema>;
+/**
+ * PD-ORCH-005 clause 4 with OQ-97, and REQ-LIBRARY-093: one root agent of the entry role by the two names its record
+ * carries — `name`, the one its transcript rows and tool calls carry (the persona its iteration was opened with, kept by a
+ * root resumed as the entry role), and `canonical`, its canonical instance name (REQ-ORCH-044), which its publishes and
+ * reads record.
+ */
+export const EntryRootSchema = z.object({ name: z.string(), canonical: z.string() });
+export type EntryRoot = z.infer<typeof EntryRootSchema>;
 
 export const SessionRecordSchema = z.object({
   id: sessionId,
@@ -330,6 +338,14 @@ export const SessionRecordSchema = z.object({
   entryTools: EntryToolsSchema,
   /** REQ-MONITOR-044/052/068/069 (live-run finding K1): the session's artifacts, for the agent surfaces' links. */
   artifacts: z.array(SessionArtifactLinkSchema),
+  /**
+   * REQ-MONITOR-071, REQ-CHAT-069, REQ-MONITOR-053 and REQ-MONITOR-044 with PD-ORCH-005 clause 4 (OQ-97) and REQ-LIBRARY-093:
+   * the entry role's root agents of this session — each iteration's, each root no iteration records that published (a plan
+   * cycle's, OQ-106), and the live run's — each pair once, in that order. The run-level agent owns the rows and the artifacts
+   * they name, not only those of the entry persona a surface knows it by: a root resumed as the entry role keeps its own
+   * persona's name on its rows, and a root's publishes and reads record its canonical name.
+   */
+  entryRoots: z.array(EntryRootSchema),
 });
 export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 

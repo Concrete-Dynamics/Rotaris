@@ -1,6 +1,6 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { IterationRow, SessionRow } from '@rotaris/store';
-import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -10,7 +10,7 @@ import { classifyStop, statusForResult, stopCondition, summarise, type StopReaso
 import { StopRequest } from './stop-request.js';
 import { Todo, type Task, type TodoDocument } from './todo.js';
 import { planRequestSection, resumedWorkSection } from './plan-text.js';
-import { runTurn, type ToolPort, type TurnOutcome } from './turn.js';
+import { recordSteeringInjected, runTurn, steeringMessage, type ToolPort, type TurnOutcome } from './turn.js';
 import { IterationChildren } from '../children/orchestration.js';
 import type { DelegationOps } from '../children/delegation.js';
 import type { Budget as ChildBudget } from '../children/ledger.js';
@@ -152,8 +152,12 @@ export interface RunDeps {
   readonly config: RunConfig;
   /** Null: no tool surface — the model is offered no tool and a requested call ends the turn. */
   readonly tools: ToolPort | null;
-  /** Part B: the tool surface for an agent with a delegation identity (the root and every child). Absent: no delegation. */
-  readonly toolsFor?: ((persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => ToolPort | null) | undefined;
+  /**
+   * Part B: the tool surface for an agent with a delegation identity (the root and every child). Absent: no delegation.
+   * `canonicalName` is the instance name its publishes record as `created_by` (REQ-LIBRARY-093) — the root's, whose
+   * `agentName` is its persona; absent for a child, whose `agentName` is its canonical name.
+   */
+  readonly toolsFor?: ((persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string) => ToolPort | null) | undefined;
   readonly dal?: StoreDal | undefined;
   /** Part Y (REQ-ORCH-149): the session artifact store, shared across iterations; absent means no artifacts exist. */
   readonly artifacts?: ArtifactStore | undefined;
@@ -358,6 +362,13 @@ export class Run {
   private rootId = 'root';
   private rootIterationId = 'root:1';
   private rootRecord: RootExecutionRecord | null = null;
+  /**
+   * PD-ORCH-005 clauses 3 and 4: the name the current root's rows carry — the persona its iteration was opened with
+   * (`iterations.root_persona`), so a root resumed as the entry role because that persona is no longer configured (OQ-97)
+   * keeps writing under the name its earlier rows and the crash record read (the repair of
+   * `a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record.md`). It is the run's persona otherwise.
+   */
+  private rootName: string;
 
   /** REQ-ORCH-072: the current iteration's root execution record. */
   get rootExecutionRecord(): RootExecutionRecord | null {
@@ -411,6 +422,13 @@ export class Run {
   private planHeld = false;
   /** REQ-MONITOR-133/134: pending steering per conversation (`root` for the entry role, the task id for a child). */
   private readonly steering = new Map<string, { id: string; text: string }[]>();
+  /**
+   * REQ-MONITOR-133 with OQ-128: set once no agent of this run will take another step — when the iteration's rest is
+   * recorded (after `deliverSteeringAtRest`), or when the run stops stepping (`closeSteering`: teardown, the pause at the
+   * message limit, the park at the plan gate) — so a later steer is refused rather than acknowledged for a step nothing
+   * would take.
+   */
+  private steeringClosed = false;
   /** REQ-MONITOR-142: the entry model/reasoning switched mid-run; applied from the next iteration. */
   private entryOverride: { model?: ModelRef; thinking?: ThinkingLevel } = {};
   /** Part Q: the waits parked on a provider limit (REQ-NOTIFY-263 reads `current()`), the memory, the catalogue. */
@@ -450,6 +468,7 @@ export class Run {
 
   constructor(private readonly deps: RunDeps) {
     this.sessionId = deps.sessionId;
+    this.rootName = deps.config.persona;
     this.hooks = deps.hooks ?? null;
     this.record = new ConversationRecord(deps.writer, deps.dal, deps.sessionId);
     this.memory = deps.resilience?.memory ?? new ResilienceMemory();
@@ -469,6 +488,9 @@ export class Run {
     if (deps.dal) settleClosedIterations(this.todo, deps.dal, deps.sessionId, openRow);
     const open = deps.openIteration === undefined ? null : openRow;
     this.resumeFrom = deps.openIteration?.resume === true ? open : null;
+    // Clause 4 with OQ-97: a run built to resume an open iteration names its root as that iteration was opened, from the
+    // start — a steer before the resumed root's first turn is announced under the name its injection and rows carry.
+    if (this.resumeFrom !== null) this.rootName = this.resumeFrom.root_persona;
     this.restedIteration = open?.iteration ?? null;
     /*
      * PD-ORCH-005 clause 17: a continue that resumes an open iteration delivers its message to the resumed root (clause 4)
@@ -633,17 +655,29 @@ export class Run {
   get entryContext(): { readonly used: number; readonly limit: number } {
     const model = this.entryOverride.model ?? this.deps.config.model;
     const advertised = this.deps.compression?.triggerFor(model).advertisedInputLimit ?? null;
-    return { used: this.deps.writer.activity.contextUsed(this.deps.config.persona), limit: advertised !== null && advertised > 0 ? advertised : DEFAULT_CONTEXT_CAPACITY };
+    return { used: this.deps.writer.activity.contextUsed(this.rootName), limit: advertised !== null && advertised > 0 ? advertised : DEFAULT_CONTEXT_CAPACITY };
   }
   /**
    * REQ-MONITOR-060/061 (live-run finding K1, R-067): the entry role's tools as the run-level agent presents them — the native
    * set its port's one resolution kept (policy narrowing applied), and its called and in-flight tools from the tracker the
-   * writer feeds, keyed by the persona the root dispatches under. Like `entryContext`, the entry role has no `children` row.
+   * writer feeds, keyed by the name the root dispatches under (`rootName`, as `entryContext` reads it). Not the run's
+   * persona: a root resumed as the entry role keeps the persona its iteration was opened with (OQ-97), and read by the entry
+   * role's name its calls were never found (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
+   * Like `entryContext`, the entry role has no `children` row.
    */
   get entryTools(): EntryToolsPayload {
-    const persona = this.deps.config.persona;
+    const name = this.rootName;
     const activity = this.deps.writer.activity;
-    return { resolved: [...(this.rootPort?.resolvedTools?.() ?? [])], called: activity.calledTools(persona), active: activity.activeTools(persona) };
+    return { resolved: [...(this.rootPort?.resolvedTools?.() ?? [])], called: activity.calledTools(name), active: activity.activeTools(name) };
+  }
+  /**
+   * PD-ORCH-005 clause 4 with OQ-97, and REQ-LIBRARY-093: the root this run executes, or executed last, by the name its rows
+   * and calls carry (`rootName`) and its canonical instance name — what `SessionRecord.entryRoots` adds, while the run is
+   * live, for a root with no iteration row, a plan cycle's. The session lets go of the run once it parks or ends, and such
+   * a root is then named by its publishes alone (`entryRootsOf`). Null before the run's first turn.
+   */
+  get currentRoot(): EntryRoot | null {
+    return this.rootRecord === null ? null : { name: this.rootName, canonical: this.rootRecord.canonicalName };
   }
   /** REQ-MONITOR-048 (Part R): the persona's configured thinking level as this run resolved it; null when the persona is unknown or states none. */
   reasoningFor(persona: string): string | null {
@@ -1165,6 +1199,9 @@ export class Run {
     // PD-ORCH-005 clause 4: a resumed iteration's root is restored with its identity — its task id and canonical name.
     const rootTaskId = resume?.root_task_id ?? mintTaskId(takenTaskIds(this.deps.dal, this.sessionId));
     const rootCanonical = resume?.root_canonical_name ?? canonicaliseName(config.persona);
+    // Clause 4 with OQ-97: a resumed root keeps the name its rows carry, even when it runs as the entry role now.
+    const rootName = resume?.root_persona ?? config.persona;
+    this.rootName = rootName;
     const rootRecord: RootExecutionRecord = {
       taskId: rootTaskId,
       canonicalName: rootCanonical,
@@ -1218,7 +1255,7 @@ export class Run {
       }, iteration)
       : null;
     this.children = children;
-    const tools = children && this.deps.toolsFor ? this.portFor(config.persona, config.persona, children, this.rootId, 0) : this.register(this.deps.tools);
+    const tools = children && this.deps.toolsFor ? this.portFor(config.persona, rootName, children, this.rootId, 0, rootCanonical) : this.register(this.deps.tools);
     this.rootPort = tools;
     // PD-ORCH-005 clause 4: a resumed iteration's agents are restored first, so the root resumes among them.
     // The timeline records each agent resumed (`child_resumed`), so a resume is not a warning (phase 4's review).
@@ -1237,7 +1274,7 @@ export class Run {
       launching = false;
       initial = false;
       return runTurn({
-      writer, owner, backend, tools, clocks: this.deps.clocks, persona: config.persona, agentName: config.persona,
+      writer, owner, backend, tools, clocks: this.deps.clocks, persona: config.persona, agentName: rootName,
       // REQ-ORCH-019: the rendered playbook is part of the instructions the role is given.
       // REQ-WORKSPACE-060 (ADR-0063): then the session's always-active context units, read at THIS construction
       // so a skill force-loaded since the last turn reaches this agent (REQ-CONFIG-166).
@@ -1288,7 +1325,8 @@ export class Run {
       if (settled === null) {
         // The turn's end is no longer awaited, so its raise must be handled here or it is an unhandled rejection.
         running.catch(() => undefined);
-        this.deps.warn(`iteration ${iteration}: the root ${config.persona} did not return within the stop's 30 s grace and was given up on (REQ-SESSION-092)`);
+        // Named as its rows and calls name it (`rootName`): a root resumed as the entry role keeps its own persona (OQ-97).
+        this.deps.warn(`iteration ${iteration}: the root ${rootName} did not return within the stop's 30 s grace and was given up on (REQ-SESSION-092)`);
       } else {
         outcome = settled;
         this.aggregates.addToolCalls(outcome.toolCallCount);
@@ -1333,9 +1371,14 @@ export class Run {
           rootRecord.state = 'paused';
           // Clauses 3 and 4: a root that raised out of a call, or was given up on in one, has that call answered as
           // interrupted, as a child's is.
-          if (this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: config.persona }, iteration, this.restCause);
+          if (this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: rootName }, iteration, this.restCause);
           answered = true;
+          // REQ-MONITOR-134 with clause 4: a steering prompt still pending reaches the record its agent resumes from.
+          this.deliverSteeringAtRest({ taskId: rootTaskId, name: rootName }, iteration, this.restCause);
         }
+        // OQ-128: the rest is recorded and no agent of this run takes another step, so no steer is accepted from here — one
+        // acknowledged now would reach no record while its agent sits `paused`, to resume on the continue without it.
+        this.steeringClosed = true;
       } else if (children) {
         // REQ-ORCH-052: every exit path from an iteration leaves every child record terminal.
         const n = children.finalize(this.stop.requested ? 'cancelled: the run was stopped while this child was in flight' : 'cancelled during iteration cleanup');
@@ -1350,7 +1393,7 @@ export class Run {
       }
       // A root given up on that no rest paused — the explicit cancel — still leaves no call row running (REQ-SESSION-129):
       // its open call is recorded cut off, naming no rest (OQ-96, "A call cut by no rest").
-      if (rootDetached && !answered && this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: config.persona }, iteration, null);
+      if (rootDetached && !answered && this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: rootName }, iteration, null);
       /*
        * REQ-MONITOR-102 (the repair of `a-roots-calls-before-a-crash-never-reach-the-session-total.md`): a root given up on
        * never returns its count, so its calls are counted from its record — once its open calls are answered, so a call it
@@ -1400,26 +1443,83 @@ export class Run {
     if (port) this.ports.add(port);
     return port;
   }
-  private readonly portFor = (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number): ToolPort | null => {
-    const p = this.deps.toolsFor ? this.deps.toolsFor(persona, agentName, delegation, parentId, depth) : null;
+  private readonly portFor = (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string): ToolPort | null => {
+    const p = this.deps.toolsFor ? this.deps.toolsFor(persona, agentName, delegation, parentId, depth, canonicalName) : null;
     return this.register(p);
   };
 
   /** REQ-MONITOR-133: a steer is pending until its conversation's next step; the id is the control's string value. */
   steer(agentId: string, text: string): string | null {
-    if (this.ended || text.trim() === '' || agentId.trim() === '') return null;
+    if (this.ended || this.steeringClosed || text.trim() === '' || agentId.trim() === '') return null;
     const key = this.isRootAgent(agentId) ? 'root' : agentId;
     if (key !== 'root' && !this.children?.ledger.get(key)) return null;
     const id = randomUUID();
     const list = this.steering.get(key) ?? [];
     list.push({ id, text });
     this.steering.set(key, list);
-    this.deps.writer.appendTimeline('steering_submitted', 'user', `A steering prompt was submitted for ${key === 'root' ? this.deps.config.persona : key} (${id.slice(0, 8)}).`, { prompt_id: id, agent: key });
+    // Named as its injection names it: the root by `rootName`, a child by its instance name (the metadata keeps the key).
+    const who = key === 'root' ? this.rootName : this.children?.ledger.get(key)?.canonical_name ?? key;
+    this.deps.writer.appendTimeline('steering_submitted', 'user', `A steering prompt was submitted for ${who} (${id.slice(0, 8)}).`, { prompt_id: id, agent: key });
     return id;
   }
   private steeringFor(conversationId: string): () => readonly { id: string; text: string }[] {
     const key = this.isRootAgent(conversationId) ? 'root' : conversationId;
     return () => { const list = this.steering.get(key) ?? []; this.steering.delete(key); return list; };
+  }
+
+  /**
+   * REQ-MONITOR-134 with PD-ORCH-005 clause 4, the repair of `a-steering-prompt-pending-at-a-rest-is-lost.md`: a steering
+   * prompt still pending when the iteration comes to rest — its agent stopped before the step that would have injected it —
+   * is delivered into the conversation record of the agent it names, when that agent is left `paused` with a record to
+   * carry on from: as the marked message its next step would have injected, after the answers to the calls the rest cut,
+   * and marked injected then, once. The resumed agent reads it at its first step. A prompt for an agent with no record — a
+   * child that never started — stays pending, and the run's end reports it not delivered (`closeSteering`,
+   * OQ-128). Once this has run, the rest closes steering: a steer after it is refused.
+   */
+  private deliverSteeringAtRest(root: { readonly taskId: string; readonly name: string }, iteration: number, cause: Interruption | null): void {
+    for (const [key, pending] of [...this.steering]) {
+      const child = key === 'root' ? null : this.children?.ledger.get(key) ?? null;
+      const agent = key === 'root' ? { ...root, iteration } : child?.state === 'paused' ? { taskId: child.task_id, name: child.canonical_name, iteration: child.iteration } : null;
+      if (agent === null || pending.length === 0 || this.record.load(agent.taskId).length === 0) continue;
+      this.steering.delete(key);
+      const recorder = this.record.recorder(agent.taskId, agent.iteration);
+      // Unlike `injectSteering`, no supervisor is told of the instruction here (REQ-MONITOR-134, "reported to the run"):
+      // the agent steps again only in the continue's run, whose supervisors are a fresh `SupervisorRegistry` with no
+      // consecutive series for a new user instruction to restart. A change that carried supervisors across a rest owes
+      // the `noteUserInstruction` call here.
+      for (const s of pending) {
+        recorder.appended(steeringMessage(s));
+        recordSteeringInjected(this.deps.writer, agent.name, s, { interruption: cause });
+      }
+    }
+  }
+
+  /**
+   * REQ-MONITOR-133/134 at the run's end (OQ-128): no steer is accepted from here, and a prompt no step injected and no rest
+   * delivered — its agent never started, ended first, or was cancelled — is recorded as not delivered: a
+   * `steering_not_delivered` timeline entry and a transcript line, so an acknowledged submission is never lost without a
+   * word. The specification has no word for such a prompt; the entry takes REQ-MONITOR-134's "delivered".
+   *
+   * Every way a run stops stepping reaches this before it awaits anything: teardown, and the two ends that are not
+   * terminations and never enter it — the pause at the message limit (`pauseAtLimit`) and the park at the plan gate
+   * (`parkAtPlanGate`, on the path that parks), each of which names itself in `ending` (found by the third review of the
+   * repair of a-steering-prompt-pending-at-a-rest-is-lost: both ended the run with a root steer still pending and said
+   * nothing). An end is named only on the path that takes it: a plan cycle that ends in teardown is teardown's to record.
+   */
+  private closeSteering(ending?: string): void {
+    try { this.reportUndeliveredSteering(ending); } catch (cause) { this.steeringClosed = true; this.deps.warn(`recording the undelivered steering of ${this.sessionId} failed: ${String(cause)}`); }
+  }
+  private reportUndeliveredSteering(ending = 'the run ended'): void {
+    this.steeringClosed = true;
+    for (const [key, pending] of this.steering) {
+      const who = key === 'root' ? this.rootName : this.children?.ledger.get(key)?.canonical_name ?? key;
+      for (const s of pending) {
+        const message = `The steering prompt for ${who} (${s.id.slice(0, 8)}) was not delivered: ${ending} before ${who} took another step.`;
+        this.deps.writer.appendTimeline('steering_not_delivered', 'rotaris', message, { prompt_id: s.id, agent: key });
+        this.deps.writer.appendRow('system', message, true);
+      }
+    }
+    this.steering.clear();
   }
 
   /**
@@ -1533,7 +1633,7 @@ export class Run {
       for (const w of this.waits.all()) this.memory.setOverride(w.provider, w.model, { key, choice });
       writer.appendTimeline('model_override', 'user', `The user chose ${key} (${provider}/${choice.model.modelId}) during the wait on ${waiting.provider}/${waiting.model}; it stands for the rest of the session.`, { provider: waiting.provider, model: waiting.model, model_key: key, to_provider: provider, to_model: choice.model.modelId });
       writer.appendRow('system', `Model changed to ${key} during the wait; the run resumes on it now and keeps it for the rest of the session.`, true);
-      if (waiting.agent === this.deps.config.persona) this.entryOverride = { ...this.entryOverride, model: choice.model };
+      if (waiting.agent === this.rootName) this.entryOverride = { ...this.entryOverride, model: choice.model };
       this.waits.resolveWithModel(key, choice);
       return true;
     }
@@ -1564,6 +1664,9 @@ export class Run {
     const { writer, owner, bus } = this.deps;
     const count = this.iterationsCompleted;
     this.pausedAtLimit = { count, limit };
+    // REQ-MONITOR-133/134 with OQ-128: no agent of this run steps again, so steering closes before anything is awaited and
+    // a prompt still pending — for the entry role, whose iteration has closed — is recorded as not delivered.
+    this.closeSteering('the run paused at the message limit');
     writer.appendRow('system', `Paused: ${count} message${count === 1 ? '' : 's'} reached the limit of ${limit}. Continue, double the limit, or cancel the run.`, true);
     this.sampler?.cancel();
     this.sampleTokens(false);
@@ -1641,6 +1744,8 @@ export class Run {
     } catch (cause) {
       this.lastFailure = String(cause);
     }
+    // A stopped cycle, and one whose turn produced no plan, end the run in teardown, whose own close records a prompt still
+    // pending as not delivered because the run ended — reached before anything is awaited, as the park's close below is.
     if (this.stop.requested) return await this.teardown(this.stop.reason ?? 'user_cancelled');
     if (plan === '') {
       // Nothing to put a decision on. A gate with no plan would offer three answers over an empty surface, so the
@@ -1648,6 +1753,14 @@ export class Run {
       this.lastFailure = this.lastFailure ?? 'the entry role produced no plan text while the run was held at the plan gate';
       return await this.teardown('agent_session_aborted');
     }
+    /*
+     * REQ-MONITOR-133/134 with OQ-128: the run parks, and no agent of it steps again — the gate's release starts the next
+     * run — so steering closes here, as the park begins and before anything is awaited, and a prompt still pending is
+     * recorded as not delivered because the run was held at the plan gate. Only here, on the path that parks: the close
+     * sat above the two branches that end the run instead, and named a gate that never opened for a stopped cycle or a
+     * failed one (found by the fourth review of the repair of a-steering-prompt-pending-at-a-rest-is-lost).
+     */
+    this.closeSteering('the run was held at the plan gate');
     writer.appendRow('system', `A plan is ready for your decision (cycle ${cycle}). Approve to release execution, revise to ask for another plan, or cancel the run.`, true);
     this.sampler?.cancel();
     this.sampleTokens(false);
@@ -1848,6 +1961,10 @@ export class Run {
     // from here. Each is closed before anything terminal is written: a call still open settles now, and one that returns
     // later writes nothing through its gate into the finished session, or into a later run's.
     this.closePorts();
+    // REQ-MONITOR-133/134 with OQ-128: no agent takes another step from here, so steering closes before anything is awaited
+    // — a steer while the hooks run is refused, not acknowledged for nothing to deliver — and what is still pending is
+    // recorded as not delivered.
+    this.closeSteering();
     // PD-ORCH-005 clause 10: a run that comes to rest records its agents' background sessions — a stop and a quit end them,
     // and so does the explicit cancel, which is a stop the user made final (OQ-96). Guarded like every teardown step.
     const ended = this.terminalsEndedBy();

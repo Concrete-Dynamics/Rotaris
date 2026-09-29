@@ -362,6 +362,20 @@ describe('rows — REQ-CHAT-068/069, delegation and scope', () => {
     ];
     expect(scopedRows(rows, runLevel).map((r) => r.index)).toEqual([0, 1]);
   });
+
+  it('REQ-CHAT-069 with PD-ORCH-005 clause 4 (OQ-97): "This task" for the run-level agent keeps every row a root of the session wrote, under whichever persona it was opened as, and no row of a child of the entry persona', () => {
+    // The entry role is `coding-agent`; the session's root was opened as `orchestrator`, and a root resumed as the entry
+    // role keeps that name on its rows (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
+    const runLevel: AgentRecord = { ...agent, id: RUN_AGENT_ID, name: 'coding-agent', persona: 'coding-agent' };
+    const rows = [
+      row({ index: 0, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }),
+      row({ index: 1, kind: 'tool', name: 'orchestrator', persona: 'coding-agent' }),
+      row({ index: 2, kind: 'agent', name: 'helper', persona: 'coding-agent' }),
+      row({ index: 3, kind: 'system' }),
+    ];
+    expect(scopedRows(rows, runLevel, [{ name: 'orchestrator', canonical: 'orchestrator' }]).map((r) => r.index)).toEqual([0, 1, 3]);
+    expect(scopedRows(rows, agent, [{ name: 'orchestrator', canonical: 'orchestrator' }]).map((r) => r.index)).toEqual([2, 3]);
+  });
 });
 
 describe('rows — REQ-CHAT-162 / REQ-CHAT-076, the `/skills` listing keeps a bare URL activatable', () => {

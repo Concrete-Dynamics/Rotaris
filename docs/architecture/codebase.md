@@ -1136,11 +1136,13 @@ header's selectors. Decisions taken here for the owner: a manual pause ends the 
 set has no `paused`); the pause at the limit writes no terminal pair; operations with no mechanism answer false.
 `ROTARIS_CAPTURE_TYPE`, `ROTARIS_CAPTURE_PAUSE_ANSWER` and `ROTARIS_CAPTURE_QUIT_MS` are verification seams.
 
-**What `pnpm part-j-proof` does.** It builds Electron and launches the app six times against scratch stores: a
+**What `pnpm part-j-proof` does.** It builds Electron and launches the app seven times against scratch stores: a
 message typed during a run is queued and consumed once as a completed task; a steer is submitted from the composer's
 card and injected; Pause then the composer's Continue run leave the pause row and two run starts, and a worker thread
 sampling the store while the app runs shows the pause released the lock and the continued run held it throughout
-(ADR-0005, 2026-09-29, R-067) and the paused session's summary naming no stop (REQ-ORCH-082 rule 1, OQ-118); a `message_limit`
+(ADR-0005, 2026-09-29, R-067) and the paused session's summary naming no stop (REQ-ORCH-082 rule 1, OQ-118); a steer
+submitted while the entry role's step is held, then a pause, reaches the root's record at the rest, injected once, and
+the Continue's resumed root reads it (REQ-MONITOR-134, OQ-128, 2026-09-29, R-067); a `message_limit`
 of one pauses the run, the dialog answers "double" and the doubled limit persists; a session left paused at the limit
 is resumed on relaunch through the one reap and its dialog answers "cancel"; a user-initiated close during a run
 records `application_shutdown` with the terminal pair and no lock. Its evidence lands under `.proof/part-j-proof/`. The queue

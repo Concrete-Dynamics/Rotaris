@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -190,6 +190,41 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     expect(sessions.continueSession(sid, 'continue')).toEqual({ ok: true, value: { resumed: true, messageLimit: 2 } });
     await sessions.running(sid);
     expect(dal.getSession(sid)!.paused_at_count).not.toBeNull();
+  });
+
+  it('REQ-MONITOR-133/134 with OQ-128 (found by the third review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): a root steer still pending at the message-limit pause is recorded as not delivered, and a steer once the pause is reached is refused', async () => {
+    let releaseEnd!: () => void;
+    const endHold = new Promise<void>((r) => { releaseEnd = r; });
+    let releasePause!: () => void;
+    const pauseHold = new Promise<void>((r) => { releasePause = r; });
+    let atEnd = false;
+    let atPause = false;
+    const sessions = makeSessions(many(6), { messageLimit: 1 });
+    const started = sessions.start(dal, 'C:/ws', 'limited');
+    if (!started.ok) throw new Error(started.error.reason);
+    const sid = started.value;
+    sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'more work' } });
+    // REQ-EVENTS-165: the boundary's drain waits on this consumer once iteration 1 has ended, and the pause's once it is recorded.
+    sessions.bus.attach(sid, { mode: 'blocking', deliver: (e) => {
+      if (dal.timelineOf(sid).some((t) => t.name === 'run_paused_message_limit')) { atPause = true; return pauseHold; }
+      if (e.event === 'iteration.end') { atEnd = true; return endHold; }
+      return undefined;
+    } });
+    await vi.waitFor(() => { expect(atEnd).toBe(true); });
+    // The root's turn has returned and the limit is met at this boundary: no step of this run will inject the steer.
+    const steered = sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: 'run', text: 'mind the tests' } });
+    expect(steered.ok && steered.value?.length).toBe(36);
+    const promptId = steered.ok ? steered.value! : '';
+    releaseEnd();
+    await vi.waitFor(() => { expect(atPause).toBe(true); });
+    expect(sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: 'run', text: 'too late' } })).toEqual({ ok: false });
+    releasePause();
+    expect((await sessions.running(sid))?.execution_status).toBe('paused_message_limit');
+    const steering = dal.timelineOf(sid).filter((t) => t.name.startsWith('steering_'));
+    expect(steering.map((t) => t.name)).toEqual(['steering_submitted', 'steering_not_delivered']);
+    expect(JSON.parse(steering[1]!.metadata)).toMatchObject({ prompt_id: promptId, agent: 'root' });
+    expect(steering[1]!.message).toMatch(/was not delivered: the run paused at the message limit before /);
+    expect(dal.residentRows(sid).filter((r) => r.kind === 'system').map((r) => r.body)).toContain(steering[1]!.message);
   });
 
   it('cancel at the limit sets paused with stop reason message_limit_reached; a null limit cannot resume and warns (REQ-SESSION-110)', async () => {

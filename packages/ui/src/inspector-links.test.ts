@@ -26,7 +26,7 @@ const session = (over: Partial<SessionRecord> = {}): SessionRecord => ({
   id: 's1', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-09-29T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [],
   tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: null, runType: 'task_run', improvementArtifactIds: [], runStartedAt: '2026-09-29T10:00:00.000Z', iterationsCompleted: 0, summary: null, permissionMode: 'ask', sandboxed: false, backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
   usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 15, agents: 1, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY },
-  entryTools: { resolved: [], called: [], active: [] }, artifacts: [], ...over,
+  entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], ...over,
 });
 const inspector = (s: SessionRecord, selected: string, runLevel: AgentRecord | null, onOpenArtifact?: (id: string) => void) => renderToStaticMarkup(createElement(Inspector, {
   session: s, rows: [], personas: [{ role: 'orchestrator', tools: ORCHESTRATOR_DECLARED, thinking: null, effectiveModel: 'm' }], runLevel, selectedAgentId: selected, onSelect: () => undefined, models: [], compressionThresholdPercent: 60, runActive: true, resting: false, nowIso: null,
@@ -129,6 +129,53 @@ describe('REQ-MONITOR-044/052/068/069 (live-run finding K1): artifact links', ()
     expect(html).not.toContain(ARTIFACTS_EMPTY);
     expect(linkIds(html, 'persona-artifacts-links')).toEqual(['art_rep00001']);
     expect(html).toMatch(/data-testid="persona-instance-artifacts" data-produced="1" data-received="1"/);
+  });
+
+  /*
+   * REQ-LIBRARY-093 (the repair of a-roots-publish-names-its-persona-as-its-author.md): a root's publish and its reads record
+   * its canonical instance name, which for a persona the canonicaliser rewrites is not the entry persona the run-level agent
+   * is named by — so its links read empty (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
+   */
+  it('REQ-LIBRARY-093: the run-level agent\'s links hold what its roots published and read under their canonical name, in the inspector and in the persona window; a child is still known by its own name', () => {
+    const roots = [{ name: 'Lead Planner', canonical: 'Lead-Planner' }];
+    const planned = link({ id: 'art_plan0002', slug: 'lead-plan', producer: 'Lead-Planner', consumedBy: ['coder-1'] });
+    const reported = link({ id: 'art_rep00002', slug: 'coder-1-report', producer: 'coder-1', consumedBy: ['Lead-Planner'] });
+    const s = session({ agents: [child({})], artifacts: [planned, reported, other], entryRoots: roots });
+    const lead = runLevelAgent(s, { persona: 'Lead Planner', model: 'm', reasoning: 'medium', tools: [] }, false)!;
+    expect(agentArtifacts(lead, s.artifacts, roots)).toEqual({ produced: [planned], received: [reported] });
+    expect(personaArtifacts([lead], s.artifacts, roots)).toEqual([planned]);
+    expect(agentArtifacts(child({}), s.artifacts, roots)).toEqual({ produced: [reported], received: [planned] });
+    const html = inspector(s, RUN_AGENT_ID, lead);
+    expect(linkIds(html, 'inspector-artifacts-produced')).toEqual(['art_plan0002']);
+    expect(linkIds(html, 'inspector-artifacts-received')).toEqual(['art_rep00002']);
+    const window = renderToStaticMarkup(createElement(PersonaWindow, {
+      persona: 'Lead Planner', session: s, rows: [], runLevel: lead, declaredTools: [], selectedAgentId: RUN_AGENT_ID, onSelectTab: () => undefined, nowIso: null, compressionThresholdPercent: 60,
+      onSteer: async () => ({ ok: true as const }), onCancel: async () => ({ ok: true as const }), onOpenArtifact: () => undefined,
+    }));
+    expect(linkIds(window, 'persona-artifacts-links')).toEqual(['art_plan0002']);
+    expect(window).toMatch(/data-testid="persona-instance-artifacts" data-produced="1" data-received="1"/);
+  });
+
+  it('PD-ORCH-005 clause 4 with OQ-97 (REQ-MONITOR-071, REQ-MONITOR-053): a root resumed as the entry role writes under the persona it was opened as, and the run-level agent\'s window shows those rows and the inspector follows them to it', () => {
+    const roots = [{ name: 'orchestrator', canonical: 'orchestrator' }];
+    const s = session({ agents: [child({})], entryRoots: roots });
+    const fallback = runLevelAgent(s, { persona: 'coding-agent', model: 'm', reasoning: 'medium', tools: [] }, false)!;
+    const rows = [
+      { index: 0, kind: 'agent', settled: true, body: 'Before the rest.', at: 'x', ts: '10:00:00', persona: 'orchestrator', name: 'orchestrator' },
+      { index: 1, kind: 'tool', settled: true, body: 'grep', at: 'x', ts: '10:01:00', persona: 'coding-agent', name: 'orchestrator', toolName: 'grep', toolStatus: 'ok' },
+      { index: 2, kind: 'agent', settled: true, body: 'The child.', at: 'x', ts: '10:02:00', persona: 'coding-agent', name: 'coder-1' },
+    ];
+    const window = renderToStaticMarkup(createElement(PersonaWindow, {
+      persona: 'coding-agent', session: s, rows, runLevel: fallback, declaredTools: [], selectedAgentId: RUN_AGENT_ID, onSelectTab: () => undefined, nowIso: null, compressionThresholdPercent: 60,
+      onSteer: async () => ({ ok: true as const }), onCancel: async () => ({ ok: true as const }),
+    }));
+    expect(window).toMatch(/data-testid="persona-transcript" data-rows="2"/);
+    // Nothing selected: the row written before the rest is the latest one, and it is followed to the run-level agent.
+    const followed = renderToStaticMarkup(createElement(Inspector, {
+      session: s, rows: rows.slice(0, 1), personas: [], runLevel: fallback, selectedAgentId: null, onSelect: () => undefined, models: [], compressionThresholdPercent: 60, runActive: true, resting: false, nowIso: null,
+      onSteer: () => undefined, onCancel: () => undefined, onPopOut: () => undefined,
+    }));
+    expect(followed).toContain(`data-shown="${RUN_AGENT_ID}"`);
   });
 });
 

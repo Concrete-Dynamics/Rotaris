@@ -270,11 +270,12 @@ store when the session is next repaired (`repairOne`) or continued (`launchConti
 which now leaves a `paused` agent alone): the open iteration's interruption `crash`, its unfinished agents `paused`, an
 unanswered last `assistant` message answered (`answerOpenCalls`: a call whose row settled keeps its result, one whose
 row is `running` is answered as interrupted and its row settles, and one with no row, which never started, is answered
-as not run), then the calls the dead run's agents made that no count held joined to the session's total
-(`countCrashedCalls`, REQ-MONITOR-102: what the root's record holds beyond its iteration's `root_tool_calls`, and each
-unfinished child's beyond its `children.tool_calls`, written with those counts in one transaction by
-`SessionWriter.countToolCalls`, so a second recording and a resumed child's own credit add nothing more; a root whose
-count is NULL — an iteration opened before v26 — adds nothing), the stored approvals withdrawn, and the background
+as not run — the root's rows found by the persona its iteration was opened with, `iterations.root_persona`, which a root
+resumed as the entry role keeps as its rows' name, OQ-97), then the calls the dead run's agents made that no count held
+joined to the session's total (`countCrashedCalls`, REQ-MONITOR-102: what the root's record holds beyond its iteration's
+`root_tool_calls`, and each unfinished child's beyond its `children.tool_calls`, written with those counts in one
+transaction by `SessionWriter.countToolCalls`, so a second recording and a resumed child's own credit add nothing more; a
+root whose count is NULL — an iteration opened before v26 — adds nothing), the stored approvals withdrawn, and the background
 sessions still recorded running and not held by this process ended by the crash. Loading a session records and
 settles nothing (clause 8), and neither does the user's cancel of one crash-left child while the session rests: it
 cancels that child and its descendants from where they stood, answers their own calls the crash cut off (no later crash
@@ -566,13 +567,26 @@ before it, a run that spawned no child drew zero however much it had spent. **`S
 finding K1, 2026-09-29) is the same route for its tools: `resolved` is the native set the live run's root port kept
 (`ToolPort.resolvedTools`, the one resolution's names the callable map kept, so a coordinator's withheld tools are absent —
 REQ-MONITOR-061), `called`
-and `active` the tracker's under the persona the root dispatches as (`Run.entryTools`); with no run live nothing is
+and `active` the tracker's under the name the root dispatches as (`Run.entryTools`, `rootName`: a root resumed as the
+entry role keeps the persona its iteration was opened with, OQ-97); with no run live nothing is
 resolved, the history is read under the latest iteration's `root_persona` (`entryToolsOf`), and the surface lets the
 role's declared tools stand in (REQ-MONITOR-060; the snapshot's `declaredTools`). A LIVE run-level agent whose root port
 has not resolved yet — the pre-flight, before `Run.iterate` sets the port — lists nothing (`runLevelGrant`), never the
 declared set (REQ-MONITOR-061). **`SessionRecord.artifacts`** is the
 session's artifacts not superseded, with producer, ready flag and consumers (`artifactLinksOf`, one body-free read through
 `artifacts_by_created` per snapshot) — what the inspector's and the persona window's artifact links read (REQ-MONITOR-052/068/069).
+**`SessionRecord.entryRoots`** names the entry role's roots, each once, by the name its rows and calls carry and its
+canonical name: every iteration's (`root_persona`, `root_canonical_name`); then each root no iteration row records that
+published — a plan cycle's — by its publish's persona and `created_by` (`StoreDal.rootPublishersOf`, a publish whose
+conversation is no child's and no iteration root's task id, through `artifacts_by_created` per snapshot); then the live
+run's current root (`entryRootsOf`, `Run.currentRoot`). The session lets go of a run once `start()` settles, a park at the
+plan gate included, so a plan cycle's root that published nothing is named only while its run is live
+(`docs/defects/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`). The surfaces know the run-level
+agent by the entry persona and by these: it owns a named row carrying either (`ownRow`, which `rowsOf`, `scopedRows` and
+`followedAgent` share; never by a named row's persona, which a child of the entry persona shares), and its artifact
+links match either or a root's canonical name, which its publishes and reads record (REQ-LIBRARY-093). Before this, a
+root whose name was not the entry persona fell outside it
+(`docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md`).
 
 **The MCP surface (Part S; ADR-0033/0034).** A port is created synchronously but its MCP surface needs discovery, so the
 run start kicks discovery off for every carried, launchable server (`McpHost.prepare`, each bounded by REQ-MCP-053's 35 s
@@ -786,7 +800,7 @@ resumes with its agents (clause 19).
 |---|---|---|
 | `cancel` | `run.stop.request('user_cancelled')` | REQ-SESSION-186's stop: graceful; the second activation forces; 30 s backstop (ADR-0014). **PD-ORCH-005:** a stop, forced or not, comes to rest — every unfinished agent `paused` by `stop`, the iteration open (clause 15) — and the next continue resumes it (§2). Sent by the composer's stop control, unconfirmed (renderer `stopRun`), and by `/stop`, offered as "Stop the active run" (clause 15) |
 | `pause` | `run.pause()` | refused while the plan gate holds (PD-ORCH-005 clause 11); `pausing` written only after acceptance; approvals and questions withdrawn, the tool deadline armed, the scheduler held; every agent stops before its next step; the run ends as `user_cancelled` → status `paused` with its row, its unfinished agents `paused` and the iteration open. **The Mission view refuses a pause for any selection but the run itself client-side, with REQ-MONITOR-276's text, and sends nothing** (Part R); the same `pause` op reaches here for the run-level selection |
-| `submitSteeringPrompt` | `run.steer(agentId, text)` | pending per conversation (`root` or a task id); the id is the string value; the persona window's steer card sends it for its instance (Part R, REQ-MONITOR-070/137) |
+| `submitSteeringPrompt` | `run.steer(agentId, text)` | pending per conversation (`root` or a task id); the id is the string value; the persona window's steer card sends it for its instance (Part R, REQ-MONITOR-070/137). A prompt still pending when the iteration comes to rest is delivered into the record of the `paused` agent it names, after the answers to its cut calls, marked injected once (`Run.deliverSteeringAtRest`); a child resumed `summarizing` whose record ends on one resumes `running`. Steering closes once no agent of the run takes another step — when the rest is recorded, when teardown begins, at the message-limit pause (`pauseAtLimit`) or at the plan-gate park (`parkAtPlanGate`, only on the path that parks: a plan cycle stopped, quit or failed ends in teardown) — and a steer after that is refused. What no step injected and no rest delivered — an agent that never started, ended or was cancelled, a root prompt pending at an iteration boundary — is recorded as not delivered at that close (`steering_not_delivered` and a transcript line naming the end, `Run.closeSteering`) (REQ-MONITOR-133/134, PD-ORCH-005 clause 4, OQ-128) |
 | `createQueuedPrompt` / `editQueuedPrompt` / `removeQueuedPrompt` | the writer's queue units | QUEUED rows; the snapshot republished; refused once TRIGGERED. **Part AB (REQ-CHAT-039):** `createQueuedPrompt` also takes an optional `context` snapshot (a one-level record, or its JSON text) and resolves ownership before the row exists — the control channel's addressing IS the explicit session id, a snapshot naming another session is REFUSED rather than re-scoped, and an unscoped prompt is refused naming OQ-51. Ownership is the primary key's first column, so edit and trigger cannot move it |
 | `editTodo` | `run.editTodo` while live; stored-document editor while paused/completed | REQ-CHAT-085..091: add / update / remove follows the plan's projected source (`child` > `agent` > `planner`); accepted edits persist and count as a user instruction for the supervisor. Planner and root-agent documents share the existing `sessions.todo` TEXT column through a version-2 JSON envelope; child plans stay on child rows |
 | `setModel` / `setReasoning` | `run.setEntryModel` / `setEntryReasoning` | applied from the next iteration; a system row. **During a provider-limit wait** (Part Q) `setModel` is REQ-NOTIFY-263's *change model*: the parked agent rebuilds and re-runs at once, the override is persisted session-wide (`model_override`); a key that cannot be applied answers `false`, records `model_override_rejected` and the header names why — the wait continues |

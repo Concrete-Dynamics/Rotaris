@@ -4,7 +4,7 @@ import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotari
 import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
-import { runTurn, type SteeringPrompt, type ToolPort, type TurnOutcome } from '../run/turn.js';
+import { isSteeringMessage, runTurn, type SteeringPrompt, type ToolPort, type TurnOutcome } from '../run/turn.js';
 import { answerOpenCalls } from '../run/crash.js';
 import { callsRun } from '../run/interruption.js';
 import type { AttachmentOutcome, BackgroundOutput, DelegateOutcome, DelegateRequest, DelegationOps, WaitOutcome } from './delegation.js';
@@ -521,7 +521,10 @@ export class IterationChildren implements DelegationOps {
       // summarising resumes `running` instead — it works, and the limits count it (found by phase 4's review).
       const notice = this.deps.resumeNotice?.(c.task_id) ?? null;
       const summarising = c.resume_state === 'summarizing';
-      const r = this.ledger.resume(c.task_id, summarising && notice !== null ? 'running' : undefined);
+      // REQ-MONITOR-136 with REQ-MONITOR-134: so does one whose record ends on a steering prompt the rest delivered to it
+      // (`Run.deliverSteeringAtRest`) — a steer that arrives while an agent is finishing makes it take another round.
+      const steered = summarising && isSteeringMessage(this.deps.record?.load(c.task_id).at(-1));
+      const r = this.ledger.resume(c.task_id, summarising && (notice !== null || steered) ? 'running' : undefined);
       if (!r.ok) { this.deps.warn(r.reason); continue; }
       n += 1;
       this.acceptScope(r.row, storedScope(r.row));

@@ -660,6 +660,13 @@ describe('store - a declared index is a claim about a query plan; the plan is as
     expect(plan(statements['artifactsOf']!.source, 's')).toBe('SEARCH artifacts USING INDEX artifacts_by_created (session_id=?)');
     // Live-run finding K1 (REQ-MONITOR-044/052): the agent surfaces' links are read at every snapshot, through the same index.
     expect(plan(statements['artifactLinksOf']!.source, 's')).toBe('SEARCH artifacts USING INDEX artifacts_by_created (session_id=?)');
+    // REQ-LIBRARY-093 with OQ-106: so are the publishes that name a root no iteration records — the same index, and each
+    // publish's conversation looked up among the session's children and its iterations' roots by primary-key prefix.
+    const roots = plan(statements['rootPublishersOf']!.source, 's');
+    expect(roots).toContain('SEARCH a USING INDEX artifacts_by_created (session_id=?)');
+    expect(roots).toMatch(/SEARCH c USING (COVERING )?INDEX sqlite_autoindex_children_1 \(session_id=\? AND task_id=\?\)/);
+    expect(roots).toContain('SEARCH i USING INDEX sqlite_autoindex_iterations_1 (session_id=?)');
+    expect(roots).not.toMatch(/SCAN|TEMP B-TREE/);
     r.db.close();
     forgetSpelling(r.dir);
   });

@@ -3986,7 +3986,16 @@ treat a resumed child.
   identity restored (found by phase 4's review). The persona holds for the whole run, so an iteration the run goes on
   to after the resumed one runs as it too, and a session model override made for the current entry role does not
   reach it. A persona the configuration no longer knows cannot be restored: the run is set up as the entry role, and
-  its warnings say so. *The first repair refused that continue and named "continue without them"; a crashed session
+  its warnings say so. The root keeps its name all the same: its rows carry the persona `iterations.root_persona`
+  records, the name its earlier rows and the crash record read, while each row's `persona` names the entry role it runs
+  as. *As first built the resumed root's rows carried the entry role's name, so a crash in its step found none of them
+  and answered a call that had completed as never started (`a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record.md`,
+  repaired 2026-09-29 under R-067).* *That repair's fourth review found the surfaces knew the run-level agent by the
+  entry persona alone, so the root's rows fell outside its scope and its persona window while the inspector followed them
+  to it, and `Run.entryTools` missed the calls it dispatched under its own name. The session now names its roots, each by
+  the name its rows carry and its canonical name (`SessionRecord.entryRoots`), and the run-level agent owns every row,
+  call and artifact link they name (`the-run-level-agent-is-known-by-its-entry-persona-alone.md`, repaired 2026-09-29 under
+  R-067).* *The first repair refused that continue and named "continue without them"; a crashed session
   cannot take that route, which needs a `paused` one, so it was left no way on (found by phase 4's second review).*
   The pre-flight classifies the continue's message as it classifies any continuation's, and its route, grant and
   playbook reach the resumed agents as they reach the agents of any run.
@@ -4916,8 +4925,10 @@ from the launch content computed when the run began.
   clause names one iteration's root.
 - **The root is known by its task id.** A root's publish carries its task id as the artifact's `conversation_id` (its
   own tool port writes it; a child's report and a child's publish carry the child's), and the iteration's row records
-  that id. `created_by` is not used: every root records its persona there
-  (`a-roots-publish-names-its-persona-as-its-author.md`), so it cannot tell one iteration's root from another's.
+  that id. `created_by` is not used: every iteration's root records the one canonical name its persona gives, so it
+  cannot tell one iteration's root from another's. *As built on 2026-09-28 every root recorded its persona there
+  (`a-roots-publish-names-its-persona-as-its-author.md`); since that repair (2026-09-29, R-067) it records the root's
+  canonical name, as REQ-LIBRARY-093 asks, which is no more distinct across iterations, so the reading stands.*
 - **A plan cycle's root is not an iteration's root.** Its publishes count only as "of any kind"; the approve path
   carries the plan itself in its own section.
 - **Work that follows a plan cycle follows no iteration.** A plan cycle is never recorded as an iteration, so on the
@@ -5562,11 +5573,19 @@ but not what following a link does, nor whether a superseded artifact is still o
 inspector on that artifact (REQ-LIBRARY-102's deep-link, REQ-LIBRARY-131's inspector, re-raised when already open). A persona
 window has no route to the main window's Library, so there a link opens the artifact inspector in the persona window itself
 — REQ-LIBRARY-131 makes the inspectors per window. An agent PRODUCED an artifact whose producer (`created_by`, else the
-record's canonical name — REQ-LIBRARY-136's "producer") is its name, and RECEIVED one whose consumers name it; the
-run-level agent is matched by the entry persona, which is the name the root publishes under
-(`a-roots-publish-names-its-persona-as-its-author.md` records why that is the persona and not the canonical name). A
-superseded artifact is listed nowhere, as the Library's table lists it nowhere. The ready flag is stated in words:
-"ready" (REQ-LIBRARY-136), else the status.
+record's canonical name — REQ-LIBRARY-136's "producer") is its name, and RECEIVED one whose consumers name it. The
+run-level agent is matched by the entry persona and by each root's two names from the session (`SessionRecord.entryRoots`:
+the name its rows carry and its canonical name). A root publishes and reads under its canonical instance name
+(REQ-LIBRARY-093). *As first built, the run-level agent was matched by the entry persona alone, "which is the name the
+root publishes under". The repair of
+[`a-roots-publish-names-its-persona-as-its-author.md`](../defects/fixed/a-roots-publish-names-its-persona-as-its-author.md)
+(2026-09-29, R-067) made that false for a persona id the canonicaliser rewrites. The links read the roots' names since
+[`the-run-level-agent-is-known-by-its-entry-persona-alone.md`](../defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
+A plan cycle's root, which no iteration row records, is named by its publishes; one that published nothing is named only
+while its run is live
+([`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`](../defects/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md),
+open).* A superseded artifact is listed nowhere, as the Library's table lists it nowhere. The ready flag is stated in
+words: "ready" (REQ-LIBRARY-136), else the status.
 
 **What a ruling decides.** Whether a link should open the Library (as built in the main window), an inspector in place
 (as built in a persona window) or something else; and whether an agent's links should keep its superseded artifacts.
@@ -5728,6 +5747,69 @@ None of them says what ends a silent child's step so that there is an outcome to
   and the requirements tell a wait from a stall only by active tool calls. The build reports it stalled; whether the
   wait pauses the watch or counts as waiting on N children is recorded in
   [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/a-child-waiting-on-its-own-children-is-reported-stalled.md).
+
+**OQ-128 — What becomes of a steering prompt still pending when the run comes to rest, or ends?** *(REQ-MONITOR-133, "the
+prompt is pending until injected"; REQ-MONITOR-134, "all pending steering prompts for an agent are delivered into its
+conversation … marked injected exactly once"; REQ-MONITOR-136; REQ-ORCH-094; `PD-ORCH-005` clauses 2 and 4. Raised
+2026-09-29 by the repair of
+[`a-steering-prompt-pending-at-a-rest-is-lost.md`](../defects/fixed/a-steering-prompt-pending-at-a-rest-is-lost.md)
+under [R-067](../product/requests.md#r-067). Open. Raised as OQ-122, renumbered OQ-127 when main had
+taken OQ-122 to OQ-126, and renumbered OQ-128 at the merge, OQ-127 having been taken on `main` meanwhile.)*
+
+A prompt is pending until the step of its agent that injects it. Clause 2 stops every agent before its next model step,
+so a prompt submitted while its agent's step or call was under way, and still pending at the pause, a stop or a quit,
+met no step to inject it. It lived only in the run's memory, and the run ended with it: acknowledged with an identifier
+and never delivered. Neither requirement says what a rest, or the end of a run, does with a pending prompt, and the
+specification has no word for a prompt that was not delivered.
+
+**The reading built.**
+
+- **At a rest, delivered into the record.** A prompt pending for an agent the rest leaves `paused`, whose conversation
+  record holds something to carry on from, is delivered into that record as the marked message its next step would have
+  injected (`[Steering prompt] …`), after the answers to the calls the rest cut, and is marked injected then, once
+  (`steering_injected`, its metadata naming the rest). The resumed agent carries on from its record (clause 4), so the
+  prompt is the last message of its first request, which is a step: a root that had answered and was waiting takes one,
+  and a child restored `summarizing` resumes `running` to take it, as one told of its background sessions does
+  (REQ-MONITOR-136's "another round").
+- **Steering closes when no agent takes another step.** The run accepts no steer once the rest is recorded (after the
+  delivery above), once its teardown begins, or once it reaches either end that is not a termination and never enters
+  teardown — the pause at the message limit (REQ-ORCH-085/087) and the park at the plan gate (REQ-ORCH-153) — whichever
+  comes first, so none is acknowledged that nothing could deliver: a steer in that window is refused (REQ-MONITOR-005's
+  `false` outcome).
+  *Falsified first reading, kept:* the first build closed steering only at the end of teardown and recorded "from that
+  moment the run accepts no steer, so none is acknowledged that nothing could deliver". Its review found that false: a
+  steer submitted after the rest, while teardown ran the `session_end` hooks, was acknowledged, never reached the record
+  of the `paused` agent it named, and was reported undelivered, although that agent resumes on the continue.
+- **At the run's end, recorded as not delivered and said so.** A prompt no step injected and no rest delivered — its
+  agent had not started and has no record, had ended, or was cancelled; or a prompt for the entry role pending when a
+  rest came at an iteration boundary, where no iteration is left open — is recorded when the run stops stepping: when
+  teardown begins, at the message-limit pause, or at the plan-gate park, each before anything is awaited. Only a run
+  that parks meets the park: a plan cycle stopped, quit, or ended on a failed turn ends in teardown, and is recorded as
+  the run ending. It is a `steering_not_delivered` timeline entry naming it, and a transcript line saying it was not
+  delivered (REQ-MONITOR-134's own verb) and which end it met (the run ended, paused at the message limit, or was held at
+  the plan gate). Like the transcript line each of those two ends writes of itself ("Paused: …", "A plan is ready …"), it
+  is written as that end begins, before the end's durable record; a recording failure at that record ends the run with
+  both lines in a history that is incomplete from that point (REQ-EVENTS-088). The first build called it "withdrawn"
+  (`steering_withdrawn`), borrowing clause 9's word; the glossary gives that word to an approval or a question only, so
+  it is no longer used for a prompt.
+  *Falsified second reading, kept:* the second build recorded it only "when teardown begins", and said an acknowledged
+  submission was never lost without a word. Its third review found that false for the pause at the message limit and the
+  park at the plan gate, which end the run without teardown: a root steer pending at the limit was acknowledged, dropped
+  with no entry, and never delivered after the continue.
+  *Falsified third build, kept:* the third build closed at the park as soon as the plan cycle's turn returned, above the
+  two branches that end the run in teardown instead. Its fourth review found a steer pending when a plan cycle was
+  stopped, quit, or ended on a failed turn recorded as "held at the plan gate", a gate that never opened; the reading
+  above named the end the run met, and the build now does.
+- **At a crash, lost.** A crash still loses what was pending, since only the run's memory held it. A crash can also fall
+  between the two writes a delivery at a rest makes — the prompt appended to the agent's record, then its
+  `steering_injected` entry — leaving a prompt the resumed agent reads that the timeline never marked injected.
+
+**What a ruling decides.** Whether a prompt for a child that has not started should instead be kept, durably, for its
+first step when it resumes; whether the entry role's prompt pending at an iteration boundary should reach the next
+iteration's root after a continue; whether a prompt should be persisted at submission so a crash does not lose it; and
+what a prompt that was never delivered is called, since the specification's vocabulary has no word for it (the build
+describes it by REQ-MONITOR-134's verb, `steering_not_delivered`, and names no new state); and whether a steer after the
+rest should instead be accepted and kept for the resumed agent, rather than refused.
 
 ## Design-reference dependencies
 

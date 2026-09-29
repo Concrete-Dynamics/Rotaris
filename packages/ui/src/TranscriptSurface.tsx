@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { RUN_AGENT_ID, type AgentRecord, type TranscriptRow } from '@rotaris/contracts';
+import type { AgentRecord, EntryRoot, TranscriptRow } from '@rotaris/contracts';
 import { elapsedLabel } from './AgentTree.js';
-import { countNoun } from './agents.js';
+import { countNoun, ownRow } from './agents.js';
 import {
   Row, TranscriptSurfaceProvider, defaultExpanded, delegationSummary, expansionKey, placements, rowKey as memberRowKey, rowMenuEntries,
   type DisplayRow, type RowMenuEntry, type RowMenuRequest, type TranscriptSurface,
@@ -176,15 +176,15 @@ export const SCOPE_NO_AGENT = 'Select an agent to scope the transcript to its ta
 export const RUN_OWNED_KINDS = new Set(['user', 'system', 'question', 'approval', 'verifier']);
 
 /**
- * REQ-CHAT-069: the run-owned rows plus the selected agent's own; the run-level agent owns the rows named for its
- * persona. **This is the requirement's one implementation.** The projection held a second one that no surface
- * ever reached and that kept three kinds of the five; it is gone
+ * REQ-CHAT-069: the run-owned rows plus the selected agent's own (`ownRow`); the run-level agent owns the rows named for
+ * its persona and for any of the session's roots (`roots`, `SessionRecord.entryRoots`: a root resumed as the entry role
+ * keeps its own persona's name, PD-ORCH-005 clause 4 with OQ-97). **This is the requirement's one implementation.** The
+ * projection held a second one that no surface ever reached and that kept three kinds of the five; it is gone
  * (docs/defects/fixed/the-in-projection-scope-filter-is-never-reached.md).
  */
-export function scopedRows(rows: readonly TranscriptRow[], agent: AgentRecord | null): readonly TranscriptRow[] {
+export function scopedRows(rows: readonly TranscriptRow[], agent: AgentRecord | null, roots: readonly EntryRoot[] = []): readonly TranscriptRow[] {
   if (!agent) return rows;
-  return rows.filter((r) => RUN_OWNED_KINDS.has(r.kind)
-    || (agent.id === RUN_AGENT_ID ? (r.name === agent.persona || (r.name === undefined && r.persona === agent.persona)) : r.name === agent.name));
+  return rows.filter((r) => RUN_OWNED_KINDS.has(r.kind) || ownRow(r, agent, roots));
 }
 
 /**

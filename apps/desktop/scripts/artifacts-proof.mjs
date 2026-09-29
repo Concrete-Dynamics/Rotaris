@@ -166,14 +166,20 @@ const results = {};
   const rows = artifacts(db, s.session_id);
   const writes = toolRows(db, s.session_id, 'artifact_write');
   const listing = toolRows(db, s.session_id, 'artifact_list');
+  const roots = db.prepare('SELECT iteration, root_task_id, root_canonical_name FROM iterations WHERE session_id = ? ORDER BY iteration').all(s.session_id);
   db.close();
   if (rows.length !== 1) throw new Error(`expected one artifact row, found ${rows.length}`);
   const record = rows[0];
   if (record.kind !== 'agent_published' || record.status !== 'published') throw new Error(`the record is not an agent publish: ${JSON.stringify(record)}`);
   if (!/^art_[0-9A-Za-z]{8}$/.test(record.id)) throw new Error(`the id is not REQ-LIBRARY-088's shape: ${record.id}`);
-  // REQ-LIBRARY-093: `created_by` is the publishing agent INSTANCE by its canonical name — the name the tool call
-  // was recorded under. (For the root that name is also its persona; there is one such instance, and a child's is not.)
-  if (record.created_by !== writes[0]?.agent_name) throw new Error(`created_by is not the publishing agent's canonical name: ${record.created_by} vs ${writes[0]?.agent_name}`);
+  // REQ-LIBRARY-093: `created_by` is the publishing agent INSTANCE by its canonical name. The publisher here is the
+  // iteration's root, so that is the canonical name its iteration records, and the record's conversation is the root's
+  // task id. (It once compared the tool call's recorded name, which for a root is its persona — the two coincide for
+  // this persona id and not for one the canonicaliser rewrites: `a-roots-publish-names-its-persona-as-its-author.md`.)
+  if (roots.length !== 1) throw new Error(`expected one iteration, found ${roots.length}`);
+  if (record.created_by !== roots[0].root_canonical_name) throw new Error(`created_by is not the publishing root's canonical name: ${record.created_by} vs ${roots[0].root_canonical_name}`);
+  if (record.conversation_id !== roots[0].root_task_id) throw new Error(`the publish's conversation is not the root's task id: ${record.conversation_id} vs ${roots[0].root_task_id}`);
+  if (writes[0]?.agent_name === undefined) throw new Error('the publish recorded no tool call');
   if (!String(writes[0]?.entry.result ?? '').includes(`Published artifact ${record.id} (slug: ${record.slug}).`)) throw new Error(`the publish observation is wrong: ${JSON.stringify(writes[0])}`);
   if (!String(listing[0]?.entry.result ?? '').includes(`- ${record.id} [${record.slug}] persona=`)) throw new Error(`the listing observation is wrong: ${JSON.stringify(listing[0])}`);
   // REQ-SESSION-002: the body is a FILE beside the session's other files, named flat.

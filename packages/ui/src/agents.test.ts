@@ -13,7 +13,7 @@ const row = (over: Partial<TranscriptRow>): TranscriptRow => ({ index: 0, kind: 
 const session = (over: Partial<SessionRecord>): SessionRecord => ({
   id: 's1', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-09-05T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [],
   tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: null, runType: 'task_run', improvementArtifactIds: [], runStartedAt: '2026-09-05T10:00:00.000Z', iterationsCompleted: 0, summary: null, permissionMode: 'ask', sandboxed: false, backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
-  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], ...over,
+  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], ...over,
 });
 
 describe('agents — the shared selection (REQ-MONITOR-042) and the run-level agent (REQ-MONITOR-043/057)', () => {
@@ -64,6 +64,28 @@ describe('agents — the inspector follows the latest author (REQ-MONITOR-053/05
     const rows = [row({ index: 1, kind: 'agent', persona: 'orchestrator', name: 'orchestrator' }), row({ index: 2, kind: 'tool', persona: 'coding-agent', name: 'helper' }), row({ index: 3, kind: 'user' }), row({ index: 4, kind: 'agent', persona: 'coding-agent', name: 'helper' })];
     expect(rowsOf(rows, helper).map((r) => r.index)).toEqual([2, 4]);
     expect(rowsOf(rows, runLevel).map((r) => r.index)).toEqual([1]);
+  });
+  /*
+   * Found by the fourth review of the repair of a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record
+   * (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md): a root resumed as the entry role keeps
+   * its own persona's name on its rows, so matching them by the entry persona alone dropped every one of them.
+   */
+  it('PD-ORCH-005 clause 4 with OQ-97: a root resumed as the entry role keeps its own persona\'s name on its rows, and the run-level agent still owns them (REQ-MONITOR-071) and is the agent they are followed to (REQ-MONITOR-053); a child of the entry persona stays its own', () => {
+    const coding = agent({ id: 'bg_00000009', name: 'coder', persona: 'coding-agent' });
+    // The entry role is `coding-agent` now; the session's roots were opened as `orchestrator` (`SessionRecord.entryRoots`).
+    const roots = [{ name: 'orchestrator', canonical: 'orchestrator' }];
+    const fallback = runLevelAgent(session({ agents: [coding], entryRoots: roots }), { persona: 'coding-agent', model: 'm', reasoning: 'medium', tools: [] }, false)!;
+    const rows = [
+      row({ index: 1, kind: 'agent', persona: 'orchestrator', name: 'orchestrator' }),
+      row({ index: 2, kind: 'agent', persona: 'coding-agent', name: 'orchestrator' }),
+      row({ index: 3, kind: 'tool', persona: 'coding-agent', name: 'orchestrator', toolName: 'grep' }),
+      row({ index: 4, kind: 'tool', persona: 'coding-agent', name: 'coder', toolName: 'grep' }),
+    ];
+    expect(rowsOf(rows, fallback, roots).map((r) => r.index)).toEqual([1, 2, 3]);
+    expect(rowsOf(rows, coding, roots).map((r) => r.index)).toEqual([4]);
+    // The root's row written before the rest, under the persona it ran as then, is followed to the run-level agent too.
+    expect(followedAgent(rows.slice(0, 1), [coding], fallback, roots)?.id).toBe(RUN_AGENT_ID);
+    expect(followedAgent(rows, [coding], fallback, roots)?.id).toBe(coding.id);
   });
 });
 

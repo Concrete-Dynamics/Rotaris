@@ -558,7 +558,17 @@ threshold, no compression can bring the count under it, and the reason is stated
 REQ-ORCH-093 recovery path is never latched. **`SessionRecord.entryContext`**
 carries the entry role's latest prompt reading and its model's advertised limit (REQ-MONITOR-089): the entry
 role has no `children` row, so this is the only route by which the synthetic root agent's meter gets a figure —
-before it, a run that spawned no child drew zero however much it had spent.
+before it, a run that spawned no child drew zero however much it had spent. **`SessionRecord.entryTools`** (live-run
+finding K1, 2026-09-29) is the same route for its tools: `resolved` is the native set the live run's root port kept
+(`ToolPort.resolvedTools`, the one resolution's names the callable map kept, so a coordinator's withheld tools are absent —
+REQ-MONITOR-061), `called`
+and `active` the tracker's under the persona the root dispatches as (`Run.entryTools`); with no run live nothing is
+resolved, the history is read under the latest iteration's `root_persona` (`entryToolsOf`), and the surface lets the
+role's declared tools stand in (REQ-MONITOR-060; the snapshot's `declaredTools`). A LIVE run-level agent whose root port
+has not resolved yet — the pre-flight, before `Run.iterate` sets the port — lists nothing (`runLevelGrant`), never the
+declared set (REQ-MONITOR-061). **`SessionRecord.artifacts`** is the
+session's artifacts not superseded, with producer, ready flag and consumers (`artifactLinksOf`, one body-free read through
+`artifacts_by_created` per snapshot) — what the inspector's and the persona window's artifact links read (REQ-MONITOR-052/068/069).
 
 **The MCP surface (Part S; ADR-0033/0034).** A port is created synchronously but its MCP surface needs discovery, so the
 run start kicks discovery off for every carried, launchable server (`McpHost.prepare`, each bounded by REQ-MCP-053's 35 s

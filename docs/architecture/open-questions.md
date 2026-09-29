@@ -4270,8 +4270,10 @@ no more; its last sentence settles "every other unfinished agent of a session at
   live (`AgentRecord.live`, running only) nor ended, so a waiting or queued agent read `waiting` alone where the base
   read `waiting · 1m 3s`; the merged build's eleventh review round restricted it to `paused`.* The agent tree, the
   table and the inspector drop a waiting or queued agent's time too, as they did before revision 4
-  ([`a-waiting-agents-elapsed-time-is-not-shown.md`](../defects/a-waiting-agents-elapsed-time-is-not-shown.md)); that
-  is not this directive's, and is not repaired here.
+  ([`a-waiting-agents-elapsed-time-is-not-shown.md`](../defects/fixed/a-waiting-agents-elapsed-time-is-not-shown.md)); that
+  is not this directive's, and is not repaired here. *Repaired 2026-09-29 under R-067: the tree, the table, the inspector and
+  the persona window show a waiting or queued agent's time, advancing, by a clock predicate of their own (OQ-124); a
+  `paused` agent keeps this reading.*
 - **A live agent's cancel.** Its confirmation and cascade note name every descendant its cancel ends — live and
   paused, through a finished one (`cancelCascade`) — so that neither understates what the cancel ends; the body and
   the note name what they are: "Its live descendants", "Its paused descendants" or "Its live and paused descendants
@@ -5514,6 +5516,57 @@ only once Initialize has been pressed (`dialogReport`). Before this, the built p
 consistently: the window lifted the gate for any run, as the first reading does, but kept the dialog open and drew the
 background run inside it. **A ruling would decide** which run REQ-WORKSPACE-105 means. If it is any run, the dialog closes
 on the background start and the composer gate goes with it.
+
+**OQ-124 — Which agents' elapsed clocks advance: REQ-MONITOR-045's "live", or every agent neither ended nor paused?** *(REQ-MONITOR-107, "While the agent is live the figure advances"; REQ-MONITOR-045, "An agent is \"live\" exactly when its presentation state is running"; REQ-MONITOR-064, whose "live (running, waiting, or queued)" uses the word in a second, wider sense; REQ-MONITOR-110/111 with resolution item 25 of `docs/spec/resolutions/02-run-monitoring-steering.md`, "A surface holding a spawn timestamp and showing a fallback … is now a defect"; OQ-100, whose reading keeps a `paused` agent's figure off "This task". Raised 2026-09-29 by the repair of
+[`a-waiting-agents-elapsed-time-is-not-shown.md`](../defects/fixed/a-waiting-agents-elapsed-time-is-not-shown.md)
+under [R-067](../product/requests.md#r-067). Open. Raised as OQ-122 and renumbered OQ-124 at the merge, main having
+taken OQ-122 and OQ-123.)*
+
+REQ-MONITOR-107 has the figure advance "while the agent is live" and fixed "once the agent is terminal", and says nothing of
+an agent that is neither. Read with REQ-MONITOR-045's definition, a waiting or queued agent is not live, so the
+requirement does not ask its figure to advance; but REQ-MONITOR-111 forbids the fallback wherever a spawn timestamp was
+recorded, so the figure must be shown, and a figure measured from the spawn timestamp that stood still while the agent
+waited would be neither its elapsed time nor its time at completion. REQ-MONITOR-064 already calls a running, waiting or
+queued agent live.
+
+**The reading built.** The clock has its own predicate, `clockAdvances` (`packages/ui/src/AgentTree.tsx`): an agent not
+ended, holding a parseable spawn timestamp, whose presentation state is running, waiting or queued — REQ-MONITOR-064's
+live set. Its figure is shown and advances on the surface's one-second tick on the four surfaces with a slot for it (the
+tree meta, the Mission table, the inspector meta, the persona window's context card); an ended agent's is fixed at
+completion minus spawn. `AgentRecord.live` keeps REQ-MONITOR-045's running-only sense and still drives the pulse, the
+motion and the inspector's writability. A `paused` agent keeps OQ-100's reading (no figure; the tree reads its state,
+the inspector and the context card their fallback), since nothing runs for it and REQ-CHAT-008's recovery state keeps
+the tick going. The tick condition (REQ-MONITOR-110) needed no change: it runs while the followed session is busy, and a
+running, waiting or queued agent is presented only then (a session at rest settles or pauses every unfinished agent).
+One case is not covered by that sentence, found at the verification of this repair: a session whose persisted status is
+literally `idle` is not reconciled (`reconcile` in `packages/engine/src/sessions.ts` excludes `idle`), so a non-terminal
+child held there would keep its running, waiting or queued state while the tick stands, and its figure would show without
+advancing. No path is known to leave a child unfinished under an `idle` session; it is stated, not built for.
+
+**What a ruling decides.** Whether a waiting or queued agent's figure advances (as built) or stands, and whether a
+`paused` agent should show a figure — fixed at its pause, or advancing — rather than OQ-100's fallback, which
+REQ-MONITOR-111's "a surface that has a spawn timestamp and shows a fallback … is a defect" reads against.
+
+**OQ-125 — What does an agent surface's artifact link open, and which artifacts does it list as an agent's?** *(REQ-MONITOR-052 and REQ-MONITOR-069, "artifact links", which name no target; REQ-MONITOR-044, "artifacts (name, producer, ready flag), produced and received artifact ids"; REQ-MONITOR-068's persona-wide card; REQ-LIBRARY-102, which lets "actions" deep-link to the Library's artifacts tab; REQ-LIBRARY-131's modeless, per-window artifact inspector; REQ-LIBRARY-136, which hides superseded artifacts from the Library's table. Raised 2026-09-29 by the repair of
+[`the-inspector-says-no-artifact-store-and-no-tools.md`](../defects/fixed/the-inspector-says-no-artifact-store-and-no-tools.md)
+(live-run finding K1) under [R-067](../product/requests.md#r-067). Open. Raised as OQ-123 and renumbered OQ-125 at
+the merge, main having taken OQ-122 and OQ-123.)*
+
+The specification asks for artifact links on three agent surfaces and says what an agent carries about its artifacts,
+but not what following a link does, nor whether a superseded artifact is still one of an agent's.
+
+**The reading built.** In the main window a link deep-links to the Library on its Artifacts tab and opens the artifact
+inspector on that artifact (REQ-LIBRARY-102's deep-link, REQ-LIBRARY-131's inspector, re-raised when already open). A persona
+window has no route to the main window's Library, so there a link opens the artifact inspector in the persona window itself
+— REQ-LIBRARY-131 makes the inspectors per window. An agent PRODUCED an artifact whose producer (`created_by`, else the
+record's canonical name — REQ-LIBRARY-136's "producer") is its name, and RECEIVED one whose consumers name it; the
+run-level agent is matched by the entry persona, which is the name the root publishes under
+(`a-roots-publish-names-its-persona-as-its-author.md` records why that is the persona and not the canonical name). A
+superseded artifact is listed nowhere, as the Library's table lists it nowhere. The ready flag is stated in words:
+"ready" (REQ-LIBRARY-136), else the status.
+
+**What a ruling decides.** Whether a link should open the Library (as built in the main window), an inspector in place
+(as built in a persona window) or something else; and whether an agent's links should keep its superseded artifacts.
 
 ## Design-reference dependencies
 

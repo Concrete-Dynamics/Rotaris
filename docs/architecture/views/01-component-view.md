@@ -110,7 +110,9 @@ Edges worth knowing the reason for:
   already owns the YAML document model the marker is a section of and the code-intelligence binding the task
   is built from.
 - **`main` cannot import `ui`/`ui-core`**: theme data the main process needs before first paint lives in
-  `contracts/src/theme/`; the persona vocabulary the loader and the engine share lives in `contracts/src/roles.ts`.
+  `contracts/src/theme/`; the persona vocabulary the loader and the engine share lives in `contracts/src/roles.ts`, and since live-run finding K1
+  (2026-09-29) so do the built-in roles' tool declarations (`BUILT_IN_ROLE_TOOLS`, `declaredToolsOf`) — the loader's role
+  view and the run host's persona resolver read one rule; the prompts stay in the engine.
 - **`providers` lives in main and only main** (ADR-0030): the credential store, sign-in and discovery run in the
   main process; the run host is *leased* a resolved bearer per run over the utility-process channel and never
   reads `tokens/`. `main` therefore imports `providers` and `config` (for the snapshot layer's types and the

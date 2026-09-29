@@ -67,6 +67,12 @@ export interface ToolPort {
   /** The ONE resolution's listing (REQ-TOOLS-010). */
   specs(): readonly ToolSpec[];
   /**
+   * REQ-MONITOR-060/061 (live-run finding K1): the NATIVE tools that same resolution kept, in declaration order — the set
+   * the inspector shows for the agent this port serves, policy narrowing applied (an MCP tool is shown under its server).
+   * Optional because a port built without the registry (a test double) has no resolution to report.
+   */
+  resolvedTools?(): readonly string[];
+  /**
    * ADR-0034 (Part S): a port whose surface needs discovery before its listing is complete resolves this first; the turn
    * awaits it before reading `specs()` or the prompt section, bounded by the port (REQ-MCP-053's 35 s at most).
    */

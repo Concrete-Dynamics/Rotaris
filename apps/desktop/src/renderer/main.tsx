@@ -471,6 +471,13 @@ function Library({ prompts, layout, onLayout }: { prompts: PromptsApi; layout: P
       : [...current, { id, raised: 1 }]));
   }, []);
   const focusedProposalId = useShellState((state) => state.libraryProposalId);
+  // REQ-LIBRARY-102 / REQ-MONITOR-052 (live-run finding K1): an agent surface's artifact link deep-links here — the Artifacts
+  // tab, and the inspector opened (or re-raised, REQ-LIBRARY-131) for that artifact. Derived during render when the request
+  // arrives, then consumed, so the same link followed again opens it again.
+  const focusedArtifactId = useShellState((state) => state.libraryArtifactId);
+  const [seenArtifactFocus, setSeenArtifactFocus] = useState<string | null>(null);
+  if (focusedArtifactId !== seenArtifactFocus) { setSeenArtifactFocus(focusedArtifactId); if (focusedArtifactId !== null) inspect(focusedArtifactId); }
+  useEffect(() => { if (focusedArtifactId !== null) useShellState.getState().takeLibraryArtifactId(); }, [focusedArtifactId]);
   const readImprovements = useCallback(async () => {
     const result = await bridge.command({ kind: 'improvements', command: { action: 'list' } });
     return result.ok ? { ok: true as const, records: result.value as ImprovementArtifactRecord[] } : { ok: false as const, reason: result.detail ?? result.headline };

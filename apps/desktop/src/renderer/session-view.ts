@@ -23,9 +23,12 @@ export function useConfigSnapshot(workspace: string): ConfigSnapshot | null {
   }, [hasWorkspace]);
   return snapshot;
 }
-/** REQ-MONITOR-050: one tab per configured persona, from the snapshot's roles (their declared tools stand in for an agent with no grant). */
+/**
+ * REQ-MONITOR-050: one tab per configured persona, from the snapshot's roles; their DECLARED tools (the file's list, else the
+ * built-in role's — `declaredTools`, live-run finding K1) stand in for an agent with no grant (REQ-MONITOR-060).
+ */
 export function personasOf(snapshot: ConfigSnapshot | null): PersonaEntry[] {
-  return (snapshot?.roles ?? []).map((r) => ({ role: r.role, tools: r.tools, thinking: r.rawThinking, effectiveModel: r.effectiveModel }));
+  return (snapshot?.roles ?? []).map((r) => ({ role: r.role, tools: r.declaredTools, thinking: r.rawThinking, effectiveModel: r.effectiveModel }));
 }
 /**
  * The entry role as the run-level agent presents it (REQ-MONITOR-057/058): the persona the transcript's first agent row
@@ -36,7 +39,7 @@ export function entryOf(snapshot: ConfigSnapshot | null, rows: readonly Transcri
   const first = rows.find((r) => r.kind === 'agent' && r.persona !== undefined && r.name !== undefined && !childNames.has(r.name));
   const persona = first?.persona ?? 'orchestrator';
   const role = snapshot?.roles.find((r) => r.role === persona);
-  return { persona, model: role?.effectiveModel ?? '', reasoning: role?.rawThinking ?? 'medium', tools: role?.tools ?? [] };
+  return { persona, model: role?.effectiveModel ?? '', reasoning: role?.rawThinking ?? 'medium', tools: role?.declaredTools ?? [] };
 }
 /** REQ-SHELL-072/073: open or raise the persona window for an agent; the run-level agent's persona is the entry role's. */
 export async function openPersona(agent: AgentRecord, focusSteer: boolean): Promise<void> {

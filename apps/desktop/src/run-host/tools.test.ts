@@ -141,6 +141,36 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
   }
 
   /**
+   * Live-run finding K1 (R-067): the inspector drew "No tools resolved." for the run-level agent. The port now reports the
+   * native set its ONE resolution kept that holds an executor, so the surface shows what the agent can call — and, for a coordinator, not the
+   * write, terminal and commit tools its policy withholds (REQ-MONITOR-061).
+   */
+  it('REQ-MONITOR-060/061: the port reports its resolved native tools — the listing\'s own names, a coordinator\'s withheld tools absent', async () => {
+    const coding = portFor(null, null, {}, { tools: '[read_file, grep, write_file]' });
+    await coding.ready?.();
+    expect(coding.resolvedTools?.()).toEqual(['read_file', 'grep', 'write_file']);
+    expect(coding.resolvedTools?.()).toEqual(coding.specs().map((s) => s.name));
+
+    mkdirSync(join(dir, '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, '.rotaris', 'agents.yaml'), yaml(null, null));
+    const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
+    if (!loaded.ok) throw new Error('configuration');
+    const cfg = loaded.value;
+    const resolver = personaResolverFor(cfg, true, (m) => warnings.push(m));
+    const root = createToolPort({
+      sessionId: asSessionId('S1'), workspaceRoot: dir, writer, persona: 'orchestrator', agentName: 'orchestrator', parentId: 'root:1', depth: 0,
+      // A delegation runtime is what makes the orchestrator a coordinator (REQ-ORCH-029); nothing here is dispatched.
+      delegation: {} as NonNullable<ToolPortContext['delegation']>,
+      requestedMode: 'ask', modeOverride: null, attended: () => true, warn: (m) => warnings.push(m), abortRun: () => undefined,
+    }, { clocks: new FakeClock(), runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver, presenter: { present: async () => ({ ok: true }), close: () => undefined }, nextSequence: () => 1, fileStates: new Map(), terminal: null, egress: () => permissivePolicyRead });
+    await root.ready?.();
+    const resolved = root.resolvedTools?.() ?? [];
+    expect(resolved).toEqual(expect.arrayContaining(['read_file', 'grep', 'delegate', 'todo', 'ask_questions']));
+    for (const withheld of ['write_file', 'haet_edit', 'haet', 'terminal', 'git_commit']) expect(resolved).not.toContain(withheld);
+    expect(resolved).toEqual(root.specs().map((s) => s.name));
+  });
+
+  /**
    * PD-TOOLS-005 through the real port: the engine's away holder reaches the gate, which marks it when the configured
    * wait (`runtime.approval_timeout_seconds`, 300 s here) expires unanswered and, while it is marked, resolves the next
    * ask at once with the directive's reason and presents nothing. The return is the engine's (`sessions.ts`); here the

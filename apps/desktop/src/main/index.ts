@@ -49,7 +49,7 @@ import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
 import { ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
-import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
+import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWriter, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
 import { withoutRuntimeRequests } from './runtime-requests.js'; // REQ-STARTUP-160
 // The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
@@ -113,7 +113,9 @@ if (!catalogue.ok) throw new Error(`the provider catalogue is invalid: ${catalog
  * the credential store, the settings store, the provider service) now does, rather than having its `warn` dropped.
  */
 const appLogLevel = appLogThreshold(process.env[APP_LOG_LEVEL_VARIABLE]);
-const logAt = createAppLog({ threshold: appLogLevel.threshold, now: () => toIsoUtc(clocks.wall.instant()), write: (line) => console.log(line) });
+// A standard stream whose reader has gone must not turn the log into an endless uncaught EPIPE (`standardStreamWriter`).
+standardStreamWriter(process.stderr);
+const logAt = createAppLog({ threshold: appLogLevel.threshold, now: () => toIsoUtc(clocks.wall.instant()), write: standardStreamWriter(process.stdout) });
 const log = (m: string, level: AppLogLevel = 'info'): void => { logAt(level, null, m); };
 // ADR-0019's prohibition, from the other side: an uncaught exception in main would raise the platform's native
 // error box — a synchronous modal that blocks the loop and every poll reply. Log it instead; nothing here may hang.

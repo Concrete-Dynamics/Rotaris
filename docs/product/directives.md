@@ -2050,6 +2050,16 @@ are not recorded, and cannot be recovered afterwards.
 > past the bound after it was ended is a loss, written at `error`. A driven close at the default level wrote no
 > `warning` or `error` line from the close onwards, and main was gone 103 ms after it.
 
+> **2026-09-29, under [R-067](requests.md#r-067):** the log's one writer wrote through `console.log`, and a standard output
+> whose reader had gone failed each write with EPIPE, reported as an `error` event nothing listened for — an uncaught
+> exception the uncaught-exception handler logged to the same stream, without end, so the quit and REQ-MONITOR-131's
+> backstop starved. The writer is now `standardStreamWriter` (`main/app-log.ts`): it listens for the stream's failure and
+> writes nothing more after it, and standard error gets the same listener. Measured on the built app by closing the
+> pipes of a running launch and sending SIGTERM: it exited in about 60 ms, where the writer put back to `console.log`
+> spun at full CPU until SIGKILL. The note is moved to
+> [`a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`](../defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md)
+> and the row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-tools-006"></a>

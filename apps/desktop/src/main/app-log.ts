@@ -85,3 +85,29 @@ export function createAppLog(deps: AppLogDeps): AppLog {
     deps.write(formatAppLogLine(deps.now(), level, source, message));
   };
 }
+
+/** A standard stream as the log writes it: a line in, and the `error` event a failed write is reported by. */
+export interface StandardStream {
+  write(chunk: string): unknown;
+  on(event: 'error', listener: (cause: Error) => void): unknown;
+}
+
+/**
+ * The writer onto one of main's standard streams, which stops at the stream's first failure
+ * (`docs/defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`).
+ *
+ * When the reader of main's standard output has gone, a write fails with EPIPE. The stream here is a socket, so Node
+ * reports it as an `error` event, and with no listener that event is an uncaught exception. Main's `uncaughtException`
+ * handler logged it through the same stream, whose write failed the same way, without end: the quit starved, its 30 s
+ * backstop (REQ-MONITOR-131) included. So the stream gets a listener of its own, and from its first failure the log
+ * writes nothing more to it — there is nobody left to read the line, and nothing else to tell. A write that throws at
+ * once is the same failure. Guarding a stream the log does not write to (standard error) needs only the listener.
+ */
+export function standardStreamWriter(stream: StandardStream): (line: string) => void {
+  let broken = false;
+  stream.on('error', () => { broken = true; });
+  return (line) => {
+    if (broken) return;
+    try { stream.write(`${line}\n`); } catch { broken = true; }
+  };
+}

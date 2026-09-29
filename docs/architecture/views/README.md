@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**The application log survives the loss of its reader (REQ-MONITOR-131, R-067).** Main's log writes through
+`standardStreamWriter` (`main/app-log.ts`) instead of `console.log`: the stream's `error` event is listened for, and from
+its first failure nothing more is written to it; standard error gets the same listener. A quit whose standard output
+has been closed no longer loops on its own EPIPE. This repairs `a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`.
+The **process view**'s application-log paragraph says so. No package, edge, process, message kind, channel, command or
+store column changed.
+
 **A child main ended itself is not a loss in the application log (PD-MONITOR-002, R-067, live-run finding L13).** The
 run host's `kill` that `endBeforeMain` sends goes through `ChildrenEndedByMain` (`main/exit.ts`), which records it by
 service name, and the `child-process-gone` handler writes Electron's `killed` report of that end at `info`, saying main

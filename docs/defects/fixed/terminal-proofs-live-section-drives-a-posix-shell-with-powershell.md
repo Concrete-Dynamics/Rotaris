@@ -27,7 +27,7 @@ catch exactly that, and here it catches it. The rest of the sweep's run shows th
 - end input and interrupt (exit 130) both complete in 61 ms;
 - the limiter delivered 33 frames and merged none.
 
-The reproduction below read the same figures within those ranges (key to paint 10.3–28.7 ms, 61 and 62 ms).
+The reproduction below read comparable figures (key to paint 10.3–28.7 ms, end input 61 ms, interrupt 62 ms).
 
 The echo program is a Node script (`node "<echo.cjs>"`), which is why those checks ran on both shells and these three
 commands did not. The header of `harness.mjs` and the comment on the live section both say "a real PowerShell".
@@ -52,3 +52,32 @@ POSIX host those are the terminal every user runs.
 - `AGENTS.md`: the proof's row.
 
 Noticed 2026-09-28 by the proof sweep under R-062.
+
+## Repaired — 2026-09-28, under R-062
+
+`main.cjs` now reads the shell the harness reports (`live.shell`, from `findShell()`) and spells its three commands in
+that shell, from a small `PS`/`SH` table beside it. On PowerShell each spelling is the old literal, character for
+character. On a POSIX shell the equivalents are:
+
+- the size the process reads from its own terminal: `stty size`, printed as `cols=<c> rows=<r>`;
+- a `while` loop printing `motion <i>` with `sleep 0.055` after each line;
+- a `while` loop printing `line 1` … `line 10000`, then `sh -c 'exit 3'` for a native exit status.
+
+No assertion was loosened or removed. The harness's header now says it runs the host's shell.
+
+Pinned by the proof itself, since the defect is in the proof. Measured by `pnpm terminal-proof` as root on Linux under
+Xvfb, Node 24, `/bin/sh` → `dash`: three runs in a row, each exit 0 with **116/116**, in 17–18 s. Another agent's
+`code-intel-proof` (nine Electron processes) was live in a separate worktree throughout, at load 0.9–1.1:
+
+| | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| grid's last report / what the process reports | 118×16 / `cols=118 rows=16` | 118×16 / `cols=118 rows=16` | 118×16 / `cols=118 rows=16` |
+| motion: samples, while running, distinct screens, divergences | 34, 32, 20, 0 | 34, 31, 20, 0 | 34, 31, 20, 0 |
+| flood closed / open: ms, exit, lines, output equal | 138 / 138, 3 / 3, 10,000, yes | 129 / 112, 3 / 3, 10,000, yes | 143 / 148, 3 / 3, 10,000, yes |
+| `live.floodPainted` (grid and preview show `line 10000`) | yes | yes | yes |
+| key to frame / key to paint (ms) | 1.5–3.7 / 8.4–27.7 | 3.1–3.9 / 9.5–29.5 | 3.5–4.0 / 10.6–29.2 |
+
+The product did not change. **Could not show:** a Windows re-run on this branch. The PowerShell spellings are the same
+literals, so nothing that ran there changed, but no Windows host was available. Nothing ran on macOS (IC-3). `sleep`
+with a fraction is accepted by GNU coreutils and BSD `sleep`, and POSIX does not require it. ADR-0047's "live section
+on a POSIX shell" note (2026-09-28) records this as a first execution.

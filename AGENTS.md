@@ -63,7 +63,7 @@ wrong.
 | | `library-proof` | the Library shell and its Prompts tab |
 | | `mission-proof` | the Mission view, the per-agent inspector, the persona windows |
 | | `git-proof` | the Git view and the worktrees |
-| | `terminal-proof` | the terminal grid, the pop-out window, the transcript preview (ADR-0047) |
+| | `terminal-proof` | the terminal grid, the pop-out window, the transcript preview (ADR-0047). Its live section spells the size probe, the motion command and the flood in the shell its harness reports (REQ-TOOLS-104). Before 2026-09-28 they were PowerShell everywhere, and off Windows four checks measured nothing (`docs/defects/fixed/terminal-proofs-live-section-drives-a-posix-shell-with-powershell.md`) |
 | | `improvements-proof` | the reviewed-improvement lifecycle end to end |
 | | `retrospective-proof` | the retrospective pass, driven from its surfaces against the built app (PD-LIBRARY-002) |
 | | `theme-proof` | the themes and scales, rendered — plus two counterfactuals that must stay red |

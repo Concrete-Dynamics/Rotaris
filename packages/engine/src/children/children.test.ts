@@ -6,7 +6,8 @@ import { FakeClock, millis, mintMachineId, type MachineId, type SessionId } from
 import { migrateStore, openStore, StoreDal, forgetSpelling, type ChildRow } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { CHILD_STATES, CHILD_TRANSITIONS, isLegalChildMove, RUN_AGENT_ID, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type PermissionPreset, type SessionRecord } from '@rotaris/contracts';
-import { canonicaliseName, ChildLedger, RUN_CONFIG_DEFAULTS, Scheduler, Sessions, SessionWriter, uniqueUnderParent, type DelegationOps, type PortToolResult, type Publisher, type RunConfig, type ToolPort, type ToolPortContext } from '../index.js';
+import { BUILT_IN_PERSONAS, canonicaliseName, ChildLedger, RUN_CONFIG_DEFAULTS, Scheduler, Sessions, SessionWriter, uniqueUnderParent, type DelegationOps, type PortToolResult, type Publisher, type RunConfig, type RoleName, type ToolPort, type ToolPortContext } from '../index.js';
+import type { PersonaResolver } from './personas.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { HookPort } from '../hooks-port.js';
 import { conversationOf } from '../run/record.js';
@@ -273,7 +274,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     };
     const builtIn = async (name: string, a: Record<string, unknown>, ok: (text: string) => PortToolResult): Promise<PortToolResult> => {
       if (name === 'delegate') {
-        const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: (a['inherited_context'] as string[] | undefined) ?? [], category: '', runInBackground: a['run_in_background'] !== false, writeScope: (a['write_scope'] as string[] | undefined) ?? [], ...(typeof a['continuation_of'] === 'string' ? { continuationOf: a['continuation_of'] } : {}) });
+        const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: (a['inherited_context'] as string[] | undefined) ?? [], category: '', runInBackground: a['run_in_background'] !== false, writeScope: (a['write_scope'] as string[] | undefined) ?? [], ...(typeof a['continuation_of'] === 'string' ? { continuationOf: a['continuation_of'] } : {}), ...(a['suppress_auto_context'] === true ? { suppressAutoContext: true } : {}), ...(Array.isArray(a['attach_artifacts']) ? { attachArtifacts: a['attach_artifacts'] as string[] } : {}) });
         if (r.status === 'rejected') return { ...ok(`Task '${r.canonicalName}': rejected — ${r.message}`), isError: true, status: 'failed' };
         let text = `Task '${r.canonicalName}': ${r.status} — ${r.message}\ntask_id: ${r.taskId}`;
         if (a['run_in_background'] === false) { const w = await ops.waitForTasks(parentId, [r.taskId]); text += `\n\n${'refused' in w ? w.refused : 'interrupted' in w ? w.interrupted : w.text}`; }
@@ -295,7 +296,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
    * model accept image input. `pending`: request ids every port reports as its own live approval or question set, so an
    * id-routed answer finds a holder.
    */
-  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string> } = {}) {
+  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; personas?: PersonaResolver } = {}) {
     // The scripted client answers by persona and by the number of calls that persona has made.
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
@@ -312,6 +313,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     /** Each agent's tool-port context, by canonical name, as the engine built it. */
     const contexts = new Map<string, ToolPortContext>();
     const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: over.images === true ? { ...MODEL, acceptsImageInput: true } : MODEL, credentialFor: () => async () => 'k' };
+    const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', modelConcurrencyCap: over.cap ?? null, drainTimeoutMs: over.drainTimeoutMs ?? 0, ...(over.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: over.childStallTimeoutMs }), ...(over.childTimeoutMs === undefined ? {} : { childTimeoutMs: over.childTimeoutMs }) } as const;
     const sessions = new Sessions({
       clocks: clock, publisher: over.publisher ?? NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++n}`,
       model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
@@ -332,7 +334,9 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       },
       attended: () => true,
       ...(over.hooks ? { hooks: () => over.hooks! } : {}),
-      runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', modelConcurrencyCap: over.cap ?? null, drainTimeoutMs: over.drainTimeoutMs ?? 0, ...(over.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: over.childStallTimeoutMs }), ...(over.childTimeoutMs === undefined ? {} : { childTimeoutMs: over.childTimeoutMs }) },
+      runtime,
+      // A resolved `personas:` table reaches a run only through the root's configuration (RunSetup).
+      ...(over.personas ? { configure: () => ({ ok: true as const, value: { model: { backend: new DefaultAgentBackend(client), config }, runtime, personas: over.personas! } }) } : {}),
     });
     return { sessions, client, counts, built, contexts };
   }
@@ -554,6 +558,66 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const resumed = textOf(client.requests.at(-1)!);
       expect(resumed).toContain("Task 'escape': rejected — write_scope pattern '../elsewhere/**' reaches outside the workspace root.");
       expect(resumed).not.toContain('task_id:');
+    });
+  });
+
+  describe('REQ-TOOLS-152 / REQ-TOOLS-154 (3): suppress_auto_context omits the sibling-artifact index', () => {
+    const textOf = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('')).join('\n');
+    /** A survey whose report becomes an artifact, then `build` delegated with `buildArgs`; returns each child's first payload. */
+    async function surveyThenBuild(buildArgs: Record<string, unknown>, over: { personas?: PersonaResolver } = {}) {
+      const payloads = new Map<string, string>();
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: survey', run_in_background: false } }], 'Surveying.');
+          if (turn === 2) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'build', task: 'TASK: build', run_in_background: false, ...buildArgs } }], 'Building.');
+          return answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        const text = textOf(req);
+        const name = text.includes('TASK: build') ? 'build' : 'survey';
+        if (!payloads.has(name)) payloads.set(name, text);
+        return answer(name === 'survey' ? 'The module is small.' : 'Built it.');
+      }, over);
+      const sid = (sessions.start(dal, 'C:/ws', 'survey then build') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const build = children(sid).find((c) => c.canonical_name === 'build')!;
+      const selection = dal.timelineOf(sid).filter((t) => t.name === 'context_selection');
+      return { payloads, build, selection };
+    }
+
+    it('REQ-TOOLS-152: the default gives the index — the survey\'s artifact is listed in the build\'s payload, and nothing is stored', async () => {
+      const { payloads, build } = await surveyThenBuild({});
+      expect(payloads.get('build')).toMatch(/PRIOR SIBLING ARTIFACT INDEX\n[^\n]*survey/);
+      expect(build.suppress_auto_context).toBe(0);
+    });
+
+    it('REQ-TOOLS-152: a call that sets it omits the index from the child\'s payload, and the flag is stored with the child\'s record', async () => {
+      const { payloads, build } = await surveyThenBuild({ suppress_auto_context: true });
+      expect(payloads.get('build')).toContain('TASK: build');
+      expect(payloads.get('build')).toMatch(/Workspace root: C:\/ws\./);
+      expect(payloads.get('build')).not.toContain('PRIOR SIBLING ARTIFACT INDEX');
+      expect(build.suppress_auto_context).toBe(1);
+    });
+
+    it('REQ-CONFIG-107: the persona-level setting forces the same omission for a call that did not ask for it, and only for that role', async () => {
+      const personas: PersonaResolver = {
+        resolve: (name) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: name === 'coding-agent' ? { ...base, skipAutoSiblingContext: true } : base, alias: null } : null; },
+        knownRoles: () => Object.keys(BUILT_IN_PERSONAS),
+      };
+      const { payloads, build } = await surveyThenBuild({}, { personas });
+      expect(payloads.get('build')).toContain('TASK: build');
+      expect(payloads.get('build')).not.toContain('PRIOR SIBLING ARTIFACT INDEX');
+      // Configuration, read at each assembly — not copied onto the record.
+      expect(build.suppress_auto_context).toBe(0);
+    });
+
+    it('REQ-LIBRARY-098: the attached artifacts are the caller\'s explicit choice — a suppressed index still carries them, and the diagnostic says the index was suppressed', async () => {
+      const { payloads, build, selection } = await surveyThenBuild({ suppress_auto_context: true, attach_artifacts: ['no-such-artifact'] });
+      expect(payloads.get('build')).not.toContain('PRIOR SIBLING ARTIFACT INDEX');
+      expect(payloads.get('build')).toContain('PRIOR AGENT CONTEXT (FULL)');
+      expect(payloads.get('build')).toContain('no-such-artifact');
+      const buildSelection = selection.map((t) => JSON.parse(t.metadata) as Record<string, unknown>).find((m) => m['task_id'] === build.task_id);
+      expect(buildSelection).toMatchObject({ sibling_index_suppressed: true, sibling_index_included: 0, attached_unresolved: ['no-such-artifact'] });
     });
   });
 

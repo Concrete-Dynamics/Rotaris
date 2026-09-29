@@ -32,6 +32,11 @@ export interface Persona {
    */
   readonly stallTimeoutMs?: number | undefined;
   /**
+   * REQ-CONFIG-107: the role's `skip_auto_sibling_context` — the persona-level setting REQ-TOOLS-152 names, which forces the
+   * omission `suppress_auto_context` asks for on every child of this role. Absent means false: the index is given.
+   */
+  readonly skipAutoSiblingContext?: boolean | undefined;
+  /**
    * REQ-MCP-065 / REQ-MCP-114 (Part S): the MCP grant evidence recorded on a child's row at spawn — the granted tools per
    * server and every carried server's fate. Supplied by the run host's resolver from the same memoised resolution the
    * tool port reads; absent for the built-in table, which carries no MCP surface.

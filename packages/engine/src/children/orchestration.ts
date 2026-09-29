@@ -246,6 +246,7 @@ export class IterationChildren implements DelegationOps {
       category: req.category, background: req.runInBackground, modelKey: persona?.modelRef?.modelId ?? this.deps.model.modelId, grantedTools: persona?.tools ?? [],
       ...(continuationOf !== '' ? { continuationOf } : {}),
       ...(scope.patterns.length > 0 ? { writeScope: scope.patterns } : {}),
+      ...(req.suppressAutoContext === true ? { suppressAutoContext: true } : {}),
     });
     if (!r.ok) return { status: 'rejected', canonicalName: req.taskName, message: r.error.reason };
     const { row, held, aliasResolved, inherited } = r.value;
@@ -866,7 +867,10 @@ export class IterationChildren implements DelegationOps {
     const store = this.deps.artifacts;
     if (!store) return [];
     const blocks: string[] = [];
-    const index = siblingIndexBlock(store.hydrate().records);
+    // REQ-TOOLS-152: the call's `suppress_auto_context`, stored on the row, or the role's `skip_auto_sibling_context`
+    // (REQ-CONFIG-107) omits the index; the attached artifacts are the caller's explicit choice and are carried either way.
+    const suppressed = row.suppress_auto_context === 1 || personaOf(this.deps, row.persona)?.skipAutoSiblingContext === true;
+    const index = suppressed ? { text: '', included: 0, elided: 0 } : siblingIndexBlock(store.hydrate().records);
     if (index.text !== '') blocks.push(index.text);
     const references = this.attached.get(row.task_id) ?? [];
     let full: ReturnType<typeof fullContextBlock> | null = null;
@@ -883,7 +887,7 @@ export class IterationChildren implements DelegationOps {
     if (blocks.length > 0) {
       this.deps.writer.appendTimeline('context_selection', 'rotaris', `${row.canonical_name} was given ${index.included} sibling artifact(s)${full ? ` and ${full.included} attached artifact(s)` : ''}.`, {
         task_id: row.task_id, canonical_name: row.canonical_name,
-        sibling_index_included: index.included, sibling_index_elided: index.elided,
+        sibling_index_included: index.included, sibling_index_elided: index.elided, sibling_index_suppressed: suppressed,
         attached_included: full?.included ?? 0, attached_elided: full?.elided ?? [], attached_unresolved: full?.unresolved ?? [],
       });
     }

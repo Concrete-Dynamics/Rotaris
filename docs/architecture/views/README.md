@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**`delegate`'s `suppress_auto_context` reaches the child (REQ-TOOLS-152, REQ-CONFIG-107, R-067, 2026-09-29).** The tool
+forwards the flag, `ChildLedger.spawn` stores it (`children.suppress_auto_context`, store **v25**), and
+`IterationChildren.artifactContext` omits the sibling-artifact index when the row carries it or the role's
+`skip_auto_sibling_context` (now `Persona.skipAutoSiblingContext`, mapped by the run host) forces it. The **runtime view**'s
+§7 `children` row and its children section name it; no package, edge, message or process changes.
+
 **`delegate` refuses a write scope for a persona that cannot write files (`PD-TOOLS-006` revision 3, OQ-112,
 2026-09-29).** `IterationChildren.delegate` rejects the delegation before any record exists when its `write_scope` names
 patterns and the persona — resolved as the ledger resolves it, an alias included — holds no `write_file`, `haet_edit`

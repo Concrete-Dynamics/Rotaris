@@ -189,6 +189,38 @@ runtime:
   });
 });
 
+/** REQ-CONFIG-107 / REQ-TOOLS-152: the persona-level setting that forces `suppress_auto_context`'s omission reaches the engine's persona. */
+describe('skip_auto_sibling_context reaches the persona (REQ-CONFIG-107, REQ-TOOLS-152)', () => {
+  it('REQ-CONFIG-107: only the role that states it true carries it; the default (false) carries nothing', () => {
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), `default_persona: coding-agent
+models:
+  selected:
+    provider: openai
+    model_id: first
+    api_key: k
+large_model: selected
+medium_model: selected
+small_model: selected
+personas:
+  coding-agent:
+    name: Coding agent
+    model: selected
+    skip_auto_sibling_context: true
+  tester:
+    name: Tester
+    model: selected
+    skip_auto_sibling_context: false
+`);
+    const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: join(dir, 'ws') });
+    if (!loaded.ok) throw new Error('configuration');
+    const personas = personaResolverFor(loaded.value, true, () => undefined);
+    expect(personas.resolve('coding-agent')!.persona.skipAutoSiblingContext).toBe(true);
+    expect(personas.resolve('tester')!.persona.skipAutoSiblingContext).toBeUndefined();
+    expect(personas.resolve('verifier')!.persona.skipAutoSiblingContext).toBeUndefined();
+  });
+});
+
 /**
  * PD-ORCH-005 clause 4: a continue that resumes an open iteration restores its root with its identity, persona
  * included, so the run is set up as the persona that root ran as — even when `default_persona` has changed since.

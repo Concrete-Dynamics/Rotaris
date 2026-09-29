@@ -245,6 +245,9 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
       // REQ-CONFIG-108: the role's `stall_timeout` substitutes for `runtime.child_stall_timeout` on its children
       // (PD-ORCH-004's progress rule is its reader); null or absent means the run's value.
       ...(typeof entry?.stall_timeout === 'number' ? { stallTimeoutMs: Math.round(entry.stall_timeout * 1000) } : {}),
+      // REQ-CONFIG-107 / REQ-TOOLS-152: the role's `skip_auto_sibling_context` forces the omission `suppress_auto_context`
+      // asks for; the engine reads it at each assembly of a child's payload. False or absent gives the index.
+      ...(entry?.skip_auto_sibling_context === true ? { skipAutoSiblingContext: true } : {}),
       // REQ-MCP-065 (Part S): the grant evidence the ledger records at spawn, read from the run host's memoised surface at that moment.
       ...(mcpEvidence ? { mcpEvidence: () => mcpEvidence(role) } : {}),
     };

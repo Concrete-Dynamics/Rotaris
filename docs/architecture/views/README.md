@@ -52,8 +52,9 @@ patterns and the persona holds no `write_file`, `haet_edit` or `haet` after `coo
 paragraph names it; no package, edge, message or store table changes.
 
 **The report's pass reads the task and the most recent part, beside the facts (OQ-111, REQ-ORCH-110, 2026-09-29).**
-`produceReport` gives the summarising pass `reportTranscript`: the first event (the task as given) and the most recent
-part, within 12,000 characters, with `… [N characters omitted] …` between them. It also gives `reportFacts`, the
+`produceReport` gives the summarising pass `reportTranscript`: the task as given (`ReportInput.task`, the ledger row's;
+the blocks the payload puts ahead of it marked omitted) and the most recent part, within 12,000 characters, with
+`… [N characters omitted] …` between them. It also gives `reportFacts`, the
 edited files and each command with its exit code, derived from the whole transcript. The head-only `transcriptText`
 remains the compressor's alone. The **runtime view**'s children paragraph names it; no package, edge, message or store
 table changes.

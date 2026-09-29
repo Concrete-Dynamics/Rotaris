@@ -396,6 +396,26 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     expect(updates.map((u) => u.cost.total)).toContain('0.0115');
   });
 
+  it("OQ-111 (live-run finding D1): the child-report summariser's transcript starts with the child's task as given, the payload's blocks ahead of it marked omitted (REQ-ORCH-110)", async () => {
+    const asked: string[] = [];
+    const { sessions } = sessionsWith((persona, turn, req) => {
+      if (persona === 'orchestrator') return turn === 1
+        ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: read it\nEXPECTED OUTCOME: what the module does', run_in_background: false } }], 'Delegating.')
+        : answer('All done.');
+      if (persona === 'summariser') {
+        asked.push(req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n'));
+        return answer('{"summary":"done","key_findings":[],"tags":[]}');
+      }
+      return answer('The module is small.');
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(asked).toHaveLength(1);
+    // REQ-TOOLS-154's payload puts the workspace root ahead of the task; the pass's start is the task itself.
+    expect(asked[0]).toMatch(/\nTranscript:\nuser: … \[\d+ characters omitted\] … TASK: read it\nEXPECTED OUTCOME: what the module does\nassistant: The module is small\.$/);
+    expect(asked[0]).not.toContain('Transcript:\nuser: Workspace root:');
+  });
+
   it('REQ-EVENTS-053 / PD-MONITOR-001: the child-report summariser\'s request counts against the run like any agent\'s', async () => {
     const { sessions } = sessionsWith((persona, turn) => {
       if (persona === 'orchestrator') return turn === 1

@@ -109,7 +109,7 @@ before the ladder's), **OQ-111** (what the report summariser reads), **OQ-112** 
 write is refused) **and OQ-113** (REQ-LIBRARY-092's fallback, answered by amendment). **Three more were raised the same day
 from the live runs and left open: OQ-114** (the specification's fixed figures on a reasoning model's critical path, and a
 continuation that starts from nothing), **OQ-115** (the code-intelligence server's imperative tool description, rendered
-verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-118** (whether the task the report summariser keeps as its start may pass REQ-ORCH-110's 2,000 per event) **and OQ-119** (the size of the facts given to the report summariser) were raised the same day by the repair of D1 and left open. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -5104,13 +5104,22 @@ denies work the record shows. REQ-ORCH-110 fixes how much and not which part, so
 nothing; the facts are what REQ-ORCH-109 already keeps runner-owned, given to the pass to condense and never to
 overwrite. Nothing is built by the ruling; the repair is owed to the note that records D1.
 
-**Built 2026-09-29 under [R-067](../product/requests.md#r-067).** `produceReport` reads `reportTranscript` (the first
-event, the marker, the most recent part; 12,000 characters with the marker) and hands the pass `reportFacts` beside
-it; the note is [`a-long-childs-report-denies-the-edits-it-made`](../defects/fixed/a-long-childs-report-denies-the-edits-it-made.md),
-repaired. One reading of the build's own, stated there: the facts are bounded by REQ-ORCH-110's two figures (2,000 per
-command, 12,000 for the block), since the ruling gives them none and the pass must stay bounded.
+**Built 2026-09-29 under [R-067](../product/requests.md#r-067).** `produceReport` reads `reportTranscript` and hands the
+pass `reportFacts` beside it. The transcript's start is the ledger row's task, as one event cut to REQ-ORCH-110's 2,000;
+the blocks the payload puts ahead of the task are replaced by a marker stating their size. Then comes the marker, then
+the most recent part, 12,000 characters with the markers. The note is
+[`a-long-childs-report-denies-the-edits-it-made`](../defects/fixed/a-long-childs-report-denies-the-edits-it-made.md),
+repaired. Two bounds the ruling leaves to the build are raised as questions of their own: a task longer than 2,000
+characters (OQ-118) and the size of the facts (OQ-119).
 Live on 2026-09-29 (duress, session `b4a768a2`), none of the six stored reports denied its own edited files, where the
 earlier run had five of seven. The reconciling child's request left 57,547 characters out and still ended on its edits.
+
+*The build's first claim, falsified by the branch's verification and kept beside its correction:* "the first event, the
+task as given". The first event is the child's whole REQ-TOOLS-154 payload, and the task comes last in it. In that same
+live run every summarising request's start began `user: Workspace root: …` and was cut inside the task, and the request
+for the last child lost its task's `EXPECTED OUTCOME` and `MUST DO`. The facts, the most recent part and the stored
+reports measured above are unaffected; the start was not the task. The start built since is the task itself, and it
+has not yet been run live.
 
 
 **OQ-112 — May `delegate` give a `write_scope` to a persona that holds no file-writing tool?** *(`PD-TOOLS-006` over REQ-TOOLS-152; REQ-ORCH-095, whose text-only completion let the child end `succeeded`. Raised 2026-09-29 from the duress live run's finding D6 under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-111 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
@@ -5234,6 +5243,36 @@ before a crash that never reach the total — is a defect of its own,
 **What a ruling decides.** Whether the counters are accumulated as each call completes, so the displayed total follows the
 record during a pass, which would amend or narrow REQ-ORCH-097's timing; or whether the lag stands and the surface says
 the total is as of the last completed pass.
+
+**OQ-118 — May the task the report summariser keeps as its start be longer than REQ-ORCH-110's 2,000 characters per event?** *(REQ-ORCH-110, "2000 characters for any one event"; OQ-111's ruling, whose kept start is "the task as given"; REQ-TOOLS-154, whose payload carries the task last. Raised 2026-09-29 by the repair of D1 under [R-067](../product/requests.md#r-067), from the branch's verification. Open.)*
+
+OQ-111's first build kept the transcript's first event as its start. That event is the child's whole REQ-TOOLS-154
+payload, which puts the workspace root, the write scopes, the sibling index, the attached artifacts and the inherited
+reports ahead of the task, so the per-event cut kept those blocks and lost the task's tail. In the duress live run of
+2026-09-29 (pack `2026-09-29T07-18-48-658Z`, session `b4a768a2`), every one of the six summarising requests began
+`user: Workspace root: …` and was cut inside the task, 297 to 3,017 of its characters omitted. A payload with a sibling
+index and inherited reports ahead of the task lost the task entirely. The repair keeps the ledger row's task itself as
+the start, with the blocks ahead of it replaced by a marker stating their size. The delegations in that run carried
+tasks of 105 to 3,447 characters, and six of the twelve were longer than 2,000.
+
+**What the build proceeds under.** The start is one event, so REQ-ORCH-110's per-event cut applies to it: a task longer
+than 2,000 characters keeps its first 2,000 (the marker ahead of it included), and the rest is marked omitted like any
+event's. The task's closing sections are the ones lost.
+
+**What a ruling decides.** Whether the task as given is exempt from the per-event cap, so its whole is kept within the
+12,000 total. That would narrow REQ-ORCH-110's per-event figure for this one event. The alternative is that the cut stands.
+
+**OQ-119 — How large may the facts given to the report summariser be, and which are kept when they are larger?** *(OQ-111's ruling, which gives the pass the report's deterministic facts and no bound on them; REQ-ORCH-110, "The report-producing pass MUST be bounded"; REQ-ORCH-109. Raised 2026-09-29 by the repair of D1 under [R-067](../product/requests.md#r-067), from the branch's verification. Open.)*
+
+The ruling adds the edited files and the commands with their outcomes to what the pass reads, and says nothing of their
+size. A child that ran many long commands would make the pass unbounded, which REQ-ORCH-110 forbids.
+
+**What the build proceeds under.** REQ-ORCH-110's two figures, borrowed: each command is cut to 2,000 characters, and the
+block to 12,000 from its head, which keeps the edited files and the earliest commands. In the duress live run of
+2026-09-29 no block came near either figure.
+
+**What a ruling decides.** Whether those figures are the facts' own, or the facts count within the transcript's 12,000;
+and, where the block is cut, whether it keeps the earliest commands or, as the transcript does, the most recent.
 
 ## Design-reference dependencies
 

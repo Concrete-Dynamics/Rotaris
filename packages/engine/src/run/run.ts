@@ -316,6 +316,14 @@ export class Run {
   private ended = false;
   private startedAt: Millis | null = null;
   private hardCancel: Budget | null = null;
+  /**
+   * REQ-SESSION-092 / REQ-MONITOR-129: settles when the stop's 30 s grace has run out, counted from the first stop request
+   * whether or not it was forced. The root's turn is awaited no longer than this (`withinStopGrace`): a root whose call
+   * ignores its abort is given up on here, as a rest gives up on a child's execution, so it cannot hold the run and its
+   * lock open (the repair of `a-root-call-that-ignores-the-stop-holds-the-run-open.md`).
+   */
+  private readonly stopGraceSpent: Promise<void>;
+  private spendStopGrace: (() => void) | null = null;
   private iterationsCompleted = 0;
   private initialIterations = 0;
   private lastFailure: string | null = null;
@@ -473,6 +481,7 @@ export class Run {
     const closedIterations = deps.dal?.iterationsOf(deps.sessionId).filter((i) => i.state === 'closed').map((i) => i.iteration) ?? [];
     this.iterationsCompleted = Math.max(stored?.iterations_completed ?? 0, ...closedIterations);
     this.initialIterations = this.iterationsCompleted;
+    this.stopGraceSpent = new Promise<void>((resolve) => { this.spendStopGrace = resolve; });
     // Sticky and observable: a request before the loop exists replays here (REQ-SESSION-092).
     this.stop.onRequested((s) => {
       // REQ-MONITOR-012: whatever is blocked on a person is released first, then the run stops. PD-ORCH-005 clause 9: a
@@ -484,6 +493,10 @@ export class Run {
       try { if (withdrawBy !== null) this.withdrawPending(withdrawBy); else this.cancelPending(); } catch (cause) { this.deps.warn(`releasing pending approvals on ${this.sessionId} failed: ${String(cause)}`); }
       if (rest !== null) this.children?.beginRest();
       this.abort.abort();
+      // The root's bound: the grace counted from the first request, forced at its first activation or not, so a root that
+      // honours the abort a moment after a forced stop still records what its step did.
+      const spend = this.spendStopGrace;
+      if (spend !== null) { this.spendStopGrace = null; this.deps.clocks.timers.after(STOP_GRACE, spend); }
       if (s.forced || this.hardCancel) return;
       // REQ-SESSION-092 / REQ-MONITOR-129: graceful first; the 30 s deadline hard-cancels and sweeps again.
       this.hardCancel = Budget.begin(this.deps.clocks.monotonic.now(), STOP_GRACE);
@@ -1189,6 +1202,8 @@ export class Run {
     const compression = this.compressionFor(this.rootResilience().cell.model, () => this.plannerTodoLines());
     // PD-ORCH-005 revision 4 clause 14: one check per execution of the root, at its first model step.
     const fingerprint = this.record.fingerprint(rootTaskId, rootCanonical, iteration);
+    /** REQ-SESSION-092: the stop's grace ran out before the root's turn returned, and the run went on without it. */
+    let rootDetached = false;
     const turnFn = (text: string | null, history: readonly ChatMessage[]) => {
       const content = launching ? this.firstMessage(text ?? task, contentOverride ?? this.deps.taskContent, iterationOverride === undefined) : undefined;
       const initialCall = initial;
@@ -1222,12 +1237,27 @@ export class Run {
       recorder: this.record.recorder(rootTaskId, iteration),
       // PD-ORCH-005 revision 4 clause 14: the fingerprint of the instructions and tools the root started with.
       fingerprint,
+      // REQ-SESSION-094: a root the stop's grace gave up on writes nothing more when its call returns.
+      detached: () => rootDetached,
       }, text, history, this.abort.signal, content);
     };
     let outcome: TurnOutcome | null = null;
     try {
       const start: TurnStart = resume ? this.resumedRootStart(rootTaskId) : { kind: 'fresh', task };
-      outcome = children ? await children.runWithChildren(this.rootId, turnFn, start, this.abort.signal) : await firstTurn(turnFn, start);
+      const running = children ? children.runWithChildren(this.rootId, turnFn, start, this.abort.signal) : firstTurn(turnFn, start);
+      /*
+       * REQ-SESSION-092 / REQ-MONITOR-129: a stop bounds how long the root is awaited, as a rest bounds a child's execution
+       * (`IterationChildren.rest`). Past the grace the root is detached: it is left where it stood — paused by a rest, its
+       * open call answered as interrupted, below — and a turn that returns after that writes nothing more.
+       */
+      const settled = await Promise.race([running, this.stopGraceSpent.then(() => { rootDetached = true; return null; })]);
+      if (settled === null) {
+        // The turn's end is no longer awaited, so its raise must be handled here or it is an unhandled rejection.
+        running.catch(() => undefined);
+        this.deps.warn(`iteration ${iteration}: the root ${config.persona} did not return within the stop's 30 s grace and was given up on (REQ-SESSION-092)`);
+        return { status: 'succeeded', text: '', usage: { input: 0, output: 0 } };
+      }
+      outcome = settled;
       this.aggregates.addToolCalls(outcome.toolCallCount);
       // REQ-ORCH-080: a stop with active background children drains before anything is cancelled — only a stop that
       // cancels them (the explicit cancel); a stop that brings the run to rest leaves them paused (PD-ORCH-005).
@@ -1241,8 +1271,12 @@ export class Run {
        */
       const rest = iterationOverride === undefined ? this.restCause : null;
       const rootFinished = outcome !== null && outcome.paused !== true && !this.abort.signal.aborted && outcome.report.status !== 'failed';
+      /** Whether the root's open calls were answered as interrupted by a rest. */
+      let answered = false;
       if (rest !== null && (!rootFinished || (children?.scheduler.hasNonTerminal ?? false))) {
-        if (children) { const n = await children.rest(rest); if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) left paused by ${rest} (PD-ORCH-005)`); }
+        // A root given up on has spent the stop's grace, and every child's execution had the same grace beside it: the rest
+        // waits for none of them again, so the stop stays bounded at the one 30 s (REQ-SESSION-092).
+        if (children) { const n = await children.rest(rest, rootDetached ? millis(0) : STOP_GRACE); if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) left paused by ${rest} (PD-ORCH-005)`); }
         /*
          * Clause 3: the explicit cancel is final even when it arrives while the run is coming to rest — the rest waits on
          * every execution, which can take the pause's whole tool deadline. Read again once the rest is done: cancelled
@@ -1254,14 +1288,19 @@ export class Run {
         } else {
           this.iterationRest = this.restCause;
           rootRecord.state = 'paused';
-          // Clauses 3 and 4: a root that raised out of a call has that call answered as interrupted, as a child's is.
+          // Clauses 3 and 4: a root that raised out of a call, or was given up on in one, has that call answered as
+          // interrupted, as a child's is.
           if (this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: config.persona }, iteration, this.restCause);
+          answered = true;
         }
       } else if (children) {
         // REQ-ORCH-052: every exit path from an iteration leaves every child record terminal.
         const n = children.finalize(this.stop.requested ? 'cancelled: the run was stopped while this child was in flight' : 'cancelled during iteration cleanup');
         if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) settled cancelled at exit (REQ-ORCH-052)`);
       }
+      // A root given up on that no rest paused — the explicit cancel — still leaves no call row running (REQ-SESSION-129):
+      // its open call is recorded cut off, naming no rest (OQ-96, "A call cut by no rest").
+      if (rootDetached && !answered && this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: config.persona }, iteration, null);
     }
   }
 

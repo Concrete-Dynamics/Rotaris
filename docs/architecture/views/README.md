@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A root call that ignores the stop no longer holds the run open (REQ-SESSION-092, REQ-MONITOR-129, REQ-SESSION-094,
+2026-09-29, R-067).** `Run.turn` awaits the root's turn no longer than the stop's 30 s grace, counted from the first
+stop request (`stopGraceSpent`); a root still in a call then is detached as a child execution is, left `paused` by a
+stop or a quit with its open call answered, and the rest that follows gives the children none of the grace again
+(`IterationChildren.rest`'s `grace`). This repairs `a-root-call-that-ignores-the-stop-holds-the-run-open.md`. The
+**runtime view**'s §2 says so. No package, edge, process, channel, message kind or store column changed.
+
 **A continue in the process that ran the session takes the lock back (ADR-0005, REQ-SESSION-047/048/083, 2026-09-29,
 R-067).** `prompt`, `continueSession` and `planDecision` claim the session's lock before their first write
 (`holdForContinue`, through the one claim `claimHold` the at-rest cancel's `lockForWrite` now shares), and the run each

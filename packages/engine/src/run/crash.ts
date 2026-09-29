@@ -32,8 +32,11 @@ export interface OpenCallsAgent {
  * assumes two agents that share a name — the root's persona across iterations, same-named children — never share a
  * call id as well; the provider mints the ids. A row released past the resident window is not read, and its call is
  * answered as never started.
+ *
+ * `cause` is null for a call no rest cut — a root the stop's grace gave up on under the explicit cancel — whose
+ * statement names no rest (OQ-96, "A call cut by no rest").
  */
-export function answerOpenCalls(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, agent: OpenCallsAgent, iteration: number, cause: Interruption): void {
+export function answerOpenCalls(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, agent: OpenCallsAgent, iteration: number, cause: Interruption | null): void {
   const rowOf = new Map(dal.residentRows(sessionId).flatMap((r) => (r.kind === 'tool' && r.name === agent.name && r.call_key !== null ? [[r.call_key, r] as const] : [])));
   const answer = answerUnanswered(conversationOf(dal.agentConversation(sessionId, agent.taskId)), cause, (callId) => {
     const row = rowOf.get(callId);

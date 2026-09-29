@@ -3862,7 +3862,12 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   more for it (REQ-SESSION-094's straggler clause). What the call's own tool gate or a streaming model step writes as it
   finishes is not stopped; `docs/defects/a-detached-call-still-writes-through-its-tool-gate.md` records it. A root's call
   has no such bound (`docs/defects/a-root-call-that-ignores-the-stop-holds-the-run-open.md`, which predates the
-  build).
+  build). *Reported back 2026-09-29 ([R-067](../product/requests.md#r-067)): that last sentence no longer holds. The root
+  is awaited within the same 30 s, counted from the first stop request whether or not it was forced, and one still in a
+  call past it is detached as a child execution is: left `paused` by a stop or a quit, with its open call answered as
+  interrupted, or under the explicit cancel with that call answered as cut off, naming no rest. A rest that follows a
+  detached root waits for no child execution again, so the stop ends within the one 30 s rather than the root's 30 s
+  and then a second one for the children (`docs/defects/fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md`).*
 - **A call cut by no rest.** A call cut by its agent's limit, by the cancellation of that agent or by the explicit
   cancel is recorded as cut off, and its statement names no rest. Only a pause, a stop, a quit or a crash is named as
   what interrupted a call.

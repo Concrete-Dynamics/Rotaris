@@ -410,16 +410,18 @@ export class IterationChildren implements DelegationOps {
    * every child that never started where it stood. Nothing summarises and nothing is settled. Returns how many ended
    * paused.
    */
-  async rest(cause: Interruption): Promise<number> {
+  async rest(cause: Interruption, grace: Millis = STOP_GRACE): Promise<number> {
     this.beginRest();
     // A stop and a quit have aborted every execution; REQ-SESSION-092's grace bounds how long their ends are awaited. A
-    // pause waits for the step in flight, whose own model timeout bounds it (REQ-MONITOR-123).
+    // pause waits for the step in flight, whose own model timeout bounds it (REQ-MONITOR-123). `grace` is what is left of
+    // it: none when the run already spent it waiting for its root (`Run.turn`), so what still executes is detached now.
     const executions = Promise.allSettled([...this.executing]).then(() => false);
     if (cause === 'pause') await executions;
+    else if (grace <= 0) this.detached = this.executing.size > 0;
     else {
-      let grace: TimerHandle | undefined;
-      this.detached = await Promise.race([executions, new Promise<boolean>((r) => { grace = this.deps.clocks.timers.after(STOP_GRACE, () => r(true)); })]);
-      grace?.cancel();
+      let timer: TimerHandle | undefined;
+      this.detached = await Promise.race([executions, new Promise<boolean>((r) => { timer = this.deps.clocks.timers.after(grace, () => r(true)); })]);
+      timer?.cancel();
     }
     // Clause 3: an explicit cancel that arrived meanwhile is final — nothing more is paused; the caller settles the rest.
     if ((this.deps.restCause?.() ?? null) === null) return 0;

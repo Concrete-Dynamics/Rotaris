@@ -240,7 +240,13 @@ hard-cancel budget — and leaves each unfinished child `paused` where it stood 
 execution record `paused`, and the iteration open (above). A child whose `child_timeout` expired during the rest ends
 `failed` as it would have without one, unsummarised; one whose execution raised is left `paused`, as the root is
 (**OQ-96**). An execution a stop's grace gave up on is **detached**: when it returns it writes nothing — no row, no
-record, no report (REQ-SESSION-094). Every agent the rest leaves paused, the root included, has any call it never
+record, no report (REQ-SESSION-094). **The root is bounded the same way (REQ-SESSION-092 / REQ-MONITOR-129, 2026-09-29):**
+`turn()` awaits the root's turn no longer than `stopGraceSpent`, which settles `STOP_GRACE` after the first stop
+request, forced or not. A root still in a call then is detached like a child — its turn's `detached` reads true, so it
+writes nothing when the call returns — and the rest that follows waits for no child execution again
+(`IterationChildren.rest(cause, 0)`: what still executes is detached at once), so a stop ends within the one 30 s. The
+root is left `paused` by a stop or a quit, its open call answered as interrupted; under the explicit cancel its open call
+is answered as cut off, naming no rest. The repair of `a-root-call-that-ignores-the-stop-holds-the-run-open.md`. Every agent the rest leaves paused, the root included, has any call it never
 returned from or raised out of answered in its record as interrupted, its row settled (`answerOpenCalls`, which the crash
 record uses for a dead run's agents too), so a resume sends a conversation whose every call has its result; a call of
 that step that completed keeps what it returned, read back from its settled row. A rest that finds nothing unfinished closes the iteration as before. The cause is

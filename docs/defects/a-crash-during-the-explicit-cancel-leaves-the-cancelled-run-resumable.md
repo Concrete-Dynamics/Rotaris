@@ -4,7 +4,8 @@ The run-level explicit cancel (`cancelAgent` for the reserved run id, REQ-MONITO
 run?" sends, `PD-ORCH-005` clause 15) writes nothing durable when it is accepted. `Run.cancelAgent` only raises the
 in-memory `StopRequest` as final; the agents end `cancelled` and the iteration closes later, in `iterate`'s `finally`,
 once the root's turn returns. If the run host dies in that window — a call that ignores the abort until its deadline
-(`a-root-call-that-ignores-the-stop-holds-the-run-open.md`), the quit's shutdown bound running out while the cancel
+([`a-root-call-that-ignores-the-stop-holds-the-run-open.md`](fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md),
+repaired 2026-09-29: the root is now given up on at the 30 s grace, which shortens the window but does not close it), the quit's shutdown bound running out while the cancel
 settles, or the process being killed — the store is identical to an ordinary mid-run crash: a busy status, the open
 iteration's interruption NULL, and the unfinished agents where they stood.
 

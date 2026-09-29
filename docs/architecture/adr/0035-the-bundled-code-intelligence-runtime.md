@@ -375,4 +375,21 @@ it is, and its note stays open, since nine other proofs use it
 (`../../defects/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`). With the correction
 forced (the seam pointed at Instructions), section 5 passed. The whole proof then passed three runs in a row (522 s,
 521 s, 524 s), with another agent's proofs sharing the host in two of them. In one launch the banner deflected the
-seam's press again, and the correction put Settings back.
+seam's press again, and the correction put Settings back. *(Corrected by the next section: that correction did not hold, and the
+three runs in a row were not what the branch does.)*
+
+**The second fix round, 2026-09-29.** The verifier ran the same build seven times (three whole, four `--steps=5`) and
+`setup-cancel` went red three times, always the same way. Start was pressed at the instant of the notice and of the
+seam's category press. The seam's press, read before the notice and delivered after it, moved Settings to a category
+above, so Cancel had left the screen when it was pressed, and the press gave up. The 3 s correction came after `create`
+had already succeeded (about 1.8 s), and there was nothing left to cancel. The product was again not at fault. The
+setup launches now leave the shared seam alone. They open Settings with the `Ctrl+7` chord, and every press, the
+category's included, waits until the notice has been drawn (`body:has([data-testid="notice"])`), so no point is read
+before the launch's one layout shift. No assertion changed
+(`../../defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`, reopened and repaired again; the
+seam's note stays open). **Measured** as root under Xvfb, Node 24, `--skip-build`: four `--steps=5` runs in a row
+passed (238 to 242 s). All 20 setup launches pressed Start 31 to 123 ms after the notice, and all four `setup-cancel`
+launches pressed Cancel while `create` ran and read `Cancelled`. Then three whole runs in a row passed (529 s, 528 s, 524 s), with another agent's proofs on the host for parts of
+all three: Start 41 to 128 ms after the notice in all 15 setup launches, Cancel pressed and `Cancelled` read in each
+`setup-cancel`, the window check recorded not measured on linux, and the drift refused. **What it could not show:** anything on
+Windows; the packaged branch and section 7 (IC-3), as before.

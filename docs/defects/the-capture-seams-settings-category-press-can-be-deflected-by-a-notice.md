@@ -6,8 +6,11 @@ checks that the category became selected. A notice banner drawn above the view i
 down between the read and the press, and the press selects a category above the one named.
 `code-intel-proof`'s `setup-again` met this on 2026-09-29: the `No model provider is authenticated yet` notice,
 raised at the open's 800 ms slot, landed with the press, and Settings opened on Instructions instead of MCP Servers
-(`fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`). That proof now corrects the category itself.
-Nine other proofs open Settings the same way: `config-proof`, `init-proof`, `injection-proof`, `mcp-proof`,
+(`fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`). That proof's correction, a second press at 3 s
+and 6 s, came too late for `setup-cancel`, where the deflected press took the card off screen between Start and
+Cancel (three reds in seven runs, 2026-09-29). That proof no longer uses this seam: it opens Settings with the Ctrl+7
+chord and presses only after the notice has drawn.
+Nine proofs still open Settings this way: `config-proof`, `init-proof`, `injection-proof`, `mcp-proof`,
 `sandbox-proof`, `settings-proof`, `skills-proof`, `slice-proof` and `live-run`. Any of them can go red for this
 reason alone. The press should be verified by the seam: re-read the point and press again until the item carries
 `is-selected`, or log that it never did by a deadline. The same kind of repair was made for `ROTARIS_CAPTURE_CLICKS`

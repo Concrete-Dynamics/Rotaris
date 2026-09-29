@@ -307,13 +307,24 @@ if (want(4)) {
 
 // ---- 5. project setup from the MCP category ------------------------------------------------------------------------
 // The presses wait for what they press (`docs/defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`).
-// The seam's own category press at ~800 ms can be deflected by the open's notice banner, drawn in the same instant, onto a
-// category above; so at 3 s and 6 s the proof presses `MCP Servers` again if it is still not the selected one (a press
-// that finds it selected matches nothing and presses nothing). Start is pressed as soon as it is drawn ENABLED, which is
-// once the setup status has arrived, whatever second that is; a press at 2500 ms clicked nothing when it was drawn late.
-const NAV_TO_MCP = '.nav-list__item:not(.is-selected)>>MCP Servers@3000;;.nav-list__item:not(.is-selected)>>MCP Servers@6000';
-const PRESS_START = 'button[data-action="setup-start"]:not([disabled])@~30000';
-const SETUP_ENV = (after, extra = {}) => ({ ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'MCP Servers', ROTARIS_CAPTURE_CLICKS: `${NAV_TO_MCP};;${PRESS_START}`, ROTARIS_CAPTURE_PROBE: '[data-setup-step];;[data-setup-message];;[data-setup-refused];;[data-setup-invocation];;[data-language-server-store];;[data-language-server]', ROTARIS_CAPTURE_AFTER_MS: String(after), ...extra });
+// Every setup launch raises one notice at the open's 800 ms slot ("No model provider is authenticated yet": the profile
+// has no provider, REQ-WORKSPACE-152), and that persistent banner, drawn above the view, moves Settings down by its own
+// height. A press whose point was read before it drew lands on whatever sat above its target. The shared seam's
+// `ROTARIS_CAPTURE_VIEW=7` reads its category's point once and presses there once, at ~800 ms, the same instant, so it was
+// deflected onto a category above more than once: in `setup-again` on 2026-09-29, and then in `setup-cancel`, where
+// Start had already been pressed and the card, Cancel with it, left the screen before Cancel could be pressed (the fix
+// round's verifier, three reds in seven runs; the seam's own note stays open, `docs/defects/
+// the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`). So these launches do not use that
+// seam. They open Settings with the Ctrl+7 chord, which has no point to miss, and every press waits until the notice
+// has been drawn (`body:has([data-testid="notice"])`), so no point is read before the one shift of the launch. The
+// category press is made only if MCP Servers is not the selected category. Start is pressed as soon as it is drawn
+// enabled, which is once the setup status has arrived. `settledPresses` refuses a launch whose Start was never
+// pressed, and says whether the notice drew.
+const AFTER_NOTICE = 'body:has([data-testid="notice"])';
+const NAV_TO_MCP = `${AFTER_NOTICE} .nav-list__item:not(.is-selected)>>MCP Servers@~20000`;
+const PRESS_START = `${AFTER_NOTICE} button[data-action="setup-start"]:not([disabled])@~30000`;
+const PRESS_CANCEL = `${AFTER_NOTICE} button[data-action="setup-cancel"]@~30000`;
+const SETUP_ENV = (after, extra = {}) => ({ ROTARIS_CAPTURE_CHORDS: 'Ctrl+7@600', ROTARIS_CAPTURE_CLICKS: `${NAV_TO_MCP};;${PRESS_START}`, ROTARIS_CAPTURE_PROBE: '[data-setup-step];;[data-setup-message];;[data-setup-refused];;[data-setup-invocation];;[data-language-server-store];;[data-language-server]', ROTARIS_CAPTURE_AFTER_MS: String(after), ...extra });
 function setupSteps(log) {
   const probe = lines(log, /capture: probe \[data-setup-step\]/).at(-1) ?? '';
   const found = JSON.parse(probe.slice(probe.indexOf('→') + 2) || '[]');
@@ -325,11 +336,18 @@ function setupMessage(log) {
   return found.map((f) => f.text).join(' | ');
 }
 const setupLog = (log) => lines(log, /mcp setup:/).map((l) => l.slice(l.indexOf('mcp setup:')).slice(0, 240));
+/** The presses above reached Start; if not, say whether the notice they wait for ever drew, rather than a step list. */
+function settledPresses(name, log) {
+  if (lines(log, /capture: clicked ".*setup-start/).length > 0) return;
+  const notice = lines(log, /notice: /).length > 0;
+  throw new Error(`${name}: Start was never pressed; the open's notice ${notice ? 'drew' : 'never drew, and every press waits for it'}\n${lines(log, /capture: /).slice(-8).join('\n')}`);
+}
 if (want(5)) {
   // The runtime auto-creates its project marker when a server is started with `--project` (launches 1–4 did), so the
   // marker is removed first: this launch must run the creation step for real, not skip it.
   rmSync(join(workspace, '.serena'), { recursive: true, force: true });
   const r = launch('setup', SETUP_ENV(90_000), { timeout: 200_000 });
+  settledPresses('setup', r.log);
   const steps = setupSteps(r.log);
   if (steps.map((s) => s.status).join(',') !== 'succeeded,succeeded,succeeded') throw new Error(`setup: ${JSON.stringify(steps)}\n${setupLog(r.log).join('\n')}`);
   if (/creation skipped/.test(steps[0].text)) throw new Error(`setup: creation was skipped on a workspace without a marker: ${steps[0].text}`);
@@ -355,6 +373,7 @@ if (want(5)) {
 }
 if (want(5)) {
   const r = launch('setup-again', SETUP_ENV(60_000), { timeout: 150_000 });
+  settledPresses('setup-again', r.log);
   const steps = setupSteps(r.log);
   // Say what was found rather than indexing into nothing. A launch that emits no setup line at all — the 150 s
   // timeout reached on a loaded machine, or the window dying before the first step — used to fail here as
@@ -369,6 +388,7 @@ if (want(5)) {
 if (want(5)) {
   rmSync(join(noCode, '.serena'), { recursive: true, force: true });
   const r = launch('setup-nocode', SETUP_ENV(40_000), { ws: noCode, timeout: 120_000 });
+  settledPresses('setup-nocode', r.log);
   const steps = setupSteps(r.log);
   if (steps.map((s) => s.status).join(',') !== 'succeeded,skipped-no-code,skipped-no-code') throw new Error(`setup-nocode: ${JSON.stringify(steps)}\n${setupLog(r.log).join('\n')}`);
   if (/creation skipped/.test(steps[0].text)) throw new Error(`setup-nocode: creation was skipped: ${steps[0].text}`);
@@ -378,6 +398,7 @@ if (want(5)) {
 }
 if (want(5)) {
   const r = launch('setup-broken', SETUP_ENV(12_000), { global: GLOBAL_BROKEN, timeout: 90_000 });
+  settledPresses('setup-broken', r.log);
   const message = setupMessage(r.log);
   const refused = setupLog(r.log).find((l) => /refused/.test(l)) ?? '';
   if (!/not a local launch/.test(message) || !/not a local launch/.test(refused)) throw new Error(`setup-broken: the non-retryable text is missing: '${message}' / '${refused}'`);
@@ -391,7 +412,8 @@ if (want(5)) {
   // Cancel is pressed as soon as it is drawn, which is when the run host has reported `create` running: the step's child
   // is spawned in the same turn as that report (`packages/mcp/src/setup.ts`), so the press lands on a running step.
   rmSync(join(noCode, '.serena'), { recursive: true, force: true });
-  const r = launch('setup-cancel', SETUP_ENV(30_000, { ROTARIS_CAPTURE_CLICKS: `${NAV_TO_MCP};;${PRESS_START};;button[data-action="setup-cancel"]@~30000` }), { ws: noCode, timeout: 120_000 });
+  const r = launch('setup-cancel', SETUP_ENV(30_000, { ROTARIS_CAPTURE_CLICKS: `${NAV_TO_MCP};;${PRESS_START};;${PRESS_CANCEL}` }), { ws: noCode, timeout: 120_000 });
+  settledPresses('setup-cancel', r.log);
   const steps = setupSteps(r.log);
   const message = setupMessage(r.log);
   if (steps.map((s) => s.status).join(',') !== 'failed,not-attempted,not-attempted' || !/Cancelled/.test(message)) throw new Error(`setup-cancel: ${JSON.stringify(steps)} — '${message}'\n${setupLog(r.log).join('\n')}`);

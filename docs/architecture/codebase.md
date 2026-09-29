@@ -1086,9 +1086,10 @@ request rejects when the child exits, errors or is killed by the guard, with the
 so a branch that dies fails the launch in seconds instead of hanging it (`line-rpc-client.test.ts`, 12 cases). It launches the token first and the sandbox switch after it, the
 product's order, which `lib/launch-sites.test.ts` holds for every token launch; its workspace file records
 `code-intelligence-setup` as skipped so ADR-0064's background task does not collide with section 5; off Windows it builds
-with `pnpm` and records the no-window check not measured; its setup launches press Start once it is drawn enabled, press
-Cancel once it is drawn, and put Settings back on MCP Servers if the shared category press was deflected (2026-09-28,
-R-062: green three runs in a row as root on Linux, twice).
+with `pnpm` and records the no-window check not measured; its setup launches open Settings with the Ctrl+7 chord rather than
+the shared category seam, and press the category, Start and Cancel only once the open's notice has drawn and the
+control is there (2026-09-28, R-062; repaired again 2026-09-29 after the fix round's verifier found `setup-cancel` red
+three times in seven runs: four `--steps=5` runs and then three whole runs in a row green as root on Linux).
 
 **What `pnpm config-proof` does.** It builds Electron and launches the app five times against commented files at
 both scopes: Settings → Runtime toggles "Allow outside workspace" through its confirmation and saves (every other

@@ -306,7 +306,14 @@ if (want(4)) {
 }
 
 // ---- 5. project setup from the MCP category ------------------------------------------------------------------------
-const SETUP_ENV = (after, extra = {}) => ({ ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'MCP Servers', ROTARIS_CAPTURE_CLICKS: 'button[data-action="setup-start"]@2500', ROTARIS_CAPTURE_PROBE: '[data-setup-step];;[data-setup-message];;[data-setup-refused];;[data-setup-invocation];;[data-language-server-store];;[data-language-server]', ROTARIS_CAPTURE_AFTER_MS: String(after), ...extra });
+// The presses wait for what they press (`docs/defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`).
+// The seam's own category press at ~800 ms can be deflected by the open's notice banner, drawn in the same instant, onto a
+// category above; so at 3 s and 6 s the proof presses `MCP Servers` again if it is still not the selected one (a press
+// that finds it selected matches nothing and presses nothing). Start is pressed as soon as it is drawn ENABLED, which is
+// once the setup status has arrived, whatever second that is; a press at 2500 ms clicked nothing when it was drawn late.
+const NAV_TO_MCP = '.nav-list__item:not(.is-selected)>>MCP Servers@3000;;.nav-list__item:not(.is-selected)>>MCP Servers@6000';
+const PRESS_START = 'button[data-action="setup-start"]:not([disabled])@~30000';
+const SETUP_ENV = (after, extra = {}) => ({ ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'MCP Servers', ROTARIS_CAPTURE_CLICKS: `${NAV_TO_MCP};;${PRESS_START}`, ROTARIS_CAPTURE_PROBE: '[data-setup-step];;[data-setup-message];;[data-setup-refused];;[data-setup-invocation];;[data-language-server-store];;[data-language-server]', ROTARIS_CAPTURE_AFTER_MS: String(after), ...extra });
 function setupSteps(log) {
   const probe = lines(log, /capture: probe \[data-setup-step\]/).at(-1) ?? '';
   const found = JSON.parse(probe.slice(probe.indexOf('→') + 2) || '[]');
@@ -381,8 +388,10 @@ if (want(5)) {
 }
 if (want(5)) {
   // Cancel while `create` runs (the runtime's import alone takes seconds): the step in flight is terminated, the rest not attempted.
+  // Cancel is pressed as soon as it is drawn, which is when the run host has reported `create` running: the step's child
+  // is spawned in the same turn as that report (`packages/mcp/src/setup.ts`), so the press lands on a running step.
   rmSync(join(noCode, '.serena'), { recursive: true, force: true });
-  const r = launch('setup-cancel', SETUP_ENV(30_000, { ROTARIS_CAPTURE_CLICKS: 'button[data-action="setup-start"]@2500;;button[data-action="setup-cancel"]@3300' }), { ws: noCode, timeout: 120_000 });
+  const r = launch('setup-cancel', SETUP_ENV(30_000, { ROTARIS_CAPTURE_CLICKS: `${NAV_TO_MCP};;${PRESS_START};;button[data-action="setup-cancel"]@~30000` }), { ws: noCode, timeout: 120_000 });
   const steps = setupSteps(r.log);
   const message = setupMessage(r.log);
   if (steps.map((s) => s.status).join(',') !== 'failed,not-attempted,not-attempted' || !/Cancelled/.test(message)) throw new Error(`setup-cancel: ${JSON.stringify(steps)} — '${message}'\n${setupLog(r.log).join('\n')}`);

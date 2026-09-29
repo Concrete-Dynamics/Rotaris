@@ -363,3 +363,16 @@ off Windows, because its sampler is `Get-Process` and this host has no window li
 consequence 1 as surely as one on Windows; the instrument is what is missing. The packaged half of section 1 and section 7
 need `win-unpacked`, and no Linux artifact may be produced (IC-3), so IC-7's contained run is untouched. Nothing on
 Windows was run.
+
+**The fix round, 2026-09-29.** The whole proof was run three more times, and run 2 went red in section 5's
+`setup-again`. The product was not at fault. The open's `No model provider is authenticated yet` notice, raised at
+the 800 ms slot, landed at the same instant as the capture seam's fixed-time press on the `MCP Servers` category. It
+moved the list two rows, so Settings opened on Instructions and Start was never on screen. The setup launches now wait
+for what they press. Start is pressed once it is drawn enabled, Cancel once it is drawn, and `MCP Servers` is pressed
+again at 3 s and 6 s if it is not selected
+(`../../defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`). The shared seam's press stays as
+it is, and its note stays open, since nine other proofs use it
+(`../../defects/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`). With the correction
+forced (the seam pointed at Instructions), section 5 passed. The whole proof then passed three runs in a row (522 s,
+521 s, 524 s), with another agent's proofs sharing the host in two of them. In one launch the banner deflected the
+seam's press again, and the correction put Settings back.

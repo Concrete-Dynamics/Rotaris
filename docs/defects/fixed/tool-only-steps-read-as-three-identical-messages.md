@@ -25,3 +25,20 @@ Live-run finding: D3 (live runs of 2026-09-29)
 - `packages/engine/src/run/supervisor.ts:150`, `:184-189` — `rawFallbackHasEvidence`; `:70` — `normaliseMessage`.
 - `packages/engine/src/run/turn.ts:305` — `observe({ kind: 'message', text: report.text })`, `''` on a tool-only step.
 - `packages/engine/src/run/supervisor.test.ts:72-74` — `rawClear`, with no empty message events.
+
+## Outcome — repaired 2026-09-29 under R-067
+
+`LoopSupervisor.rawFallbackHasEvidence` (`packages/engine/src/run/supervisor.ts`) now reads a message that normalises to
+nothing — a tool-only step's `''`, or whitespace — as no assistant message: REQ-ORCH-104's "last 3 normalized-equal" is
+taken over the last three messages with text, so three tool-only steps are no evidence, and three identical texts with
+tool-only steps between them still are. The turn still observes every step's text as before (`run/turn.ts` unchanged),
+so the message count REQ-ORCH-101's raw trigger reads is unchanged; whether a tool-only step should count there is
+[OQ-124](../../architecture/open-questions.md), open, raised by this repair. The four-consecutive-same-tool limb is
+unchanged.
+
+Pinned by `packages/engine/src/run/supervisor.test.ts`: the fallback's `rawClear` case now feeds the empty message event a
+real turn records before each step's calls, and four cases under "REQ-ORCH-104: a raw-count fallback never reads tool-only
+steps as identical messages" — distinct edits and reads in tool-only steps declare no loop; whitespace-only texts are no
+message; three identical messages with tool-only steps between them are still evidence; four consecutive same-tool calls
+in tool-only steps are still evidence. The first three, and `rawClear`, failed on the code before the repair (the first two
+and `rawClear` declared a loop; the third declared none).

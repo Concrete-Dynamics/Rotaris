@@ -5442,6 +5442,26 @@ given what is left of the grace, or the drain replaced by the grace for the canc
 whether REQ-ORCH-080's drain should still apply to the explicit cancel at all, now that `PD-ORCH-005` has a stop leave
 the background children paused rather than cancelled.
 
+**OQ-124 — Is a step that only called tools a message for REQ-ORCH-101's raw count?** *(REQ-ORCH-101, whose raw-count
+trigger counts "tool calls" and "messages" against their thresholds; REQ-ORCH-100, the message-count threshold 60;
+REQ-ORCH-104, whose raw-count fallback declares a loop from "repeated identical assistant messages". Raised 2026-09-29 by
+the repair of live-run finding D3,
+[`tool-only-steps-read-as-three-identical-messages.md`](../defects/fixed/tool-only-steps-read-as-three-identical-messages.md),
+under [R-067](../product/requests.md#r-067). Numbered past OQ-122 and OQ-123, which branches in flight already hold. Open.)*
+
+The turn observes every model step as a message carrying its text, and a step that only called tools carries none
+(`runTurn`'s `observe({ kind: 'message', text: report.text })`). The repair of D3 reads such a step as **no assistant
+message** for REQ-ORCH-104's evidence — three tool-only steps are not three identical messages — which is what "never from
+counts alone" requires. The same event still counts toward the message threshold of REQ-ORCH-101's raw count, so the message
+count reaches sixty after sixty model steps whether or not any of them said anything. Neither requirement says whether a
+step with no text is a message.
+
+**The reading built.** Unchanged: every step counts toward the message count, a tool-only step included; only the fallback's
+evidence reads a message that normalises to nothing as none.
+
+**What a ruling decides.** Whether a step with no assistant text counts toward REQ-ORCH-101's message count (and so toward
+the `weighted` score), or only a step that said something does — which would make the reading the same in both places.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

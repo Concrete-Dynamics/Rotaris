@@ -35,9 +35,16 @@ export interface ShellState {
    */
   readonly libraryTab: string | null;
   readonly libraryProposalId: string | null;
-  openLibrary(tab: string, proposalId?: string): void;
+  /**
+   * REQ-LIBRARY-102 / REQ-MONITOR-052 (live-run finding K1): an artifact an agent surface's link asked to open — the Library
+   * opens on its Artifacts tab and opens the artifact inspector for it (REQ-LIBRARY-131), consumed once like the proposal.
+   */
+  readonly libraryArtifactId: string | null;
+  /** `focusId` names the proposal to focus on the proposals tab, or the artifact to inspect on the artifacts tab. */
+  openLibrary(tab: string, focusId?: string): void;
   takeLibraryTab(): void;
   takeLibraryProposalId(): void;
+  takeLibraryArtifactId(): void;
   /** REQ-CONFIG-286/287: the unsaved-settings guard; asked before a view switch away from Settings while dirty. */
   readonly navigationGuard: ((next: ViewId) => Promise<boolean>) | null;
   setNavigationGuard(guard: ((next: ViewId) => Promise<boolean>) | null): void;
@@ -156,9 +163,14 @@ export const useShellState = create<ShellState>((set, get) => ({
   },
   libraryTab: null,
   libraryProposalId: null,
-  openLibrary(tab, proposalId) {
+  libraryArtifactId: null,
+  openLibrary(tab, focusId) {
     // REQ-LIBRARY-103: an unknown tab name is ignored — the Library still opens, on whichever tab it was showing.
-    set({ activeView: 'library', ...(LIBRARY_TABS.includes(tab as (typeof LIBRARY_TABS)[number]) ? { libraryTab: tab, libraryProposalId: proposalId ?? null } : {}) });
+    const known = LIBRARY_TABS.includes(tab as (typeof LIBRARY_TABS)[number]);
+    set({ activeView: 'library', ...(known ? { libraryTab: tab, libraryProposalId: tab === 'proposals' ? focusId ?? null : null, libraryArtifactId: tab === 'artifacts' ? focusId ?? null : null } : {}) });
+  },
+  takeLibraryArtifactId() {
+    set({ libraryArtifactId: null });
   },
   takeLibraryTab() {
     set({ libraryTab: null });

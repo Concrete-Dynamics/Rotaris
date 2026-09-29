@@ -45,6 +45,17 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**The inspector shows the run-level agent's tools and every agent's artifact links (REQ-MONITOR-052/060/061/068/069,
+live-run finding K1, R-067, 2026-09-29).** `SessionRecord` gains `entryTools` (the root port's resolution — a new optional
+`ToolPort.resolvedTools` — and the tracker's history) and `artifacts` (the session's artifacts not superseded, a body-free
+read per snapshot, `StoreDal.artifactLinksOf`); the config snapshot's role view gains `declaredTools`, by the rule
+(`declaredToolsOf`) the run host's persona resolver applies, which moved with the built-in roles' tool declarations to
+`contracts/src/roles.ts`. A link in the main window deep-links to the Library (`openLibrary('artifacts', id)`), which opens
+the artifact inspector; in a persona window it opens the inspector there. The **runtime view**'s compression paragraph and
+the **component view**'s `roles.ts` line name them; no package, edge, message kind, command, column or process changes.
+At its verification the runtime view gained that a live run-level agent with no resolution yet lists nothing
+(`runLevelGrant`) rather than its declared tools.
+
 **A root's calls before a crash reach the session total (REQ-MONITOR-102, R-067, 2026-09-29).** The root had no persisted
 tool-call count, so a crash — which ends its turn without returning — lost its calls. `iterations.root_tool_calls` (store
 **v26**) holds the calls of the root the total holds; `SessionWriter.countToolCalls` writes the total with the root's or a
@@ -358,6 +369,24 @@ beginning or ending. The **runtime view**'s step-4 and step-5 rows and its pool 
 `pool.ts` entry, say so. The proof's side is `transcript-proof.mjs` and `lib/trace-summary.mjs` (the CPU profile's
 attribution), which no view describes. No package, edge, process, channel, message kind, store column or owner of state
 changed.
+
+**A skip before the open's resolution (2026-09-28, R-062).** The **process view**'s `initialization.*` paragraph says
+which listed ids a skip leaves out (only one the live run is attempting) and that a skip arriving before the open's
+one automatic resolution performs that resolution first (OQ-122). No package, edge, process, channel, message kind,
+store column or owner of state changed. **Its second round (2026-09-29):** the same paragraph now names the
+`backgroundRun` field the initialization state carries on its existing channel. The window reads it to keep a
+background run out of the setup dialog and to keep the prompt due beside it (REQ-WORKSPACE-103/110, OQ-123). It is one
+more field on an existing message; no message kind changed. **Its third round (2026-09-29):** the paragraph adds that a
+skip leaves an id already recorded completed where it is, and that a skip after the resolution reads nothing more before
+it records; nothing else in any view moved. **Its fourth round (2026-09-29):** the paragraph adds that main makes every
+marker write through one queue and builds each patch inside its turn from the file as it stands, and that a skip decides
+what it leaves out in that turn. No message, channel or owner of state changed; the writer is still main's coordinator.
+The **runtime view**'s `initialization:` / `project_init:` bullet still described the first execution's re-read before
+each recording, with the reason this round falsified; it was corrected in place in the repair round that followed, the
+old sentence kept and marked superseded beside a statement of the queue (`ExecuteDeps.commit` replaces `reread`).
+**Its fifth round (2026-09-29):** the queue is one per workspace root rather than one for the coordinator, so a
+workspace just opened does not wait behind the last marker write of the one it replaced (REQ-WORKSPACE-013); the
+process view's paragraph and the runtime view's bullet say so. Nothing else in any view moved.
 
 **The notices generator reads the shipped setup manifest (2026-09-28, R-062).** `tools/notices/notices.mjs` reads
 `apps/desktop/resources/setup-manifest.json` rather than `pins.json` as REQ-STARTUP-142's manifest, by a copy of

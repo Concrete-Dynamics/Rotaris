@@ -35,7 +35,7 @@ nothing — a tool-only step's `''`, or whitespace — as no assistant message: 
 taken over the last three messages with text, so three tool-only steps are no evidence, and three identical texts with
 tool-only steps between them still are. The turn still observes every step's text as before (`run/turn.ts` unchanged),
 so the message count REQ-ORCH-101's raw trigger reads is unchanged; whether a tool-only step should count there is
-[OQ-124](../../architecture/open-questions.md), open, raised by this repair. The four-consecutive-same-tool limb is
+[OQ-126](../../architecture/open-questions.md), open, raised by this repair. The four-consecutive-same-tool limb is
 unchanged.
 
 Pinned by `packages/engine/src/run/supervisor.test.ts`: the fallback's `rawClear` case now feeds the empty message event a

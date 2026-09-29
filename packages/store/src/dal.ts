@@ -619,6 +619,8 @@ export class StoreDal {
         @highlight_paths, @snippets, @edited_files, @created_files, @commands, @tags, @supersedes, @superseded_by, @created_by, @consumed_by, @timeline_event_id, @conversation_id, @importance, @created_at, @edited_at, @body_file)`),
       // REQ-LIBRARY-096: ascending by creation time, the index's own order; the plan is asserted in `store.test.ts`.
       artifactsOf: db.prepare('SELECT * FROM artifacts WHERE session_id = ? ORDER BY created_at, id'),
+      // Live-run finding K1: the few columns an agent surface links by, read at every snapshot — never the bodies.
+      artifactLinksOf: db.prepare('SELECT id, slug, title, status, created_by, canonical_name, consumed_by FROM artifacts WHERE session_id = ? AND superseded_by IS NULL ORDER BY created_at, id'),
       artifactById: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND id = ?'),
       artifactBySlug: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND slug = ?'),
       artifactByTask: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND source_task_id = ?'),
@@ -1208,6 +1210,13 @@ export class StoreDal {
   /** REQ-LIBRARY-096: ascending by creation time. Hydration reads this and tolerates whatever it finds (REQ-LIBRARY-091). */
   artifactsOf(id: SessionId): ArtifactRow[] {
     return this.stmts['artifactsOf']!.all(id) as ArtifactRow[];
+  }
+  /**
+   * REQ-MONITOR-044/052 (live-run finding K1): the session's artifacts not superseded, as the agent surfaces link them —
+   * the columns a link needs and no body, in the index's own order (`artifacts_by_created`), read at every snapshot.
+   */
+  artifactLinksOf(id: SessionId): Pick<ArtifactRow, 'id' | 'slug' | 'title' | 'status' | 'created_by' | 'canonical_name' | 'consumed_by'>[] {
+    return this.stmts['artifactLinksOf']!.all(id) as Pick<ArtifactRow, 'id' | 'slug' | 'title' | 'status' | 'created_by' | 'canonical_name' | 'consumed_by'>[];
   }
   /** REQ-LIBRARY-096: lookup accepts an id or a slug; the id is tried first, so a slug that looks like an id cannot shadow one. */
   artifactByRef(id: SessionId, ref: string): ArtifactRow | undefined {

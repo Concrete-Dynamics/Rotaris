@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { INSTRUCTIONS_CONFIG_DEFAULT, SKILLS_CONFIG_DEFAULT, type ConfigSnapshot, type DesktopSavePayload } from '@rotaris/contracts';
+import { declaredToolsOf, INSTRUCTIONS_CONFIG_DEFAULT, SKILLS_CONFIG_DEFAULT, type ConfigSnapshot, type DesktopSavePayload } from '@rotaris/contracts';
 import type { Timers } from '@rotaris/kernel';
 import { PERSONA_SYNTHETIC_PREFIX, STARTUP_SLOT_PREFIX } from './keys.js';
 import { isPlainMap, type PlainMap } from './merge.js';
@@ -64,7 +64,7 @@ export function snapshotOf(cfg: LoadedConfiguration, env: InstructionSnapshotEnv
     slots: slotPreferences(cfg).map((p) => ({ slot: p.slot, value: p.value, origin: p.origin, thinking: p.thinking })),
     models: Object.keys(cfg.models).filter((name) => !name.startsWith(STARTUP_SLOT_PREFIX) && !name.startsWith(PERSONA_SYNTHETIC_PREFIX)).sort(),
     imageInputModels: Object.keys(cfg.models).filter((name) => cfg.models[name]!.accepts_image_input && !name.startsWith(STARTUP_SLOT_PREFIX) && !name.startsWith(PERSONA_SYNTHETIC_PREFIX)).sort(),
-    roles: rolePreferences(cfg).map((r) => ({ role: r.role, rawModel: r.rawModel, modelOrigin: r.modelOrigin, effectiveModel: r.effectiveModel, inherited: r.inherited, builtInDefault: r.builtInDefault, rawThinking: r.rawThinking, thinkingOrigin: r.thinkingOrigin, tier: r.tier, tools: [...r.tools] })),
+    roles: rolePreferences(cfg).map((r) => ({ role: r.role, rawModel: r.rawModel, modelOrigin: r.modelOrigin, effectiveModel: r.effectiveModel, inherited: r.inherited, builtInDefault: r.builtInDefault, rawThinking: r.rawThinking, thinkingOrigin: r.thinkingOrigin, tier: r.tier, tools: [...r.tools], declaredTools: [...declaredToolsOf(r.role, r.tools)] })),
     runtime: {
       max_depth: cfg.runtime.max_depth, max_active_children: cfg.runtime.max_active_children, max_iterations: cfg.runtime.max_iterations,
       allow_outside_workspace: cfg.runtime.allow_outside_workspace, permission_mode: cfg.runtime.permission_mode,

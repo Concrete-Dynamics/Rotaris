@@ -562,7 +562,17 @@ threshold, no compression can bring the count under it, and the reason is stated
 REQ-ORCH-093 recovery path is never latched. **`SessionRecord.entryContext`**
 carries the entry role's latest prompt reading and its model's advertised limit (REQ-MONITOR-089): the entry
 role has no `children` row, so this is the only route by which the synthetic root agent's meter gets a figure —
-before it, a run that spawned no child drew zero however much it had spent.
+before it, a run that spawned no child drew zero however much it had spent. **`SessionRecord.entryTools`** (live-run
+finding K1, 2026-09-29) is the same route for its tools: `resolved` is the native set the live run's root port kept
+(`ToolPort.resolvedTools`, the one resolution's names the callable map kept, so a coordinator's withheld tools are absent —
+REQ-MONITOR-061), `called`
+and `active` the tracker's under the persona the root dispatches as (`Run.entryTools`); with no run live nothing is
+resolved, the history is read under the latest iteration's `root_persona` (`entryToolsOf`), and the surface lets the
+role's declared tools stand in (REQ-MONITOR-060; the snapshot's `declaredTools`). A LIVE run-level agent whose root port
+has not resolved yet — the pre-flight, before `Run.iterate` sets the port — lists nothing (`runLevelGrant`), never the
+declared set (REQ-MONITOR-061). **`SessionRecord.artifacts`** is the
+session's artifacts not superseded, with producer, ready flag and consumers (`artifactLinksOf`, one body-free read through
+`artifacts_by_created` per snapshot) — what the inspector's and the persona window's artifact links read (REQ-MONITOR-052/068/069).
 
 **The MCP surface (Part S; ADR-0033/0034).** A port is created synchronously but its MCP surface needs discovery, so the
 run start kicks discovery off for every carried, launchable server (`McpHost.prepare`, each bounded by REQ-MCP-053's 35 s
@@ -982,9 +992,16 @@ of §5 and none a channel: each is a request answered once.
   is also what lets REQ-WORKSPACE-115's refresh promise to show "the values the persisted section holds at that
   moment" while disturbing nothing else — it is one file, read on its own, on demand. Writes go the ordinary
   Tier A way (`config.setField` → `writeConfigFields`), and `overlaySection` replaces both id lists wholesale
-  (REQ-CONFIG-050) while every other top-level key stays put. Because the lists are replaced wholesale, the
-  execution re-reads the section immediately before each recording: a skip answered while a background task ran
-  was otherwise erased by that task's own outcome, which is the second defect ADR-0064's first execution found.
+  (REQ-CONFIG-050) while every other top-level key stays put. Because the lists are replaced wholesale, main's
+  coordinator makes every marker write through a queue, one per workspace root (`InitializationCoordinator.marker`),
+  one write at a time in the order asked, and builds each patch — a skip's, each of a run's recordings through
+  `ExecuteDeps.commit`, the silent stamp — inside its turn from the file as the previous write left it; a skip
+  decides which ids it leaves out in that turn too (ADR-0064, "Fourth round" and "Fifth round", 2026-09-29).
+  *Superseded 2026-09-29:* "the execution re-reads the section immediately before each recording: a skip answered
+  while a background task ran was otherwise erased by that task's own outcome, which is the second defect ADR-0064's
+  first execution found." The erasure was real; the re-read (`ExecuteDeps.reread`, now removed) did not end it,
+  because a read taken before the write, outside the order the writes land in, still missed a skip whose write was in
+  flight, and the skip built its own patch from the in-memory state the run's write had not reached yet.
   `project_init.source_extensions` is read from the same file and decides classification (REQ-WORKSPACE-099).
 - **The one per-call read** — the `fetch` tool's egress policy and `tool_call_timeout` are loaded from the saved
   files at every call, without the live state (REQ-SANDBOX-038/118): a saved edit to the host lists reaches the

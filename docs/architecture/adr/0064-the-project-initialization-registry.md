@@ -129,7 +129,9 @@ itself. Two separate things were wrong once the user answered:
 - A run computes each outcome patch from the state it began with, and the patch replaces both lists
   wholesale (`REQ-CONFIG-050`). So the skip written seconds earlier was gone the moment the task
   finished. The repair is a `reread` port on the execution: the persisted state is read again
-  immediately before each recording, so the one writer writes over what is actually there.
+  immediately before each recording, so the one writer writes over what is actually there. *(Superseded 2026-09-29,
+  "Fourth round": a read taken before the write, outside the order the writes land in, still missed a skip whose write
+  was in flight; the recording is now built inside its turn of one marker-write queue, `ExecuteDeps.commit`.)*
 - A task the live run is **attempting** is not the user's to skip at all: `REQ-WORKSPACE-084` owes every
   attempted task exactly one outcome, and a skip is not that outcome. The coordinator now drops such ids
   from a skip and says so in the log.
@@ -170,3 +172,142 @@ not a proof of the happy path.
 was demonstrated there; no implementation condition is raised and none is discharged. **IC-7 is
 untouched**: running `project create` for real is the first time the product's own flow provokes the
 language-server question that condition describes, and the observation is recorded without changing it.
+
+## On Linux as root — 2026-09-28 (`pnpm init-proof`, R-062): a third order of the same race
+
+**The race of finding (2) has a third order, and on Linux the product lost it.** Finding (2) covered a skip answered
+**while** the background task ran. On Linux under Xvfb the window mounts fast enough that a skip can land **before** the
+task has started. The window reads the state as it mounts, which shows a consent task pending and no run in progress,
+so it opens the dialog. The automatic resolution comes 800 ms after the workspace is acknowledged (REQ-WORKSPACE-141's
+slot). `init-proof`'s Escape, pressed as soon as the dialog exists, landed about 100 ms before the resolution in every
+run measured, the sweep's and this reproduction's. The skip recorded both listed ids, the resolution found nothing
+pending, and `code-intelligence-setup` never started: against REQ-WORKSPACE-083's "an immediate-start list regardless
+of whether a prompt is also due" and REQ-WORKSPACE-088's "starts by itself when the workspace opens". Scenario 3b caught
+it at the sidebar hint (`../../defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
+
+**A first repair, withdrawn before it merged, read the specification against its text.** It kept the open's pending
+background task out of the skip until the resolution had started it. That is not finding (2)'s reading moved one step
+earlier. Finding (2) rests on REQ-WORKSPACE-084, which owes an **attempted** task one outcome, and a task that has not
+started is not attempted. REQ-WORKSPACE-086 ("Skipping SHALL record every given pending task id as skipped") and
+REQ-WORKSPACE-111 ("SHALL persist the listed task ids as skipped") both name that id, which the prompt of
+REQ-WORKSPACE-083 lists and REQ-WORKSPACE-106 draws a card for. The earlier text here also said a dialog raised before
+the resolution "is not itself against a requirement". That was a reading, not a finding: REQ-WORKSPACE-083 makes the
+prompt request a product of the resolution, and REQ-WORKSPACE-141 puts the resolution in the interactive slot.
+**OQ-122** now carries the question.
+
+**The repair built follows the specification's order (revised 2026-09-29).** The prompt a skip answers is a product
+of the open's resolution. So a skip that arrives before the open's one automatic resolution performs that resolution
+first, or waits for the one already under way. That resolution starts the background task as REQ-WORKSPACE-083
+requires. The task is then attempted, and finding (2)'s REQ-WORKSPACE-084 reading leaves it out of the skip. Every
+other given id is recorded as REQ-WORKSPACE-086 says, including the background task when the resolution started
+nothing. The 800 ms slot then finds the open's one automatic resolution made and makes no second one
+(REQ-WORKSPACE-102). A skip is the window's own answer, so the window is accepting input when it arrives. The mount
+read and the dialog are unchanged. `initialization.test.ts` pins three cases: a skip before the slot, a skip while
+the slot's resolution is checking applicability, and a skip whose resolution starts nothing. The first two fail on
+both earlier coordinators, and the third fails on the withdrawn one. `init-proof` asserts that the background task
+started beside the consent prompt and was recorded completed. It passed three runs in a row as root under Xvfb
+(170 s each). In each run the Escape again came before the slot, the log shows the resolution run first and the
+skip leaving the running task out, and no second resolution followed. The withdrawn repair had passed the same
+proof three times, so the proof alone could not tell the two readings apart; the unit cases can.
+
+**Not shown:** the Windows order after the change. No proof run landed a skip while the resolution awaits the
+applicability check; only the unit case covers that interval. *(Corrected 2026-09-29: the "three runs in a row"
+above did not reproduce. The resolution-first order was not merely unmeasured on Windows. It went red on Linux, as the
+next section records.)*
+
+**Second round (2026-09-29): the dialog drew the background run as its own.** The fix round's verifier ran the proof six
+times at `0551f33`, with another agent's proofs on the host. It went red twice, once in each order. In both, the dialog
+read the one run report the coordinator publishes and so took the **background** run as its running state. When the
+skip performed the open's resolution first, the dialog switched to "Running" beneath the user's own Escape, before the
+skip answered. When the resolution came first, the dialog was already running when Escape arrived, ignored it, and
+recorded no decision. That is against REQ-WORKSPACE-103 ("nothing renders their progress live") and REQ-WORKSPACE-107
+(Escape "SHALL resolve as a skip"). The window also lifted the composer gate for any run in progress
+(`../../defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`). Main cannot order a push behind a
+command's reply, so the repair is in what the window draws, not in holding main's publishes. The state carries
+`backgroundRun` beside the report, and REQ-WORKSPACE-105's nine values are unchanged. The dialog draws that run only
+once Initialize is pressed (REQ-WORKSPACE-110's flip). A background run neither withdraws the setup prompt nor lifts the
+gate (`setupPromptDue`, **OQ-123**). `init-proof` now reads the dialog before its Escape, and no assertion changed.
+**Measured** as root under Xvfb on Linux, Node 24, on 2026-09-29, after one `pnpm build` at `19aef49`:
+`init-proof --skip-build` passed six runs in a row (175, 175, 172, 172, 173 and 173 s), all five scenarios. At the end
+of the runs, another agent's Electron processes on the host numbered 0, 6, 9, 9, 16 and 16. The runs took three orders.
+In run 1 the resolution came first and the background run was live 74 ms before the dialog was read: the verifier's
+red order. In run 2 the dialog was read first, and the resolution and background start landed before the Escape. In
+runs 3 to 6 the Escape came first, and the skip performed the resolution. Every reading gave "Set up this project?",
+the two-task intro, the card word Pending, the dialog visible and Send disabled. Every Escape was recorded as `skipped
+verification-consent`, and `code-intelligence-setup → success` followed 1.7 to 2.5 s later. Every reopen read "Not run
+yet: Verification consent task." **Not shown:** the Windows orders; a live background run
+flipped by Initialize in the built app (REQ-WORKSPACE-110 is pinned by unit cases only); and a skip naming a task
+completed a moment earlier. That last one was first recorded, not repaired, and is repaired in the next section
+(`../../defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`).
+
+**Third round (2026-09-29): the second round made a completed task skippable.** The fix round's verifier found that
+the second round opened the path its own note had called a few milliseconds wide. The dialog now stays in its prompt
+state, with Skip and Escape live, for the whole background run. And `skip` awaited `resolve(true)` before filtering,
+which on a resolved open is a view recomputed through the run host's `setup.status()`. A background run that ended
+inside that read was recorded completed, and the skip then **moved** it into `skipped` (`recordPatch` moves an id
+between the lists). The verifier reproduced it with the coordinator's harness. That is against REQ-WORKSPACE-086 ("every
+given **pending** task id") and REQ-WORKSPACE-084 (a success "is recorded as completed"). **The repair:** a skip after
+the open's resolution awaits that resolution and reads nothing more. A skip before it still performs it (OQ-122). After
+the last await, in one turn, the skip leaves out an id the live run is attempting and an id already recorded
+completed. A run clears `attempting` only after its outcome is in the state, so the two cannot disagree. *(Falsified
+2026-09-29 by the fourth verifier: they cannot disagree in memory, but the state reaches the run's outcome only when its
+write returns, and the skip wrote from that state, so its patch could land after the run's and empty `completed`; see
+"Fourth round".)* An id no longer
+applicable is not dropped: that would need the read the repair removes, and the view shows no inapplicable id either
+way. Two cases in `initialization.test.ts` fail on the code before the repair. The second also fails with the first
+change alone, so it pins the completed filter. REQ-WORKSPACE-105's "any run" reading in `packages/config/src/init/sets.ts`
+(`promptDue`, reached only by its own test) was retired, so `setupPromptDue` is the one reading (OQ-123). **Measured** as
+root under Xvfb on Linux, Node 24, after one `pnpm build`: `init-proof --skip-build` passed three runs in a row (173 s,
+173 s and 172 s), all five scenarios. At the end of run 3, another agent's Electron processes numbered 11; there were
+none before that. In run 1 the dialog was read first. The resolution and the background start followed, and then
+Escape: the skip after the resolution, the path this round repaired. In runs 2 and 3 the Escape came first, and the skip
+performed the resolution. Every reading gave "Set up this project?", the card word Pending, the dialog visible and Send
+disabled. Every Escape recorded `skipped verification-consent` and left the running task to its run, and
+`code-intelligence-setup → success` followed 1.8 to 2.0 s later and stayed completed on disk. Every reopen read "Not run
+yet: Verification consent task." **Not shown:** a built-app run in which the background run ends inside a skip; only
+the unit cases hold that interval. Also not shown: the Windows orders, and REQ-WORKSPACE-110's flip in the built app.
+
+**Fourth round (2026-09-29): the third round's reason held in memory and not in the file.** The fix round's fourth
+verifier found that a skip and the background run's recording could still erase each other. Both write a patch that
+replaces the two lists whole (REQ-CONFIG-050). The skip built its patch from the coordinator's `state`, which reaches the
+run's outcome only once the run's write has returned. The run built its patch from a `reread` taken before its write, and
+that read could miss a skip whose write was still in flight. With a harness whose marker writes land in the order sent,
+the verifier showed both orders. (A) A skip while the run's completion write was in flight left the file with
+`completed: []`, against REQ-WORKSPACE-084. (B) A skip whose write was in flight when the task finished left it with
+`skipped: []`, so the prompt would return on the next open, against REQ-WORKSPACE-111 and REQ-WORKSPACE-086. The second
+round had made both reachable by keeping Skip and Escape live for the whole background run. The third round's sentence
+above is kept with its falsification beside it. **The repair:** the coordinator makes every marker write through one
+queue (`InitializationCoordinator.marker`), one at a time in the order asked, and hands each turn the file as the
+previous write left it. The skip decides what it leaves out and builds its patch inside its turn. Each of a run's
+recordings is built inside its own turn (`ExecuteDeps.commit`, which replaces the first execution's `reread`), and so is
+the silent stamp. REQ-WORKSPACE-085's one writer is unchanged: it is still main's coordinator. The coordinator's harness
+now applies marker writes in the order sent and can hold them. Two new cases pin the two orders, and both fail on the
+code before the queue. Under the ordered harness, the third round's first case also fails on that code, by order (B).
+**Measured** as root under Xvfb on Linux, Node 24, after `pnpm symbols` and one `pnpm build`, after `origin/main` was
+merged in: `init-proof --skip-build` passed two runs in a row (171 s and 172 s), all five scenarios. Another agent's
+Electron processes were on the host for parts of both runs (none at the start of run 1, 14 at its end, 11 at the end of run 2). Run 2 took the
+Escape-first path. The skip performed the resolution, and the background task started 7 ms after the skip arrived. The
+skip left that task to its run, recorded `skipped verification-consent` 46 ms after arriving, and
+`code-intelligence-setup → success` followed 2.0 s later. The workspace file then held `completed:
+[code-intelligence-setup]` and `skipped: [verification-consent]`. Run 1's app log was overwritten by run 2, so its path is
+not recorded. `code-intel-proof --skip-build` passed twice (526 s and 525 s). **Not shown:** a built-app run in which the
+run's completion write and a skip's write are in flight together. Only the unit cases hold those orders. Also not shown:
+the Windows orders.
+
+**Fifth round (2026-09-29): one queue per workspace root.** The fourth round's queue was one for the whole
+coordinator. Each root's marker is its own file, written by that root's own workspace service (`config.setField`), so
+nothing orders one root's writes against another's; but one coordinator-wide queue did. After a workspace switch, whose
+resolution "SHALL NOT wait on the cancellation to finish" (REQ-WORKSPACE-013), the new workspace's silent stamp or skip
+could queue behind the outgoing workspace's last recording, which can take the whole 30 s write timeout. The queue is
+now one per root (`InitializationCoordinator.markerQueues`, keyed by the workspace root and dropped once its last turn
+settles); within a root every guarantee the fourth round stated holds unchanged. The fourth round's "one queue" is kept
+as written above. The coordinator's harness now orders marker writes per root, as the real per-workspace services do,
+and a new case, "lets a newly opened workspace record while the previous workspace's marker write is still in flight",
+fails on the coordinator-wide queue and passes on the per-root one. The same round corrected the runtime view's
+`initialization:` bullet, which still gave the first execution's re-read and its falsified reason; the old sentence is
+kept there, marked superseded. **Measured** as root under Xvfb on Linux, Node 24, `--skip-build` after `pnpm symbols`,
+a green `pnpm check` and one `pnpm build` of the per-root queue, with `origin/main` already merged: `init-proof` passed
+two runs in a row (171 s and 172 s), all five scenarios, each ending with the skip's workspace file holding
+`completed: [code-intelligence-setup]` and a reopen reading "Not run yet: Verification consent task."; `code-intel-proof`
+passed twice (523 s and 525 s). Another agent's Electron processes (8 to 11) were on the host through all four runs.
+**Not shown:** a built-app run with two workspaces' marker writes in flight together; only the unit case holds it.

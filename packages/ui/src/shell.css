@@ -1410,6 +1410,15 @@
 .inspector__controls .inspector__note { grid-column: 1 / -1; }
 .inspector__note { font-size: var(--rt-text-2xs, 10px); }
 .inspector__tools { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
+/* Live-run finding K1 (REQ-MONITOR-052/068/069): an agent's artifact links — the mockup's inspector "Artifacts" line, a
+ * link in the accent (`.btn-link`) with the metadata beside it in the tertiary text at the small scale. */
+.inspector__artifacts { display: flex; flex-direction: column; gap: var(--rt-space-1); }
+.artifact-groups { display: flex; flex-direction: column; gap: var(--rt-space-1); }
+.artifact-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--rt-space-2); }
+.artifact-group__label, .artifact-link__state { color: var(--rt-text-tertiary); font-size: var(--rt-text-2xs); }
+.artifact-links { display: flex; flex-wrap: wrap; gap: var(--rt-space-1) var(--rt-space-3); min-width: 0; }
+.artifact-link { display: inline-flex; align-items: baseline; gap: var(--rt-space-1); min-width: 0; }
+.artifact-link__open { font-size: var(--rt-text-xs); overflow-wrap: anywhere; text-align: left; }
 .inspector__actions { display: flex; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
 .inspector__cascade:empty { display: none; }
 .inspector__cascade { color: var(--rt-warn); }

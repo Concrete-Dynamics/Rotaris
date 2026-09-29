@@ -293,3 +293,16 @@ skip left that task to its run, recorded `skipped verification-consent` 46 ms af
 not recorded. `code-intel-proof --skip-build` passed twice (526 s and 525 s). **Not shown:** a built-app run in which the
 run's completion write and a skip's write are in flight together. Only the unit cases hold those orders. Also not shown:
 the Windows orders.
+
+**Fifth round (2026-09-29): one queue per workspace root.** The fourth round's queue was one for the whole
+coordinator. Each root's marker is its own file, written by that root's own workspace service (`config.setField`), so
+nothing orders one root's writes against another's; but one coordinator-wide queue did. After a workspace switch, whose
+resolution "SHALL NOT wait on the cancellation to finish" (REQ-WORKSPACE-013), the new workspace's silent stamp or skip
+could queue behind the outgoing workspace's last recording, which can take the whole 30 s write timeout. The queue is
+now one per root (`InitializationCoordinator.markerQueues`, keyed by the workspace root and dropped once its last turn
+settles); within a root every guarantee the fourth round stated holds unchanged. The fourth round's "one queue" is kept
+as written above. The coordinator's harness now orders marker writes per root, as the real per-workspace services do,
+and a new case, "lets a newly opened workspace record while the previous workspace's marker write is still in flight",
+fails on the coordinator-wide queue and passes on the per-root one. The same round corrected the runtime view's
+`initialization:` bullet, which still gave the first execution's re-read and its falsified reason; the old sentence is
+kept there, marked superseded.

@@ -64,6 +64,8 @@ harness now applies marker writes in the order sent and can hold them, and two m
 the run's completed outcome when a skip arrives while the completion write is in flight" and "keeps a skip whose write
 is in flight when the background run records its outcome". Both fail on the code before the queue. Under the ordered
 harness the first case below fails on that code too, by order (B).
+The queue was then made one per workspace root (ADR-0064, "Fifth round"), so a workspace just opened does not wait
+behind the last marker write of the one it replaced (REQ-WORKSPACE-013); within a root the order above is unchanged.
 
 It does not drop an id that is no longer applicable. Knowing that needs the applicability read the repair removes, and
 recording such an id as skipped changes nothing the user can see: the view filters both lists to applicable tasks.

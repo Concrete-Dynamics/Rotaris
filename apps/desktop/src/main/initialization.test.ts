@@ -46,23 +46,24 @@ function harness(options: { applicable?: boolean; startFails?: boolean; writeFai
   const banners: { headline: string; detail: string }[] = [];
   const writes: PlainMap[] = [];
   const clock = new FakeClock(0, Date.parse('2026-09-15T12:00:00Z'));
-  // The workspace service applies marker writes one at a time, in the order they are sent; a write sent while
-  // `writeHold` is set lands only once it is released, and every write sent after it lands after it.
-  let applied: Promise<unknown> = Promise.resolve();
+  // Each workspace's own service applies its marker writes one at a time, in the order they are sent; a write sent
+  // while `writeHold` is set lands only once it is released, and every write sent after it to the same root lands after
+  // it. Two roots are two services, so nothing orders one root's writes against another's.
+  const applied = new Map<string, Promise<unknown>>();
   const coordinator = new InitializationCoordinator({
     clocks: clock,
     log: () => undefined,
-    writeMarker: (_root, patch) => {
+    writeMarker: (writeRoot, patch) => {
       const held = options.writeHold?.current ?? null;
-      const landed = applied.then(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
+      const landed = (applied.get(writeRoot) ?? Promise.resolve()).then(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
         await held;
         if (options.writeFails) return { ok: false, reason: options.writeFails };
         writes.push(patch);
         // The real path is the workspace service's `commitConfigFields`, which is this call plus a reload.
-        const r = await writeConfigFields(agents, patch);
+        const r = await writeConfigFields(join(writeRoot, '.rotaris', 'agents.yaml'), patch);
         return r.ok ? { ok: true } : { ok: false, reason: r.error.fault };
       });
-      applied = landed;
+      applied.set(writeRoot, landed);
       return landed;
     },
     setup: {
@@ -427,6 +428,34 @@ describe('the skip path and the start refusals', () => {
     const after = readInitializationState(h.agents);
     expect(after.completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
     expect(after.skipped).toEqual(['verification-consent']);
+  });
+
+  /**
+   * The queue is one per workspace root. A workspace opened while the one it replaced still has a marker write in flight
+   * resolves without waiting for that write (REQ-WORKSPACE-013), and the held write still lands in its own file after.
+   */
+  it('lets a newly opened workspace record while the previous workspace\'s marker write is still in flight (REQ-WORKSPACE-013, REQ-WORKSPACE-083)', async () => {
+    const writeHold: StatusHold = { current: null };
+    const h = harness({ applicable: false, writeHold });
+    let release: () => void = () => undefined;
+    writeHold.current = new Promise<void>((r) => { release = r; });
+    // The first workspace's silent stamp is sent and held.
+    const first = h.coordinator.resolve(true);
+    for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
+    expect(readInitializationState(h.agents).lastRun).toBeNull();
+    writeHold.current = null;
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents);
+    let secondDone = false;
+    const second = h.coordinator.resolve(true).then((s) => { secondDone = true; return s; });
+    for (let i = 0; i < 8; i += 1) await new Promise((r) => setImmediate(r));
+    expect(secondDone).toBe(true);
+    expect(readInitializationState(other.agents).lastRun).toBe('2026-09-15T12:00:00.000Z');
+    expect(readInitializationState(h.agents).lastRun).toBeNull();
+    release();
+    await first;
+    await second;
+    expect(readInitializationState(h.agents).lastRun).toBe('2026-09-15T12:00:00.000Z');
   });
 
   /** Once the open's resolution has run and nothing is running, a listed background task is skipped as listed (REQ-WORKSPACE-086/111). */

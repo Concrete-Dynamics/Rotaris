@@ -978,9 +978,16 @@ of §5 and none a channel: each is a request answered once.
   is also what lets REQ-WORKSPACE-115's refresh promise to show "the values the persisted section holds at that
   moment" while disturbing nothing else — it is one file, read on its own, on demand. Writes go the ordinary
   Tier A way (`config.setField` → `writeConfigFields`), and `overlaySection` replaces both id lists wholesale
-  (REQ-CONFIG-050) while every other top-level key stays put. Because the lists are replaced wholesale, the
-  execution re-reads the section immediately before each recording: a skip answered while a background task ran
-  was otherwise erased by that task's own outcome, which is the second defect ADR-0064's first execution found.
+  (REQ-CONFIG-050) while every other top-level key stays put. Because the lists are replaced wholesale, main's
+  coordinator makes every marker write through a queue, one per workspace root (`InitializationCoordinator.marker`),
+  one write at a time in the order asked, and builds each patch — a skip's, each of a run's recordings through
+  `ExecuteDeps.commit`, the silent stamp — inside its turn from the file as the previous write left it; a skip
+  decides which ids it leaves out in that turn too (ADR-0064, "Fourth round" and "Fifth round", 2026-09-29).
+  *Superseded 2026-09-29:* "the execution re-reads the section immediately before each recording: a skip answered
+  while a background task ran was otherwise erased by that task's own outcome, which is the second defect ADR-0064's
+  first execution found." The erasure was real; the re-read (`ExecuteDeps.reread`, now removed) did not end it,
+  because a read taken before the write, outside the order the writes land in, still missed a skip whose write was in
+  flight, and the skip built its own patch from the in-memory state the run's write had not reached yet.
   `project_init.source_extensions` is read from the same file and decides classification (REQ-WORKSPACE-099).
 - **The one per-call read** — the `fetch` tool's egress policy and `tool_call_timeout` are loaded from the saved
   files at every call, without the live state (REQ-SANDBOX-038/118): a saved edit to the host lists reaches the

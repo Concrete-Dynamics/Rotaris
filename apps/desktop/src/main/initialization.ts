@@ -110,13 +110,17 @@ export class InitializationCoordinator {
   /** The live setup's step sink, set for as long as `code-intelligence-setup` is running. */
   private setupListener: ((status: McpSetupStatus) => void) | null = null;
   /**
-   * REQ-WORKSPACE-084/085/086: every marker write this coordinator makes, one at a time, in the order asked. Each patch
-   * replaces both lists whole (REQ-CONFIG-050), so a patch is built inside its turn from the file as the previous write
-   * left it (see `marker`). Before this, a skip built its patch from the in-memory state while the background run's
-   * completion write was in flight, and the run built its patch from a read taken before a skip's write had landed:
-   * whichever landed second erased the other (`docs/defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`).
+   * REQ-WORKSPACE-084/085/086: every marker write this coordinator makes to one workspace's file, one at a time, in the
+   * order asked, keyed by the workspace root. Each patch replaces both lists whole (REQ-CONFIG-050), so a patch is built
+   * inside its turn from the file as the previous write left it (see `marker`). Before this, a skip built its patch from
+   * the in-memory state while the background run's completion write was in flight, and the run built its patch from a
+   * read taken before a skip's write had landed: whichever landed second erased the other
+   * (`docs/defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`). One queue per root, not one for the
+   * coordinator: each root's marker is its own file written by its own workspace service, so nothing orders it against
+   * another root's, and a workspace just opened is not made to wait behind the last recording of the one it replaced,
+   * which can take the whole 30 s write timeout (REQ-WORKSPACE-013).
    */
-  private markerQueue: Promise<unknown> = Promise.resolve();
+  private readonly markerQueues = new Map<string, Promise<unknown>>();
 
   constructor(private readonly deps: InitializationDeps) {
     this.registry.register(this.codeIntelligenceTask());
@@ -234,12 +238,16 @@ export class InitializationCoordinator {
   }
 
   /**
-   * One turn of `markerQueue`: `work` runs once every write asked for before it has landed, and is handed the state on
-   * disk read at that moment, from which it builds its own patch. Nothing else may write the marker (REQ-WORKSPACE-085).
+   * One turn of the root's queue in `markerQueues`: `work` runs once every write asked for before it on the same root
+   * has landed, and is handed the state on disk read at that moment, from which it builds its own patch. Nothing else
+   * may write the marker (REQ-WORKSPACE-085). A root's queue is dropped once its last turn has settled.
    */
   private marker<T>(e: WorkspaceEntry, work: (current: InitializationState) => Promise<T>): Promise<T> {
-    const turn = this.markerQueue.then(async () => await work(readInitializationState(e.agentsFile)));
-    this.markerQueue = turn.catch(() => undefined);
+    const tail = this.markerQueues.get(e.root) ?? Promise.resolve();
+    const turn = tail.then(async () => await work(readInitializationState(e.agentsFile)));
+    const settled = turn.catch(() => undefined);
+    this.markerQueues.set(e.root, settled);
+    void settled.then(() => { if (this.markerQueues.get(e.root) === settled) this.markerQueues.delete(e.root); });
     return turn;
   }
 
@@ -417,7 +425,7 @@ export class InitializationCoordinator {
     }
     // What is recorded is decided inside the skip's turn of the marker queue, from the file as every write asked for
     // before it left it, in the same turn as `attempting` is read: a run clears `attempting` only after its recording has
-    // landed, and a recording asked for after the skip is built from the file the skip left (see `markerQueue`).
+    // landed, and a recording asked for after the skip is built from the file the skip left (see `markerQueues`).
     // A task the live run is attempting is not the user's to skip; its own outcome is owed (see `attempting`).
     // REQ-WORKSPACE-084/086: nor is a task already recorded completed. A skip names what the dialog last drew, and a
     // background run can finish between that draw and the skip, or while the skip performs the resolution; recording

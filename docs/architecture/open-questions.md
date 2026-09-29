@@ -5232,7 +5232,10 @@ level is this build's reading: the ruling names the session log and not a level,
 every session log left at REQ-SESSION-142's default. Nothing is added to the ladder; no issue and no timeline entry is
 written for an absorbed retry. Pinned by `ai-sdk-client.test.ts` (the two cases "OQ-110 …: each retry the dispatch layer
 absorbs is reported …" and "… a connection failure …") and `run/turn.test.ts` ("OQ-110 …: a retry the dispatch layer
-absorbed is written to the session log …"), each failing with the report withdrawn.
+absorbed is written to the session log …"), each failing with the report withdrawn. Shown live the same day
+(`pnpm live-run --only=faults` against `katalyst`, pack `2026-09-29T19-39-22-466Z`): `faults-ladder`'s session log reads
+`met HTTP 429 and waited 2002 ms before retry 1 of 5` and `met HTTP 500 and waited 4003 ms before retry 2 of 5`, the
+proxy's record showing the same two gaps; the row is in `first-executions.md`.
 
 **Found by building it — the ladder did not take over when the dispatch layer was exhausted.** The ruling's second half
 ("the ladder takes over when they are exhausted") did not hold: the SDK reports an exhausted budget as a `RetryError`

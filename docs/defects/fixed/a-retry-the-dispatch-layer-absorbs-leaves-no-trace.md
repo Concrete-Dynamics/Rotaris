@@ -54,6 +54,16 @@ written to the session log …"), each red with the report withdrawn. OQ-110 car
 `first-executions.md` was corrected in place by the ruling. The live run's ladder check stays with
 `../two-live-run-checks-cannot-see-what-they-claim.md`.
 
+Shown live the same day with `pnpm live-run --confirm --skip-build --only=faults` against `katalyst` (pack
+`.live-run/runs/2026-09-29T19-39-22-466Z`, git-ignored): `faults-ladder/session.log` reads
+
+```
+2026-09-29T19:39:41.629Z WARNING model request retried by the dispatch layer: orchestrator on openai-compatible--katalyst/qwen3.8-flash-next met HTTP 429 and waited 2002 ms before retry 1 of 5 (…)
+2026-09-29T19:39:45.636Z WARNING model request retried by the dispatch layer: orchestrator on openai-compatible--katalyst/qwen3.8-flash-next met HTTP 500 and waited 4003 ms before retry 2 of 5 (…)
+```
+
+and the scenario's sixteen checks passed. The row is in `first-executions.md`.
+
 Files: `packages/model/src/ports.ts` (`DispatchRetry`, `ModelRequest.onRetry`, `TurnSink.retried`),
 `packages/model/src/ai-sdk-client.ts` (the decorated fetch, `AiSdkClientOptions.monotonic`),
 `packages/model/src/default-backend.ts`, `packages/engine/src/run/turn.ts` (`dispatchRetryLine`, the step's sink),

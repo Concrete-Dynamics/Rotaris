@@ -30,7 +30,11 @@ record already decides, and every ruling it needs is named as the owner's rather
 
 - The other product gaps in `codebase.md`'s "Where the next work lands", for example providers' device-code and
   PKCE authenticators, Git integration and merge, the manual compression part, and persona memory.
-- The open notes in `../defects/`.
+- The open notes in `../defects/`. *Since 2026-09-29 ([R-067](../product/requests.md#r-067)) the owner has ruled the
+  decisions five of them waited on — ESC-42's floor, OQ-103's cancel in flight, REQ-LIBRARY-092's fallback (OQ-112),
+  `delegate`'s `session_id` (OQ-66) and the graceful stop's status (OQ-96, whose note is settled) — and has directed that
+  this workflow repair the open notes and the live runs' findings. Each note stays open until its repair lands; OQ-113 to
+  OQ-115 are open against the live runs' figures and block nothing in this plan.*
 - The four red proofs: `transcript-proof`, `library-proof`, `part-h-proof`, and `theme-proof`'s contrast section
   (OQ-56). *`transcript-proof` was recorded as passing on 2026-09-28 (REQ-CHAT-055's measurement round under R-062) and
   reopened the same day: its fix round passed four runs of six, never three in a row, on Linux, and fix round 2 two of six (nine passes in fifteen); ~~the per-increment cost

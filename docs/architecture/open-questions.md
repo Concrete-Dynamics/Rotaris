@@ -102,7 +102,14 @@ to resume), **OQ-104** (where the plan gate holds a run that resumed an iteratio
 **OQ-105** (what an agent's fingerprint is taken of, when it is compared and where the warning is stated), **OQ-106** (whose
 root the handoff's artifact is taken from), **OQ-107** (which offers a later iteration's root is told, and where) **and
 OQ-108** (what the audit of clause 15, clause 19, `PD-CHAT-001` revision 4 and `PD-CHAT-002` revision 2 leaves
-undecided), each stating the reading the build proceeds under. The fifteen were raised as OQ-67 to OQ-81 on their branch and renumbered at the merge, OQ-67 to OQ-93 having been taken on `main`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+undecided), each stating the reading the build proceeds under. The fifteen were raised as OQ-67 to OQ-81 on their branch and renumbered at the merge, OQ-67 to OQ-93 having been taken on `main`. **On 2026-09-29 the owner ruled eight decisions as recommended ([R-067](../product/requests.md#r-067))**: OQ-96's
+stop status, OQ-103's last question and OQ-66's open part among the questions already here, and ESC-42 in
+`owner-decisions.md`; and four were **raised and ruled in the same entry — OQ-109** (the dispatch layer's retries come
+before the ladder's), **OQ-110** (what the report summariser reads), **OQ-111** (a `write_scope` for a persona that cannot
+write is refused) **and OQ-112** (REQ-LIBRARY-092's fallback, answered by amendment). **Three more were raised the same day
+from the live runs and left open: OQ-113** (the specification's fixed figures on a reasoning model's critical path, and a
+continuation that starts from nothing), **OQ-114** (the code-intelligence server's imperative tool description, rendered
+verbatim) **and OQ-115** (the displayed tool-call total during a long execution pass). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -5108,6 +5115,81 @@ different task ids never share or overwrite an artifact. The requirement disagre
 so it is corrected in place rather than narrowed by a directive: `REQ-LIBRARY-092`'s parenthesis now says when the
 fallback applies, with the inline mark "accepted amendment 2026-09-29, OQ-112", and domain 14's resolution record
 carries the note. Nothing is built by the ruling; the repair is owed to the note above.
+
+**OQ-113 — Do the specification's fixed figures still hold when the model on the critical path reasons before it answers?** *(REQ-ORCH-108 and REQ-ORCH-110, the report-producing pass before the parent resumes, two attempts within 120 s; REQ-ORCH-007 and REQ-ORCH-008, the 12.0 s intent bound and its fallback; REQ-TOOLS-006, whose `coordinator_only` control removes the orchestrator's terminal; REQ-CONFIG-467 and REQ-ORCH-104, the 2.0 s loop-classification bound and its fallback; REQ-LIBRARY-127 and REQ-CONFIG-118, analysis cancelled at shutdown and its 60 s bound; REQ-TOOLS-039 under REQ-TOOLS-033, the recursive-delete deny rule; `PD-ORCH-004` revision 2, "nothing of the continued child is injected". Raised 2026-09-29 from the live runs' frictions F1 to F5 and the duress run's continuation under [R-067](../product/requests.md#r-067). Open.)*
+
+The live runs of 2026-09-29 ran the built product against the owner's self-hosted endpoint (`qwen3.8-flash-next`, a
+model that reasons before it answers; packs `2026-09-29T02-41-56-779Z` and `2026-09-29T03-06-14-929Z`). The product met
+each requirement below as written, and each written figure cost the run time or tokens on its critical path.
+
+- **The report summariser (F1).** Every child's report waits on a summarising call before its parent resumes. Summariser
+  time on the critical path: `edit` 47.0 s; `requirements` 60.0 s and 39.2 s; `frictions` 40.8 s; `terminal` 9.7 s and
+  33.9 s — 230.6 s of the 1,182.0 s wall clock of the four delegating runs (19.5 %). Each summary is a short JSON and
+  took 647 to 3,430 output tokens, most of them reasoning. In the duress run seven summaries took 172.8 s, and 8,743 of
+  their 10,838 output tokens were reasoning.
+- **The intent bound (F2).** The pre-flight classification waited 3.5, 12.0, 10.2, 8.0, 4.5, 5.9 and 12.0 s (56.1 s in all)
+  and ran into its 12 s bound twice, taking REQ-ORCH-007's fallback (`moderate_feature`); each answer took 207 to 1,641
+  output tokens for three fields. The same bound was raised from 8.0 s under ESC-35 for a slow first token; here the
+  cost is the reasoning. And the orchestrator holds no terminal (REQ-TOOLS-006): asked to run `node --test` itself, it
+  told the user to run it.
+- **The loop-classification bound (F3).** The 2.0 s bound cannot be met by this model: one classification took 8.5 s and
+  610 output tokens, and in the duress run the classifier answered `"loop_detected": false` 23 s after the fallback had
+  already declared a loop on counts (recorded as D3, a defect of the fallback's own).
+- **The improvement analysis (F4).** No post-run analysis completed in either run: `improvement_artifacts` holds no row.
+  Each scenario quit within 3 s of its run ending, and REQ-LIBRARY-127 cancels an analysis in progress at shutdown; the
+  six analyst calls took 22 to 134 s at the endpoint, three of them beyond REQ-CONFIG-118's 60 s bound.
+- **The recursive-delete rule (F5).** The starter deny rule refused `rm -rf /tmp/mut` on a scratch path outside the
+  workspace (`edit`, tool call #38), as REQ-TOOLS-039 states it.
+- **The continuation that starts from nothing.** `PD-ORCH-004` gives a continuation no part of the continued child, and
+  the duress run's continuation `d2` of the cut-off `d` made 34 reads before its first edit — 6 min 40 s of its 515 s —
+  re-deriving what `d` had known, beside a report whose summary denied `d`'s edits (OQ-110).
+
+**What the build proceeds under.** Every figure as written; nothing here is a defect of the code.
+
+**What a ruling decides.** Whether any of these figures or rules should change for a model of this kind — for example
+whether the summarising pass may run off the parent's critical path or be skipped where the report's deterministic facts
+suffice, whether the intent and loop-classification bounds should scale with the model's measured latency or request no
+reasoning, whether an analysis in progress may finish within a bound after the last window closes, whether the
+recursive-delete rule should admit a scratch directory, and whether a continuation should be given its predecessor's
+record or report beyond the offer. Each is a change to a requirement or a directive that states the behavioural target
+or the owner's choice, so each would be a directive or a revision, not a repair.
+
+**OQ-114 — Should the bundled code-intelligence server's tool descriptions reach the system prompt verbatim?** *(REQ-MCP-101, which renders each tool's description text in the persona's MCP section; REQ-MCP-015, which puts usage-instruction retrieval in the READ tier every persona carrying the server holds. Raised 2026-09-29 from the first live run's finding L8 under [R-067](../product/requests.md#r-067). Open.)*
+
+`packages/config/src/mcp/prompt.ts:29` renders each server tool's description as REQ-MCP-101 requires, and the bundled
+server's usage-instruction tool describes itself imperatively ("IMPORTANT: If you have not yet read the manual, call this
+tool immediately …"; bound as `initial_instructions` in READ by
+`packages/config/src/mcp/code-intelligence-manifest.generated.ts:36`). Every agent's system prompt carries it, and agents
+obey it. In the live run of 2026-09-29 it was called three times — the orchestrator's first call in `requirements`
+(2,188 ms), the verifier in the same session, and a child in `frictions` (2,244 ms) — and again by the orchestrator and
+one child in the duress run. Each call returns 7.1 to 7.5 thousand characters, which every later request of that agent
+re-sends: 33 requests in the first run, about 60,000 input tokens. The instruction also moves each agent's first step
+onto a manual about a tool it may not need.
+
+**What the build proceeds under.** REQ-MCP-101 as written: the description rendered verbatim. No requirement lets the
+product rewrite a server's own description, and REQ-MCP-015 grants the tool.
+
+**What a ruling decides.** Whether the product may substitute its own description for a bundled server's tool (a
+product-owned override the manifest carries), whether usage-instruction retrieval should leave the READ tier or the
+built-in grants, or whether the cost stands. Each departs from REQ-MCP-101 or REQ-MCP-015, which state the target.
+
+**OQ-115 — Is a run's displayed tool-call total the persisted one while a long pass is still running?** *(REQ-ORCH-097, which accumulates per-child tool-call counters "after each successful execution pass"; REQ-MONITOR-102, which persists a session-wide total and has a displayed total be the persisted value. Raised 2026-09-29 from the duress live run's finding D4 under [R-067](../product/requests.md#r-067). Open.)*
+
+The root's calls are added to the persisted total after its turn returns, and a child's when it settles
+(`packages/engine/src/run/run.ts`, `packages/engine/src/children/orchestration.ts`). In the duress run of 2026-09-29 (pack
+`2026-09-29T03-06-14-929Z`, session `379f1490`) the root's one execution pass lasted the whole 40-minute run: at the
+deadline `sessions.tool_calls` read 240 against 309 `tool_calls` rows — the orchestrator's 54 and the running child
+`f`'s 15 missing, `f`'s own `children.tool_calls` 0 — and the autopsy's header said 240 above a per-tool breakdown summing
+to 309. REQ-ORCH-097's "after each successful execution pass" is met to the letter, and a surface following REQ-MONITOR-102
+shows a figure 69 calls behind the record for as long as the pass lasts. The crash half of the same finding — calls made
+before a crash that never reach the total — is a defect of its own,
+[`a-roots-calls-before-a-crash-never-reach-the-session-total.md`](../defects/a-roots-calls-before-a-crash-never-reach-the-session-total.md).
+
+**What the build proceeds under.** REQ-ORCH-097 as written: accumulated at the end of each pass.
+
+**What a ruling decides.** Whether the counters are accumulated as each call completes, so the displayed total follows the
+record during a pass, which would amend or narrow REQ-ORCH-097's timing; or whether the lag stands and the surface says
+the total is as of the last completed pass.
 
 ## Design-reference dependencies
 

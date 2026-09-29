@@ -94,7 +94,7 @@ function opened() {
 describe("improvement store handles (ADR-0061)", () => {
   it("migrates v19, records the session association and survives reopen", () => {
     const resolved = opened();
-    expect(CURRENT_SCHEMA_VERSION).toBe(25); // REQ-TOOLS-152 (R-067) appended v25
+    expect(CURRENT_SCHEMA_VERSION).toBe(26); // REQ-MONITOR-102 (R-067) appended v26
     const sessionDal = new StoreDal(resolved.db);
     sessionDal.upsertSession({
       session_id: "typed-run",

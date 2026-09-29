@@ -84,8 +84,13 @@ export interface ChildrenDeps {
    * child settles — once per child, from the one place its count is known. Without it the total is the entry
    * agent's own calls, and a surface that subtracts the per-agent counts from it (the synthetic run row) reads
    * zero on any run that delegated. Found by the live run's first execution, 2026-09-11.
+   *
+   * `child` is the child's own count that now holds those calls: the run persists it with the session's total in one
+   * transaction (`SessionWriter.countToolCalls`), so a crash never leaves a call held by one and not the other — the crash
+   * record adds what a child's record shows beyond its count (the repair of
+   * `a-roots-calls-before-a-crash-never-reach-the-session-total.md`).
    */
-  readonly countToolCalls?: ((n: number) => void) | undefined;
+  readonly countToolCalls?: ((n: number, child?: { readonly taskId: string; readonly calls: number }) => void) | undefined;
   /**
    * REQ-EVENTS-053, PD-MONITOR-001: every completed provider request a child makes is a request of the run, so it
    * reaches the run's cumulative tokens and cost through the same callback the entry agent's turn uses. Without it
@@ -630,7 +635,7 @@ export class IterationChildren implements DelegationOps {
     // by phase 4's review: a child that worked before a crash counted none).
     const priorCalls = resume ? Math.max(row.tool_calls, callsRun(resume.history)) : 0;
     // REQ-MONITOR-102: calls the record shows that no count held join the session's total now, once (phase 4's review).
-    if (priorCalls > row.tool_calls) deps.countToolCalls?.(priorCalls - row.tool_calls);
+    if (priorCalls > row.tool_calls) deps.countToolCalls?.(priorCalls - row.tool_calls, { taskId: row.task_id, calls: priorCalls });
     let outcome: TurnOutcome | null = null;
     let error: { type: string; message: string } | null = null;
     let timedOut = false;
@@ -751,7 +756,7 @@ export class IterationChildren implements DelegationOps {
     const toolCalls = priorCalls + (outcome?.toolCallCount ?? 0);
     this.toolCalls.set(row.task_id, toolCalls);
     // REQ-MONITOR-102: this child's calls join the session-wide total, counted once, here, whatever it ended as.
-    deps.countToolCalls?.(outcome?.toolCallCount ?? 0);
+    deps.countToolCalls?.(outcome?.toolCallCount ?? 0, { taskId: row.task_id, calls: toolCalls });
     // REQ-CHAT-088: the tool port may have persisted this child's own plan while it ran; settling updates the
     // call count while preserving that document for the scoped transcript and later session refreshes.
     const persistedTodo = deps.dal.childrenOf(deps.sessionId).find((child) => child.task_id === row.task_id)?.todo ?? null;

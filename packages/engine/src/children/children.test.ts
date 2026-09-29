@@ -11,7 +11,8 @@ import type { PersonaResolver } from './personas.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { HookPort } from '../hooks-port.js';
 import { conversationOf } from '../run/record.js';
-import { interruptedResult } from '../run/interruption.js';
+import { callsRun, interruptedResult } from '../run/interruption.js';
+import { recordCrash } from '../run/crash.js';
 import { decodeStoredTodo } from '../todo-view.js';
 import { resumableOf } from '../sessions.js';
 import { userCancellation } from './ledger.js';
@@ -1854,6 +1855,62 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'stop' }]);
     });
 
+    it('REQ-MONITOR-102 (the repair of a-roots-calls-before-a-crash-never-reach-the-session-total.md): a child the stop\'s grace gave up on, credited from its record by the continue and then lost to a crash, is counted once — the credit persisted its own count with the total', async () => {
+      const probe: PortToolResult = { text: 'probed', isError: false, status: 'ok', durationMs: 1, label: 'probe', args: {} };
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'stuck', task: 'TASK: stuck' } }]) : answer('delegated');
+        // Two calls before the stop (the second one hangs through it), and — resumed — one more that hangs through the crash.
+        return turn === 1 ? toolCalls([{ callId: 'p1', name: 'probe', args: {} }]) : toolCalls([{ callId: `h${turn}`, name: 'hang', args: {} }]);
+      }, { tool: (name) => (name === 'hang' ? new Promise<PortToolResult>(() => undefined) : name === 'probe' ? Promise.resolve(probe) : undefined) });
+      const hangRows = (sid: SessionId) => dal.residentRows(sid).filter((r) => r.kind === 'tool' && r.tool_name === 'hang' && r.name === 'stuck');
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => hangRows(sid).length === 1);
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(30_000);
+      await sessions.running(sid);
+      // Given up on at the grace: rested with no count, so only the root's delegate is in the total.
+      expect(byName(sid, 'stuck')).toMatchObject({ state: 'paused', interruption: 'stop', tool_calls: 0 });
+      expect(dal.getSession(sid)!.tool_calls).toBe(1);
+      // The root returned before the grace ran out (while the rest waited for its child): counted once, with its outcome.
+      expect(dal.iterationsOf(sid)[0]!.root_tool_calls).toBe(1);
+      // The continue credits the child's p1 and h2 from its record; the resumed child makes h3, which is running at the death.
+      expect(sessions.prompt(sid, 'go on').ok).toBe(true);
+      await settle(() => hangRows(sid).length === 2);
+      // The run's token sampler saves its figures every 10 s, so the credit is in the stored total before the death.
+      clock.advance(10_000);
+      await settle(() => dal.getSession(sid)!.tool_calls === 3);
+      expect(dal.getSession(sid)!.tool_calls).toBe(3);
+      expect(byName(sid, 'stuck')).toMatchObject({ state: 'running', tool_calls: 2 });
+      // The process dies here: a later process records the crash from the store alone.
+      const w = SessionWriter.open({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { pid: 5, host: HOST, isProcessAlive: () => false });
+      if (!w.ok) throw new Error('writer');
+      recordCrash(dal, w.value, sid, new Set(), () => undefined);
+      // d1, p1, h2 and h3 — each once; the child's count is its record's.
+      expect(dal.getSession(sid)!.tool_calls).toBe(4);
+      expect(dal.iterationsOf(sid)[0]!.root_tool_calls).toBe(1);
+      expect(byName(sid, 'stuck')).toMatchObject({ state: 'paused', interruption: 'crash', tool_calls: 3 });
+      expect(callsRun(conversationOf(dal.agentConversation(sid, byName(sid, 'stuck').task_id)))).toBe(3);
+    });
+
+    it('REQ-MONITOR-102 (the repair of a-roots-calls-before-a-crash-never-reach-the-session-total.md): a child\'s settle persists the total with its own count, so a crash right after it — the child terminal, never counted by the crash record — loses none of its calls', async () => {
+      const probe: PortToolResult = { text: 'probed', isError: false, status: 'ok', durationMs: 1, label: 'probe', args: {} };
+      const { sessions, counts } = sessionsWith((persona, turn) => {
+        // The root delegates, answers, and — resumed with the report — takes a step that never returns: the death.
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'quick', task: 'TASK: quick' } }]) : turn === 2 ? answer('delegated') : { parts: [{ hold: new Promise<void>(() => undefined) }, ...answer('never').parts] };
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        return turn === 1 ? toolCalls([{ callId: 'p1', name: 'probe', args: {} }, { callId: 'p2', name: 'probe', args: {} }]) : answer('Done.');
+      }, { tool: (name) => (name === 'probe' ? Promise.resolve(probe) : undefined) });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'quick')?.state === 'succeeded' && (counts.get('orchestrator') ?? 0) >= 3);
+      expect(byName(sid, 'quick')).toMatchObject({ state: 'succeeded', tool_calls: 2 });
+      const w = SessionWriter.open({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { pid: 5, host: HOST, isProcessAlive: () => false });
+      if (!w.ok) throw new Error('writer');
+      recordCrash(dal, w.value, sid, new Set(), () => undefined);
+      // d1, p1 and p2, each once.
+      expect(dal.getSession(sid)!.tool_calls).toBe(3);
+    });
+
     describe('REQ-SESSION-092 / REQ-MONITOR-129: a root call that ignores the stop no longer holds the run open (the repair of a-root-call-that-ignores-the-stop-holds-the-run-open.md)', () => {
       const hang: TestTool = (name) => (name === 'hang' ? new Promise<PortToolResult>(() => undefined) : undefined);
       const hangs = (turn: number): ScriptedCall => (turn === 1 ? toolCalls([{ callId: 'h1', name: 'hang', args: {} }], 'Hanging.') : answer('never'));
@@ -1883,6 +1940,48 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         const last = conversationOf(dal.agentConversation(sid, root)).at(-1)!;
         expect(last).toMatchObject({ role: 'tool', content: [{ kind: 'tool-result', callId: 'h1', result: interruptedResult('stop', true, ''), isError: true }] });
         expect(warnings.some((w) => /root.*did not return within the stop's 30 s grace/.test(w))).toBe(true);
+      });
+
+      it('REQ-MONITOR-102 (the repair of a-roots-calls-before-a-crash-never-reach-the-session-total.md): a root given up on counts the call it made from its record, and its resume counts only the calls it adds', async () => {
+        const probe: TestTool = (name) => (name === 'hang' ? new Promise<PortToolResult>(() => undefined) : name === 'probe' ? Promise.resolve({ text: 'probed', isError: false, status: 'ok', durationMs: 1, label: 'probe', args: {} }) : undefined);
+        const { sessions } = sessionsWith((persona, turn) => {
+          if (persona !== 'orchestrator') return answer('done');
+          // Two calls before the one that hangs, then — resumed — one more before its answer.
+          return turn === 1 ? toolCalls([{ callId: 'q1', name: 'probe', args: {} }, { callId: 'q2', name: 'probe', args: {} }]) : turn === 2 ? toolCalls([{ callId: 'h1', name: 'hang', args: {} }]) : turn === 3 ? toolCalls([{ callId: 'q3', name: 'probe', args: {} }]) : answer('Done.');
+        }, { tool: probe });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await settle(() => rootHangRow(sid) !== undefined);
+        expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+        expect(await endsAfter(sessions, sid, 30_000)).toBe(true);
+        // q1, q2 and the cut h1 — none of which a returned turn counted.
+        expect(dal.getSession(sid)!.tool_calls).toBe(3);
+        expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', interruption: 'stop', root_tool_calls: 3 }]);
+        expect(sessions.prompt(sid, 'go on').ok).toBe(true);
+        expect((await sessions.running(sid))!.status).toBe('completed');
+        expect(dal.getSession(sid)!.tool_calls).toBe(4);
+        expect(dal.iterationsOf(sid)[0]).toMatchObject({ state: 'closed', root_tool_calls: 4 });
+      });
+
+      it('REQ-MONITOR-102: a resumed root given up on at a second stop counts only what its record gained in that execution', async () => {
+        const probe: TestTool = (name) => (name === 'hang' ? new Promise<PortToolResult>(() => undefined) : name === 'probe' ? Promise.resolve({ text: 'probed', isError: false, status: 'ok', durationMs: 1, label: 'probe', args: {} }) : undefined);
+        const { sessions } = sessionsWith((persona, turn) => {
+          if (persona !== 'orchestrator') return answer('done');
+          // Each execution: one call that returns, then one that hangs through the stop.
+          return turn % 2 === 1 ? toolCalls([{ callId: `q${turn}`, name: 'probe', args: {} }]) : toolCalls([{ callId: `h${turn}`, name: 'hang', args: {} }]);
+        }, { tool: probe });
+        const hangs = (sid: SessionId) => dal.residentRows(sid).filter((r) => r.kind === 'tool' && r.tool_name === 'hang' && r.name === 'orchestrator');
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await settle(() => hangs(sid).length === 1);
+        expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+        expect(await endsAfter(sessions, sid, 30_000)).toBe(true);
+        expect(dal.getSession(sid)!.tool_calls).toBe(2);
+        expect(sessions.prompt(sid, 'go on').ok).toBe(true);
+        await settle(() => hangs(sid).length === 2);
+        expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+        expect(await endsAfter(sessions, sid, 30_000)).toBe(true);
+        // q1 and h2 from the first execution, q3 and h4 from the second — the record's first two not counted again.
+        expect(dal.getSession(sid)!.tool_calls).toBe(4);
+        expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', interruption: 'stop', root_tool_calls: 4 }]);
       });
 
       it('a stop forced at its first activation still gives the root the whole grace before it is given up on', async () => {

@@ -4405,8 +4405,12 @@ only with a run behind it. The clause does not say:
   "Keep it paused" rather than "Keep running", on the Workspace and in a persona window through `AgentCancelConfirm`
   (its own module beside the cancel rules, the run's cancel on the Workspace included), whose props take no label a call
   site could override; a test over both call sites' source fails when either takes the labels itself again. The Mission
-  view's own confirmation adds "and will not resume" to its sentence (`missionCancelBody`), and takes its title and both
-  buttons from the same `cancelConfirmation` (`missionConfirmation`). The confirmation describes the session as it was
+  view's own confirmation names the agent and its persona and then states the paused child's cancel in the shared words
+  (`missionCancelBody`, from `pausedCancelWith` and `PAUSED_CANCEL_ALONE`: "Cancellation cannot be undone: the agent will
+  not resume, …") since 2026-09-29 under R-067, with the repair of
+  [`the-mission-views-paused-child-confirmation-omits-that-it-cannot-be-undone.md`](../defects/fixed/the-mission-views-paused-child-confirmation-omits-that-it-cannot-be-undone.md);
+  *until then it only added "and will not resume" to its own sentence, and never said the cancel cannot be undone*. It
+  takes its title and both buttons from the same `cancelConfirmation` (`missionConfirmation`). The confirmation describes the session as it was
   when Cancel was pressed: a continue confirmed in another window before this one is answered sends the cancel to the
   live run, which cancels every unfinished descendant rather than the paused ones listed — the same window a live
   agent's confirmation has when its descendants change under it.

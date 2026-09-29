@@ -1324,7 +1324,8 @@ export class Run {
       if (settled === null) {
         // The turn's end is no longer awaited, so its raise must be handled here or it is an unhandled rejection.
         running.catch(() => undefined);
-        this.deps.warn(`iteration ${iteration}: the root ${config.persona} did not return within the stop's 30 s grace and was given up on (REQ-SESSION-092)`);
+        // Named as its rows and calls name it (`rootName`): a root resumed as the entry role keeps its own persona (OQ-97).
+        this.deps.warn(`iteration ${iteration}: the root ${rootName} did not return within the stop's 30 s grace and was given up on (REQ-SESSION-092)`);
       } else {
         outcome = settled;
         this.aggregates.addToolCalls(outcome.toolCallCount);

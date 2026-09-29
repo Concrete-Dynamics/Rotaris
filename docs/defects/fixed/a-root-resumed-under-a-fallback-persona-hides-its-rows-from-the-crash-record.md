@@ -41,7 +41,9 @@ role, the root's rows were missing from "This task" and from its persona window,
 root dispatched under its own name (REQ-MONITOR-060). The first statement of this repair said nothing of either. Both are
 repaired by [`the-run-level-agent-is-known-by-its-entry-persona-alone.md`](the-run-level-agent-is-known-by-its-entry-persona-alone.md):
 the session names its roots (`SessionRecord.entryRoots`), the run-level agent owns the rows each root's name carries, and
-`entryTools` reads under `rootName`.
+`entryTools` reads under `rootName`. The same review noted, as a lesser finding, that the warning the stop's grace writes
+when it gives a root up named the entry role too; it names `rootName` now, pinned by "clause 4 with OQ-97
+(REQ-SESSION-092) …" in `packages/engine/src/run/crash.test.ts`, whose warning named `coding-agent` before.
 
 Evidence: `packages/engine/src/run/crash.test.ts`, "clauses 3 and 4 with OQ-97: a root resumed as the entry role …":
 a crash-left session is continued with the entry role set up in place of `orchestrator`; the resumed root's step

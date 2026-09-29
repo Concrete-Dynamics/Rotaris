@@ -39,6 +39,7 @@ export * from './transcript/Row.js';
 export * from './TranscriptSurface.js';
 export * from './RowProof.js';
 export * from './agents.js';
+export * from './cancel-overlay.js';
 export * from './ContextRing.js';
 export * from './Inspector.js';
 export * from './AgentTable.js';

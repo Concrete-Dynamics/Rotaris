@@ -45,6 +45,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A continue in the process that ran the session takes the lock back (ADR-0005, REQ-SESSION-047/048/083, 2026-09-29,
+R-067).** `prompt`, `continueSession` and `planDecision` claim the session's lock before their first write
+(`holdForContinue`, through the one claim `claimHold` the at-rest cancel's `lockForWrite` now shares), and the run each
+launches holds it until its teardown; a continue that launches none gives back what it took, and a live holder in
+another process refuses it with REQ-SESSION-048's words. This repairs
+`a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md` and
+`a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`. The **runtime view**'s §6 gains the paragraph and
+its §7 `session_locks` row the writers; the **state-ownership view**'s lock row names the continue. No package, edge,
+process, channel, message kind or store column changed.
+
 **Every iteration is sent its own task (REQ-CHAT-040, REQ-ORCH-004 / REQ-ORCH-135, 2026-09-29, R-067).** The launch
 content stays the base of every execution iteration's first message, and the todo task the iteration selected, when it
 is not the run's own and its text is not the launch content's request, follows it as the task to work on

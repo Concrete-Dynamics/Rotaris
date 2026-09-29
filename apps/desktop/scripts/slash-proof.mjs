@@ -433,7 +433,8 @@ const stopped = match(run, '[data-testid="run-state"]', T.stopped)?.text;
 expect(typeof stopped === 'string' && stopped !== 'Run active' && /control cancel on \S+ → ok/.test(run.log), `/stop during the run should be accepted and stop it: run state ${JSON.stringify(stopped)}`);
 // Part AO: the run start cleared the unscoped "Command not run" (REQ-NOTIFY-058) — measured above at `T.compressFailed` — and the
 // executed /stop raises no refusal of its own. What the ONE slot holds once the run rests is the RUN's own notice, "The run came to
-// rest because a person stopped it.", raised by the run host through main's notice store. A first reading had this read `=== null`,
+// rest at the user's request." (REQ-ORCH-082 rule 1's words since 2026-09-29, OQ-118; "The run came to rest because a person
+// stopped it." before), raised by the run host through main's notice store. A first reading had this read `=== null`,
 // which is the composer banner's rule and never the slot's; the falsified reading is kept in ADR-0049's fourth-execution note.
 const atRest = evalAt(run, T.stopped, readNotice);
 expect((atRest === null || atRest.title !== 'Command not run') && match(run, '[data-testid="composer-notice"]', T.stopped) === null,

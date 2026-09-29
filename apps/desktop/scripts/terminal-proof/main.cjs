@@ -361,7 +361,7 @@ app.whenReady().then(async () => {
   }
 
   // ── Part AL2 — REQ-SHELL-166 against a REAL pseudo-terminal, through the window ──────────────────────────────
-  // The run-host half is `harness.cjs` (a Node child: the real terminal manager over a real PowerShell PTY, the real
+  // The run-host half is `harness.cjs` (a Node child: the real terminal manager over the host's real shell in a PTY, the real
   // `createTerminalHost`, the real `FrameDeliveryLimiter` over a real `UpdateRelay`); this process relays its frames to
   // the page on the proof's preload channel and the page's `terminal.*` requests back to it — one hop each way, as in
   // the product. Every key below is a REAL input event; every reading is the page's own. The echo program is a Node
@@ -424,6 +424,25 @@ app.whenReady().then(async () => {
     const readyMessage = await until(() => ready.then((m) => m).catch(() => null), 30_000, 50);
     if (!readyMessage) throw new Error(`the harness did not become ready: ${harnessLog.join(' | ')}`);
     live.shell = readyMessage.shell;
+    // REQ-TOOLS-104 sends Windows to PowerShell and every other host to a POSIX shell, and the harness says which one it
+    // got. So each command below that is not the Node echo program is spelled in THAT shell. Until 2026-09-28 they were
+    // PowerShell everywhere, and on Linux each one exited 127 and measured nothing
+    // (docs/defects/fixed/terminal-proofs-live-section-drives-a-posix-shell-with-powershell.md). The two spellings
+    // produce the same output, so every check after them reads the same text on both shells.
+    const PS = live.shell === 'powershell';
+    const SH = {
+      /** The grid size the process itself reads from its terminal, as `cols=<c> rows=<r>`. */
+      size: () => (PS ? 'Write-Output "cols=$($Host.UI.RawUI.WindowSize.Width) rows=$($Host.UI.RawUI.WindowSize.Height)"' : `stty size | { read r c; printf 'cols=%s rows=%s\\n' "$c" "$r"; }`),
+      /**
+       * `<word> 1` … `<word> <n>`, one per line, with a pause of `sleepMs` after each line when one is given. On POSIX the
+       * pause is `sleep` with a fraction of a second, which GNU coreutils and the BSD `sleep` both accept.
+       */
+      count: (n, word, sleepMs = 0) => (PS
+        ? `1..${n} | ForEach-Object { "${word} $_"${sleepMs > 0 ? `; Start-Sleep -Milliseconds ${sleepMs}` : ''} }`
+        : `i=1; while [ "$i" -le ${n} ]; do printf '${word} %s\\n' "$i";${sleepMs > 0 ? ` sleep ${sleepMs / 1000};` : ''} i=$((i+1)); done`),
+      /** A native process's exit status, in a shell that keeps running (`exit` alone would end the persistent shell, ADR-0020). */
+      exit: (code) => (PS ? `cmd /c "exit ${code}"` : `sh -c 'exit ${code}'`),
+    };
     const { writeFileSync: writeEcho } = require('node:fs');
     // Under `out/`, which the lint's ignore list covers (`**/out/**`): the script is proof output, not source.
     const echoScript = join(out, 'out', 'echo.cjs');
@@ -542,7 +561,7 @@ app.whenReady().then(async () => {
     expect('live.auditEntriesAsSpec12', auditOk, live.audits);
     // ── REQ-SHELL-166: the size the process reports equals the grid's last report ────────────────────────────────
     const lastGeometry = (await state(LIVE)).log.resize.filter((r) => r.streamId === LIVE).at(-1);
-    const sizeRun = run('Write-Output "cols=$($Host.UI.RawUI.WindowSize.Width) rows=$($Host.UI.RawUI.WindowSize.Height)"');
+    const sizeRun = run(SH.size());
     const sizeDone = await Promise.race([sizeRun.done, pause(15_000).then(() => null)]);
     live.resize = { reported: lastGeometry, process: sizeDone?.result.output ?? null };
     expect('live.processReportsGridSize', sizeDone !== null && lastGeometry && sizeDone.result.output.includes(`cols=${lastGeometry.cols} rows=${lastGeometry.rows}`), live.resize);
@@ -554,7 +573,7 @@ app.whenReady().then(async () => {
     // (@xterm/xterm), the transcript row's preview and the persona card's (two separate @xterm/headless registries —
     // ADR-0021 consequence 3's "two emulator instances per visible stream", and UI's objection that two parsers may
     // disagree) in ONE page turn, so a sample is simultaneous rather than three reads with a gap between them.
-    const motionCommand = '1..40 | ForEach-Object { "motion $_"; Start-Sleep -Milliseconds 55 }';
+    const motionCommand = SH.count(40, 'motion', 55);
     const motionSample = async (at) => {
       const st = await state(LIVE);
       return {
@@ -608,7 +627,7 @@ app.whenReady().then(async () => {
     live.threeSurfaces = { lines: gridLines.length, state: three.state, exit: three.exit };
     expect('live.threeSurfacesIdentical', JSON.stringify(three.grid) === JSON.stringify(three.preview) && JSON.stringify(three.grid) === JSON.stringify(three.persona) && gridLines.length > 0 && new Set(three.state).size === 1 && new Set(three.truncated).size === 1 && new Set(three.exit).size === 1, three);
     // ── REQ-SHELL-103/166: throughput — the same output and exit status with the window closed and open ──────────
-    const flood = '1..10000 | ForEach-Object { "line $_" }; cmd /c "exit 3"';
+    const flood = `${SH.count(10_000, 'line')}; ${SH.exit(3)}`;
     await ask('deliver', { on: false });
     const closedRun = run(flood);
     const closed = await Promise.race([closedRun.done, pause(60_000).then(() => null)]);

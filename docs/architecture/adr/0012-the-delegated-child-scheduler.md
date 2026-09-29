@@ -453,7 +453,7 @@ and `a-child-that-produces-no-output-is-never-given-its-one-corrective-message.m
 timer, on the clock port. It reads the threshold consequence 5 names: the role's override, else
 `runtime.child_stall_timeout`. It never cancels. REQ-NOTIFY-112's recovery reads the same watch: a child whose turn
 failed after no output for the whole window is given one corrective message and carries on. The readings, including
-what ends a silent step when the watch cancels nothing, are OQ-126.
+what ends a silent step when the watch cancels nothing, are OQ-127.
 
 **What the execution found.** The decision held: consequence 5's premise was true, and the watchdog needed nothing but
 the clock port and the child's own events. Three things the record did not anticipate:
@@ -479,7 +479,7 @@ not a child's. The badge the callback exists for is not wired to any host. The r
 each throttled warning, on the reasoning that an issue every 5 s would evict the session's other issues from
 REQ-SESSION-133's ring. That reasoning narrowed REQ-MONITOR-119's "every stall evaluation", whose throttle
 (REQ-MONITOR-120) bounds only "the warning itself", so it is kept here as the falsified reason: the issue is now
-written at every evaluation, and the eviction is left to a ruling in OQ-126. The same round recorded in OQ-126 that
+written at every evaluation, and the eviction is left to a ruling in OQ-127. The same round recorded in OQ-127 that
 three of the timeline words the watch and the recovery write are outside REQ-ORCH-139's closed vocabulary.
 
 **Corrected in place by the verifier's second round, 2026-09-29.** Two claims above were narrower than they read.

@@ -15,7 +15,7 @@ import type { ChatMessage, ModelError } from '@rotaris/model';
  *
  * The recovery is separate from the watch. A child whose turn ends `failed`, having produced no output for the whole
  * window before it ended, is recovery-eligible (REQ-NOTIFY-112). It is given one corrective message and resumes from where
- * it stopped (REQ-NOTIFY-111). OQ-126 records the readings.
+ * it stopped (REQ-NOTIFY-111). OQ-127 records the readings.
  */
 
 /** REQ-MONITOR-117: one sixth of the threshold, never shorter than 1 s and never longer than 5 s. */
@@ -28,7 +28,7 @@ export function stallRepeat(thresholdMs: number): Millis {
   return millis(Math.max(thresholdMs, 30_000));
 }
 
-/** The model events that are output: a token of the answer, of the reasoning, or of a tool call (REQ-NOTIFY-112, OQ-126). */
+/** The model events that are output: a token of the answer, of the reasoning, or of a tool call (REQ-NOTIFY-112, OQ-127). */
 const OUTPUT_EVENTS: ReadonlySet<string> = new Set(['text', 'reasoning', 'tool-call']);
 
 /** What one stall report carries (REQ-ORCH-089's diagnostics issue: active tools, the last 5 tool calls, the last model event type). */
@@ -94,7 +94,7 @@ export class StallWatch {
    * The run gave the child something to answer — its payload, its record at a resume, its children's reports, a re-prompt
    * or the corrective message: the silence starts again, so a wait on its own children before it is not counted in the
    * silence REQ-NOTIFY-112's recovery reads (`quietFor`); the watch's own evaluation still reports the child stalled
-   * while such a wait lasts (OQ-126).
+   * while such a wait lasts (OQ-127).
    */
   activity(): void {
     const now = this.clocks.monotonic.now();
@@ -172,7 +172,7 @@ export function stallWarning(agentName: string, taskId: string, silentS: number)
 /*
  * The three lines below go to the session log through the run's `warn` (REQ-SESSION-142), in the manner OQ-76 set for the
  * user's presence: REQ-ORCH-139 closes the timeline vocabulary and it has no word for any of them, so none is minted here.
- * OQ-126 asks the owner for the words.
+ * OQ-127 asks the owner for the words.
  */
 
 /** REQ-MONITOR-118's informational message: the silence with tool calls in flight, which is a wait and not a stall. */
@@ -241,7 +241,7 @@ export interface StallRecoveryInput {
 
 /**
  * REQ-NOTIFY-112's authentication failure, quota exhaustion and validation error in the task definition, which earn no
- * corrective message, as the failed step's error carries them (OQ-126): a refusal of the credential (401, 403), an
+ * corrective message, as the failed step's error carries them (OQ-127): a refusal of the credential (401, 403), an
  * exhausted quota (402, 429), a validation failure, and an abort.
  */
 export function unrecoverableFailure(error: ModelError): boolean {

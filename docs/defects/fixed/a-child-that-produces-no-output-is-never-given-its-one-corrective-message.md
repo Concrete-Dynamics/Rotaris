@@ -55,8 +55,9 @@ wired in `IterationChildren.execute`. The readings are [OQ-109](../../architectu
 - the corrective message.
 
 What it writes:
-- at stall entry, and at REQ-MONITOR-120's throttle after that, a warning on the run's warning channel and a `stall`
-  issue carrying the active tools, the last five tool calls and the last model event's type;
+- at every stall evaluation, a `stall` issue carrying the active tools, the last five tool calls and the last model
+  event's type (REQ-MONITOR-119); at stall entry, and at REQ-MONITOR-120's throttle after that, a warning on the run's
+  warning channel too;
 - with a tool call in flight, a `child_waiting_on_tools` entry instead;
 - when activity resumes, `child_stall_recovered`.
 
@@ -70,9 +71,10 @@ Evidence:
 - `stall.test.ts`, eleven unit cases over `FakeClock`: the cadence, the throttle, entry and repeat, the recovery, the
   wait on tools, the diagnostics, output against model events, eligibility against every excluded outcome, and the
   composed and fixed instructions.
-- `children.test.ts`, "a child that produces no output is given its one corrective message", six end-to-end cases
+- `children.test.ts`, "a child that produces no output is given its one corrective message", seven end-to-end cases
   through `Sessions`:
   - the stall is warned while the child still runs, and the message follows its task and lets it succeed;
+  - a `stall` issue at every evaluation, and the warning only at entry and at the throttle;
   - a second silent failure ends the child `failed` with no second message;
   - a failure inside the window earns nothing;
   - `runtime.child_stall_timeout` of 30 s is the window, at 29 s against 30 s;
@@ -91,3 +93,11 @@ and the role case fails with the role's window dropped.
 
 REQ-NOTIFY-112's other three recovery-eligible conditions are not detected, so REQ-NOTIFY-111's third-recovery
 escalation is unreachable (OQ-109). No live run was made (the `duress` scenario was not run).
+
+**Corrected by the verifier's first round, 2026-09-29.** The first form wrote the `stall` issue only with each
+throttled warning, which narrowed REQ-MONITOR-119's "every stall evaluation" (the throttle of REQ-MONITOR-120 bounds
+"the warning itself"). The issue is now written at every evaluation, and the ring eviction that reasoning feared is
+the question OQ-109 leaves for a ruling. `children.test.ts`'s "a `stall` issue at every stall evaluation" fails when
+the issue is written with the warning only. The timeline words `child_waiting_on_tools`, `child_stall_recovered` and
+`child_corrective_message` are outside REQ-ORCH-139's closed vocabulary; the first form minted them without saying so,
+and OQ-109 now records the gap and the reading built.

@@ -102,7 +102,7 @@ to resume), **OQ-104** (where the plan gate holds a run that resumed an iteratio
 **OQ-105** (what an agent's fingerprint is taken of, when it is compared and where the warning is stated), **OQ-106** (whose
 root the handoff's artifact is taken from), **OQ-107** (which offers a later iteration's root is told, and where) **and
 OQ-108** (what the audit of clause 15, clause 19, `PD-CHAT-001` revision 4 and `PD-CHAT-002` revision 2 leaves
-undecided), each stating the reading the build proceeds under. The fifteen were raised as OQ-67 to OQ-81 on their branch and renumbered at the merge, OQ-67 to OQ-93 having been taken on `main`. **One more was raised on 2026-09-29 by building REQ-ORCH-089's stall watchdog and REQ-NOTIFY-111/112's corrective message under R-067: OQ-109** (what counts as "an outcome that produced no output within `child_stall_timeout`" when the watchdog never cancels, and what the watchdog counts, writes and calls). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+undecided), each stating the reading the build proceeds under. The fifteen were raised as OQ-67 to OQ-81 on their branch and renumbered at the merge, OQ-67 to OQ-93 having been taken on `main`. **One more was raised on 2026-09-29 by building REQ-ORCH-089's stall watchdog and REQ-NOTIFY-111/112's corrective message under R-067: OQ-109** (what counts as "an outcome that produced no output within `child_stall_timeout`" when the watchdog never cancels, and what the watchdog counts, writes and calls — including the three timeline words REQ-ORCH-139's vocabulary lacks, and whether REQ-MONITOR-119's issue at every evaluation may evict REQ-SESSION-133's ring). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -5717,7 +5717,7 @@ asar unpacking, and run under the host Node it passes on exactly the artifact th
 written the easy way is worse than none, because it reads as verified.** Somebody must establish that it
 is constructible on all three release runners before it is relied on as the only defence.
 
-**OQ-109 — What counts as "an outcome that produced no output within `child_stall_timeout`" when the stall watchdog never cancels, and what does the watchdog count, write and call?** *(REQ-NOTIFY-111, REQ-NOTIFY-112, REQ-NOTIFY-100, REQ-NOTIFY-105, REQ-ORCH-089, REQ-MONITOR-117 to REQ-MONITOR-120, REQ-MONITOR-285, REQ-CONFIG-108, REQ-CONFIG-113 and REQ-ORCH-144. Raised 2026-09-29 by building the watchdog and the corrective message under R-067, the repair of [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../defects/fixed/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md).)*
+**OQ-109 — What counts as "an outcome that produced no output within `child_stall_timeout`" when the stall watchdog never cancels, and what does the watchdog count, write and call?** *(REQ-NOTIFY-111, REQ-NOTIFY-112, REQ-NOTIFY-100, REQ-NOTIFY-105, REQ-ORCH-089, REQ-MONITOR-117 to REQ-MONITOR-120, REQ-MONITOR-285, REQ-CONFIG-108, REQ-CONFIG-113, REQ-ORCH-144, REQ-ORCH-139 and REQ-SESSION-133. Raised 2026-09-29 by building the watchdog and the corrective message under R-067, the repair of [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../defects/fixed/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md).)*
 
 The requirements pull two ways:
 - REQ-NOTIFY-100 names `runtime.child_stall_timeout` as the bound on "a child task producing no output". It says that
@@ -5751,8 +5751,10 @@ None of them says what ends a silent child's step so that there is an outcome to
   - a validation error: the `validation` code;
   - the child's own `child_timeout` expired.
 
-  A refusal by the permission policy is a tool result and never fails a turn. Also excluded, as outside what an
-  instruction addresses:
+  A refusal by the permission policy is a tool result and never fails a turn. A turn that ended `partial` (its step
+  allowance spent with an answer in hand) is not eligible either: the child it ends reaches `succeeded`
+  (`reportStatusToState`), and REQ-NOTIFY-112's outcome is one where the child "did not reach `succeeded`". Also
+  excluded, as outside what an instruction addresses:
   - loop supervision's escalation (REQ-NOTIFY-112's "separately from loop supervision");
   - a run coming to rest, since PD-ORCH-005 allows no model call then;
   - an answer-only route (REQ-ORCH-015's `answer`).
@@ -5773,19 +5775,47 @@ None of them says what ends a silent child's step so that there is an outcome to
 
   Nothing therefore counts to three.
 - **The watchdog.** The threshold is the role's `stall_timeout`, else `runtime.child_stall_timeout`, else 90 s. The
-  cadence is REQ-MONITOR-117's. At stall entry, and at each repeat REQ-MONITOR-120 allows, the watch writes two
-  things:
-  - a warning on the run's warning channel, in REQ-ORCH-089's words with REQ-MONITOR-119's "still waiting on it";
-  - a `stall` issue at warning severity, which writes its own timeline entry. It carries the active tools (none, by
-    REQ-MONITOR-119's own condition), the names of the last five tool calls and the last model event's type.
+  cadence is REQ-MONITOR-117's. Every evaluation that finds the silence with no tool call in flight writes a `stall`
+  issue at warning severity (REQ-MONITOR-119's "every stall evaluation"), which writes its own `issue` timeline entry.
+  It carries the active tools (none, by REQ-MONITOR-119's own condition), the names of the last five tool calls, the
+  last model event's type and the silence so far. The warning, on the run's warning channel in REQ-ORCH-089's words
+  with REQ-MONITOR-119's "still waiting on it", is written only at stall entry and at each repeat REQ-MONITOR-120
+  allows, since that requirement bounds "the warning itself" and nothing else.
 
-  REQ-MONITOR-119 asks for the issue on "every stall evaluation", which is every 5 s at the default. The build writes it
-  with each warning instead, because an issue ring written every 5 s through a twenty-minute stall would evict the
-  session's other issues. REQ-MONITOR-118's informational message is a `child_waiting_on_tools` timeline entry at
-  `info`, throttled the same way, since the children have no informational log channel. The recovery is a
-  `child_stall_recovered` entry at the next evaluation after activity resumes. The corrective message is recorded as
-  `child_corrective_message`.
+  *Corrected in place, 2026-09-29, by the verifier's first round.* The first form wrote the issue only with each
+  throttled warning, "because an issue ring written every 5 s through a twenty-minute stall would evict the session's
+  other issues". That narrowed an explicit clause rather than reading an ambiguous one, and a change to a clause is
+  the owner's. The clause is now built as written (`stall.test.ts`, and `children.test.ts`'s "a `stall` issue at every
+  stall evaluation"), and **the eviction is the question left for a ruling**: REQ-SESSION-133 keeps the newest 500
+  issues, and at the default 5 s cadence one child stalled from its 90 s threshold to its 1200 s `child_timeout`
+  writes more than 220 `stall` issues, so two such children, or one with its fallback retry, can evict every other issue the
+  session had. Recommendation: keep one issue per evaluation, and let a ruling say whether the ring counts a stall's
+  repeated issues against the cap.
+- **The timeline words, which REQ-ORCH-139's vocabulary does not have.** REQ-ORCH-139 names every timeline event "only
+  from the timeline-event vocabulary" of domain 01's Data & Formats "and MUST NOT use any name outside" it. That list
+  has no word for three things this build records, and neither has any other domain's list or any directive:
+  - REQ-MONITOR-118's informational message for a silence with tool calls in flight, which the requirement says the
+    watchdog "logs";
+  - REQ-MONITOR-120's recovery, which "must be logged and notified";
+  - REQ-NOTIFY-111's corrective message, which no requirement says how to record.
+
+  *What the build proceeds under.* They are written as the timeline entries `child_waiting_on_tools` (at `info`,
+  throttled like the warning), `child_stall_recovered` and `child_corrective_message`. OQ-76's precedent was to write
+  such transitions to the session log instead (REQ-SESSION-142), but a child's execution reaches the log only through
+  the run's warning channel, and none of the three is a warning: an informational line at `WARNING` misstates its own
+  level. The channel the children would need is handed to them where `Run.turn` builds `IterationChildren`, which
+  this round does not edit. The corrective message is also in the child's conversation record itself (REQ-ORCH-140),
+  as the user message it is. *What a ruling decides.* Whether domain 01's list gains these three words (or others for
+  the same facts), or whether the first two move to the session log at `INFO` and the third is left to the
+  conversation record. Recommendation: the three words, in domain 01's list, since the timeline is what an autopsy
+  reads first and the export reaches it (REQ-SESSION-199); the log is neither. The same closure is already crossed
+  elsewhere in the engine
+  ([`the-run-writes-timeline-events-outside-its-closed-vocabulary.md`](../defects/the-run-writes-timeline-events-outside-its-closed-vocabulary.md)).
 - **The stall callback fires on every evaluation, and no host listens.** No badge, activity text or countdown is drawn
   ([`a-stalled-child-is-never-shown-stalled.md`](../defects/a-stalled-child-is-never-shown-stalled.md)). The run's own root agent is not watched: REQ-MONITOR-117
   says "each agent", and REQ-ORCH-089's threshold is a child's. Whether the root is watched, and against which
   threshold, is left open in the same note.
+- **A child waiting on its own children reads as stalled.** It has no model step and no call in flight while it waits,
+  and the requirements tell a wait from a stall only by active tool calls. The build reports it stalled; whether the
+  wait pauses the watch or counts as waiting on N children is recorded in
+  [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/a-child-waiting-on-its-own-children-is-reported-stalled.md).

@@ -829,6 +829,25 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(JSON.parse(child(sid).report!)).toMatchObject({ status: 'succeeded' });
     });
 
+    it('REQ-MONITOR-119/120: a `stall` issue at every stall evaluation, and the warning only at entry and at the throttle', async () => {
+      const { sessions, gates } = stalling(['silent', 'answers']);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => gates.length === 1);
+      clock.advance(90_000);
+      clock.advance(10_000);
+      const silent = () => dal.issuesOf(sid).filter((i) => i.kind === 'stall').map((i) => (JSON.parse(i.metadata) as { silent_seconds: number }).silent_seconds);
+      // The evaluations at 90, 95 and 100 s each record the issue; the warning is written once, at entry.
+      expect(silent()).toEqual([90, 95, 100]);
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'stall').every((i) => i.severity === 'warning')).toBe(true);
+      expect(warnings.filter((m) => m.startsWith('child appears stalled'))).toEqual([`child appears stalled: no model event or token for 90 seconds (quiet, ${child(sid).task_id}); the run is still waiting on it.`]);
+      // REQ-MONITOR-120: the next warning is due max(90 s, 30 s) after the first.
+      clock.advance(80_000);
+      expect(silent()).toHaveLength(19);
+      expect(warnings.filter((m) => m.startsWith('child appears stalled')).map((m) => /for (\d+) seconds/.exec(m)![1])).toEqual(['90', '180']);
+      gates[0]!();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+    });
+
     it('REQ-MONITOR-118/120: a tool call in flight is waited on, not a stall; a stall that ends in output is recorded as recovered', async () => {
       let releaseTool!: () => void;
       const toolHeld = new Promise<void>((r) => { releaseTool = r; });

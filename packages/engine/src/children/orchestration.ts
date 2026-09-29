@@ -633,12 +633,15 @@ export class IterationChildren implements DelegationOps {
     const stallMs = millis(persona?.stallTimeoutMs ?? deps.childStallTimeoutMs ?? CHILD_STALL_TIMEOUT_MS);
     const progress = new ProgressLog(deps.workspaceRoot);
     // REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch over the same window — visibility only, it cancels nothing. What
-    // it reports is written only while this execution still belongs to a live run (REQ-SESSION-094).
+    // it reports is written only while this execution still belongs to a live run (REQ-SESSION-094). The timeline words
+    // `child_waiting_on_tools`, `child_stall_recovered` and `child_corrective_message` are outside REQ-ORCH-139's closed
+    // vocabulary: OQ-109 records the gap and this reading.
     const stallWatch = new StallWatch(deps.clocks, stallMs, {
+      // REQ-MONITOR-119: the `stall` issue at every stall evaluation; REQ-MONITOR-120 throttles only the warning.
       stalled: (s) => {
         if (this.detached) return;
         const message = stallWarning(row.canonical_name, row.task_id, s.silentS);
-        deps.warn(message);
+        if (s.warn) deps.warn(message);
         deps.writer.recordIssue({ kind: 'stall', severity: 'warning', actor: row.canonical_name, message, metadata: { task_id: row.task_id, silent_seconds: s.silentS, active_tools: s.activeTools, recent_tool_calls: s.recentCalls, last_model_event: s.lastModelEvent } });
       },
       waiting: (w) => { if (!this.detached) deps.writer.appendTimeline('child_waiting_on_tools', 'rotaris', `${row.canonical_name} (${row.task_id}) is waiting on ${w.activeCalls} active tool call(s): no model event or token for ${w.silentS} seconds.`, { task_id: row.task_id, active_calls: w.activeCalls, silent_seconds: w.silentS }); },

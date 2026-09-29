@@ -614,10 +614,13 @@ as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds
 - the corrective message.
 
 What it writes:
-- a silence of the threshold with no call in flight: a warning and a `stall` issue, at entry and then every
-  `max(threshold, 30)` s;
+- a silence of the threshold with no call in flight: a `stall` issue at every evaluation (REQ-MONITOR-119), and a
+  warning at entry and then every `max(threshold, 30)` s (REQ-MONITOR-120);
 - the same silence with calls in flight: `child_waiting_on_tools`;
 - activity resuming after a stall: `child_stall_recovered`.
+
+Those two timeline words and `child_corrective_message` are not in REQ-ORCH-139's closed vocabulary; OQ-109 records
+the gap and the reading built.
 
 Its per-evaluation callback has no listener yet. A child's turn can end `failed` after no output for the whole window,
 with no call in flight. Unless the outcome is one REQ-NOTIFY-112 excludes, that child is given one corrective message

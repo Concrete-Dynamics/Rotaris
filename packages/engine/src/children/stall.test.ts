@@ -21,7 +21,7 @@ describe('REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch', () => {
     expect([stallRepeat(90_000), stallRepeat(10_000)]).toEqual([90_000, 30_000]);
   });
 
-  it('warns at stall entry with the diagnostics, fires the callback on every evaluation, and repeats only at the throttle', () => {
+  it('REQ-MONITOR-119/120: every stall evaluation reports the stall and fires the callback; only the warning waits for the throttle', () => {
     const w = watched(90_000);
     w.watch.start();
     w.watch.toolStarted('c1', 'read_file'); w.watch.toolCompleted('c1');
@@ -31,14 +31,18 @@ describe('REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch', () => {
     expect(w.evaluated).toHaveLength(17);
     expect(w.evaluated.every((s) => !s)).toBe(true);
     w.clock.advance(5_000);
-    expect(w.stalled).toEqual([{ silentS: 90, entry: true, activeTools: [], recentCalls: ['read_file'], lastModelEvent: 'usage' }]);
+    expect(w.stalled).toEqual([{ silentS: 90, entry: true, warn: true, activeTools: [], recentCalls: ['read_file'], lastModelEvent: 'usage' }]);
     expect(w.evaluated.at(-1)).toBe(true);
-    // Every evaluation still calls back, but the warning waits for max(90 s, 30 s).
+    // Every evaluation reports the stall (its issue) and calls back; the warning waits for max(90 s, 30 s).
     w.clock.advance(85_000);
-    expect(w.stalled).toHaveLength(1);
+    expect(w.stalled).toHaveLength(18);
+    expect(w.stalled.slice(1).map((r) => [r.silentS, r.entry, r.warn])).toEqual(Array.from({ length: 17 }, (_, i) => [95 + i * 5, false, false]));
     expect(w.evaluated.slice(-17).every((s) => s)).toBe(true);
     w.clock.advance(5_000);
-    expect(w.stalled.map((r) => [r.silentS, r.entry])).toEqual([[90, true], [180, false]]);
+    expect(w.stalled).toHaveLength(19);
+    expect(w.stalled.filter((r) => r.warn).map((r) => [r.silentS, r.entry])).toEqual([[90, true], [180, false]]);
+    // One report per stalled evaluation, no more and no fewer.
+    expect(w.stalled).toHaveLength(w.evaluated.filter((s) => s).length);
   });
 
   it('a model event ends the stall: the recovery is reported at the next evaluation and the callback reads not stalled', () => {
@@ -78,7 +82,7 @@ describe('REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch', () => {
     for (const n of ['a', 'b', 'c', 'd', 'e', 'f']) { w.watch.toolStarted(`id-${n}`, n); w.watch.toolCompleted(`id-${n}`); }
     w.watch.modelEvent('finish');
     w.clock.advance(6_000);
-    expect(w.stalled).toEqual([{ silentS: 6, entry: true, activeTools: [], recentCalls: ['b', 'c', 'd', 'e', 'f'], lastModelEvent: 'finish' }]);
+    expect(w.stalled).toEqual([{ silentS: 6, entry: true, warn: true, activeTools: [], recentCalls: ['b', 'c', 'd', 'e', 'f'], lastModelEvent: 'finish' }]);
   });
 
   it('REQ-NOTIFY-112: output is a token; an error or a usage part is a model event and not output', () => {

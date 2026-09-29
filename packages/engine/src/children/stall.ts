@@ -8,7 +8,8 @@ import type { ModelError } from '@rotaris/model';
  * The watch is visibility only and never cancels anything (REQ-ORCH-089, REQ-MONITOR-285). On a fixed cadence taken from
  * the stall threshold it asks how long the child has gone without a model event or token:
  * - with a tool call in flight, it reports that the child is waiting on its calls (REQ-MONITOR-118);
- * - with none, it reports a stall at entry and then no more often than the throttle (REQ-MONITOR-119/120);
+ * - with none, it reports a stall at every evaluation, and marks the warning due only at entry and then no more often
+ *   than the throttle (REQ-MONITOR-119/120);
  * - when activity resumes, it reports the recovery.
  * The callback fires on every evaluation with the stalled state, so a host can draw a badge.
  *
@@ -33,15 +34,20 @@ const OUTPUT_EVENTS: ReadonlySet<string> = new Set(['text', 'reasoning', 'tool-c
 /** What one stall report carries (REQ-ORCH-089's diagnostics issue: active tools, the last 5 tool calls, the last model event type). */
 export interface StallReport {
   readonly silentS: number;
-  /** True at stall entry, false for a throttled repeat. */
+  /** True at stall entry, false after it. */
   readonly entry: boolean;
+  /**
+   * REQ-MONITOR-120: whether this evaluation's warning is due — at entry, then no sooner than the throttle. The issue and
+   * the callback are not throttled (REQ-MONITOR-119: "every stall evaluation"); only the warning is.
+   */
+  readonly warn: boolean;
   readonly activeTools: readonly string[];
   readonly recentCalls: readonly string[];
   readonly lastModelEvent: string | null;
 }
 
 export interface StallSinks {
-  /** REQ-MONITOR-119: a stall, at entry and at each repeat the throttle allows. */
+  /** REQ-MONITOR-119: a stall, at every evaluation that finds one; `warn` says whether the warning is due too. */
   readonly stalled: (report: StallReport) => void;
   /** REQ-MONITOR-118: the same silence with tool calls in flight, at entry and at each repeat the throttle allows. */
   readonly waiting: (report: { readonly silentS: number; readonly activeCalls: number }) => void;
@@ -145,11 +151,10 @@ export class StallWatch {
     }
     this.lastWaitingAt = null;
     const entry = !this.stalledNow;
-    if (entry || (this.lastWarnAt !== null && now - this.lastWarnAt >= repeat)) {
-      this.stalledNow = true;
-      this.lastWarnAt = now;
-      this.sinks.stalled({ silentS, entry, activeTools: [...this.active.values()], recentCalls: [...this.recent], lastModelEvent: this.lastModelEvent });
-    }
+    const warn = entry || (this.lastWarnAt !== null && now - this.lastWarnAt >= repeat);
+    this.stalledNow = true;
+    if (warn) this.lastWarnAt = now;
+    this.sinks.stalled({ silentS, entry, warn, activeTools: [...this.active.values()], recentCalls: [...this.recent], lastModelEvent: this.lastModelEvent });
     this.sinks.evaluated(true);
   }
 }

@@ -474,3 +474,10 @@ retry and the role's window. Each positive case fails with its limb reverted.
 **What was not measured.** No built app and no live run: the live run's `faults` scenario stalls the root's stream,
 not a child's. The badge the callback exists for is not wired to any host. The root is not watched. The row is in
 [`../first-executions.md`](../first-executions.md).
+
+**Corrected in place by the verifier's first round, 2026-09-29.** The build first wrote the `stall` issue only with
+each throttled warning, on the reasoning that an issue every 5 s would evict the session's other issues from
+REQ-SESSION-133's ring. That reasoning narrowed REQ-MONITOR-119's "every stall evaluation", whose throttle
+(REQ-MONITOR-120) bounds only "the warning itself", so it is kept here as the falsified reason: the issue is now
+written at every evaluation, and the eviction is left to a ruling in OQ-109. The same round recorded in OQ-109 that
+three of the timeline words the watch and the recovery write are outside REQ-ORCH-139's closed vocabulary.

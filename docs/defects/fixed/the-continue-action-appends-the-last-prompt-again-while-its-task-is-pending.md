@@ -47,7 +47,8 @@ the lane's third review, since no selection takes an unheld task in progress up)
 without them" on an iteration that holds a message. The reading is recorded in OQ-102 ("A continue that states no new
 request appends no second task"). The handoff still reaches every iteration's root, because every iteration's first
 call is sent the launch content (the behaviour `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`
-records). Evidence: `run/message-task.test.ts` — the Continue action after a message was left pending works it once,
+recorded; its repair of 2026-09-29 keeps the launch content as every iteration's base and adds the selected task after
+it). Evidence: `run/message-task.test.ts` — the Continue action after a message was left pending works it once,
 taken up first, and a request a pause put back in the first run is worked once; reverting the guard turns both red, and
 so does narrowing it to pending tasks alone (the decline case). The message-limit route is pinned by "the message-limit
 resolution 'continue'/'double' restates the last request too" (found by the iteration lane review): sending that route a message of no parts

@@ -76,13 +76,25 @@ launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PROMPT: 
   const db = open(s1);
   const session = db.prepare('SELECT session_id, execution_status, iterations_completed, todo FROM sessions').get();
   const prompts = db.prepare('SELECT prompt_id, content, status FROM queued_prompts WHERE session_id = ?').all(session.session_id);
+  // REQ-CHAT-040 (the repair of every-iteration-is-sent-the-prompt-the-run-was-launched-with.md): the iteration that took
+  // the queued prompt up was SENT it — its root's first user message, in the conversation record (PD-ORCH-005 clause 1),
+  // carries the launch prompt and then the queued prompt as its task; the launch prompt's own iteration's does not.
+  const iterations = db.prepare('SELECT iteration, root_task_id, todo_task_id FROM iterations WHERE session_id = ? ORDER BY iteration').all(session.session_id);
+  const firstUser = (taskId) => {
+    const sent = db.prepare("SELECT body FROM agent_messages WHERE session_id = ? AND task_id = ? AND kind = 'message' ORDER BY seq").all(session.session_id, taskId).map((r) => JSON.parse(r.body)).find((m) => m.role === 'user');
+    return sent ? sent.content.filter((c) => c.kind === 'text').map((c) => c.text).join('\n') : '';
+  };
+  const sent = iterations.map((i) => ({ iteration: i.iteration, queued: i.todo_task_id === prompts[0]?.prompt_id, first: firstUser(i.root_task_id) }));
   db.close();
   if (session.execution_status !== 'completed' || session.iterations_completed < 2) throw new Error(`the queued run did not complete two iterations: ${JSON.stringify(session)}`);
   if (prompts.length !== 1 || prompts[0].content !== 'and then this' || prompts[0].status !== 'TRIGGERED') throw new Error(`the queued prompt was not consumed exactly once: ${JSON.stringify(prompts)}`);
   const todo = JSON.parse(session.todo);
   const phase = todo.phases.find((p) => p.name === 'Queued Prompts');
   if (!phase || phase.tasks[0].state !== 'complete') throw new Error(`the queued prompt did not become a completed task: ${session.todo}`);
-  results.queue = { iterations: session.iterations_completed, prompt: prompts[0] };
+  const took = sent.filter((s) => s.queued);
+  if (took.length !== 1 || !took[0].first.startsWith('first task') || !took[0].first.endsWith('\n\nand then this')) throw new Error(`the iteration that took the queued prompt up was not sent it: ${JSON.stringify(sent)}`);
+  if (sent.some((s) => !s.queued && s.first.includes('and then this'))) throw new Error(`an iteration whose task is the launch prompt was sent the queued prompt: ${JSON.stringify(sent)}`);
+  results.queue = { iterations: session.iterations_completed, prompt: prompts[0], sent };
 }
 
 // 2. A steer reaches the entry role at its next step.

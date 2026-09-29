@@ -60,6 +60,14 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
   /** How many calls have reached each watched path, so a rule can name the call it acts on. */
   const calls = new Map();
   const fired = [];
+  /**
+   * The same two figures over the proxy's whole life, which `setFaults` never resets. The per-launch pair above is
+   * what a scenario asks about the launch it just ran; the run's summary asks about every rule the run declared and
+   * every one that fired, and reading the per-launch pair after the last scenario's `setFaults([])` reported
+   * `faultsFired: []` and `faultsDeclared: 0` for a run in which three had fired (live-run finding H4, 2026-09-29).
+   */
+  const everFired = [];
+  let everDeclared = faults.length;
 
   /**
    * The rule that acts on THIS call, or null.
@@ -77,24 +85,89 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
     const index = (calls.get(key) ?? 0) + 1;
     calls.set(key, index);
     const rule = watched.find((f) => f.at === index && f.spent !== true) ?? null;
-    if (rule !== null) { rule.spent = true; fired.push({ kind: rule.kind, at: rule.at, path: key }); }
+    if (rule !== null) { rule.spent = true; fired.push({ kind: rule.kind, at: rule.at, path: key }); everFired.push({ kind: rule.kind, at: rule.at, path: key }); }
     return rule;
   };
 
-  const write = (record) => {
-    if (sink === null) return;
-    try { appendFileSync(sink, `${JSON.stringify(record)}\n`); recorded += 1; }
+  /**
+   * Write one record to the file `target` names — the file of the scenario that MADE the call, captured when the
+   * call arrived. Writing to the sink current when a call ends put the first live run's aborted `ask` analyst in
+   * `edit/` and its released stall in `terminal/` (live-run finding H1, 2026-09-29).
+   */
+  const write = (target, record) => {
+    if (target === null) return;
+    try { appendFileSync(target, `${JSON.stringify(record)}\n`); recorded += 1; }
     catch { /* a record that cannot be written never fails the run */ }
   };
+  /**
+   * The calls still open, each as the function that writes it `in-flight at close` and lets the endpoint go.
+   * `close()` runs them, so the call the run was waiting on when the harness stopped — often the one that explains
+   * an overrun — is in the pack (live-run finding H-g: 201 `model request POST` lines against 200 records).
+   */
+  const open = new Set();
 
   const server = createServer((clientReq, clientRes) => {
     const started = Date.now();
+    const target = sink;
     const path = `${basePath}${clientReq.url ?? '/'}`;
     const sentChunks = [];
     const backChunks = [];
     const headers = { ...clientReq.headers, host: upstream.host };
     const rule = ruleFor(path);
     const note = rule === null ? {} : { fault: { kind: rule.kind, at: rule.at, ...(rule.status ? { status: rule.status } : {}), ...(rule.afterChunks === undefined ? {} : { afterChunks: rule.afterChunks }) } };
+
+    /** The endpoint's answer once its headers arrive; null while it is still thinking. */
+    let upstreamRes = null;
+    /** The upstream request; null for an injected status, which never contacts the endpoint. */
+    let upstreamReq = null;
+    let stallTimer = null;
+    /** A final record of this call is written: nothing after it is, a stall's first record is not final. */
+    let ended = false;
+    /** The proxy itself let go of the endpoint, so what the endpoint's socket says next is not its failure. */
+    let letGo = false;
+    /**
+     * Write this call's record. `outcome` names why it is being written, because a stalled call is written
+     * TWICE — once when the silence begins and once when it ends (released, aborted by the client, or open at
+     * close) — and a reader of the pack needs to know which one they have. Every other outcome is final:
+     * `complete`, `cut`, `released`, `aborted`, `in-flight at close`, `upstream-error`, `unreachable`.
+     *
+     * **A stalled call must be recorded at the moment it stalls, not only when it is released.** Measured on
+     * the first live execution, 2026-09-22: the product's idle bound fired at 120 s and the run recovered by
+     * retrying, so the launch ended long before the proxy's 300 s hold expired, the timer (correctly
+     * `unref`'d) never ran, and the ONE call the whole scenario is about was the one call missing from the
+     * pack — five `model request POST` lines in the log against four records in `model-traffic.jsonl`.
+     */
+    const settle = (outcome, extra = {}) => {
+      if (ended) return;
+      if (outcome !== 'stalled') { ended = true; open.delete(atClose); if (stallTimer !== null) clearTimeout(stallTimer); }
+      write(target, {
+        at: new Date(started).toISOString(), ms: Date.now() - started,
+        method: clientReq.method, path: clientReq.url, upstream: `${upstream.origin}${path}`,
+        status: upstreamRes?.statusCode ?? null, ...note, ...(outcome === undefined ? {} : { outcome }), ...extra,
+        requestHeaders: scrub(clientReq.headers), requestBody: redact(cap(sentChunks)),
+        responseHeaders: upstreamRes?.headers ?? {}, responseBody: redact(cap(backChunks)),
+      });
+    };
+    /** The endpoint is told the call is over the only way HTTP can tell it: its socket closes. */
+    const release = () => {
+      letGo = true;
+      try { upstreamReq?.destroy(); } catch { /* the call is over */ }
+    };
+    const atClose = () => { settle('in-flight at close'); release(); };
+    open.add(atClose);
+
+    /*
+     * The client letting go: the product aborted the call (a timed-out classifier, an analysis cancelled at
+     * quit, a stream its idle bound declared dead) or the app itself exited. The response closes without the
+     * proxy having ended it. The upstream request is destroyed at once, so the endpoint stops generating what
+     * nobody will read — on a metered endpoint that is spend the product never made (live-run finding H1: nine
+     * such calls ran to completion upstream and were written `complete`).
+     */
+    clientRes.on('close', () => {
+      if (ended || letGo || clientRes.writableEnded) return;
+      settle('aborted');
+      release();
+    });
 
     /*
      * `status`: the endpoint answers a refusal, and the upstream is never contacted. Synthesised rather than
@@ -108,49 +181,20 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
       clientReq.on('end', () => {
         clientRes.writeHead(rule.status ?? 500, { 'content-type': 'application/json', ...(rule.headers ?? {}) });
         clientRes.end(body);
-        write({
-          at: new Date(started).toISOString(), ms: Date.now() - started,
-          method: clientReq.method, path: clientReq.url, upstream: `${upstream.origin}${path}`,
-          status: rule.status ?? 500, ...note,
-          requestHeaders: scrub(clientReq.headers), requestBody: redact(cap(sentChunks)),
-          responseHeaders: {}, responseBody: body,
-        });
+        backChunks.push(Buffer.from(body));
+        settle(undefined, { status: rule.status ?? 500 });
       });
       return;
     }
 
-    const upstreamReq = transport(
+    upstreamReq = transport(
       { protocol: upstream.protocol, hostname: upstream.hostname, port: upstream.port || (upstream.protocol === 'https:' ? 443 : 80), method: clientReq.method, path, headers },
-      (upstreamRes) => {
+      (answer) => {
+        upstreamRes = answer;
         // Status and headers straight through, before a single byte of body is copied anywhere.
         clientRes.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers);
         let forwarded = 0;
         let severed = false;
-        let stallTimer = null;
-        let written = false;
-        /**
-         * Write this call's record. `outcome` names why it is being written, because a stalled call is
-         * written TWICE — once when the silence begins and once if the socket is ever let go — and a reader
-         * of the pack needs to know which one they have.
-         *
-         * **A stalled call must be recorded at the moment it stalls, not only when it is released.** Measured
-         * on the first live execution, 2026-09-22: the product's idle bound fired at 120 s and the run
-         * recovered by retrying, so the launch ended long before the proxy's 300 s hold expired, the timer
-         * (correctly `unref`'d) never ran, and the ONE call the whole scenario is about was the one call
-         * missing from the pack — five `model request POST` lines in the log against four records in
-         * `model-traffic.jsonl`.
-         */
-        const settle = (outcome) => {
-          if (written && outcome !== 'released') return;
-          written = true;
-          write({
-            at: new Date(started).toISOString(), ms: Date.now() - started,
-            method: clientReq.method, path: clientReq.url, upstream: `${upstream.origin}${path}`,
-            status: upstreamRes.statusCode ?? null, ...note, ...(outcome === undefined ? {} : { outcome }),
-            requestHeaders: scrub(clientReq.headers), requestBody: redact(cap(sentChunks)),
-            responseHeaders: upstreamRes.headers, responseBody: redact(cap(backChunks)),
-          });
-        };
         upstreamRes.on('data', (chunk) => {
           backChunks.push(chunk);
           if (severed) return;
@@ -173,7 +217,7 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
               // Recorded HERE, with what had arrived before the silence, because the run may well outlive
               // this stall and the launch may well end before the hold does. See `settle`'s note.
               settle('stalled');
-              stallTimer = setTimeout(() => { try { clientRes.destroy(); upstreamReq.destroy(); } catch { /* the call is over */ } settle('released'); }, rule.holdMs ?? 180_000);
+              stallTimer = setTimeout(() => { settle('released'); release(); try { clientRes.destroy(); } catch { /* the call is over */ } }, rule.holdMs ?? 180_000);
               stallTimer.unref?.();
             }
             return;
@@ -182,8 +226,9 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
           if (rule?.kind === 'cut' && forwarded >= after) {
             severed = true;
             clientRes.write(chunk);
-            try { clientRes.destroy(); upstreamReq.destroy(); } catch { /* the call is over */ }
             settle('cut');
+            release();
+            try { clientRes.destroy(); } catch { /* the call is over */ }
             return;
           }
           clientRes.write(chunk);
@@ -194,27 +239,29 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
           if (stallTimer !== null) return;
           if (!severed) { clientRes.end(); settle('complete'); }
         });
-        upstreamRes.on('error', () => { clientRes.destroy(); });
+        // The endpoint dropping the stream is its failure, written as such — never mistaken for the client's abort.
+        upstreamRes.on('error', (cause) => {
+          if (letGo || ended) return;
+          failed += 1;
+          settle('upstream-error', { error: String(cause instanceof Error ? cause.message : cause) });
+          clientRes.destroy();
+        });
       },
     );
 
     // The failure of the hop itself is a record too — a run that died because the endpoint refused the
     // connection leaves nothing in the product's log but a generic model error.
     upstreamReq.on('error', (cause) => {
+      if (letGo || ended) return;
       failed += 1;
-      write({
-        at: new Date(started).toISOString(), ms: Date.now() - started,
-        method: clientReq.method, path: clientReq.url, upstream: `${upstream.origin}${path}`,
-        status: null, error: String(cause instanceof Error ? cause.message : cause),
-        requestHeaders: scrub(clientReq.headers), requestBody: redact(cap(sentChunks)),
-      });
+      settle('unreachable', { error: String(cause instanceof Error ? cause.message : cause) });
       if (!clientRes.headersSent) clientRes.writeHead(502, { 'content-type': 'text/plain' });
       clientRes.end('the live run\'s recording proxy could not reach the endpoint');
     });
 
     clientReq.on('data', (chunk) => { sentChunks.push(chunk); upstreamReq.write(chunk); });
     clientReq.on('end', () => { upstreamReq.end(); });
-    clientReq.on('error', () => { upstreamReq.destroy(); });
+    clientReq.on('error', () => { release(); });
   });
 
   // Loopback only. This listener forwards a bearer to a real endpoint; it may not be reachable from the network.
@@ -233,8 +280,20 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
      * must reset: a rule that says "the second completion" means the second of THIS launch, and a scenario
      * that inherited the previous launch's count would fire it somewhere nobody chose.
      */
-    setFaults: (rules) => { faults = rules.map((rule) => ({ ...rule })); calls.clear(); fired.length = 0; },
+    setFaults: (rules) => { faults = rules.map((rule) => ({ ...rule })); calls.clear(); fired.length = 0; everDeclared += faults.length; },
+    /** This launch's figures: the fault pair covers the rules since the last `setFaults`. */
     stats: () => ({ recorded, failed, faultsFired: fired.slice(), faultsDeclared: faults.length }),
-    close: () => new Promise((resolve) => { server.close(() => resolve(undefined)); server.closeAllConnections?.(); }),
+    /** The whole run's figures, for its summary: every rule ever declared, and every one that fired, in order. */
+    totals: () => ({ recorded, failed, faultsFired: everFired.slice(), faultsDeclared: everDeclared }),
+    /**
+     * Stop listening. A call still open is written first, `in-flight at close`, into its own scenario's file,
+     * and the endpoint is let go — synchronously, before the returned promise, so a caller that does not await
+     * it (the live run's exit paths) still leaves the record.
+     */
+    close: () => new Promise((resolve) => {
+      for (const atClose of [...open]) atClose();
+      server.close(() => resolve(undefined));
+      server.closeAllConnections?.();
+    }),
   };
 }

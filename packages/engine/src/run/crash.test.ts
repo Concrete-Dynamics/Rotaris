@@ -12,6 +12,7 @@ import { recordCrash } from './crash.js';
 import { crashLeftOf, resumableOf } from '../sessions.js';
 import { conversationOf } from './record.js';
 import { interruptedResult } from './interruption.js';
+import type { HookPort } from '../hooks-port.js';
 
 /**
  * PD-ORCH-005 clause 3 — "a crash is recorded when the session is next repaired or continued": what a dead run host
@@ -316,6 +317,40 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       ] });
       // REQ-SESSION-129: no row is left running.
       expect(dal.residentRows(sid).find((r) => r.call_key === 'k2')).toMatchObject({ tool_status: 'failed', output: interruptedResult('crash', true, '') });
+    });
+
+    it('clause 4 with OQ-97 (found by the review of the repair of a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record): a steer for a root resumed as the entry role, submitted before its first step, is announced under the persona its iteration was opened with', async () => {
+      const sid = await crashed();
+      // The continue's run is set up as the entry role, `coding-agent` (OQ-97); its `session_start` hook is held, so the
+      // steer lands before the resumed root's turn begins.
+      let releaseHook!: () => void;
+      const hookHold = new Promise<void>((r) => { releaseHook = r; });
+      let starting = false;
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event) => { if (event === 'session_start') { starting = true; await hookHold; } return []; }, advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      const client = new ScriptedModelClient([]);
+      const original = client.stream.bind(client);
+      client.stream = (req) => { client.push(answer('Answered.')); return original(req); };
+      const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, persona: 'coding-agent', model: MODEL, credentialFor: () => async () => 'k' };
+      const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' as const };
+      const next = new Sessions({
+        clocks: clock, publisher: NONE, pid: 88, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
+        model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s),
+        hooks: () => hooks,
+        configure: () => ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }),
+      });
+      expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      expect(next.prompt(sid, 'second').ok).toBe(true);
+      for (let i = 0; i < 400 && !starting; i++) await new Promise((r) => setTimeout(r, 5));
+      expect(starting).toBe(true);
+      expect(next.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: RUN_AGENT_ID, text: 'mind the tests' } }).ok).toBe(true);
+      releaseHook();
+      await next.running(sid);
+      // Announced and injected under the one name its rows carry, not the entry role it runs as.
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'steering_submitted').map((t) => t.message)).toEqual([expect.stringMatching(/^A steering prompt was submitted for orchestrator \(/)]);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'steering_injected').map((t) => t.message)).toEqual([expect.stringMatching(/orchestrator/)]);
     });
 
     it('clause 6 (found by phase 4\'s second review): a continue that declines the open iteration is set up as the entry role — its root is not restored', async () => {

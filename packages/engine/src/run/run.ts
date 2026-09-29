@@ -479,6 +479,9 @@ export class Run {
     if (deps.dal) settleClosedIterations(this.todo, deps.dal, deps.sessionId, openRow);
     const open = deps.openIteration === undefined ? null : openRow;
     this.resumeFrom = deps.openIteration?.resume === true ? open : null;
+    // Clause 4 with OQ-97: a run built to resume an open iteration names its root as that iteration was opened, from the
+    // start — a steer before the resumed root's first turn is announced under the name its injection and rows carry.
+    if (this.resumeFrom !== null) this.rootName = this.resumeFrom.root_persona;
     this.restedIteration = open?.iteration ?? null;
     /*
      * PD-ORCH-005 clause 17: a continue that resumes an open iteration delivers its message to the resumed root (clause 4)

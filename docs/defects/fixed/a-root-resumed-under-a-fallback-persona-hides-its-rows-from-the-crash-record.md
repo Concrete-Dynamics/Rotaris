@@ -26,7 +26,10 @@ iteration was opened with: `Run.turn` takes the name `resume.root_persona` for a
 a fresh one (`rootName`), and uses it wherever the run names its root — the rows `runTurn` writes, the root's tool port,
 the rest's and the stop's `answerOpenCalls`, the entry agent's context reading (`entryContext`), the wait whose model
 the user replaces, and the `steering_submitted` entry of a steer for the root (`Run.steer`, found by the repair's review:
-it still named the run's persona, so the root was announced under one name and injected under another). A root resumed as the entry role because its persona is no longer configured (OQ-97) therefore
+it still named the run's persona, so the root was announced under one name and injected under another). A run built to
+resume an open iteration takes that name when it is built, not only when its first turn begins, so a steer submitted
+before the resumed root's first step — during the pre-flight or the `session_start` hook — is announced under it too
+(found by the repair's second review). A root resumed as the entry role because its persona is no longer configured (OQ-97) therefore
 keeps writing under the name `recordCrash` looks up (`iterations.root_persona`), and a call of its step that completed
 before a crash keeps what it returned. The row's `persona` column still names the persona it runs as. Nothing changes
 for a root that resumes as its own persona, whose two names are the same.
@@ -37,5 +40,8 @@ completes one call and hangs in the second; the crash is then recorded from the 
 the completed call was answered as "not run: it was interrupted by a crash before it started", and its row and the
 running one carried the entry role's name; with the repair it keeps "wrote the file" and only the running call is
 answered as interrupted, its row settling `failed`. The same case steers the resumed root, and its `steering_submitted`
-entry names `orchestrator`; on the first build of the repair it named `coding-agent`. OQ-97's fallback bullet is
+entry names `orchestrator`; on the first build of the repair it named `coding-agent`. A second case, "a steer for a root resumed as the entry role,
+submitted before its first step …", holds the continue's `session_start` hook and steers the root there: its
+`steering_submitted` entry named `coding-agent` until the run took the name when built, and names `orchestrator` now, as
+its `steering_injected` entry does. OQ-97's fallback bullet is
 reported back in place.

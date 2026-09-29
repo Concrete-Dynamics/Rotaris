@@ -5570,11 +5570,19 @@ but not what following a link does, nor whether a superseded artifact is still o
 inspector on that artifact (REQ-LIBRARY-102's deep-link, REQ-LIBRARY-131's inspector, re-raised when already open). A persona
 window has no route to the main window's Library, so there a link opens the artifact inspector in the persona window itself
 — REQ-LIBRARY-131 makes the inspectors per window. An agent PRODUCED an artifact whose producer (`created_by`, else the
-record's canonical name — REQ-LIBRARY-136's "producer") is its name, and RECEIVED one whose consumers name it; the
-run-level agent is matched by the entry persona, which is the name the root publishes under
-(`a-roots-publish-names-its-persona-as-its-author.md` records why that is the persona and not the canonical name). A
-superseded artifact is listed nowhere, as the Library's table lists it nowhere. The ready flag is stated in words:
-"ready" (REQ-LIBRARY-136), else the status.
+record's canonical name — REQ-LIBRARY-136's "producer") is its name, and RECEIVED one whose consumers name it. The
+run-level agent is matched by the entry persona and by each root's two names from the session (`SessionRecord.entryRoots`:
+the name its rows carry and its canonical name). A root publishes and reads under its canonical instance name
+(REQ-LIBRARY-093). *As first built, the run-level agent was matched by the entry persona alone, "which is the name the
+root publishes under". The repair of
+[`a-roots-publish-names-its-persona-as-its-author.md`](../defects/fixed/a-roots-publish-names-its-persona-as-its-author.md)
+(2026-09-29, R-067) made that false for a persona id the canonicaliser rewrites. The links read the roots' names since
+[`the-run-level-agent-is-known-by-its-entry-persona-alone.md`](../defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
+A plan cycle's root, which no iteration row records, is named by its publishes; one that published nothing is named only
+while its run is live
+([`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`](../defects/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md),
+open).* A superseded artifact is listed nowhere, as the Library's table lists it nowhere. The ready flag is stated in
+words: "ready" (REQ-LIBRARY-136), else the status.
 
 **What a ruling decides.** Whether a link should open the Library (as built in the main window), an inspector in place
 (as built in a persona window) or something else; and whether an agent's links should keep its superseded artifacts.

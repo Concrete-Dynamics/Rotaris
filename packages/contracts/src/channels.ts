@@ -340,10 +340,10 @@ export const SessionRecordSchema = z.object({
   artifacts: z.array(SessionArtifactLinkSchema),
   /**
    * REQ-MONITOR-071, REQ-CHAT-069, REQ-MONITOR-053 and REQ-MONITOR-044 with PD-ORCH-005 clause 4 (OQ-97) and REQ-LIBRARY-093:
-   * the entry role's root agents of this session — each iteration's, and the live run's — each pair once, oldest first.
-   * The run-level agent owns the rows and the artifacts they name, not only those of the entry persona a surface knows it
-   * by: a root resumed as the entry role keeps its own persona's name on its rows, and a root's publishes and reads
-   * record its canonical name.
+   * the entry role's root agents of this session — each iteration's, each root no iteration records that published (a plan
+   * cycle's, OQ-106), and the live run's — each pair once, in that order. The run-level agent owns the rows and the artifacts
+   * they name, not only those of the entry persona a surface knows it by: a root resumed as the entry role keeps its own
+   * persona's name on its rows, and a root's publishes and reads record its canonical name.
    */
   entryRoots: z.array(EntryRootSchema),
 });

@@ -575,9 +575,13 @@ has not resolved yet — the pre-flight, before `Run.iterate` sets the port — 
 declared set (REQ-MONITOR-061). **`SessionRecord.artifacts`** is the
 session's artifacts not superseded, with producer, ready flag and consumers (`artifactLinksOf`, one body-free read through
 `artifacts_by_created` per snapshot) — what the inspector's and the persona window's artifact links read (REQ-MONITOR-052/068/069).
-**`SessionRecord.entryRoots`** names the entry role's roots, each once, oldest first: every iteration's, by the name its
-rows and calls carry (`root_persona`) and its canonical name (`root_canonical_name`), then the live run's current root,
-which a plan cycle records in no iteration row (`entryRootsOf`, `Run.currentRoot`). The surfaces know the run-level
+**`SessionRecord.entryRoots`** names the entry role's roots, each once, by the name its rows and calls carry and its
+canonical name: every iteration's (`root_persona`, `root_canonical_name`); then each root no iteration row records that
+published — a plan cycle's — by its publish's persona and `created_by` (`StoreDal.rootPublishersOf`, a publish whose
+conversation is no child's and no iteration root's task id, through `artifacts_by_created` per snapshot); then the live
+run's current root (`entryRootsOf`, `Run.currentRoot`). The session lets go of a run once `start()` settles, a park at the
+plan gate included, so a plan cycle's root that published nothing is named only while its run is live
+(`docs/defects/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`). The surfaces know the run-level
 agent by the entry persona and by these: it owns a named row carrying either (`ownRow`, which `rowsOf`, `scopedRows` and
 `followedAgent` share; never by a named row's persona, which a child of the entry persona shares), and its artifact
 links match either or a root's canonical name, which its publishes and reads record (REQ-LIBRARY-093). Before this, a

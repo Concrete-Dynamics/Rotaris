@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type Result, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
-import { buildContinuationPayload, offersToldIn, RUN_CONFIG_DEFAULTS, Sessions, type ArtifactOps, type Preflight, type PreflightContext, type RunSetup, type TodoDocument, type ToolPort } from './index.js';
+import { buildContinuationPayload, entryRootsOf, offersToldIn, RUN_CONFIG_DEFAULTS, Sessions, type ArtifactOps, type Preflight, type PreflightContext, type RunSetup, type TodoDocument, type ToolPort } from './index.js';
 import type { SessionRecord } from '@rotaris/contracts';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
@@ -528,6 +528,115 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
     const seen = snapshots.at(-1)!;
     expect(seen.entryRoots).toEqual([{ name: 'Lead Planner', canonical: 'Lead-Planner' }]);
     expect(seen.artifacts.map((a) => a.producer)).toEqual(['Lead-Planner', 'Lead-Planner']);
+  });
+
+  /*
+   * Found by the fifth review of the repair of the-run-level-agent-is-known-by-its-entry-persona-alone.md: a plan cycle's
+   * root has no iteration row (REQ-ORCH-153), so the session named it only while the process that ran it held its run
+   * (`Run.currentRoot`). Reopened in a fresh process, a session parked at the gate named no root, and the plan cycle root's
+   * publish — recorded under its canonical name since the repair of a-roots-publish-names-its-persona-as-its-author.md,
+   * where it had carried the persona the surfaces know the run-level agent by — was no agent's while the user reviewed
+   * the plan. A root's publish carries its task id as its conversation (OQ-106), so a publish whose conversation is no
+   * child's and no iteration's root is the publish of a root with no iteration row, and names it.
+   */
+  describe('REQ-LIBRARY-093 with REQ-MONITOR-044 and OQ-106: a plan cycle\'s root is named by its publishes once the process that ran it is gone', () => {
+    const publishing = (ops: ArtifactOps | undefined): ToolPort => ({
+      specs: () => [{ name: 'publish', description: 'publish', parameters: { type: 'object' } }],
+      dispatch: async () => {
+        const r = ops?.write({ slug: 'the-plan', title: 'The plan', body: 'Plan body.', tags: [], supersedes: null });
+        return { text: r?.ok ? r.id : 'failed', isError: !r?.ok, status: r?.ok ? 'ok' : 'failed', durationMs: 1, label: 'publish', args: {} };
+      },
+      cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+    });
+    /** A persona id the canonicaliser rewrites, in `plan` mode: every run of a new session is held for a plan first. */
+    const planSessions = (pid: number, backend: AgentBackend, snapshots: SessionRecord[] = []) => new Sessions({
+      clocks: clock, publisher: { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } }, pid, host: HOST,
+      retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-plan-root',
+      model: null, sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid), attended: () => true,
+      tools: (ctx) => publishing(ctx.artifacts),
+      configure: () => ({ ok: true, value: {
+        model: { backend, config: { ...RUN_CONFIG_DEFAULTS, persona: 'Lead Planner', model: MODEL, credentialFor: () => async () => '' } },
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, runStartMode: 'plan' },
+      } }),
+    });
+    const ROOT = { name: 'Lead Planner', canonical: 'Lead-Planner' };
+
+    it('parked at the gate: the session reopened in a fresh process names the plan cycle\'s root, the producer of its publish', async () => {
+      const backend = new DefaultAgentBackend(new ScriptedModelClient([toolCalls([{ callId: 'w1', name: 'publish', args: {} }], 'Publishing.'), answer('Step 1: the plan.')]));
+      const live: SessionRecord[] = [];
+      const first = planSessions(82, backend, live);
+      const sid = (first.start(dal, 'C:/ws', 'plan it') as { value: SessionId }).value;
+      expect((await first.running(sid)!).execution_status).toBe('awaiting_plan_decision');
+      // A plan cycle is not an iteration: the root is on no iteration row, and its publish carries its canonical name.
+      expect(dal.iterationsOf(sid)).toEqual([]);
+      expect(dal.artifactsOf(sid).map((a) => [a.kind, a.created_by, a.source_persona])).toEqual([['agent_published', 'Lead-Planner', 'Lead Planner']]);
+      first.owner(sid)!.reconcile();
+      expect(live.at(-1)!.entryRoots).toEqual([ROOT]);
+      // The application quits and a fresh process opens the parked session: no run of it is held anywhere.
+      await first.closeAll();
+      expect(entryRootsOf(dal, sid, undefined)).toEqual([ROOT]);
+      const reopened: SessionRecord[] = [];
+      const second = planSessions(83, backend, reopened);
+      expect(second.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      second.owner(sid)!.reconcile();
+      const seen = reopened.at(-1)!;
+      expect(seen.planGate?.cycle).toBe(1);
+      expect(seen.entryRoots).toEqual([ROOT]);
+      expect(seen.artifacts.map((a) => a.producer)).toEqual([ROOT.canonical]);
+    });
+
+    it('stopped before its gate opened: the plan cycle\'s root is still named by its publish, with no plan cycle and no iteration recorded', async () => {
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      let published = false;
+      const client = new ScriptedModelClient([toolCalls([{ callId: 'w1', name: 'publish', args: {} }], 'Publishing.'), { parts: [{ hold }, ...answer('Step 1: the plan.').parts] }]);
+      const sessions = planSessions(82, new DefaultAgentBackend(client));
+      const sid = (sessions.start(dal, 'C:/ws', 'plan it') as { value: SessionId }).value;
+      for (let i = 0; i < 200 && !published; i++) { await new Promise((r) => setTimeout(r, 5)); published = dal.artifactsOf(sid).length > 0; }
+      expect(published).toBe(true);
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      expect((await sessions.running(sid)!).execution_status).not.toBe('awaiting_plan_decision');
+      await sessions.closeAll();
+      expect(dal.planCyclesOf(sid)).toEqual([]);
+      expect(dal.iterationsOf(sid)).toEqual([]);
+      expect(entryRootsOf(dal, sid, undefined)).toEqual([ROOT]);
+    });
+  });
+
+  it('entryRootsOf (REQ-MONITOR-071, REQ-LIBRARY-093, OQ-97, OQ-106): each iteration\'s root, then each root no iteration records that published, and no child — read from the store alone', () => {
+    const sid = asSessionId('S-entry-roots');
+    seed(sid);
+    /** A publish as an agent's own tool port records it (`ArtifactStore.publish`): no source task, its task id as conversation. */
+    const publish = (id: string, conversationId: string | null, persona: string, createdBy: string, createdAt: string, supersededBy: string | null = null) => dal.insertArtifact({
+      session_id: sid, id, slug: id, title: `${id} title`, kind: 'agent_published', source_task_id: null, canonical_name: createdBy, source_persona: persona, status: 'published',
+      summary: '', key_findings: '', highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', commands: '[]', tags: '[]',
+      supersedes: null, superseded_by: supersededBy, created_by: createdBy, consumed_by: '[]', timeline_event_id: null, conversation_id: conversationId, importance: 'normal',
+      created_at: createdAt, edited_at: null, body_file: `${id}.md`,
+    });
+    // Iteration 1's root was resumed as the entry role (OQ-97): its rows carry `orchestrator`, its publish the entry role's
+    // persona beside its own canonical name. It is named once, by its iteration row, never by that publish's persona.
+    iteration(sid, 1, 'bg_root0001', '2026-09-27T00:00:00.000Z');
+    dal.closeIteration(sid, 1, 'succeeded', '2026-09-27T00:30:00.000Z');
+    publish('a0000001', 'bg_root0001', 'coding-agent', 'orchestrator', '2026-09-27T00:10:00.000Z');
+    // A child's publish and its report carry the child's task id: a child is never one of the roots.
+    dal.insertChild({ session_id: sid, task_id: 'bg_child001', canonical_name: 'Research', given_name: 'Research', persona: 'researcher', state: 'succeeded', parent_id: 'bg_root0001', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: '2026-09-27T00:15:00.000Z' });
+    publish('a0000002', 'bg_child001', 'researcher', 'Research', '2026-09-27T00:20:00.000Z');
+    artifact(sid, 'a0000003', 'child_report', 'bg_child001', '2026-09-27T00:25:00.000Z');
+    // Two plan cycles' roots of personas the canonicaliser rewrites, each named once by its publishes: the first one's only
+    // publish was superseded by the second's, which still names it (what it read is recorded under that name), and the
+    // second published twice. A publish recorded with no conversation names no root.
+    publish('a0000004', 'bg_plan0001', 'Lead Planner', 'Lead-Planner', '2026-09-27T01:00:00.000Z', 'a0000005');
+    publish('a0000005', 'bg_plan0002', 'Lead Reviewer', 'Lead-Reviewer', '2026-09-27T02:00:00.000Z');
+    publish('a0000006', 'bg_plan0002', 'Lead Reviewer', 'Lead-Reviewer', '2026-09-27T02:30:00.000Z');
+    publish('a0000007', null, 'Other', 'Other', '2026-09-27T03:00:00.000Z');
+    const orchestrator = { name: 'orchestrator', canonical: 'orchestrator' };
+    const planner = { name: 'Lead Planner', canonical: 'Lead-Planner' };
+    const reviewer = { name: 'Lead Reviewer', canonical: 'Lead-Reviewer' };
+    expect(entryRootsOf(dal, sid, undefined)).toEqual([orchestrator, planner, reviewer]);
+    // A live run's current root comes last, and once.
+    expect(entryRootsOf(dal, sid, { currentRoot: planner })).toEqual([orchestrator, planner, reviewer]);
+    expect(entryRootsOf(dal, sid, { currentRoot: { name: 'coding-agent', canonical: 'coding-agent' } })).toEqual([orchestrator, planner, reviewer, { name: 'coding-agent', canonical: 'coding-agent' }]);
   });
 
   it('end to end: a root\'s publish carries its task id as its conversation, and the next iteration\'s handoff names it over a later report', async () => {

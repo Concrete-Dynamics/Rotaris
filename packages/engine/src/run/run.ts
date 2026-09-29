@@ -672,8 +672,9 @@ export class Run {
   }
   /**
    * PD-ORCH-005 clause 4 with OQ-97, and REQ-LIBRARY-093: the root this run executes, or executed last, by the name its rows
-   * and calls carry (`rootName`) and its canonical instance name — what `SessionRecord.entryRoots` adds for a root with no
-   * iteration row, a plan cycle's. Null before the run's first turn.
+   * and calls carry (`rootName`) and its canonical instance name — what `SessionRecord.entryRoots` adds, while the run is
+   * live, for a root with no iteration row, a plan cycle's. The session lets go of the run once it parks or ends, and such
+   * a root is then named by its publishes alone (`entryRootsOf`). Null before the run's first turn.
    */
   get currentRoot(): EntryRoot | null {
     return this.rootRecord === null ? null : { name: this.rootName, canonical: this.rootRecord.canonicalName };

@@ -52,3 +52,17 @@ rewrites, its root's publishes and reads, now recorded under the canonical name,
 the session names each root's canonical name (`SessionRecord.entryRoots`), and the run-level agent's links match it. The
 case above now also reads the session's snapshot, which names `Lead Planner` with `Lead-Planner` and both publishes'
 producer `Lead-Planner`.
+
+*That paragraph said the session names each root's canonical name, and for a plan cycle's root that was only partly true.
+A plan cycle's root has no iteration row (REQ-ORCH-153), so the session named it only while the process that ran it held
+its run (`Run.currentRoot`). That process lets go of the run once it parks at the gate. The fifth review of the run-level
+agent's repair found the result: a session parked at the plan gate named no root, in the same process or reopened in a
+fresh one. The plan cycle root's publish, recorded under its canonical name by this repair, was then no agent's while the
+user reviewed the plan. On `main` it had carried the persona the surfaces know the run-level agent by, so this repair
+regressed it.* That is repaired too. A root no iteration row records is named by its publishes: each publish whose
+conversation, the publisher's task id, is no child's and no iteration root's (OQ-106) contributes its persona and
+`created_by` (`StoreDal.rootPublishersOf` in `entryRootsOf`). The regression is pinned by the "a plan cycle's root is
+named by its publishes …" cases in `packages/engine/src/session-resume.test.ts`. A plan cycle's root that published
+nothing is still named only while its run is live. For a persona the canonicaliser rewrites, an artifact it only read is
+then not the run-level agent's received link, where on `main` its read carried the persona. That residual is open in
+[`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`](../a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md).

@@ -8,7 +8,7 @@ import { ignoredBy, parseGitignore } from './gitignore.js';
 import { classifyWorkspace, classifyWorkspaceRoot, DEFAULT_SOURCE_EXTENSIONS, extensionOf } from './classify.js';
 import { applyRecord, initializationOf, isNeverInitialized, isResolved, NEVER_INITIALIZED, readInitializationState, recordPatch, sourceExtensionOverrideOf, type InitializationState } from './state.js';
 import { DUPLICATE_TASK, isApplicable, labelFor, TaskRegistry, type InitializationTask, type TaskResult } from './registry.js';
-import { deriveSets, promptDue, promptOwed, sameView, viewOf } from './sets.js';
+import { deriveSets, promptOwed, sameView, viewOf } from './sets.js';
 import { executeTasks, recordSkip, stampOnly } from './execute.js';
 
 function tree(): string {
@@ -290,14 +290,6 @@ describe('the task sets and the nine values', () => {
     const state: InitializationState = { completed: ['gone', 'ghost'], skipped: [], lastRun: 'x', classification: null };
     const view = viewOf(state, await deriveSets(r, state, log), false, null);
     expect(view.completed).toEqual([]);
-  });
-
-  it('holds the prompt back while a run is in progress', async () => {
-    const r = new TaskRegistry();
-    r.register(task('ask', { requiresConsent: true }));
-    const sets = await deriveSets(r, NEVER_INITIALIZED, log);
-    expect(promptDue(viewOf(NEVER_INITIALIZED, sets, false, null))).toBe(true);
-    expect(promptDue(viewOf(NEVER_INITIALIZED, sets, true, null))).toBe(false);
   });
 });
 

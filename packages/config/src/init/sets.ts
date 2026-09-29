@@ -76,10 +76,12 @@ export function viewOf(state: InitializationState, sets: TaskSets, running: bool
   };
 }
 
-/** REQ-WORKSPACE-105: the prompt is due exactly when a consent-requiring task is pending and no run is in progress. */
-export function promptDue(view: InitializationView): boolean {
-  return view.consentPending.length > 0 && !view.running;
-}
+/*
+ * REQ-WORKSPACE-105's "the setup prompt SHALL be due exactly when …" is read in one place, `setupPromptDue` in
+ * `packages/ui/src/ProjectSetupDialog.tsx`, because which run "no run is in progress" means is OQ-119 and the reading
+ * built needs the published `backgroundRun` beside the nine values. The "any run" reading that stood here was retired
+ * with it, so the codebase holds one.
+ */
 
 function sameSet(a: readonly string[], b: readonly string[]): boolean {
   if (a.length !== b.length) return false;

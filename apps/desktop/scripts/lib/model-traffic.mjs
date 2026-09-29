@@ -60,6 +60,14 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
   /** How many calls have reached each watched path, so a rule can name the call it acts on. */
   const calls = new Map();
   const fired = [];
+  /**
+   * The same two figures over the proxy's whole life, which `setFaults` never resets. The per-launch pair above is
+   * what a scenario asks about the launch it just ran; the run's summary asks about every rule the run declared and
+   * every one that fired, and reading the per-launch pair after the last scenario's `setFaults([])` reported
+   * `faultsFired: []` and `faultsDeclared: 0` for a run in which three had fired (live-run finding H4, 2026-09-29).
+   */
+  const everFired = [];
+  let everDeclared = faults.length;
 
   /**
    * The rule that acts on THIS call, or null.
@@ -77,7 +85,7 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
     const index = (calls.get(key) ?? 0) + 1;
     calls.set(key, index);
     const rule = watched.find((f) => f.at === index && f.spent !== true) ?? null;
-    if (rule !== null) { rule.spent = true; fired.push({ kind: rule.kind, at: rule.at, path: key }); }
+    if (rule !== null) { rule.spent = true; fired.push({ kind: rule.kind, at: rule.at, path: key }); everFired.push({ kind: rule.kind, at: rule.at, path: key }); }
     return rule;
   };
 
@@ -272,8 +280,11 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
      * must reset: a rule that says "the second completion" means the second of THIS launch, and a scenario
      * that inherited the previous launch's count would fire it somewhere nobody chose.
      */
-    setFaults: (rules) => { faults = rules.map((rule) => ({ ...rule })); calls.clear(); fired.length = 0; },
+    setFaults: (rules) => { faults = rules.map((rule) => ({ ...rule })); calls.clear(); fired.length = 0; everDeclared += faults.length; },
+    /** This launch's figures: the fault pair covers the rules since the last `setFaults`. */
     stats: () => ({ recorded, failed, faultsFired: fired.slice(), faultsDeclared: faults.length }),
+    /** The whole run's figures, for its summary: every rule ever declared, and every one that fired, in order. */
+    totals: () => ({ recorded, failed, faultsFired: everFired.slice(), faultsDeclared: everDeclared }),
     /**
      * Stop listening. A call still open is written first, `in-flight at close`, into its own scenario's file,
      * and the endpoint is let go — synchronously, before the returned promise, so a caller that does not await

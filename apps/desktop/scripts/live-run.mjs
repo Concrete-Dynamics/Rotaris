@@ -847,6 +847,14 @@ function readToolCalls(sessionId) {
       });
   } finally { db.close(); }
 }
+/**
+ * One session's own log (REQ-SESSION-142), read from the sandbox's store beside the database — the file `preserveRun`
+ * copies into the pack. Empty when the run wrote none at the sandbox's `session_log_level`.
+ */
+function readSessionLog(sessionId) {
+  const file = join(dirname(oneDatabase()), 'sessions', sessionId, 'session.log');
+  try { return existsSync(file) ? readFileSync(file, 'utf8') : ''; } catch { return ''; }
+}
 /** One session's `issues` rows — what the product itself recorded as having gone wrong, in its own words. */
 function readIssues(sessionId) {
   const Database = require('better-sqlite3');
@@ -954,7 +962,9 @@ function finish(code) {
   // Closed BEFORE its figures are read: a call still in flight is written `in-flight at close` into its own
   // scenario's file as the proxy closes, and the count below includes it (live-run finding H-g).
   closeProxy();
-  results.traffic = proxy === null ? { recorded: false, reason: RECORD_TRAFFIC ? 'the proxy could not start' : '--no-record-traffic' } : { recorded: true, proxy: proxy.url, ...proxy.stats() };
+  // The RUN's figures (`totals`), never the last launch's (`stats`): the `faults` scenario's closing `setFaults([])`
+  // empties the per-launch pair, and reading it here reported no fault fired in a run where three had (finding H4).
+  results.traffic = proxy === null ? { recorded: false, reason: RECORD_TRAFFIC ? 'the proxy could not start' : '--no-record-traffic' } : { recorded: true, proxy: proxy.url, ...proxy.totals() };
   results.passed = code === 0 && checks.every((c) => c.passed);
   writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
   // A red names the assertion, never the run.
@@ -1107,7 +1117,7 @@ if (wanted.includes('edit')) {
   const log = await launch('edit', {
     // One run, several mechanisms at once: the implementation and its tests are written by two children working in
     // PARALLEL, each under a declared write scope (PD-TOOLS-006), and priced at configured rates (PD-MONITOR-001).
-    ROTARIS_CAPTURE_PROMPT: 'Implement REQ-103 from docs/requirements: add a clearCompleted(todos) function to src/todos.js and export it, and add tests for it to src/todos.test.js. Do the two in parallel: in ONE turn, delegate two coding-agent children in the background, one for the implementation with write_scope ["src/todos.js"] and one for the tests with write_scope ["src/todos.test.js"], then wait for both with wait_for_tasks. Afterwards run `node --test` in the terminal yourself and tell me whether it passed. Delegate nothing else, and answer as soon as the suite has run.',
+    ROTARIS_CAPTURE_PROMPT: 'Implement REQ-103 from docs/requirements: add a clearCompleted(todos) function to src/todos.js and export it, and add tests for it to src/todos.test.js. Do the two in parallel: in ONE turn, delegate two coding-agent children in the background, one for the implementation with write_scope ["src/todos.js"] and one for the tests with write_scope ["src/todos.test.js"], then wait for both with wait_for_tasks. You hold no terminal, so tell each child to run `node --test` in the terminal before it reports, and tell me whether the suite passed. Delegate nothing else, and answer as soon as both have reported.',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
   }, EDIT_WAIT_MS + 90_000);
   check(!/capture: wait for result timed out/.test(log), 'the run reached its result inside the wait');
@@ -1119,7 +1129,17 @@ if (wanted.includes('edit')) {
   const suite = readFileSync(join(workspace, 'src', 'todos.test.js'), 'utf8');
   check(read?.session.execution_status === 'completed', 'the session completed', `${read?.session.execution_status} (${read?.session.stop_reason})`);
   check(tools.length > 0 && tools.every((row) => row.settled === 1), 'every tool call settled', names.join(', '));
-  check(names.includes('terminal'), 'the agent ran the suite through the terminal tool', names.join(', '));
+  /*
+   * Who ran the suite, read from the store. The orchestrator is `coordinator_only` (REQ-ORCH-029), and that control
+   * removes `terminal` from its tool set (REQ-TOOLS-006), so the prompt asks the CHILDREN to run it. This check once
+   * read "the agent ran the suite through the terminal tool" over a prompt asking the orchestrator to run it
+   * "yourself", and passed on the children's calls while the thing it named never happened (live-run finding H3).
+   */
+  const calls = read ? readToolCalls(read.session.session_id) : [];
+  const suiteCalls = calls.filter((c) => c.tool_name === 'terminal' && /\bnode\s+--test\b/.test(String(c.args.command ?? '')));
+  const ROOT = 'orchestrator';
+  check(suiteCalls.some((c) => c.agent_name !== ROOT), 'a child ran `node --test` through the terminal tool', suiteCalls.length === 0 ? `no terminal call ran node --test; tools used: ${names.join(', ')}` : [...new Set(suiteCalls.map((c) => c.agent_name))].join(', '));
+  check(!calls.some((c) => c.tool_name === 'terminal' && c.agent_name === ROOT), 'the orchestrator made no terminal call (REQ-TOOLS-006 coordinator_only)', `${calls.filter((c) => c.agent_name === ROOT).length} orchestrator call(s)`);
   // REQ-MONITOR-102: the session's own counter is SESSION-wide, so it must agree with the ring the gate wrote
   // across every agent that dispatched. The first live run found it holding the entry agent's calls alone, which
   // left the Overview card short and the synthetic run row reading zero on any run that delegated.
@@ -1142,7 +1162,6 @@ if (wanted.includes('edit')) {
    * A write the gate refused for a scope is RECORDED rather than required — whether a model tries to cross a claim is
    * its choice — but every such refusal must name its holder, in the directive's words.
    */
-  const calls = read ? readToolCalls(read.session.session_id) : [];
   const scoped = calls.filter((c) => c.tool_name === 'delegate' && Array.isArray(c.args.write_scope) && c.args.write_scope.length > 0);
   const scopedIds = scoped.map((c) => /task_id: (bg_[0-9a-f]{8})/.exec(c.result)?.[1]).filter((id) => id !== undefined);
   check(scopedIds.length >= 2, 'two children were delegated with a write scope each (PD-TOOLS-006)', scoped.map((c) => `${c.args.task_name}: ${JSON.stringify(c.args.write_scope)}`).join('; ') || 'no delegate carried a write_scope');
@@ -1554,8 +1573,10 @@ if (wanted.includes('frictions')) {
  * evidence about anything:
  *
  *   faults-ladder — a 429 on the second completion and a 500 on the third. Neither reaches the endpoint, so
- *                   this costs the owner nothing but the retries. The question is REQ-ORCH-092's: does the
- *                   ladder wait, fall back, and still finish?
+ *                   this costs the owner nothing but the retries. The question: does the run survive both, and
+ *                   does each leave the trace of the layer that retried it? OQ-110 (2026-09-29) ruled the
+ *                   dispatch layer's retries (REQ-CONFIG-086) come before the ladder's (REQ-ORCH-091/092), so
+ *                   with its default budget of 5 the ladder is not reached and the trace is the session log's.
  *   faults-stall  — the bytes stop mid-stream on the second completion and the socket stays open. The question
  *                   is the eighty-second defect's: a model timeout once collapsed into the same `aborted` flag
  *                   a user's stop sets, and the run reported itself `user_cancelled` with nobody having
@@ -1584,10 +1605,33 @@ if (wanted.includes('faults')) {
     checkPricing('faults-ladder', ladderRead?.session);
     check(ladderFired.length === 2, 'both injected refusals reached the product', `${ladderFired.length} of 2 fired; statuses recorded: ${injected.join(', ') || 'none'}`);
     check(ladderRead?.session.execution_status === 'completed', 'the run completed despite a 429 and a 500', `${ladderRead?.session.execution_status} (${ladderRead?.session.stop_reason})`);
-    // A ladder that waited and retried made MORE calls than the faults it was given; one that gave up made fewer.
-    check(ladderTraffic.length > injected.length, 'the ladder retried past the refusals rather than giving up', `${ladderTraffic.length} call(s) for ${injected.length} refusal(s)`);
+    /*
+     * WHO retried each refusal, read from the product's own record — never from the traffic alone.
+     *
+     * This check once read "the ladder retried past the refusals rather than giving up" and passed on the call count:
+     * more calls than refusals. The first live run's 429 and 500 were retried by the model client's dispatch layer
+     * before the ladder saw either, so it passed with the ladder never reached (live-run finding H3). OQ-110 ruled
+     * that order the specification's — REQ-CONFIG-086's `num_retries` (default 5) first, REQ-ORCH-091/092's ladder
+     * when they are exhausted — and made the dispatch layer's retries visible: one WARNING line per absorbed retry in
+     * the session log, naming the status it met. So each injected refusal must be answered by a trace one of the two
+     * layers leaves: that session-log line, or the ladder's own `issues` row (`model_wait` for a 429,
+     * `transient_llm_error` for a 500). Which layer it was is noted, not required.
+     */
+    const ladderLog = ladderRead === null ? '' : readSessionLog(ladderRead.session.session_id);
+    const absorbed = [...ladderLog.matchAll(/model request retried by the dispatch layer: .*? met HTTP (\d{3}) and waited (\d+) ms before retry (\d+) of (\d+)/g)]
+      .map((m) => ({ status: Number(m[1]), waitedMs: Number(m[2]), attempt: Number(m[3]), of: Number(m[4]) }));
+    const ladderIssues = ladderRead === null ? [] : readIssues(ladderRead.session.session_id).filter((issue) => issue.kind === 'model_wait' || issue.kind === 'transient_llm_error');
+    const unanswered = [...injected];
+    for (const retry of absorbed) { const at = unanswered.indexOf(retry.status); if (at !== -1) unanswered.splice(at, 1); }
+    const byLadder = { 429: 'model_wait', 500: 'transient_llm_error' };
+    for (const issue of ladderIssues) { const at = unanswered.findIndex((status) => byLadder[status] === issue.kind); if (at !== -1) unanswered.splice(at, 1); }
+    check(injected.length > 0 && unanswered.length === 0, 'each injected refusal was retried, read from the session log\'s dispatch-layer lines or the ladder\'s issues (OQ-110)',
+      `${injected.length} refusal(s) (${injected.join(', ') || 'none'}); dispatch layer: ${absorbed.map((r) => `HTTP ${r.status} waited ${r.waitedMs} ms, retry ${r.attempt} of ${r.of}`).join('; ') || 'no line'}; ladder: ${ladderIssues.map((issue) => issue.kind).join(', ') || 'no issue'}${unanswered.length === 0 ? '' : `; no trace for ${unanswered.join(', ')}`}; ${ladderTraffic.length} call(s) recorded`);
+    noted('which layer retried the refusals', ladderIssues.length === 0
+      ? `the dispatch layer alone (${absorbed.length} absorbed retr${absorbed.length === 1 ? 'y' : 'ies'}); the ladder was not reached, as OQ-110 rules for a budget that was not exhausted`
+      : `the ladder recorded ${ladderIssues.map((issue) => issue.kind).join(', ')} after the dispatch layer's ${absorbed.length} retr${absorbed.length === 1 ? 'y' : 'ies'}`);
     if (ladderRead) preserveRun('faults-ladder', ladderRead.session.session_id);
-    results.scenarios['faults-ladder'] = { fired: ladderFired, injected, calls: ladderTraffic.length, status: ladderRead?.session.execution_status, stopReason: ladderRead?.session.stop_reason };
+    results.scenarios['faults-ladder'] = { fired: ladderFired, injected, calls: ladderTraffic.length, dispatchRetries: absorbed, ladderIssues: ladderIssues.map((issue) => ({ kind: issue.kind, message: issue.message })), status: ladderRead?.session.execution_status, stopReason: ladderRead?.session.stop_reason };
     await budgetGate();
 
     /*

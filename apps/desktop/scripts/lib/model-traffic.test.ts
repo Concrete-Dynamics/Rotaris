@@ -22,7 +22,9 @@ import { startRecordingProxy } from './model-traffic.mjs';
 interface Proxy {
   readonly url: string;
   sink: (path: string | null) => void;
-  stats: () => { recorded: number; failed: number };
+  stats: () => { recorded: number; failed: number; faultsFired: unknown[]; faultsDeclared: number };
+  totals: () => { recorded: number; failed: number; faultsFired: unknown[]; faultsDeclared: number };
+  setFaults: (rules: unknown[]) => void;
   close: () => Promise<void>;
 }
 
@@ -299,6 +301,34 @@ describe('the live run\'s recording proxy', () => {
       expect(String(written[0]['responseBody'])).toContain('one');
       ac.abort();
     }, 20_000);
+
+    /*
+     * Live-run finding H4 (2026-09-29): `results.json` read `faultsFired: []` and `faultsDeclared: 0` for a run in
+     * which a 429, a 500 and a stall had fired, because the summary read the per-launch figures after the `faults`
+     * scenario's closing `setFaults([])` had emptied them. The run's figures must survive every replacement.
+     */
+    it('keeps the run-wide fault figures through every setFaults, while the per-launch ones reset (H4)', async () => {
+      const target = await upstream((_req, res) => { res.writeHead(200); res.end('{"ok":true}'); });
+      const { proxy } = await proxyTo(target, [{ kind: 'status', at: 1, status: 429 }, { kind: 'status', at: 2, status: 500 }]);
+      const call = () => fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{}' });
+      expect((await call()).status).toBe(429);
+      expect((await call()).status).toBe(500);
+      proxy.setFaults([{ kind: 'status', at: 1, status: 503 }]);
+      expect((await call()).status).toBe(503);
+      proxy.setFaults([]);
+
+      // The launch's own pair resets with its rules, which is what a scenario reads about the launch it ran …
+      expect(proxy.stats().faultsFired).toEqual([]);
+      expect(proxy.stats().faultsDeclared).toBe(0);
+      // … and the run's pair does not.
+      expect(proxy.totals().faultsDeclared).toBe(3);
+      expect(proxy.totals().faultsFired).toEqual([
+        { kind: 'status', at: 1, path: '/chat/completions' },
+        { kind: 'status', at: 2, path: '/chat/completions' },
+        { kind: 'status', at: 1, path: '/chat/completions' },
+      ]);
+      expect(proxy.totals().recorded).toBe(3);
+    });
 
     it('leaves every other call untouched when no rule matches', async () => {
       const target = await upstream((_req, res) => { res.writeHead(200); res.end('{"ok":true}'); });

@@ -136,9 +136,11 @@ async function controlOutcome(ctx: SlashContext, op: Parameters<SlashContext['co
 export function builtInCommands(options: CatalogueOptions): readonly SlashCommand[] {
   const reach = (key: Reachable, name: string, otherwise: Availability = ok): Availability => (options.reachable[key] === true ? otherwise : unavailable(defaultUnavailableReason(name)));
   return [
-    // REQ-CHAT-029: `/stop` accepted during a live run cancels it and sends no text to any agent. The typed command is the
-    // user's deliberate act, so it takes the cancel directly (graceful, as the Stop control's first activation does).
-    { name: 'stop', description: 'Cancel the active run', kind: 'action', availability: whileRunning, run: (_a, ctx) => controlOutcome(ctx, 'cancel') },
+    // PD-ORCH-005 clause 15 (REQ-CHAT-029 as narrowed): `/stop` is the stop, offered as "Stop the active run". Accepted
+    // during a live run it sends the stop control's graceful first activation (the `cancel` op, REQ-SESSION-186), which
+    // brings the run to rest with its agents `paused` (clause 3), and sends no text to any agent. It is never the
+    // confirmed explicit cancel (the reserved run id), so it asks nothing.
+    { name: 'stop', description: 'Stop the active run', kind: 'action', availability: whileRunning, run: (_a, ctx) => controlOutcome(ctx, 'cancel') },
     // REQ-CHAT-029 fixes `/pause`'s gating and no description; this wording is the composer's, matching REQ-MONITOR-123's control.
     { name: 'pause', description: 'Pause the active run', kind: 'action', availability: whileRunning, run: (_a, ctx) => controlOutcome(ctx, 'pause') },
     // REQ-CHAT-029: `forceCompression` is a control op with no arm in the run host until Part AO; until then the

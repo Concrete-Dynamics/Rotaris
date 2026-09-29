@@ -19,3 +19,12 @@ policy [R-058](../product/requests.md#r-058) asked for.
 - `packages/engine/src/run/stop-conditions.ts` — `classifyStop`.
 - `packages/engine/src/run/run.ts` — the terminal status and the `Run paused…` rows.
 - `packages/engine/src/sessions.ts` — the `cancel` and `pause` controls.
+
+## Read by PD-ORCH-005's build — 2026-09-27, not repaired
+
+PD-ORCH-005 does not settle this. Clause 2 has a pause persist `paused`, and clause 3 has a stop leave "the same
+state": every unfinished agent `paused` and the iteration open. The build persists `paused` for a stop, graceful or
+forced. That keeps REQ-MONITOR-029 and REQ-SESSION-093 and leaves REQ-SESSION-186's `stopped` unmet, as before.
+REQ-SESSION-186 is not in the directive's Narrows list, so the contradiction is still the corpus's, and it still
+belongs to an ESC. A stop is told apart from a pause by `children.interruption` and `iterations.interruption` (`stop`),
+as well as by `stop_reason` and the timeline. OQ-96 records the reading.

@@ -98,10 +98,10 @@ launch('steer', s2, { ROTARIS_SCRIPT: 'read,read,read,read', ROTARIS_CAPTURE_PRO
 }
 
 // 3. A graceful pause, then the paused Continue. The pause click WAITS for the run to be pausable
-// (the `~` form) and the Continue waits for the paused strip — which keeps its own `Continue run`
-// button beside the message pill, so the lookup is the button's own visible label.
+// (the `~` form) and the Continue waits for the paused strip — whose continue shows the pill's short
+// label `Continue` with `Continue run` as its accessible name (PD-ORCH-005 phase 5), so the lookup is that name.
 const s3 = scenario('pause', []);
-launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'pause me', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Pause the run"]@~8000;;.composer__strip .btn-primary>>Continue run@~24000', ROTARIS_CAPTURE_AFTER_MS: '26000' });
+launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'pause me', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Pause the run"]@~8000;;.composer__strip .btn-primary[aria-label="Continue run"]@~24000', ROTARIS_CAPTURE_AFTER_MS: '26000' });
 {
   const db = open(s3);
   const session = db.prepare('SELECT session_id, execution_status, stop_reason FROM sessions').get();

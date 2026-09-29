@@ -485,7 +485,9 @@ in `configuration.ts`'s header.)
    while a surface is open. `pnpm palette-proof` drives five launches and reads the block through the **operating
    system's own cursor and keyboard** — the injected events every other proof uses enter the renderer below the host's
    input block and would pass through a disabled window, which is recorded in ADR-0048 beside the reading that a
-   disabled window can still be raised to the foreground. **Found — one defect:** binding Ctrl+L and Ctrl+Return through
+   disabled window can still be raised to the foreground. That host-input half runs on Windows only. Since 2026-09-28
+   the proof states it not applicable elsewhere and asserts the application's own reading there
+   ([note](../defects/fixed/palette-proof-reads-the-win32-host-input-on-every-platform.md)). **Found — one defect:** binding Ctrl+L and Ctrl+Return through
    the registry deferred both by two animation frames, so a keystroke immediately after Ctrl+L reached whatever held
    focus before; the product's own prompt seam types at that speed and stopped submitting, which is how it surfaced.
 
@@ -1090,7 +1092,11 @@ both scopes: Settings → Runtime toggles "Allow outside workspace" through its 
 line as written, the global file untouched); Settings → Models chooses a slot and its strength and saves; a toggle
 then Discard writes nothing; the composer's control writes `runtime.permission_mode` with no run active; a file
 with `max_depth: many` refuses the run naming the file, the workspace scope and `runtime.max_depth`, and the corrected
-file runs to completion. Its evidence lands under `.proof/config-proof/`; the load time is read from the app log.
+file runs to completion. Its evidence lands under `.proof/config-proof/`; the load time is read from the app log. The
+Discard scenario is seeded as a workspace already initialized, because a never-initialized one gets the
+initialization record written into the same file during the launch wherever the code-intelligence bundle is present.
+Its Runtime steps wait for their controls and are read back from the log (2026-09-28, R-062;
+[the note](../defects/fixed/config-proofs-discard-scenario-counts-the-initialization-record-as-a-discard-write.md)).
 
 **The control channel.** `contracts/src/control.ts` (the twenty-two operations, the pause payload), store v6
 (`queued_prompts`, `sessions.message_limit`, `sessions.paused_at_count`), the writer's units, `engine/src/run/run.ts`

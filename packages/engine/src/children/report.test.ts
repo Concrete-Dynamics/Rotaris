@@ -165,9 +165,50 @@ describe('engine/children/report — every construction site carries them', () =
     };
     const s: SummariserDeps = { backend: backend as never, model: { providerId: 'a', modelId: 'a1', dialect: 'chat' }, thinking: 'unset', timers: new FakeClock().timers, credentialFor: () => async () => 'k' };
     const r = await produceReport(input({ messages, toolCallCount: 2 }), s, new AbortController().signal);
-    expect(r.summary).toBe('wrote a document and ran the tests');
-    expect(r.edited_files).toEqual(['docs/a.md', 'Memory: domain-design/core-domain']);
+    expect(r!.summary).toBe('wrote a document and ran the tests');
+    expect(r!.edited_files).toEqual(['docs/a.md', 'Memory: domain-design/core-domain']);
     // The model may not author this field: what ran is a fact of the transcript, not of the summary.
-    expect(r.commands).toEqual([{ command: 'pnpm test', exit_code: 0 }]);
+    expect(r!.commands).toEqual([{ command: 'pnpm test', exit_code: 0 }]);
+  });
+
+  describe('PD-ORCH-005 clauses 2 and 3 / REQ-ORCH-133 (found by phase 3\'s second review): a pass cut short makes no further call', () => {
+    const summariser = (answers: (signal: AbortSignal) => Promise<unknown>) => {
+      const calls: AbortSignal[] = [];
+      const s: SummariserDeps = {
+        backend: { runTurn: async (_req: unknown, _sink: unknown, signal: AbortSignal) => { calls.push(signal); return answers(signal); } } as never,
+        model: { providerId: 'a', modelId: 'a1', dialect: 'chat' }, thinking: 'unset', timers: new FakeClock().timers, credentialFor: () => async () => 'k',
+      };
+      return { s, calls };
+    };
+    const unusable = async () => ({ status: 'succeeded' as const, usage: { input: 1, output: 1 }, text: 'not json' });
+
+    it('an attempt the child\'s abort cut off is the last: no retry, and no report', async () => {
+      const abort = new AbortController();
+      const { s, calls } = summariser(async (signal) => { abort.abort(); return { status: 'failed' as const, usage: { input: 0, output: 0 }, error: { headline: signal.aborted ? 'aborted' : 'x' } }; });
+      expect(await produceReport(input({ messages, toolCallCount: 2 }), s, abort.signal)).toBeNull();
+      expect(calls).toHaveLength(1);
+    });
+
+    it('a pass already aborted makes no call at all', async () => {
+      const abort = new AbortController();
+      abort.abort();
+      const { s, calls } = summariser(unusable);
+      expect(await produceReport(input({ messages, toolCallCount: 2 }), s, abort.signal)).toBeNull();
+      expect(calls).toHaveLength(0);
+    });
+
+    it('a rest accepted during the first attempt allows no second: the unusable answer is not retried', async () => {
+      let resting = false;
+      const { s, calls } = summariser(async () => { resting = true; return unusable(); });
+      expect(await produceReport(input({ messages, toolCallCount: 2 }), s, new AbortController().signal, undefined, () => resting)).toBeNull();
+      expect(calls).toHaveLength(1);
+    });
+
+    it('with neither, the second attempt is made as before', async () => {
+      const { s, calls } = summariser(unusable);
+      const r = await produceReport(input({ messages, toolCallCount: 2 }), s, new AbortController().signal, undefined, () => false);
+      expect(calls).toHaveLength(2);
+      expect(r!.errors.at(-1)).toMatchObject({ type: 'summary_failure' });
+    });
   });
 });

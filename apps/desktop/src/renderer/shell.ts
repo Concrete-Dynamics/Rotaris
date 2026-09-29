@@ -41,7 +41,7 @@ export const replica: ReplicaStore = createReplicaStore({
  * The gestures every surface in this window makes against the session it is following — made once, here, because
  * the bridge and the replica they are made against are this window's and there is exactly one of each.
  */
-export const { answerQuestions, cancelAgent, cancelQuestions, continueSession, control, planDecision, planEdit, setMode, setRunStartMode, stopRun, submitPrompt } = createSessionActions({ bridge, replica });
+export const { answerQuestions, cancelAgent, cancelQuestions, cancelRun, continueSession, control, planDecision, planEdit, setMode, setRunStartMode, stopRun, submitPrompt } = createSessionActions({ bridge, replica });
 
 export const notices: NoticeStore = createNoticeStore();
 /** REQ-NOTIFY-013 / REQ-SHELL-112: this window's ONE transient stack; main pushes to it over channel 8. */

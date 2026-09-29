@@ -16,3 +16,9 @@ follow-up"). Neither has any effect. What reusing a session would mean is itself
 - `packages/agent-tools/src/tools/delegation.ts` — the schema and `execute`.
 - `packages/engine/src/children/delegation.ts` — `DelegateRequest`.
 - `packages/engine/src/sessions.ts` — `delegationSessionId: null`.
+
+## Read by PD-ORCH-005's build — 2026-09-27, not repaired
+
+PD-ORCH-005 resumes an agent from its own record under its own task id. It gives `session_id` no meaning, and it
+neither needs nor defines "reusing a previous delegation's session". The field still has no effect, and what it would
+mean is still OQ-66's open part. Nothing in the resume depends on it, so the fix is not part of this build.

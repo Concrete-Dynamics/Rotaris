@@ -57,8 +57,11 @@ export interface WaitOutcome {
 export interface DelegationOps {
   delegate(parentId: string, req: DelegateRequest): Promise<DelegateOutcome>;
   backgroundOutput(parentId: string, taskId: string, detail: 'summary' | 'verbatim'): BackgroundOutput;
-  /** REQ-TOOLS-156: an empty list means all of the caller's active background children. */
-  waitForTasks(parentId: string, taskIds: readonly string[]): Promise<WaitOutcome | { readonly refused: string }>;
+  /**
+   * REQ-TOOLS-156: an empty list means all of the caller's active background children. PD-ORCH-005: `interrupted` when
+   * the run came to rest while the caller waited, the tasks it waited on paused with it.
+   */
+  waitForTasks(parentId: string, taskIds: readonly string[]): Promise<WaitOutcome | { readonly refused: string } | { readonly interrupted: string }>;
   /** For the tree and the strip. */
   children(): readonly ChildRow[];
 }

@@ -6018,6 +6018,39 @@ every signal death read `failed (exit -1)`: an error, a `tool_error` issue, and 
 the exit code of a signal death the product did not cause. A ruling that every signal death is `killed` would drop
 the second reading. A ruling that every one is `failed` would need a code other than −1 for it.
 
+**OQ-133 — Which shell state does a hard-timeout reset restore when a command completed that the product never saw
+complete?** *(`PD-TOOLS-001`, which narrows REQ-TOOLS-099; REQ-TOOLS-097, REQ-TOOLS-098. Raised 2026-09-29 by the
+repair of [`a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md`](../defects/fixed/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md)
+under [R-067](../product/requests.md#r-067). Open.)*
+
+`PD-TOOLS-001` says the product "SHALL snapshot the shell's working directory and exported variables before the
+respawn". The respawn follows a wedged command, and a wedged shell cannot be asked for its state. So the build takes
+the snapshot on the idle shell after each command it sees complete, and a reset re-applies the last one
+([ADR-0020](adr/0020-terminal-execution.md)'s third first execution). The directive does not say what that snapshot
+misses. It misses a command that soft-paused (REQ-TOOLS-098) and then finished while the agent's next command waited
+behind it in the shell's input. The product never sees that completion: the next call's marker is the one it scans
+for, and a poll that later hands over a finished paused command takes no snapshot either. If that next command then
+reaches its hard timeout, the reset restores the state from before the paused command and reports "were restored".
+What the paused command set or changed — an exported variable, `cd` — is lost, although it happened before the
+respawn.
+
+This is the whole of what the repaired note measured. In `terminal.test.ts` the timeout case's first command,
+`export ROTARIS_GONE='set'`, named no timeout and queued behind a command the case before it had left soft-paused.
+It waited about 1.45 s against the 1.5 s no-output window. Over 20 loaded runs of the file the whole call, its
+snapshot included, took 1,486 to 1,707 ms. Under load it soft-paused, and the reset then restored the snapshot of an
+older command.
+
+**What the build proceeds under:** the snapshot of the last command the product saw complete, as ADR-0020 records.
+The case `PD-TOOLS-001 (OQ-133): …` in `terminal.test.ts` pins that reading, and the timeout case now names its
+own timeout, so it no longer depends on it.
+
+**What a ruling decides.** Whether "before the respawn" asks for the state after such a command too. Meeting it
+would take the shell's state from inside the command's own wrapper, since the shell is never idle in between. The
+cost is an environment dump in the output of every command written behind a still-running one: through the capture,
+and through the live stream REQ-TOOLS-127 holds faithful to what the command wrote. A lighter half-measure is a
+snapshot when a poll hands over a finished paused command, which covers the agent that polls and not the one that
+moves on.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

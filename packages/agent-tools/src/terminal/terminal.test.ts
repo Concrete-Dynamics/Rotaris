@@ -227,7 +227,13 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
 
   it('REQ-TOOLS-097/099: the hard timeout kills the tree, restarts the session, reports 124 and session_reset; shell state is gone', async () => {
     const t = await tool();
-    await t.execute(args({ command: SH.setVar('ROTARIS_GONE', 'set') }), ctx());
+    // The variable is set by a call that names its own timeout, so it cannot soft-pause (REQ-TOOLS-098). The case
+    // before this one leaves `sleep 3` running soft-paused in this shared session, and a call that named none queued
+    // behind it for ~1.45 s against the 1.5 s no-output window. Under load it paused, the product never saw it
+    // complete, and the reset restored an older snapshot without the variable: the `[]` of
+    // docs/defects/fixed/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md (OQ-133, pinned below).
+    const set = await t.execute(args({ command: SH.setVar('ROTARIS_GONE', 'set'), timeout: 15 }), ctx());
+    expect(diag(set.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
     const r = await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('late')}`, timeout: 1 }), ctx());
     expect(diag(r.text)).toMatchObject({ exit_code: 124, timeout: true, failure_kind: 'timeout', kill_status: 'session_reset', outcome_kind: 'timeout' });
     expect(r.text).toContain('[partial_terminal_output]');
@@ -241,6 +247,27 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     expect(output(after.text)).toBe('[set]');
     expect(diag(after.text)['session_reinitialized']).toBe(true);
   }, 30_000);
+  it('PD-TOOLS-001 (OQ-133): a reset restores the snapshot of the last command the product saw complete, so a soft-paused command that completed unseen is not in it', async () => {
+    // A session of its own, so no other case's snapshot or paused command stands in it.
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
+    try {
+      await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
+      // A quiet command soft-pauses and keeps running; the next call queues behind it in the shell's input.
+      expect(diag((await t.execute(args({ command: `${SH.sleep(5)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      // Named no timeout, the variable's call waits ~3.5 s of silence and soft-pauses too: its completion is never seen.
+      expect(diag((await t.execute(args({ command: SH.setVar('ROTARIS_UNSEEN', 'set') }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      const r = await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('late')}`, timeout: 1 }), ctx());
+      expect(r.text).toContain('were restored');
+      // The shell had set it before the respawn; the snapshot restored is the `ready` call's, which never held it.
+      expect(output((await t.execute(args({ command: SH.bracketVar('ROTARIS_UNSEEN'), timeout: 15 }), ctx())).text)).toBe('[]');
+      // The same sequence with a call that names its timeout does not pause, is seen to complete, and is restored.
+      expect(diag((await t.execute(args({ command: `${SH.sleep(5)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: SH.setVar('ROTARIS_SEEN', 'set'), timeout: 15 }), ctx())).text)['outcome_kind']).toBe('success');
+      expect((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('late')}`, timeout: 1 }), ctx())).text).toContain('were restored');
+      expect(output((await t.execute(args({ command: SH.bracketVar('ROTARIS_SEEN'), timeout: 15 }), ctx())).text)).toBe('[set]');
+    } finally { await m.dispose(); }
+  }, 45_000);
 
   /**
    * ADR-0020's second first execution, 2026-09-12: four defects a real 22-minute run found. Each proof

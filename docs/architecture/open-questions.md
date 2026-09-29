@@ -5118,8 +5118,9 @@ earlier run had five of seven. The reconciling child's request left 57,547 chara
 task as given". The first event is the child's whole REQ-TOOLS-154 payload, and the task comes last in it. In that same
 live run every summarising request's start began `user: Workspace root: …` and was cut inside the task, and the request
 for the last child lost its task's `EXPECTED OUTCOME` and `MUST DO`. The facts, the most recent part and the stored
-reports measured above are unaffected; the start was not the task. The start built since is the task itself, and it
-has not yet been run live.
+reports measured above are unaffected; the start was not the task. The start built since is the task itself. Live
+again on 2026-09-29 (duress, session `059ae1d7`), all six summarising requests started with the child's task, whole,
+with 313 to 1,653 characters of payload blocks marked omitted ahead of it, and none of the six summaries denied its facts.
 
 
 **OQ-112 — May `delegate` give a `write_scope` to a persona that holds no file-writing tool?** *(`PD-TOOLS-006` over REQ-TOOLS-152; REQ-ORCH-095, whose text-only completion let the child end `succeeded`. Raised 2026-09-29 from the duress live run's finding D6 under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-111 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*

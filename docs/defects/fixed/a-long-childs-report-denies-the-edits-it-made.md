@@ -82,3 +82,13 @@ with between 13,219 and 57,547 characters omitted. Each request carried the `Fac
 characters out, and its facts read `Edited files: docs/overview.md, docs/api.md`. None of the six stored reports
 contradicts its own `edited_files`, where the earlier run had five of seven. `wave2-d`'s summary begins "The agent
 reconciled docs/api.md and docs/overview.md … and editing both docs".
+
+Live again, 2026-09-29, built from the repair of the start: `pnpm live-run --confirm --only=duress`, pack
+`.live-run/runs/2026-09-29T08-18-41-076Z` (this branch's worktree; git-ignored), session `059ae1d7`, 2,093 s, six
+children. All six summarising requests (traffic #34, #46, #49, #88, #121, #177) start with the child's task, whole and
+uncut: `user: … [N characters omitted] … <the task>`, where N is 313 to 1,653 characters of payload blocks ahead of it.
+Each start is 138 to 320 characters. Each transcript is 11,999 or 12,000 characters, with 9,541 to 112,198 omitted
+before the most recent part. Each request carries its facts. None of the six summaries denies the files its facts list.
+The reconciling child's request (#121) omitted 57,739 characters, and its summary begins "The agent reconciled
+docs/api.md and docs/overview.md". This run's tasks were shorter than the earlier run's, so no start was cut to
+2,000 (OQ-118).

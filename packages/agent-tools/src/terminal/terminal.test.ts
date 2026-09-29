@@ -7,6 +7,7 @@ import { foregroundStreamId } from '@rotaris/contracts';
 import { nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
 import { parseSnapshot, snapshotCommand, wrapCommand } from './foreground.js';
+import { endOfExit } from './background.js';
 import { execFileSync } from 'node:child_process';
 import { findShell, nodePtyFactory, TerminalManager, terminalTool, TERMINAL_DEFAULTS, type BackgroundSession } from './index.js';
 import type { ToolContext } from '../tools/types.js';
@@ -138,6 +139,20 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     // POSIX first execution 2026-09-16).
     expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, 'a\nb', 'S', 'E')).toBe("printf '%s\\n' 'S'; eval \"$(printf '%b' 'a\\nb')\"; printf 'E:%s\\n' \"$?\"");
     expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, "x='q'\ny", 'S', 'E')).toContain(`'x='\\''q'\\''\\ny'`);
+  });
+  it('OQ-132: a signal death\'s status — killed (−1) for a signal the session delivered, failed (128 + n) for one it did not, an exit code as ever (REQ-TOOLS-109/179, live-run L4)', () => {
+    const none = new Set<string>();
+    expect(endOfExit(0, null, none)).toEqual({ status: 'completed', exitCode: 0 });
+    expect(endOfExit(3, null, none)).toEqual({ status: 'failed', exitCode: 3 });
+    // An exit code wins even after a signal was sent: a command that handles SIGINT and exits reports its own outcome.
+    expect(endOfExit(130, null, new Set(['SIGINT']))).toEqual({ status: 'failed', exitCode: 130 });
+    expect(endOfExit(0, null, new Set(['SIGINT']))).toEqual({ status: 'completed', exitCode: 0 });
+    // The live run's shape: the agent's own SIGINT, and the shell died of it. It read `failed (exit -1)`.
+    expect(endOfExit(null, 'SIGINT', new Set(['SIGINT']))).toEqual({ status: 'killed', exitCode: -1 });
+    expect(endOfExit(null, 'SIGKILL', new Set(['SIGTERM', 'SIGKILL']))).toEqual({ status: 'killed', exitCode: -1 });
+    // A signal nobody here sent — a crash, another process's kill — is a failure, and −1 stays `killed`'s alone.
+    expect(endOfExit(null, 'SIGTERM', none)).toEqual({ status: 'failed', exitCode: 143 });
+    expect(endOfExit(null, 'SIGSEGV', new Set(['SIGINT']))).toEqual({ status: 'failed', exitCode: 139 });
   });
 });
 
@@ -403,11 +418,14 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     // replaces the shell, so the group's one process is `sleep` with SIGINT at its default disposition
     // and no shell left to absorb the signal; on Windows there is no exec idiom and none is needed, as
     // OQ-10's win32 mapping terminates the tree (`end`) rather than delivering a signal. Signalling only
-    // AFTER the marker is observed is what makes the case deterministic: sending SIGINT to a session that
-    // has not finished fork/exec/setsid races the group's establishment, and such a signal can land on a
-    // process still in the shell's brief SIGINT-masked window and be lost — measured ~11 % under full-suite
-    // load with no wait, and 0 in 500 once the marker gates it. This is a property of signalling a freshly
-    // spawned tree, not of the product's delivery, which reports the signal sent in every one of those runs.
+    // AFTER the marker is observed is what makes the case deterministic. `/bin/sh` here is `dash`, which catches
+    // SIGINT under `-c` and launches a command with `vfork`; until the child `exec`s it runs dash's handler, which
+    // returns at once in a vforked child, so a SIGINT that reaches the group in that instant is discarded by the
+    // command, and the shell acts on its own copy only when the command ends — `sleep 30` outlived the poll.
+    // Sent the instant `start` returned, 38 of 200 such sessions survived under load (0 of 150 under `bash`, 0 of
+    // 150 with `exec`); gated on the marker, with `exec`, none does. A property of the shell, not of the product's
+    // delivery, which reaches every process of the group and reports it sent in every one of those runs
+    // (docs/defects/fixed/a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md).
     const command = PS ? `Write-Output 'up'; ${SH.sleep(30)}` : `printf 'up\\n'; exec sleep 30`;
     const started = await t.execute(args({ command, background: true }), ctx());
     const id = /ts_[0-9a-f]{8}/.exec(started.text)![0];
@@ -430,6 +448,41 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     }
     expect((await t.execute(args({ session_action: 'list' }), ctx())).text).toContain(`✗ ${id}`);
   }, 40_000);
+  it('REQ-TOOLS-109/179, OQ-132 (live-run L4): a session the agent ends with send_signal SIGINT reads killed (−1) at warning, not an error', async () => {
+    const t = await tool();
+    // As in the OQ-10 case above: the command becomes the long-lived process, and the signal waits for its marker.
+    const command = PS ? `Write-Output 'up'; ${SH.sleep(30)}` : `printf 'up\\n'; exec sleep 30`;
+    const id = /ts_[0-9a-f]{8}/.exec((await t.execute(args({ command, background: true }), ctx())).text)![0];
+    const runningBy = (clocks.monotonic.now() as number) + 15_000;
+    while (!(output((await t.execute(args({ session_id: id, session_action: 'query' }), ctx())).text) ?? '').includes('up')) {
+      expect(clocks.monotonic.now() as number).toBeLessThan(runningBy);
+      await new Promise((res) => setTimeout(res, 25));
+    }
+    expect((await t.execute(args({ session_id: id, session_action: 'send_signal', signal: 'SIGINT' }), ctx())).text).toContain(`Sent SIGINT to session ${id}.`);
+    const endedBy = (clocks.monotonic.now() as number) + 15_000;
+    while (!(await t.execute(args({ session_action: 'list' }), ctx())).text.includes(`✗ ${id}`)) {
+      expect(clocks.monotonic.now() as number).toBeLessThan(endedBy);
+      await new Promise((res) => setTimeout(res, 50));
+    }
+    // The live run read `Session ts_… is failed (exit -1).` here: an error, and a `tool_error` issue the gate files
+    // for any observation that is one. `killed` is REQ-TOOLS-112's `warning`: the agent ended it deliberately.
+    const q = await t.execute(args({ session_id: id, session_action: 'query' }), ctx());
+    expect(q.text).toContain(`Session ${id} is killed (exit -1).`);
+    expect(diag(q.text)).toMatchObject({ session_status: 'killed', exit_code: -1, outcome_kind: 'background_terminal', outcome_severity: 'warning' });
+    expect(q.isError).toBe(false);
+  }, 40_000);
+  it.skipIf(PS)('OQ-132: a signal death the product did not send reads failed with 128 + n, never the −1 of killed', async () => {
+    const t = await tool();
+    // The shell ends itself by SIGTERM: a death by a signal no `send_signal` delivered.
+    const id = /ts_[0-9a-f]{8}/.exec((await t.execute(args({ command: 'kill -TERM $$', background: true }), ctx())).text)![0];
+    const endedBy = (clocks.monotonic.now() as number) + 15_000;
+    while (!(await t.execute(args({ session_action: 'list' }), ctx())).text.includes(`✗ ${id}`)) {
+      expect(clocks.monotonic.now() as number).toBeLessThan(endedBy);
+      await new Promise((res) => setTimeout(res, 50));
+    }
+    const q = await t.execute(args({ session_id: id, session_action: 'query' }), ctx());
+    expect(diag(q.text)).toMatchObject({ session_status: 'failed', exit_code: 143, outcome_kind: 'background_terminal', outcome_severity: 'error' });
+  }, 30_000);
   it('PD-ORCH-005 clause 10: a background session is attributed to the agent that started it, recorded at its start and at an end it reaches by itself, and listed by its session', async () => {
     const recorded: { id: string; status: string; tail: string }[] = [];
     const record = (b: BackgroundSession) => { recorded.push({ id: b.id, status: b.status, tail: b.tail() }); };

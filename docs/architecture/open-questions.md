@@ -5988,6 +5988,36 @@ becomes of the call's other fields, or what a child with no recorded conversatio
 **What a ruling decides.** Whether each reading above stands, the retry and the user's cancel most of all. A ruling that a follow-up resumes
 straight into `running`, as a resumed child does, would take it out of REQ-ORCH-050's cap.
 
+**OQ-132 — Which status does a background session take when its process dies of a signal?** *(REQ-TOOLS-109,
+REQ-TOOLS-110, REQ-TOOLS-112, REQ-TOOLS-128, REQ-TOOLS-179; OQ-10 as ruled in [R-044](../product/requests.md#r-044).
+Raised 2026-09-29 by the repair of live-run finding L4 under [R-067](../product/requests.md#r-067),
+[`a-background-session-ended-by-a-signal-reads-failed.md`](../defects/fixed/a-background-session-ended-by-a-signal-reads-failed.md).
+Open.)*
+
+REQ-TOOLS-109's vocabulary is `completed` (exit 0), `failed` (nonzero), `killed` (the explicit kill, −1) and `timeout`
+(124). REQ-TOOLS-179 keeps −1 for `killed` alone on a background session. A process that dies of a signal has no exit
+code at all, so it is neither a zero nor a nonzero exit, and no requirement names its status. `send_signal`
+(REQ-TOOLS-110) and the stream-control interrupt (REQ-TOOLS-128) are the two ways the agent or the user ends a
+session by a signal. REQ-TOOLS-112 reads `killed` as "the agent or the user ended it deliberately". Before this entry
+every signal death read `failed (exit -1)`: an error, a `tool_error` issue, and a −1 that REQ-TOOLS-179 does not give
+`failed` (live run of 2026-09-29, `frictions`, after the agent's own SIGINT).
+
+**What the build proceeds under** (`endOfExit` in `packages/agent-tools/src/terminal/background.ts`):
+- **A death by a signal the product delivered is `killed`, exit −1**, at REQ-TOOLS-112's `warning`, so it files no
+  `tool_error`. "Delivered" means that `send_signal` or the stream-control interrupt sent that signal to the session's
+  process group. The session remembers each signal it sent.
+- **A death by a signal the product never sent is `failed`**, with the shell's `128 + n` for signal `n` (143 for
+  SIGTERM, 139 for SIGSEGV) as its nonzero exit code. A crash, or another process's kill, is not a deliberate end by
+  the agent or the user, and −1 stays `killed`'s alone.
+- **An exit code always wins.** A command that handles the signal and exits with a code of its own is `completed` or
+  `failed` by that code, as REQ-TOOLS-109 states for any exit. The code is the command's real outcome (REQ-TOOLS-179).
+- **Windows is unchanged.** OQ-10's ruling already maps every signal there to the session's own termination, which is
+  `killed`.
+
+**What a ruling decides.** Whether a signal death the agent or the user caused is `killed`, and whether `128 + n` is
+the exit code of a signal death the product did not cause. A ruling that every signal death is `killed` would drop
+the second reading. A ruling that every one is `failed` would need a code other than −1 for it.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

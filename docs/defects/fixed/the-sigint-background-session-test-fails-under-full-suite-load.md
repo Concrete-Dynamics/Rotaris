@@ -32,6 +32,15 @@ landed on a process still in the shell's brief SIGINT-masked start-up window (an
 `execve`, so `dash` and its child could then run on) and was absorbed. Once the command is observably running,
 SIGINT to the group is reliable — 0 survivors in 500 under the same load.
 
+*Corrected in place 2026-09-29 under R-067 by the repair of
+[`a-signal-sent-just-after-a-background-start-can-be-lost-under-load`](a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md),
+which names the window. The race stands; its mechanism as written above does not. The falsified reason, kept: "a
+SIGINT-masked start-up window (an ignored disposition survives `execve`)". The survivors had SIGINT neither blocked nor
+ignored. `dash` catches SIGINT and launches the command with `vfork`, and its handler returns at once in the `vfork`ed
+child until the child `exec`s. A SIGINT that reaches the group in that instant is therefore discarded by the command.
+The parent shell acts on its own copy only when the command ends. The repair below closes that window for the case,
+by making the command `exec` and by signalling only once it runs.*
+
 **Fix (test only; the product's delivery was never at fault — it reported the signal sent every time).** The
 case now (1) runs a command that prints a marker and then *becomes* the long-lived process (`printf 'up\n';
 exec sleep 30` on POSIX, so the group's one process is `sleep` at SIGINT's default disposition with no shell left

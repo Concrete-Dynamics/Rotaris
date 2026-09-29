@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { ChildProcess } from 'node:child_process';
+import { constants as osConstants } from 'node:os';
 import type { Millis, MonotonicClock, TimerHandle, Timers, WallClock } from '@rotaris/kernel';
 import { spawnChild } from '@rotaris/platform';
 import { toIsoUtc } from '@rotaris/kernel';
@@ -18,6 +19,22 @@ import type { BackgroundStatus } from './classify.js';
 export const BACKGROUND_BUFFER = 1024 * 1024;
 export const DEFAULT_MAX_BACKGROUND = 20;
 export const DEFAULT_BACKGROUND_TIMEOUT_S = 3600;
+
+/**
+ * REQ-TOOLS-109/179 with OQ-132: the status and exit code a background session ends with, from what its process's
+ * `exit` reported. An exit code is the command's own outcome — `completed` for 0, `failed` for any other. A death by a
+ * signal carries no exit code: one the product delivered at the agent's or the user's request (`send_signal`, the
+ * stream-control interrupt) ends it `killed` with −1, as an explicit kill does, because the agent or the user ended it
+ * deliberately (REQ-TOOLS-112); one the product never sent — a crash, another process's kill — is `failed` with the
+ * shell's `128 + n` for signal `n`, so −1 stays `killed`'s alone. Before this, every signal death read `failed (exit -1)`
+ * (live-run finding L4).
+ */
+export function endOfExit(code: number | null, signal: NodeJS.Signals | null, delivered: ReadonlySet<string>): { readonly status: BackgroundStatus; readonly exitCode: number } {
+  if (code !== null) return { status: code === 0 ? 'completed' : 'failed', exitCode: code };
+  if (signal !== null && delivered.has(signal)) return { status: 'killed', exitCode: -1 };
+  const n = signal === null ? undefined : (osConstants.signals as Record<string, number | undefined>)[signal];
+  return { status: 'failed', exitCode: n === undefined ? -1 : 128 + n };
+}
 
 export interface BackgroundDeps {
   readonly backend: ShellBackend;
@@ -50,6 +67,8 @@ export class BackgroundSession {
   private exited: Promise<void>;
   /** Part AL: the live stream's taps (REQ-TOOLS-127: `bg:<id>` publishes what the pipe produces). */
   private taps: ((chunk: string) => void)[] = [];
+  /** OQ-132: the signals `signal` delivered to the session's group, so a death by one of them reads `killed`. */
+  private readonly delivered = new Set<string>();
 
   constructor(readonly command: string, private readonly child: ChildProcess, id: string, startedAt: string, timeoutMs: number, private readonly deps: BackgroundDeps) {
     this.id = id;
@@ -58,9 +77,9 @@ export class BackgroundSession {
     child.stdout?.on('data', onData);
     child.stderr?.on('data', onData);
     this.exited = new Promise<void>((resolve) => {
-      child.on('exit', (code) => {
+      child.on('exit', (code, signal) => {
         this.timer?.cancel();
-        if (this.status === 'running') { this.exitCode = code ?? -1; this.status = code === 0 ? 'completed' : 'failed'; }
+        if (this.status === 'running') { const end = endOfExit(code, signal, this.delivered); this.exitCode = end.exitCode; this.status = end.status; }
         resolve();
       });
       child.on('error', (e) => { this.append(`\n[spawn error] ${String(e)}`); if (this.status === 'running') { this.status = 'failed'; this.exitCode = -1; } resolve(); });
@@ -135,7 +154,9 @@ export class BackgroundSession {
       void this.end('killed');
       return true;
     }
-    try { process.kill(-pid, name); return true; } catch { return false; }
+    try { process.kill(-pid, name); } catch { return false; }
+    this.delivered.add(name);
+    return true;
   }
 }
 

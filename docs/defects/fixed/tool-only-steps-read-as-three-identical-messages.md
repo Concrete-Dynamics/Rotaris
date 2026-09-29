@@ -22,6 +22,8 @@ Live-run finding: D3 (live runs of 2026-09-29)
 
 ## Relevant files
 
+Line numbers are those of `origin/main` 5c7de7c, before the repair.
+
 - `packages/engine/src/run/supervisor.ts:150`, `:184-189` — `rawFallbackHasEvidence`; `:70` — `normaliseMessage`.
 - `packages/engine/src/run/turn.ts:305` — `observe({ kind: 'message', text: report.text })`, `''` on a tool-only step.
 - `packages/engine/src/run/supervisor.test.ts:72-74` — `rawClear`, with no empty message events.

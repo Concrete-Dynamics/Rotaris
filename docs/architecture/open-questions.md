@@ -5461,6 +5461,10 @@ evidence reads a message that normalises to nothing as none.
 
 **What a ruling decides.** Whether a step with no assistant text counts toward REQ-ORCH-101's message count (and so toward
 the `weighted` score), or only a step that said something does — which would make the reading the same in both places.
+And, for REQ-ORCH-104's "last 3" identical messages: whether a tool-only step between three identical texts breaks the
+run. The reading built says it does not — the last three messages that carry text are compared — so three identical texts
+with tool-only steps between them now declare a loop where the code before the repair, which compared the last three
+events whatever they held, did not.
 
 ## Design-reference dependencies
 

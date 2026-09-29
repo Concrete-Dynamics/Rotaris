@@ -1028,7 +1028,10 @@ notice); a session with no rows, a ref deleted from outside, a live run's refusa
 retention of two trimming rows and refs together; an isolated run whose checkpoints land in the shared repository and
 whose restore touches the worktree only; `enabled: false`. Figures — invocations and times per capture, preview and
 restore — land in `.proof/checkpoint-proof/results.json`. The Git proof's isolated launch now asserts one checkpoint row where it asserted the card's
-empty sentence: an isolated run records a checkpoint by REQ-GIT-044's default, which the merge found by failing that launch.
+empty sentence: an isolated run records a checkpoint by REQ-GIT-044's default, which the merge found by failing that launch. The live
+run's lock is probed dead the moment that launch returns, so a lock that outlived its application fails there, naming
+REQ-SESSION-047/056, and not one launch later as a failed repair (2026-09-28, R-062;
+[the note](../defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md)).
 
 **What `pnpm resilience-proof` does.** It builds Electron and launches the app nine times with scripted fault steps: a 429
 with `retry-after: 2` (the countdown, the auto-resume); a 429 with no header (the 60 s local wait, cancelled from the
@@ -1089,7 +1092,10 @@ spawns is left alone; "nothing was stale" on a second press); a delete with two 
 refs in the shared repository, a session whose repository moved, a live run refused; the four-record export of a
 capped audit and of an empty session, and the trajectory export of one, of two in reverse order, of a resumed and of a
 capped history — every file parsed by a SEPARATE node process holding no product code; an unreadable session listed
-and deleted; the backup disclosure panel. Evidence under `.proof/sessions-proof/`.
+and deleted; the backup disclosure panel. Evidence under `.proof/sessions-proof/`. The planted locks name this machine through the
+identifier where the product mints it on the running platform (`machineIdFileFor`), and a "dead" pid is chosen per platform
+(`plantedDeadPid`: one the script saw exit on Linux and macOS, `4242` on Windows, where a freed pid is soon reissued); until 2026-09-28 the Windows spelling made the proof crash at `repair-all` on Linux (R-062;
+[the note](../defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md)).
 
 **What `pnpm code-intel-proof` does.** After `pnpm code-intel:bundle` (once per checkout; the tree is git-ignored), it
 launches the app seven times: the branch guard on the dev entry and, under `ROTARIS_CODE_INTEL_PACKAGED=1`, on

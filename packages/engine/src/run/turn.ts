@@ -172,6 +172,10 @@ export interface TurnDeps {
    * progress rule and the list of paths a child changed; absent means nobody is listening.
    */
   readonly onToolCompleted?: ((call: PortToolCall, result: PortToolResult) => void) | undefined;
+  /** REQ-ORCH-089: every tool call this agent dispatches, as it starts; `onToolCompleted` reports its end. The children's stall watch reads both. */
+  readonly onToolStarted?: ((call: PortToolCall) => void) | undefined;
+  /** REQ-ORCH-089: every part each model step streams, by its kind (`TurnSink.event`) — the stall watch's "model event or token". */
+  readonly onModelEvent?: ((kind: string) => void) | undefined;
   /** PD-ORCH-005 clause 1: observes every message as it joins this agent's conversation — the conversation record. */
   readonly recorder?: ConversationRecorder | undefined;
   /**
@@ -385,6 +389,7 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
       const call: PortToolCall = { callId: c.callId, name: c.name, rawArgs: c.args, persona: deps.persona, agentId: deps.agentName, agentName: deps.agentName };
       // REQ-ORCH-134 (PD-ORCH-005 clause 2): the call runs under the turn's signal and the pause's tool deadline.
       const callSignal = deps.cutCalls ? AbortSignal.any([signal, deps.cutCalls]) : signal;
+      deps.onToolStarted?.(call);
       const r = await tools.dispatch(call, callSignal);
       if (deps.detached?.() === true) return { report: { status: 'succeeded', text: lastReport.text, usage }, messages: conv.snapshot(), toolCallCount, paused: true };
       const interrupted = r.interrupted === true || callSignal.aborted;
@@ -520,6 +525,7 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
       }
     },
     usage: () => { outputArrived(); },
+    event: (kind: string) => { deps.onModelEvent?.(kind); },
   };
   let report: TurnReport;
   try {

@@ -1811,8 +1811,9 @@ so a child that genuinely loops is still stopped at the same point.
 > `stall_timeout` were loaded and validated and reached no run; the progress rule is their first reader. Both are now
 > handed to the run, and the role's value substitutes for the run's on that role's children (REQ-CONFIG-108). The
 > stall recovery REQ-NOTIFY-111/112 describe for the same window is not built, and that is recorded in
-> [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../defects/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md),
-> not changed. **(2) How a parent names a continuation.** REQ-TOOLS-152's fields have none. `session_id` reuses a
+> [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../defects/fixed/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md),
+> not changed. *(Built 2026-09-29 under R-067, with REQ-ORCH-089's watchdog over the same window; the readings are
+> OQ-127.)* **(2) How a parent names a continuation.** REQ-TOOLS-152's fields have none. `session_id` reuses a
 > delegation's session, and this directive asks for a new child and never a resume, so `delegate` takes one new
 > optional field, `continuation_of`, the task id of the child continued. It is recorded on the new child as
 > `children.continuation_of` (store v22). REQ-TOOLS-152 calls itself the whole of the `delegate` contract, and this
@@ -2571,9 +2572,11 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > commits name:
 > - two guards removed as redundant;
 > - the tool deadline's cancel at a run's exit, which is timer hygiene;
-> - `track`'s change, which no test can observe while
->   [`a-child-whose-execution-raises-before-its-turn-stays-running.md`](../defects/a-child-whose-execution-raises-before-its-turn-stays-running.md)
->   stands;
+> - `track`'s change, which no test could observe while
+>   [`a-child-whose-execution-raises-before-its-turn-stays-running.md`](../defects/fixed/a-child-whose-execution-raises-before-its-turn-stays-running.md)
+>   stood. *(2026-09-29, R-067: the note is repaired and still no test observes it, for a new reason: `executeSettling`
+>   now settles a raise before `track` sees it, so an execution reaches `track` rejected only when that settle itself
+>   raises.)*
 > - main's `before-quit`, which only the built app reaches.
 >
 > In the built app, driven, one session went through three rests with one child (`bg_d5cb3784`):

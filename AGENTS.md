@@ -293,7 +293,8 @@ second completion" is a reproduction, "some completion" is a coincidence.
 calls against two refusals and completed *(falsified 2026-09-29: the two refusals were retried by the model client's
 dispatch layer — REQ-CONFIG-086's `num_retries`, default 5 — before the ladder saw them, and the ladder was never
 reached; the owner ruled that order as the specification's, OQ-110, R-067, so `faults-ladder` shows that a run survives
-the refusals and not that the ladder handled them)*; the stalled stream was noticed by the **idle bound at 120.5 s**,
+the refusals and not that the ladder handled them; each retry the dispatch layer absorbs is now a WARNING line in the
+session log, so a pack's `faults-ladder/session.log` names both refusals with the delay waited)*; the stalled stream was noticed by the **idle bound at 120.5 s**,
 classified `transient_llm_error`, retried at 121.5 s and finished — the first live evidence that the
 eighty-second defect's repair holds.
 

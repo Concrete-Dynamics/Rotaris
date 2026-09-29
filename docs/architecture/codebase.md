@@ -326,7 +326,8 @@ in `configuration.ts`'s header.)
    timeline entry rehydrated on resume (the wire-event catalogue is closed at 23, so no event); the unresponsive-model
    fallback after `llm_response_timeout` on the first model event; the hard child timeout's one retry on the role's
    fallback; per-model `timeout` and `num_retries` (the dispatch layer's retries, which come before the ladder's — ruled
-2026-09-29, OQ-110). The record's `wait` and the Workspace header that counts down and
+2026-09-29, OQ-110; each one it absorbs is a WARNING line in the session log, `ModelRequest.onRetry` → `TurnSink.retried`
+→ `dispatchRetryLine`, and an exhausted budget hands the ladder the last attempt's error, built the same day). The record's `wait` and the Workspace header that counts down and
    offers keep waiting (no operation), change model (`setModel`) and cancel — REQ-MONITOR-004's enumeration stays at
    twenty-two. `pnpm resilience-proof` drives nine launches through scripted fault steps. **Found — four defects in
    existing code:** the transient retry re-ran the whole turn and would have replayed executed tool calls under fresh ids

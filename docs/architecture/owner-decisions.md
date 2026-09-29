@@ -1590,7 +1590,7 @@ within live requirements, so nothing is amended. `first-release-plan.md` §4.6 s
 
 **Raised 2026-09-28. RULED 2026-09-29 ([R-067](../product/requests.md#r-067)): option (b), the floor.** Found while moving `money.ts` into `kernel` for R-049 and recorded as the
 open defect note
-[`a-cost-below-five-hundred-thousandths-renders-as-zero.md`](../defects/a-cost-below-five-hundred-thousandths-renders-as-zero.md);
+[`a-cost-below-five-hundred-thousandths-renders-as-zero.md`](../defects/fixed/a-cost-below-five-hundred-thousandths-renders-as-zero.md);
 raised here under [R-062](../product/requests.md#r-062). Two live requirements state the product's one money
 rule, and one of them also states a property the rule cannot deliver.
 
@@ -1704,8 +1704,19 @@ recommendation with seven others ("Accept all eight (Recommended)").
   amendment 2026-09-29, ESC-42", and the resolution records of domains 04 and 12 carry the note. `PD-MONITOR-001` takes
   revision 3, with its back-pointer at `REQ-PROVIDER-121` amended in place.
 - **What the ruling does not do.** It builds nothing. `formatAmount` renders `0.0000` for such an amount until the
-  repair of [`a-cost-below-five-hundred-thousandths-renders-as-zero.md`](../defects/a-cost-below-five-hundred-thousandths-renders-as-zero.md),
+  repair of [`a-cost-below-five-hundred-thousandths-renders-as-zero.md`](../defects/fixed/a-cost-below-five-hundred-thousandths-renders-as-zero.md),
   whose first execution reports into this entry, into `PD-MONITOR-001` and into `first-executions.md`.
+
+**First execution, 2026-09-29 — built under R-067, and it found nothing the ruling had not said.** `formatAmount`
+(`packages/kernel/src/money.ts`) returns `AMOUNT_FLOOR`, `< 0.0001`, where REQ-PROVIDER-121's half-up rounding brings an
+amount greater than zero to zero; only the four-place band can, so the floor covers exactly (0, 0.00005). Zero at any
+scale renders `0.00`, a negative amount is rounded as before, and a balance is not rendered by this function. The
+floor is bare because no figure the product renders names a currency; the symbol placement the ruling fixes (`< $0.0001`,
+`< 0.0001 <CODE>`) has no caller yet and is stated in the function's comment rather than built ahead of one. The
+ruling's reading of the `incomplete` label held in the code as on paper: `costLabelOf` did not change, and its three new
+cases read the three priced labels with the floor in `<amount>`. The unit cases were red on the code before the repair
+(`money.test.ts`, `run/token-samples.test.ts`); the note is at
+[`../defects/fixed/a-cost-below-five-hundred-thousandths-renders-as-zero.md`](../defects/fixed/a-cost-below-five-hundred-thousandths-renders-as-zero.md).
 
 ## Rulings after the gate — 2026-09-29
 

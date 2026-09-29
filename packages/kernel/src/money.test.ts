@@ -38,17 +38,35 @@ describe('kernel — exact decimal money (PD-MONITOR-001, REQ-PROVIDER-121, ADR-
     expect(isZeroAmount('nothing')).toBe(false);
   });
 
-  it('renders half-up to two places, and to four below one hundredth so a small cost is never a zero', () => {
+  it('REQ-PROVIDER-121: renders half-up to two places, and to four below one hundredth', () => {
     expect(formatAmount('1.005')).toBe('1.01');
     expect(formatAmount('1.004')).toBe('1.00');
     expect(formatAmount('0.01')).toBe('0.01');
     expect(formatAmount('0.009999')).toBe('0.0100');
     expect(formatAmount('0.0012')).toBe('0.0012');
     expect(formatAmount('0.00005')).toBe('0.0001');
-    expect(formatAmount('0.000001')).toBe('0.0000');
+    expect(formatAmount('0.0001')).toBe('0.0001');
     expect(formatAmount('0')).toBe('0.00');
     expect(formatAmount('7')).toBe('7.00');
     expect(formatAmount('not money')).toBeNull();
+  });
+
+  it('REQ-SHELL-045, REQ-PROVIDER-121 (ESC-42 option b): a cost greater than zero that four places would render as zero renders as the floor < 0.0001, never as zero', () => {
+    expect(formatAmount('0.000001')).toBe('< 0.0001');
+    expect(formatAmount('0.00004999')).toBe('< 0.0001');
+    // 50 tokens at a configured 0.0000001 — the case that made the contradiction reachable (PD-MONITOR-001 revision 2).
+    expect(formatAmount('0.0000050')).toBe('< 0.0001');
+    expect(formatAmount('0.000000000000000001')).toBe('< 0.0001');
+    // The floor's edge: half-up still reaches 0.0001 at exactly half of it, so the floor is only ever below 0.00005.
+    expect(formatAmount('0.00005')).toBe('0.0001');
+  });
+
+  it('ESC-42: zero at any scale is still 0.00, and an amount below zero is rounded as before and never floored', () => {
+    expect(formatAmount('0')).toBe('0.00');
+    expect(formatAmount('0.0000')).toBe('0.00');
+    expect(formatAmount('0.00000000')).toBe('0.00');
+    expect(formatAmount('-0.000001')).toBe('0.0000');
+    expect(formatAmount('-0.0012')).toBe('-0.0012');
   });
 
   it('multiplies a price by a whole token count exactly, at the price\'s own scale', () => {

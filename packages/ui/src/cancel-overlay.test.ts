@@ -25,7 +25,7 @@ describe('REQ-MONITOR-128: a confirmed cancel of one agent is shown at once', ()
     const store = createCancelOverlayStore();
     const s = record();
     expect(store.getState().begin(s, alpha.id, AT)).not.toBeNull();
-    const shown = shownSession(s, store.getState().overlays)!;
+    const shown = shownSession(s, store.getState())!;
     expect(states(shown)).toEqual(['alpha:cancelled', 'sub:cancelled', 'done:done', 'beta:running']);
     expect(shown.agents[0]).toMatchObject({ state: 'cancelled', activity: cancelledByUser('alpha', true), activeTools: [], live: false, completedAt: AT });
     expect(shown.agents[1]!.activity).toBe('Cancelled with alpha, which the user cancelled.');
@@ -39,7 +39,7 @@ describe('REQ-MONITOR-128: a confirmed cancel of one agent is shown at once', ()
     const store = createCancelOverlayStore();
     store.getState().begin(record(), alpha.id, AT);
     const unrelated = record({ executionStatus: 'running' });
-    expect(states(shownSession(unrelated, store.getState().overlays))).toEqual(['alpha:cancelled', 'sub:cancelled', 'done:done', 'beta:running']);
+    expect(states(shownSession(unrelated, store.getState()))).toEqual(['alpha:cancelled', 'sub:cancelled', 'done:done', 'beta:running']);
   });
 
   it('restores the prior state on a refusal: the record itself is shown again', () => {
@@ -47,7 +47,7 @@ describe('REQ-MONITOR-128: a confirmed cancel of one agent is shown at once', ()
     const s = record();
     const token = store.getState().begin(s, alpha.id, AT)!;
     store.getState().refuse(token);
-    expect(shownSession(s, store.getState().overlays)).toBe(s);
+    expect(shownSession(s, store.getState())).toBe(s);
     expect(store.getState().overlays).toEqual([]);
   });
 
@@ -56,13 +56,52 @@ describe('REQ-MONITOR-128: a confirmed cancel of one agent is shown at once', ()
     const s = record();
     const token = store.getState().begin(s, alpha.id, AT)!;
     store.getState().accept(token, s);
-    expect(states(shownSession(s, store.getState().overlays))).toEqual(['alpha:cancelled', 'sub:cancelled', 'done:done', 'beta:running']);
+    expect(states(shownSession(s, store.getState()))).toEqual(['alpha:cancelled', 'sub:cancelled', 'done:done', 'beta:running']);
     // The engine's republished record is what is shown from then on, whatever it says.
     const authoritative = record({ agents: [agent({ state: 'cancelled', presentationState: 'cancelled', activity: 'TASK: alpha' }), sub, done, beta] });
-    expect(shownSession(authoritative, store.getState().overlays)).toBe(authoritative);
-    // A later cancel drops the overlay no record covers any longer.
+    expect(shownSession(authoritative, store.getState())).toBe(authoritative);
+    // A later cancel leaves the accepted overlay inert: it covers no record taken after the acceptance.
+    store.getState().witness(authoritative);
     store.getState().begin(authoritative, beta.id, AT);
-    expect(store.getState().overlays.map((o) => o.agentId)).toEqual([beta.id]);
+    expect(states(shownSession(authoritative, store.getState()))).toEqual(['alpha:cancelled', 'sub:running', 'done:done', 'beta:cancelled']);
+    expect(shownSession(authoritative, store.getState())!.agents[0]).toBe(authoritative.agents[0]);
+  });
+
+  it('REQ-MONITOR-296 / REQ-SHELL-076: an accepted cancel still covers a reader drawing a record older than the one the engine answered over', () => {
+    // A persona window draws a copy coalesced up to 120 ms behind the replica; the engine publishes and answers inside it.
+    const store = createCancelOverlayStore();
+    const before = record();
+    const atConfirm = record();
+    store.getState().witness(before);
+    store.getState().witness(atConfirm);
+    const token = store.getState().begin(atConfirm, alpha.id, AT)!;
+    const engineRecord = record({ agents: [agent({ state: 'cancelled', presentationState: 'cancelled', activity: 'TASK: alpha' }), agent({ id: sub.id, name: 'sub', parentId: alpha.id, depth: 2, state: 'cancelled', presentationState: 'cancelled' }), done, beta] });
+    store.getState().witness(engineRecord);
+    store.getState().accept(token, engineRecord);
+    // The lagging reader still draws `before` or `atConfirm`: shown cancelled, never `running` again.
+    for (const lagging of [before, atConfirm]) {
+      expect(states(shownSession(lagging, store.getState()))).toEqual(['alpha:cancelled', 'sub:cancelled', 'done:done', 'beta:running']);
+    }
+    // The engine's record is shown as it is, and so is every record taken after the acceptance.
+    expect(shownSession(engineRecord, store.getState())).toBe(engineRecord);
+    const later = record();
+    store.getState().witness(later);
+    expect(shownSession(later, store.getState())).toBe(later);
+    // A record the store never witnessed is not covered once the engine has answered.
+    const unseen = record();
+    expect(shownSession(unseen, store.getState())).toBe(unseen);
+  });
+
+  it('numbers a record once, in the order the replica took it', () => {
+    const store = createCancelOverlayStore();
+    const a = record();
+    const b = record();
+    store.getState().witness(a);
+    store.getState().witness(b);
+    store.getState().witness(a);
+    store.getState().witness(null);
+    expect(store.getState().orderOf(a)).toBeLessThan(store.getState().orderOf(b)!);
+    expect(store.getState().orderOf(record())).toBeUndefined();
   });
 
   it('covers only the session it was made against, and shows nothing for an agent the record does not hold', () => {
@@ -71,8 +110,8 @@ describe('REQ-MONITOR-128: a confirmed cancel of one agent is shown at once', ()
     expect(store.getState().begin(null, alpha.id, AT)).toBeNull();
     store.getState().begin(record(), alpha.id, AT);
     const other = record({ id: 's2' });
-    expect(shownSession(other, store.getState().overlays)).toBe(other);
-    expect(shownSession(null, store.getState().overlays)).toBeNull();
+    expect(shownSession(other, store.getState())).toBe(other);
+    expect(shownSession(null, store.getState())).toBeNull();
   });
 
   it('PD-ORCH-005 clause 16: a paused child\'s at-rest cancel is shown at once too, and the Continue action\'s count drops with it', () => {
@@ -81,7 +120,7 @@ describe('REQ-MONITOR-128: a confirmed cancel of one agent is shown at once', ()
     const resting = record({ executionStatus: 'paused', agents: [pausedAlpha, pausedSub, beta], resumable: { iteration: 1, agents: 4 } });
     const store = createCancelOverlayStore();
     store.getState().begin(resting, alpha.id, AT);
-    const shown = shownSession(resting, store.getState().overlays)!;
+    const shown = shownSession(resting, store.getState())!;
     expect(states(shown)).toEqual(['alpha:cancelled', 'sub:cancelled', 'beta:running']);
     expect(shown.resumable).toEqual({ iteration: 1, agents: 2 });
     expect(resting.resumable).toEqual({ iteration: 1, agents: 4 });

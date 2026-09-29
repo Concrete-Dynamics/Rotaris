@@ -18,8 +18,16 @@ import { cancelCascade } from './agents.js';
  *
  * An overlay lives from the confirmation to the authoritative read: while the engine has not answered it is laid over
  * whatever the replica holds, so an unrelated publication in flight does not bring the agents back; a refusal removes it;
- * an acceptance pins it to the record held at that moment, and the first whole-session update after it — a different
- * record — overwrites it. An agent the authoritative record already shows finished is never overlaid.
+ * an acceptance pins it to the records held up to that moment, and the first whole-session update after it overwrites it.
+ * An agent the authoritative record already shows finished is never overlaid.
+ *
+ * "Up to that moment" is an order, not an identity. A reader need not draw the replica's newest record: a persona window
+ * draws a copy coalesced up to one 120 ms interval behind it (REQ-SHELL-076), and the engine commonly publishes its
+ * cancelled record and answers the control inside that interval. Pinned to the one record the replica held at the answer,
+ * the overlay stopped covering the older record that window still drew, and its agents read `running` again until the
+ * next delivery. So the store numbers every record the replica takes, in the order it takes them (`witness`, called from
+ * the replica's own subscription), and an accepted overlay covers every record of its session numbered at or below the
+ * newest one witnessed when the engine answered — any record a lagging reader can still be drawing — and none after.
  */
 export interface CancelOverlay {
   readonly token: number;
@@ -31,10 +39,10 @@ export interface CancelOverlay {
   readonly agentIds: readonly string[];
   readonly at: string;
   /**
-   * `undefined` until the engine answers; then the session record the replica held when it accepted, which the overlay
-   * covers until a newer record replaces it.
+   * `undefined` until the engine answers; then the number of the newest record witnessed when it accepted. The overlay
+   * covers every record of its session numbered at or below it, and none taken after (the note above).
    */
-  readonly acceptedOver?: SessionRecord | null;
+  readonly acceptedThrough?: number;
 }
 
 /** REQ-MONITOR-128's activity line: the user cancelled the agent, or the agent was cancelled with the one the user cancelled. */
@@ -42,19 +50,29 @@ export const cancelledByUser = (agentName: string, own: boolean): string => (own
 
 const FINISHED: ReadonlySet<AgentRecord['presentationState']> = new Set(['done', 'failed', 'cancelled']);
 
-/** Whether an overlay still covers `session`: the same session, and either unanswered or the record it was accepted over. */
-function covers(overlay: CancelOverlay, session: SessionRecord): boolean {
-  return overlay.sessionId === session.id && (overlay.acceptedOver === undefined || overlay.acceptedOver === session);
+/** The order the store has witnessed records in: a record's number, or `undefined` for one it never took. */
+export type RecordOrder = (session: SessionRecord) => number | undefined;
+
+/**
+ * Whether an overlay still covers `session`: the same session, and either unanswered or a record witnessed no later than
+ * the engine's acceptance. A record the store never witnessed is not covered once the engine has answered — the
+ * authoritative read is shown.
+ */
+function covers(overlay: CancelOverlay, session: SessionRecord, orderOf: RecordOrder): boolean {
+  if (overlay.sessionId !== session.id) return false;
+  if (overlay.acceptedThrough === undefined) return true;
+  const n = orderOf(session);
+  return n !== undefined && n <= overlay.acceptedThrough;
 }
 
 /**
- * The session as a surface shows it: the replica's record with every covering overlay laid over it. The record itself is
- * returned, unchanged and identical, when no overlay covers it or none changes an agent, so a surface memoised on it does
- * not redraw for nothing.
+ * The session as a surface shows it: the record the surface draws with every covering overlay laid over it. The record
+ * itself is returned, unchanged and identical, when no overlay covers it or none changes an agent, so a surface memoised on
+ * it does not redraw for nothing.
  */
-export function shownSession(session: SessionRecord | null, overlays: readonly CancelOverlay[]): SessionRecord | null {
+export function shownSession(session: SessionRecord | null, held: Pick<CancelOverlayState, 'overlays' | 'orderOf'>): SessionRecord | null {
   if (session === null) return null;
-  const covering = overlays.filter((o) => covers(o, session));
+  const covering = held.overlays.filter((o) => covers(o, session, held.orderOf));
   if (covering.length === 0) return session;
   const byAgent = new Map<string, CancelOverlay>();
   for (const o of covering) for (const id of o.agentIds) if (!byAgent.has(id)) byAgent.set(id, o);
@@ -75,8 +93,15 @@ export function shownSession(session: SessionRecord | null, overlays: readonly C
 
 export interface CancelOverlayState {
   readonly overlays: readonly CancelOverlay[];
+  /** The number the store gave a record when it witnessed it; stable for the store's life. */
+  readonly orderOf: RecordOrder;
 }
 export interface CancelOverlayActions {
+  /**
+   * The replica took `session`: it is numbered after every record taken before it (once — a record seen again keeps its
+   * number). Nothing is drawn again for it; the window's replica subscription calls it on every change.
+   */
+  witness(session: SessionRecord | null): void;
   /**
    * The confirmation: `agentId` and each unfinished descendant are shown cancelled from now. Returns the token the answer
    * settles, or null when the session or the agent is not held (nothing is shown then).
@@ -84,31 +109,44 @@ export interface CancelOverlayActions {
   begin(session: SessionRecord | null, agentId: string, nowIso: string): number | null;
   /** The engine refused: the overlay is removed, so the prior state shows again (REQ-MONITOR-128). */
   refuse(token: number): void;
-  /** The engine accepted: the overlay covers `current`, the record held now, until a newer record replaces it. */
+  /**
+   * The engine accepted: the overlay covers `current`, the record held now, and every record witnessed before it — what a
+   * lagging reader can still draw — until a record taken after it replaces them.
+   */
   accept(token: number, current: SessionRecord | null): void;
 }
 export type CancelOverlayStore = StoreApi<CancelOverlayState & CancelOverlayActions>;
 
 export function createCancelOverlayStore(): CancelOverlayStore {
   let next = 1;
+  const order = new WeakMap<SessionRecord, number>();
+  let newest = 0;
+  const witness = (session: SessionRecord | null): void => {
+    if (session !== null && !order.has(session)) order.set(session, ++newest);
+  };
+  const orderOf: RecordOrder = (session) => order.get(session);
   return createStore<CancelOverlayState & CancelOverlayActions>((set, get) => ({
     overlays: [],
+    orderOf,
+    witness,
     begin(session, agentId, nowIso) {
       if (session === null) return null;
       const agent = session.agents.find((a) => a.id === agentId);
       if (!agent) return null;
+      witness(session);
       const token = next++;
       const agentIds = [agentId, ...cancelCascade(session.agents, agent).map((a) => a.id)];
-      // An accepted overlay no record covers any longer has been overwritten, and is dropped as the next one begins.
-      const kept = get().overlays.filter((o) => o.acceptedOver === undefined || (o.acceptedOver !== null && o.acceptedOver === session));
-      set({ overlays: [...kept, { token, sessionId: session.id, agentId, agentName: agent.name, agentIds, at: nowIso }] });
+      // An accepted overlay is kept, inert once every reader has drawn a later record: it is a handful of numbers and
+      // names, it holds no record, and the window knows no bound on how far behind a reader may draw.
+      set({ overlays: [...get().overlays, { token, sessionId: session.id, agentId, agentName: agent.name, agentIds, at: nowIso }] });
       return token;
     },
     refuse(token) {
       set({ overlays: get().overlays.filter((o) => o.token !== token) });
     },
     accept(token, current) {
-      set({ overlays: get().overlays.map((o) => (o.token === token ? { ...o, acceptedOver: current } : o)) });
+      witness(current);
+      set({ overlays: get().overlays.map((o) => (o.token === token ? { ...o, acceptedThrough: newest } : o)) });
     },
   }));
 }

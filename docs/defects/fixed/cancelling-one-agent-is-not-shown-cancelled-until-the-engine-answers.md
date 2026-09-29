@@ -31,7 +31,13 @@ optimistic overlay over the window's session before it sends the control. The ov
 
 A refusal removes the overlay, so the prior state shows again with the engine's words or "That agent is no longer
 cancellable." (REQ-MONITOR-128's words, which replace "not cancellable (unknown, or already finished)"). An acceptance
-pins the overlay to the record held at that moment, and the next whole-session update overwrites it (REQ-MONITOR-296).
+pins the overlay to every record the window's replica took up to that moment, and the first whole-session update taken
+after it overwrites it (REQ-MONITOR-296). The store numbers each record the replica takes (`witness`, subscribed in
+`shell.ts`), so a persona window drawing its coalesced copy up to 120 ms behind the replica (REQ-SHELL-076) still shows
+the cancel. *As first built, an acceptance pinned the overlay to the one record the replica held at that moment; the
+verifier showed a persona window then drew its older copy without the overlay, its agents `running` again until the
+next delivery. Corrected the same day, before merge; the pin is the case "an accepted cancel still covers a reader
+drawing a record older than the one the engine answered over" in `cancel-overlay.test.ts`, red under the identity rule.*
 Every surface that cancels one agent comes through `cancelAgent`: the inspector, the agents header, the Mission view and
 a persona window. The Workspace, Mission and Overview roots read the session through `useShownSession`, and a persona
 window through `useCancelOverlaid`. The replica is never written (ADR-0043). OQ-128 records the reading: which line,
@@ -39,10 +45,11 @@ which window, until when.
 
 The pins are:
 - `packages/ui/src/cancel-overlay.test.ts`: the set and the lines, holding over an unrelated publication, the refusal,
-  the overwrite and the clause 16 count;
+  the overwrite, a reader lagging the replica, the record order and the clause 16 count;
 - `apps/desktop/src/renderer/session-actions.test.ts`, "REQ-MONITOR-128: a confirmed cancel of one agent is shown
   cancelled before the engine answers, and restored on its refusal", which is red without the overlay's `begin`;
-- `apps/desktop/src/renderer/cancel-overlay-wiring.test.ts`, which pins the roots' source.
+- `apps/desktop/src/renderer/cancel-overlay-wiring.test.ts`, which pins the roots' source and the replica
+  subscription that numbers the records.
 
 In the built app, `mission-proof`'s fourth launch sampled the Mission table 40 ms after the confirm:
 - the build without the overlay read `alpha` and `sub` `running`;

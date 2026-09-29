@@ -4351,8 +4351,10 @@ only with a run behind it. The clause does not say:
   requires recovery before an agent can be cancelled: …" when one is found first or the chosen child's move fails to be
   written, and "The workspace store could not take this session's lock, so the agent was not cancelled: …" when
   reading or claiming the lock throws, where no other process is involved. Every other refusal states none, and the
-  renderer's fallback is REQ-MONITOR-128's "no longer cancellable" ("That agent is not cancellable (unknown, or already
-  finished)."). **This departs from REQ-MONITOR-128**, whose refusal sentence — "an error message states that the agent
+  renderer's fallback is REQ-MONITOR-128's "no longer cancellable" ("That agent is no longer cancellable." since
+  2026-09-29 under R-067, with the repair of
+  [`cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md`](../defects/fixed/cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md);
+  *until then "That agent is not cancellable (unknown, or already finished)."*). **This departs from REQ-MONITOR-128**, whose refusal sentence — "an error message states that the agent
   is no longer cancellable" — clause 16 does not govern: the directive names REQ-MONITOR-128 for the confirmation only.
   The build reads the requirement's sentence as written for an agent the run no longer has, and states the engine's
   words where the refusal is the store's or another process's, because "no longer cancellable" would be false of a
@@ -5729,7 +5731,7 @@ None of them says what ends a silent child's step so that there is an outcome to
   wait pauses the watch or counts as waiting on N children is recorded in
   [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/a-child-waiting-on-its-own-children-is-reported-stalled.md).
 
-**OQ-128 — What is the optimistic cancel of one agent: which activity line, on which surfaces, and until when?** *(REQ-MONITOR-128, "optimistically shown as cancelled, with an activity line stating that the user cancelled them"; REQ-MONITOR-296, "eventually overwritten by the authoritative final read"; REQ-MONITOR-006(b); REQ-MONITOR-038; PD-ORCH-005 clause 16 and OQ-100/OQ-101, whose cascade counts paused descendants. Raised 2026-09-29 by the repair of [`cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md`](../defects/fixed/cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md) under [R-067](../product/requests.md#r-067). Open.)*
+**OQ-128 — What is the optimistic cancel of one agent: which activity line, on which surfaces, and until when?** *(REQ-MONITOR-128, "optimistically shown as cancelled, with an activity line stating that the user cancelled them"; REQ-MONITOR-296, "eventually overwritten by the authoritative final read"; REQ-MONITOR-006(b); REQ-MONITOR-038; PD-ORCH-005 clause 16 and OQ-100/OQ-101, whose cascade counts paused descendants; the reading below departs from REQ-MONITOR-128's "each of its live descendants" by showing paused descendants cancelled too, as OQ-100 and OQ-101 depart from it. Raised 2026-09-29 by the repair of [`cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md`](../defects/fixed/cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md) under [R-067](../product/requests.md#r-067). Open.)*
 
 The requirement names an optimistic state and a line. It does not say where the line is drawn, whether it outlives the
 engine's answer, or which windows show the state before the engine does.
@@ -5748,8 +5750,15 @@ engine's answer, or which windows show the state before the engine does.
   persona window. Another window shows the cancel when the engine's record reaches it.
 - **Until when.** Until the engine answers, the overlay is laid over whatever record the replica holds, so an unrelated
   publication does not bring the agents back. A refusal removes it and states the engine's words, or "That agent is no
-  longer cancellable.". An acceptance pins it to the record held at that moment, and the next whole-session update
-  overwrites it. An agent the engine's record already shows finished is never overlaid.
+  longer cancellable.". An acceptance pins it to every record the replica took up to that moment, and the first
+  whole-session update taken after it overwrites it. The window numbers each record its replica takes, in order
+  (`witness`, from the replica's subscription in `shell.ts`), so a reader drawing an older record than the replica's
+  newest, as a persona window's copy coalesced up to 120 ms behind does (REQ-SHELL-076), still shows the cancel. An
+  agent the engine's record already shows finished is never overlaid. *Until the verifier's finding of 2026-09-29, an
+  acceptance pinned the overlay to the one record the replica held at that moment, and "the next whole-session update
+  overwrites it". That reason was falsified before merge: the engine publishes its cancelled record and answers inside
+  one coalesce interval, so a persona window drawing the record before it lost the overlay and showed its agents
+  `running` again until its next delivery.*
 
 ## Design-reference dependencies
 

@@ -14,6 +14,10 @@ describe('REQ-MONITOR-128: every agent surface of a window reads the session und
   it('shell.ts hands the window\'s one overlay store to the gestures', () => {
     expect(source('shell.ts')).toContain('createSessionActions({ bridge, replica, cancels: cancelOverlays })');
   });
+  it('shell.ts numbers every record the replica takes, so an accepted cancel covers what a lagging persona window draws (REQ-SHELL-076)', () => {
+    expect(source('shell.ts')).toContain('replica.subscribe((s) => { cancelOverlays.getState().witness(s.session); });');
+    expect(source('session-view.ts')).toContain('shownSession(session, { overlays, orderOf })');
+  });
   it('main.tsx: the Workspace, Mission and Overview roots read the shown session, never the replica\'s record directly', () => {
     const text = source('main.tsx');
     for (const root of ['Workspace', 'Mission', 'Overview']) {

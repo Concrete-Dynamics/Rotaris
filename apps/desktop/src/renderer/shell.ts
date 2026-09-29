@@ -46,6 +46,9 @@ export const replica: ReplicaStore = createReplicaStore({
  * surface reads it (`useShownSession`) and never written into the replica (ADR-0043's two writers).
  */
 export const cancelOverlays: CancelOverlayStore = createCancelOverlayStore();
+// Every record the replica takes is numbered in the order it took it, so an accepted cancel keeps covering what a reader
+// lagging the replica still draws — a persona window's coalesced copy (REQ-SHELL-076) — and nothing taken after it.
+replica.subscribe((s) => { cancelOverlays.getState().witness(s.session); });
 export const { answerQuestions, cancelAgent, cancelQuestions, cancelRun, continueSession, control, planDecision, planEdit, setMode, setRunStartMode, stopRun, submitPrompt } = createSessionActions({ bridge, replica, cancels: cancelOverlays });
 
 export const notices: NoticeStore = createNoticeStore();

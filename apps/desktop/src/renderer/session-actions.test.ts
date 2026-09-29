@@ -190,18 +190,18 @@ describe('PD-ORCH-005 clauses 3 and 15: the stop comes to rest, and the confirme
     const replies: CommandOutcome[] = [{ ok: true, value: { ok: false } }, { ok: true, value: { ok: true } }];
     let n = 0;
     const a = createSessionActions({
-      bridge: { command: async () => { seen.push(shownSession(record, cancels.getState().overlays)!.agents.map((x) => x.presentationState)); return replies[n++]!; } },
+      bridge: { command: async () => { seen.push(shownSession(record, cancels.getState())!.agents.map((x) => x.presentationState)); return replies[n++]!; } },
       replica: { getState: () => ({ sessionId: 'S1', follow: () => undefined, session: record }) },
       cancels, now: () => '2026-09-29T10:00:00.000Z',
     });
     expect(await a.cancelAgent('bg_000000c1')).toEqual({ ok: false, reason: 'That agent is no longer cancellable.' });
     expect(seen[0]).toEqual(['cancelled', 'cancelled']);
-    expect(shownSession(record, cancels.getState().overlays)).toBe(record);
+    expect(shownSession(record, cancels.getState())).toBe(record);
     expect(await a.cancelAgent('bg_000000c1')).toEqual({ ok: true });
     expect(seen[1]).toEqual(['cancelled', 'cancelled']);
     // Accepted: still shown over the record held when the engine answered, until a newer record replaces it.
-    expect(shownSession(record, cancels.getState().overlays)!.agents.map((x) => x.presentationState)).toEqual(['cancelled', 'cancelled']);
+    expect(shownSession(record, cancels.getState())!.agents.map((x) => x.presentationState)).toEqual(['cancelled', 'cancelled']);
     const next = { ...record, agents: [{ ...parent, presentationState: 'cancelled' }, { ...child, presentationState: 'cancelled' }] } as SessionRecord;
-    expect(shownSession(next, cancels.getState().overlays)).toBe(next);
+    expect(shownSession(next, cancels.getState())).toBe(next);
   });
 });

@@ -16,11 +16,13 @@ import { bridge, cancelOverlays, replica } from './shell.js';
 /**
  * REQ-MONITOR-128 / REQ-MONITOR-296: a session record as this window's surfaces show it — under the optimistic cancels
  * this window has sent and the engine has not yet overwritten (`shownSession`). The persona window hands in its coalesced
- * record; the main window's roots read the replica's through `useShownSession`.
+ * record, which an accepted cancel still covers while it lags the replica (the store numbers the records the replica
+ * takes, `shell.ts`); the main window's roots read the replica's through `useShownSession`.
  */
 export function useCancelOverlaid(session: SessionRecord | null): SessionRecord | null {
   const overlays = useStore(cancelOverlays, (s) => s.overlays);
-  return useMemo(() => shownSession(session, overlays), [session, overlays]);
+  const orderOf = useStore(cancelOverlays, (s) => s.orderOf);
+  return useMemo(() => shownSession(session, { overlays, orderOf }), [session, overlays, orderOf]);
 }
 /** The followed session as the main window's agent surfaces show it: the replica's record under the optimistic cancels. */
 export function useShownSession(): SessionRecord | null {

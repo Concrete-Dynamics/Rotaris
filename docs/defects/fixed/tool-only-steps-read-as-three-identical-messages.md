@@ -42,3 +42,8 @@ steps as identical messages" — distinct edits and reads in tool-only steps dec
 message; three identical messages with tool-only steps between them are still evidence; four consecutive same-tool calls
 in tool-only steps are still evidence. The first three, and `rawClear`, failed on the code before the repair (the first two
 and `rawClear` declared a loop; the third declared none).
+
+**Not reached live.** The duress live run on the repaired branch (2026-09-29, pack `.live-run/runs/2026-09-29T12-40-51-800Z/`
+of the `fix-turn-accounting` worktree, git-ignored, session `c0066cc5`) never tripped the raw-count trigger: its busiest
+agent made 54 calls against the threshold of 60, the recorded traffic holds no loop-classifier request, and the timeline no
+`loop_supervisor_activation`. The repair is pinned by the unit cases above only.

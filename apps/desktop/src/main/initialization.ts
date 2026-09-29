@@ -371,7 +371,10 @@ export class InitializationCoordinator {
     }
   }
 
-  /** REQ-WORKSPACE-086/111: every listed id recorded as skipped, and the marker stamped even for an empty list. */
+  /**
+   * REQ-WORKSPACE-086/111: every listed id recorded as skipped, and the marker stamped even for an empty list — except an id
+   * the live run is attempting or one already recorded completed, neither of which is pending.
+   */
   async skip(ids: readonly string[]): Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }> {
     const e = this.current();
     if (!e) return { ok: false, reason: 'no workspace is open' };
@@ -381,11 +384,26 @@ export class InitializationCoordinator {
     // plainly accepting input, since it answered) and is recorded against what that resolution left. Without it the
     // skip wrote `code-intelligence-setup` as skipped before it had started, and the resolution then started nothing
     // (`init-proof` on Linux, `docs/defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
-    if (e.automatic === null) this.deps.log(`initialization: a skip arrived before ${e.root} was resolved, so the open's resolution runs first`);
-    await this.resolve(true);
+    // Once that resolution is made, or under way, the skip waits for it and reads nothing more: a view recomputed here
+    // would cost a run-host status read, and a background run could end inside it.
+    if (e.automatic === null) {
+      this.deps.log(`initialization: a skip arrived before ${e.root} was resolved, so the open's resolution runs first`);
+      await this.resolve(true);
+    } else {
+      await e.automatic;
+    }
+    // Everything below runs in one turn after the last await, so `attempting` and `state` describe the same moment: a run
+    // clears `attempting` only after its outcome is in `state`.
     // A task the live run is attempting is not the user's to skip; its own outcome is owed (see `attempting`).
-    const mine = ids.filter((id) => !e.attempting.has(id));
-    if (mine.length !== ids.length) this.deps.log(`initialization: ${ids.filter((id) => e.attempting.has(id)).join(', ')} is already running, so the skip leaves its outcome to the run`);
+    // REQ-WORKSPACE-084/086: nor is a task already recorded completed. A skip names what the dialog last drew, and a
+    // background run can finish between that draw and the skip, or while the skip performs the resolution; recording
+    // it moved the id out of `completed` (`docs/defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`).
+    const completed = new Set(e.state.completed);
+    const running = ids.filter((id) => e.attempting.has(id));
+    const done = ids.filter((id) => !e.attempting.has(id) && completed.has(id));
+    const mine = ids.filter((id) => !e.attempting.has(id) && !completed.has(id));
+    if (running.length > 0) this.deps.log(`initialization: ${running.join(', ')} is already running, so the skip leaves its outcome to the run`);
+    if (done.length > 0) this.deps.log(`initialization: ${done.join(', ')} is already completed, so the skip leaves it completed`);
     const r = await recordSkip(e.state, mine, { nowIso: this.nowIso, write: this.write(e.root) });
     if (!r.ok) return r;
     e.state = r.state;

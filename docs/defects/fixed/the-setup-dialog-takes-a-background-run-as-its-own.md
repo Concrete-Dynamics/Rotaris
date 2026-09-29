@@ -106,4 +106,7 @@ verification-consent`, and `code-intelligence-setup → success` followed 1.7 to
 yet: Verification consent task."
 
 **Not shown:** the Windows orders; REQ-WORKSPACE-110's flip in the built app (unit cases only). Found beside this and
-recorded, not repaired: `../a-skip-can-move-a-completed-task-into-skipped.md`.
+first recorded, not repaired: [`a-skip-can-move-a-completed-task-into-skipped.md`](a-skip-can-move-a-completed-task-into-skipped.md).
+*(2026-09-29, the fix round's verifier: this repair is what made that path reachable. With the dialog in its prompt
+state for the whole background run, Skip is live while the run ends. The note was repaired on the same branch, and it
+records how.)*

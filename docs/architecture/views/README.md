@@ -43,7 +43,7 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-28**
+## Last reconciled with the code: **2026-09-29**
 
 **A skip before the open's resolution (2026-09-28, R-062).** The **process view**'s `initialization.*` paragraph says
 which listed ids a skip leaves out (only one the live run is attempting) and that a skip arriving before the open's
@@ -51,7 +51,9 @@ one automatic resolution performs that resolution first (OQ-118). No package, ed
 store column or owner of state changed. **Its second round (2026-09-29):** the same paragraph now names the
 `backgroundRun` field the initialization state carries on its existing channel. The window reads it to keep a
 background run out of the setup dialog and to keep the prompt due beside it (REQ-WORKSPACE-103/110, OQ-119). It is one
-more field on an existing message; no message kind changed.
+more field on an existing message; no message kind changed. **Its third round (2026-09-29):** the paragraph adds that a
+skip leaves an id already recorded completed where it is, and that a skip after the resolution reads nothing more before
+it records; nothing else in any view moved.
 
 **The notices generator reads the shipped setup manifest (2026-09-28, R-062).** `tools/notices/notices.mjs` reads
 `apps/desktop/resources/setup-manifest.json` rather than `pins.json` as REQ-STARTUP-142's manifest, by a copy of

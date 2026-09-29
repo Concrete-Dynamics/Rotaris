@@ -402,8 +402,10 @@ terminate then tree-killed after 5 s on cancel or timeout; the category polls th
 `initialization.resolve` (REQ-WORKSPACE-102's "Check again", additional to the one automatic resolution per
 workspace open), `initialization.start`, `initialization.skip {ids}` and `initialization.cancel`. Each answers with
 the whole state. A skip records every listed id except one the live run is attempting, which it logs (ADR-0064,
-finding (2)). The window can open the dialog from its mount read before main's 800 ms slot, so a skip that arrives
-before the open's one automatic resolution performs that resolution first (or waits for the one under way), and the
+finding (2)), and one already recorded completed, which it leaves completed (REQ-WORKSPACE-084/086; 2026-09-29,
+R-062). The window can open the dialog from its mount read before main's 800 ms slot, so a skip that arrives
+before the open's one automatic resolution performs that resolution first (or waits for the one under way, and after it
+reads nothing more before recording), and the
 background task it starts is then attempted (2026-09-28, R-062; REQ-WORKSPACE-083/084/086/102; OQ-118). The state
 carries `backgroundRun` beside the run report: whether that report describes a run the resolution started for background
 tasks. The window reads it twice. A background run neither withdraws the setup prompt nor lifts the composer gate

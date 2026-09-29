@@ -3633,7 +3633,9 @@ Readings:
 
 **What the build proceeds under:** the second reading (`InitializationCoordinator.skip` and `resolve` in
 `apps/desktop/src/main/initialization.ts`). It keeps REQ-WORKSPACE-105's values as they are. It records every given
-id except one the live run is attempting, which is the exception ADR-0064 already rests on REQ-WORKSPACE-084. It runs the
+id except one the live run is attempting, which is the exception ADR-0064 already rests on REQ-WORKSPACE-084, and one
+already recorded completed, which is not pending (REQ-WORKSPACE-086; added 2026-09-29 by the repair of
+`../defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`). It runs the
 open's resolution once, and only when the window has plainly accepted input, since the skip is the window's own
 answer (REQ-WORKSPACE-102). **A ruling would decide** whether the dialog may precede the resolution at all. If it may
 not, the first reading replaces the second, and the skip path then never meets an unresolved open.

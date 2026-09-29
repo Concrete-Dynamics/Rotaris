@@ -235,5 +235,29 @@ the two-task intro, the card word Pending, the dialog visible and Send disabled.
 verification-consent`, and `code-intelligence-setup → success` followed 1.7 to 2.5 s later. Every reopen read "Not run
 yet: Verification consent task." **Not shown:** the Windows orders; a live background run
 flipped by Initialize in the built app (REQ-WORKSPACE-110 is pinned by unit cases only); and a skip naming a task
-completed a moment earlier. That last one is recorded, not repaired
-(`../../defects/a-skip-can-move-a-completed-task-into-skipped.md`).
+completed a moment earlier. That last one was first recorded, not repaired, and is repaired in the next section
+(`../../defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`).
+
+**Third round (2026-09-29): the second round made a completed task skippable.** The fix round's verifier found that
+the second round opened the path its own note had called a few milliseconds wide. The dialog now stays in its prompt
+state, with Skip and Escape live, for the whole background run. And `skip` awaited `resolve(true)` before filtering,
+which on a resolved open is a view recomputed through the run host's `setup.status()`. A background run that ended
+inside that read was recorded completed, and the skip then **moved** it into `skipped` (`recordPatch` moves an id
+between the lists). The verifier reproduced it with the coordinator's harness. That is against REQ-WORKSPACE-086 ("every
+given **pending** task id") and REQ-WORKSPACE-084 (a success "is recorded as completed"). **The repair:** a skip after
+the open's resolution awaits that resolution and reads nothing more. A skip before it still performs it (OQ-118). After
+the last await, in one turn, the skip leaves out an id the live run is attempting and an id already recorded
+completed. A run clears `attempting` only after its outcome is in the state, so the two cannot disagree. An id no longer
+applicable is not dropped: that would need the read the repair removes, and the view shows no inapplicable id either
+way. Two cases in `initialization.test.ts` fail on the code before the repair. The second also fails with the first
+change alone, so it pins the completed filter. REQ-WORKSPACE-105's "any run" reading in `packages/config/src/init/sets.ts`
+(`promptDue`, reached only by its own test) was retired, so `setupPromptDue` is the one reading (OQ-119). **Measured** as
+root under Xvfb on Linux, Node 24, after one `pnpm build`: `init-proof --skip-build` passed three runs in a row (173 s,
+173 s and 172 s), all five scenarios. At the end of run 3, another agent's Electron processes numbered 11; there were
+none before that. In run 1 the dialog was read first. The resolution and the background start followed, and then
+Escape: the skip after the resolution, the path this round repaired. In runs 2 and 3 the Escape came first, and the skip
+performed the resolution. Every reading gave "Set up this project?", the card word Pending, the dialog visible and Send
+disabled. Every Escape recorded `skipped verification-consent` and left the running task to its run, and
+`code-intelligence-setup → success` followed 1.8 to 2.0 s later and stayed completed on disk. Every reopen read "Not run
+yet: Verification consent task." **Not shown:** a built-app run in which the background run ends inside a skip; only
+the unit cases hold that interval. Also not shown: the Windows orders, and REQ-WORKSPACE-110's flip in the built app.

@@ -37,7 +37,10 @@ interface Harness {
   push(s: McpSetupStatus): void;
 }
 
-function harness(options: { applicable?: boolean; startFails?: boolean; writeFails?: string | null; modelReachable?: boolean; statusGate?: Promise<void> } = {}): Harness {
+/** A hold a test can set at any moment: every setup status read taken while it is set waits on it. */
+interface StatusHold { current: Promise<void> | null }
+
+function harness(options: { applicable?: boolean; startFails?: boolean; writeFails?: string | null; modelReachable?: boolean; statusGate?: Promise<void>; hold?: StatusHold; onStart?: () => void } = {}): Harness {
   const { root, agents } = workspace();
   const published: InitializationStateView[] = [];
   const banners: { headline: string; detail: string }[] = [];
@@ -54,9 +57,9 @@ function harness(options: { applicable?: boolean; startFails?: boolean; writeFai
       return r.ok ? { ok: true } : { ok: false, reason: r.error.fault };
     },
     setup: {
-      start: async () => (options.startFails ? { ok: false, reason: 'not a local launch' } : { ok: true, status: status() }),
+      start: async () => { options.onStart?.(); return options.startFails ? { ok: false, reason: 'not a local launch' } : { ok: true, status: status() }; },
       cancel: async () => undefined,
-      status: async () => { await options.statusGate; return status({ applicable: options.applicable !== false }); },
+      status: async () => { await options.statusGate; await options.hold?.current; return status({ applicable: options.applicable !== false }); },
     },
     publish: (s) => published.push(s),
     banner: (headline, detail) => banners.push({ headline, detail }),
@@ -306,6 +309,58 @@ describe('the skip path and the start refusals', () => {
     expect(during.some((v) => v.report.running)).toBe(true);
     for (const v of during) expect(v.backgroundRun).toBe(false);
     expect(readInitializationState(h.agents).completed).toEqual(['verification-consent']);
+  });
+
+  /**
+   * `docs/defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`: with the open resolved and the background run
+   * live, the dialog stays in its prompt state and Skip is live. The skip used to recompute the view before filtering,
+   * which is a run-host status read, and a run that ended inside that read had its completed id moved into `skipped`.
+   * A skip after the resolution now reads nothing more before it records (REQ-WORKSPACE-084, REQ-WORKSPACE-086).
+   */
+  it('leaves a background task completed when its run ends while a skip after the resolution is in flight (REQ-WORKSPACE-084, REQ-WORKSPACE-086)', async () => {
+    const hold: StatusHold = { current: null };
+    const h = harness({ hold });
+    h.coordinator.registry.register(consentTask);
+    await h.coordinator.resolve(true);
+    await new Promise((r) => setImmediate(r));
+    expect(h.published.at(-1)!.view.running).toBe(true);
+    // Every status read from here on is held until the run has ended.
+    let release: () => void = () => undefined;
+    hold.current = new Promise<void>((r) => { release = r; });
+    const skipped = h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
+    h.push(status({ state: 'finished', outcome: 'completed', containsCode: false, steps: [step('create', 'succeeded', 'made')] }));
+    for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
+    release();
+    expect(await skipped).toEqual({ ok: true });
+    for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
+    const after = readInitializationState(h.agents);
+    expect(after.completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    expect(after.skipped).toEqual(['verification-consent']);
+  });
+
+  /**
+   * The same note, on the path where the skip performs the open's resolution first (OQ-118): the resolution starts the
+   * background run and then reads the view once more, and a run that ends inside that read is recorded completed before
+   * the skip records. The skip leaves a completed id where it is (REQ-WORKSPACE-084, REQ-WORKSPACE-086).
+   */
+  it('leaves a background task completed when its run ends while the resolution a skip performs first is still reading (REQ-WORKSPACE-084, REQ-WORKSPACE-086)', async () => {
+    const hold: StatusHold = { current: null };
+    let release: () => void = () => undefined;
+    // The run's start is the moment to hold every later status read, the resolution's own last one among them.
+    const h = harness({ hold, onStart: () => { hold.current = new Promise<void>((r) => { release = r; }); } });
+    h.coordinator.registry.register(consentTask);
+    const skipped = h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
+    for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
+    expect(hold.current).not.toBeNull();
+    h.push(status({ state: 'finished', outcome: 'completed', containsCode: false, steps: [step('create', 'succeeded', 'made')] }));
+    for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
+    expect(readInitializationState(h.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    release();
+    expect(await skipped).toEqual({ ok: true });
+    for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
+    const after = readInitializationState(h.agents);
+    expect(after.completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    expect(after.skipped).toEqual(['verification-consent']);
   });
 
   /** Once the open's resolution has run and nothing is running, a listed background task is skipped as listed (REQ-WORKSPACE-086/111). */

@@ -65,3 +65,7 @@ window is still a FAIL, since that is L1's signature. A line the shell expanded 
 run". `terminal-shapes.test.ts` pins the three readings on the two recorded observations. The `exec bash` call itself
 soft-paused for 30 s: recorded as
 [`a-command-that-replaces-the-shell-reads-as-a-soft-pause`](../a-command-that-replaces-the-shell-reads-as-a-soft-pause.md).
+The scenario as corrected was run on the built branch against `katalyst` (pack `.live-run/runs/2026-09-29T22-46-43-191Z`,
+git-ignored). The shell refused the line (`shell_failure`, exit 2, `ran` and `/bin/sh: 1: eval: Bad substitution`)
+and the call ended in 20 ms, so the four checks passed with the guard asked. The model did not replace the shell in
+that run.

@@ -2251,6 +2251,29 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(byName(sid, 'work')).toMatchObject({ state: 'paused', resume_state: 'running' });
     });
 
+    it('REQ-MONITOR-133 with OQ-122 (found by the second review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): once the rest is recorded a steer is refused, while the open iteration still waits on a blocking consumer and before teardown begins', async () => {
+      let releaseDrain!: () => void;
+      const drainHold = new Promise<void>((r) => { releaseDrain = r; });
+      let holding = false;
+      const g = gate();
+      const { sessions } = scriptedChild([() => ({ parts: [{ hold: g.hold }, ...look().parts] })]);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      // REQ-EVENTS-165: the open iteration's drain waits on this consumer once the rest is in the timeline.
+      sessions.bus.attach(sid, { mode: 'blocking', deliver: () => { if (dal.timelineOf(sid).some((t) => t.name === 'iteration_paused')) { holding = true; return drainHold; } return undefined; } });
+      await settle(() => byName(sid, 'work')?.state === 'running');
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      g.open();
+      await settle(() => holding);
+      expect(byName(sid, 'work')).toMatchObject({ state: 'paused', interruption: 'pause' });
+      // No agent of this run takes another step: a steer acknowledged now would reach no record while its agent resumes.
+      expect(sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: byName(sid, 'work').task_id, text: 'go left' } })).toEqual({ ok: false });
+      expect(sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: RUN_AGENT_ID, text: 'mind the tests' } })).toEqual({ ok: false });
+      releaseDrain();
+      expect((await sessions.running(sid)!).status).toBe('interrupted');
+      expect(dal.timelineOf(sid).filter((t) => t.name.startsWith('steering_'))).toEqual([]);
+      expect(byName(sid, 'work')).toMatchObject({ state: 'paused', resume_state: 'running' });
+    });
+
     it('REQ-MONITOR-133 with OQ-122 (found by the review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): once the run\'s teardown has begun a steer is refused, not acknowledged for a step no agent will take', async () => {
       let releaseHook!: () => void;
       const hookHold = new Promise<void>((r) => { releaseHook = r; });

@@ -1414,6 +1414,10 @@ export class Run {
       if (agent === null || pending.length === 0 || this.record.load(agent.taskId).length === 0) continue;
       this.steering.delete(key);
       const recorder = this.record.recorder(agent.taskId, agent.iteration);
+      // Unlike `injectSteering`, no supervisor is told of the instruction here (REQ-MONITOR-134, "reported to the run"):
+      // the agent steps again only in the continue's run, whose supervisors are a fresh `SupervisorRegistry` with no
+      // consecutive series for a new user instruction to restart. A change that carried supervisors across a rest owes
+      // the `noteUserInstruction` call here.
       for (const s of pending) {
         recorder.appended(steeringMessage(s));
         recordSteeringInjected(this.deps.writer, agent.name, s, { interruption: cause });

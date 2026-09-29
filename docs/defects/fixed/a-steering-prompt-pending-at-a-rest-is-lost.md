@@ -44,8 +44,13 @@ then stopped resumes `running`, takes a step over the prompt and reports. On the
 record ended on the tool results with no prompt, and the second moved straight back to `summarizing`. Two further cases
 beside the explicit cancel that lands while teardown runs its hooks: a steer, for the paused child or the root, after the
 rest is recorded and while the `session_end` hooks run, is refused and nothing of it reaches the timeline; and a steer
-while a completed run's teardown runs its hooks is refused. Both acknowledged the steer on the first build. The
-first case also reads each `steering_submitted` entry: it names a child by its instance name, as its injection and the
+while a completed run's teardown runs its hooks is refused. Both acknowledged the steer on the first build. Both
+steer after teardown has begun, so they pin only the teardown's close; the rest's own close is pinned by a third case,
+added by the repair's second review: a blocking event consumer holds the open iteration's drain once `iteration_paused`
+is in the timeline — after the rest is recorded and before teardown begins — and a steer for the paused child or the
+root there is refused, nothing of it reaches the timeline and the child stays `paused`. With the rest's close removed
+from `Run.turn` that case acknowledges the steer (`{ ok: true }`) and fails; with it, it passes. The first of the two
+cases also reads each `steering_submitted` entry: it names a child by its instance name, as its injection and the
 not-delivered entry do (it named the child's task id on the first build, found by the review).
 `apps/desktop/scripts/part-j-proof.mjs`'s scenario 3b drives it in the built app: a steer submitted while the entry
 role's step is held, then a pause, then the Continue; the root's record holds the prompt after the read's result and

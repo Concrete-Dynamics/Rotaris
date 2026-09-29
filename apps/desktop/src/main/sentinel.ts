@@ -91,6 +91,18 @@ function runtimeHome(python: string): string {
   return home;
 }
 
+/**
+ * What the runtime is handed: the arguments after the separator. The launcher's own switches may stand between the token
+ * and `--` — `--no-sandbox`, which Chromium needs to start as root (R-065,
+ * `docs/defects/fixed/the-code-intelligence-server-cannot-start-as-root.md`) — and are Chromium's, never the runtime's.
+ * With no separator the arguments pass as they are.
+ */
+export function runtimeArguments(afterToken: readonly string[]): string[] {
+  let at = 0;
+  while (at < afterToken.length && afterToken[at] !== '--' && afterToken[at]!.startsWith('--')) at += 1;
+  return afterToken[at] === '--' ? afterToken.slice(at + 1) : [...afterToken];
+}
+
 const tokenAt = process.defaultApp || process.env['ELECTRON_RUN_AS_NODE'] ? 2 : 1;
 if (process.argv[tokenAt] === CODE_INTELLIGENCE_TOKEN) {
   const python = runtimeExecutable();
@@ -104,8 +116,7 @@ if (process.argv[tokenAt] === CODE_INTELLIGENCE_TOKEN) {
   // positional — `Rotaris.exe builtin:code-intelligence start-mcp-server` never reaches this file; the same line with `--`
   // after the token does, and the token is still the first argument. The launch of the token (packages/config) therefore
   // puts `--` second; it is dropped here so the runtime sees its own arguments only.
-  const rest = process.argv.slice(tokenAt + 1);
-  if (rest[0] === '--') rest.shift();
+  const rest = runtimeArguments(process.argv.slice(tokenAt + 1));
   const env: Record<string, string> = { ...(process.env as Record<string, string>), SERENA_HOME: runtimeHome(python), PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', PYTHONDONTWRITEBYTECODE: '1' };
   delete env['ELECTRON_RUN_AS_NODE'];
   const r = spawnSync(python, ['-c', RUNTIME_ENTRY, ...rest], { stdio: 'inherit', env, windowsHide: true, maxBuffer: Number.MAX_SAFE_INTEGER });

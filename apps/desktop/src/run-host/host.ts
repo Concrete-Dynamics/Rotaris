@@ -11,7 +11,8 @@ import { runPreflight } from './intent.js';
 import { createLoopClassifier } from './loop.js';
 import { createCheckpointPort } from './checkpoints.js';
 import { McpHost } from './mcp.js';
-import { CHECKPOINTS_DEFAULTS, INSTRUCTIONS_DEFAULTS, loadConfiguration, RUNTIME_DEFAULTS, SKILLS_DEFAULTS, type LiveState, CODE_INTELLIGENCE_TOKEN } from '@rotaris/config';
+import { CHECKPOINTS_DEFAULTS, INSTRUCTIONS_DEFAULTS, loadConfiguration, RUNTIME_DEFAULTS, SKILLS_DEFAULTS, type LiveState } from '@rotaris/config';
+import { codeIntelligenceLaunch as buildCodeIntelligenceLaunch } from './code-intelligence-launch.js';
 import { SkillHost } from './skills.js'; // ADR-0063
 import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, type ConfiguredRun } from './configuration.js';
 import { leaseForContinuation, LeaseReportLog } from './launch.js';
@@ -141,12 +142,10 @@ export function createRunHost() {
     // Part AS (ADR-0064): every step and the end, pushed — what ADR-0064's task runner follows instead of a cadence.
     publishSetup: (status) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'mcp.setupStatus', status } }),
   });
-  // REQ-MCP-033 / ADR-0035 (Part T): what the reserved token launches — THIS application's own executable (a utility process
-  // runs the same binary) with the token first and `--` second (the branch's separator, measured in
-  // spikes/code-intelligence-branch.md); in development Electron's binary with the main bundle before them, which is the
-  // interpreted installation's "own language runtime" of REQ-MCP-033. Packaged is read off this bundle's own location.
+  // REQ-MCP-033 / ADR-0035 (Part T): what the reserved token launches (`codeIntelligenceLaunch`). Packaged is read off this
+  // bundle's own location; root, off the process, as Chromium reads it.
   const packaged = import.meta.dirname.includes('app.asar');
-  const codeIntelligenceLaunch = { command: process.execPath, args: packaged ? [CODE_INTELLIGENCE_TOKEN, '--'] : [join(import.meta.dirname, 'index.js'), CODE_INTELLIGENCE_TOKEN, '--'] };
+  const codeIntelligenceLaunch = buildCodeIntelligenceLaunch({ execPath: process.execPath, bundleDir: import.meta.dirname, packaged, root: process.getuid?.() === 0 });
   log(`mcp: the reserved token launches ${codeIntelligenceLaunch.command} ${codeIntelligenceLaunch.args.join(' ')} (${packaged ? 'packaged' : 'development'})`);
   /**
    * ADR-0022's availability service, owned at application lifetime (REQ-SANDBOX-067): one probe per

@@ -45,6 +45,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**An explicit cancel is durable across a crash (PD-ORCH-005 clause 3 with REQ-MONITOR-126, OQ-103's last question ruled
+under R-067, 2026-09-29).** `iterations.cancel_accepted_at` (store **v27**, appended) is written the moment the reserved run
+id's `cancelAgent` is accepted (`SessionWriter.recordCancelAccepted`), and by `Run.turn` for an iteration it opens after. An
+open iteration carrying it is closed `cancelled` by the next repair or continue, its unfinished agents ended `cancelled`
+(`recordCrash` → `recordAcceptedCancel`), never paused by a crash; `crashLeftOf` and `resumableOf` read it, the new
+`cancelLeftOf` presents those agents `cancelled` meanwhile, and a continue is set up as the entry role. This repairs
+`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`. The **runtime view**'s §2 (the paragraph "An
+explicit cancel the host died before carrying out") and §7 (`iterations`, `timeline`), and the **state-ownership view**'s
+rest rows say so. One store column is added; no package, edge, process, channel, message kind or command changed.
+
 **The run-level agent owns every row, call and artifact its roots carry (REQ-MONITOR-071, REQ-CHAT-069, REQ-MONITOR-053,
 REQ-MONITOR-060, REQ-MONITOR-044 with PD-ORCH-005 clause 4, OQ-97 and REQ-LIBRARY-093, 2026-09-29, R-067).**
 `SessionRecord` gains `entryRoots`: each root of the session once, by the name its rows and calls carry and its canonical

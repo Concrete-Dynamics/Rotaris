@@ -287,6 +287,11 @@ export interface IterationRow {
    * the root's turn returns, and by the crash record. NULL on a row written before v26: not known.
    */
   readonly root_tool_calls: number | null;
+  /**
+   * v27 — PD-ORCH-005 clause 3 (OQ-103, R-067): when the explicit cancel (REQ-MONITOR-126) was accepted while this
+   * iteration was open; NULL when none was. An OPEN row carrying it is a cancel its run never carried out.
+   */
+  readonly cancel_accepted_at: string | null;
 }
 export type IterationInsert = Pick<IterationRow, 'session_id' | 'iteration' | 'root_task_id' | 'root_canonical_name' | 'root_persona' | 'todo_task_id' | 'task' | 'opened_at'>;
 
@@ -566,6 +571,8 @@ export class StoreDal {
       setIterationInterruption: db.prepare("UPDATE iterations SET interruption = ? WHERE session_id = ? AND iteration = ? AND state = 'open'"),
       // v26 — REQ-MONITOR-102: a NULL count (a row older than v26) is not known and stays NULL.
       addIterationRootCalls: db.prepare('UPDATE iterations SET root_tool_calls = root_tool_calls + ? WHERE session_id = ? AND iteration = ? AND root_tool_calls IS NOT NULL'),
+      // v27 — PD-ORCH-005 clause 3 (OQ-103): the explicit cancel's mark, on the open iteration only, the first acceptance kept.
+      markCancelAccepted: db.prepare("UPDATE iterations SET cancel_accepted_at = ? WHERE session_id = ? AND state = 'open' AND cancel_accepted_at IS NULL"),
 
       // v23 — PD-ORCH-005: the agents' conversations. The sequence is per agent and taken inside the insert, as the slot queue's is.
       insertAgentMessage: db.prepare(`INSERT INTO agent_messages (session_id, task_id, seq, iteration, kind, body, at)
@@ -746,6 +753,13 @@ export class StoreDal {
   /** v26 — REQ-MONITOR-102: `n` more of the root's calls held by the session total; false when the count is not known (NULL). */
   addIterationRootCalls(id: SessionId, iteration: number, n: number): boolean {
     return this.stmts['addIterationRootCalls']!.run(n, id, iteration).changes === 1;
+  }
+  /**
+   * v27 — PD-ORCH-005 clause 3 (OQ-103, R-067): the explicit cancel was accepted at `at` while the session's open iteration
+   * was open. False when none is open, or its mark is already set (the first acceptance is kept).
+   */
+  markCancelAccepted(id: SessionId, at: string): boolean {
+    return this.stmts['markCancelAccepted']!.run(at, id).changes === 1;
   }
   insertAgentMessage(row: Omit<AgentMessageRow, 'seq'>): void {
     this.stmts['insertAgentMessage']!.run(row);

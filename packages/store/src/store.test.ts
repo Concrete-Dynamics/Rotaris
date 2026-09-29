@@ -9,8 +9,10 @@ import { asSessionId, millis, mintMachineId, mintWorkspaceId, type MachineId, ty
 import { nodeClocks } from '@rotaris/platform';
 import { claimAsideName, CURRENT_SCHEMA_VERSION, MIGRATIONS, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, openStore, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
 
-/** REQ-MONITOR-102 (R-067): what v26 added, undone before v25's so a test that lowers `user_version` below 26 can climb it again. */
-const UNDO_V26 = 'ALTER TABLE iterations DROP COLUMN root_tool_calls;';
+/** PD-ORCH-005 clause 3 (OQ-103, R-067): what v27 added, undone before v26's so a test that lowers `user_version` below 27 can climb it again. */
+const UNDO_V27 = 'ALTER TABLE iterations DROP COLUMN cancel_accepted_at;';
+/** REQ-MONITOR-102 (R-067): what v26 added, undone before v25's so a test that lowers `user_version` below 26 can climb it again. v27's goes first. */
+const UNDO_V26 = `${UNDO_V27} ALTER TABLE iterations DROP COLUMN root_tool_calls;`;
 /** REQ-TOOLS-152 (R-067): what v25 added, undone before v24's so a test that lowers `user_version` below 25 can climb it again. v26's goes first. */
 const UNDO_V25 = `${UNDO_V26} ALTER TABLE children DROP COLUMN suppress_auto_context;`;
 /** PD-ORCH-005 revision 4 clause 14: what v24 added, undone before v23's so a test that lowers `user_version` below 24 can climb it again. v25's goes first. */
@@ -776,8 +778,8 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     // v20 gives `plan_cycles` the cascade REQ-SESSION-166's delete assumes; v21 records the cost qualifier; v22 the
     // continuation a child was delegated as (PD-ORCH-004); v23 the record a paused run resumes from (PD-ORCH-005); v24 the
     // fingerprint each agent started with (PD-ORCH-005 revision 4 clause 14); v25 the call's `suppress_auto_context` (REQ-TOOLS-152);
-    // v26 the root's tool-call count on its iteration (REQ-MONITOR-102).
-    expect(CURRENT_SCHEMA_VERSION).toBe(26);
+    // v26 the root's tool-call count on its iteration (REQ-MONITOR-102); v27 the explicit cancel's mark (PD-ORCH-005 clause 3, OQ-103).
+    expect(CURRENT_SCHEMA_VERSION).toBe(27);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null, continuation_of: null, interruption: null, resume_state: null, write_scope: '[]', suppress_auto_context: 0 });
@@ -1072,10 +1074,10 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
   it('is v19, and the migration list is append-only with nothing renumbered', () => {
     // Part X reserved v11, Part Y v12, Part AB v13, Part AE v14 and Part AK v15 (plan Reservations, ruled 2026-09-09: the ladder and
     // the pin ride with the v15 reservation) before any of them was written; PD-LIBRARY-001 appended v16; the plan gate appended
-    // v17; ADR-0061 appended v18; ADR-0065 appended v19; the plan_cycles cascade appended v20; PD-MONITOR-001 revision 2 appended v21; PD-ORCH-004 appended v22; PD-ORCH-005 appended v23, and its revision 4 v24; REQ-TOOLS-152's `suppress_auto_context` (R-067) appended v25; REQ-MONITOR-102's root count (R-067) appended v26. The ladder is asserted whole rather than at its top, so a later part
+    // v17; ADR-0061 appended v18; ADR-0065 appended v19; the plan_cycles cascade appended v20; PD-MONITOR-001 revision 2 appended v21; PD-ORCH-004 appended v22; PD-ORCH-005 appended v23, and its revision 4 v24; REQ-TOOLS-152's `suppress_auto_context` (R-067) appended v25; REQ-MONITOR-102's root count (R-067) appended v26; the explicit cancel's mark (OQ-103, R-067) appended v27. The ladder is asserted whole rather than at its top, so a later part
     // that renumbers an earlier entry fails here and not on a user's disk.
-    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]);
-    expect(CURRENT_SCHEMA_VERSION).toBe(26);
+    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]);
+    expect(CURRENT_SCHEMA_VERSION).toBe(27);
   });
 });
 
@@ -1291,6 +1293,30 @@ describe('store — v24: the fingerprint an agent started with (PD-ORCH-005 revi
     expect(dal.addIterationRootCalls(sid, 2, 2)).toBe(true);
     expect(dal.getIteration(sid, 2)!.root_tool_calls).toBe(5);
     expect(() => r.db.prepare('UPDATE iterations SET root_tool_calls = -1 WHERE session_id = ? AND iteration = 2').run(sid)).toThrow(/CHECK/);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('PD-ORCH-005 clause 3 (OQ-103, R-067): a v26 store migrates to v27; an iteration written before it carries no mark, and the mark lands on the open iteration only, the first acceptance kept', () => {
+    const { r, sid } = open('5');
+    r.db.exec(UNDO_V27);
+    r.db.pragma('user_version = 26');
+    r.db.prepare(`INSERT INTO iterations (session_id, iteration, root_task_id, root_canonical_name, root_persona, todo_task_id, task, state, opened_at, root_tool_calls)
+      VALUES (?, 1, 'bg_000000a1', 'orchestrator', 'orchestrator', 't', 't', 'closed', 't', 0)`).run(sid);
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 26, to: CURRENT_SCHEMA_VERSION });
+    const dal = new StoreDal(r.db);
+    expect(dal.getIteration(sid, 1)!.cancel_accepted_at).toBeNull();
+    // No iteration open: nothing to mark, and the closed one is left as it is.
+    expect(dal.markCancelAccepted(sid, 'a')).toBe(false);
+    expect(dal.getIteration(sid, 1)!.cancel_accepted_at).toBeNull();
+    dal.insertIteration({ session_id: sid, iteration: 2, root_task_id: 'bg_000000a2', root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
+    expect(dal.getIteration(sid, 2)!.cancel_accepted_at).toBeNull();
+    expect(dal.markCancelAccepted(sid, 'a')).toBe(true);
+    expect(dal.markCancelAccepted(sid, 'b')).toBe(false);
+    expect(dal.getIteration(sid, 2)!.cancel_accepted_at).toBe('a');
+    // The close keeps it: a closed row's mark is history.
+    dal.closeIteration(sid, 2, 'cancelled', 't');
+    expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'closed', cancel_accepted_at: 'a' });
     r.db.close();
     forgetSpelling(r.dir);
   });

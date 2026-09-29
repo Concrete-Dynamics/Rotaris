@@ -967,6 +967,26 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE iterations ADD COLUMN root_tool_calls INTEGER CHECK (root_tool_calls IS NULL OR root_tool_calls >= 0);
     `,
   },
+  {
+    to: 27,
+    /*
+     * PD-ORCH-005 clause 3 (R-067, OQ-103's last question ruled; the repair of
+     * `a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`): the cancel control's agents "end
+     * `cancelled` as today, and those are never resumed" — REQ-MONITOR-126, "cannot be undone in this session". The run-level
+     * explicit cancel ended its agents only in the run's teardown, so a host that died before the teardown left a store no
+     * different from any mid-run crash's, and the next continue resumed what the user had cancelled.
+     *
+     * `cancel_accepted_at` is the durable mark: the instant the explicit cancel was accepted while this iteration was open,
+     * written when it is accepted, before anything of it is carried out. The run's own close of the iteration leaves it as
+     * it is, a closed row's mark being history only. An open row that carries it is one whose cancel was never carried out:
+     * the next repair or continue ends its unfinished agents `cancelled` and closes it `cancelled` in the cancel's place
+     * (`recordCrash`), no surface presents it as a crash left it, and the Continue action counts none of it. NULL on every
+     * row written before this version, and true of them: none could record the mark.
+     */
+    sql: `
+      ALTER TABLE iterations ADD COLUMN cancel_accepted_at TEXT;
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

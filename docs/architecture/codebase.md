@@ -1035,7 +1035,14 @@ with `retry-after: 2` (the countdown, the auto-resume); a 429 with no header (th
 header with REQ-NOTIFY-063's notice); a quota with a same-tier candidate (the transparent fallback); a quota with none
 (the indefinite wait, `setModel` from the header, the override honoured after a relaunch); an unresponsive model with
 and without a role fallback; a hung child under a small `child_timeout` with and without a fallback; a 503 (one
-transient retry) and a 401 (no retry). Evidence under `.proof/resilience-proof/`.
+transient retry) and a 401 (no retry). Evidence under `.proof/resilience-proof/`. **Since 2026-09-28 (R-062)** the override
+launch is driven (the header's `SearchableSelect` chosen by real clicks, `override.steps.json`), every launch is
+bounded — the ten seam-driven ones by `spawnBounded`, the driven one by the driver's `stopApp`, both ending an overrun
+through `lib/bounded-launch.mjs` by SIGTERM, a grace, then SIGKILL and reporting it with its log tail — and every
+scenario runs to its end with its failure listed in `results.json`
+([note](../defects/fixed/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md)).
+`spawnSync`'s own timeout could not bound a launch: it closes the pipes as it signals, and the application's quit then
+loops on its own EPIPE ([note](../defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md), open).
 
 **A probe is a deadline, not an appointment (2026-09-12).** Three of this proof's assertions were mid-run DOM probes
 fired at a fixed instant — `.wait-header@1700` — and they failed intermittently on a busy machine with nothing wrong
@@ -1069,7 +1076,11 @@ child; a mid-run narrowing refused; a server crashing after connect, warned once
 drop rules per persona and a session toggle gone after a relaunch; the Settings category probing every row twice with the
 `.cmd` stand-in for `browser` healthy through the wrap; two fatal YAML defects reported together and the same defects
 dropped from a discovery file; a server that never answers `initialize` bounded at 35 s with the exit 1.5 s after the
-quit. Evidence under `.proof/mcp-proof/`.
+quit. Evidence under `.proof/mcp-proof/`. **Launches 6 and 7 are driven (2026-09-28, R-062):** the toggle, the prompt,
+both `Check status` presses, the secrets choice and every read wait for their conditions through `lib/driver.mjs`
+rather than firing at offsets, each step recorded in `<name>.steps.json`; the offsets had made two REQ-MCP-115 reds on a
+loaded Linux host that the product had not earned
+([note](../defects/fixed/mcp-proofs-drop-rules-launch-clicks-at-a-fixed-offset.md)).
 
 
 **What `pnpm sessions-proof` does.** It builds Electron and launches the app ten times against a scratch store and
@@ -1188,7 +1199,13 @@ of the evidence rather than a move of it, and the driver below removes the press
 launch, opens a loopback listener and answers newline-delimited JSON: `waitFor`, `click` (by selector, optionally
 by the name on screen), `type`, `chord`, `inspect`, `probe`, `eval`, `screenshot`, `resize`, `command` (relayed to
 main's own `runCommand`, never around it) and `quit`. The client is `scripts/lib/driver.mjs`; `pnpm app:drive` is
-the one-command-at-a-time CLI over it and `pnpm driver-proof` is its proof.
+the one-command-at-a-time CLI over it and `pnpm driver-proof` is its proof. Since 2026-09-28 the client also carries
+`until` (a wait on a condition that is not one selector — a store row, an attribute), `choose` (either chooser kind: a
+native `<select>` confirmed once the control shows the value, or the design system's `SearchableSelect` by two real
+clicks) and `stopApp` (the closing picture and the quit, each within a bound, then SIGTERM, a grace and SIGKILL
+through `lib/bounded-launch.mjs` for an application that does not exit, reported rather than absorbed), and `startApp`
+ends a launch whose driver never answers before it throws (`lib/driver.test.ts`); `mcp-proof`'s launches 6 and 7 were
+the first to use them.
 
 **Why it exists, stated as the thing it replaces.** The sixty-seven `ROTARIS_CAPTURE_*` seams share one shape: a
 step scheduled at a wall-clock offset, fired at whatever the window is showing then, read back by grepping the

@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A child settled without its turn gets its report (REQ-ORCH-048 / REQ-ORCH-052 / REQ-ORCH-108, 2026-09-29, R-067).**
+The scheduler's blocking cascade stores each blocked child's `blocked` report and artifact before its parent is told.
+A child whose execution raises outside its turn, on either start path, is settled `failed` with its report by
+`IterationChildren.executeSettling` and `settleRaised`, instead of being left `running`. So is a resumed child whose
+record cannot be decoded. The **runtime view**'s §4 names both. No package, edge, process, channel, command or store
+table changes.
+
 **A request queued behind an open approval dialog waits for its turn (REQ-TOOLS-063, 2026-09-28).** Main answers a
 present-request that waits behind the dialog already open in its window, or behind requests queued ahead of it, with
 the new run-host request `approval.queued` (`MainWindows.enqueueApproval` answers which). `RunHostPresenter` then stops

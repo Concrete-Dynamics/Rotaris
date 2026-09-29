@@ -2425,8 +2425,8 @@ revision 4 as [R-064](requests.md#r-064).*
 > - two guards removed as redundant;
 > - the tool deadline's cancel at a run's exit, which is timer hygiene;
 > - `track`'s change, which no test can observe while
->   [`a-child-whose-execution-raises-before-its-turn-stays-running.md`](../defects/a-child-whose-execution-raises-before-its-turn-stays-running.md)
->   stands;
+>   [`a-child-whose-execution-raises-before-its-turn-stays-running.md`](../defects/fixed/a-child-whose-execution-raises-before-its-turn-stays-running.md)
+>   stands (repaired 2026-09-29 under R-067);
 > - main's `before-quit`, which only the built app reaches.
 >
 > In the built app, driven, one session went through three rests with one child (`bg_d5cb3784`):

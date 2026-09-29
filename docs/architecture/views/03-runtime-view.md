@@ -595,6 +595,15 @@ Each child execution holds its own `AbortController`. `IterationChildren.cancel`
 descendant `cancelled`, stores each report and `child_user_cancelled`, and aborts each execution; an execution that
 finds its record terminal writes nothing further, so the cancellation's report stays.
 
+**A child settled without its turn (REQ-ORCH-048 / REQ-ORCH-052 / REQ-ORCH-108; repaired 2026-09-29).** The cascade
+stores each blocked child's `blocked` report (`blockedReport`, naming the dependency and how it ended) with its
+artifact before the terminal callbacks resume its parent. Both start paths run a child through
+`IterationChildren.executeSettling`: the scheduler's `runChild`, and `resumePaused`, whose record load is guarded the
+same way. A raise that `execute`'s own `try` did not catch goes to `settleRaised`. That covers the stretch that builds
+the turn's persona, tool port, compression and fingerprint, the settle after the turn, and a resumed record that does
+not decode. The child ends `failed` with a `child_exception` issue and a report naming the raise, `child_end` and
+`child_completed`. So no child is left `running` with no execution behind it.
+
 **Write scopes (PD-TOOLS-006; `children/write-scope.ts`).** A `delegate` call may carry `write_scope`, path
 patterns in the `glob` tool's dialect (the one compiler, `kernel/glob.ts`). `IterationChildren.delegate` validates
 them before admission (an empty, absolute or root-escaping pattern is a `rejected` delegation with no record) and,

@@ -203,6 +203,25 @@ describe('the ledger and the scheduler against a real store (ADR-0012)', () => {
     expect(dal.getChild(sid, idC)!.completed_at).not.toBeNull();
   });
 
+  it('REQ-ORCH-048 with REQ-ORCH-108 / REQ-ORCH-112: each child the cascade blocks has its `blocked` report stored, naming the dependency, before its parent is told', () => {
+    const l = ledger();
+    const sched = new Scheduler({ ledger: l, runChild: async () => undefined, warn: (m) => warnings.push(m) });
+    const a = spawn(l, 'a'); const idA = a.ok ? a.value.row.task_id : '';
+    const b = spawn(l, 'b', { dependsOn: [idA] }); const idB = b.ok ? b.value.row.task_id : '';
+    const c = spawn(l, 'c', { dependsOn: [idB] }); const idC = c.ok ? c.value.row.task_id : '';
+    sched.pass();
+    // The terminal callback sees each blocked child with its report already stored (REQ-ORCH-108: "before its parent resumes").
+    const seen: [string, string, number][] = [];
+    sched.onTerminal((row) => seen.push([row.task_id, row.state, row.report_stored]));
+    l.transition(idA, 'running'); l.transition(idA, 'failed'); sched.settled(dal.getChild(sid, idA)!);
+    sched.pass();
+    expect(seen).toEqual([[idA, 'failed', 0], [idB, 'blocked', 1], [idC, 'blocked', 1]]);
+    expect(JSON.parse(dal.getChild(sid, idB)!.report!)).toEqual({ agent_name: 'b', role: 'coding-agent', status: 'blocked', summary: `Blocked: Its dependency a (${idA}) ended failed, so this child never started (REQ-ORCH-048).`, key_findings: [], last_response: '', final_response: '', errors: [{ type: 'blocked', message: `Its dependency a (${idA}) ended failed, so this child never started (REQ-ORCH-048).` }] });
+    // Transitively: c names the dependency that blocked it, b, and how b ended.
+    expect(JSON.parse(dal.getChild(sid, idC)!.report!)).toMatchObject({ status: 'blocked', summary: `Blocked: Its dependency b (${idB}) ended blocked, so this child never started (REQ-ORCH-048).` });
+    expect(warnings).toEqual([]);
+  });
+
   it('REQ-ORCH-050: over the cap a child is held, promoted in the order held one per freed slot; a terminal held child is dropped', () => {
     const l = ledger(1);
     const started: string[] = [];
@@ -295,7 +314,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
    * model accept image input. `pending`: request ids every port reports as its own live approval or question set, so an
    * id-routed answer finds a holder.
    */
-  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string> } = {}) {
+  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; raisingPort?: string } = {}) {
     // The scripted client answers by persona and by the number of calls that persona has made.
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
@@ -320,6 +339,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         // `selectRequestedMode` — the persona's pin, then the session override, then `runtime.permission_mode`
         // (REQ-TOOLS-048, covered in `run-host/tools.test.ts`); with no pins that is the override or the
         // start-of-run mode, which is the half this run's engine owns (REQ-TOOLS-073's second).
+        // `raisingPort`: the agent whose tool-port factory throws, as one the run host could not build would.
+        if (over.raisingPort === ctx.agentName) throw new Error(`no tool port for ${ctx.agentName}`);
         const selected = (ctx.modeOverride ?? ctx.requestedMode) as PermissionPreset;
         built.push({ persona: ctx.persona, mode: selected });
         contexts.set(ctx.agentName, ctx);
@@ -2207,6 +2228,47 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       // Nothing is left open, so nothing is cancellable at rest any more.
       expect(cancel(sessions, sid, byName(sid, 'two').task_id)).toEqual({ ok: false });
     });
+    it('a dependent of the cancelled child (OQ-101) is blocked by the resumed run\'s first pass with its `blocked` report and artifact (REQ-ORCH-048 / REQ-ORCH-108 / REQ-LIBRARY-092)', async () => {
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      const state = { resumed: false };
+      const rootAsked: string[] = [];
+      const textOf = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('')).join('\n');
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          rootAsked.push(textOf(req));
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'one', task: 'TASK: one' } }]);
+          const one = /task_id: (bg_[0-9a-f]{8})/.exec(textOf(req))?.[1] ?? '';
+          if (turn === 2) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'after', task: 'TASK: after', depends_on: [one] } }]);
+          return answer('delegated');
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        if (state.resumed) return answer('done');
+        return { parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Checking.').parts] };
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => children(sid).length === 2 && byName(sid, 'one').state === 'running' && byName(sid, 'after').state === 'waiting_on_dependencies');
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      await sessions.running(sid)!;
+      expect([byName(sid, 'one').state, byName(sid, 'after').state]).toEqual(['paused', 'paused']);
+      const one = byName(sid, 'one').task_id;
+      const after = byName(sid, 'after').task_id;
+      // Clause 16: the at-rest cancel runs no cascade, so the dependent stays paused until the continue resumes it.
+      expect(cancel(sessions, sid, one)).toEqual({ ok: true });
+      expect(byName(sid, 'after').state).toBe('paused');
+      state.resumed = true;
+      const before = rootAsked.length;
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await sessions.running(sid)!;
+      expect(byName(sid, 'after')).toMatchObject({ state: 'blocked', report_stored: 1 });
+      expect(JSON.parse(byName(sid, 'after').report!)).toMatchObject({ status: 'blocked', summary: `Blocked: Its dependency one (${one}) ended cancelled, so this child never started (REQ-ORCH-048).` });
+      expect(dal.artifactsOf(sid).filter((a) => a.kind === 'child_report' && a.source_task_id === after).map((a) => a.status)).toEqual(['blocked']);
+      // The root is resumed with the blocked child's report, and the iteration closes.
+      expect(rootAsked.slice(before).some((t) => t.includes(`Its dependency one (${one}) ended cancelled`))).toBe(true);
+      expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
+    });
+
     describe('PD-ORCH-005 clause 16 (OQ-101): the cancel is made under the session\'s lock', () => {
       it('a session this process paused holds no lock: the cancel takes it for the write and gives it back; another live process holding it refuses the cancel, writing nothing', async () => {
         const { sessions, sid } = await restedFamily();
@@ -2252,6 +2314,69 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
    * application's quit, whose `quit` a stop request received first would displace (the first reason stands — the
    * board-run defect, `docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`).
    */
+  describe('REQ-ORCH-052 / REQ-ORCH-108, the repair of a-child-whose-execution-raises-before-its-turn-stays-running: a raise outside the turn settles the child', () => {
+    const settle = async (until: () => boolean) => { for (let i = 0; i < 400 && !until(); i += 1) await new Promise((r) => setTimeout(r, 5)); };
+    const byName = (sid: SessionId, name: string): ChildRow | undefined => children(sid).find((c) => c.canonical_name === name);
+    const textOf = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('')).join('\n');
+
+    it('the fresh path: a tool port that cannot be built ends the child failed with its report and artifact, and the parent\'s foreground wait returns it', async () => {
+      const rootAsked: string[] = [];
+      const completed: Readonly<Record<string, unknown>>[] = [];
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event, fields) => { if (event === 'child_completed') completed.push(fields); return []; }, advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') { rootAsked.push(textOf(req)); return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'broken', task: 'TASK: broken', run_in_background: false } }]) : answer('handled'); }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return answer('never reached');
+      }, { raisingPort: 'broken', hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'broken')?.state === 'failed');
+      const row = byName(sid, 'broken')!;
+      expect(row).toMatchObject({ state: 'failed', report_stored: 1 });
+      expect(JSON.parse(row.report!)).toMatchObject({ status: 'failed', summary: 'Child broken ended failed: its execution raised outside its turn: no tool port for broken', errors: [{ type: 'child_exception', message: 'no tool port for broken' }] });
+      expect(dal.artifactsOf(sid).filter((a) => a.kind === 'child_report' && a.source_task_id === row.task_id).map((a) => a.status)).toEqual(['failed']);
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'child_exception').map((i) => i.message)).toEqual(['Child broken raised: no tool port for broken']);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_end').map((t) => t.message)).toEqual([`Child broken (${row.task_id}) ended failed.`]);
+      // REQ-HOOKS-003: `child_completed` fires for it, whatever its final state.
+      expect(completed).toEqual([{ child_id: row.task_id, child_name: 'broken', persona: 'coding-agent', state: 'failed', status: 'failed', summary: 'Child broken ended failed: its execution raised outside its turn: no tool port for broken' }]);
+      await sessions.running(sid);
+      // The foreground delegation's wait (REQ-TOOLS-156) resolved with the report, and the run went on to its end.
+      expect(rootAsked.at(-1)).toContain('no tool port for broken');
+      expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
+    });
+
+    it('the resume path: a record that cannot be decoded ends the child failed with its report, and the resumed iteration closes', async () => {
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      const state = { resumed: false };
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'one', task: 'TASK: one' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        if (state.resumed) return answer('done');
+        return { parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Checking.').parts] };
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'one')?.state === 'running');
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      await sessions.running(sid)!;
+      const one = byName(sid, 'one')!;
+      expect(one.state).toBe('paused');
+      dal.db.prepare('UPDATE agent_messages SET body = ? WHERE session_id = ? AND task_id = ?').run('{not json', sid, one.task_id);
+      state.resumed = true;
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await settle(() => byName(sid, 'one')?.state === 'failed');
+      const row = byName(sid, 'one')!;
+      expect(row).toMatchObject({ state: 'failed', report_stored: 1 });
+      expect(JSON.parse(row.report!)).toMatchObject({ status: 'failed', errors: [{ type: 'child_exception' }] });
+      expect(JSON.parse(row.report!).summary).toMatch(/^Child one ended failed: its record could not be loaded to resume it: /);
+      await sessions.running(sid);
+      expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
+    });
+  });
+
   describe('PD-ORCH-005 clause 15: a forced stop is a stop, and a quit rests by quit', () => {
     const restsBy = async (sessions: Sessions, sid: SessionId, interruption: 'stop' | 'quit') => {
       const result = await sessions.running(sid)!;

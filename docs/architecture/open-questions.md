@@ -4332,8 +4332,11 @@ only with a run behind it. The clause does not say:
   cancelled, as clause 16 says, and the confirmation's "the other paused agents resume when the session continues" is
   literally what happens to it: the Continue action resumes it (`child_resumed`), and the resumed run's first scheduler
   pass blocks it (REQ-ORCH-048). It does no work, and it gets no report
-  ([`a-child-blocked-by-its-dependency-gets-no-report.md`](../defects/a-child-blocked-by-its-dependency-gets-no-report.md),
-  which a live cascade reaches too). So the count overstates by the dependents the resumed run will block at once.
+  ([`a-child-blocked-by-its-dependency-gets-no-report.md`](../defects/fixed/a-child-blocked-by-its-dependency-gets-no-report.md),
+  which a live cascade reaches too). *Corrected 2026-09-29 (R-067): "it gets no report" held until then. The cascade now
+  stores its `blocked` report, naming the dependency and how it ended, with its `child_report` artifact, before the
+  root is told; pinned in `children.test.ts` ("a dependent of the cancelled child (OQ-101) is blocked by the resumed
+  run's first pass …").* So the count overstates by the dependents the resumed run will block at once.
   Blocking them at the cancel would make the count drop by more than were cancelled and would move an agent clause 16
   does not name, so the build does not. Pinned in `crash.test.ts` ("a dependent of the cancelled child stays counted
   …", `paused` and the recovery state). Found by the merged build's ninth review round.

@@ -189,7 +189,7 @@ export class IterationChildren implements DelegationOps {
   constructor(private readonly deps: ChildrenDeps, readonly iteration: number) {
     this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, warn: deps.warn , personas: deps.personas, ...(deps.artifacts ? { artifacts: deps.artifacts } : {}), ...(deps.rootRecord ? { rootRecord: deps.rootRecord } : {}) });
     this.endedInEarlierRun = new Set(this.ledger.all().filter((c) => isTerminalChildState(c.state)).map((c) => c.task_id));
-    this.scheduler = new Scheduler({ ledger: this.ledger, runChild: (row) => this.track(this.execute(row)), warn: deps.warn });
+    this.scheduler = new Scheduler({ ledger: this.ledger, runChild: (row) => this.track(this.executeSettling(row)), warn: deps.warn });
     this.scheduler.onTerminal((row) => { const w = this.resumeWaiters.get(row.parent_id); if (w) { this.resumeWaiters.delete(row.parent_id); w(); } });
     // PD-TOOLS-006: a claim lapses at its child's terminal state. Liveness is also read from the ledger at every
     // query, so a child settled by a path that fires no listener (a stale sweep) holds nothing either; this only
@@ -460,10 +460,15 @@ export class IterationChildren implements DelegationOps {
       this.acceptScope(r.row, storedScope(r.row));
       if (r.row.state !== 'running' && r.row.state !== 'summarizing') continue;
       const row = r.row;
-      const resume: ChildResume = { history: this.resumedConversation(row.task_id, row.iteration, notice), assessed: summarising };
+      // REQ-ORCH-052: a record that cannot be loaded (one that does not decode) settles the child, never leaving it moved
+      // back to `running` with no execution behind it (the repair of `a-child-whose-execution-raises-before-its-turn-stays-running.md`).
+      let history: ChatMessage[];
+      try { history = this.resumedConversation(row.task_id, row.iteration, notice); }
+      catch (cause) { void this.settleRaised(row, cause, 'its record could not be loaded to resume it').catch((e) => this.deps.warn(`child ${row.task_id} could not be settled: ${String(e)}`)); continue; }
+      const resume: ChildResume = { history, assessed: summarising };
       // Started as the scheduler starts a child (`startOne`): a raise is warned, and its end is a pass, so a sibling held
       // on the model slot it frees, or on it as a dependency, starts then (found by phase 4's review).
-      void this.track(this.execute(row, resume)).catch((e) => this.deps.warn(`child ${row.task_id} raised out of its resumed execution: ${String(e)}`)).finally(() => this.scheduler.pass());
+      void this.track(this.executeSettling(row, resume)).catch((e) => this.deps.warn(`child ${row.task_id} raised out of its resumed execution: ${String(e)}`)).finally(() => this.scheduler.pass());
     }
     this.scheduler.pass();
     return n;
@@ -560,6 +565,44 @@ export class IterationChildren implements DelegationOps {
   }
 
   // ---- a child's execution -----------------------------------------------------------------
+
+  /**
+   * REQ-ORCH-052 / REQ-ORCH-108, the repair of `a-child-whose-execution-raises-before-its-turn-stays-running.md`: a child's
+   * execution, on either start path, that never ends with the child left `running` and nothing behind it. `execute`
+   * catches a raise inside the child's turn itself; one anywhere else — the stretch that builds what the turn needs
+   * (persona, resilience, compression, the tool port, the fingerprint) before its `try`, or the settle after it — is
+   * settled here.
+   */
+  private async executeSettling(row: ChildRow, resume: ChildResume | null = null): Promise<void> {
+    try {
+      await this.execute(row, resume);
+    } catch (cause) {
+      await this.settleRaised(row, cause, 'its execution raised outside its turn');
+    }
+  }
+
+  /**
+   * A child whose execution raised where nothing settled it ends `failed` (REQ-ORCH-073's intent at the child's level)
+   * with a report whose error names the raise, stored before its parent is told (REQ-ORCH-108), and the teardown's
+   * `child_end` and `child_completed` (REQ-ORCH-098, REQ-HOOKS-003). A child already terminal (a cancel), or `paused`, is
+   * left as it is, and so is everything after the rest detached this iteration (REQ-SESSION-094). A raise inside the
+   * turn while the run comes to rest never reaches here: `execute` catches it and leaves the child `paused` (OQ-96).
+   */
+  private async settleRaised(row: ChildRow, cause: unknown, where: string): Promise<void> {
+    const { deps } = this;
+    const reason = String(cause instanceof Error ? cause.message : cause);
+    if (this.detached) return;
+    const current = this.ledger.get(row.task_id);
+    if (!current || isTerminalChildState(current.state) || current.state === 'paused') { deps.warn(`child ${row.task_id} raised (${where}): ${reason}`); return; }
+    deps.writer.recordIssue({ kind: 'child_exception', severity: 'error', actor: row.canonical_name, message: `Child ${row.canonical_name} raised: ${reason}` });
+    const message = `Child ${row.canonical_name} ended failed: ${where}: ${reason}`;
+    this.ledger.storeReport(row.task_id, { agent_name: row.canonical_name, role: row.persona, status: 'failed', summary: message, key_findings: [], last_response: '', final_response: '', errors: [{ type: 'child_exception', message: reason }] });
+    const t = this.ledger.transition(row.task_id, 'failed');
+    if (!t.ok) { deps.warn(t.reason); return; }
+    deps.writer.appendTimeline('child_end', 'rotaris', `Child ${row.canonical_name} (${row.task_id}) ended failed.`, { task_id: row.task_id, state: 'failed', at: toIsoUtc(deps.clocks.wall.instant()) });
+    if (deps.hooks) await deps.hooks.fireLifecycle('child_completed', { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: 'failed', status: 'failed', summary: message });
+    this.scheduler.settled(this.ledger.get(row.task_id) ?? t.row);
+  }
 
   /**
    * A child's execution. `resume` is PD-ORCH-005's resume: the child was restored `running` or `summarizing` and carries

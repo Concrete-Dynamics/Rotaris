@@ -80,16 +80,27 @@ export class Scheduler {
     try { return JSON.parse(row.depends_on) as string[]; } catch { return []; }
   }
 
-  /** REQ-ORCH-048: a dependency in failed/cancelled/blocked blocks every pre-start dependent, transitively. */
+  /**
+   * REQ-ORCH-048: a dependency in failed/cancelled/blocked blocks every pre-start dependent, transitively. REQ-ORCH-108:
+   * the blocked child is terminal, so it has its report — status `blocked` (REQ-ORCH-112), naming the dependency and
+   * how it ended — stored, and materialised (REQ-LIBRARY-092), before the terminal callbacks resume its parent. The
+   * repair of `a-child-blocked-by-its-dependency-gets-no-report.md`; it covers PD-ORCH-005 clause 16's route too, a
+   * paused dependent of a child cancelled at rest that the resumed run's first pass blocks here (OQ-101).
+   */
   private cascadeBlocked(): boolean {
     let changed = false;
     const all = this.deps.ledger.all();
     for (const c of all) {
       if (!PRE_START.has(c.state)) continue;
       const deps = this.deps_(c).map((d) => all.find((x) => x.task_id === d));
-      if (deps.some((d) => d && (d.state === 'failed' || d.state === 'cancelled' || d.state === 'blocked'))) {
+      const cause = deps.find((d): d is ChildRow => d !== undefined && (d.state === 'failed' || d.state === 'cancelled' || d.state === 'blocked'));
+      if (cause) {
         const r = this.deps.ledger.transition(c.task_id, 'blocked');
-        if (r.ok) { changed = true; this.settled(r.row); } else this.deps.warn(r.reason);
+        if (r.ok) {
+          changed = true;
+          this.deps.ledger.storeReport(c.task_id, blockedReport(c, cause));
+          this.settled(this.deps.ledger.get(c.task_id) ?? r.row);
+        } else this.deps.warn(r.reason);
       }
     }
     return changed;
@@ -194,4 +205,13 @@ export class Scheduler {
   get isCancelled(): boolean {
     return this.cancelled;
   }
+}
+
+/**
+ * REQ-ORCH-108 / REQ-ORCH-112: the report of a child REQ-ORCH-048's cascade blocked. It never started, so it made no
+ * call and said nothing: no summarising pass is made, and the report states only why it never ran.
+ */
+export function blockedReport(child: Pick<ChildRow, 'canonical_name' | 'persona'>, dependency: Pick<ChildRow, 'task_id' | 'canonical_name' | 'state'>): Record<string, unknown> {
+  const message = `Its dependency ${dependency.canonical_name} (${dependency.task_id}) ended ${dependency.state}, so this child never started (REQ-ORCH-048).`;
+  return { agent_name: child.canonical_name, role: child.persona, status: 'blocked', summary: `Blocked: ${message}`, key_findings: [], last_response: '', final_response: '', errors: [{ type: 'blocked', message }] };
 }

@@ -38,5 +38,5 @@ Evidence:
   session's start has no test that reaches it, because a new session has no earlier children.
 
 A child REQ-ORCH-048's cascade blocks gets no report to materialise
-([`a-child-blocked-by-its-dependency-gets-no-report.md`](../a-child-blocked-by-its-dependency-gets-no-report.md), found by
+([`a-child-blocked-by-its-dependency-gets-no-report.md`](a-child-blocked-by-its-dependency-gets-no-report.md), found by
 phase 7's review).

@@ -5151,6 +5151,8 @@ repaired. "After REQ-TOOLS-006's controls" is read as the two a child's grant me
 agent's grant today (recorded as a defect of its own), so the check follows the grant the tool port builds.
 The persona checked is the one the ledger resolves, an alias included; the first build read the built-in table without
 its aliases, so `playwright` with a scope was accepted as `ui-verifier` (found by the branch's verification, repaired).
+Live again on 2026-09-29 (duress, session `059ae1d7`), scopes given to `codebase-analyst` and to `verifier` were both
+refused, and each task went next to a writer.
 Live on 2026-09-29 (duress, session `b4a768a2`) the orchestrator gave a scope to `verifier`. It was refused with the
 writers named, and 15 s later it delegated the task to `docs-writer`.
 

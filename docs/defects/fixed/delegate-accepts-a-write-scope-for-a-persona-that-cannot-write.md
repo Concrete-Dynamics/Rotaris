@@ -72,3 +72,11 @@ which cannot write files: it holds no file-writing tool (write_file, haet_edit).
 Personas that can write files: coding-agent, tester, docs-writer, refactorer. …" No record was made. Its next request,
 15 s later (traffic #116), delegated the same task to `docs-writer` (`bg_6d91af9c`), which wrote `docs/verification.md`
 and ended `succeeded`. The earlier run lost 2 min 47 s and a second child to the same mistake.
+
+Live again, 2026-09-29, built from the alias repair: `pnpm live-run --confirm --only=duress`, pack
+`.live-run/runs/2026-09-29T08-18-41-076Z` (this branch's worktree; git-ignored), session `059ae1d7`. The orchestrator
+made the finding's own mistake in its first request: `Wave 1c — write docs/overview.md` to `codebase-analyst` with
+`write_scope: ["docs/overview.md"]`. It was refused with the writers named, no record was made, and the next request
+(traffic #20) delegated it to `docs-writer`, which wrote the file. In wave 3 it gave a scope to `verifier`; that was
+refused the same way, and the next request (#128) delegated to `tester`. No alias was delegated in this run; the alias
+is shown by the unit case above only.

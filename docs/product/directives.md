@@ -2185,7 +2185,9 @@ revision 3 as [R-067](requests.md#r-067).*
 > **What was measured.** Scripted end-to-end cases in `children.test.ts` over the duress call's shape and over the
 > alias, each red with its check removed, and the predicate, the catalogue and the reason in `write-scope.test.ts`. Live, in the duress run of
 > session `b4a768a2`, a scope given to `verifier` was refused with the writers named. The orchestrator's next request,
-> 15 s later, delegated the task to `docs-writer`. The row is in
+> 15 s later, delegated the task to `docs-writer`. In a second duress run built from the alias repair (session `059ae1d7`), a scope given
+> to `codebase-analyst`, the finding's own shape, and one given to `verifier` were both refused, and each task went next
+> to a writer (`docs-writer`, `tester`). No alias was delegated live. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---

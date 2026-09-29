@@ -20,7 +20,9 @@
  *                   ALTERNATELY (empty, loaded, empty, loaded, …) so the host's drift lands on both alike, the
  *                   samples are pooled to thirty or more a side and reported in frames as well as milliseconds
  *                   with their spread, and one further launch of each is recorded with Chromium's own tracing so
- *                   the frames can be attributed to style, layout, paint, the observer pass or script.
+ *                   the frames can be attributed to style, layout, paint, the observer pass or script — and, since
+ *                   the 2026-09-29 round, with V8's sampling profiler under the same trace, so the script is
+ *                   attributed to the functions and source modules it ran in, loaded against empty.
  *
  * Evidence under `.proof/transcript-proof/`: one PNG and one log per launch, the two traces, `results.json`.
  * `--skip-build` skips the build.
@@ -30,7 +32,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
-import { readTrace, spread, summariseAppendTrace } from './lib/trace-summary.mjs';
+import { CPU_PROFILE_CATEGORIES, bundleRegions, profileDifference, readTrace, spread, summariseAppendProfile, summariseAppendTrace } from './lib/trace-summary.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -449,7 +451,7 @@ const behaviour = launch('behaviour', {
 // REQ-CHAT-055's append clause, read as that requirement fixes it: a comparison of two SHOWN-UPDATE times, taken
 // after the frame showing the update has been painted. Never a synchronous figure.
 //
-// The R-048 measurement round (docs/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md)
+// The R-048 measurement round (docs/defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md)
 // tightened how the comparison is taken, because two passes in three with a spread wider than the effect was not a
 // verdict either way:
 //
@@ -464,6 +466,12 @@ const behaviour = launch('behaviour', {
 //  - one further launch of each fixture is recorded with Chromium's own startup tracing, and `lib/trace-summary.mjs`
 //    attributes each apply window to style, layout, pre-paint, paint, the compositor commit, the ResizeObserver
 //    delivery and script. Those two launches are NOT pooled into the comparison — tracing has a cost of its own.
+//  - the same two launches carry V8's CPU profile (`CPU_PROFILE_CATEGORIES`), because the trace can say how long script
+//    ran but not which script: a `FunctionCall` names the entry point React's scheduler was called through, never the
+//    component or helper. `summariseAppendProfile` charges every sample inside the increments' span to the browser work
+//    open at that instant or to the sampled function's self time, names each function by the module the renderer
+//    bundle's region markers place it in, and `profileDifference` ranks loaded minus empty per increment. The round
+//    that added it (2026-09-29, the note's "CPU profile" section) is what named the loaded side's extra script.
 const APPLIES = 'window.__rotarisApplies()';
 /** The renderer's frame cadence: sixty consecutive animation frames while nothing is live, as intervals. */
 const FRAME_CADENCE = `(async () => { const ts = []; await new Promise((done) => { const step = (t) => { ts.push(t); if (ts.length < 61) requestAnimationFrame(step); else done(); }; requestAnimationFrame(step); }); const d = ts.slice(1).map((t, i) => t - ts[i]).sort((a, b) => a - b); return { medianMs: d[Math.floor(d.length / 2)], p25Ms: d[Math.floor(d.length / 4)], p75Ms: d[Math.floor((3 * d.length) / 4)], minMs: d[0], maxMs: d[d.length - 1] }; })()`;
@@ -477,7 +485,7 @@ const FRAME_CADENCE = `(async () => { const ts = []; await new Promise((done) =>
 const APPEND_SCRIPT = 'read,glob,read,glob,read,glob,think';
 const APPEND_LAUNCHES = 2;
 const APPEND_READ_AT = 26_000;
-const TRACE_CATEGORIES = 'devtools.timeline,disabled-by-default-devtools.timeline,blink,blink.user_timing,v8.execute,cc,toplevel';
+const TRACE_CATEGORIES = ['devtools.timeline', 'disabled-by-default-devtools.timeline', 'blink', 'blink.user_timing', 'v8.execute', 'cc', 'toplevel', ...CPU_PROFILE_CATEGORIES].join(',');
 function appendRun(name, sid, tracePath = null) {
   const electronArgs = tracePath === null ? [] : [`--trace-startup=${TRACE_CATEGORIES}`, `--trace-startup-file=${tracePath}`, '--trace-startup-format=json', '--trace-startup-duration=300'];
   const r = launch(name, {
@@ -587,9 +595,16 @@ const loadedTraced = appendRun('append-loaded-traced', 'S1200', loadedTracePath)
     return { label, emptyMedianMs: e.median, loadedMedianMs: l.median, differenceMs: Math.round((l.median - e.median) * 100) / 100, slackMs: Math.round(slack * 100) / 100, emptyIqrMs: e.iqr, loadedIqrMs: l.iqr, pass };
   };
   const verdicts = { all: verdict('every update', empty.all.ms, loaded.all.ms), appends: verdict('row appends', empty.appends.ms, loaded.appends.ms) };
+  // The renderer bundle the traced launches ran, so a sampled frame names the source module it came from.
+  const assets = join(app, 'out', 'renderer', 'assets');
+  const bundleUrl = existsSync(assets) ? readdirSync(assets).find((f) => /^index-.*\.js$/.test(f)) ?? null : null;
+  const bundle = bundleUrl === null ? null : bundleRegions(readFileSync(join(assets, bundleUrl), 'utf8'));
+  const profiles = {};
   const traced = (launch, path) => {
-    const trace = existsSync(path) ? summariseAppendTrace(readTrace(JSON.parse(readFileSync(path, 'utf8')))) : null;
+    const events = existsSync(path) ? readTrace(JSON.parse(readFileSync(path, 'utf8'))) : null;
+    const trace = events === null ? null : summariseAppendTrace(events);
     const seqs = new Set(launch.samples.map((s) => s.seq));
+    profiles[launch.name] = events === null ? null : summariseAppendProfile(events, { seqs, bundle, bundleUrl });
     const covered = trace === null ? 0 : trace.windows.filter((w) => seqs.has(w.seq)).length;
     return {
       launch: launch.name, samples: spread(launch.samples.map((s) => s.ms)), cadence: launch.cadence, tracePath: relative(repo, path),
@@ -598,15 +613,30 @@ const loadedTraced = appendRun('append-loaded-traced', 'S1200', loadedTracePath)
       windows: trace === null ? [] : trace.windows.filter((w) => seqs.has(w.seq)),
     };
   };
+  const traceEmpty = traced(emptyTraced, emptyTracePath);
+  const traceLoaded = traced(loadedTraced, loadedTracePath);
+  const profileEmpty = profiles[emptyTraced.name];
+  const profileLoaded = profiles[loadedTraced.name];
   results.append = {
     script: APPEND_SCRIPT, launches: APPEND_LAUNCHES, order: 'alternating: empty, loaded, empty, loaded, then one traced launch of each',
     frameMs: { median: frameMs, perLaunch: cadences },
     empty, loaded, verdicts,
-    trace: { empty: traced(emptyTraced, emptyTracePath), loaded: traced(loadedTraced, loadedTracePath), categories: TRACE_CATEGORIES },
+    trace: { empty: traceEmpty, loaded: traceLoaded, categories: TRACE_CATEGORIES },
+    // V8's sampled profile of the same two launches: per increment, by function and by module, and loaded minus empty.
+    // `all` (every function's figure) is what the difference is taken over and is left out of the file for its size.
+    profile: {
+      empty: profileEmpty === null ? null : { ...profileEmpty, all: undefined },
+      loaded: profileLoaded === null ? null : { ...profileLoaded, all: undefined },
+      difference: profileDifference(profileEmpty, profileLoaded),
+      bundle: bundleUrl,
+    },
     measurementPoint: 'after the frame showing the update has been painted (double requestAnimationFrame; a proxy, per ADR-0045)',
   };
   // The evidence is written BEFORE the verdict is enforced, so a red run leaves its figures on disk.
   writeFileSync(join(output, 'append.json'), `${JSON.stringify(results.append, null, 2)}\n`);
+  // The attribution is part of the evidence this comparison carries since the 2026-09-29 round: a traced launch whose
+  // trace holds no CPU profile would report the trace account alone and say nothing about which script ran.
+  expect(profileEmpty !== null && profileLoaded !== null, `the traced launches carry no CPU profile (${CPU_PROFILE_CATEGORIES.join(', ')}); see append.json`);
   for (const v of Object.values(verdicts)) {
     expect(v.pass, `appending at 1200 rows showed in ${v.loadedMedianMs} ms (${loaded.all.frames.median} frames) against ${v.emptyMedianMs} ms (${empty.all.frames.median} frames) on an empty transcript, on ${v.label}; slack one frame of ${v.slackMs} ms; spreads (IQR) ${v.emptyIqrMs} and ${v.loadedIqrMs} ms`);
   }

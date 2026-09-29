@@ -33,7 +33,12 @@ export class LruCache<V> {
   private misses = 0;
   private evictions = 0;
 
-  constructor(private readonly maxEntries: number, private readonly maxCharacters: number) {}
+  /**
+   * `onEvict` hears every key the bound pushes out. The measurement caches report it to the offset table's ledger
+   * (`pool.ts`'s `MeasureLedger`): a height that falls out of a cache changes what the table reads for that row exactly
+   * as a new measurement does, and the table only re-reads the rows it is told about.
+   */
+  constructor(private readonly maxEntries: number, private readonly maxCharacters: number, private readonly onEvict?: (key: string) => void) {}
 
   get(key: string): V | undefined {
     const held = this.map.get(key);
@@ -65,10 +70,12 @@ export class LruCache<V> {
       this.map.delete(oldest.value);
       this.chars -= dropped.chars;
       this.evictions += 1;
+      this.onEvict?.(oldest.value);
     }
   }
 
   clear(): void {
+    if (this.onEvict !== undefined) for (const key of this.map.keys()) this.onEvict(key);
     this.map.clear();
     this.chars = 0;
   }
@@ -84,8 +91,8 @@ export const MEASUREMENT_CACHE_ENTRIES = 4096;
 export function createRenderCache<V>(): LruCache<V> {
   return new LruCache<V>(RENDER_CACHE_ENTRIES, RENDER_CACHE_CHARACTERS);
 }
-export function createMeasurementCache(): LruCache<number> {
-  return new LruCache<number>(MEASUREMENT_CACHE_ENTRIES, Number.MAX_SAFE_INTEGER);
+export function createMeasurementCache(onEvict?: (key: string) => void): LruCache<number> {
+  return new LruCache<number>(MEASUREMENT_CACHE_ENTRIES, Number.MAX_SAFE_INTEGER, onEvict);
 }
 
 /** The source text a displayed row is rendered from — REQ-UIBENCH-086's "characters" and the cache's content part. */

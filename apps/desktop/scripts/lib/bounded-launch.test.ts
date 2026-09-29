@@ -2,12 +2,14 @@
  * R-062: a proof's launch cannot outlive its bound. Pinned against REAL child processes, because what is being pinned
  * is what the operating system does with the signals: a child that exits by itself, one that takes SIGTERM, one that
  * ignores it (the shape `resilience-proof`'s override launch had, alive 649 s after a 180 s timeout), and a process
- * group whose member outlives its leader. No product code runs here.
+ * group whose member outlives its leader. `spawnBounded` is pinned the same way, including the shape that made
+ * `spawnSync` hang: the quit path's own line must still reach the proof after SIGTERM, because the pipes stay open.
+ * No product code runs here.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the module is plain ESM beside the scripts that run it.
-import { endOverrun, exitWithin } from './bounded-launch.mjs';
+import { endOverrun, exitWithin, logTail, overrunMessage, spawnBounded } from './bounded-launch.mjs';
 
 const POSIX = process.platform !== 'win32';
 
@@ -71,5 +73,48 @@ describe('R-062: ending a proof launch within its bound', () => {
     // The kernel reaps the grandchild on its own schedule; give it a moment rather than assert on the same tick.
     for (let i = 0; i < 50 && alive(grandchild); i += 1) await new Promise((r) => setTimeout(r, 50));
     expect(alive(grandchild)).toBe(false);
+  });
+
+  it('spawnBounded returns a launch that ends by itself as spawnSync would, with nothing overrun', async () => {
+    const r = await spawnBounded(process.execPath, ['-e', "console.log('out'); console.error('err'); process.exit(4);"], { timeoutMs: 10_000 });
+    expect(r).toMatchObject({ status: 4, signal: null, overran: null });
+    expect(r.stdout).toBe('out\n');
+    expect(r.stderr).toBe('err\n');
+  });
+
+  it('spawnBounded keeps the pipes open across SIGTERM, so the quit path\'s own line reaches the proof', async () => {
+    // What `spawnSync`'s timeout breaks: it closes its ends of the pipes as it signals, the line below meets EPIPE,
+    // and the product's uncaught-exception handler loops on it (`docs/defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`).
+    const r = await spawnBounded(process.execPath, ['-e', "process.on('SIGTERM', () => { console.log('quit: requested (before-quit)'); process.exit(0); }); console.log('ready'); setInterval(() => {}, 1000);"], { timeoutMs: 800, graceMs: 5_000 });
+    expect(r.overran).toMatchObject({ timeoutMs: 800, endedBy: 'SIGTERM' });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toBe('ready\nquit: requested (before-quit)\n');
+    expect(overrunMessage('fixture', r, r.stdout)).toMatch(/^fixture overran its 800 ms bound: SIGTERM ended it after \d+ ms\.\n--- the launch's last words ---\nready\nquit: requested \(before-quit\)$/);
+  });
+
+  it.skipIf(!POSIX)('spawnBounded ends a launch that ignores SIGTERM with SIGKILL, and the failure names both and the log tail', async () => {
+    const started = Date.now();
+    const r = await spawnBounded(process.execPath, ['-e', "process.on('SIGTERM', () => console.log('ignored SIGTERM')); console.log('waiting on a condition that cannot come'); setInterval(() => {}, 1000);"], { timeoutMs: 500, graceMs: 500 });
+    expect(Date.now() - started).toBeLessThan(10_000);
+    expect(r.overran).toMatchObject({ timeoutMs: 500, endedBy: 'SIGKILL' });
+    expect(r.signal).toBe('SIGKILL');
+    expect(r.stdout).toContain('ignored SIGTERM');
+    expect(overrunMessage('override', r, r.stdout)).toContain('override overran its 500 ms bound: SIGTERM did not end it within');
+    expect(overrunMessage('override', r, r.stdout)).toContain('waiting on a condition that cannot come');
+  });
+
+  it.skipIf(!POSIX)('spawnBounded returns once the process has exited even while a helper it started holds standard output', async () => {
+    // A grandchild inherits the pipe and outlives its parent; `close` never comes while it lives. The launch has ended,
+    // so the proof moves on after a short bound instead of waiting for the helper. The group is cleaned up here.
+    const started = Date.now();
+    const r = await spawnBounded(process.execPath, ['-e', "const { spawn } = require('node:child_process'); const g = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { stdio: ['ignore', 'inherit', 'inherit'] }); console.log('helper ' + g.pid); process.exit(0);"], { timeoutMs: 10_000 });
+    expect(r).toMatchObject({ status: 0, overran: null });
+    expect(Date.now() - started).toBeLessThan(6_000);
+    const helper = Number(/helper (\d+)/.exec(r.stdout)?.[1] ?? 0);
+    if (helper > 0) { try { process.kill(helper, 'SIGKILL'); } catch { /* gone */ } }
+  });
+
+  it('logTail keeps the last non-empty lines', () => {
+    expect(logTail('a\n\nb\nc\n', 2)).toBe('b\nc');
   });
 });

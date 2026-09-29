@@ -237,6 +237,14 @@ brought to the **foreground**: the host refuses the window's input, not its z-or
 window is not foreground fails against a correct implementation, and the proof does not make it. What the reading turns
 on is the host's enabled state at the moment of the input and the window's unchanged content.
 
+**On Linux (2026-09-28, R-062) the host half is not measured, and the proof says so.** The driver is Win32's, and X11
+has no per-window enabled state to report. Until then the proof spawned `powershell.exe` on every platform and went red
+on `ENOENT`. Under Xvfb it now asserts the registry's reading: the persona window was enabled before the palette,
+disabled while it was open, enabled after Escape, and main logged the modality pair. The host-input readings are stated
+not applicable. **Not measured on Linux:** that a real X server click and real keystrokes are refused by the disabled
+window. That needs an XTEST driver, which this harness does not have
+([`palette-proof-reads-the-win32-host-input-on-every-platform.md`](../../defects/fixed/palette-proof-reads-the-win32-host-input-on-every-platform.md)).
+
 **Found — one defect, in this part's own code, before any of the above could be measured.** Binding `Ctrl+L` and
 `Ctrl+Return` through the registry made both wait two animation frames, so that the Workspace view would be mounted
 before the caret moved. That is correct when the chord arrives from another view and wrong when it arrives from

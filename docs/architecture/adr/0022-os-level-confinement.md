@@ -241,3 +241,14 @@ platform concerned, and says in advance that a rendering matching `REQ-SANDBOX-0
 unit tests do not discharge that check, and this note is not a claim that they do. Raised as **IC-8**
 in `../implementation-conditions.md`, whose shape is IC-3's: both wait on hosts this project does not
 have, and ESC-6 option 2 already priced that extension.
+
+**Reported back 2026-09-28 (R-062): the Linux half of the check IC-8 names has run once, and it did not all
+pass.** `pnpm sandbox-proof` now reads the verdict of the host it runs on instead of the Windows verdict. On a Linux
+host with bubblewrap 0.9.0 it runs the six effects of `REQ-SANDBOX-127` through the product's terminal enforcement
+point, in the built application. All six held. The absent-subpath case of `REQ-SANDBOX-077` did **not** hold: the
+`--tmpfs`/`--remount-ro` pair leaves an empty `.git` on the host, because bubblewrap creates the mountpoint through
+the writable bind. The renderer's reason "leave nothing on the host" is falsified by that measurement and stays
+beside its replacement when one is written. The table, the host, and what the run could not show are in IC-8's
+section of `../implementation-conditions.md`. The defect is
+[`the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`](../../defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md).
+macOS remains unmeasured, and IC-8 is not discharged.

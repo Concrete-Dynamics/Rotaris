@@ -68,7 +68,8 @@ export function Inspector(props: InspectorProps) {
   const { session, rows, personas, runLevel, selectedAgentId, onSelect, models, withheldModels = [], compressionThresholdPercent, runActive, resting, nowIso, onSteer, onCancel, onPopOut, onSetModel, onSetReasoning, drawer = false, onCloseDrawer, onOpenArtifact } = props;
   const agents = useMemo(() => session?.agents ?? [], [session]);
   const selected = useMemo(() => (selectedAgentId === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgentId) ?? null), [selectedAgentId, agents, runLevel]);
-  const followed = useMemo(() => (selected ? null : followedAgent(rows, agents, runLevel)), [selected, rows, agents, runLevel]);
+  // PD-ORCH-005 clause 4 with OQ-97: the run-level agent owns the rows its roots wrote, under whichever name each carries.
+  const followed = useMemo(() => (selected ? null : followedAgent(rows, agents, runLevel, session?.entryRoots)), [selected, rows, agents, runLevel, session]);
   const shown = selected ?? followed;
   const pinned = selected !== null;
   // REQ-MONITOR-050: the tab follows the shown agent's persona (derived during render when the shown agent changes); a tab chosen by hand stays until an agent is chosen.
@@ -86,7 +87,7 @@ export function Inspector(props: InspectorProps) {
   const cancellable = cancelOffered(shown, runActive, resting);
   const chips = shown ? chipStates(resolvedTools(shown, persona?.tools ?? []), shown.calledTools, shown.activeTools) : [];
   const elapsed = shown && elapsedShown(shown) ? elapsedLabel(shown, nowIso) : null;
-  const links = shown ? agentArtifacts(shown, session?.artifacts ?? []) : { produced: [], received: [] };
+  const links = shown ? agentArtifacts(shown, session?.artifacts ?? [], session?.entryRoots) : { produced: [], received: [] };
   const currentModel = shown?.model ?? '';
   const modelOptions = useMemo(() => {
     // REQ-MONITOR-066: the current model is always an option, even when the catalogue no longer lists it.

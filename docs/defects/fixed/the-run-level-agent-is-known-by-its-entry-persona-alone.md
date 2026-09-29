@@ -42,3 +42,40 @@ those names.
 - `packages/ui/src/agents.ts` — `rowsOf`, `followedAgent`, `agentArtifacts` and `personaArtifacts`, each matching the
   run-level agent by the entry persona.
 - `packages/ui/src/TranscriptSurface.tsx` — `scopedRows`, REQ-CHAT-069's one implementation, matching it the same way.
+
+## Repaired — 2026-09-29
+
+Repaired 2026-09-29 under [R-067](../../product/requests.md#r-067). The session now names the entry role's roots, so a
+surface no longer has to guess them from the entry persona. `SessionRecord.entryRoots` lists each root once, oldest first,
+by the two names its record carries: the name its rows and calls carry (`root_persona`) and its canonical instance name
+(`root_canonical_name`). It covers every iteration's root, then the live run's current root, which for a plan cycle has
+no iteration row (`entryRootsOf` in `packages/engine/src/sessions.ts`, `Run.currentRoot`). The run-level agent owns a
+named row when the row carries the entry persona or any root's name, and never by a named row's persona column, which a
+child of the entry persona shares (`ownRow` in `packages/ui/src/agents.ts`). That rule serves `rowsOf` (the persona
+window), `scopedRows` ("This task") and `followedAgent` (the inspector), and each of their callers passes the session's
+roots. The run-level agent's artifact links match an artifact's producer and consumers against the entry persona and each
+root's two names (`agentArtifacts`, `personaArtifacts`). `Run.entryTools` reads the tracker under `rootName`, the name the
+root dispatches under, as `entryContext` already did. A child is still known by its own name alone.
+
+Evidence, each case red on the code before the repair and green with it:
+
+- `packages/ui/src/agents.test.ts`, "PD-ORCH-005 clause 4 with OQ-97 …": with `coding-agent` as the run-level agent and a
+  root opened as `orchestrator`, the root's rows before the rest and after it are the run-level agent's, a child of
+  `coding-agent` keeps its own, and the root's row is followed to the run-level agent.
+- `packages/ui/src/rows.test.ts`, "REQ-CHAT-069 with PD-ORCH-005 clause 4 (OQ-97) …": "This task" keeps those rows and no
+  row of the child.
+- `packages/ui/src/inspector-links.test.ts`, two cases rendered through the inspector and the persona window: the
+  run-level agent of `Lead Planner` links the artifact its root published as `Lead-Planner` and the report it read, and
+  a fallback run-level agent's window shows the root's two rows while the inspector follows its row to it. Both fail
+  with only the call sites' new argument removed, which pins each caller's wiring.
+- `packages/engine/src/run/crash.test.ts`, "clause 4 with OQ-97 (REQ-MONITOR-060/061/071) …": a crash-left session
+  continued with `coding-agent` in place of `orchestrator`; while the resumed root's second call is held, the session
+  names `orchestrator` among its roots, and the run-level agent's called tools are the two calls it made, the held one
+  active. The first half failed with no `entryRoots`. With only the snapshot repaired, the tools read `[]`, which is the
+  second half's own failure.
+- `packages/engine/src/session-resume.test.ts`, the REQ-LIBRARY-093 case: the session names `Lead Planner` with its
+  canonical name `Lead-Planner`, the producer both of its roots' publishes carry.
+
+Not pinned by a unit test: the Workspace's call of `scopedRows`, whose scope is the component's own state and cannot be
+reached without a DOM. A static render cannot choose "This task", so that one-line call site stands on the typecheck and
+on reading.

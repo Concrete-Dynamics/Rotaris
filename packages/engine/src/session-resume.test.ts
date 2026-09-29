@@ -6,6 +6,7 @@ import { asSessionId, FakeClock, mintMachineId, type MachineId, type Result, typ
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
 import { buildContinuationPayload, offersToldIn, RUN_CONFIG_DEFAULTS, Sessions, type ArtifactOps, type Preflight, type PreflightContext, type RunSetup, type TodoDocument, type ToolPort } from './index.js';
+import type { SessionRecord } from '@rotaris/contracts';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
@@ -499,8 +500,9 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
       cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
     });
     // A persona id the canonicaliser rewrites: its space becomes a hyphen in the instance's canonical name.
+    const snapshots: SessionRecord[] = [];
     const sessions = new Sessions({
-      clocks: clock, publisher: { increment: () => undefined, snapshot: () => undefined }, pid: 82, host: HOST,
+      clocks: clock, publisher: { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } }, pid: 82, host: HOST,
       retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-root-author',
       model: null, sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid), attended: () => true,
       tools: (ctx) => port(ctx.artifacts),
@@ -519,6 +521,13 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
     // One publish by each iteration's root (the fake clock stamps both alike, so they are compared in root order).
     const byRoot = (a: { conversation_id: string | null }, b: { conversation_id: string | null }) => (a.conversation_id ?? '').localeCompare(b.conversation_id ?? '');
     expect([...published].sort(byRoot).map((a) => [a.created_by, a.source_persona, a.conversation_id])).toEqual([...roots].map((r) => ({ conversation_id: r.root_task_id })).sort(byRoot).map((r) => ['Lead-Planner', 'Lead Planner', r.conversation_id]));
+    // The surfaces know the run-level agent by the persona id; the session names each root by its rows' name and its
+    // canonical name, so the root's publishes are the run-level agent's links
+    // (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
+    sessions.owner(sid)!.reconcile();
+    const seen = snapshots.at(-1)!;
+    expect(seen.entryRoots).toEqual([{ name: 'Lead Planner', canonical: 'Lead-Planner' }]);
+    expect(seen.artifacts.map((a) => a.producer)).toEqual(['Lead-Planner', 'Lead-Planner']);
   });
 
   it('end to end: a root\'s publish carries its task id as its conversation, and the next iteration\'s handoff names it over a later report', async () => {

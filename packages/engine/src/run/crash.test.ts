@@ -403,6 +403,63 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       expect(dal.timelineOf(sid).filter((t) => t.name === 'steering_injected').map((t) => t.message)).toEqual([expect.stringMatching(/orchestrator/)]);
     });
 
+    /*
+     * Found by the fourth review of the repair of a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record
+     * (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md): the root's rows and calls carry the
+     * persona its iteration was opened with, and the surfaces knew the run-level agent by the entry persona alone.
+     */
+    it('clause 4 with OQ-97 (REQ-MONITOR-060/061/071): the session names a root resumed as the entry role among its roots, and the run-level agent\'s tools are the calls it made under that name', async () => {
+      const sid = await crashed();
+      const client = new ScriptedModelClient([]);
+      const original = client.stream.bind(client);
+      let asked = false;
+      client.stream = (req) => {
+        const root = !asked && req.messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text === 'second'));
+        if (root) asked = true;
+        client.push(root ? toolCalls([{ callId: 'k1', name: 'write', args: {} }, { callId: 'k2', name: 'grep', args: {} }], 'Two more.') : answer('Answered.'));
+        return original(req);
+      };
+      // The root's second call is held until the test has read the session as the surfaces would. Each call is recorded
+      // through the writer as the run host's gate records it (`openToolCall`, `settleToolCall`), which is what the
+      // run-level agent's tool history is read from.
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const port = (writer: SessionWriter): ToolPort => ({
+        specs: () => ['write', 'grep'].map((name) => ({ name, description: name, parameters: { type: 'object' } })),
+        dispatch: async (c) => {
+          const open = { call_id: c.callId, agent_name: c.agentName, tool_name: c.name, args: {} };
+          const ordinal = writer.openToolCall(open);
+          if (c.callId === 'k2') await held;
+          if (ordinal.ok) writer.settleToolCall(ordinal.value, open, { status: 'ok', elapsed_ms: 1, is_error: false, result: 'done' });
+          return { text: 'done', isError: false, status: 'ok' as const, durationMs: 1, label: c.name, args: {} };
+        },
+        cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+      });
+      const snapshots: SessionRecord[] = [];
+      const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, persona: 'coding-agent', model: MODEL, credentialFor: () => async () => 'k' };
+      const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' as const };
+      const next = new Sessions({
+        clocks: clock, publisher: { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } }, pid: 88, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
+        model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s),
+        tools: (ctx) => port(ctx.writer),
+        configure: () => ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }),
+      });
+      expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      expect(next.prompt(sid, 'second').ok).toBe(true);
+      const running = () => dal.residentRows(sid).some((r) => r.call_key === 'k2' && r.tool_status === 'running');
+      for (let i = 0; i < 400 && !running(); i++) await new Promise((r) => setTimeout(r, 5));
+      expect(running()).toBe(true);
+      next.owner(sid)!.reconcile();
+      const seen = snapshots.at(-1)!;
+      // Every root the session recorded, by the name its rows carry and its canonical name: iteration 1's and the one resumed.
+      expect(seen.entryRoots).toEqual([{ name: 'orchestrator', canonical: 'orchestrator' }]);
+      // The calls of its step, recorded under that name, are the run-level agent's history, the held one active.
+      expect(seen.entryTools.called).toEqual(['write', 'grep']);
+      expect(seen.entryTools.active).toEqual(['grep']);
+      release();
+      await next.running(sid);
+    });
+
     it('clause 6 (found by phase 4\'s second review): a continue that declines the open iteration is set up as the entry role — its root is not restored', async () => {
       const sid = await crashed(() => undefined, 'paused');
       const personas: (string | undefined)[] = [];

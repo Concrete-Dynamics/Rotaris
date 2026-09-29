@@ -1,6 +1,6 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { IterationRow, SessionRow } from '@rotaris/store';
-import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type EntryRoot, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -660,12 +660,23 @@ export class Run {
   /**
    * REQ-MONITOR-060/061 (live-run finding K1, R-067): the entry role's tools as the run-level agent presents them — the native
    * set its port's one resolution kept (policy narrowing applied), and its called and in-flight tools from the tracker the
-   * writer feeds, keyed by the persona the root dispatches under. Like `entryContext`, the entry role has no `children` row.
+   * writer feeds, keyed by the name the root dispatches under (`rootName`, as `entryContext` reads it). Not the run's
+   * persona: a root resumed as the entry role keeps the persona its iteration was opened with (OQ-97), and read by the entry
+   * role's name its calls were never found (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
+   * Like `entryContext`, the entry role has no `children` row.
    */
   get entryTools(): EntryToolsPayload {
-    const persona = this.deps.config.persona;
+    const name = this.rootName;
     const activity = this.deps.writer.activity;
-    return { resolved: [...(this.rootPort?.resolvedTools?.() ?? [])], called: activity.calledTools(persona), active: activity.activeTools(persona) };
+    return { resolved: [...(this.rootPort?.resolvedTools?.() ?? [])], called: activity.calledTools(name), active: activity.activeTools(name) };
+  }
+  /**
+   * PD-ORCH-005 clause 4 with OQ-97, and REQ-LIBRARY-093: the root this run executes, or executed last, by the name its rows
+   * and calls carry (`rootName`) and its canonical instance name — what `SessionRecord.entryRoots` adds for a root with no
+   * iteration row, a plan cycle's. Null before the run's first turn.
+   */
+  get currentRoot(): EntryRoot | null {
+    return this.rootRecord === null ? null : { name: this.rootName, canonical: this.rootRecord.canonicalName };
   }
   /** REQ-MONITOR-048 (Part R): the persona's configured thinking level as this run resolved it; null when the persona is unknown or states none. */
   reasoningFor(persona: string): string | null {

@@ -26,7 +26,7 @@ import type { ToolPort } from './run/turn.js';
 import { settleStaleChildren } from './children/orchestration.js';
 import type { DelegationOps } from './children/delegation.js';
 import { DEFAULT_BUDGET, storeChildReport, userCancellation, type Budget } from './children/ledger.js';
-import { DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryToolsPayload, type SessionArtifactLink } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryRoot, type EntryToolsPayload, type SessionArtifactLink } from '@rotaris/contracts';
 import type { ChildRow } from '@rotaris/store';
 import { SummaryWriter } from './run/summary.js';
 import { isActiveStatus } from './run/stop-conditions.js';
@@ -647,6 +647,8 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     // Live-run finding K1: likewise the entry role's tools and the session's artifact links (`entryToolsOf`, `artifactLinksOf`).
     entryTools: { resolved: [], called: [], active: [] },
     artifacts: [],
+    // PD-ORCH-005 clause 4 with OQ-97: likewise the roots the run-level agent owns rows and artifacts under (`entryRootsOf`).
+    entryRoots: [],
     id: r.session_id,
     executionStatus: r.execution_status,
     workspaceRoot: r.workspace_root,
@@ -708,6 +710,22 @@ export function artifactLinksOf(dal: StoreDal, sessionId: SessionId): SessionArt
   return dal.artifactLinksOf(sessionId).map((r) => ({
     id: r.id, slug: r.slug, title: r.title, status: r.status, producer: r.created_by || r.canonical_name || '', ready: isReadyArtifactStatus(r.status), consumedBy: parseList(r.consumed_by),
   }));
+}
+
+/**
+ * PD-ORCH-005 clause 4 with OQ-97, and REQ-LIBRARY-093 (the repair of the-run-level-agent-is-known-by-its-entry-persona-alone.md):
+ * the entry role's root agents of the session, each (name, canonical name) pair once, oldest first — every iteration's, by
+ * the persona it was opened with (`root_persona`, the name its rows and calls carry, which a root resumed as the entry role
+ * keeps) and its `root_canonical_name` (which its publishes and reads record), then the live run's current root, which
+ * for a plan cycle has no iteration row. What the run-level agent owns rows and artifacts under (REQ-MONITOR-071,
+ * REQ-CHAT-069, REQ-MONITOR-044).
+ */
+export function entryRootsOf(dal: StoreDal, sessionId: SessionId, run: { readonly currentRoot: EntryRoot | null } | null | undefined): EntryRoot[] {
+  const out: EntryRoot[] = [];
+  const add = (root: EntryRoot): void => { if (!out.some((r) => r.name === root.name && r.canonical === root.canonical)) out.push(root); };
+  for (const r of dal.iterationsOf(sessionId)) add({ name: r.root_persona, canonical: r.root_canonical_name });
+  if (run?.currentRoot) add(run.currentRoot);
+  return out;
 }
 
 /**
@@ -988,7 +1006,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -1048,7 +1066,7 @@ export class Sessions {
     if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;

@@ -567,13 +567,22 @@ before it, a run that spawned no child drew zero however much it had spent. **`S
 finding K1, 2026-09-29) is the same route for its tools: `resolved` is the native set the live run's root port kept
 (`ToolPort.resolvedTools`, the one resolution's names the callable map kept, so a coordinator's withheld tools are absent —
 REQ-MONITOR-061), `called`
-and `active` the tracker's under the persona the root dispatches as (`Run.entryTools`); with no run live nothing is
+and `active` the tracker's under the name the root dispatches as (`Run.entryTools`, `rootName`: a root resumed as the
+entry role keeps the persona its iteration was opened with, OQ-97); with no run live nothing is
 resolved, the history is read under the latest iteration's `root_persona` (`entryToolsOf`), and the surface lets the
 role's declared tools stand in (REQ-MONITOR-060; the snapshot's `declaredTools`). A LIVE run-level agent whose root port
 has not resolved yet — the pre-flight, before `Run.iterate` sets the port — lists nothing (`runLevelGrant`), never the
 declared set (REQ-MONITOR-061). **`SessionRecord.artifacts`** is the
 session's artifacts not superseded, with producer, ready flag and consumers (`artifactLinksOf`, one body-free read through
 `artifacts_by_created` per snapshot) — what the inspector's and the persona window's artifact links read (REQ-MONITOR-052/068/069).
+**`SessionRecord.entryRoots`** names the entry role's roots, each once, oldest first: every iteration's, by the name its
+rows and calls carry (`root_persona`) and its canonical name (`root_canonical_name`), then the live run's current root,
+which a plan cycle records in no iteration row (`entryRootsOf`, `Run.currentRoot`). The surfaces know the run-level
+agent by the entry persona and by these: it owns a named row carrying either (`ownRow`, which `rowsOf`, `scopedRows` and
+`followedAgent` share; never by a named row's persona, which a child of the entry persona shares), and its artifact
+links match either or a root's canonical name, which its publishes and reads record (REQ-LIBRARY-093). Before this, a
+root whose name was not the entry persona fell outside it
+(`docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md`).
 
 **The MCP surface (Part S; ADR-0033/0034).** A port is created synchronously but its MCP surface needs discovery, so the
 run start kicks discovery off for every carried, launchable server (`McpHost.prepare`, each bounded by REQ-MCP-053's 35 s

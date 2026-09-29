@@ -45,6 +45,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**The run-level agent owns every row, call and artifact its roots carry (REQ-MONITOR-071, REQ-CHAT-069, REQ-MONITOR-053,
+REQ-MONITOR-060, REQ-MONITOR-044 with PD-ORCH-005 clause 4, OQ-97 and REQ-LIBRARY-093, 2026-09-29, R-067).**
+`SessionRecord` gains `entryRoots`: each root of the session once, by the name its rows and calls carry and its canonical
+name, every iteration's then the live run's (`entryRootsOf`, `Run.currentRoot`). The surfaces own a named row for the
+run-level agent by the entry persona or a root's name (`ownRow`, shared by `rowsOf`, `scopedRows` and `followedAgent`),
+and its artifact links by those or a root's canonical name; `Run.entryTools` reads the tracker under `rootName`. This
+repairs `the-run-level-agent-is-known-by-its-entry-persona-alone.md`. The **runtime view**'s §3 paragraph on the entry
+role's snapshot fields (`entryContext`, `entryTools`, `artifacts`) says so. No package, edge, process, channel, message
+kind, command or store column changed.
+
 **A steering prompt pending at a rest is kept (REQ-MONITOR-134 with PD-ORCH-005 clause 4, OQ-127, 2026-09-29, R-067).**
 `Run.turn`'s rest delivers every prompt still pending for a `paused` agent with a record into that record, as the marked
 message its next step would have injected, marked injected once (`deliverSteeringAtRest`); a child resumed `summarizing`

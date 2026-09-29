@@ -34,6 +34,15 @@ keeps writing under the name `recordCrash` looks up (`iterations.root_persona`),
 before a crash keeps what it returned. The row's `persona` column still names the persona it runs as. Nothing changes
 for a root that resumes as its own persona, whose two names are the same.
 
+What the rename meant elsewhere, found by the repair's fourth review: the surfaces knew the run-level agent by the entry
+persona alone, so a root whose rows carry another name fell outside it. When the surface's entry persona is the entry
+role, the root's rows were missing from "This task" and from its persona window, while the inspector followed them to it
+(REQ-CHAT-069, REQ-MONITOR-071, REQ-MONITOR-053). `Run.entryTools`, read under the run's persona, missed every call the
+root dispatched under its own name (REQ-MONITOR-060). The first statement of this repair said nothing of either. Both are
+repaired by [`the-run-level-agent-is-known-by-its-entry-persona-alone.md`](the-run-level-agent-is-known-by-its-entry-persona-alone.md):
+the session names its roots (`SessionRecord.entryRoots`), the run-level agent owns the rows each root's name carries, and
+`entryTools` reads under `rootName`.
+
 Evidence: `packages/engine/src/run/crash.test.ts`, "clauses 3 and 4 with OQ-97: a root resumed as the entry role …":
 a crash-left session is continued with the entry role set up in place of `orchestrator`; the resumed root's step
 completes one call and hangs in the second; the crash is then recorded from the store. On the code before the repair

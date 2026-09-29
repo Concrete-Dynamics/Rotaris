@@ -43,3 +43,12 @@ iteration's `root_canonical_name` and the record's conversation with its root ta
 call's recorded name, which for a root is its persona. OQ-106's bullet naming this note is reported back in place.
 `created_by` still cannot tell one iteration's root from another's: each records the one canonical name its persona
 gives, and OQ-106's reading keys on `conversation_id` for that reason.
+
+What this meant for the agent surfaces, found while repairing the fourth review's finding on the resumed root's rows: the
+artifact links live-run finding K1 added match the run-level agent by its entry persona. For a persona the canonicaliser
+rewrites, its root's publishes and reads, now recorded under the canonical name, were no longer its links
+(REQ-MONITOR-044, REQ-MONITOR-052, REQ-MONITOR-068, REQ-MONITOR-069). Repaired by
+[`the-run-level-agent-is-known-by-its-entry-persona-alone.md`](the-run-level-agent-is-known-by-its-entry-persona-alone.md):
+the session names each root's canonical name (`SessionRecord.entryRoots`), and the run-level agent's links match it. The
+case above now also reads the session's snapshot, which names `Lead Planner` with `Lead-Planner` and both publishes'
+producer `Lead-Planner`.

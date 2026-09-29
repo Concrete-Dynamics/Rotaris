@@ -90,12 +90,13 @@ export function PersonaWindow(props: PersonaWindowProps) {
     const r = await onSteer(shown.id, text);
     if (r.ok) { setText(''); setError(null); } else setError(r.reason);
   };
-  const own = shown ? rowsOf(rows, shown) : [];
+  // REQ-MONITOR-071 with PD-ORCH-005 clause 4 (OQ-97): the run-level agent's rows by every name the session's roots carry.
+  const own = shown ? rowsOf(rows, shown, session?.entryRoots) : [];
   const chips = shown ? chipStates(resolvedTools(shown, declaredTools), shown.calledTools, shown.activeTools) : [];
   const elapsed = shown && elapsedShown(shown) ? elapsedLabel(shown, nowIso) : null;
   // REQ-MONITOR-068/069 (live-run finding K1): the persona-wide card and the instance's own links, from the session's artifacts.
-  const byPersona = personaArtifacts(instances, session?.artifacts ?? []);
-  const links = shown ? agentArtifacts(shown, session?.artifacts ?? []) : { produced: [], received: [] };
+  const byPersona = personaArtifacts(instances, session?.artifacts ?? [], session?.entryRoots);
+  const links = shown ? agentArtifacts(shown, session?.artifacts ?? [], session?.entryRoots) : { produced: [], received: [] };
   return (
     <div className="persona-window" data-persona={persona} data-shown={shown?.id ?? ''} data-instances={instances.length}>
       <DesignPageHeader className="persona-window__header page-header">

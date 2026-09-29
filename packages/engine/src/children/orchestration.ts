@@ -588,7 +588,7 @@ export class IterationChildren implements DelegationOps {
   /**
    * A child whose execution raised where nothing settled it ends `failed` (REQ-ORCH-073's intent at the child's level)
    * with a report whose error names the raise, stored before its parent is told (REQ-ORCH-108), and the teardown's
-   * `child_end` and `child_completed` (REQ-ORCH-098, REQ-HOOKS-003). A child already terminal (a cancel), or `paused`, is
+   * `child_end`, `child_result` and `child_conversation_closed` (REQ-ORCH-098) and `child_completed` (REQ-HOOKS-003). A child already terminal (a cancel), or `paused`, is
    * left as it is, and so is everything after the rest detached this iteration (REQ-SESSION-094). A raise inside the
    * turn while the run comes to rest never reaches here: `execute` catches it and leaves the child `paused` (OQ-96).
    */
@@ -603,7 +603,10 @@ export class IterationChildren implements DelegationOps {
     this.ledger.storeReport(row.task_id, { agent_name: row.canonical_name, role: row.persona, status: 'failed', summary: message, key_findings: [], last_response: '', final_response: '', errors: [{ type: 'child_exception', message: reason }] });
     const t = this.ledger.transition(row.task_id, 'failed');
     if (!t.ok) { deps.warn(t.reason); return; }
+    // REQ-ORCH-098: the same teardown the settle in `execute` writes, "whether or not its execution raised".
     deps.writer.appendTimeline('child_end', 'rotaris', `Child ${row.canonical_name} (${row.task_id}) ended failed.`, { task_id: row.task_id, state: 'failed', at: toIsoUtc(deps.clocks.wall.instant()) });
+    deps.writer.appendTimeline('child_result', 'rotaris', `Child ${row.canonical_name} reported failed: ${message.slice(0, 120)}`, { task_id: row.task_id, status: 'failed' });
+    deps.writer.appendTimeline('child_conversation_closed', 'rotaris', `Child ${row.canonical_name}'s conversation closed.`, { task_id: row.task_id });
     if (deps.hooks) await deps.hooks.fireLifecycle('child_completed', { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: 'failed', status: 'failed', summary: message });
     this.scheduler.settled(this.ledger.get(row.task_id) ?? t.row);
   }

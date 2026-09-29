@@ -601,7 +601,8 @@ artifact before the terminal callbacks resume its parent. Both start paths run a
 `IterationChildren.executeSettling`: the scheduler's `runChild`, and `resumePaused`, whose record load is guarded the
 same way. A raise that `execute`'s own `try` did not catch goes to `settleRaised`. That covers the stretch that builds
 the turn's persona, tool port, compression and fingerprint, the settle after the turn, and a resumed record that does
-not decode. The child ends `failed` with a `child_exception` issue and a report naming the raise, `child_end` and
+not decode. The child ends `failed` with a `child_exception` issue and a report naming the raise, and the teardown the
+settle in `execute` writes (REQ-ORCH-098): `child_end`, `child_result`, `child_conversation_closed` and
 `child_completed`. So no child is left `running` with no execution behind it.
 
 **The stall watch and the corrective message (REQ-ORCH-089, REQ-MONITOR-117..120, REQ-NOTIFY-111/112;

@@ -2425,9 +2425,11 @@ revision 4 as [R-064](requests.md#r-064).*
 > commits name:
 > - two guards removed as redundant;
 > - the tool deadline's cancel at a run's exit, which is timer hygiene;
-> - `track`'s change, which no test can observe while
+> - `track`'s change, which no test could observe while
 >   [`a-child-whose-execution-raises-before-its-turn-stays-running.md`](../defects/fixed/a-child-whose-execution-raises-before-its-turn-stays-running.md)
->   stands (repaired 2026-09-29 under R-067);
+>   stood. *(2026-09-29, R-067: the note is repaired and still no test observes it, for a new reason: `executeSettling`
+>   now settles a raise before `track` sees it, so an execution reaches `track` rejected only when that settle itself
+>   raises.)*
 > - main's `before-quit`, which only the built app reaches.
 >
 > In the built app, driven, one session went through three rests with one child (`bg_d5cb3784`):

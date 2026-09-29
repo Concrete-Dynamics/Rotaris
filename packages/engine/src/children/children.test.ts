@@ -2466,6 +2466,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(dal.artifactsOf(sid).filter((a) => a.kind === 'child_report' && a.source_task_id === row.task_id).map((a) => a.status)).toEqual(['failed']);
       expect(dal.issuesOf(sid).filter((i) => i.kind === 'child_exception').map((i) => i.message)).toEqual(['Child broken raised: no tool port for broken']);
       expect(dal.timelineOf(sid).filter((t) => t.name === 'child_end').map((t) => t.message)).toEqual([`Child broken (${row.task_id}) ended failed.`]);
+      // REQ-ORCH-098: torn down "whether or not its execution raised" — its result and its closed conversation.
+      expect(dal.timelineOf(sid).filter((t) => JSON.parse(t.metadata).task_id === row.task_id && ['child_end', 'child_result', 'child_conversation_closed'].includes(t.name)).map((t) => t.name)).toEqual(['child_end', 'child_result', 'child_conversation_closed']);
       // REQ-HOOKS-003: `child_completed` fires for it, whatever its final state.
       expect(completed).toEqual([{ child_id: row.task_id, child_name: 'broken', persona: 'coding-agent', state: 'failed', status: 'failed', summary: 'Child broken ended failed: its execution raised outside its turn: no tool port for broken' }]);
       await sessions.running(sid);
@@ -2499,6 +2501,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(row).toMatchObject({ state: 'failed', report_stored: 1 });
       expect(JSON.parse(row.report!)).toMatchObject({ status: 'failed', errors: [{ type: 'child_exception' }] });
       expect(JSON.parse(row.report!).summary).toMatch(/^Child one ended failed: its record could not be loaded to resume it: /);
+      // REQ-ORCH-098: a resumed child that had a recorded conversation has it closed too.
+      expect(dal.timelineOf(sid).filter((t) => JSON.parse(t.metadata).task_id === row.task_id && ['child_end', 'child_result', 'child_conversation_closed'].includes(t.name)).map((t) => t.name)).toEqual(['child_end', 'child_result', 'child_conversation_closed']);
       await sessions.running(sid);
       expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
     });

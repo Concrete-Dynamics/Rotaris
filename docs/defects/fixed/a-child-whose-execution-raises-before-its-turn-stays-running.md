@@ -34,16 +34,22 @@ way, and the loop goes on to the next paused child.
 detached the iteration. Any other child:
 - is recorded as a `child_exception` issue;
 - gets a `failed` report whose error names the raise, stored with its artifact;
-- is moved to `failed`, with the `child_end` timeline entry and the `child_completed` hook;
+- is moved to `failed`, with REQ-ORCH-098's teardown as the settle in `execute` writes it: the `child_end`,
+  `child_result` and `child_conversation_closed` timeline entries, then the `child_completed` hook;
 - is handed to the scheduler's terminal callbacks, so a parent waiting in the resume loop or in `wait_for_tasks` is
   released.
 
 Evidence, in `packages/engine/src/children/children.test.ts`, the describe "a raise outside the turn settles the
 child":
 - the fresh path: a tool-port factory that throws. The child ends `failed` with its report, artifact, issue,
-  `child_end` and `child_completed`, and the parent's foreground `delegate` wait returns the report. The iteration
-  closes.
+  `child_end`, `child_result`, `child_conversation_closed` and `child_completed`, and the parent's foreground `delegate`
+  wait returns the report. The iteration closes.
 - the resume path: a paused child's recorded conversation corrupted in the store before the continue. The child ends
-  `failed` with its report, and the resumed iteration closes.
+  `failed` with its report and the same three timeline entries, and the resumed iteration closes.
 
 Both fail on the code before the repair: the child stays `running`.
+
+The teardown's `child_result` and `child_conversation_closed` were added in the verifier's first round (2026-09-29):
+the first form wrote only `child_end` and `child_completed`, which left REQ-ORCH-098's "whether or not its execution
+raised … its conversation is closed, a `child_conversation_closed` timeline event is emitted" unmet. Both tests now
+assert the three entries, and both fail with the two lines removed from `settleRaised`.

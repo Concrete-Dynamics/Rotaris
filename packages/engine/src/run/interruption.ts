@@ -52,7 +52,7 @@ export interface KnownResult {
  * is answered as not run, interrupted before it started (as the live step answers a call it skips). Anything else is
  * returned as it stands. Pure; the caller records what it returns.
  */
-export function answerUnanswered(messages: readonly ChatMessage[], cause: Interruption, known: (callId: string) => KnownResult | undefined): ChatMessage | null {
+export function answerUnanswered(messages: readonly ChatMessage[], cause: Interruption | null, known: (callId: string) => KnownResult | undefined): ChatMessage | null {
   const last = messages[messages.length - 1];
   if (!last || last.role !== 'assistant') return null;
   const calls = last.content.flatMap((p) => (p.kind === 'tool-call' ? [p] : []));

@@ -3860,9 +3860,29 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   from is answered in its record as interrupted, its row settled; a call of the same step that completed keeps its
   result, as above. When the execution returns, the engine writes nothing
   more for it (REQ-SESSION-094's straggler clause). What the call's own tool gate or a streaming model step writes as it
-  finishes is not stopped; `docs/defects/a-detached-call-still-writes-through-its-tool-gate.md` records it. A root's call
-  has no such bound (`docs/defects/a-root-call-that-ignores-the-stop-holds-the-run-open.md`, which predates the
-  build).
+  finishes is not stopped; `docs/defects/fixed/a-detached-call-still-writes-through-its-tool-gate.md` records it. A root's call
+  has no such bound (`docs/defects/fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md`, which predates the
+  build). *Reported back 2026-09-29 ([R-067](../product/requests.md#r-067)): that last sentence no longer holds. The root
+  is awaited within the same 30 s, counted from the first stop request whether or not it was forced, and one still in a
+  call past it is detached as a child execution is: left `paused` by a stop or a quit, with its open call answered as
+  interrupted, or under the explicit cancel with that call answered as cut off, naming no rest. The rest that follows
+  is given what is left of the grace, counted from the first request, so the stop ends within the one 30 s rather than
+  the root's time and then a second 30 s for the children. Under the explicit cancel, which rests nothing, the child
+  executions still running once their records are settled are detached with the root, and a root given up on still
+  drains the background children, bounded by REQ-ORCH-080's own timeout (OQ-121)
+  (`docs/defects/fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md`). *First reported as "A rest that
+  follows a detached root waits for no child execution again", which was true and not enough: a root that returned at
+  29 s still gave the rest a fresh 30 s, and under the explicit cancel the children stayed attached and the drain was
+  skipped (found by the verifier of the repair, corrected the same day).*
+  *Reported back 2026-09-29 ([R-067](../product/requests.md#r-067)): the sentence "What the call's own tool gate or a
+  streaming model step writes as it finishes is not stopped" no longer holds either. Teardown closes every tool port the
+  run built before anything terminal is written: a call its gate still has open settles then, as failed with the rest's
+  interrupted statement, and the gate writes nothing after it. A model step the rest detached streams no row, settles
+  none and counts no usage when it returns, and so does one the explicit cancel leaves running past the grace: the
+  cancel's children are awaited within what is left of it after their records are settled, and detached past it
+  (`docs/defects/fixed/a-detached-call-still-writes-through-its-tool-gate.md`). *First reported without that last
+  clause, when only a rest detached: a child step that ignored the explicit cancel still wrote its row and usage after
+  `result` (found by the verifier of the repair, corrected the same day).*
 - **A call cut by no rest.** A call cut by its agent's limit, by the cancellation of that agent or by the explicit
   cancel is recorded as cut off, and its statement names no rest. Only a pause, a stop, a quit or a crash is named as
   what interrupted a call.
@@ -5392,6 +5412,35 @@ block to 12,000 from its head, which keeps the edited files and the earliest com
 
 **What a ruling decides.** Whether those figures are the facts' own, or the facts count within the transcript's 12,000;
 and, where the block is cut, whether it keeps the earliest commands or, as the transcript does, the most recent.
+
+**OQ-121 — Does the explicit cancel's drain wait past the stop's 30 s?** *(REQ-ORCH-080, "wait up to the shutdown-drain
+timeout (default 120 s; 0 disables) for still-running background children without cancelling them"; REQ-SESSION-092,
+"if the loop has not reached a stop check within 30.0 seconds, a hard cancel follows"; REQ-MONITOR-129; `PD-ORCH-005`
+clause 3, which keeps the explicit cancel "as today", and OQ-96's "The explicit cancel and a child summarising". Raised
+2026-09-29 by the repair round of
+[`a-root-call-that-ignores-the-stop-holds-the-run-open.md`](../defects/fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md)
+under [R-067](../product/requests.md#r-067). Numbered OQ-119 on its branch; renumbered OQ-121 at the merge, origin/main's OQ-119 and OQ-120 having taken the numbers first. Open.)*
+
+A stop that brings the run to rest leaves the background children `paused` and drains nothing (`PD-ORCH-005`). The
+explicit cancel cancels them, so REQ-ORCH-080's drain applies to it: the run waits up to the drain timeout for them,
+records the drain-timeout issue for what is left and then cancels it. REQ-SESSION-092 bounds the same stop at 30 s, after
+which a hard cancel follows, and REQ-ORCH-080's default is four times that. The two requirements do not say which
+bound governs when both apply. The first build of the root's bound hid the question: a root that returned drained, and
+one the grace gave up on skipped the drain, so the same cancel waited up to 120 s or not at all depending on the root
+(found by the verifier of that build).
+
+**The reading built.** The drain is REQ-ORCH-080's own bound, not the grace's, and it runs whether the root returned or
+was given up on at the grace (`Run.turn`): the explicit cancel with active background children can take the grace and
+then the drain timeout, 150 s at the defaults. The 30 s stays the bound on how long any one execution is awaited: once
+the drain is over, a child execution still running past the grace, counted from the first stop request, is detached
+(`IterationChildren.outlast`), so it writes nothing into the finished session (REQ-SESSION-094). A stop
+and a quit drain nothing and end within the one 30 s. The application's quit (REQ-MONITOR-131, REQ-MONITOR-283) is a
+stop, so its 30 s force exit is not met by a drain.
+
+**What a ruling decides.** Whether the explicit cancel's drain should be bounded by REQ-SESSION-092's 30 s (the drain
+given what is left of the grace, or the drain replaced by the grace for the cancel), or run after it as built; and
+whether REQ-ORCH-080's drain should still apply to the explicit cancel at all, now that `PD-ORCH-005` has a stop leave
+the background children paused rather than cancelled.
 
 ## Design-reference dependencies
 

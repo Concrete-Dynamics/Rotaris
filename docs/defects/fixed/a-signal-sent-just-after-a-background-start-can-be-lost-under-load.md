@@ -36,7 +36,7 @@ the test's timing.
   session instead of refusing it", which starts `sleep 30` and signals it at once.
 - `packages/agent-tools/src/terminal/` — the background session and its `send_signal` path.
 
-## Repaired — 2026-09-29 under R-067
+## Outcome — 2026-09-29 under R-067: the test flake repaired, the product's exposure recorded open
 
 **Diagnosis: `dash` discards a SIGINT that reaches a command between its `vfork` and its `exec`.** Measured outside the
 product, spawning as `spawnChild` does (`detached`, piped stdio) and sending SIGINT to the group at once, counting the
@@ -72,13 +72,25 @@ The three recurrences above were all on the `PD-ORCH-005` line, which did not ho
 the phase 3 gate of 2026-09-27, the revision 4 gates of 2026-09-28, and the live-run branch's gate and isolated run of
 2026-09-29.
 
-**Repair: the case's own timing, already landed, with no product change.** `send_signal` delivers the signal to every
-process of the session's group, as REQ-TOOLS-110 says, and reports that it did. What a shell does with a signal is the
-shell's. With `dash` the one exposure is a signal that lands on a command in the instant between its `vfork` and its
-`exec`. That instant is microseconds on an idle host, and the session then ends when that command does. The case's
+**Only the test flake is repaired: the case's own timing, already landed, with no product change.** `send_signal`
+delivers the signal to every process of the session's group, as REQ-TOOLS-110 says, and reports that it did. The case's
 comment now names this mechanism in place of "a SIGINT-masked window", and the sibling note is corrected in place.
+
+**The product's exposure is not repaired, and is recorded open.** A `send_signal SIGINT` or an interrupt that lands on
+a command between `dash`'s `vfork` and its `exec` is reported sent, and the session runs on until that command ends:
+for a server, indefinitely. By this note's own Specs criterion that contradicts OQ-10 as ruled by R-044, now that the
+race reading holds. The window is microseconds on an idle host and wider under load, and it reopens at every command a
+script starts. It is recorded in
+[`a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session`](../a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md).
+Whether the product owes more than the delivery (re-delivery, `exec`, another shell) is
+[OQ-134](../../architecture/open-questions.md).
+
+*Corrected 2026-09-29 in the branch's verification round: this section first read "Repair: the case's own timing,
+already landed, with no product change", and called the exposure "the shell's" with no open record of it. That moved
+the note to `fixed/` while the product still lost the signal it describes.*
 
 **Pinned by** `terminal.test.ts`, "OQ-10 (R-044): send_signal SIGINT stops a background session instead of refusing it".
 It passed in every loaded repeat of the whole file: 25 of 25 runs under six CPU burners, and 20 of 20 under eight
 with this round's two signal cases beside it (`pnpm vitest run packages/agent-tools/src/terminal/terminal.test.ts`,
-Node 24). Its old form lost the signal in the reproduction above. Repaired 2026-09-29 under R-067.
+Node 24). Its old form lost the signal in the reproduction above. The test flake was repaired 2026-09-29 under R-067; the
+product's exposure stays open, as above.

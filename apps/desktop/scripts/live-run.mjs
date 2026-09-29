@@ -1532,7 +1532,10 @@ if (wanted.includes('frictions')) {
   // that filed a tool_error. It reads `killed` now; a `failed (exit -1)` anywhere in the record is the old shape.
   const signalDeath = calls.filter((call) => call.tool_name === 'terminal' && /is failed \(exit -1\)/.test(resultOf(call)));
   const readKilled = calls.filter((call) => call.tool_name === 'terminal' && /is killed \(exit -1\)/.test(resultOf(call)));
-  check(signalDeath.length === 0, "no background session read failed (exit -1) after the agent's signal", signalDeath.length === 0 ? `${readKilled.length} observation(s) read killed (exit -1)` : `ordinal ${signalDeath[0].ordinal} (${signalDeath[0].agent_name})`);
+  // Neither shape in the record means the model never read the session back after its signal: nothing was observed
+  // about the product, so it is a NOTE, not a pass.
+  if (signalDeath.length === 0 && readKilled.length === 0) noted("no background session's end was read back after the agent's signal", signalled ? 'the model did not query the session after send_signal, so the status of its signal death was not observed' : 'no send_signal in the record');
+  else check(signalDeath.length === 0, "no background session read failed (exit -1) after the agent's signal", signalDeath.length === 0 ? `${readKilled.length} observation(s) read killed (exit -1)` : `ordinal ${signalDeath[0].ordinal} (${signalDeath[0].agent_name})`);
   // The probe file served its purpose in the record above; the sandbox stays clean for the scenarios after it.
   if (read) {
     check(existsSync(join(workspace, 'friction-probe.txt')), 'the probe file landed in the workspace', 'friction-probe.txt');

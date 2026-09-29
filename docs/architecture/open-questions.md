@@ -6055,6 +6055,35 @@ and through the live stream REQ-TOOLS-127 holds faithful to what the command wro
 snapshot when a poll hands over a finished paused command, which covers the agent that polls and not the one that
 moves on.
 
+**OQ-134 — Does `send_signal SIGINT` owe the session's stop when the shell discards the signal?** *(REQ-TOOLS-110,
+REQ-TOOLS-128; OQ-10 as ruled in [R-044](../product/requests.md#r-044). Raised 2026-09-29 under
+[R-067](../product/requests.md#r-067) by the verification of the repair of
+[`a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md`](../defects/fixed/a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md),
+for the exposure recorded open in
+[`a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md`](../defects/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md).
+Open.)*
+
+REQ-TOOLS-110 says `send_signal` *sends* the signal. The product sends it to every process of the session's group and
+reports it sent. R-044's ruling reads "SIGINT stops a background session". Where `/bin/sh` is `dash`, a SIGINT that
+lands on a command between `dash`'s `vfork` and the command's `exec` is discarded by that command. The shell holds its
+own copy until the command ends, so the session stops only then, and for a server never. The requirement does not say
+whether the product answers for that shell behaviour. Each repair changes something no requirement states:
+- **Re-deliver.** Check shortly after the signal that the group has ended, and send it again if it has not. A command
+  that handles SIGINT — a server shutting down gracefully — then receives two, and many programs read a second
+  interrupt as "quit now".
+- **`exec` a lone command.** Launch a command that is one simple command as `exec <command>`, so `dash` does not fork.
+  This takes the window away for that command only, and it changes which process leads the group and what the shell
+  reports.
+- **Another shell.** REQ-TOOLS-104 sends POSIX hosts to a POSIX shell, and `findShell` names `/bin/sh`. Choosing `bash`
+  where it exists would change what every background command runs under.
+
+**What the build proceeds under:** delivery once, as REQ-TOOLS-110 states, with the session reporting what its
+process does. A second `send_signal SIGINT` or interrupt stops a session the first one did not. The exposure is
+recorded open in the note above, not repaired.
+
+**What a ruling decides.** Whether R-044's "stops" binds the product past delivery, and if so, which of the three
+repairs is acceptable, or whether the window is accepted as the shell's.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

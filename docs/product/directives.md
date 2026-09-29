@@ -2749,6 +2749,12 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 >   settled before its aborted execution returns. An execution that then found its record live again wrote over the
 >   follow-up, which a case pins.
 > - **The fallback retry starts from the payload** and loses the follow-up. That is put to the owner.
+> - **A child the user cancelled is settled, and may be followed up.** Clause 3 says a cancelled agent is "never
+>   resumed", and clause 16 calls a paused child's cancel "final as clause 3 says". Clause 22 names every terminal state
+>   but the cut-off one, and says clause 5, which lists `cancelled`, does not bar a follow-up. The build reads clauses 3
+>   and 16 as about a continue's resume, which a follow-up is not, so a parent can follow up a child the user cancelled
+>   (REQ-MONITOR-128). The cancel race's case pins it. Refusing it would add a refusal PD-TOOLS-006 revision 3 does not
+>   list; that is put to the owner.
 >
 > Three places of the resume path serve the follow-up unchanged:
 > - clause 3's crash record and clause 2's rest pause a follow-up that has not started, from its record;
@@ -2758,9 +2764,11 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > The defect note is repaired:
 > [`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/fixed/delegate-drops-session-id-and-suppress-auto-context.md).
 >
-> **What was measured.** Fifteen cases in `children.test.ts` and two in `agent-tools`' `delegation.test.ts`. The two
-> tool cases and the first seven engine cases were red on the code before the repair. Each later case was red with its
-> own limb removed. **What was not
+> **What was measured.** Fourteen cases in `children.test.ts` (twelve in the clause 22 describe, with the transition
+> table's case and the writer's) and two in `agent-tools`' `delegation.test.ts`. The two tool cases and the first seven
+> engine cases were red on the code before the repair. Each later case was red with its own limb removed. This report
+> first said fifteen cases; that counted the two outer cases twice, and the case for a later iteration's root, added
+> since, had not been written. **What was not
 > measured.** No built-app or live run followed a child up. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 

@@ -753,6 +753,41 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(dal.eventsOfKind(sid, 'child.transition').map((e) => (JSON.parse(e.payload) as { to_state: string }).to_state)).not.toContain('queued');
     });
 
+    it('OQ-66 ruled, REQ-TOOLS-155: a later iteration\'s root is refused a session_id naming an earlier iteration\'s child, which stays as it ended', async () => {
+      let sid = '' as SessionId;
+      let asked = false;
+      const { sessions, client } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: survey the module' } }]);
+          // The second iteration's root names the first iteration's settled child.
+          if (!asked && textOf(req.messages.at(-1)!).includes('ask the survey again')) {
+            asked = true;
+            const survey = children(sid).find((c) => c.canonical_name === 'survey')!;
+            return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: which files does it have?', session_id: survey.task_id } }]);
+          }
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"surveyed","key_findings":[],"tags":[]}');
+        return answer('The module is small.');
+      });
+      sid = (sessions.start(dal, 'C:/ws', 'survey the module') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const survey = children(sid).find((c) => c.canonical_name === 'survey')!;
+      expect(survey).toMatchObject({ state: 'succeeded', iteration: 1 });
+      expect(sessions.prompt(sid, 'ask the survey again').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(asked).toBe(true);
+      const refused = rootRequests(client).map((r) => textOf(r.messages.at(-1)!)).find((t) => t.startsWith("Task 'survey': rejected"));
+      expect(refused).toMatch(/session_id.*no settled child of yours: none of your children has that task id/);
+      expect(refused).not.toContain('task_id:');
+      // Nothing moved: no second record, no exit from its terminal state, one report.
+      expect(children(sid)).toHaveLength(1);
+      expect(children(sid)[0]).toMatchObject({ task_id: survey.task_id, state: 'succeeded', iteration: 1 });
+      expect(dal.eventsOfKind(sid, 'child.transition').map((e) => (JSON.parse(e.payload) as { to_state: string }).to_state)).not.toContain('queued');
+      expect(dal.eventsOfKind(sid, 'child.complete')).toHaveLength(1);
+      expect(childRequests(client).filter((r) => r.messages.some((m) => textOf(m) === 'TASK: which files does it have?'))).toHaveLength(0);
+    });
+
     it('PD-TOOLS-006 revision 3: a session_id naming a child that has not ended is refused rejected, and the child runs on untouched', async () => {
       let release!: () => void;
       const held = new Promise<void>((r) => { release = r; });

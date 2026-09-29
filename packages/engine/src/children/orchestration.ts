@@ -359,7 +359,8 @@ export class IterationChildren implements DelegationOps {
    * PD-TOOLS-006 revision 3: the refusal of a `session_id` naming `taskId`, or null. It names a settled child of the caller
    * — a direct child by REQ-TOOLS-155's ownership test, in a terminal state, that its `child_timeout` did not cut off. Like
    * `background_output`, another agent's child reads as no child of the caller's. A child the limit cut off keeps
-   * PD-ORCH-004's `continuation_of`, and the reason names that field.
+   * PD-ORCH-004's `continuation_of`, and the reason names that field. A child the user cancelled is settled and is not
+   * refused: PD-ORCH-005 clauses 3 and 16 are read as about a continue's resume (OQ-130, put to the owner).
    */
   private followUpRefusalFor(parentId: string, taskId: string): string | null {
     const head = `session_id '${taskId}' names no settled child of yours`;

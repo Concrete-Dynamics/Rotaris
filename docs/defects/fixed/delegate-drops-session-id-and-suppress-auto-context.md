@@ -87,10 +87,12 @@ Repaired 2026-09-29 under [R-067](../../product/requests.md#r-067). Both halves 
 - `packages/engine/src/children/children.test.ts`:
   - "the transition table", for the follow-up move;
   - "the writer's follow-up reopens a settled child", at the ledger against a real store;
-  - the describe "PD-ORCH-005 clause 22 / PD-TOOLS-006 revision 3", thirteen cases in all:
+  - the describe "PD-ORCH-005 clause 22 / PD-TOOLS-006 revision 3", twelve cases, so fourteen in the file with the two
+    above:
     - the follow-up resumes under its own task id from its record, and reports and notifies again;
     - `run_in_background: false`;
-    - the three refusals (unknown, a name, another agent's child), the live child, and the cut-off child;
+    - the three refusals (unknown, a name, another agent's child), a later iteration's root naming an earlier
+      iteration's child, the live child, and the cut-off child;
     - the blocked child;
     - a follow-up paused while waiting for a model slot, which the continue starts from its record;
     - the cancel race;
@@ -102,6 +104,15 @@ and each then failed:
 - the cascade's exemption and the payload-first record, for the blocked child;
 - the start from the record, for four cases;
 - the wait for the winding-down execution, for the cancel race;
-- the open-call answer, for the open call.
+- the open-call answer, for the open call;
+- the ownership test in `followUpRefusalFor`, for the later iteration's root (a case added in the verifier's first
+  round; it was not run on the code before the repair).
+
+A first count of this list, written here, in clause 22's report and in the first-executions row, said thirteen cases
+in the describe and fifteen in the file; it counted the two outer cases twice. It was eleven and thirteen, and is twelve
+and fourteen with the later iteration's case.
+
+The cancel race's case follows up a child the user cancelled, and it ends `succeeded`. That is a reading where
+`PD-ORCH-005` clauses 3, 16 and 22 meet, recorded in OQ-130 and put to the owner.
 
 The live check the task named as optional was not made.

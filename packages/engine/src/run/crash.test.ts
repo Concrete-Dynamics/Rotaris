@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeClock, mintMachineId, ok, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ChatMessage, type ModelRequest } from '@rotaris/model';
-import type { ApprovalPayload, SessionRecord } from '@rotaris/contracts';
+import { RUN_AGENT_ID, type ApprovalPayload, type SessionRecord } from '@rotaris/contracts';
 import { RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type CheckpointPort, type Publisher, type RunConfig, type ToolPort } from '../index.js';
 import { decodeStoredTodo } from '../todo-view.js';
 import { recordCrash } from './crash.js';
@@ -302,6 +302,9 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         ['orchestrator', 'coding-agent', 'ok'],
         ['orchestrator', 'coding-agent', 'running'],
       ]);
+      // A steer for the root is announced under that same name, the one its injection and its rows carry.
+      expect(next.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: RUN_AGENT_ID, text: 'mind the tests' } }).ok).toBe(true);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'steering_submitted').map((t) => t.message)).toEqual([expect.stringMatching(/^A steering prompt was submitted for orchestrator \(/)]);
       // The host dies in that step; the next repair or continue records the crash from the store alone.
       const w = SessionWriter.open({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { pid: 99, host: HOST, isProcessAlive: () => false });
       if (!w.ok) throw new Error('writer');

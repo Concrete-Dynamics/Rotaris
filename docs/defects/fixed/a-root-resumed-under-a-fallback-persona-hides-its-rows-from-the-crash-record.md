@@ -24,8 +24,9 @@ leaves unmet in this one case.
 Repaired 2026-09-29 under [R-067](../../product/requests.md#r-067). The root's rows are now named by the persona its
 iteration was opened with: `Run.turn` takes the name `resume.root_persona` for a resumed root and the run's persona for
 a fresh one (`rootName`), and uses it wherever the run names its root — the rows `runTurn` writes, the root's tool port,
-the rest's and the stop's `answerOpenCalls`, the entry agent's context reading (`entryContext`) and the wait whose model
-the user replaces. A root resumed as the entry role because its persona is no longer configured (OQ-97) therefore
+the rest's and the stop's `answerOpenCalls`, the entry agent's context reading (`entryContext`), the wait whose model
+the user replaces, and the `steering_submitted` entry of a steer for the root (`Run.steer`, found by the repair's review:
+it still named the run's persona, so the root was announced under one name and injected under another). A root resumed as the entry role because its persona is no longer configured (OQ-97) therefore
 keeps writing under the name `recordCrash` looks up (`iterations.root_persona`), and a call of its step that completed
 before a crash keeps what it returned. The row's `persona` column still names the persona it runs as. Nothing changes
 for a root that resumes as its own persona, whose two names are the same.
@@ -35,4 +36,6 @@ a crash-left session is continued with the entry role set up in place of `orches
 completes one call and hangs in the second; the crash is then recorded from the store. On the code before the repair
 the completed call was answered as "not run: it was interrupted by a crash before it started", and its row and the
 running one carried the entry role's name; with the repair it keeps "wrote the file" and only the running call is
-answered as interrupted, its row settling `failed`. OQ-97's fallback bullet is reported back in place.
+answered as interrupted, its row settling `failed`. The same case steers the resumed root, and its `steering_submitted`
+entry names `orchestrator`; on the first build of the repair it named `coding-agent`. OQ-97's fallback bullet is
+reported back in place.

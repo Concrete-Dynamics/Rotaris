@@ -30,6 +30,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { workspacesRootFor } from './lib/harness.mjs';
+import { zeroCostLine } from './lib/autopsy-coherence.mjs';
 
 const require = createRequire(join(process.cwd(), 'apps', 'desktop', 'package.json'));
 const Database = require('better-sqlite3');
@@ -200,7 +201,8 @@ for (const j of jumps.slice(0, 10)) console.log(`  ${j.at}: in=${j.input} out=${
 console.log('');
 console.log('### coherence');
 console.log(`  null summary on stopped run: ${stopped && (row.summary_text ?? '') === ''}`);
-console.log(`  zero cost with tokens: ${row.cost === '0' && row.tokens_input + row.tokens_output > 0}`);
+// Asked only where a figure existed: `cost_qualifier` `unknown` makes 0 the correct total (live-run finding K2(b)).
+console.log(zeroCostLine(row));
 for (const [path, n] of [...reads.entries()].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 10)) console.log(cut(`  read ${n}×: ${path}`));
 for (const [command, n] of [...commands.entries()].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 10)) console.log(cut(`  retried ${n}×: ${command}`));
 console.log('');

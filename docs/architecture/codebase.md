@@ -835,7 +835,10 @@ positive half read from the product's own `issues` table — the stall must be s
 what it was classified as must not be fatal. Two smaller ones: the wedge **soft-paused before the hard cap**,
 so `hardMs`'s own question is still unmeasured live and now says so; and `duress`'s `zero cost with tokens`
 check would have reported a fault on an unmetered endpoint that has no cost to record, so it is conditioned on
-the accounting kind — caught before the forty-minute scenario was run rather than after. ~~`duress` has not been
+the accounting kind — caught before the forty-minute scenario was run rather than after. *Corrected 2026-09-29 (live-run
+finding K2(b)): the condition is gone. The reader was wrong, not the endpoint: `autopsy.mjs` now reads the session's
+`cost_qualifier` and answers `false` where no request had a figure (`scripts/lib/autopsy-coherence.mjs`), and `duress`
+asks the question unconditionally.* ~~`duress` has not been
 executed; it owes its row.~~ *`duress` was executed on 2026-09-29 and has its row in `first-executions.md`.*
 
 **What the board's live path found on its first execution — 2026-09-11, and the eighty-first defect.** The fifth

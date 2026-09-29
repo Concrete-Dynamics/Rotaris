@@ -324,7 +324,7 @@ afterAll(async () => {
 });
 
 describe.skipIf(!shell || !proofDir)('the live stream behind a real PTY (ADR-0021 first execution; REQ-TOOLS-127, REQ-SHELL-103/104)', () => {
-  it('10,000 lines: the frames are gapless, the deltas concatenate to the PTY bytes, the closing frame is the observation text', async () => {
+  it('10,000 lines: the frames are gapless, the deltas concatenate to what the command wrote (live-run L9), the closing frame is the observation text', async () => {
     const m = await realManager();
     const tool = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 10_000 });
     const c = ctx();
@@ -349,12 +349,19 @@ describe.skipIf(!shell || !proofDir)('the live stream behind a real PTY (ADR-002
     expect(own[0]!.kind).toBe('meta');
     const deltas = own.filter((f) => f.kind === 'delta');
     expect(deltas.map((f) => f.payload).join('')).toBe(raw);
+    // Live-run L9 (REQ-TOOLS-127): the tap carries what the command wrote — the wrapper's echo, its two markers, the
+    // prompt and the product's own environment snapshot after the command are withheld — so the deltas start at the
+    // command's first line and end at its last.
+    const written = deltas.map((f) => f.payload).join('');
+    expect(written).not.toContain('__rot_');
+    expect(written.startsWith('line 1\r\n') || written.startsWith('line 1\n')).toBe(true);
+    expect(written.trimEnd().endsWith('line 10000')).toBe(true);
     const closing = own.find((f) => f.kind === 'screen' && f.closing);
     expect(closing?.payload).toBe(text);
     expect(own.at(-1)).toMatchObject({ kind: 'meta', meta: { running: false, exitCode: 0 } });
     expect(own.indexOf(closing!)).toBe(own.length - 2);
     // The ceiling: at the 100 ms default no two deltas of one stream are closer than the floor.
-    measurements['tenThousandLines'] = { frames: own.length, deltas: deltas.length, bytes: raw.length, elapsedMs: Math.round(elapsed), gapless: gapless(own), deltasEqualPty: deltas.map((f) => f.payload).join('') === raw, closingEqualsObservation: closing?.payload === text };
+    measurements['tenThousandLines'] = { frames: own.length, deltas: deltas.length, bytes: raw.length, elapsedMs: Math.round(elapsed), gapless: gapless(own), deltasEqualPty: deltas.map((f) => f.payload).join('') === raw, deltasCarryNoMarker: !written.includes('__rot_'), closingEqualsObservation: closing?.payload === text };
   });
 
   it('a background session publishes on its own `bg:<id>` stream with its own counter, and the foreground keeps its own', async () => {

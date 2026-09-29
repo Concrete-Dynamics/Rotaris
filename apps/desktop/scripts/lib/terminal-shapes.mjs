@@ -35,6 +35,10 @@ export function terminalShapes(platform = process.platform) {
     // `hardMs` was passed by `index.ts` and read nowhere, so a call supplying no `timeout` had the soft pause
     // and no hard cap at all — REQ-TOOLS-097 wants both bounds with the first to fire governing.
     { id: 'wedge', match: /setTimeout/, command: node },
+    // Live-run finding L2: an empty poll right after the wedge's soft pause returned in under a millisecond saying "No
+    // output for 30 seconds", and the model counted thirty seconds a poll. `prompt` is how the list names it, since the
+    // command itself is empty; the scenario reads the first empty-command call after the wedge.
+    { id: 'poll', match: /^$/, command: '', prompt: 'an empty command (command "") — one poll of the command above, at once' },
     // Run `2e21e324`'s docker line, in the lower case it was recorded in, at exit 0. It warned as REQ-TOOLS-113's
     // `FAILED ` marker; PD-TOOLS-003 matches that marker in capitals only, so it must not warn now. A regression
     // guard, as `diff-exit-1` is for ESC-41.

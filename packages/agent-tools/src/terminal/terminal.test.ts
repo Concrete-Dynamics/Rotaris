@@ -6,10 +6,11 @@ import { FakeClock, type Clocks } from '@rotaris/kernel';
 import { foregroundStreamId } from '@rotaris/contracts';
 import { nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
-import { parseSnapshot, snapshotCommand, wrapCommand } from './foreground.js';
+import { CommandRegion, parseSnapshot, snapshotCommand, wrapCommand } from './foreground.js';
 import { endOfExit } from './background.js';
 import { execFileSync } from 'node:child_process';
-import { findShell, nodePtyFactory, TerminalManager, terminalDescription, terminalTool, TERMINAL_DEFAULTS, type BackgroundSession } from './index.js';
+import { performance } from 'node:perf_hooks';
+import { findShell, nodePtyFactory, seconds, TerminalManager, terminalDescription, terminalTool, TERMINAL_DEFAULTS, type BackgroundSession } from './index.js';
 import type { ToolContext } from '../tools/types.js';
 
 /**
@@ -143,6 +144,34 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     // POSIX first execution 2026-09-16).
     expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, 'a\nb', 'S', 'E')).toBe("printf '%s\\n' 'S'; command eval \"$(printf '%b' 'a\\nb')\"; printf 'E:%s\\n' \"$?\"");
     expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, "x='q'\ny", 'S', 'E')).toContain(`'x='\\''q'\\''\\ny'`);
+  });
+  it('REQ-TOOLS-127 (live-run L9): the live stream is given what the command wrote — not the echo, the markers, the prompt or what follows', () => {
+    const S = '__rot_0123456789abcdef01234567_s';
+    const E = '__rot_0123456789abcdef01234567_e';
+    const pty = [
+      `# printf '%s\\n' '${S}'; command eval 'ls'; printf '${E}:%s\\n' "$?"\r\n`,
+      `${S}\r\n`,
+      'alpha\r\nbeta_\r\n',
+      `${E}:0\r\n# `,
+      "Q='__rot_b64__'; … the snapshot's own echo and output\r\n",
+    ].join('');
+    // Every way the bytes can arrive: whole, one character at a time, and split at every boundary in two.
+    const splits: string[][] = [[pty], [...pty]];
+    for (let i = 1; i < pty.length; i += 1) splits.push([pty.slice(0, i), pty.slice(i)]);
+    for (const chunks of splits) {
+      const region = new CommandRegion(S, E);
+      const shown = chunks.map((c) => region.push(c)).join('');
+      expect(shown).toBe('alpha\r\nbeta_\r\n');
+      expect(region.ended).toBe(true);
+    }
+    // A command that prints the marker text of ANOTHER call is output like any other.
+    const region = new CommandRegion(S, E);
+    expect(region.push(`${S}\r\n__rot_deadbeefdeadbeefdeadbeef_e:0\r\n`)).toBe('__rot_deadbeefdeadbeefdeadbeef_e:0\r\n');
+  });
+  it('REQ-TOOLS-098 (live-run L2): a measured span is stated in tenths of a second, never rounded up to a window', () => {
+    expect(seconds(0.6)).toBe('under 0.1 seconds');
+    expect(seconds(1_486)).toBe('1.5 seconds');
+    expect(seconds(31_240)).toBe('31.2 seconds');
   });
   it('OQ-133: a signal death\'s status — killed (−1) for a signal the session delivered, failed (128 + n) for one it did not, an exit code as ever (REQ-TOOLS-109/179, live-run L4)', () => {
     const none = new Set<string>();
@@ -425,6 +454,40 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     await new Promise((res) => setTimeout(res, 3_500));
     const poll = await t.execute(args({ command: '' }), ctx());
     expect(output(poll.text)).toContain('done-later');
+  }, 20_000);
+  // Live-run L2: five polls in 21.6 s each said "No output for 30 seconds" after under a millisecond, and the model counted
+  // thirty seconds a poll. A poll returns at once; what it states is what it measured.
+  it('REQ-TOOLS-098 (live-run L2): an empty poll states the time it actually waited, not the no-output window it did not wait out', async () => {
+    const t = await tool();
+    const r = await t.execute(args({ command: `${SH.sleep(4)}; ${SH.echo('late')}` }), ctx());
+    expect(diag(r.text)['outcome_kind']).toBe('soft_pause');
+    const t0 = performance.now();
+    const poll = await t.execute(args({ command: '' }), ctx());
+    const took = performance.now() - t0;
+    expect(diag(poll.text)).toMatchObject({ exit_code: -1, outcome_kind: 'soft_pause' });
+    expect(output(poll.text)).toBe('(no output)');
+    expect(poll.text).not.toContain('No output for 1.5 seconds');
+    const since = /No new output in the (under 0\.1|\d+\.\d) seconds since the previous observation, and none for (\d+\.\d) seconds in the merged terminal stream; stdout and stderr are both captured\./.exec(poll.text);
+    expect(since, poll.text).not.toBeNull();
+    // What it states it waited is no more than the call took (plus the stated precision), and the silence is at least the window.
+    if (since![1] !== 'under 0.1') expect(Number(since![1]) * 1000).toBeLessThanOrEqual(took + 100);
+    expect(Number(since![2])).toBeGreaterThanOrEqual(1.5);
+    expect(poll.text).toContain('The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.');
+    await new Promise((res) => setTimeout(res, 3_000));
+    const done = await t.execute(args({ command: '' }), ctx());
+    expect(output(done.text)).toContain('late');
+    expect(diag(done.text)['exit_code']).toBe(0);
+  }, 20_000);
+  it('REQ-TOOLS-127 (live-run L9): the tap a live stream reads carries what the command wrote, and none of the wrapper, the markers or the snapshot', async () => {
+    const t = await tool();
+    const session = manager!.session('s1:orchestrator', root);
+    let tapped = '';
+    const untap = session.onOutput((chunk) => { tapped += chunk; });
+    const r = await t.execute(args({ command: `${SH.echo('first-line')}; ${SH.echo('second-line')}`, timeout: 15 }), ctx());
+    untap();
+    expect(output(r.text)).toBe('first-line\nsecond-line');
+    expect(stripVt(tapped).split('\n').map((l) => l.trim()).filter((l) => l !== '')).toEqual(['first-line', 'second-line']);
+    expect(tapped).not.toContain('__rot_');
   }, 20_000);
   it('REQ-TOOLS-101/102: validation refusals and the reset confirmation', async () => {
     const t = await tool();

@@ -47,6 +47,12 @@ export interface ForegroundResult {
   readonly error: string | null;
   /** PD-TOOLS-001: what the post-reset restore did — carried into the observation's detail. */
   readonly restore: RestoreOutcome;
+  /**
+   * REQ-TOOLS-098 (live-run L2): what a poll of a command still running actually measured, on the monotonic clock —
+   * the time since the previous observation of the command (its soft pause, or the poll before this one), and the time
+   * since the command last wrote anything. Absent on every other result.
+   */
+  readonly waited?: { readonly sinceObservedMs: number; readonly silentMs: number };
 }
 
 export const FOREGROUND_CAP = 100_000;
@@ -126,6 +132,72 @@ interface PausedCall {
   delivered: string;
   onEnd: ((code: number) => void) | null;
   code: number | null;
+  /** Monotonic time the command last wrote anything (live-run L2). */
+  lastOutputAt: number;
+  /** Monotonic time of the previous observation of the command: its soft pause, then each poll (live-run L2). */
+  observedAt: number;
+}
+
+/**
+ * REQ-TOOLS-127 (live-run finding L9): what the live stream is given of one call — the bytes the COMMAND wrote, which
+ * lie between the start marker the wrapper prints and the end frame it prints after. The PTY carries more than that: the
+ * shell's echo of the whole wrapped line, which names both markers; the prompt; and, after the command, the product's
+ * own PD-TOOLS-001 snapshot of the shell's environment. The agent's capture has always dropped them (ADR-0020
+ * consequence 2); the live tap forwarded every byte, so the preview showed `printf …` and `__rot_…_s` above the output.
+ *
+ * The PRINTED start marker is told from its echo by what follows it: the echo quotes it (`'__rot_…_s'`), the printed
+ * one ends its row. Everything up to and including that row is withheld. From there bytes pass through, less a tail
+ * that could still be the beginning of the end frame, which is held until the next chunk decides it; the end frame is
+ * cut at its first occurrence, as the capture cuts it, and nothing after it passes. The markers are per-call nonces, so
+ * no command can spell one to hide its own output.
+ */
+export class CommandRegion {
+  private phase: 'before' | 'inside' | 'after' = 'before';
+  private held = '';
+  private readonly endFrame: string;
+  constructor(private readonly start: string, end: string) {
+    this.endFrame = `${end}:`;
+  }
+  /** True once the end frame has been seen: nothing more passes. */
+  get ended(): boolean {
+    return this.phase === 'after';
+  }
+  /** The part of `chunk` (with whatever an earlier chunk left undecided) that the command wrote; '' when none. */
+  push(chunk: string): string {
+    if (this.phase === 'after') return '';
+    this.held += chunk;
+    if (this.phase === 'before') {
+      let from = 0;
+      for (;;) {
+        const at = this.held.indexOf(this.start, from);
+        if (at < 0) {
+          // Keep only what could be the start of a marker split across two chunks.
+          this.held = this.held.slice(Math.max(0, this.held.length - (this.start.length - 1)));
+          return '';
+        }
+        const after = at + this.start.length;
+        if (after >= this.held.length) { this.held = this.held.slice(at); return ''; }
+        if (this.held[after] === "'") { from = after; continue; }
+        const nl = this.held.indexOf('\n', after);
+        if (nl < 0) { this.held = this.held.slice(at); return ''; }
+        this.held = this.held.slice(nl + 1);
+        this.phase = 'inside';
+        break;
+      }
+    }
+    const at = this.held.indexOf(this.endFrame);
+    if (at >= 0) {
+      const out = this.held.slice(0, at);
+      this.held = '';
+      this.phase = 'after';
+      return out;
+    }
+    let keep = Math.min(this.held.length, this.endFrame.length - 1);
+    while (keep > 0 && !this.endFrame.startsWith(this.held.slice(this.held.length - keep))) keep -= 1;
+    const out = this.held.slice(0, this.held.length - keep);
+    this.held = this.held.slice(this.held.length - keep);
+    return out;
+  }
 }
 
 /** Windows: terminate the whole tree; POSIX: signal the group. Never throws. */
@@ -360,8 +432,13 @@ export class ForegroundSession {
   private state: 'idle' | 'running' | 'resetting' = 'idle';
   private chain: Promise<unknown> = Promise.resolve();
   private listeners: ((chunk: string) => void)[] = [];
-  /** Part AL: the live stream's taps — every byte the PTY produces, before the capture reads it (REQ-TOOLS-127). */
+  /**
+   * Part AL: the live stream's taps, ahead of the capture (REQ-TOOLS-127). Since live-run L9 they are given what the
+   * running call's command wrote — `region` — and not every byte the PTY produces.
+   */
   private taps: ((chunk: string) => void)[] = [];
+  /** The call whose output the taps are given; null between calls, and during the product's own snapshot and restore. */
+  private region: CommandRegion | null = null;
   private size = { cols: 240, rows: 50 };
   private active: { readonly start: string; readonly end: string; readonly onEnd: (code: number) => void; readonly onKill: (reset: boolean) => void } | null = null;
   private pendingText = '';
@@ -393,7 +470,10 @@ export class ForegroundSession {
     return this.size.rows;
   }
 
-  /** Part AL: a tap on the PTY's output, in arrival order, ahead of the capture; the returned function removes it. */
+  /**
+   * Part AL: a tap on what the running command writes, in arrival order, ahead of the capture — the wrapper's echo, its
+   * markers, the prompt and the product's own snapshot withheld (live-run L9); the returned function removes it.
+   */
   onOutput(cb: (chunk: string) => void): () => void {
     this.taps.push(cb);
     return () => { this.taps = this.taps.filter((t) => t !== cb); };
@@ -439,7 +519,8 @@ export class ForegroundSession {
   }
 
   private onData(chunk: string): void {
-    for (const t of this.taps) { try { t(chunk); } catch (cause) { this.deps.warn(`terminal session ${this.id}: an output tap raised: ${String(cause)}`); } }
+    const shown = this.region?.push(chunk) ?? '';
+    if (shown !== '') for (const t of this.taps) { try { t(shown); } catch (cause) { this.deps.warn(`terminal session ${this.id}: an output tap raised: ${String(cause)}`); } }
     for (const l of this.listeners) l(chunk);
     if (!this.active && !this.pausedCommand) return;
     this.pendingText += chunk;
@@ -547,8 +628,12 @@ export class ForegroundSession {
       this.clearers.set(nonce, clear);
     });
     this.pendingText = '';
+    this.region = new CommandRegion(start, end);
     p.write(`${wrapCommand(this.deps.backend, command, start, end)}\r`);
     const outcome = await done;
+    // Only a soft-paused command keeps writing to its stream; after any other outcome what the PTY carries is the
+    // product's own — the snapshot, the reset, the restore — and none of it is the command's (live-run L9).
+    if (outcome.kind !== 'pause') this.region = null;
     this.clearers.get(nonce)?.();
     this.clearers.delete(nonce);
     this.listeners = this.listeners.filter((l) => l !== listener);
@@ -580,11 +665,11 @@ export class ForegroundSession {
       // A pause nobody ever polled is replaced here: release its listener and its screen rather than leave both.
       this.pausedCommand?.onEnd?.(-1);
       this.pausedCommand?.screen.dispose();
-      const paused: PausedCall = { start, end, screen, hold, delivered: lines.join('\n').replace(/\s+$/, ''), onEnd: null, code: null };
+      const paused: PausedCall = { start, end, screen, hold, delivered: lines.join('\n').replace(/\s+$/, ''), onEnd: null, code: null, lastOutputAt, observedAt: monotonic.now() };
       this.pausedCommand = paused;
       this.active = null;
       this.state = 'idle';
-      const pausedListener = (chunk: string) => { paused.hold.push(chunk); };
+      const pausedListener = (chunk: string) => { paused.hold.push(chunk); paused.lastOutputAt = monotonic.now(); };
       this.listeners.push(pausedListener);
       paused.onEnd = () => { this.listeners = this.listeners.filter((l) => l !== pausedListener); };
       return finish({ exitCode: -1, timedOut: false, softPaused: true, killStatus: null, error: null });
@@ -626,7 +711,13 @@ export class ForegroundSession {
     }
     const pc = this.pausedCommand;
     if (!pc) return { output: '', exitCode: 0, timedOut: false, softPaused: false, killStatus: null, sessionReinitialized: false, truncated: false, error: 'No paused command to poll.', restore: { status: 'none' } };
-    return { output: await ForegroundSession.sincePoll(pc), exitCode: -1, timedOut: false, softPaused: true, killStatus: null, sessionReinitialized: false, truncated: pc.screen.truncated || pc.hold.dropped, error: null, restore: { status: 'none' } };
+    // Live-run L2: a poll returns at once with what has arrived. What it states is what it measured — the time since
+    // the previous observation and since the command last wrote — never the no-output window it did not wait out.
+    const output = await ForegroundSession.sincePoll(pc);
+    const now = this.deps.monotonic.now();
+    const waited = { sinceObservedMs: Math.max(0, now - pc.observedAt), silentMs: Math.max(0, now - pc.lastOutputAt) };
+    pc.observedAt = now;
+    return { output, exitCode: -1, timedOut: false, softPaused: true, killStatus: null, sessionReinitialized: false, truncated: pc.screen.truncated || pc.hold.dropped, error: null, restore: { status: 'none' }, waited };
   }
 
   /**
@@ -649,6 +740,7 @@ export class ForegroundSession {
     const old = this.pty;
     this.pty = null;
     this.active = null;
+    this.region = null;
     this.pausedCommand?.screen.dispose();
     this.pausedCommand = null;
     this.pausedDone?.screen.dispose();

@@ -6,7 +6,7 @@ runs. The shell's echo of the whole wrapped line, marker included, then reaches 
 one [`a-posix-command-that-fails-to-expand-loses-its-end-marker`](a-posix-command-that-fails-to-expand-loses-its-end-marker.md)
 records (L1): the command is not guarded, and a model writes bash (`<(…)` process substitution here) for a shell that
 is `/bin/sh`. The symptom is new: that note, and
-[`the-terminal-preview-shows-the-command-wrapper`](../the-terminal-preview-shows-the-command-wrapper.md) (L9), say what the
+[`the-terminal-preview-shows-the-command-wrapper`](the-terminal-preview-shows-the-command-wrapper.md) (L9), say what the
 agent reads is clean. Here it is not.
 
 Noticed 2026-09-29 in the duress live run of branch `fix-child-report`, whose one failing check was "no end marker

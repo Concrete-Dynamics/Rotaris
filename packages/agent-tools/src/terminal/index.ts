@@ -186,6 +186,11 @@ export class TerminalManager {
   }
 }
 
+/** A measured span as the observation states it: tenths of a second, and "under 0.1 seconds" below that (live-run L2). */
+export function seconds(ms: number): string {
+  return ms < 100 ? 'under 0.1 seconds' : `${(ms / 1000).toFixed(1)} seconds`;
+}
+
 function invalid(message: string, a: { readonly command: string }): Observation {
   const diag = diagnosticBlock({ backend: BACKEND_NAME, command: a.command, detail: message, error_class: 'ValueError', exit_code: null, failure_kind: 'invalid_request', outcome_kind: 'invalid_request', outcome_severity: 'warning', warnings: [] });
   return errorObservation(`${message}\n${outputSection('', false)}\n${diag}`, { outcomeKind: 'invalid_request', failureKind: 'invalid_request', exitCode: null, warnings: [] });
@@ -360,9 +365,14 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
             : ' There was no earlier shell state to restore.';
         detail = `The command exceeded its timeout of ${timeoutMs / 1000} seconds; the terminal session was forcibly restarted to terminate the process tree, and shell state (working directory, variables, aliases, background jobs) was lost${r.killStatus === 'reset_failed' ? ' — restarting the session failed' : ''}.${restoreNote}${r.error ? ` (${r.error})` : ''}`;
       } else if (r.softPaused) {
-        detail = r.output === ''
-          ? `No output for ${(config.noOutputWindowMs ?? 30_000) / 1000} seconds in the merged terminal stream; stdout and stderr are both captured. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`
-          : 'The command is still running; this is the output so far. Poll again with an empty command.';
+        // REQ-TOOLS-098: an empty capture states the elapsed no-output window. For the soft pause that is the window it
+        // waited out; for a poll — which returns at once — it is what the poll measured (live-run L2): a poll that said
+        // "No output for 30 seconds" after under a millisecond had the model counting thirty seconds per poll.
+        detail = r.output !== ''
+          ? 'The command is still running; this is the output so far. Poll again with an empty command.'
+          : r.waited
+            ? `No new output in the ${seconds(r.waited.sinceObservedMs)} since the previous observation, and none for ${seconds(r.waited.silentMs)} in the merged terminal stream; stdout and stderr are both captured. A poll returns at once rather than waiting for output. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`
+            : `No output for ${(config.noOutputWindowMs ?? 30_000) / 1000} seconds in the merged terminal stream; stdout and stderr are both captured. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`;
       } else if (r.error) {
         detail = `Terminal execution failed before completion: ${r.error}`;
       } else {

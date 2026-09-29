@@ -21,7 +21,7 @@ import { existsSync, realpathSync } from 'node:fs';
 // @ts-expect-error — the shapes are plain ESM beside the script that replays them.
 import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes } from './terminal-shapes.mjs';
 
-interface Shape { readonly id: string; readonly match: RegExp; readonly command: string }
+interface Shape { readonly id: string; readonly match: RegExp; readonly command: string; readonly prompt?: string }
 
 const PLATFORMS = ['win32', 'linux'] as const;
 
@@ -32,9 +32,10 @@ describe('the terminal shapes the live run replays', () => {
 
       it('carries every shape of its platform, each named once', () => {
         // Live-run L1's `unexpandable` is POSIX only: PowerShell has no such expansion.
+        // Live-run L2's `poll` follows the wedge on both.
         expect(shapes.map((s) => s.id)).toEqual(platform === 'win32'
-          ? ['here-string', 'long-output', 'wedge', 'failed-word', 'diff-exit-1', 'pipe-to-shell']
-          : ['here-string', 'long-output', 'unexpandable', 'wedge', 'failed-word', 'diff-exit-1', 'pipe-to-shell']);
+          ? ['here-string', 'long-output', 'wedge', 'poll', 'failed-word', 'diff-exit-1', 'pipe-to-shell']
+          : ['here-string', 'long-output', 'unexpandable', 'wedge', 'poll', 'failed-word', 'diff-exit-1', 'pipe-to-shell']);
       });
 
       it('matches its own command — the round trip the scenario depends on', () => {

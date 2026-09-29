@@ -1663,6 +1663,7 @@ if (wanted.includes('faults')) {
  * | `long-output`   | the concatenation above, and the agent's capture VT-stripped where the window's was not |
  * | `unexpandable`  | live-run finding L1 — `a-posix-command-that-fails-to-expand-loses-its-end-marker.md`: a bash-ism dash cannot expand abandoned the wrapper's end frame, so a finished command read as a soft pause (POSIX only) |
  * | `wedge`         | `hardMs` passed and read nowhere: a call supplying no `timeout` had the soft pause and no hard cap (REQ-TOOLS-097) |
+ * | `poll`          | live-run finding L2 — `an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md`: an empty poll returned at once and said thirty seconds had passed |
  * | `failed-word`   | `exit-0-output-flagged-on-the-word-failed-twice.md` — PD-TOOLS-003's capitals-only marker, and a real regression guard |
  * | `diff-exit-1`   | `git-diff-with-differences-read-as-a-failure.md` — ESC-41's carve-out, and a real regression guard |
  * | `pipe-to-shell` | `a-read-only-git-pipeline-was-withheld-by-the-pipe-to-shell-rule.md` — also cost, not contradiction |
@@ -1686,7 +1687,7 @@ if (wanted.includes('terminal')) {
     'Do not rewrite them, do not split them, do not add a timeout argument, and do not skip one because you',
     'expect it to fail — a failure is the answer for some of them. Report what each did in one line.',
     '',
-    ...SHAPES.map((shape, i) => `${i + 1}. ${shape.command}`),
+    ...SHAPES.map((shape, i) => `${i + 1}. ${shape.prompt ?? shape.command}`),
   ].join('\n');
   const log = await launch('terminal', {
     ROTARIS_CAPTURE_PROMPT: PROMPT,
@@ -1760,6 +1761,23 @@ if (wanted.includes('terminal')) {
     } else noted('the wedge did not reach the hard cap', 'it soft-paused first; the hard bound is unmeasured this run');
   }
 
+  // Live-run L2: the first poll after the wedge. What it says it waited must be no more than the time between the wedge's
+  // end and its own, both as the product recorded them; the no-output window it never waited out must not be claimed.
+  const poll = wedge === undefined ? undefined
+    : terminals.find((call) => call.ordinal > wedge.ordinal && String(call.args.command ?? '') === '' && call.args.is_input !== true && call.args.session_action === undefined && call.args.background !== true);
+  if (poll === undefined) noted('no poll followed the wedge', 'no empty-command call after it; what a poll states is unasked');
+  else {
+    const d = diagnosticOf(poll.result);
+    const since = /No new output in the (under 0\.1|\d+\.\d) seconds since the previous observation/.exec(poll.result);
+    const gapMs = poll.endedAt !== null && wedge.endedAt !== null ? poll.endedAt - wedge.endedAt : null;
+    if (d?.outcome_kind !== 'soft_pause' || (outputOf(poll.result) ?? '').trim() !== '(no output)') noted('the poll did not find the wedge silent', `outcome ${d?.outcome_kind ?? 'none'}; what an empty poll states is unasked`);
+    else {
+      check(!/No output for 30 seconds/.test(poll.result), 'an empty poll did not claim the no-output window it never waited out', /No output for 30 seconds/.test(poll.result) ? 'it said "No output for 30 seconds"' : 'no window claimed');
+      const claimed = since === null ? null : since[1] === 'under 0.1' ? 0 : Number(since[1]) * 1000;
+      check(claimed !== null && gapMs !== null && claimed <= gapMs + 100, 'what the poll said it waited is no more than the time that passed', `stated ${since?.[1] ?? 'nothing'} s, ${gapMs === null ? '?' : Math.round(gapMs)} ms between the wedge's end and the poll's`);
+    }
+  }
+
   const failedWord = attempted('failed-word')[0];
   if (failedWord === undefined) noted('the docker line was not attempted', 'no terminal call carried it; PD-TOOLS-003 is unasked');
   else {
@@ -1800,7 +1818,7 @@ if (wanted.includes('terminal')) {
     platform: process.platform, status: read?.session.execution_status, stopReason: read?.session.stop_reason,
     attempted: seen, terminalCalls: terminals.length,
     diagnostics: SHAPES.map((shape) => {
-      const call = attempted(shape.id)[0];
+      const call = shape.id === 'poll' ? poll : attempted(shape.id)[0];
       return { id: shape.id, command: shape.command, ...(call === undefined ? { attempted: false } : { attempted: true, ordinal: call.ordinal, status: call.status, diagnostic: diagnosticOf(call.result) }) };
     }),
   };

@@ -41,6 +41,8 @@ const results = {
   testsPassed: test.status === 0,
   tenThousandLinesGapless: m.tenThousandLines?.gapless === true && m.tenThousandLines?.deltasEqualPty === true,
   closingFrameIsObservation: m.tenThousandLines?.closingEqualsObservation === true,
+  // Live-run L9 (REQ-TOOLS-127): the live stream carries what the command wrote — no wrapper echo, no marker.
+  deltasCarryOnlyTheCommand: m.tenThousandLines?.deltasCarryNoMarker === true,
   backgroundStreamOwnCounter: m.backgroundStream?.gapless === true && typeof m.backgroundStream?.streamId === 'string' && m.backgroundStream.streamId.startsWith('bg:ts_'),
   keystrokeArmsFlushUnderCeiling: typeof m.armedFlush?.keyToFrameMs === 'number' && m.armedFlush.keyToFrameMs < 500 && m.armedFlush.intervalMs === 2000,
   fortyStreamsUnderBound: typeof m.fortyStreams?.deliveredPeakPerSecond === 'number' && m.fortyStreams.deliveredPeakPerSecond <= 1000 && m.fortyStreams.streams === 40,

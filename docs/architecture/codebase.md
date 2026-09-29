@@ -1063,7 +1063,11 @@ child; a mid-run narrowing refused; a server crashing after connect, warned once
 drop rules per persona and a session toggle gone after a relaunch; the Settings category probing every row twice with the
 `.cmd` stand-in for `browser` healthy through the wrap; two fatal YAML defects reported together and the same defects
 dropped from a discovery file; a server that never answers `initialize` bounded at 35 s with the exit 1.5 s after the
-quit. Evidence under `.proof/mcp-proof/`.
+quit. Evidence under `.proof/mcp-proof/`. **Launches 6 and 7 are driven (2026-09-28, R-062):** the toggle, the prompt,
+both `Check status` presses, the secrets choice and every read wait for their conditions through `lib/driver.mjs`
+rather than firing at offsets, each step recorded in `<name>.steps.json`; the offsets had made two REQ-MCP-115 reds on a
+loaded Linux host that the product had not earned
+([note](../defects/fixed/mcp-proofs-drop-rules-launch-clicks-at-a-fixed-offset.md)).
 
 
 **What `pnpm sessions-proof` does.** It builds Electron and launches the app ten times against a scratch store and
@@ -1176,7 +1180,11 @@ of the evidence rather than a move of it, and the driver below removes the press
 launch, opens a loopback listener and answers newline-delimited JSON: `waitFor`, `click` (by selector, optionally
 by the name on screen), `type`, `chord`, `inspect`, `probe`, `eval`, `screenshot`, `resize`, `command` (relayed to
 main's own `runCommand`, never around it) and `quit`. The client is `scripts/lib/driver.mjs`; `pnpm app:drive` is
-the one-command-at-a-time CLI over it and `pnpm driver-proof` is its proof.
+the one-command-at-a-time CLI over it and `pnpm driver-proof` is its proof. Since 2026-09-28 the client also carries
+`until` (a wait on a condition that is not one selector — a store row, an attribute), `choose` (either chooser kind: a
+native `<select>` confirmed once the control shows the value, or the design system's `SearchableSelect` by two real
+clicks) and `stopApp` (the quit, then SIGTERM, a grace and SIGKILL through `lib/bounded-launch.mjs` for an application
+that does not exit, reported rather than absorbed); `mcp-proof`'s launches 6 and 7 were the first to use them.
 
 **Why it exists, stated as the thing it replaces.** The sixty-seven `ROTARIS_CAPTURE_*` seams share one shape: a
 step scheduled at a wall-clock offset, fired at whatever the window is showing then, read back by grepping the

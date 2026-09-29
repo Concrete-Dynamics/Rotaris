@@ -109,7 +109,7 @@ before the ladder's), **OQ-111** (what the report summariser reads), **OQ-112** 
 write is refused) **and OQ-113** (REQ-LIBRARY-092's fallback, answered by amendment). **Three more were raised the same day
 from the live runs and left open: OQ-114** (the specification's fixed figures on a reasoning model's critical path, and a
 continuation that starts from nothing), **OQ-115** (the code-intelligence server's imperative tool description, rendered
-verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-117** (what an iteration is told of a task it takes up that is not the run's own) was raised the same day by the repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` and left open. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -4423,7 +4423,7 @@ message.
   had the next iteration take the resumed iteration's own task instead (found by the iteration lane's second review).*
 - **Taking it up sends it.** An iteration's first message is the launch content, whose latest request is whatever
   launched the run
-  ([`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)),
+  ([`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)),
   so a message taken up by a later run's iteration, or by the iteration after a continue by a second message, would be
   selected and marked done without ever being sent as the request, and the newer request worked in its place and again
   under its own task. So a task that is a continue's message (`message`, set when it is appended and kept for good, in
@@ -4432,9 +4432,12 @@ message.
   same text, when the launch content already says it. It is sent only to an iteration's root: a plan cycle is not an
   iteration and has no iteration task (REQ-ORCH-153), so the plan cycle held after a resumed iteration whose own task
   was a message is not told it (found by the iteration lane's fifth review). Only the message's text is sent; its images
-  are not, as the task holds its text only. Every other task keeps the recorded defect's behaviour, which this does not
-  repair. *The second build selected the message and sent it nothing of it (found by the iteration lane's fourth
-  review).*
+  are not, as the task holds its text only. Every other task an iteration selects that is not the run's own, and whose
+  text is not the launch content's request, is sent the same way since the recorded defect's repair (2026-09-29, under
+  [R-067](../product/requests.md#r-067)), in words that name it a task of the session's todo rather than an earlier
+  message. *Until that repair every other task kept the recorded defect's behaviour — sent only the launch content —
+  which this reading did not repair.* *The second build selected the message and sent it nothing of it (found by the
+  iteration lane's fourth review).*
 - **Several continues on one open iteration.** Each continue by message that resumes the iteration appends its own task,
   held by it; they close together, in the order they were appended.
 - **Which continues make one.** Only a continue that delivers a message: a continue by message (`Sessions.prompt`), with
@@ -4706,12 +4709,15 @@ and what the answer at that gate launches.
   published anything, and its progress and recent iterations are from before the close — while the preamble, read from
   the live todo, says that iteration has closed and, when it succeeded, carried the message out. The payload's own
   opening ("Prior session context is authoritative") leaves the role two statements of the todo that disagree. This is
-  the behaviour
-  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
-  records for a later iteration of the same run, met here by the first turn after the resumed iteration; nothing
-  rebuilds the payload for the plan cycle, and the pending tasks the preamble lists are what the approved plan releases.
-  Measured in `plan-gate-resume.test.ts`, "the plan cycle held after a resumed iteration is sent the handoff the continue
-  built before that iteration ran". Recorded at the merged build's tenth review.
+  the staleness OQ-106 reads for a later iteration of the same run ("The handoff is read once"), met here by the first
+  turn after the resumed iteration; nothing rebuilds the payload for the plan cycle, and the pending tasks the preamble
+  lists are what the approved plan releases. The repair of
+  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
+  (2026-09-29) keeps this: it adds an execution iteration's own task after the launch content and rebuilds no
+  handoff, and a plan cycle is sent no iteration task. *Until that repair this bullet called the staleness the behaviour
+  that defect records; the repair left it, so it stands on this reading and the ruling question below.* Measured in
+  `plan-gate-resume.test.ts`, "the plan cycle held after a resumed iteration is sent the handoff the continue built
+  before that iteration ran". Recorded at the merged build's tenth review.
 - **What the answer launches.** A plan decision's relaunch appends no task: the held run's stored todo already carries
   every task — the gated work, and after this hold the continue's message too, which `PD-ORCH-005` clause 17 made a task
   of its own and closed with the resumed iteration, `complete` or `pending` and taken up first — so appending the last
@@ -4888,14 +4894,18 @@ from the launch content computed when the run began.
   artifact is carried — was not taken: it would carry nothing where an unsuperseded artifact stands.
 - **The handoff is read once, when the continuation starts its run.** REQ-SESSION-115's handoff is "the payload handed
   to the run", built at the continue, and clause 20's "that nothing supersedes" holds of it then. A later iteration of
-  the same run is not a new handoff: it is re-sent the launch content computed at the continue, by the recorded defect
-  `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`, so **its artifact line can name an artifact
+  the same run is not a new handoff: it is re-sent the launch content computed at the continue — the base of every
+  iteration, which the repair of
+  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
+  (2026-09-29) kept, adding only the iteration's own task after it — so **its artifact line can name an artifact
   superseded since, or another agent's where the resumed root published its first artifact after the continue**, as
   its todo and progress lines can be stale. The plan cycle held after a resumed iteration (`PD-ORCH-003` revision 2)
   is sent the same stale payload, whose artifact line was read before the resumed root published anything (OQ-104, "The
-  handoff after the preamble is the continue's"). The artifact line is not recomputed alone; the repair belongs to that
-  defect, which must keep the three flows it names, and `PD-ORCH-004` revision 4 adds only the open offers to that
-  first message.
+  handoff after the preamble is the continue's"). The artifact line is not recomputed alone, and `PD-ORCH-004` revision
+  4 adds only the open offers to that first message. *Until that repair this bullet said the payload was re-sent by
+  that defect and that its repair, which had to keep the three flows it names, would settle the staleness; the repair
+  kept those flows by keeping the payload as every iteration's base, so the staleness stands on this reading and the
+  ruling question below.*
 - **A cancelled child's stub report counts as "of any kind".** A cancelled agent's report is stored as an artifact
   (REQ-LIBRARY-092), and clause 16 (OQ-101) adds a route that writes one every time: cancelling a `paused` child while
   its session rests. When the iteration's root published nothing, the handoff then carries that stub ("The user
@@ -4958,9 +4968,9 @@ handoff it is re-sent, or whether a plan cycle's root is such a root.
   message, so the root reads it as part of its task. It is the same list, header, lines, newest ten and elision line
   as the handoff's and the resumed root's, so a later reader recognises it.
 - **The re-sent handoff is left as it is.** A later iteration of a continuation run is re-sent the payload built at
-  the continue, whose list can name an offer taken up since (the behaviour
-  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
-  records). Those lines are not rewritten; an offer the payload already names is not named again, and one taken up since
+  the continue, whose list can name an offer taken up since (OQ-106's "The handoff is read once", which the repair of
+  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
+  kept; *until that repair this bullet called it the behaviour that defect records*). Those lines are not rewritten; an offer the payload already names is not named again, and one taken up since
   is refused at admission with "already continued by".
 - **A plan cycle is told none.** A plan cycle is not an iteration (REQ-ORCH-153) and its root takes up no offer
   (OQ-99), so neither a plan cycle at a run's start nor one held after a resumed iteration (`PD-ORCH-003` revision 2)
@@ -5216,6 +5226,38 @@ before a crash that never reach the total — is a defect of its own,
 **What a ruling decides.** Whether the counters are accumulated as each call completes, so the displayed total follows the
 record during a pass, which would amend or narrow REQ-ORCH-097's timing; or whether the lag stands and the surface says
 the total is as of the last completed pass.
+
+**OQ-117 — What is an iteration told of a task it takes up that is not the run's own, and with what?** *(REQ-CHAT-040, whose queued prompt becomes a task "carrying the prompt text as its content"; REQ-ORCH-004 and REQ-ORCH-135, whose task a resumed session carries on and "stays anchored"; REQ-ORCH-072, which gives the root execution record "the task's execution payload"; REQ-CHAT-090 and REQ-CHAT-091, which let the user rename a task; and `PD-ORCH-005` clause 17 with OQ-102, whose message is told in words of its own. Raised 2026-09-29 by the repair of [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md) under [R-067](../product/requests.md#r-067). Open.)*
+
+No requirement says what an iteration's first message holds when the task it selected is not the one the launch
+content states: a queued prompt (REQ-CHAT-040), a task a pause, a stop or a death put back and a later message's run
+takes up (REQ-ORCH-135), a task after a plan decision's gated one, or an improvement run's proposal (REQ-LIBRARY-059,
+whose launch prompt lists every proposal). The recorded defect sent such an iteration the launch content alone, so the
+task was marked done without ever reaching a model.
+
+**What the build proceeds under.**
+
+- **The launch content is the base, and the task follows it.** Every execution iteration's first message is the launch
+  content — which keeps the three flows the defect named: the approved plan, the executor's instructions and the
+  continuation's handoff — then, when the selected task is not the run's own (`RunDeps.taskId`) and its text is not the
+  launch content's request, a text part naming it the task to work on: "The task for this iteration is the task below,
+  from the session's todo. Work on it now. What precedes it is what this run was launched with: read it as context, and
+  leave any other work it asks for to its own task." followed by the task's text. The words are the build's; a
+  continue's message keeps OQ-102's. The alternative — the task's text alone, in place of the launch content — was
+  tried and reverted in `PD-ORCH-005` phase 2, because it loses all three flows.
+- **A task of the same text as the launch content's request is told nothing more**, whichever task it is: the Continue
+  action that restates a pending request, a plan decision's gated request, or a queued prompt that repeats the launch
+  prompt word for word. The launch content already states it.
+- **The run's own task is told nothing more even when the user renamed it** (REQ-CHAT-091): its iteration is sent the
+  launch content, which still states the request as it was sent.
+- **Only the task's text is sent.** A task holds its text only, so a request put back and taken up by a later run is sent
+  without the images its prompt carried, as OQ-102 reads for a message.
+- **The handoff is not rebuilt** (OQ-104, OQ-106).
+
+**What a ruling decides.** Whether the product should word the task part otherwise, or name a queued prompt as
+REQ-CHAT-040's "Queued Prompt: <id>"; whether a task that repeats the launch content's request should still be told it;
+whether a renamed own task should be sent its new text; and whether a task taken up by a later run should carry the
+images its prompt was sent with, which needs a task to hold them.
 
 ## Design-reference dependencies
 

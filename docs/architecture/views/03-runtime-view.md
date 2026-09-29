@@ -134,7 +134,8 @@ and before the first new iteration — and parks there (`parkAtPlanGate(resumed)
 pending ahead of the launch content (`resumedWorkSection`), which it is told the resumed iteration carried out only
 when that iteration closed the continue's message as done (`done`, `pending` or `none`: PD-ORCH-005 clause 17). The
 launch content after it is the payload the continue built before that iteration ran, so its handoff predates the close
-(OQ-104, `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`). A message-limit pause that wins there leaves
+(OQ-104, "The handoff after the preamble is the continue's", which the repair of
+`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` left as it reads). A message-limit pause that wins there leaves
 nothing open and the continue's message `complete`, and its resolution appends that message again, as the Continue
 action does on the other routes to that state (OQ-103). A plan
 decision relaunches with `RunDeps.appendsTask: false`:
@@ -312,10 +313,21 @@ it), so one a death left held and the run returns to pending is not appended a s
 appends its task, even beside a pending task of the same text: it states a request (REQ-ORCH-004, OQ-102). The plan cycle held after a resumed iteration is told what became of
 every message that iteration held (`Todo.heldIds`, read when the run is built): this continue's, or an earlier one's a
 Continue action resumed it with. A message is marked as one for good (`Task.message`), so the iteration that takes it up
-is sent it: `iterate()` records the selected message's text when it is not the launch content's own request, and
-`Run.firstMessage` adds it to an execution root's first message after the launch content and before the offers list —
-never to a plan cycle's, which is not an iteration, including the one held after a resumed iteration whose own task was
-a message.
+is told it in clause 17's words.
+
+**Every iteration is sent its own task (REQ-CHAT-040, REQ-ORCH-004 / REQ-ORCH-135; the repair of
+`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`, 2026-09-29).** The launch content — the prompt and its
+attachments, or a continuation's handoff payload, with a plan decision's `planSection` — is the base of every
+execution iteration's first message. `iterate()` records the task it selected (`Run.takenUp`) when that task is not the
+run's own (`RunDeps.taskId`) and its text is not the launch content's request (`taskLabel ?? task`) — a queued prompt,
+a task a pause, a stop or a death put back, an earlier request, an improvement run's proposal, a continue's message — and
+`Run.firstMessage` adds it as a text part after the launch content and before the offers list, naming it the task to
+work on (`takenUpText`; a continue's message in clause 17's words). The run's own task, and a task whose text is the
+launch content's request (the Continue action restating a pending request, a plan decision's gated request), are told
+nothing more. Never a plan cycle's root, which is not an iteration, including the one held after a resumed iteration
+whose own task was a message. The launch content is not rebuilt per iteration: a later iteration of a continuation is
+re-sent the handoff as it was read at the continue (OQ-106, "The handoff is read once"; OQ-104 for the plan cycle held
+after a resumed iteration).
 
 **An iteration a previous run left open, declined (PD-ORCH-005 clause 6; the repair of the crashed-iteration defect).**
 Every execution iteration has an `iterations` row from the moment its root is minted, and `iteration.end` and the row's

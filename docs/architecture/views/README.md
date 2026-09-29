@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**Every iteration is sent its own task (REQ-CHAT-040, REQ-ORCH-004 / REQ-ORCH-135, 2026-09-29, R-067).** The launch
+content stays the base of every execution iteration's first message, and the todo task the iteration selected, when it
+is not the run's own and its text is not the launch content's request, follows it as the task to work on
+(`Run.takenUp`, `takenUpText`, `Run.firstMessage`) — a queued prompt, a task put back, an improvement run's proposal,
+the task after a plan decision's gated one; PD-ORCH-005 clause 17's message keeps its own words. The handoff is not
+rebuilt per iteration (OQ-104, OQ-106). This repairs `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`.
+The **runtime view**'s §2 gains the paragraph. No package, edge, process, channel, message kind or store column changed.
+
 **A request queued behind an open approval dialog waits for its turn (REQ-TOOLS-063, 2026-09-28).** Main answers a
 present-request that waits behind the dialog already open in its window, or behind requests queued ahead of it, with
 the new run-host request `approval.queued` (`MainWindows.enqueueApproval` answers which). `RunHostPresenter` then stops
@@ -177,7 +185,8 @@ resumes an open iteration appends its message to the planner todo as a task that
 `heldBy` in the todo document), marked as a message for good (`Task.message`), which closes with it
 (`Todo.releaseHeld`): done when it succeeds, pending on any other close. A message left pending is taken up by the next
 iteration (`Task.nextUp`, `Todo.selectNext`), which is sent its text after the launch content when that names another
-request (`Run.firstMessage`). A held message a death left stale closes as the record says its iteration did
+request (`Run.firstMessage`; since 2026-09-29 every selected task that is not the run's own is, as the entry above
+records). A held message a death left stale closes as the record says its iteration did
 (`Todo.releaseStale`, against `succeededIterationsOf`, which the run's constructor shares). A continue that delivers no
 message — the Continue action, "continue without them", and the message-limit resolution's 'continue' and 'double' —
 judges the todo after that settle, and appends no task while the todo holds the last request unfinished — a task of

@@ -2779,6 +2779,22 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > measured.** No built-app or live run followed a child up. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **The quit's gap, repaired 2026-09-29 under [R-067](requests.md#r-067):** clause 9's withdrawal by a quit was built for
+> what is pending when the run host's `shutdown` arrives, and main sends it only after `window-all-closed` has waited on
+> REQ-GIT-101's checkpoint operation. The last window's presenter is revoked as it closes, so an approval asked in that
+> gap met no presenter and was denied by the headless policy. Main now marks the revoke its quit causes (`quitting`, from
+> `QuitState`), and the run host holds what is asked meanwhile — an approval unshown in `pending_approvals`, a present
+> that crossed the close, a question — with no budget expiring on it, for the shutdown to withdraw by `quit`. The same
+> hold keeps an approval asked before the quit from timing out into a denial while the checkpoint operation runs.
+> [OQ-132](../architecture/open-questions.md) states the reading against REQ-TOOLS-064, REQ-TOOLS-058, REQ-EVENTS-049 and
+> REQ-CHAT-094. The note is repaired:
+> [`an-approval-asked-after-the-last-window-closes-is-denied.md`](../defects/fixed/an-approval-asked-after-the-last-window-closes-is-denied.md).
+> **What was measured.** Eight unit cases across `gate.test.ts`, `questions.test.ts`, the run host's `tools.test.ts` and
+> `dispatch.test.ts`; the first was red on the code before the repair, and each limb's cases were red with it removed.
+> **What was not measured.** No built-app quit with a checkpoint operation in flight and an ask made during it was
+> driven; main's `revokePresenter` is wiring no unit reaches. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <!--

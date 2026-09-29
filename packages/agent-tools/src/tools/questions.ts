@@ -5,6 +5,7 @@ import {
   interruptionPhrase, QUESTION_OPTIONS_MAX, QUESTION_STEPS_MAX, stepsPhrase,
   type QuestionAnswer, type QuestionAnswers, type QuestionPrompt, type QuestionStep,
 } from '@rotaris/contracts';
+import type { WaitHoldOptions } from '../approvals.js';
 import { errorObservation, INTERRUPTED_FAILURE_KIND, observation, type ToolExecutor } from './types.js';
 
 /**
@@ -41,7 +42,11 @@ export class PendingQuestions {
   private readonly waiters = new Map<string, Waiter>();
   /** REQ-CHAT-094's reentrancy guard: conversation id → the request id pending for it. */
   private readonly byConversation = new Map<string, string>();
-  constructor(private readonly timers: Timers) {}
+  private readonly held: () => boolean;
+  /** PD-ORCH-005 clause 9: `held` is `PendingApprovals`' — a budget expiring while the quit holds the wait is armed again. */
+  constructor(private readonly timers: Timers, options: WaitHoldOptions = {}) {
+    this.held = options.held ?? (() => false);
+  }
 
   /**
    * REQ-CHAT-093 / REQ-TOOLS-178: `timeoutMs` null or 0 waits without limit. Answers null when the conversation
@@ -56,7 +61,11 @@ export class PendingQuestions {
     const promise = new Promise<QuestionOutcome>((resolve) => { settle = resolve; });
     const w: Waiter = { prompt, promise, settle, timer: null };
     if (timeoutMs !== null && timeoutMs > 0) {
-      w.timer = this.timers.after(timeoutMs as Millis, () => this.finish(prompt.request_id, { kind: 'timed_out', afterSeconds: timeoutMs / 1000 }));
+      const expire = (): void => {
+        if (this.held()) { w.timer = this.timers.after(timeoutMs as Millis, expire); return; }
+        this.finish(prompt.request_id, { kind: 'timed_out', afterSeconds: timeoutMs / 1000 });
+      };
+      w.timer = this.timers.after(timeoutMs as Millis, expire);
     }
     this.waiters.set(prompt.request_id, w);
     this.byConversation.set(prompt.conversation_id, prompt.request_id);

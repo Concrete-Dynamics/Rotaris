@@ -1093,7 +1093,10 @@ async function main(): Promise<void> {
     },
     revokePresenter: (wcId) => {
       parentWindowIds.delete(String(wcId));
-      void runHost.request({ kind: 'presenter.revoke', windowId: String(wcId) }, millis(5_000)).catch(() => undefined);
+      // PD-ORCH-005 clause 9: the run host's shutdown follows only after `window-all-closed` has waited on the checkpoint
+      // operation (REQ-GIT-101). A revoke the quit causes says so, and what an agent asks in that gap waits for the quit
+      // to withdraw it instead of meeting no presenter and being denied.
+      void runHost.request({ kind: 'presenter.revoke', windowId: String(wcId), quitting: quitting() }, millis(5_000)).catch(() => undefined);
     },
     forgetTerminalFrames: (wcId) => terminalFrames.forget(wcId),
     closeConfirmed: (wcId) => { quit.closeConfirmed(wcId); },

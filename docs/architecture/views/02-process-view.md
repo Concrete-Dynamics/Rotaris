@@ -442,7 +442,8 @@ repaint or repopulate every live window.
 **Main ↔ run host (`RunHostRequestSchema` / `ProcessReplySchema` / `ProcessEventSchema`).** Since 2026-09-09 (Part AL): the seven `terminal.*` requests, the `terminal.streams` reply and the `publish.terminal` event, listed above. Requests:
 `workspace.opened/closing/refuseRuns/renewLease/closeStore/release`, `session.*` (start, list, resume,
 continue, prompt, attach, detach, reconcile, pageOlder, control), `runs.active`, `circuit_breaker.status`,
-`config.liveState`, `presenter.register/revoke/pollReply`, `approval.shown/queued`, `hooks.*`, `playbooks.catalogue`,
+`config.liveState`, `presenter.register/revoke/pollReply` (a revoke the application's quit causes carries `quitting`,
+PD-ORCH-005 clause 9 — `06-sequences.md` §2), `approval.shown/queued`, `hooks.*`, `playbooks.catalogue`,
 `checkpoint.list/recordSafety/recordRestore` (Part P), `prompts.read/push/take` (Part X, session-less like
 `session.list` — REQ-LIBRARY-137/138), `timeline.append` (Part V, REQ-NOTIFY-268; its optional
 `severity` is REQ-SESSION-134's vocabulary and `info` where absent, while the entry's `id` is minted by the writer

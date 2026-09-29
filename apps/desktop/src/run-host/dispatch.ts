@@ -546,7 +546,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       presenters.register(req.windowId);
       return { kind: 'ack' };
     case 'presenter.revoke':
-      presenters.revoke(req.windowId);
+      presenters.revoke(req.windowId, req.quitting === true);
       return { kind: 'ack' };
     case 'presenter.pollReply':
       presenters.pollReplied(req.windows);

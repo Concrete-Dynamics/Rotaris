@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**What is asked of a person in the quit's gap is held for the quit to withdraw (PD-ORCH-005 clause 9, R-067, OQ-132).**
+`presenter.revoke` gains an optional `quitting`, which main sets from `QuitState`; the run host's `PresenterRegistry.quitting`
+holds from such a revoke until a window registers. Meanwhile the gate holds an ask unshown in `pending_approvals` instead
+of denying it headless, a present answered "not shown" is held too, `ask_questions` records its prompt pending, and
+`PendingApprovals` and `PendingQuestions` arm an expiring budget again; the shutdown withdraws every one by `quit`. This
+repairs `an-approval-asked-after-the-last-window-closes-is-denied.md`. The **sequences view**'s §2 (the diagram and a new
+paragraph) and the **process view**'s message list say so. No package, edge, process, channel, command or store column
+changed.
+
 **A small non-zero cost renders as the floor `< 0.0001`, never as zero (ESC-42 ruled option (b) under R-067, 2026-09-29).**
 `formatAmount` (`kernel/money.ts`) returns `AMOUNT_FLOOR` where REQ-PROVIDER-121's half-up rounding brings an amount
 greater than zero to zero; `costLabelOf` is unchanged and every label takes the floor as its `<amount>`. This repairs

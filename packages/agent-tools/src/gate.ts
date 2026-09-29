@@ -150,6 +150,14 @@ export interface GateDeps {
   readonly writeClaimFor?: ((rel: string) => WriteClaimHolder | null) | undefined;
   /** PD-TOOLS-005: the run's away state; absent means no run holds one, and every ask is brokered as before the directive. */
   readonly presence?: PresencePort | undefined;
+  /**
+   * PD-ORCH-005 clause 9: the application's quit has closed its last window, so no presenter is left and the run is about
+   * to come to rest by the quit. An ask made now is not REQ-TOOLS-064's headless case — the quit took the window, not the
+   * person — so it is HELD: it waits unshown in `pending_approvals` until the quit's shutdown withdraws it, and is never
+   * denied. The same predicate holds its wait past the approval budget (`PendingApprovals`' `held`). Absent: no quit is
+   * ever announced to this gate.
+   */
+  readonly quitting?: (() => boolean) | undefined;
 }
 
 /** REQ-TOOLS-032's first repair: close the strings, objects and arrays still open at the cut. */
@@ -309,10 +317,12 @@ export class Gate {
     // (1) permission resolution — never raises; an ask is resolved here, so nothing below sees one.
     const req = permissionRequest(call.name, call.persona, repaired);
     const attended = deps.attended();
-    let decision = deps.policy.evaluate(req, { attended, workspaceRoot: deps.workspaceRoot, resolvePath: deps.resolvePath, publicTool: deps.publicTool });
+    // PD-ORCH-005 clause 9: the quit took the last window, not the person — an ask in the quit's gap is held, not denied.
+    const heldForQuit = !attended && deps.quitting?.() === true;
+    let decision = deps.policy.evaluate(req, { attended: attended || heldForQuit, workspaceRoot: deps.workspaceRoot, resolvePath: deps.resolvePath, publicTool: deps.publicTool });
     let requestId: string | undefined;
     if (decision.decision === 'ask') {
-      const brokered = await this.broker(call, req, decision, attended);
+      const brokered = await this.broker(call, req, decision, attended, heldForQuit);
       if ('withdrawn' in brokered) {
         /*
          * PD-ORCH-005 clause 9: the run came to rest while this call waited on a person. The approval is withdrawn —
@@ -418,13 +428,13 @@ export class Gate {
   }
 
   /** ADR-0019's flow: publish, then either the headless policy (no wait at all) or the brokered wait. */
-  private async broker(call: ToolCall, req: PermissionRequest, asked: DecisionRecord, attended: boolean): Promise<{ decision: DecisionRecord; requestId: string } | { withdrawn: string; requestId: string }> {
+  private async broker(call: ToolCall, req: PermissionRequest, asked: DecisionRecord, attended: boolean, heldForQuit = false): Promise<{ decision: DecisionRecord; requestId: string } | { withdrawn: string; requestId: string }> {
     const { deps } = this;
     const requestId = (deps.newRequestId ?? (() => randomUUID().replace(/-/g, '')))();
     const summary = requestSummary(req);
     const base = { agent_name: call.agentName, persona: call.persona, tool_name: call.name, rule_id: asked.ruleId, summary };
     try {
-      if (!attended || !deps.presenter) {
+      if (!heldForQuit && (!attended || !deps.presenter)) {
         // REQ-TOOLS-061/064/065/066: headless — timeout null, no wait occurs.
         deps.sink.approvalRequested({ request_id: requestId, ...base, resolver: 'headless', timeout_seconds: null, unattended_reason: 'headless-policy' });
         return { requestId, decision: this.headless(asked) };
@@ -451,6 +461,19 @@ export class Gate {
       };
       const wait = deps.approvals.create(payload, deps.approvalTimeoutMs > 0 ? deps.approvalTimeoutMs : null);
       deps.sink.pendingChanged(deps.approvals.pending());
+      /*
+       * PD-ORCH-005 clause 9: the quit closed the last window and its shutdown is still to come. There is nobody to show
+       * the request to and nobody left the application: the request waits, unshown, in `pending_approvals`, and the quit's
+       * shutdown withdraws it with every other wait of the run. A later decision (the explicit cancel's cancellation)
+       * still resolves it by REQ-TOOLS-052, a request never shown counting a timeout as cancelled (REQ-TOOLS-054).
+       */
+      const heldUntilTheQuit = async (): Promise<{ decision: DecisionRecord; requestId: string } | { withdrawn: string; requestId: string }> => {
+        const outcome = await wait;
+        deps.sink.pendingChanged(deps.approvals.pending());
+        if (outcome.kind === 'withdrawn') return { requestId, withdrawn: outcome.cause };
+        return { requestId, decision: this.outcomeDecision(call, req, asked, outcome.kind === 'timed_out' ? { kind: 'cancelled' } : outcome) };
+      };
+      if (heldForQuit || !deps.presenter) return await heldUntilTheQuit();
       // REQ-TOOLS-063: a request queued behind an open dialog stays unshown until that dialog closes. If its wait ends
       // first (a timeout, a cancellation, a withdrawal, or an answer given elsewhere), it is dropped unshown. A
       // timeout or a cancellation of a request never shown counts as cancelled (REQ-TOOLS-054).
@@ -462,6 +485,9 @@ export class Gate {
         if (outcome.kind === 'withdrawn') return { requestId, withdrawn: outcome.cause };
         return { requestId, decision: this.outcomeDecision(call, req, asked, outcome.kind === 'timed_out' ? { kind: 'cancelled' } : outcome) };
       }
+      // PD-ORCH-005 clause 9: a request main could not show because the quit had closed its window (the present crossed
+      // the last window's close) is the quit's to withdraw, as one asked after the close is — not REQ-TOOLS-058's fault.
+      if (!shown.ok && deps.quitting?.() === true) return await heldUntilTheQuit();
       if (!shown.ok) {
         // REQ-TOOLS-058: the pending request is discarded and the call denied with source presenter-error.
         deps.approvals.cancel(requestId);

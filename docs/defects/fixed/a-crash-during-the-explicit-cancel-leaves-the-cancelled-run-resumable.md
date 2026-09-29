@@ -4,7 +4,7 @@ The run-level explicit cancel (`cancelAgent` for the reserved run id, REQ-MONITO
 run?" sends, `PD-ORCH-005` clause 15) writes nothing durable when it is accepted. `Run.cancelAgent` only raises the
 in-memory `StopRequest` as final; the agents end `cancelled` and the iteration closes later, in `iterate`'s `finally`,
 once the root's turn returns. If the run host dies in that window — a call that ignores the abort until its deadline
-([`a-root-call-that-ignores-the-stop-holds-the-run-open.md`](fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md),
+([`a-root-call-that-ignores-the-stop-holds-the-run-open.md`](a-root-call-that-ignores-the-stop-holds-the-run-open.md),
 repaired 2026-09-29: the root is now given up on at the 30 s grace, which shortens the window but does not close it), the quit's shutdown bound running out while the cancel
 settles, or the process being killed — the store is identical to an ordinary mid-run crash: a busy status, the open
 iteration's interruption NULL, and the unfinished agents where they stood.
@@ -38,9 +38,36 @@ carried out when the host died; the build follows clause 18 because nothing dura
   `continueSession`.
 - `packages/engine/src/run/crash.ts`: `recordCrash`, which pauses every non-terminal agent by `crash`.
 
-## Ruled 2026-09-29 (R-067), not repaired
+## Ruled 2026-09-29 (R-067)
 
-OQ-103's last question is ruled ([R-067](../product/requests.md#r-067)): clause 3's "those are never resumed" governs. The
+OQ-103's last question is ruled ([R-067](../../product/requests.md#r-067)): clause 3's "those are never resumed" governs. The
 explicit cancel is made durable when it is accepted — a stored mark, by an appended store migration — and the next repair
 or continue ends those agents `cancelled` and closes the iteration; clause 18's Continue does not resume them, and the
-Continue action counts none of them. This note stays open until that is built.
+Continue action counts none of them. This note stayed open until that was built.
+
+## Outcome — Repaired 2026-09-29 under R-067
+
+The explicit cancel is made durable when it is accepted. Store **v27** appends `iterations.cancel_accepted_at`, and
+`Run.cancelAgent` writes it for the reserved run id on the iteration open in the store at once
+(`SessionWriter.recordCancelAccepted`, at the stronger durability setting), before anything of the cancel is carried out;
+`Run.turn` writes it on an iteration it opens after the cancel was accepted. The run's own close keeps it as history.
+
+An OPEN iteration carrying the mark is read as that cancel wherever the build read a crash:
+
+- `recordCrash` (`packages/engine/src/run/crash.ts`) carries the cancel out in the crash's place (`recordAcceptedCancel`):
+  the calls a dead step left unanswered are answered and counted as for a crash, every agent of the iteration not in a
+  terminal state (`paused` ones included, where the cancel overtook a rest) ends `cancelled` with its report stored and
+  materialised, and the iteration closes `cancelled` with its task back to `pending` in the same transaction; the
+  approvals and the background sessions are recorded as for any dead run. So the repair and every continue — the
+  Continue action, "continue without them", a continue by message — end those agents and close the iteration first.
+- `crashLeftOf` names none of them, `resumableOf` states nothing to resume (the Continue action counts none of them), and
+  the new `cancelLeftOf` names them while no run carries the cancel out, so every agent surface presents them
+  `cancelled`, ended with the run (`AgentFacts.cancelLeft`), never `paused` by `crash`.
+- A continue is set up as the entry role (`resumedPersona`), since nothing is resumed.
+
+Pinned by `packages/engine/src/run/crash.test.ts`, "PD-ORCH-005 clause 3 with REQ-MONITOR-126 (OQ-103 ruled): …" — the
+record, the presentation and the count at the store, and at `Sessions` the mark at acceptance and at an iteration opened
+after it, the repair, and the Continue action, "continue without them" and a continue by message from the recovery state and from `interrupted`;
+thirteen of its fourteen cases fail with the repair's reads and writes withdrawn — and by the store's v27 migration test in
+`packages/store/src/store.test.ts`. No checkpoint is captured for the iteration the record closes; that reading is raised
+as OQ-129. The ruling's report-back is in OQ-103, and its first execution in `docs/architecture/first-executions.md`.

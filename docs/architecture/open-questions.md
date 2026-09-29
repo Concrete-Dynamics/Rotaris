@@ -109,7 +109,9 @@ before the ladder's), **OQ-111** (what the report summariser reads), **OQ-112** 
 write is refused) **and OQ-113** (REQ-LIBRARY-092's fallback, answered by amendment). **Three more were raised the same day
 from the live runs and left open: OQ-114** (the specification's fixed figures on a reasoning model's critical path, and a
 continuation that starts from nothing), **OQ-115** (the code-intelligence server's imperative tool description, rendered
-verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-117** (what an iteration is told of a task it takes up that is not the run's own) was raised the same day by the repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` and left open. **OQ-119** (whether the task the report summariser keeps as its start may pass REQ-ORCH-110's 2,000 per event) **and OQ-120** (the size of the facts given to the report summariser) were raised the same day by the repair of D1 and left open, as OQ-118 and OQ-119 on their branch, renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. **And OQ-122** (whether the window may open the setup dialog before the open's resolution, and what a skip answered in that interval records — built as: the dialog opens on the values, and such a skip performs the open's one automatic resolution first), raised 2026-09-29 by repairing `init-proof`'s red on Linux under R-062. **And OQ-123** (which run REQ-WORKSPACE-105's "no run is in progress" means — built as a run the user started, so a background run neither withdraws the setup prompt nor is drawn in its dialog), raised the same day by the same repair's second round. The two were raised as OQ-109 and OQ-110 on their branch, renumbered there to OQ-118 and OQ-119 when OQ-109 to OQ-117 had been taken on `main`, and renumbered again at the merge, OQ-118 to OQ-121 having been taken on `main` meanwhile. **One more was raised on 2026-09-29 by building REQ-ORCH-089's stall watchdog and REQ-NOTIFY-111/112's corrective message under R-067: OQ-127** (what counts as "an outcome that produced no output within `child_stall_timeout`" when the watchdog never cancels, and what the watchdog counts, writes and calls — including the three records REQ-ORCH-139's timeline vocabulary has no word for, written to the session log instead, and whether REQ-MONITOR-119's issue at every evaluation may evict REQ-SESSION-133's ring), raised as OQ-109 on its branch, renumbered there to OQ-126 when OQ-109 to OQ-125 had been taken on `main`, and renumbered again at the merge, OQ-126 having been taken on `main` meanwhile. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-117** (what an iteration is told of a task it takes up that is not the run's own) was raised the same day by the repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` and left open. **OQ-119** (whether the task the report summariser keeps as its start may pass REQ-ORCH-110's 2,000 per event) **and OQ-120** (the size of the facts given to the report summariser) were raised the same day by the repair of D1 and left open, as OQ-118 and OQ-119 on their branch, renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. **And OQ-122** (whether the window may open the setup dialog before the open's resolution, and what a skip answered in that interval records — built as: the dialog opens on the values, and such a skip performs the open's one automatic resolution first), raised 2026-09-29 by repairing `init-proof`'s red on Linux under R-062. **And OQ-123** (which run REQ-WORKSPACE-105's "no run is in progress" means — built as a run the user started, so a background run neither withdraws the setup prompt nor is drawn in its dialog), raised the same day by the same repair's second round. The two were raised as OQ-109 and OQ-110 on their branch, renumbered there to OQ-118 and OQ-119 when OQ-109 to OQ-117 had been taken on `main`, and renumbered again at the merge, OQ-118 to OQ-121 having been taken on `main` meanwhile. **One more was raised on 2026-09-29 by building REQ-ORCH-089's stall watchdog and REQ-NOTIFY-111/112's corrective message under R-067: OQ-127** (what counts as "an outcome that produced no output within `child_stall_timeout`" when the watchdog never cancels, and what the watchdog counts, writes and calls — including the three records REQ-ORCH-139's timeline vocabulary has no word for, written to the session log instead, and whether REQ-MONITOR-119's issue at every evaluation may evict REQ-SESSION-133's ring), raised as OQ-109 on its branch, renumbered there to OQ-126 when OQ-109 to OQ-125 had been taken on `main`, and renumbered again at the merge, OQ-126 having been taken on `main` meanwhile. **And OQ-129** (whether the iteration the
+record of an accepted explicit cancel closes takes REQ-GIT-051's capture — built as: none is captured), raised the same day
+by the repair of `a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md` under OQ-103's ruling. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -4616,9 +4618,11 @@ say what the decline's wording means before the crash is recorded.
   written when the explicit cancel is accepted, read by `crashLeftOf`, `resumableOf`, `recordCrash` and
   `continueSession`, so that the next repair or continue ends those agents `cancelled` and closes the iteration — needs
   a stored field and a reading of what the repair then records, so it is not built ahead of a ruling
-  ([`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`](../defects/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md)).
+  ([`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`](../defects/fixed/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md)).
   At the base the case was reachable only by a continue by message. *Recorded at the merged build's thirteenth review
-  round; until then this question did not name it.*
+  round; until then this question did not name it.* *Replaced 2026-09-29: the ruling below withdrew this reading, and
+  its repair was built the same day (R-067) — the build now tells the case apart by the cancel's durable mark, and no
+  longer treats it as crash-left. What this bullet says the build does is kept as the reading that stood until then.*
 - **The actions at the message limit.** A crash-left session is not at the message limit, so it takes `action` as a
   manually paused session does. `continue` and `double` continue it; `cancel` leaves it as it is.
 - **Nothing open to resume.** A crash-left session with no open iteration draws the two continues where the send pill
@@ -4721,7 +4725,32 @@ action counts none of them, and clause 18's Continue does not resume them. REQ-M
 session" then holds across the host's death. No directive text changes: clause 3 already says it, and the reading above,
 which departed from it, is withdrawn by this ruling. The other questions of this entry stay open. Nothing is built by the
 ruling; the repair is owed to
-[`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`](../defects/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md).
+[`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`](../defects/fixed/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md).
+
+*Built 2026-09-29 (R-067), and its first execution reported here.* The mark is `iterations.cancel_accepted_at` (store
+**v27**, appended): the reserved run id's `Run.cancelAgent` writes it on the iteration open in the store at the moment the
+cancel is accepted, at the stronger durability setting, and `Run.turn` writes it on an iteration it opens after the cancel
+was accepted. The run's own close keeps it as history, so only an OPEN row carrying it is a cancel never carried out. The
+crash record reads it before anything else (`recordCrash` → `recordAcceptedCancel`): the calls a dead step left
+unanswered are answered and counted as for a crash, every agent of the iteration not in a terminal state — `paused` ones
+included, where the cancel overtook a rest — ends `cancelled` with its report stored and materialised
+(REQ-LIBRARY-092), and the iteration closes `cancelled` with its task back to `pending` in the same transaction
+(REQ-ORCH-135), `iterations_completed` moved past it and an `iteration_cancelled` timeline entry written; the stored
+approvals and the background sessions are recorded as for any dead run. `crashLeftOf` names none of those agents,
+`resumableOf` states nothing to resume, `cancelLeftOf` names them while no run carries the cancel out so every surface
+presents them `cancelled` and ended with the run, and a continue is set up as the entry role. So the repair closes the
+iteration, and the Continue action and a continue by message resume nothing of it: the session goes on as a new
+iteration, which takes the cancelled task up as REQ-ORCH-135 anchors it — as a send after a cancel carried out does.
+What the ruling left to the build, read here: the repair still writes REQ-SESSION-060's `interrupted`, so the session is
+one a crash left under clause 18 with nothing open to resume ("Nothing open to resume", above) — the ruling bars
+resuming the cancelled agents, not the Continue action. One reading departs from a requirement and is raised as
+**OQ-129**: no checkpoint is captured for the iteration the record closes (REQ-GIT-051). The first execution — the unit
+tests in `run/crash.test.ts` ("PD-ORCH-005 clause 3 with REQ-MONITOR-126 (OQ-103 ruled): …", at the store and at
+`Sessions`: the mark at acceptance and at an iteration opened after it, the repair, and the Continue action, "continue
+without them" and a continue by message from the recovery state and from `interrupted`) — found the repair holding on
+every path the note named, and one thing the ruling did not name: a paused agent the record cancels keeps its `interruption` and
+`resume_state`, as clause 6's decline leaves one (`Run.cancelPausedAgents`), which the runtime view's `children` row
+already records. Thirteen of its fourteen cases fail with the repair's reads and writes withdrawn.
 
 **OQ-104 — Where does the gate hold a run that resumed an iteration, and what does that plan cycle plan?** *(`PD-ORCH-003` revision 2, with `PD-ORCH-005` clause 18; REQ-ORCH-152, which the directive narrows for an iteration a rest left open (`PD-ORCH-005` clause 4), and which the reading below that an iteration a crash left open resumes unheld too departs from for an iteration the directive does not govern; REQ-ORCH-153, whose gate that reading also departs from for the same iteration; and REQ-ORCH-021, REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-073, REQ-ORCH-085, REQ-ORCH-154, REQ-CHAT-040, REQ-SESSION-115 and REQ-TOOLS-010, which it does not name. Raised 2026-09-28 by building `PD-ORCH-003` revision 2 under [R-065](../product/requests.md#r-065). Numbered OQ-77 while it was built; renumbered when it reached `main`, where OQ-77 had been taken meanwhile.)*
 
@@ -5810,6 +5839,28 @@ iteration's root after a continue; whether a prompt should be persisted at submi
 what a prompt that was never delivered is called, since the specification's vocabulary has no word for it (the build
 describes it by REQ-MONITOR-134's verb, `steering_not_delivered`, and names no new state); and whether a steer after the
 rest should instead be accepted and kept for the resumed agent, rather than refused.
+
+**OQ-129 — Is a checkpoint captured for the iteration the record of an accepted explicit cancel closes?** *(REQ-GIT-051,
+"Exactly one capture SHALL be attempted for each iteration that closes, at the moment it closes"; REQ-GIT-045;
+`PD-ORCH-005` clause 3 with OQ-103's last question, ruled under [R-067](../product/requests.md#r-067). Raised 2026-09-29 by
+the repair of
+[`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`](../defects/fixed/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md).
+Open.)*
+
+The ruling has the next repair or continue close an iteration whose explicit cancel was accepted and never carried out.
+The close is written from the store alone (`recordAcceptedCancel`), by the repair — `Sessions.repairOne`, which holds no
+checkpoint port and runs no Git — or by a continue before its run exists. REQ-GIT-051 asks for one capture attempt at every
+iteration's close, and the run's own close of a cancelled iteration makes one; an iteration a crash left open and the user
+declined is captured too, by the run that closes it (`closeLeftOpenIteration`).
+
+**The reading built.** No capture is attempted for it: the close records `iteration.end` and the row's `cancelled`
+outcome, and the session's checkpoints hold none for that iteration. Whatever the dead run wrote to the tree is still
+there, and the next iteration's capture records it, credited to that iteration.
+
+**What a ruling decides.** Whether the close should attempt the capture — at a continue by handing it to the run the
+continue launches (which would hold the checkpoint port), and at a repair by giving the repair a port of its own — or
+whether an iteration a recorded cancel closes is outside REQ-GIT-051's "each iteration that closes", as a close no run
+made.
 
 ## Design-reference dependencies
 

@@ -7,6 +7,18 @@ status: resolved
 
 # Resolution Record — Domain 14, Library, Artifacts, and Improvement Proposals
 
+> ## Amendment, 2026-09-29 — a child report's artifact falls back to the canonical name only without a task id (OQ-112)
+>
+> `REQ-LIBRARY-092` read "idempotent keyed on the task id (falling back to the canonical agent name)". Read as a fallback
+> taken whenever the task-id lookup finds nothing, it let a later child whose name repeats an earlier child's rewrite the
+> earlier child's report artifact in place, so that report was no longer materialized — against the requirement's own
+> "Every terminal child report is materialized". The parenthesis now says the fallback serves only a record that carries
+> no task id, so two children with different task ids never share or overwrite one artifact.
+>
+> **Why this is an amendment and not a directive.** The requirement disagreed with itself under the reading built; a
+> clause that says when a fallback applies corrects it without changing what it was written to guarantee. The owner ruled
+> OQ-112 as it recommended ([R-067](../../product/requests.md#r-067)); `open-questions.md` holds the ruling.
+
 > ## Amendment, 2026-09-14 — history states gaps truthfully
 >
 > REQ-LIBRARY-168's statement that every artifact history is nonempty is superseded for an artifact

@@ -101,6 +101,17 @@ export function tokensDirFor(local, platform = process.platform, home = scratchH
 }
 
 /**
+ * The machine identifier's file (`dataLayout().machineId`, REQ-SESSION-046: minted once per machine "in the machine-local
+ * location the store lives in") below `local`, by the same copied rule. `sessions-proof` read it at the Windows spelling
+ * `local/rotaris/data/machine-id` on every platform. On Linux the app writes `<XDG_DATA_HOME>/rotaris/machine-id`, so
+ * planting a lock that names this machine crashed with ENOENT, and `repair-all` and every launch after it went
+ * unmeasured (`docs/defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`).
+ */
+export function machineIdFileFor(local, platform = process.platform, home = scratchHomeFor(local)) {
+  return dataSubdirFor(local, 'machine-id', platform, home);
+}
+
+/**
  * The configuration directory (`resolveUserDirs().config`) of a launch isolated at `local`, by the same copied rule:
  * on Windows `local/rotaris/config`, on macOS `<home>/Library/Application Support/rotaris`, elsewhere
  * `<XDG_CONFIG_HOME>/rotaris`. The live run read the discovery snapshot (`project_settings.yaml`) at the Windows

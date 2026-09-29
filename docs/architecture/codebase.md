@@ -1075,7 +1075,10 @@ spawns is left alone; "nothing was stale" on a second press); a delete with two 
 refs in the shared repository, a session whose repository moved, a live run refused; the four-record export of a
 capped audit and of an empty session, and the trajectory export of one, of two in reverse order, of a resumed and of a
 capped history — every file parsed by a SEPARATE node process holding no product code; an unreadable session listed
-and deleted; the backup disclosure panel. Evidence under `.proof/sessions-proof/`.
+and deleted; the backup disclosure panel. Evidence under `.proof/sessions-proof/`. The planted locks name this machine through the
+identifier where the product mints it on the running platform (`machineIdFileFor`), and a "dead" pid is one the script saw
+exit; until 2026-09-28 the Windows spelling made the proof crash at `repair-all` on Linux (R-062;
+[the note](../defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md)).
 
 **What `pnpm code-intel-proof` does.** After `pnpm code-intel:bundle` (once per checkout; the tree is git-ignored), it
 launches the app seven times: the branch guard on the dev entry and, under `ROTARIS_CODE_INTEL_PACKAGED=1`, on

@@ -4,7 +4,7 @@ Two more scripts compose a sub-location of the product's data directory from the
 `join(local, 'rotaris', 'data', …)`. That is the Windows answer only. On Linux the product's data directory is
 `$XDG_DATA_HOME/rotaris`, which is `<local>/rotaris/data/rotaris` under the harness. On macOS it is
 `<home>/Library/Application Support/rotaris/data`. The mistake is the same one `sessions-proof` made with the machine
-identifier ([`sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`](sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md)).
+identifier ([`sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`](fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md)).
 This note was found by reading while that one was being repaired. **Neither script was run for this note**:
 `slice-proof` needs a real key and spends money.
 

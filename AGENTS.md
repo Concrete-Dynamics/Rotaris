@@ -35,7 +35,7 @@ wrong.
 | | `resilience-proof` | the model ladder, the waits, the fallbacks, against scripted faults; its `override` launch addresses a native `<select>` the wait header no longer draws, and **as root on Linux that launch outlived its 180 s timeout: SIGTERM did not end it, it was alive 649 s in, and only a SIGKILL from outside ended it** — expect to kill it (`docs/defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md`) |
 | | `compression-proof` | context compression and its timeline entries (ADR-0060) |
 | | `checkpoint-proof` | the capture at iteration close through to the desktop restore (ADR-0039); the `live` launch's lock is probed dead the moment it returns (`lib/lock-holder.mjs`), so a lock that outlives the application fails there and is not blamed on the `repaired` step (`docs/defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`) |
-| | `sessions-proof` | the session browser's actions: repair, delete with ref cleanup, the exports |
+| | `sessions-proof` | the session browser's actions: repair, delete with ref cleanup, the exports; its planted locks read the machine identifier where the product mints it on the running platform (`machineIdFileFor`; `docs/defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`) |
 | **Tools** | `fetch-proof` | `fetch` and its egress policy, read from saved configuration at **every** call |
 | | `questions-proof` | `ask_questions`, the trailer row, the stepper, the two control operations |
 | | `todo-proof` | the todo source priority, write-through edits, the pane |

@@ -209,4 +209,31 @@ skip leaving the running task out, and no second resolution followed. The withdr
 proof three times, so the proof alone could not tell the two readings apart; the unit cases can.
 
 **Not shown:** the Windows order after the change. No proof run landed a skip while the resolution awaits the
-applicability check; only the unit case covers that interval.
+applicability check; only the unit case covers that interval. *(Corrected 2026-09-29: the "three runs in a row"
+above did not reproduce. The resolution-first order was not merely unmeasured on Windows. It went red on Linux, as the
+next section records.)*
+
+**Second round (2026-09-29): the dialog drew the background run as its own.** The fix round's verifier ran the proof six
+times at `0551f33`, with another agent's proofs on the host. It went red twice, once in each order. In both, the dialog
+read the one run report the coordinator publishes and so took the **background** run as its running state. When the
+skip performed the open's resolution first, the dialog switched to "Running" beneath the user's own Escape, before the
+skip answered. When the resolution came first, the dialog was already running when Escape arrived, ignored it, and
+recorded no decision. That is against REQ-WORKSPACE-103 ("nothing renders their progress live") and REQ-WORKSPACE-107
+(Escape "SHALL resolve as a skip"). The window also lifted the composer gate for any run in progress
+(`../../defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`). Main cannot order a push behind a
+command's reply, so the repair is in what the window draws, not in holding main's publishes. The state carries
+`backgroundRun` beside the report, and REQ-WORKSPACE-105's nine values are unchanged. The dialog draws that run only
+once Initialize is pressed (REQ-WORKSPACE-110's flip). A background run neither withdraws the setup prompt nor lifts the
+gate (`setupPromptDue`, **OQ-110**). `init-proof` now reads the dialog before its Escape, and no assertion changed.
+**Measured** as root under Xvfb on Linux, Node 24, on 2026-09-29, after one `pnpm build` at `19aef49`:
+`init-proof --skip-build` passed six runs in a row (175, 175, 172, 172, 173 and 173 s), all five scenarios. At the end
+of the runs, another agent's Electron processes on the host numbered 0, 6, 9, 9, 16 and 16. The runs took three orders.
+In run 1 the resolution came first and the background run was live 74 ms before the dialog was read: the verifier's
+red order. In run 2 the dialog was read first, and the resolution and background start landed before the Escape. In
+runs 3 to 6 the Escape came first, and the skip performed the resolution. Every reading gave "Set up this project?",
+the two-task intro, the card word Pending, the dialog visible and Send disabled. Every Escape was recorded as `skipped
+verification-consent`, and `code-intelligence-setup → success` followed 1.7 to 2.5 s later. Every reopen read "Not run
+yet: Verification consent task." **Not shown:** the Windows orders; a live background run
+flipped by Initialize in the built app (REQ-WORKSPACE-110 is pinned by unit cases only); and a skip naming a task
+completed a moment earlier. That last one is recorded, not repaired
+(`../../defects/a-skip-can-move-a-completed-task-into-skipped.md`).

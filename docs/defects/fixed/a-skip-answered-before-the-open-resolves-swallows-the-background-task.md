@@ -92,3 +92,10 @@ read "Not run yet: Verification consent task." The withdrawn repair had passed t
 170 s, 171 s), which is why the proof alone could not tell the two readings apart.
 **Not shown:** the Windows order. No proof run landed a skip while the slot's resolution was checking applicability;
 unit case 2 covers that interval.
+
+**Correction, 2026-09-29.** The "three runs in a row" above did not reproduce. The fix round's verifier ran the same
+build six times and got PASS, PASS, red, red, PASS, PASS. Neither red was this defect: the background task started and
+was not skipped. In both, the setup dialog drew the background run as its own running state. In one order that
+happened under the skip's own resolution, which this repair introduced. In the other, the resolution came first, and the
+dialog then refused Escape. So the resolution-first order was not merely unmeasured on Windows. It was red on Linux.
+Both are recorded and repaired in [`the-setup-dialog-takes-a-background-run-as-its-own.md`](the-setup-dialog-takes-a-background-run-as-its-own.md).

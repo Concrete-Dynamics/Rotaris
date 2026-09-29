@@ -61,3 +61,49 @@ order only as "not shown" on Windows. Order 2 was reproduced red here, on Linux.
   readings.
 - `apps/desktop/scripts/init-proof.mjs`: scenario 3, whose probe and Escape both fire when the dialog matches, so their
   order was not fixed.
+
+## Repaired 2026-09-28 under R-062
+
+*The date is the one this repair round was set under. The note was recorded, repaired and measured on 2026-09-29.*
+
+**What changed.**
+- `InitializationStateSchema` (`packages/contracts/src/initialization.ts`) carries `backgroundRun` beside the report.
+  It says whether the report describes a run the resolution started for background tasks. The coordinator sets it in
+  `run` and publishes it in every view (`apps/desktop/src/main/initialization.ts`). REQ-WORKSPACE-105's nine values are
+  unchanged.
+- The dialog draws its state from `dialogReport` (`packages/ui/src/ProjectSetupDialog.tsx`). For a background run
+  that is an empty report until Initialize is pressed. Pressing it while such a run is live starts nothing and flips
+  the dialog to that run (REQ-WORKSPACE-110). Before that, the dialog stays in its prompt state with Skip and Escape
+  live, and a failed background run stays on its banner.
+- `setupPromptDue` is now the one reading of "the prompt is due", used by the window's auto-open and by the composer
+  gate (`apps/desktop/src/renderer/main.tsx`). A background run neither withdraws the prompt nor lifts the gate. The
+  reading is **OQ-110**, raised.
+- `init-proof`'s scenario 3 reads the dialog before its Escape: the reading marks the document and the key waits for
+  the mark. No assertion changed. The AGENTS.md row no longer claims scenario 3 held in both orders.
+- The fix is in what the window draws, not in holding main's publishes during a skip, because a push can reach the
+  window after the command's reply whatever order main sends them in.
+
+**The tests that pin it.**
+- `packages/ui/src/settings/project-init.test.ts`, "the project setup dialog beside a background run", 4 cases:
+  1. no report is drawn for a background run, live or failed;
+  2. it is drawn once Initialize has been pressed, and a user-started run is always drawn;
+  3. the rendered dialog stays in its prompt state, with the intro, no Running card, no log and Skip enabled;
+  4. the prompt stays due beside a background run and is withdrawn by a user-started one.
+  Three of the four fail against the old dialog and the old gate. The second passes because the old dialog drew every
+  report.
+- `apps/desktop/src/main/initialization.test.ts`, 2 cases: every view published during a skip that shows a run in
+  progress says `backgroundRun`, and so does its finished report; a run the user starts is published as no background
+  run.
+
+**Measured** as root under Xvfb on Linux, Node 24, on 2026-09-29, after one `pnpm build` at `19aef49`:
+`init-proof --skip-build` passed six runs in a row (175, 175, 172, 172, 173 and 173 s), all five scenarios. At the end
+of the runs, another agent's Electron processes on the host numbered 0, 6, 9, 9, 16 and 16. The runs took three orders.
+In run 1 the resolution came first and the background run was live 74 ms before the dialog was read: the verifier's
+red order. In run 2 the dialog was read first, and the resolution and background start landed before the Escape. In
+runs 3 to 6 the Escape came first, and the skip performed the resolution. Every reading gave "Set up this project?",
+the two-task intro, the card word Pending, the dialog visible and Send disabled. Every Escape was recorded as `skipped
+verification-consent`, and `code-intelligence-setup → success` followed 1.7 to 2.5 s later. Every reopen read "Not run
+yet: Verification consent task."
+
+**Not shown:** the Windows orders; REQ-WORKSPACE-110's flip in the built app (unit cases only). Found beside this and
+recorded, not repaired: `../a-skip-can-move-a-completed-task-into-skipped.md`.

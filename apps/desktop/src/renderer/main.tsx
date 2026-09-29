@@ -1,12 +1,12 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { isBusy, isViewId, LIBRARY_TABS, presentationStatus, STATUS_LABELS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload } from '@rotaris/contracts';
+import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload } from '@rotaris/contracts';
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
 import { TerminalHostProvider } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, runLevelAgent, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripRunItem, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -21,9 +21,9 @@ import '@phosphor-icons/web/fill';
 
 // The window itself: the bridge, the replica and the two stacks, the terminal registry, the display preferences and
 // the theme — everything this window has before a surface mounts (`shell.ts`).
-import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, setMode, setRunStartMode, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
+import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, setMode, setRunStartMode, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
 // What a transcript surface reads about the session it is following, shared with the persona window (`session-view.ts`).
-import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick } from './session-view.js';
+import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery } from './session-view.js';
 // The other windows this same bundle is the root of, each one a role on the route (`windows.tsx`, ADR-0056).
 import { bootApproval, bootHookReview, bootPause, bootPersona, bootProvider, bootTerminal } from './windows.js';
 /**
@@ -122,31 +122,6 @@ async function pageOlder(beforeIndex: number): Promise<boolean> {
   const page = r.value as { rows?: TranscriptRow[]; oldest?: boolean };
   replica.getState().prependOlder(page.rows ?? [], page.oldest === true);
   return true;
-}
-
-/**
- * Part AB — REQ-CHAT-008's synthetic state: the persisted session claims busy but no local run exists. The verdict
- * comes from the ONE liveness predicate (REQ-SESSION-171) through `session.list`'s `stale`, never from this window
- * inferring it from silence, and it is re-asked only when the followed session or its status changes — there is no
- * poll, because a wrong answer here would mislabel a live run and a timer would make it a race.
- */
-function useNeedsRecovery(sessionId: string | null, executionStatus: string | null): boolean {
-  const [recovery, setRecovery] = useState(false);
-  const busy = executionStatus !== null && isBusy(executionStatus);
-  useEffect(() => {
-    let live = true;
-    queueMicrotask(() => {
-      if (!live) return;
-      if (!sessionId || !busy) { setRecovery(false); return; }
-      void bridge.command({ kind: 'session.list' }).then((r) => {
-        if (!live || !r.ok) return;
-        const rows = (r.value as { sessions?: readonly SessionListItemPayload[] }).sessions ?? [];
-        setRecovery(rows.find((s) => s.sessionId === sessionId)?.stale === true);
-      });
-    });
-    return () => { live = false; };
-  }, [sessionId, busy, executionStatus]);
-  return recovery;
 }
 
 /**
@@ -319,7 +294,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     onOpenTrailer={onOpenTrailer}
     onAnswerQuestions={answerQuestions}
     onCancelQuestions={cancelQuestions}
-    session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={nowIso}
+    session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onCancelRun={cancelRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={nowIso}
     onPageOlder={pageOlder} reachedOldest={reachedOldest} groupTools={groupTools} displayCaps={pendingCaps ?? snapshot?.display}
     onStash={(text) => prompts.push('stash', text)} stashCount={prompts.stash.length} onOpenStash={onOpenStash}
     onRecordPrompt={(text) => prompts.push('history', text)}
@@ -339,7 +314,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
         ...(edit.ownerId === null ? {} : { ownerId: edit.ownerId }),
       }, 'Todo editing is not ready for this active run yet.')}
     onPause={() => control('pause', {}, 'Pause is unavailable because no active run exists.')}
-    onContinue={() => continueSession('continue')}
+    onContinue={(opts) => continueSession('continue', opts)}
     /* REQ-ORCH-153/154 (ADR-0062): the plan gate's two entries, addressed to the focused session. */
     onPlanEdit={(text) => planEdit(text)}
     onPlanDecision={(decision, changes) => planDecision(decision, changes)}
@@ -355,7 +330,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
 /**
  * REQ-SHELL-023's Mission view (Part R; REQ-MONITOR-274..276). Mounted only while shown (REQ-MONITOR-039/275: a hidden
  * surface refreshes nothing and runs no timer); the strategy and the depth are the settings' own values, written through
- * the per-field path (REQ-CONFIG-321, REQ-CONFIG-112); pause is the existing `pause` control, cancel `cancelAgent`/`cancel`.
+ * the per-field path (REQ-CONFIG-321, REQ-CONFIG-112); pause is the existing `pause` control, and cancel is `cancelAgent` — for the run row the reserved run id, final (`cancelRun`, PD-ORCH-005 clause 15).
  */
 function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) {
   const session = useStore(replica, (s) => s.session);
@@ -365,7 +340,11 @@ function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) 
   const snapshot = useConfigSnapshot(workspace);
   const refresh = useStore(refreshStats, (st) => st);
   const entry = useMemo(() => entryOf(snapshot, rows, session?.agents ?? []), [snapshot, rows, session]);
-  const runLevel = useMemo(() => runLevelAgent(session, entry), [session, entry]);
+  // PD-ORCH-005 clauses 13 and 16 (OQ-100, OQ-101): in REQ-CHAT-008's recovery state the run-level agent presents `paused`,
+  // as its agents do, and a paused child offers "Cancel selection" while its session rests — both from `restingView`,
+  // the one call the Workspace makes too.
+  const needsRecovery = useNeedsRecovery(session?.id ?? null, session?.executionStatus ?? null);
+  const { runLevel, resting } = useMemo(() => restingView(session, entry, needsRecovery), [session, entry, needsRecovery]);
   const nowIso = useElapsedTick(session);
   const [sessions, setSessions] = useState<readonly SessionListItemPayload[]>([]);
   useEffect(() => { if (workspace !== '(no workspace)') queueMicrotask(() => { void bridge.command({ kind: 'session.list' }).then((r) => { if (r.ok) setSessions((r.value as { sessions: SessionListItemPayload[] }).sessions); }); }); }, [workspace, session?.id]);
@@ -381,12 +360,12 @@ function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) 
     useShellState.getState().switchView('workspace');
   };
   return <MissionView
-    session={session} sessionLabel={label} runLevel={runLevel} selectedAgentId={selectedAgentId} nowIso={nowIso} refresh={refresh}
+    session={session} sessionLabel={label} runLevel={runLevel} resting={resting} recovery={needsRecovery} selectedAgentId={selectedAgentId} nowIso={nowIso} refresh={refresh}
     onSelect={(id, source) => { selectAgent(id); if (source === 'click' && popOut && id !== null && id !== RUN_AGENT_ID) { const agent = session?.agents.find((a) => a.id === id); if (agent) void openPersona(agent, false); } }}
     strategy={snapshot?.delegationStrategy ?? null} maxDepth={snapshot?.runtime.max_depth ?? null}
     onSetStrategy={(value) => setField({ rotaris: { delegation_strategy: value } })} onSetDepth={(value) => setField({ runtime: { max_depth: value } })}
     onPause={() => control('pause', {}, 'Pause is unavailable because no active run exists.')}
-    onCancelAgent={cancelAgent} onCancelRun={() => stopRun(false)}
+    onCancelAgent={cancelAgent} onCancelRun={cancelRun}
     onOpen={open} onPopOut={(agent) => { void openPersona(agent, false); }}
   />;
 }
@@ -1189,10 +1168,13 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
     void bridge.command({ kind: 'approval.raise', requestId: trailer.requestId });
   }, []);
   const branchItem = useMemo(() => branchStripItem(git.state, session?.worktreeBranch ?? null), [git.state, session]);
+  // REQ-CHAT-008's recovery fact for the strip's run item, from the one liveness predicate the Workspace and Mission read.
+  const needsRecovery = useNeedsRecovery(session?.id ?? null, session?.executionStatus ?? null);
   const status = useMemo<readonly StatusItem[]>(
     () => [
-      // REQ-NOTIFY-048/049: the presentation vocabulary, never a raw persisted string.
-      session ? `run ${STATUS_LABELS[presentationStatus(session.executionStatus)]}` : 'no session',
+      // REQ-NOTIFY-048/049: the presentation vocabulary, never a raw persisted string; in REQ-CHAT-008's recovery state the
+      // synthetic label, as the run header and the Mission view read it (PD-ORCH-005 clause 13, OQ-100).
+      statusStripRunItem(session?.executionStatus ?? null, needsRecovery),
       // REQ-SHELL-038 / REQ-GIT-122/161: the checked-out branch, the focused session's worktree branch first.
       { text: branchItem.text, name: 'Checked-out branch', title: branchItem.title, state: branchItem.state, testId: 'strip-branch' },
       // REQ-TOOLS-184: text, never colour alone — the mode, the workspace-scope flag (REQ-TOOLS-131), redaction (REQ-TOOLS-174), background sessions.
@@ -1200,7 +1182,7 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
       ...(circuitBreakerArmed ? ['● CB armed'] : []),
       theme.label, ...processes, `applied ${counters.applied} · reset ${counters.reset} · refused ${counters.refused}`,
     ],
-    [processes, counters, session, theme, circuitBreakerArmed, branchItem],
+    [processes, counters, session, needsRecovery, theme, circuitBreakerArmed, branchItem],
   );
   // Part W: Ctrl+L (REQ-CHAT-002) and every other chord of REQ-SHELL-049 are the command registry's, bound once by the
   // shell's `useCommandShortcuts`; the Ctrl+L effect that lived here is gone. ADR-0048's application modality: the palette

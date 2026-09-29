@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type Result, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
-import { answer, DefaultAgentBackend, ScriptedModelClient, type AgentBackend } from '@rotaris/model';
-import { buildContinuationPayload, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type RunSetup, type TodoDocument } from './index.js';
+import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
+import { buildContinuationPayload, offersToldIn, RUN_CONFIG_DEFAULTS, Sessions, type ArtifactOps, type Preflight, type PreflightContext, type RunSetup, type TodoDocument, type ToolPort } from './index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
@@ -72,7 +72,7 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     expect(roots).toEqual([{ workspaceRoot: 'C:/ws', executionRoot: tree }, { workspaceRoot: 'C:/ws', executionRoot: tree }]);
   });
 
-  it('reopens the same identity, sweeps orphans, continues ordinals and carries prior intent', async () => {
+  it('reopens the same identity, sweeps orphans at the continue (never at the load, PD-ORCH-005 clause 8), continues ordinals and carries prior intent', async () => {
     const client = new ScriptedModelClient([answer('first answer', { input: 10, output: 4 }), answer('second answer', { input: 7, output: 3 })]);
     const backend = new DefaultAgentBackend(client);
     const priorContexts: (string | null | undefined)[] = [];
@@ -95,13 +95,18 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
 
     const resumed = makeSessions(88, backend, { preflight, isProcessAlive: () => false });
     const opened = resumed.resume(dal, 'C:/ws', sid);
-    expect(opened).toEqual({ ok: true, value: { sessionId: sid, settledChildren: 1 } });
+    expect(opened).toEqual({ ok: true, value: { sessionId: sid } });
     expect(dal.getSession(sid)).toEqual(persisted);
-    expect(dal.getChild(sid, 'bg_00000001')).toMatchObject({ state: 'cancelled', report_stored: 1 });
+    // Loading a session to view it changes no agent record; the settle happens when a run is about to start.
+    expect(dal.getChild(sid, 'bg_00000001')).toMatchObject({ state: 'running', report_stored: 0 });
     expect(dal.getLock(sid)).toMatchObject({ pid: 88, host: HOST });
 
     expect(resumed.prompt(sid, 'continue').ok).toBe(true);
     await resumed.running(sid);
+    // REQ-ORCH-053: the orphan belongs to no open iteration, so the continue settles it cancelled before its first iteration.
+    expect(dal.getChild(sid, 'bg_00000001')).toMatchObject({ state: 'cancelled', report_stored: 1 });
+    // REQ-LIBRARY-092: its report is an artifact, as every terminal child's is (a-stale-settled-childs-report-is-never-an-artifact.md).
+    expect(dal.artifactsOf(sid).filter((a) => a.source_task_id === 'bg_00000001').map((a) => [a.kind, a.status])).toEqual([['child_report', 'cancelled']]);
     expect(priorContexts).toEqual([undefined, 'single_file_change']);
     const continuation = client.requests[1]!.messages
       .flatMap((message) => message.content.map((part) => part.kind === 'text' ? part.text : null))
@@ -133,6 +138,87 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     expect(payload).toContain('...');
     const context = payload.split('Recent session context:\n')[1]!;
     expect(context.length).toBeLessThanOrEqual(3_200);
+  });
+
+  it('REQ-SESSION-115\'s artifact is the latest one the session holds, never a line saying none is recorded (the repair of the-continuation-payload-says-no-artifact-is-recorded)', () => {
+    const sid = asSessionId('S-artifact');
+    const at = new Date(clock.instant()).toISOString();
+    dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });
+    expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain('Artifact: (none recorded in this session)');
+    const artifact = (id: string, title: string, summary: string, createdAt: string, supersededBy: string | null = null, kind: 'child_report' | 'agent_published' = 'child_report', findings = '- found the bug') => dal.insertArtifact({
+      session_id: sid, id, slug: id, title, kind, source_task_id: 'bg_00000001', canonical_name: 'build', source_persona: 'coding-agent', status: kind === 'child_report' ? 'succeeded' : 'published',
+      summary, key_findings: findings, highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', commands: '[]', tags: '[]',
+      supersedes: null, superseded_by: supersededBy, created_by: 'build', consumed_by: '[]', timeline_event_id: null, conversation_id: null, importance: 'normal',
+      created_at: createdAt, edited_at: null, body_file: `${id}.md`,
+    });
+    artifact('a0000001', 'build report', 'The build was fixed.', '2026-09-27T01:00:00.000Z');
+    artifact('a0000002', 'review report', 'The review found nothing.', '2026-09-27T02:00:00.000Z');
+    // A superseded record is never the latest.
+    artifact('a0000003', 'draft report', 'A draft.', '2026-09-27T03:00:00.000Z', 'a0000002');
+    const payload = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
+    expect(payload).not.toContain('no orchestrator artifact is recorded');
+    // Its id leads, so no cut reaches it (REQ-SESSION-194).
+    expect(payload).toContain('Artifact: a0000002 — review report (child_report, succeeded)\nThe review found nothing.\nKey findings:\n- found the bug');
+    expect(payload).not.toContain('A draft.');
+    // At most 6,000 characters of it (REQ-SESSION-115's budget).
+    artifact('a0000004', 'long report', 'w'.repeat(9_000), '2026-09-27T04:00:00.000Z');
+    const long = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
+    const part = long.slice(long.indexOf('Artifact: '), long.indexOf('\nTodo:'));
+    expect(part.length).toBe(6_000);
+    expect(part.endsWith('...')).toBe(true);
+    // A cut never splits a surrogate pair (found by phase 6's review): this one would fall between a pair's halves.
+    artifact('a0000005', 'emoji report', `${'w'.repeat(5_900)}${'😀'.repeat(60)}`, '2026-09-27T05:00:00.000Z');
+    const emoji = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
+    const tail = emoji.slice(emoji.indexOf('Artifact: '), emoji.indexOf('\nTodo:'));
+    expect(tail.endsWith('...')).toBe(true);
+    expect(/[\uD800-\uDBFF]$/.test(tail.slice(0, -3))).toBe(false);
+    // A title is cut to 80 characters; the id before it never is.
+    artifact('a0000007', 'T'.repeat(100), 'Long.', '2026-09-27T05:30:00.000Z');
+    expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain(`Artifact: a0000007 — ${'T'.repeat(77)}... (child_report, succeeded)`);
+    // A published document states its body once: its summary is the body's first line (REQ-LIBRARY-093).
+    artifact('a0000006', 'notes', 'First line.', '2026-09-27T06:00:00.000Z', null, 'agent_published', 'First line.\nSecond line.');
+    expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain('Artifact: a0000006 — notes (agent_published, published)\nFirst line.\nSecond line.\nTodo:');
+  });
+
+  it('PD-ORCH-004 revision 3 (found by phase 6\'s fourth review): an offer counts as told only when the conversation holds the offer itself, never for a mere mention of its task id', () => {
+    const offer = 'Continuation offer: the remaining work may be delegated to a new child as a continuation of this one — call delegate with continuation_of: "bg_0000aa01". A piece of work is continued once; a continuation is not offered one of its own.';
+    const told = offersToldIn([
+      { role: 'user', content: [{ kind: 'text', text: `### build (coding-agent) — failed\n${offer}` }] },
+      { role: 'tool', content: [{ kind: 'tool-result', callId: 'w1', name: 'wait_for_tasks', isError: false, result: offer.replaceAll('aa01', 'aa02') }] },
+      { role: 'user', content: [{ kind: 'text', text: 'Open continuation offers (delegate with `continuation_of` set to the task id to take one up):\n- lint (bg_0000aa03)' }] },
+      { role: 'assistant', content: [{ kind: 'text', text: 'I will look at bg_0000aa04 later.' }, { kind: 'tool-call', callId: 'b1', name: 'background_output', args: '{"task_id":"bg_0000aa05"}' }] },
+      // The list inside a new iteration's handoff counts too, elision line and all; the line after it ends the list.
+      { role: 'user', content: [{ kind: 'text', text: 'Progress: p\nOpen continuation offers (delegate with `continuation_of` set to the task id to take one up):\n- [... earlier continuation offers elided]\n- docs (bg_0000aa06)\nRecent iterations:\n- iteration 1 (bg_0000aa07)' }] },
+    ]);
+    expect([...told].sort()).toEqual(['bg_0000aa01', 'bg_0000aa02', 'bg_0000aa03', 'bg_0000aa06']);
+  });
+
+  it('PD-ORCH-004 revision 3: the handoff states every continuation offer no child has taken up, so a later run\'s root learns of it (OQ-99)', () => {
+    const sid = asSessionId('S-offers');
+    const at = new Date(clock.instant()).toISOString();
+    dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });
+    expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).not.toContain('Open continuation offers');
+    const child = (id: string, name: string, continuationOf: string | null = null) => dal.insertChild({ session_id: sid, task_id: id, canonical_name: name, given_name: name, persona: 'coding-agent', state: 'failed', parent_id: 'bg_root0001', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: at, continuation_of: continuationOf });
+    const offering = (id: string) => JSON.stringify({ status: 'failed', summary: 'timed out', cut_off: { statement: 's', changed_paths: [], changes: '', continuation_offer: `Continue with continuation_of: "${id}".` } });
+    child('bg_00000a01', 'build');
+    dal.setChildReport(sid, 'bg_00000a01', offering('bg_00000a01'));
+    child('bg_00000a02', 'lint');
+    dal.setChildReport(sid, 'bg_00000a02', offering('bg_00000a02'));
+    child('bg_00000a03', 'lint-rest', 'bg_00000a02');
+    const payload = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
+    expect(payload).toContain('Open continuation offers (delegate with `continuation_of` set to the task id to take one up):\n- build (bg_00000a01)\nRecent iterations:');
+    expect(payload).not.toContain('- lint (bg_00000a02)');
+    // Budgeted as every part of the handoff is: the newest ten, the rest elided (found by phase 6's second review).
+    for (let i = 10; i < 21; i += 1) {
+      const id = `bg_00000b${i}`;
+      child(id, `task-${i}`);
+      dal.setChildReport(sid, id, offering(id));
+    }
+    const many = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
+    const told = many.slice(many.indexOf('Open continuation offers'), many.indexOf('\nRecent iterations:')).split('\n');
+    expect(told.slice(1, 3)).toEqual(['- [... earlier continuation offers elided]', '- task-11 (bg_00000b11)']);
+    expect(told).toHaveLength(12);
+    expect(told.at(-1)).toBe('- task-20 (bg_00000b20)');
   });
 
   it('reaps one dead local lock and preserves live local and foreign holders with distinct refusals', () => {
@@ -168,5 +254,165 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     expect(sessions.list(dal, 'C:/ws').map((row) => ({ id: row.sessionId, status: row.status, stale: row.stale }))).toEqual([
       { id: active, status: 'running', stale: true }, { id: done, status: 'completed', stale: false },
     ]);
+  });
+});
+
+/**
+ * PD-ORCH-005 clause 20 (revision 4): the handoff's artifact is the latest one the iteration's root published that
+ * nothing supersedes and, when the root published none, the latest of any kind that nothing supersedes. The iteration is
+ * the session's most recent recorded one (OQ-106), and its root is known by the task id its publishes carry.
+ */
+describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', () => {
+  let dir: string;
+  let dal: StoreDal;
+  let clock: FakeClock;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-handoff-'));
+    const db = openStore(join(dir, 'workspace.db'));
+    migrateStore(db);
+    dal = new StoreDal(db);
+    clock = new FakeClock();
+  });
+  afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
+
+  const seed = (sid: SessionId): void => {
+    const at = new Date(clock.instant()).toISOString();
+    dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });
+  };
+  const iteration = (sid: SessionId, n: number, rootTaskId: string, openedAt = '2026-09-27T00:00:00.000Z'): void => dal.insertIteration({ session_id: sid, iteration: n, root_task_id: rootTaskId, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: `t${n}`, task: 'work', opened_at: openedAt });
+  const artifact = (sid: SessionId, id: string, kind: 'child_report' | 'agent_published', conversationId: string | null, createdAt: string, supersededBy: string | null = null) => dal.insertArtifact({
+    session_id: sid, id, slug: id, title: `${id} title`, kind, source_task_id: conversationId ?? 'bg_00000001', canonical_name: 'build', source_persona: 'coding-agent', status: kind === 'child_report' ? 'succeeded' : 'published',
+    summary: `${id} summary`, key_findings: `${id} body`, highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', commands: '[]', tags: '[]',
+    supersedes: null, superseded_by: supersededBy, created_by: 'build', consumed_by: '[]', timeline_event_id: null, conversation_id: conversationId, importance: 'normal',
+    created_at: createdAt, edited_at: null, body_file: `${id}.md`,
+  });
+  const handoffArtifact = (sid: SessionId): string => /Artifact: (\S+)/.exec(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined))![1]!;
+
+  it('the root\'s publish is chosen over a later child report and over a later publish by a child', () => {
+    const sid = asSessionId('S-root-first');
+    seed(sid);
+    iteration(sid, 1, 'bg_root0001');
+    artifact(sid, 'a0000001', 'agent_published', 'bg_root0001', '2026-09-27T01:00:00.000Z');
+    artifact(sid, 'a0000002', 'child_report', 'bg_child001', '2026-09-27T02:00:00.000Z');
+    artifact(sid, 'a0000003', 'agent_published', 'bg_child001', '2026-09-27T03:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000001');
+    // The latest of the root's own, when it published more than one.
+    artifact(sid, 'a0000004', 'agent_published', 'bg_root0001', '2026-09-27T04:00:00.000Z');
+    artifact(sid, 'a0000005', 'child_report', 'bg_child002', '2026-09-27T05:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000004');
+  });
+
+  it('a root publish that is superseded, or a root that published none, falls back to the latest of any kind', () => {
+    const sid = asSessionId('S-root-fallback');
+    seed(sid);
+    iteration(sid, 1, 'bg_root0001');
+    artifact(sid, 'a0000001', 'child_report', 'bg_child001', '2026-09-27T01:00:00.000Z');
+    artifact(sid, 'a0000002', 'agent_published', 'bg_child001', '2026-09-27T02:00:00.000Z');
+    // The root published none.
+    expect(handoffArtifact(sid)).toBe('a0000002');
+    // The root's only publish is superseded (by a child's), so nothing of the root's stands.
+    artifact(sid, 'a0000000', 'agent_published', 'bg_root0001', '2026-09-27T00:30:00.000Z', 'a0000002');
+    expect(handoffArtifact(sid)).toBe('a0000002');
+  });
+
+  it('the root is the most recent recorded iteration\'s: an earlier iteration\'s root publish counts only as "of any kind" (OQ-106)', () => {
+    const sid = asSessionId('S-root-iterations');
+    seed(sid);
+    iteration(sid, 1, 'bg_root0001');
+    dal.closeIteration(sid, 1, 'succeeded', '2026-09-27T01:30:00.000Z');
+    artifact(sid, 'a0000001', 'agent_published', 'bg_root0001', '2026-09-27T01:00:00.000Z');
+    artifact(sid, 'a0000002', 'child_report', 'bg_child002', '2026-09-27T02:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000001');
+    iteration(sid, 2, 'bg_root0002');
+    expect(handoffArtifact(sid)).toBe('a0000002');
+    // A plan cycle's root (iteration 0, never recorded as an iteration) is not an iteration's root either.
+    artifact(sid, 'a0000003', 'agent_published', 'bg_plan0001', '2026-09-27T03:00:00.000Z');
+    artifact(sid, 'a0000004', 'child_report', 'bg_child003', '2026-09-27T04:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000004');
+    artifact(sid, 'a0000005', 'agent_published', 'bg_root0002', '2026-09-27T01:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000005');
+  });
+
+  it('a plan cycle that ran after the latest iteration is what the new work follows: an earlier iteration\'s root document never outranks what the plan cycle produced (OQ-106)', () => {
+    const sid = asSessionId('S-root-plan-cycle');
+    seed(sid);
+    iteration(sid, 1, 'bg_root0001', '2026-09-27T00:00:00.000Z');
+    dal.closeIteration(sid, 1, 'succeeded', '2026-09-27T01:30:00.000Z');
+    artifact(sid, 'a0000001', 'agent_published', 'bg_root0001', '2026-09-27T01:00:00.000Z');
+    // The session is re-armed and a prompt starts a plan cycle: its child reports, its root publishes the plan, and the
+    // gate opens. The handoff the approve (or the revise) builds takes the latest of any kind — the plan — not X.
+    artifact(sid, 'a0000002', 'child_report', 'bg_child002', '2026-09-27T02:00:00.000Z');
+    artifact(sid, 'a0000003', 'agent_published', 'bg_plan0001', '2026-09-27T02:30:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000001');
+    dal.insertPlanCycle(sid, 1, '2026-09-27T03:00:00.000Z', 'The plan.', 'implementation', '', '');
+    expect(handoffArtifact(sid)).toBe('a0000003');
+    // Approved: the iteration the plan led into opens after the gate, so its root is preferred again once it publishes.
+    iteration(sid, 2, 'bg_root0002', '2026-09-27T04:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000003');
+    artifact(sid, 'a0000004', 'agent_published', 'bg_root0002', '2026-09-27T05:00:00.000Z');
+    artifact(sid, 'a0000005', 'child_report', 'bg_child005', '2026-09-27T06:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000004');
+  });
+
+  it('the plan cycle PD-ORCH-003 revision 2 holds after a resumed iteration is taken the same way: the resumed root\'s document counts only as "of any kind" (OQ-106)', () => {
+    const sid = asSessionId('S-root-resumed-hold');
+    seed(sid);
+    // Iteration 1 opens, its root publishes, a pause leaves it open; a continue resumes it (opened_at is never rewritten),
+    // the resumed root publishes again, and the iteration closes. With no release in `plan` mode the run then holds: a
+    // plan cycle plans the work still pending, and a child of that plan cycle reports.
+    iteration(sid, 1, 'bg_root0001', '2026-09-27T00:00:00.000Z');
+    artifact(sid, 'a0000001', 'agent_published', 'bg_root0001', '2026-09-27T01:00:00.000Z');
+    expect(dal.setIterationInterruption(sid, 1, 'pause')).toBe(true);
+    expect(dal.setIterationInterruption(sid, 1, null)).toBe(true);
+    artifact(sid, 'a0000002', 'agent_published', 'bg_root0001', '2026-09-27T02:00:00.000Z');
+    dal.closeIteration(sid, 1, 'succeeded', '2026-09-27T02:30:00.000Z');
+    expect(dal.iterationsOf(sid)[0]!.opened_at).toBe('2026-09-27T00:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000002');
+    artifact(sid, 'a0000003', 'child_report', 'bg_child003', '2026-09-27T02:45:00.000Z');
+    dal.insertPlanCycle(sid, 1, '2026-09-27T03:00:00.000Z', 'The plan.', 'implementation', '', '');
+    // The approve's (or the revise's) handoff: the plan-cycle child's later report, not the resumed root's own document.
+    expect(handoffArtifact(sid)).toBe('a0000003');
+  });
+
+  it('end to end: a root\'s publish carries its task id as its conversation, and the next iteration\'s handoff names it over a later report', async () => {
+    const calls: unknown[] = [];
+    const script: ScriptedCall[] = [
+      toolCalls([{ callId: 'w1', name: 'publish', args: {} }], 'Publishing.'), answer('Published.'),
+      answer('Second iteration done.'),
+    ];
+    const client = new ScriptedModelClient(script);
+    const backend = new DefaultAgentBackend(client);
+    const port = (ops: ArtifactOps | undefined): ToolPort => ({
+      specs: () => [{ name: 'publish', description: 'publish', parameters: { type: 'object' } }],
+      dispatch: async (c) => {
+        calls.push(c);
+        const r = ops?.write({ slug: 'the-plan', title: 'The plan', body: 'Plan body.', tags: [], supersedes: null });
+        return { text: r?.ok ? r.id : 'failed', isError: !r?.ok, status: r?.ok ? 'ok' : 'failed', durationMs: 1, label: 'publish', args: {} };
+      },
+      cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+    });
+    const sessions = new Sessions({
+      clocks: clock, publisher: { increment: () => undefined, snapshot: () => undefined }, pid: 81, host: HOST,
+      retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-handoff-e2e',
+      model: null, sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid), attended: () => true,
+      tools: (ctx) => port(ctx.artifacts),
+      configure: () => ({ ok: true, value: {
+        model: { backend, config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => '' } },
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0 },
+      } }),
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'plan it') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(calls).toHaveLength(1);
+    const root = dal.iterationsOf(sid)[0]!.root_task_id;
+    const published = dal.artifactsOf(sid).find((a) => a.kind === 'agent_published')!;
+    expect(published.conversation_id).toBe(root);
+    // A later child report (as a child of the same iteration would leave) is newer than the root's publish.
+    artifact(sid, 'a0000009', 'child_report', 'bg_child009', '2999-01-01T00:00:00.000Z');
+    expect(sessions.prompt(sid, 'next').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const firstOfSecond = client.requests.at(-1)!.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n');
+    expect(firstOfSecond).toContain(`Artifact: ${published.id} — The plan (agent_published, published)\nPlan body.`);
+    expect(firstOfSecond).not.toContain('Artifact: a0000009');
   });
 });

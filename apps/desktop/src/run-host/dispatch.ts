@@ -187,7 +187,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       sessionRoots.set(req.sessionId, s.root);
       const resumed = sessions.resume(s.dal, s.root, asSessionId(req.sessionId));
       if (!resumed.ok) return { kind: 'refused', code: `session.${resumed.error.code}`, headline: 'The session could not be loaded', detail: resumed.error.reason };
-      return { kind: 'session.resumed', sessionId: resumed.value.sessionId, settledChildren: resumed.value.settledChildren };
+      return { kind: 'session.resumed', sessionId: resumed.value.sessionId };
     }
     case 'session.start': {
       if (lease.isRefusing(req.workspaceId as WorkspaceId)) return { kind: 'refused', code: 'workspace.refusing', headline: 'New runs are refused for this workspace while a restore is under way' };
@@ -308,11 +308,17 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       return { kind: 'ack' };
     }
     case 'session.continue': {
-      // REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause or continue a paused session; nothing is appended.
+      // REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause, or continue a paused session or one a crash left
+      // (PD-ORCH-005 clause 18); no user row is appended. `continueSession` decides the todo: a session with nothing
+      // open whose last request finished — crash-left, `paused` by a pause, a stop or the application's quit accepted
+      // after its iteration closed, `paused` by a plan Cancel, a stop or a quit of the plan cycle held after a resumed
+      // iteration (PD-ORCH-003 revision 2, OQ-104), or `paused_message_limit` by a limit reached as the iteration that
+      // finished it closed — takes that request up again as a task (OQ-103).
       // REQ-PROVIDER-066 (the continuation lease): refresh the bearers before the run resolves its setup.
       const leaseRefusal = await continuationLeaseForSession(req.sessionId);
       if (leaseRefusal) return leaseRefusal;
-      const r = sessions.continueSession(asSessionId(req.sessionId), req.action);
+      // PD-ORCH-005 clause 6: resuming the open iteration is the default; `withoutPaused` declines it.
+      const r = sessions.continueSession(asSessionId(req.sessionId), req.action, { withoutPaused: req.withoutPaused === true });
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The session could not be continued', detail: r.error.reason };
       log(`session ${req.sessionId} ${req.action}: ${r.value.resumed ? 'a continuation run is executing' : 'left paused'}${r.value.messageLimit === null ? '' : ` (message limit ${r.value.messageLimit})`}`);
       return { kind: 'session.continued', sessionId: req.sessionId, resumed: r.value.resumed, messageLimit: r.value.messageLimit };
@@ -547,6 +553,8 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       return { kind: 'ack' };
     case 'approval.shown':
       return presenter.shown(req.requestId, req.ok, req.error) ? { kind: 'ack' } : { kind: 'refused', code: 'approval.unknown', headline: 'No present-request waits for that id' };
+    case 'approval.queued':
+      return presenter.queued(req.requestId) ? { kind: 'ack' } : { kind: 'refused', code: 'approval.unknown', headline: 'No present-request waits for that id' };
     case 'session.attach':
       return sessions.attach(asSessionId(req.sessionId)) ? { kind: 'ack' } : { kind: 'refused', code: 'session.not-live', headline: 'That session is not live' };
     case 'session.detach':

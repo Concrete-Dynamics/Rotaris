@@ -388,6 +388,18 @@ checkpoint progress dialog (`REQ-SHELL-117`), the kill-confirmation dialog (`REQ
 desktop approval dialog (`REQ-TOOLS-063`). The design system ships a `CommandPalette` component but
 the mockup never places it.
 
+**The composer's paused state — no design.** `PD-ORCH-005` clause 6 and `PD-CHAT-001` revision 4 give a
+paused session a composer of its own. Two continues take the send pill's place, `Continue` and `Send`. Below
+the dock, the notices row holds the pause's statement, the count of agents a continue resumes and "Continue
+without them". The mockup draws no paused composer. The build follows the language: the row's quiet hint,
+and the compact ghost button the session tables draw for "Resume". On 2026-09-28 the owner asked for the
+state to be drawn ([R-064](../product/requests.md#r-064), OQ-98).
+
+**A paused agent — no design.** `PD-ORCH-005` clause 13 gives a `paused` agent a presentation state of its own on
+every agent surface. The mockup draws no paused agent. The build follows the language: its dot takes `--rt-wait`, the
+waiting family `REQ-SHELL-036` puts `paused` in, drawn at full opacity with no pulse, and the state text `paused` is what
+tells it from `queued` (OQ-100).
+
 **All three themes but one.** `REQ-SHELL-128` requires three built-in themes in order —
 `rotaris-dim` (default), `nocturne`, `high-contrast` — each declaring a light/dark flag, seven token
 groups and hard accessibility floors (`REQ-SHELL-129`), each rendering all seven views without error

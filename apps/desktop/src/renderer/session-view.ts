@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { isBusy, type AgentRecord, type ConfigSnapshot, type TranscriptRow } from '@rotaris/contracts';
+import { isBusy, type AgentRecord, type ConfigSnapshot, type SessionListItemPayload, type TranscriptRow } from '@rotaris/contracts';
 import type { PersonaEntry } from '@rotaris/ui';
 import { bridge } from './shell.js';
 
@@ -55,4 +55,29 @@ export function useElapsedTick(session: { executionStatus: string; updatedAt: st
     return () => clearInterval(t);
   }, [busy]);
   return busy ? nowIso : session?.updatedAt ?? null;
+}
+
+/**
+ * Part AB — REQ-CHAT-008's synthetic state: the persisted session claims busy but no local run exists. The verdict
+ * comes from the ONE liveness predicate (REQ-SESSION-171) through `session.list`'s `stale`, never from this window
+ * inferring it from silence, and it is re-asked only when the followed session or its status changes — there is no
+ * poll, because a wrong answer here would mislabel a live run and a timer would make it a race.
+ */
+export function useNeedsRecovery(sessionId: string | null, executionStatus: string | null): boolean {
+  const [recovery, setRecovery] = useState(false);
+  const busy = executionStatus !== null && isBusy(executionStatus);
+  useEffect(() => {
+    let live = true;
+    queueMicrotask(() => {
+      if (!live) return;
+      if (!sessionId || !busy) { setRecovery(false); return; }
+      void bridge.command({ kind: 'session.list' }).then((r) => {
+        if (!live || !r.ok) return;
+        const rows = (r.value as { sessions?: readonly SessionListItemPayload[] }).sessions ?? [];
+        setRecovery(rows.find((s) => s.sessionId === sessionId)?.stale === true);
+      });
+    });
+    return () => { live = false; };
+  }, [sessionId, busy, executionStatus]);
+  return recovery;
 }

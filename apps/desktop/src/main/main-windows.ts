@@ -47,7 +47,7 @@ type WorkspaceGate =
   | { readonly ok: true }
   | { readonly ok: false; readonly outcome: CommandOutcome };
 
-export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWindows> {
+export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWindows, TApproval = never> {
   readonly adapter: MainWindowAdapter<TWindow, TPersonaWindows, TTerminalWindows>;
   readonly timers: { readonly after: (delayMs: number, callback: () => void) => MainWindowTimer };
   readonly currentDirectory: () => string;
@@ -72,6 +72,11 @@ export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWind
   ) => void;
   readonly reportFailure: (windowId: number, title: string, audience: 'window' | 'application') => void;
   readonly log: (message: string) => void;
+  /**
+   * REQ-TOOLS-063/064: the requests still queued for a window's dialog when the window closes. Each was acknowledged as
+   * queued (`approval.queued`), so the run host no longer bounds its wait: main must say it was never shown, or it hangs.
+   */
+  readonly unshownApprovals?: (approvals: readonly TApproval[]) => void;
   /**
    * REQ-STARTUP-043 / REQ-STARTUP-114 / REQ-STARTUP-047: the post-show activation of ONE main window — where the update
    * check is initiated, and the only place it is. Called once per window, after that window is shown and never during
@@ -100,7 +105,7 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
   readonly #records = new Map<number, WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TDialog>>();
   readonly #focusOrder: number[] = [];
 
-  constructor(private readonly dependencies: MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWindows>) {}
+  constructor(private readonly dependencies: MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWindows, TApproval>) {}
 
   async build(input: { readonly workspace: string; readonly origin: MainWindowOrigin }): Promise<MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>> {
     const built = await this.dependencies.adapter.create(input);
@@ -217,8 +222,17 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     return sessionId;
   }
 
-  enqueueApproval(senderId: number, approval: TApproval): void {
-    this.#liveRecord(senderId)?.approvals.push(approval);
+  /**
+   * REQ-TOOLS-063: queue a request for this window's one dialog. Answers whether it waits behind another: a dialog is
+   * open, or requests are queued ahead of it. Main tells the run host so (`approval.queued`), which then stops bounding
+   * the wait for `approval.shown`. Otherwise a request left queued past that bound was denied unshown.
+   */
+  enqueueApproval(senderId: number, approval: TApproval): boolean {
+    const record = this.#liveRecord(senderId);
+    if (!record) return false;
+    const waits = record.openDialog !== null || record.approvals.length > 0;
+    record.approvals.push(approval);
+    return waits;
   }
 
   approvalQueue(senderId: number): readonly TApproval[] {
@@ -530,6 +544,8 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     const index = this.#focusOrder.indexOf(id);
     if (index >= 0) this.#focusOrder.splice(index, 1);
     this.dependencies.adapter.disposeResources(record.win, record.wcId, record.personaWindows, record.terminalWindows);
+    const unshown = record.approvals.splice(0);
+    if (unshown.length > 0) this.dependencies.unshownApprovals?.(unshown);
   }
 }
 
@@ -546,6 +562,10 @@ export interface ElectronMainWindowAdapterDependencies {
   readonly registerPresenter: (wcId: number) => void;
   readonly revokePresenter: (wcId: number) => void;
   readonly forgetTerminalFrames: (wcId: number) => void;
+  /** A main window's close was confirmed and is now under way: what an application quit is recognised by (`exit.ts`). */
+  readonly closeConfirmed?: ((wcId: number) => void) | undefined;
+  /** Each main window's close guard as it is built, and `null` once the window has closed. */
+  readonly closeGuard?: ((wcId: number, guard: CloseGuard | null) => void) | undefined;
   readonly log: (message: string) => void;
 }
 
@@ -568,6 +588,44 @@ export function mainWindowOptions(backgroundColor: string): BrowserWindowConstru
     frame: false,
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
   };
+}
+
+/** The part of a main window its close guard needs. */
+export interface GuardedWindow {
+  on(event: 'close', listener: (event: { preventDefault(): void }) => void): unknown;
+  isDestroyed(): boolean;
+  close(): void;
+}
+
+/** A main window's close guard, as the application's quit drives it (`exit.ts`, `closeThroughGuards`). */
+export interface CloseGuard {
+  /** Asks the renderer's guard; a guard that cannot answer allows. Nothing closes. */
+  ask(): Promise<boolean>;
+  /** Marks the close as confirmed and reports it; the next close of the window passes. */
+  confirm(): void;
+  close(): void;
+}
+
+/**
+ * The main window's close guard. The first close is held while the renderer's guard is asked; a close it allows — or
+ * one it cannot answer — is reported as confirmed and then made, and that second close passes. Reporting before closing
+ * is what lets main tell the application's quit from a person closing a dialog (PD-ORCH-005 clause 9, `exit.ts`): the
+ * window's modal dialogs close as the window does, after the report. The guard is returned so the application's quit
+ * can ask every window's guard before confirming any.
+ */
+export function guardClose(win: GuardedWindow, ask: () => Promise<unknown>, confirmed: () => void): CloseGuard {
+  let closeConfirmed = false;
+  const guard: CloseGuard = {
+    ask: () => ask().then((proceed) => proceed !== false, () => true),
+    confirm: () => { if (closeConfirmed) return; closeConfirmed = true; confirmed(); },
+    close: () => { if (!win.isDestroyed()) win.close(); },
+  };
+  win.on('close', (event) => {
+    if (closeConfirmed || win.isDestroyed()) return;
+    event.preventDefault();
+    void guard.ask().then((allowed) => { if (allowed) { guard.confirm(); guard.close(); } });
+  });
+  return guard;
 }
 
 /** Electron's concrete half of the lifecycle seam. Tests use an in-memory adapter with the same ordering. */
@@ -656,22 +714,13 @@ export function createElectronMainWindowAdapter(
         log: dependencies.log,
       });
 
-      let closeConfirmed = false;
-      win.on('close', (event) => {
-        if (closeConfirmed || win.isDestroyed()) return;
-        event.preventDefault();
-        void win.webContents
-          .executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true')
-          .then((proceed: unknown) => {
-            if (proceed === false) return;
-            closeConfirmed = true;
-            win.close();
-          })
-          .catch(() => {
-            closeConfirmed = true;
-            win.close();
-          });
-      });
+      const guard = guardClose(
+        win,
+        () => win.webContents.executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true'),
+        () => dependencies.closeConfirmed?.(wcId),
+      );
+      dependencies.closeGuard?.(wcId, guard);
+      win.once('closed', () => dependencies.closeGuard?.(wcId, null));
       win.once('ready-to-show', () => win.show());
 
       if (dependencies.capturing && process.env['ROTARIS_CAPTURE_NET'] === '1') {

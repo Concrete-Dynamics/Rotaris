@@ -616,3 +616,34 @@ that applies above it. That is what this record said a ceiling would buy, and it
 is discharged. Nothing in "The cap is load-bearing" is now open: obligation 1 was honoured at every execution by the
 20 ms floor, and obligation 2's ceiling exists. What this record still owes is unchanged and unrelated — the
 packaged-app limb and the synthetic-ladder limb noted in the third execution.
+
+## The real-PTY half on a POSIX shell — 2026-09-28 (R-062)
+
+*A first execution, reported back in place. Every execution above measured the stream's fidelity against a real
+PowerShell: the gapless `seq`, the deltas equal to the PTY bytes, the closing frame, the background stream, the armed
+echo, streaming off, the resize and the kill. REQ-TOOLS-104 gives every other host a POSIX shell, and until this date
+no POSIX shell had carried any of it.*
+
+**Found — the half had never run anywhere but Windows, and it measured nothing off it.** The suite was not skipped on a
+POSIX host. It sent PowerShell there, so `/bin/sh` answered every command with `not found`, exit 127, and six of the
+proof's checks were red without the stream being measured at all. The proof sweep of 2026-09-28 read this as a proof
+failure, and the record, correctly, had no product defect to explain it. The note is
+[`terminal-stream-proofs-real-pty-half-speaks-powershell-to-a-posix-shell.md`](../../defects/fixed/terminal-stream-proofs-real-pty-half-speaks-powershell-to-a-posix-shell.md).
+Each command is now spelled in the host's shell (the PowerShell spellings are the same literals as before). Every
+assertion is kept.
+
+**Found nothing in the mechanism.** On Linux (`dash`), in three runs of `pnpm terminal-stream-proof`, every check held:
+
+- **10,000 lines:** 5 frames, 2 deltas byte-equal to the PTY's 124,928 bytes, gapless, and the closing frame equal to
+  the observation.
+- **The `bg:` stream:** gapless on its own counter.
+- **The armed echo:** framed 1.1–2.1 ms after the keystroke at an interval of 2,000 ms.
+- **Streaming off:** 0 frames, against 4, with the same exit code (3) and the same output.
+- **A resize to 80×24:** it reached the process as `cols=80 rows=24` (`stty size`), and the observation stayed clean.
+- **Kill from the window:** it ended the command with exit −1 and closed the stream.
+
+The echo figure is small because the kernel's line discipline echoes on a POSIX PTY, where PowerShell echoes the
+keystroke itself. Either way it is the frame the armed flush produced.
+
+**Could not show.** A Windows re-run on the branch (no host). Anything on macOS (IC-3). The synthetic ladder and the
+packaged limb are unchanged, and are owed where the third execution left them.

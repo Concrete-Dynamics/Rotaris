@@ -1,11 +1,12 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { PRESENTATION_STATUSES } from '@rotaris/contracts';
 import {
   CANCELLING_REFUSAL, CHIPS_DISABLED_STATES, CHIPS_ENABLED_STATES, clampComposerHeight, composerChipReason, composerPlaceholderFor,
   COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, COMPOSER_PLACEHOLDERS, COMPOSER_WIDGET_MIN_HEIGHT, DEFAULT_REASONING, DRAFT_PUBLISH_MS,
-  DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel, MODELS_LOADING_LABEL, PROJECT_SETUP_REFUSAL,
-  reasoningChipLabel, runControlReason, runHeaderControlReason, RUN_STATE_LABELS, runStateOf, runTimingLabel, runTimingSeconds,
-  sendRefusal, TRANSCRIPT_MIN_HEIGHT, type HistoryWalk,
+  DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel, MODELS_LOADING_LABEL, pausePendingAfter,
+  PROJECT_SETUP_REFUSAL, reasoningChipLabel, runControlReason, runHeaderControlReason, RUN_STATE_LABELS, runStateOf, runTimingLabel,
+  runTimingSeconds, sendRefusal, statusStripRunItem, TRANSCRIPT_MIN_HEIGHT, type HistoryWalk,
 } from './composer.js';
 import { STRIP_NARROW_BELOW, STRIP_TIGHT_BELOW, stripDensity, stripIconTitle } from './WorkspaceView.js';
 
@@ -33,6 +34,37 @@ describe('composer — REQ-CHAT-008: the run-state label vocabulary', () => {
     expect(runStateOf('waiting', false)).toBe('running');
     expect(runStateOf('interrupted', false)).toBe('idle');
     expect(runStateOf(null, false)).toBe('idle');
+  });
+});
+
+describe('REQ-SHELL-038 with REQ-CHAT-008: the status strip names the recovery state as the run header does', () => {
+  it('reads "Run needs recovery" for a busy session with no run here, and the presentation vocabulary otherwise', () => {
+    // PD-ORCH-005 clause 13 (OQ-100): the strip never says a run is active beside a run-level agent drawn `paused`.
+    expect(statusStripRunItem('running', true)).toBe('Run needs recovery');
+    expect(statusStripRunItem('waiting', true)).toBe('Run needs recovery');
+    expect(statusStripRunItem('pausing', true)).toBe('Run needs recovery');
+    expect(statusStripRunItem('running', false)).toBe('run Running');
+    // A session at rest is named by its own status whatever a stale listing says (REQ-NOTIFY-049).
+    expect(statusStripRunItem('paused', true)).toBe('run Paused');
+    expect(statusStripRunItem('interrupted', true)).toBe('run Idle');
+    expect(statusStripRunItem(null, false)).toBe('no session');
+  });
+});
+
+describe('REQ-MONITOR-296: the accepted pause\'s pending mark belongs to the run that accepted it', () => {
+  const s1Busy = { sessionId: 's1', busy: true };
+  it('holds while that run stays busy, and ends when it rests, ends, or another session is shown', () => {
+    expect(pausePendingAfter(true, s1Busy, s1Busy)).toBe(true);
+    expect(pausePendingAfter(true, s1Busy, { sessionId: 's1', busy: false })).toBe(false);
+    expect(pausePendingAfter(true, s1Busy, { sessionId: 's2', busy: true })).toBe(false);
+    expect(pausePendingAfter(true, s1Busy, { sessionId: null, busy: false })).toBe(false);
+    expect(pausePendingAfter(false, s1Busy, s1Busy)).toBe(false);
+  });
+  // WorkspaceView's Pause control is stateful and vitest has no DOM, so what pins its use of the rule is its source.
+  it('WorkspaceView clears the mark through the rule whenever the scope changes', () => {
+    const text = readFileSync(new URL('./WorkspaceView.tsx', import.meta.url), 'utf8');
+    expect(text).toContain('if (pausePending && !pausePendingAfter(pausePending, pauseScopeSeen, pauseScope)) setPausePending(false);');
+    expect(text).toContain('const pauseScope: PauseScope = { sessionId: session?.id ?? null, busy: sessionBusy };');
   });
 });
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProcessReply } from '@rotaris/contracts';
 import { FakeClock, millis } from '@rotaris/kernel';
-import { CHILD_CLOSE_BOUND_MS, endBeforeMain, exitAfterChildWindows, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
+import { CHILD_CLOSE_BOUND_MS, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
 
 /** A window whose destruction reports `closed` at once, later, or never. */
 function win(opts: { parent: boolean; closes?: 'now' | 'never' }, log: string[], name: string): ClosableWindow & { closed: () => void } {
@@ -153,6 +153,57 @@ describe("a child's shutdown at quit, raced against its own exit (exit.ts)", () 
     c.exit(0);
     await flush();
     expect(said).toHaveLength(1);
+  });
+});
+
+describe('PD-ORCH-005 clause 9: what the application\'s quit closes answers nothing (exit.ts)', () => {
+  const windows = (...ws: [number, boolean][]) => ws.map(([wcId, destroyed]) => ({ wcId, destroyed }));
+
+  it('the application stays while a main window neither destroyed nor confirmed closing remains', () => {
+    const q = new QuitState();
+    expect(q.quitting(windows([1, false]))).toBe(false);
+    // One main window of two closes: the other stays.
+    q.closeConfirmed(1);
+    expect(q.quitting(windows([1, false], [2, false]))).toBe(false);
+    expect(q.isClosing(1)).toBe(true);
+    expect(q.isClosing(2)).toBe(false);
+  });
+
+  it('the application is quitting once every main window\'s close is confirmed or done, or the process exits', () => {
+    const q = new QuitState();
+    q.closeConfirmed(1);
+    expect(q.quitting(windows([1, false]))).toBe(true);
+    expect(q.quitting(windows([1, false], [2, true]))).toBe(true);
+    const exiting = new QuitState();
+    exiting.exiting();
+    expect(exiting.quitting(windows([1, false]))).toBe(true);
+  });
+
+  it('a dialog closed unanswered answers Deny (REQ-TOOLS-063) unless the quit closed it; an answered one asks nothing more', () => {
+    expect(dialogCloseAnswersDeny({ answered: false, quitting: false })).toBe(true);
+    expect(dialogCloseAnswersDeny({ answered: false, quitting: true })).toBe(false);
+    expect(dialogCloseAnswersDeny({ answered: true, quitting: false })).toBe(false);
+  });
+});
+
+describe('PD-ORCH-005 clause 9: a quit Electron starts closes the main windows through their guards, all or none (exit.ts)', () => {
+  const guard = (name: string, log: string[], allows: boolean, delayMs = 0) => ({
+    ask: () => new Promise<boolean>((r) => setTimeout(() => { log.push(`asked ${name}`); r(allows); }, delayMs)),
+    confirm: () => { log.push(`confirm ${name}`); },
+    close: () => { log.push(`close ${name}`); },
+  });
+
+  it('asks every guard, then confirms every close before closing any window, so no dialog closes while a window is undecided (found by phase 7\'s second review)', async () => {
+    const log: string[] = [];
+    // A's guard answers at once, B's (unsaved settings) later: A must not close before B is confirmed.
+    expect(await closeThroughGuards([guard('A', log, true), guard('B', log, true, 20)])).toBe(true);
+    expect(log).toEqual(['asked A', 'asked B', 'confirm A', 'confirm B', 'close A', 'close B']);
+  });
+
+  it('a guard that refuses closes nothing, and confirms nothing', async () => {
+    const log: string[] = [];
+    expect(await closeThroughGuards([guard('A', log, true), guard('B', log, false, 5)])).toBe(false);
+    expect(log).toEqual(['asked A', 'asked B']);
   });
 });
 

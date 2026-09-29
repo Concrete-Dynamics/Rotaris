@@ -16,7 +16,7 @@ import type { ToolContext } from '../tools/types.js';
  * ADR-0021's first execution (Part AL). Two halves:
  *  - the registry on a FAKE clock and a fake emulator — the ceiling, the armed flush, the 20 ms floor, the closing
  *    burst, retention, the refusals, streaming off;
- *  - the same registry behind the REAL terminal tool, a REAL PowerShell through a REAL PTY, on the node clocks —
+ *  - the same registry behind the REAL terminal tool, the host's REAL shell through a REAL PTY, on the node clocks —
  *    what `pnpm terminal-stream-proof` asserts over. Skipped where no shell is present (REQ-TOOLS-104).
  * With ROTARIS_TERMINAL_PROOF_DIR set, the real half writes its measurements there for the proof script.
  */
@@ -265,9 +265,33 @@ describe('the xterm adapter — a screen, not a log (ADR-0021; REQ-SHELL-095)', 
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
-// The real half: a real PowerShell through a real PTY, the node clocks, the real xterm emulator.
+// The real half: the host's real shell through a real PTY, the node clocks, the real xterm emulator.
 // ---------------------------------------------------------------------------------------------------------------------
 const shell = findShell();
+/**
+ * REQ-TOOLS-104 sends Windows to PowerShell and every other host to a POSIX shell, so each command below is spelled
+ * in the shell the host actually runs, as `terminal.test.ts` already does. This half was first written against
+ * PowerShell alone, and on a POSIX host every command came back `not found`, exit 127, so nothing was measured there
+ * (docs/defects/fixed/terminal-stream-proofs-real-pty-half-speaks-powershell-to-a-posix-shell.md). What is under
+ * test is the stream: its frames, its counter, its armed flush, its resize and its kill. None of that belongs to
+ * either language. The two spellings produce the same output, and the assertions after them are identical.
+ */
+const PS = shell?.kind === 'powershell';
+const SH = {
+  /** `line 1` … `line <n>`, one per line (`<word> <i>` for another word). */
+  count: (n: number, word = 'line') => (PS ? `1..${n} | ForEach-Object { "${word} $_" }` : `i=1; while [ "$i" -le ${n} ]; do printf '${word} %s\\n' "$i"; i=$((i+1)); done`),
+  /** One line on stdout. */
+  echo: (text: string) => (PS ? `Write-Output ${text}` : `printf '%s\\n' ${text}`),
+  /** Read one line typed at the terminal and print it back behind `got:`. */
+  readBack: () => (PS ? '$typed = Read-Host; Write-Output "got:$typed"' : `read typed; printf 'got:%s\\n' "$typed"`),
+  /** A native process's exit status, in a shell that keeps running (`exit` alone would end the persistent shell itself, ADR-0020). */
+  exit: (code: number) => (PS ? `cmd /c "exit ${code}"` : `sh -c 'exit ${code}'`),
+  /** The grid size the process itself reads from its terminal, as `cols=<c> rows=<r>`. */
+  size: () => (PS ? 'Write-Output "cols=$($Host.UI.RawUI.WindowSize.Width) rows=$($Host.UI.RawUI.WindowSize.Height)"' : `stty size | { read r c; printf 'cols=%s rows=%s\\n' "$c" "$r"; }`),
+  /** A word from `size()`'s own text that its output never contains: finding it would mean the echoed command leaked into the observation. */
+  sizeWord: PS ? 'Write-Output' : 'stty',
+  sleep: (seconds: number) => (PS ? `Start-Sleep -Seconds ${seconds}` : `sleep ${seconds}`),
+};
 const clocks: Clocks = nodeClocks();
 const root = mkdtempSync(join(tmpdir(), 'rotaris-stream-'));
 const measurements: Record<string, unknown> = {};
@@ -311,7 +335,7 @@ describe.skipIf(!shell || !proofDir)('the live stream behind a real PTY (ADR-002
     const session = m.session(`${c.sessionId}:${c.agentName}`, root);
     const untap = session.onOutput((chunk) => { if (!stop) raw += chunk; });
     const t0 = performance.now();
-    const r = await tool.execute(args({ command: '1..10000 | ForEach-Object { "line $_" }' }), c);
+    const r = await tool.execute(args({ command: SH.count(10_000) }), c);
     const elapsed = performance.now() - t0;
     untap();
     expect(r.isError).toBe(false);
@@ -339,7 +363,7 @@ describe.skipIf(!shell || !proofDir)('the live stream behind a real PTY (ADR-002
     const c = ctx();
     const frames: TerminalFrame[] = [];
     m.streams.onFrame((f) => frames.push(f));
-    const r = await tool.execute(args({ command: '1..50 | ForEach-Object { "bg $_" }', background: true }), c);
+    const r = await tool.execute(args({ command: SH.count(50, 'bg'), background: true }), c);
     const id = String(diag(r.text)['session_id']);
     const streamId = backgroundStreamId(id);
     expect(await until(() => frames.some((f) => f.streamId === streamId && f.kind === 'meta' && f.meta?.running === false), 20_000)).toBe(true);
@@ -348,7 +372,7 @@ describe.skipIf(!shell || !proofDir)('the live stream behind a real PTY (ADR-002
     expect(bg[0]!.meta).toMatchObject({ kind: 'background', displayName: `Background session ${id}`, running: true, canKill: true, acceptsInput: true });
     expect(bg.filter((f) => f.kind === 'delta').map((f) => f.payload).join('')).toContain('bg 50');
     expect(bg.find((f) => f.closing)?.payload).toContain('bg 50');
-    await tool.execute(args({ command: 'Write-Output fg' }), c);
+    await tool.execute(args({ command: SH.echo('fg') }), c);
     const fg = frames.filter((f) => f.streamId === foregroundStreamId('orchestrator'));
     expect(gapless(fg)).toBe(true);
     expect(m.streams.list('sess-1').map((s) => s.streamId).sort()).toEqual([streamId, 'fg:orchestrator'].sort());
@@ -362,7 +386,7 @@ describe.skipIf(!shell || !proofDir)('the live stream behind a real PTY (ADR-002
     const c = ctx();
     const frames: (TerminalFrame & { at: number })[] = [];
     m.streams.onFrame((f) => frames.push({ ...f, at: performance.now() }));
-    const running = tool.execute(args({ command: '$typed = Read-Host; Write-Output "got:$typed"' }), c);
+    const running = tool.execute(args({ command: SH.readBack() }), c);
     const streamId = foregroundStreamId('orchestrator');
     // Let the prompt's own output settle behind the 2 s ceiling before the keystroke, so the flush measured is the armed one.
     await new Promise((r) => setTimeout(r, 2_300));
@@ -388,7 +412,7 @@ describe.skipIf(!shell || !proofDir)('the live stream behind a real PTY (ADR-002
     on.streams.onFrame((f) => onFrames.push(f));
     off.streams.onFrame((f) => offFrames.push(f));
     // A native exit status (`exit` alone would end the persistent shell itself, ADR-0020).
-    const command = '1..200 | ForEach-Object { "line $_" }; cmd /c "exit 3"';
+    const command = `${SH.count(200)}; ${SH.exit(3)}`;
     const a = await terminalTool(on, TERMINAL_DEFAULTS).execute(args({ command }), ctx());
     const b = await terminalTool(off, TERMINAL_DEFAULTS).execute(args({ command }), ctx());
     expect(onFrames.length).toBeGreaterThan(2);
@@ -405,16 +429,16 @@ describe.skipIf(!shell || !proofDir)('the live stream behind a real PTY (ADR-002
     const m = await realManager();
     const tool = terminalTool(m, TERMINAL_DEFAULTS);
     const c = ctx();
-    await tool.execute(args({ command: 'Write-Output warm' }), c);
+    await tool.execute(args({ command: SH.echo('warm') }), c);
     expect(m.streams.resize(foregroundStreamId('orchestrator'), 80, 24).ok).toBe(true);
-    const r = await tool.execute(args({ command: 'Write-Output "cols=$($Host.UI.RawUI.WindowSize.Width) rows=$($Host.UI.RawUI.WindowSize.Height)"; Write-Output second' }), c);
+    const r = await tool.execute(args({ command: `${SH.size()}; ${SH.echo('second')}` }), c);
     expect(diag(r.text)['exit_code']).toBe(0);
     const text = output(r.text);
     expect(text).toContain('cols=80 rows=24');
     expect(text.split('\n').at(-1)).toBe('second');
-    expect(text).not.toContain('Write-Output');
+    expect(text).not.toContain(SH.sizeWord);
     expect(text).not.toContain('__rot_');
-    measurements['resize'] = { reported: /cols=\d+ rows=\d+/.exec(text)?.[0] ?? null, clean: !text.includes('__rot_') && !text.includes('Write-Output') };
+    measurements['resize'] = { reported: /cols=\d+ rows=\d+/.exec(text)?.[0] ?? null, clean: !text.includes('__rot_') && !text.includes(SH.sizeWord) };
   });
 
   it('kill from the terminal window ends the running command with exit −1 and a stated reason, and closes the stream', async () => {
@@ -423,7 +447,7 @@ describe.skipIf(!shell || !proofDir)('the live stream behind a real PTY (ADR-002
     const c = ctx();
     const frames: TerminalFrame[] = [];
     m.streams.onFrame((f) => frames.push(f));
-    const running = tool.execute(args({ command: 'Start-Sleep -Seconds 30; Write-Output never' }), c);
+    const running = tool.execute(args({ command: `${SH.sleep(30)}; ${SH.echo('never')}` }), c);
     const streamId = foregroundStreamId('orchestrator');
     expect(await until(() => frames.some((f) => f.streamId === streamId), 5_000)).toBe(true);
     await new Promise((r) => setTimeout(r, 300));

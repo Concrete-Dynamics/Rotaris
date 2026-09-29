@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { millis, type Millis, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { QuestionPrompt } from '@rotaris/contracts';
 import {
-  askQuestionsTool, PendingQuestions, QUESTIONS_CANCELLED, QUESTIONS_NOT_SHOWN, userAnswersText, validateQuestionSteps,
+  askQuestionsTool, PendingQuestions, QUESTIONS_CANCELLED, QUESTIONS_NOT_SHOWN, questionsWithdrawn, userAnswersText, validateQuestionSteps,
 } from './questions.js';
-import type { ToolContext } from './types.js';
+import { INTERRUPTED_FAILURE_KIND, type ToolContext } from './types.js';
 
 /**
  * Part AC — `ask_questions` and its wait registry (REQ-TOOLS-157/158, REQ-CHAT-092..096). What blocks on a person
@@ -200,6 +200,21 @@ describe('REQ-CHAT-095 — the four outcomes and the `## User Answers` rendering
     const r = await call;
     expect(r.text).toBe('User did not respond to the questions in time.');
     expect(r.warnings).toEqual(['User did not respond within 300 seconds.']);
+  });
+
+  it('PD-ORCH-005 clause 9: a rest withdraws the prompt — the call is interrupted and never answered, and no answer is replayed later', async () => {
+    const timers = new TestTimers();
+    const pending = new PendingQuestions(timers);
+    const tool = askQuestionsTool({ pending, conversationId: 'root', agentId: 'orchestrator', timeoutMs: 300_000, publish: () => true, newRequestId: () => 'q1' });
+    const call = tool.execute({ steps: [{ id: 'a', title: 'A' }] }, context());
+    await Promise.resolve();
+    expect(pending.withdrawAll('pause')).toBe(1);
+    const r = await call;
+    expect(r).toMatchObject({ isError: true, failureKind: INTERRUPTED_FAILURE_KIND, outcomeKind: 'withdrawn' });
+    expect(r.text).toBe('The questions were withdrawn by the pause before the user answered. Nothing was answered; ask again if the answers are still needed.');
+    expect(r.text).toBe(questionsWithdrawn('pause'));
+    expect(pending.size).toBe(0);
+    expect(pending.resolve('q1', { a: { selected_option: 'yes', freeform_text: null } })).toBe(false);
   });
 
   it('REQ-CHAT-096: an aborted run releases the waiting call at once', async () => {

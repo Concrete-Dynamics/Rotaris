@@ -12,6 +12,13 @@ which changed nothing under `packages/agent-tools`, listed each time as a new fa
 SIGINT" was reported and the session list still showed it `▶ … running` twenty seconds later. The test passed alone
 and its file passed 33 of 33. Still not reproduced in isolation and not repaired.
 
+On 2026-09-29 it failed in the gate of the live-run branch (R-065), which also changes nothing under
+`packages/agent-tools`, and then once in three runs of its file alone — the first failure in isolation. The race
+reading was tested outside the product and did not hold: `bash -c 'sleep 30'` spawned detached, as `spawnChild` spawns
+a background session, and sent SIGINT to its process group at once, ended 200 times out of 200, and 200 of 200 again with
+the signal 50 ms later. Whatever keeps the session running lies in what the product does around the spawn or the
+signal, not in the shell's startup. Not repaired.
+
 ## Specs
 
 `OQ-10` as ruled by `R-044` — `send_signal SIGINT` stops a background session instead of refusing it. A signal that is

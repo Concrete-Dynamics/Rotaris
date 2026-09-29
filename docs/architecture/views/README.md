@@ -43,7 +43,12 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-28**
+## Last reconciled with the code: **2026-09-29**
+
+**The code-intelligence server starts as root (REQ-MCP-033, R-065, 2026-09-29).** The run host builds the reserved
+token's launch in `run-host/code-intelligence-launch.ts`; run as root it puts `--no-sandbox` between the token and `--`,
+and the sentinel hands the runtime only what follows `--` (`runtimeArguments`). The **process view**'s code-intelligence
+paragraph says so; no package, edge, channel or store table changes.
 
 **A request queued behind an open approval dialog waits for its turn (REQ-TOOLS-063, 2026-09-28).** Main answers a
 present-request that waits behind the dialog already open in its window, or behind requests queued ahead of it, with

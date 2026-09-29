@@ -343,3 +343,22 @@ against the built branch, as root under Xvfb on Linux, drove the token-first lau
 order this ADR's correction retired — `--no-sandbox` ahead of the token — so as root the proof starts the application,
 not the branch, and section 1 fails at the guard (`../../defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`,
 recorded, not repaired). Not shown: section 1 passing, which waits for that note and for a tree with the bundle.
+
+**The proof on Linux as root — 2026-09-28 (R-062).** The note above was reproduced, then repaired in the proof: `branch()`
+and `exitStatus()` launch the token first and the switch between it and `--`, this ADR's corrected order, and
+`lib/launch-sites.test.ts` now fails any token launch that puts something other than the entry ahead of the token
+(`../../defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`). Section 1 then
+**passed**: `tools/list` at 2,065–2,400 ms on the development entry across the three passing runs, 22 tools under a project (`list_memories` present,
+no project switching or configuration introspection), nothing on standard output before the first `{`, exit 0 on
+standard input's end, an unknown subcommand exiting the runtime's 2. The first full run went on to find a second
+harness defect. Every launch rewrote the workspace file without an `initialization:` section, so ADR-0064's background
+`code-intelligence-setup` started at each open. Section 5's click met it and was refused "already running", correctly
+(`../../defects/fixed/code-intel-proofs-setup-launches-collide-with-the-background-initialization.md`). The proof's
+workspace file now records that task as skipped. Then the whole proof passed **three runs in a row** (521 s, 522 s and 521 s, as root under Xvfb, Node 24, `--skip-build`), with
+nothing else running on the host: the discovery grant of 12 and the memories block, both launch lines carrying
+`--project`, `get_symbols_overview` naming `Greeter`, `greet` and `Counter` after provisioning TypeScript 5.9.3 and
+typescript-language-server 5.1.3 through the host's proxy (the disclosure true to the runtime), the five setup launches,
+and the drift refused. **What it could not show:** the no-window check of consequence 1 is recorded as not applicable
+off Windows, because its sampler is `Get-Process` and this host has no window lister. The packaged half of section 1 and section 7
+need `win-unpacked`, and no Linux artifact may be produced (IC-3), so IC-7's contained run is untouched. Nothing on
+Windows was run.

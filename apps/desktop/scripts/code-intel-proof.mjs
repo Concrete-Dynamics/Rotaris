@@ -95,7 +95,13 @@ writeFileSync(join(workspace, 'README.md'), '# code-intelligence proof workspace
 writeFileSync(join(workspace, 'src', 'index.ts'), 'export interface Greeter { name: string }\nexport function greet(g: Greeter): string { return `hi ${g.name}`; }\nexport class Counter { private n = 0; bump(): number { return ++this.n; } }\n');
 writeFileSync(join(noCode, 'README.md'), '# no code here\n');
 for (const ws of [workspace, noCode]) spawnSync('git', ['init', '-q'], { cwd: ws, stdio: 'ignore' });
-const WORKSPACE = ['# workspace configuration', 'runtime:', '  permission_mode: autonomous', '  allow_unsandboxed_autonomous: true', 'rotaris:', '  delegation_strategy: single', ''].join('\n');
+// The initialization marker resolves `code-intelligence-setup` (skipped, REQ-WORKSPACE-078/111), so no launch starts it
+// in the background at open (ADR-0064, REQ-WORKSPACE-083/088). This proof measures ADR-0035's branch and REQ-MCP-099's
+// setup action; without the marker every launch opened a never-initialized workspace, the background task was already
+// running when section 5 clicked, and the run host refused the click
+// (`docs/defects/fixed/code-intel-proofs-setup-launches-collide-with-the-background-initialization.md`).
+const INITIALIZED = ['initialization:', '  completed: []', '  skipped: [code-intelligence-setup]', "  last_run: '2026-09-28T00:00:00.000Z'"];
+const WORKSPACE = ['# workspace configuration', 'runtime:', '  permission_mode: autonomous', '  allow_unsandboxed_autonomous: true', 'rotaris:', '  delegation_strategy: single', ...INITIALIZED, ''].join('\n');
 const GLOBAL = ['# scratch configuration written by the code-intelligence proof', 'models:', '  scripted: { provider: scripted, model_id: scripted }', 'small_model: scripted', 'medium_model: scripted', 'large_model: scripted', ''].join('\n');
 /** REQ-MCP-036/099: an entry whose arguments hold no launch subcommand — the non-retryable failure. */
 const GLOBAL_BROKEN = `${GLOBAL}mcp_servers:\n  code_intelligence: { args: ["--transport", "stdio"] }\n`;
@@ -154,6 +160,8 @@ function launch(name, extra, { ws = workspace, global = GLOBAL, timeout = 150_00
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
+  // The marker above is what keeps the setup this proof drives the only one: say so if the product started another.
+  if (/initialization: running code-intelligence-setup/.test(log)) throw new Error(`${name}: the workspace's initialization started code-intelligence-setup in the background beside this launch's own; see ${name}.log`);
   return { log, elapsedMs, png, startedAt: new Date(started).toISOString() };
 }
 

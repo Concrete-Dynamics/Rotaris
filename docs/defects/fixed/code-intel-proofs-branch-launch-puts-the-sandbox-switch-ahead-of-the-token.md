@@ -64,7 +64,7 @@ proof as it was, the scan case and the new case both fail, each naming "the rese
 **Measured** as root under Xvfb on Linux, Node 24, in `/home/user/Rotaris-crw-wt-prfb5`, `--skip-build` after one
 `pnpm build`: section 1 passes. `tools/list` at about 2,060 ms, 22 tools, no preamble, exit 0 on standard input's end,
 an unknown subcommand exits the runtime's 2. The whole proof then failed in section 5 on a second, separate harness
-defect ([note](../code-intel-proofs-setup-launches-collide-with-the-background-initialization.md)), repaired in the
+defect ([note](code-intel-proofs-setup-launches-collide-with-the-background-initialization.md)), repaired in the
 commit after this one. With both repaired, the proof passed three runs in a row (ADR-0035, "The proof on Linux as
 root"). **Not shown:** section 7 and the packaged branch of section 1 need `win-unpacked` (`ROTARIS_CODE_INTEL_PACKAGED=1`),
 and no Linux artifact may be produced (IC-3); the no-window check on this platform; anything on Windows.

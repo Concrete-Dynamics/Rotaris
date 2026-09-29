@@ -29,3 +29,22 @@ background task and does not account for it, so section 5 measures a collision i
   and section 5's five setup launches.
 - `apps/desktop/src/main/initialization.ts`: the default background task and its start at resolution.
 - `apps/desktop/src/run-host/mcp.ts`: the "already running" refusal.
+
+## Repaired 2026-09-28 under R-062
+
+**What changed** (the harness only; no product file). The workspace file `code-intel-proof`'s `launch()` writes before
+every launch now carries an `initialization:` section that resolves `code-intelligence-setup` as skipped, with a
+`last_run` stamp (REQ-WORKSPACE-078, REQ-WORKSPACE-111). No launch starts the background task, so section 5's click is
+the only setup running and the `.serena` marker is the one that setup writes. A user who skipped the prompt and later
+presses the MCP card's action is in the same position. `launch()` also fails a launch whose log shows
+`initialization: running code-intelligence-setup`, naming the launch, so a later change that brings the background
+task back fails with its cause and not as `[pending, pending, pending]`.
+
+**What pins it.** The proof itself: it is harness code with no unit beside it. The guard in `launch()` is what catches
+a regression. It was not exercised red here: the marker keeps the background task out of every launch.
+
+**Measured** as root under Xvfb on Linux, Node 24, `--skip-build`, three consecutive runs of the whole proof in
+`/home/user/Rotaris-crw-wt-prfb5`, all passed (521 s, 522 s and 521 s; see ADR-0035, "The proof on Linux as root").
+Section 5 read `succeeded succeeded succeeded` (create 1.5–1.8 s, index 2.8–3.3 s, memory 1.5–1.8 s), creation
+skipped on the marker, `succeeded skipped-no-code skipped-no-code`, the launch-less entry refused, and a cancel
+mid-step reading `failed not-attempted not-attempted`.

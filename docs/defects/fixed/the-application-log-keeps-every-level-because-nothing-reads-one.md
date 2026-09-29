@@ -115,7 +115,11 @@ filtered by its child's level, and 141 dropped `debug` lines that are neither st
 `improvements.test.ts` now pins the REQ-LIBRARY-035(b) line at `warn`. A driven launch with one scripted run wrote 72
 application-log lines at the default (66 `info`, 6 `warning`, 0 `debug`) and 69 with the variable at `debug`: the same
 lines plus the code-intelligence child's two `debug` lines, less five of the first launch's own driving. 24
-last-window closes at the default level wrote no `warning` or `error` line and quit in 40–69 ms. At `warning`, a run
+last-window closes at the default level wrote no `warning` or `error` line and quit in 40–69 ms. *(Beside it, 2026-09-29: the immediate exit is not as clean. In the live run of that day 7 of 9 launches ended
+through the capture seam's immediate exit wrote `error   CHILD PROCESS GONE (… killed, exit 15)` after an orderly
+"quit: exiting with status 0"; recorded as [`an-orderly-quit-logs-the-run-host-gone-at-error.md`](../an-orderly-quit-logs-the-run-host-gone-at-error.md),
+live-run finding L13. The directive's sentence that an `app.exit` at `warning` wrote nothing is falsified for that path
+and kept beside its correction.)* At `warning`, a run
 host killed with SIGKILL and then the last window closed wrote only `run host exited (9)` and
 `CHILD PROCESS GONE (… killed, exit 9)`, both `error`, in about 60 ms, and one stopped with SIGSTOP before the close
 wrote the unanswered-`shutdown` line at `error` after 30 s. The 141 lines this note measured could not be reproduced

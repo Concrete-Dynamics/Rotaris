@@ -22,3 +22,13 @@ follow-up"). Neither has any effect. What reusing a session would mean is itself
 PD-ORCH-005 resumes an agent from its own record under its own task id. It gives `session_id` no meaning, and it
 neither needs nor defines "reusing a previous delegation's session". The field still has no effect, and what it would
 mean is still OQ-66's open part. Nothing in the resume depends on it, so the fix is not part of this build.
+
+## Ruled 2026-09-29 — what `session_id` means (R-067), not repaired
+
+OQ-66's open part is ruled ([R-067](../product/requests.md#r-067)): `session_id` names, by task id, a settled child of
+the caller — a direct child that reached a terminal state and that its `child_timeout` did not cut off (a cut-off child
+keeps `continuation_of`). The follow-up resumes that child from its recorded conversation under its own task id, with the
+call's `task` appended as its next user message; a `session_id` naming no such child is refused `rejected` with no record.
+[`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 5 (clause 22) and
+[`PD-TOOLS-006`](../product/directives.md#pd-tools-006) revision 3 carry it. `suppress_auto_context` needed no ruling:
+REQ-TOOLS-152 and REQ-TOOLS-154 (3) already say what it does. This note stays open until both fields are built.

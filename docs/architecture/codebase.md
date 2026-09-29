@@ -325,7 +325,8 @@ in `configuration.ts`'s header.)
    60·2^(n−1) s capped at 300 s — resolved by the clock port, by `cancel` or by `setModel`, which persists the override as a
    timeline entry rehydrated on resume (the wire-event catalogue is closed at 23, so no event); the unresponsive-model
    fallback after `llm_response_timeout` on the first model event; the hard child timeout's one retry on the role's
-   fallback; per-model `timeout` and `num_retries`. The record's `wait` and the Workspace header that counts down and
+   fallback; per-model `timeout` and `num_retries` (the dispatch layer's retries, which come before the ladder's — ruled
+2026-09-29, OQ-110). The record's `wait` and the Workspace header that counts down and
    offers keep waiting (no operation), change model (`setModel`) and cancel — REQ-MONITOR-004's enumeration stays at
    twenty-two. `pnpm resilience-proof` drives nine launches through scripted fault steps. **Found — four defects in
    existing code:** the transient retry re-ran the whole turn and would have replayed executed tool calls under fresh ids
@@ -757,7 +758,10 @@ timeout is still collapsed into the flag a user's stop sets and reported as `use
 first of the two frictions the `frictions` scenario records as uncoverable inducible on demand. **Neither
 product check has yet run against a real endpoint**: the mechanism is unit-tested against a loopback upstream,
 what the checks claim about the product is unverified, and that first execution owes its row in
-`first-executions.md`.
+`first-executions.md`. *Both ran live on 2026-09-22 (the row is there). The ladder half is corrected 2026-09-29 (R-067, OQ-110): the
+429 and the 500 are retried by the model client's dispatch layer (REQ-CONFIG-086's `num_retries`, default 5) before the
+ladder sees them, which the owner ruled is the specification's order; the scenario shows the run surviving the refusals,
+not the ladder waiting or falling back.*
 
 **Two scenarios enter the gap this page names below** — "short tasks against an unmetered endpoint, so no
 generation near the model timeout, no multi-line command, and no re-spawn", where all seven of one session's
@@ -826,8 +830,8 @@ positive half read from the product's own `issues` table — the stall must be s
 what it was classified as must not be fatal. Two smaller ones: the wedge **soft-paused before the hard cap**,
 so `hardMs`'s own question is still unmeasured live and now says so; and `duress`'s `zero cost with tokens`
 check would have reported a fault on an unmetered endpoint that has no cost to record, so it is conditioned on
-the accounting kind — caught before the forty-minute scenario was run rather than after. `duress` has not been
-executed; it owes its row.
+the accounting kind — caught before the forty-minute scenario was run rather than after. ~~`duress` has not been
+executed; it owes its row.~~ *`duress` was executed on 2026-09-29 and has its row in `first-executions.md`.*
 
 **What the board's live path found on its first execution — 2026-09-11, and the eighty-first defect.** The fifth
 scenario was written after a hand-driven precursor took the same path, and the precursor is what found the defect;

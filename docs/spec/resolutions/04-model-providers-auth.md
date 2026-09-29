@@ -8,6 +8,19 @@ status: resolved
 # Resolution Record — Domain 04, Model Providers, Sign-In, and Model Routing
 
 
+> ## Amendment, 2026-09-29 — the money rule's floor (ESC-42)
+>
+> `REQ-PROVIDER-121` gains one sentence: an amount that is not a balance, is greater than zero, and that the rule's
+> rounding would render as zero renders as `< 0.0001`, with the currency's symbol or code placed as the rule places it.
+> Zero renders `0.00`; a balance, rounded down, and a negative amount are never floored. The rendering-formats line below
+> carries the floor with it. The floor is rendering only: every amount is still computed, stored and summed exactly.
+>
+> **Why this is an amendment and not a directive.** `REQ-SHELL-045` (domain 12) cites this rule "so a cost that is small
+> but not nothing is never rendered as zero", and the rule as written rendered every such cost below 0.00005 as `0.0000`.
+> Two live requirements disagreed about what the one money rule achieves. The owner ruled ESC-42 option (b) as it
+> recommended ([R-067](../../product/requests.md#r-067)); `owner-decisions.md` holds the ruling.
+
+
 > ## Amendment, 2026-09-23 — per-token prices are decimal strings (OQ-21)
 >
 > `REQ-PROVIDER-072` now carries `concrete-cloud`'s decimal-string prices as decimal strings rather than

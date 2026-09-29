@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { IntentCategory } from '@rotaris/contracts';
-import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
+import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
 import { SUPERVISOR_DEFAULTS, type LoopClassifier } from './supervisor.js';
 import { RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type RunConfig, type RuntimePosture, type ToolPort } from '../index.js';
 
@@ -130,6 +130,47 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     release();
     expect((await sessions.running(sid)!).execution_status).toBe('awaiting_plan_decision');
     expect(dal.timelineOf(sid).filter((t) => t.name.startsWith('steering_'))).toEqual([]);
+  });
+
+  /*
+   * Found by the fourth review of the same repair: the park's close sat before the two branches that end the run instead
+   * of parking it, so a steer pending when the plan cycle was stopped, quit, or ended by its failed turn was recorded as
+   * not delivered because "the run was held at the plan gate" — a gate that never opened. Only the park names the gate; an
+   * end that takes teardown is recorded by teardown's own close, as the run ending.
+   */
+  for (const how of ['stopped', 'quit', 'failed'] as const) it(`REQ-MONITOR-134 with OQ-127: a steer pending when the plan cycle's turn is ${how === 'failed' ? 'ended by a failed model step' : `${how} while its call runs`} is recorded as not delivered because the run ended, never as held at a plan gate that did not open`, async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    let calling = false;
+    const port: ToolPort = {
+      specs: () => [{ name: 'glob', description: 'find', parameters: { type: 'object' } }],
+      // The plan turn's call, held until the test lets it return.
+      dispatch: async () => { calling = true; await hold; return { text: 'a.ts', isError: false, status: 'ok', durationMs: 1, label: 'glob', args: {} }; },
+      cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+    };
+    const { client, backend } = scripted(how === 'failed'
+      ? [{ parts: [{ hold }, { error: modelError({ code: 'http', status: 401, headline: 'unauthorised', providerMessage: 'bad key' }) }] }]
+      : [toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('Step 1: the plan.')]);
+    const sessions = sessionsWith(backend, { tools: port });
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await vi.waitFor(() => { expect(how === 'failed' ? client.requests.length > 0 : calling).toBe(true); });
+    expect(sessions.run(sid)!.isPlanGateHeld).toBe(true);
+    const steered = sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: 'run', text: 'mind the tests' } });
+    expect(steered.ok).toBe(true);
+    let closed: Promise<void> | null = null;
+    if (how === 'stopped') expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+    else if (how === 'quit') closed = sessions.closeAll();
+    release();
+    expect((await sessions.running(sid)!).execution_status).not.toBe('awaiting_plan_decision');
+    await closed;
+    const timeline = dal.timelineOf(sid);
+    expect(timeline.map((t) => t.name)).not.toContain('plan_gate_opened');
+    const steering = timeline.filter((t) => t.name.startsWith('steering_'));
+    expect(steering.map((t) => t.name)).toEqual(['steering_submitted', 'steering_not_delivered']);
+    const line = steering[1]!.message;
+    expect(line).not.toMatch(/plan gate/);
+    expect(line).toMatch(/was not delivered: the run ended before /);
+    expect(dal.residentRows(sid).filter((r) => r.kind === 'system').map((r) => r.body)).toContain(line);
   });
 
   it('PD-ORCH-003 revision 2: a continue that resumes an open iteration runs it without holding, and with no new work after it no plan cycle opens', async () => {

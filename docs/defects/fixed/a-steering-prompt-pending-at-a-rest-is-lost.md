@@ -31,9 +31,14 @@ is a step; a child restored `summarizing` whose record ends on one resumes `runn
 boundary — is recorded as not delivered once the run stops stepping, with a `steering_not_delivered` entry and a
 transcript line (`Run.closeSteering`, which runs `Run.reportUndeliveredSteering`): when teardown begins, and at the two
 ends that are not terminations and never enter teardown — the pause at the message limit (`Run.pauseAtLimit`) and the
-park at the plan gate (`Run.parkAtPlanGate`), each named in the line. Steering closes once no agent of the run takes
-another step: when the rest is recorded, when teardown begins, at the message-limit pause and at the plan-gate park, so
-a steer after any of them is refused rather than acknowledged for nothing to deliver. (The second build recorded and
+park at the plan gate (`Run.parkAtPlanGate`, on the path that parks), each named in the line. A plan cycle that is
+stopped, quit, or ends on a failed turn parks nothing: it ends in teardown, and its line says the run ended. Steering
+closes once no agent of the run takes another step: when the rest is recorded, when teardown begins, at the
+message-limit pause and at the plan-gate park, so a steer after any of them is refused rather than acknowledged for
+nothing to deliver. (The third build said "each named in the line" too, but closed at the park as soon as the plan
+cycle's turn returned, above the two branches that end the run in teardown instead; its fourth review found a steer
+pending when a plan cycle was stopped, quit, or ended on a failed turn recorded as not delivered because "the run was
+held at the plan gate" — a gate that never opened, since the run ended.) (The second build recorded and
 closed only at teardown; its third review found a root steer pending at the message-limit pause acknowledged, then
 dropped without a word, and never delivered after the continue — this note's own defect on a pause the first two builds
 had not reached, since neither end calls teardown. The plan-gate park had the same gap.) (The first build closed steering only at the end of teardown, and called the undelivered prompt "withdrawn";
@@ -63,7 +68,11 @@ with a message limit of 1 and a queued prompt, and steers the root there; the ru
 transcript, and a steer while the pause's own drain is held is refused. `packages/engine/src/run/plan-gate.test.ts`
 holds the park's drain once `plan_gate_opened` is recorded and steers the root there; it is refused and nothing of it
 reaches the timeline. On the second build both acknowledged the late steer (`{ ok: true }`) and failed; with the close
-at both ends they pass.
+at both ends they pass. The fourth review's cases, beside the last in `plan-gate.test.ts`: a steer for the root while the
+plan cycle's call is held, then a stop or a quit, and a steer while its model step is held before that step fails, are
+each recorded as not delivered with a line that says the run ended and names no plan gate, and no `plan_gate_opened`
+entry exists. On the third build each line said the run was held at the plan gate, and the three cases failed; with the
+park's close on the path that parks they pass, and so does the case above.
 `apps/desktop/scripts/part-j-proof.mjs`'s scenario 3b drives it in the built app: a steer submitted while the entry
 role's step is held, then a pause, then the Continue; the root's record holds the prompt after the read's result and
 before the resumed step, injected once by the pause. On a build of the code before the repair the scenario failed ("the

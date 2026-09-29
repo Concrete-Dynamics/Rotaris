@@ -1489,8 +1489,9 @@ export class Run {
    *
    * Every way a run stops stepping reaches this before it awaits anything: teardown, and the two ends that are not
    * terminations and never enter it — the pause at the message limit (`pauseAtLimit`) and the park at the plan gate
-   * (`parkAtPlanGate`), each of which names itself in `ending` (found by the third review of the repair of
-   * a-steering-prompt-pending-at-a-rest-is-lost: both ended the run with a root steer still pending and said nothing).
+   * (`parkAtPlanGate`, on the path that parks), each of which names itself in `ending` (found by the third review of the
+   * repair of a-steering-prompt-pending-at-a-rest-is-lost: both ended the run with a root steer still pending and said
+   * nothing). An end is named only on the path that takes it: a plan cycle that ends in teardown is teardown's to record.
    */
   private closeSteering(ending?: string): void {
     try { this.reportUndeliveredSteering(ending); } catch (cause) { this.steeringClosed = true; this.deps.warn(`recording the undelivered steering of ${this.sessionId} failed: ${String(cause)}`); }
@@ -1730,10 +1731,8 @@ export class Run {
     } catch (cause) {
       this.lastFailure = String(cause);
     }
-    // REQ-MONITOR-133/134 with OQ-127: the plan cycle's one turn has returned and no agent steps again in this run — the
-    // gate's release starts the next — so steering closes here, before anything is awaited, and a prompt still pending is
-    // recorded as not delivered. Teardown, on the two paths below that take it, finds nothing left.
-    this.closeSteering('the run was held at the plan gate');
+    // A stopped cycle, and one whose turn produced no plan, end the run in teardown, whose own close records a prompt still
+    // pending as not delivered because the run ended — reached before anything is awaited, as the park's close below is.
     if (this.stop.requested) return await this.teardown(this.stop.reason ?? 'user_cancelled');
     if (plan === '') {
       // Nothing to put a decision on. A gate with no plan would offer three answers over an empty surface, so the
@@ -1741,6 +1740,14 @@ export class Run {
       this.lastFailure = this.lastFailure ?? 'the entry role produced no plan text while the run was held at the plan gate';
       return await this.teardown('agent_session_aborted');
     }
+    /*
+     * REQ-MONITOR-133/134 with OQ-127: the run parks, and no agent of it steps again — the gate's release starts the next
+     * run — so steering closes here, as the park begins and before anything is awaited, and a prompt still pending is
+     * recorded as not delivered because the run was held at the plan gate. Only here, on the path that parks: the close
+     * sat above the two branches that end the run instead, and named a gate that never opened for a stopped cycle or a
+     * failed one (found by the fourth review of the repair of a-steering-prompt-pending-at-a-rest-is-lost).
+     */
+    this.closeSteering('the run was held at the plan gate');
     writer.appendRow('system', `A plan is ready for your decision (cycle ${cycle}). Approve to release execution, revise to ask for another plan, or cancel the run.`, true);
     this.sampler?.cancel();
     this.sampleTokens(false);

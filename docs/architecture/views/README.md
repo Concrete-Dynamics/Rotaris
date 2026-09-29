@@ -49,11 +49,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 `Run.turn`'s rest delivers every prompt still pending for a `paused` agent with a record into that record, as the marked
 message its next step would have injected, marked injected once (`deliverSteeringAtRest`); a child resumed `summarizing`
 whose record ends on one resumes `running` (`IterationChildren.resumePaused`). Steering closes once no agent takes another
-step — when the rest is recorded, when teardown begins, at the message-limit pause or at the plan-gate park — so a later
-steer is refused; that close records what is left as not delivered (`closeSteering`: a `steering_not_delivered` entry and
-a transcript line naming the end). This repairs
-`a-steering-prompt-pending-at-a-rest-is-lost.md`. The **runtime view**'s §5 steer row says so. No package, edge, process,
-channel, message kind or store column changed.
+step — when the rest is recorded, when teardown begins, at the message-limit pause or at the plan-gate park (only a run
+that parks: a plan cycle stopped, quit or failed ends in teardown) — so a later steer is refused; that close records what
+is left as not delivered (`closeSteering`: a `steering_not_delivered` entry and a transcript line naming the end). This
+repairs `a-steering-prompt-pending-at-a-rest-is-lost.md`. The **runtime view**'s §5 steer row says so. No package, edge,
+process, channel, message kind or store column changed.
 
 **A root resumed as the entry role keeps its rows' name (PD-ORCH-005 clauses 3 and 4, OQ-97, 2026-09-29, R-067).**
 `Run.turn` names the root's rows, its tool port and its open calls by the persona its iteration was opened with

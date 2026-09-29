@@ -44,7 +44,14 @@ allow-list binds the entry agent alone. The reason, `scopeWithoutWriterReason`, 
 started." It then names the catalogue's writers (`fileWriters`) when there are any: the configured known roles, the
 same list the unknown-persona refusal gives, or the built-in table (`coding-agent, tester, docs-writer, refactorer`).
 An unknown persona is still refused by the ledger, with the list of known personas. A delegation without a scope is
-unchanged, as is REQ-ORCH-095's text-only completion.
+unchanged, as is REQ-ORCH-095's text-only completion. The persona checked is the one the ledger resolves, an alias
+included: a configured catalogue resolves aliases itself, and where the built-in table stands alone `resolveRole` is
+read, as `ChildLedger.spawn` reads it.
+
+*The first repair's gap, found by the branch's verification and kept beside its repair:* the check read `personaOf`,
+whose built-in path looks the name up in the table and never in `ROLE_ALIASES`. `delegate({persona: 'playwright',
+write_scope: [...]})` skipped the check as an unknown persona, and the ledger then accepted it as `ui-verifier`, which
+holds no file-writing tool. The check now reads the ledger's resolution.
 
 Evidence: `packages/engine/src/children/children.test.ts`, "PD-TOOLS-006 revision 3 (OQ-112, live-run finding D6)…".
 It is the duress call's shape: `codebase-analyst` with `write_scope: ["docs/overview.md"]`. The test checks that the call
@@ -52,8 +59,10 @@ is rejected, that no child is recorded, that the resumed parent reads the reason
 task id appears. It fails with the check removed. `write-scope.test.ts`, "PD-TOOLS-006 revision 3 (OQ-112)…", pins three
 things: the predicate over the controls (`haet` alone writes; `read_only`, `coordinator_only` and `terminal`-only
 personas do not), the catalogue's writers for the built-in table and for a configured resolver, and the reason's text.
-Two earlier write-scope cases in `children.test.ts` scoped a `codebase-analyst` and now scope a `docs-writer`, since
-the directive forbids the earlier form.
+A second case in `children.test.ts`, "…an ALIAS of a persona that cannot write files…", delegates to `playwright` with a
+scope on the built-in table's path and checks that it is refused as `ui-verifier` with no record; it fails with the
+check reading `personaOf` again. Two earlier write-scope cases in `children.test.ts` scoped a `codebase-analyst` and
+now scope a `docs-writer`, since the directive forbids the earlier form.
 
 Live, 2026-09-29: `pnpm live-run --confirm --only=duress` against the unmetered `katalyst` endpoint, built from this
 branch's code, pack `.live-run/runs/2026-09-29T07-18-48-658Z` (this branch's worktree; git-ignored), session `b4a768a2`.

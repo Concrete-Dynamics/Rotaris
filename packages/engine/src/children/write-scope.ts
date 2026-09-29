@@ -30,6 +30,10 @@ const ABSOLUTE = /^(?:[\\/]|[A-Za-z]:)/;
  * removes all three, and `read_only` reduces the set to REQ-TOOLS-007's read-only class, which holds none of them; the
  * run-scoped allow-list binds the entry agent alone, never a child. A persona whose only writing tools are ones the
  * claim does not fence (`terminal`, MCP or plugin tools) counts as holding none, as the directive states.
+ *
+ * `coordinator_only` is applied here unconditionally. The run host's tool port (`apps/desktop/src/run-host/tools.ts`)
+ * applies it only where delegation is available and the session is not in direct work; a delegated child always has
+ * delegation, so the two agree today. A change to either condition changes this check with it.
  */
 export function writesFiles(persona: Pick<Persona, 'tools' | 'coordinatorOnly' | 'readOnly'>): boolean {
   return !persona.coordinatorOnly && !persona.readOnly && persona.tools.some(isFileWritingTool);

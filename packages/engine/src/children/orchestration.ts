@@ -13,7 +13,7 @@ import type { ArtifactStore } from '../artifacts/store.js';
 import { ChildLedger, storeChildReport, userCancellation, type Budget } from './ledger.js';
 import { childPayload, completionNotification, inheritedContextBlock, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
 import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, type CutOff } from './cut-off.js';
-import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver, type RoleName } from './personas.js';
+import { BUILT_IN_PERSONAS, resolveRole, type Persona, type PersonaResolver, type RoleName } from './personas.js';
 import { fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
 import { fileWriters, scopeWithoutWriterReason, validateWriteScope, WriteClaims, writeScopeBlock, writesFiles, type ClaimHit, type ScopeDisclosure } from './write-scope.js';
@@ -224,9 +224,16 @@ export class IterationChildren implements DelegationOps {
     // PD-TOOLS-006: a scope that cannot be honoured refuses the delegation before a record exists, like every refusal here.
     const scope = validateWriteScope(req.writeScope ?? []);
     if (!scope.ok) return { status: 'rejected', canonicalName: req.taskName, message: scope.reason };
-    // PD-TOOLS-006 revision 3 (OQ-112): a scope for a persona that cannot write files. An unknown persona is the ledger's refusal.
-    if (scope.patterns.length > 0 && persona !== undefined && !writesFiles(persona)) {
-      return { status: 'rejected', canonicalName: req.taskName, message: scopeWithoutWriterReason(persona.name, fileWriters(this.deps.personas)) };
+    /*
+     * PD-TOOLS-006 revision 3 (OQ-112): a scope for a persona that cannot write files. The persona is the one the ledger
+     * will resolve, an alias included — `personaOf`'s built-in path reads the table alone, so `playwright` would pass
+     * as unknown and the ledger would then accept it as `ui-verifier` (found by the branch's verification). Its other
+     * readers above are recorded in `docs/defects/delegate-reads-no-alias-on-the-built-in-table.md`. An unknown persona
+     * is the ledger's refusal.
+     */
+    const named = this.deps.personas ? persona : resolveRole(req.persona)?.persona;
+    if (scope.patterns.length > 0 && named !== undefined && !writesFiles(named)) {
+      return { status: 'rejected', canonicalName: req.taskName, message: scopeWithoutWriterReason(named.name, fileWriters(this.deps.personas)) };
     }
     // PD-ORCH-004: a continuation is admitted only for the caller's own child that offered one, and only once.
     const continuationOf = req.continuationOf ?? '';

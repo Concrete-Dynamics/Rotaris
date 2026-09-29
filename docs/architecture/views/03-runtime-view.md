@@ -601,8 +601,9 @@ finds its record terminal writes nothing further, so the cancellation's report s
 **Write scopes (PD-TOOLS-006; `children/write-scope.ts`).** A `delegate` call may carry `write_scope`, path
 patterns in the `glob` tool's dialect (the one compiler, `kernel/glob.ts`). `IterationChildren.delegate` validates
 them before admission (an empty, absolute or root-escaping pattern is a `rejected` delegation with no record; so,
-since revision 3, is a scope for a known persona that cannot write files — `writesFiles`: `write_file`, `haet_edit` or
-`haet` surviving `coordinator_only` and `read_only` — whose reason names the catalogue's writers, `fileWriters`) and,
+since revision 3, is a scope for a known persona, or an alias of one, that cannot write files — `writesFiles`:
+`write_file`, `haet_edit` or `haet` surviving `coordinator_only` and `read_only` — whose reason names the catalogue's
+writers, `fileWriters`) and,
 once the ledger has accepted the child, records its **claim** in `WriteClaims` — in memory, in acceptance order —
 together with the child's **disclosure**: its own scope and the live scopes of the others as they
 stand at that moment. The disclosure is rendered as a block immediately after the workspace-root line of the child's

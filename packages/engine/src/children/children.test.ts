@@ -526,6 +526,21 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(resumed).not.toContain('task_id:');
     });
 
+    it('PD-TOOLS-006 revision 3 (OQ-112): an ALIAS of a persona that cannot write files is refused the same way — the persona the ledger would resolve', async () => {
+      const { sessions, client } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'playwright', task_name: 'ui: write docs/overview.md', task: 'TASK: write it', write_scope: ['docs/overview.md'] } }], 'Delegating.') : answer('Understood.');
+        }
+        return answer('unreachable');
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'write the overview') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(children(sid)).toEqual([]);
+      const resumed = textOf(client.requests.at(-1)!);
+      expect(resumed).toContain("Task 'ui: write docs/overview.md': rejected — write_scope was given to 'ui-verifier', which cannot write files");
+      expect(resumed).not.toContain('task_id:');
+    });
+
     it('a scope reaching outside the workspace root rejects the delegation: no child, no task id, the reason names the pattern', async () => {
       const { sessions, client } = sessionsWith((persona, turn) => {
         if (persona === 'orchestrator') {

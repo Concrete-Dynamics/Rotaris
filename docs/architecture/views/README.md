@@ -47,8 +47,8 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 **`delegate` refuses a write scope for a persona that cannot write files (`PD-TOOLS-006` revision 3, OQ-112,
 2026-09-29).** `IterationChildren.delegate` rejects the delegation before any record exists when its `write_scope` names
-patterns and the persona holds no `write_file`, `haet_edit` or `haet` after `coordinator_only` and `read_only`
-(`writesFiles`). The reason names the catalogue's personas that can (`fileWriters`). The **runtime view**'s write-scopes
+patterns and the persona — resolved as the ledger resolves it, an alias included — holds no `write_file`, `haet_edit`
+or `haet` after `coordinator_only` and `read_only` (`writesFiles`). The reason names the catalogue's personas that can (`fileWriters`). The **runtime view**'s write-scopes
 paragraph names it; no package, edge, message or store table changes.
 
 **The report's pass reads the task and the most recent part, beside the facts (OQ-111, REQ-ORCH-110, 2026-09-29).**

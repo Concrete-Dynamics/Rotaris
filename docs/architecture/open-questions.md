@@ -5148,6 +5148,8 @@ after the scope's own validation (`writesFiles`, `scopeWithoutWriterReason` and 
 repaired. "After REQ-TOOLS-006's controls" is read as the two a child's grant meets, `coordinator_only` and
 `read_only`: the run-scoped allow-list binds the entry agent alone, and the `tool_restrictions` map is applied to no
 agent's grant today (recorded as a defect of its own), so the check follows the grant the tool port builds.
+The persona checked is the one the ledger resolves, an alias included; the first build read the built-in table without
+its aliases, so `playwright` with a scope was accepted as `ui-verifier` (found by the branch's verification, repaired).
 Live on 2026-09-29 (duress, session `b4a768a2`) the orchestrator gave a scope to `verifier`. It was refused with the
 writers named, and 15 s later it delegated the task to `docs-writer`.
 

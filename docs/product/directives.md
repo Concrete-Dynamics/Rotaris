@@ -2178,8 +2178,12 @@ revision 3 as [R-067](requests.md#r-067).*
 > `codebase-analyst`, which the directive now forbids, and they scope a `docs-writer` instead. Revision 3's other
 > refusal, a `session_id` naming no settled child, is not part of this build.
 >
-> **What was measured.** A scripted end-to-end case in `children.test.ts` over the duress call's shape, red with the
-> check removed, and the predicate, the catalogue and the reason in `write-scope.test.ts`. Live, in the duress run of
+> The persona checked is the one the ledger resolves, an alias included. The first build read the built-in table
+> without its aliases, so `playwright` with a scope reached the ledger and was accepted as `ui-verifier`; the branch's
+> verification found it, and the check now reads the ledger's resolution.
+>
+> **What was measured.** Scripted end-to-end cases in `children.test.ts` over the duress call's shape and over the
+> alias, each red with its check removed, and the predicate, the catalogue and the reason in `write-scope.test.ts`. Live, in the duress run of
 > session `b4a768a2`, a scope given to `verifier` was refused with the writers named. The orchestrator's next request,
 > 15 s later, delegated the task to `docs-writer`. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).

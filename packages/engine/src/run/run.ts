@@ -414,7 +414,11 @@ export class Run {
   private planHeld = false;
   /** REQ-MONITOR-133/134: pending steering per conversation (`root` for the entry role, the task id for a child). */
   private readonly steering = new Map<string, { id: string; text: string }[]>();
-  /** REQ-MONITOR-133: set once the run's end has withdrawn what was still pending (`withdrawSteering`); a later steer is refused. */
+  /**
+   * REQ-MONITOR-133 with OQ-122: set once no agent of this run will take another step — when the iteration's rest is
+   * recorded (after `deliverSteeringAtRest`), or when teardown begins (`reportUndeliveredSteering`) — so a later steer is
+   * refused rather than acknowledged for a step nothing would take.
+   */
   private steeringClosed = false;
   /** REQ-MONITOR-142: the entry model/reasoning switched mid-run; applied from the next iteration. */
   private entryOverride: { model?: ModelRef; thinking?: ThinkingLevel } = {};
@@ -1325,6 +1329,9 @@ export class Run {
           // REQ-MONITOR-134 with clause 4: a steering prompt still pending reaches the record its agent resumes from.
           this.deliverSteeringAtRest({ taskId: rootTaskId, name: rootName }, iteration, this.restCause);
         }
+        // OQ-122: the rest is recorded and no agent of this run takes another step, so no steer is accepted from here — one
+        // acknowledged now would reach no record while its agent sits `paused`, to resume on the continue without it.
+        this.steeringClosed = true;
       } else if (children) {
         // REQ-ORCH-052: every exit path from an iteration leaves every child record terminal.
         const n = children.finalize(this.stop.requested ? 'cancelled: the run was stopped while this child was in flight' : 'cancelled during iteration cleanup');
@@ -1395,7 +1402,8 @@ export class Run {
    * is delivered into the conversation record of the agent it names, when that agent is left `paused` with a record to
    * carry on from: as the marked message its next step would have injected, after the answers to the calls the rest cut,
    * and marked injected then, once. The resumed agent reads it at its first step. A prompt for an agent with no record — a
-   * child that never started — stays pending, and the run's end withdraws it (`withdrawSteering`, OQ-122).
+   * child that never started — stays pending, and the run's end reports it not delivered (`reportUndeliveredSteering`,
+   * OQ-122). Once this has run, the rest closes steering: a steer after it is refused.
    */
   private deliverSteeringAtRest(root: { readonly taskId: string; readonly name: string }, iteration: number, cause: Interruption | null): void {
     for (const [key, pending] of [...this.steering]) {
@@ -1413,16 +1421,17 @@ export class Run {
 
   /**
    * REQ-MONITOR-133/134 at the run's end (OQ-122): no steer is accepted from here, and a prompt no step injected and no rest
-   * delivered — its agent never started, ended first, or was cancelled — is withdrawn: the timeline records it and the
-   * transcript says it was not delivered, so an acknowledged submission is never lost without a word.
+   * delivered — its agent never started, ended first, or was cancelled — is recorded as not delivered: a
+   * `steering_not_delivered` timeline entry and a transcript line, so an acknowledged submission is never lost without a
+   * word. The specification has no word for such a prompt; the entry takes REQ-MONITOR-134's "delivered".
    */
-  private withdrawSteering(): void {
+  private reportUndeliveredSteering(): void {
     this.steeringClosed = true;
     for (const [key, pending] of this.steering) {
       const who = key === 'root' ? this.rootName : this.children?.ledger.get(key)?.canonical_name ?? key;
       for (const s of pending) {
         const message = `The steering prompt for ${who} (${s.id.slice(0, 8)}) was not delivered: the run ended before ${who} took another step.`;
-        this.deps.writer.appendTimeline('steering_withdrawn', 'rotaris', message, { prompt_id: s.id, agent: key });
+        this.deps.writer.appendTimeline('steering_not_delivered', 'rotaris', message, { prompt_id: s.id, agent: key });
         this.deps.writer.appendRow('system', message, true);
       }
     }
@@ -1855,6 +1864,10 @@ export class Run {
     // from here. Each is closed before anything terminal is written: a call still open settles now, and one that returns
     // later writes nothing through its gate into the finished session, or into a later run's.
     this.closePorts();
+    // REQ-MONITOR-133/134 with OQ-122: no agent takes another step from here, so steering closes before anything is awaited
+    // — a steer while the hooks run is refused, not acknowledged for nothing to deliver — and what is still pending is
+    // recorded as not delivered.
+    try { this.reportUndeliveredSteering(); } catch (cause) { this.steeringClosed = true; this.deps.warn(`recording the undelivered steering of ${this.sessionId} failed: ${String(cause)}`); }
     // PD-ORCH-005 clause 10: a run that comes to rest records its agents' background sessions — a stop and a quit end them,
     // and so does the explicit cancel, which is a stop the user made final (OQ-96). Guarded like every teardown step.
     const ended = this.terminalsEndedBy();
@@ -1891,7 +1904,6 @@ export class Run {
         if (await this.closeOpenIteration(() => 'the run was cancelled after it had come to rest', () => 'Cancelled: the user cancelled the run after it had come to rest.', this.restedIteration) && this.rootRecord) this.rootRecord.state = 'cancelled';
       } catch (cause) { this.deps.warn(`closing the rested iteration of ${this.sessionId} after the cancel failed: ${String(cause)}`); }
     }
-    try { this.withdrawSteering(); } catch (cause) { this.deps.warn(`withdrawing the pending steering of ${this.sessionId} failed: ${String(cause)}`); }
     this.cancelWindowClosed = true;
     const result: RunResult = {
       status: classified.result, session_id: this.sessionId, stop_reason: stopReason, summary: summary.message,

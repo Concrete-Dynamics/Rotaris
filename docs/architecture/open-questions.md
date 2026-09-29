@@ -5470,17 +5470,27 @@ specification has no word for a prompt that was not delivered.
   prompt is the last message of its first request, which is a step: a root that had answered and was waiting takes one,
   and a child restored `summarizing` resumes `running` to take it, as one told of its background sessions does
   (REQ-MONITOR-136's "another round").
-- **At the run's end, withdrawn and said so.** A prompt no step injected and no rest delivered — its agent had not
-  started and has no record, had ended, or was cancelled; or a prompt for the entry role pending when a rest came at an
-  iteration boundary, where no iteration is left open — is recorded as withdrawn: a `steering_withdrawn` timeline entry
-  naming it, and a transcript line saying it was not delivered. From that moment the run accepts no steer, so none is
-  acknowledged that nothing could deliver. A crash still loses what was pending, since only the run's memory held it.
+- **Steering closes when no agent takes another step.** The run accepts no steer once the rest is recorded (after the
+  delivery above) or once its teardown begins, whichever comes first, so none is acknowledged that nothing could
+  deliver: a steer in that window is refused (REQ-MONITOR-005's `false` outcome).
+  *Falsified first reading, kept:* the first build closed steering only at the end of teardown and recorded "from that
+  moment the run accepts no steer, so none is acknowledged that nothing could deliver". Its review found that false: a
+  steer submitted after the rest, while teardown ran the `session_end` hooks, was acknowledged, never reached the record
+  of the `paused` agent it named, and was reported undelivered, although that agent resumes on the continue.
+- **At the run's end, recorded as not delivered and said so.** A prompt no step injected and no rest delivered — its
+  agent had not started and has no record, had ended, or was cancelled; or a prompt for the entry role pending when a
+  rest came at an iteration boundary, where no iteration is left open — is recorded when teardown begins: a
+  `steering_not_delivered` timeline entry naming it, and a transcript line saying it was not delivered (REQ-MONITOR-134's
+  own verb). The first build called it "withdrawn" (`steering_withdrawn`), borrowing clause 9's word; the glossary gives
+  that word to an approval or a question only, so it is no longer used for a prompt. A crash still loses what was
+  pending, since only the run's memory held it.
 
 **What a ruling decides.** Whether a prompt for a child that has not started should instead be kept, durably, for its
 first step when it resumes; whether the entry role's prompt pending at an iteration boundary should reach the next
 iteration's root after a continue; whether a prompt should be persisted at submission so a crash does not lose it; and
-what the withdrawn prompt is called, since the specification's vocabulary has no word for it (the build borrows
-clause 9's "withdrawn").
+what a prompt that was never delivered is called, since the specification's vocabulary has no word for it (the build
+describes it by REQ-MONITOR-134's verb, `steering_not_delivered`, and names no new state); and whether a steer after the
+rest should instead be accepted and kept for the resumed agent, rather than refused.
 
 ## Design-reference dependencies
 

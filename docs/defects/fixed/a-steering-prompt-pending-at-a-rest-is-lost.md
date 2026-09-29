@@ -28,15 +28,23 @@ answers to the calls the rest cut, and records `steering_injected` then, once, i
 is a step; a child restored `summarizing` whose record ends on one resumes `running` to take it
 (`IterationChildren.resumePaused`, as for the background-sessions notice). What no step injected and no rest delivered
 — a child that never started, an agent that ended or was cancelled, a prompt for the entry role pending at an iteration
-boundary — is withdrawn at the run's end, with a `steering_withdrawn` entry and a transcript line, and a steer after
-that is refused (`Run.withdrawSteering`). The reading, and what it leaves to a ruling, is [OQ-122](../../architecture/open-questions.md).
+boundary — is recorded as not delivered when the run's teardown begins, with a `steering_not_delivered` entry and a
+transcript line (`Run.reportUndeliveredSteering`). Steering closes once no agent of the run takes another step: when the
+rest is recorded, and when teardown begins, so a steer after either is refused rather than acknowledged for nothing to
+deliver. (The first build closed steering only at the end of teardown, and called the undelivered prompt "withdrawn";
+its review found a steer submitted after the rest, while teardown ran its hooks, acknowledged and never delivered to the
+paused agent it named, and the glossary's "withdrawn" is an approval's or a question's, not a prompt's.) The reading,
+and what it leaves to a ruling, is [OQ-122](../../architecture/open-questions.md).
 
 Evidence: `packages/engine/src/children/children.test.ts`, two cases under "PD-ORCH-005 phase 3": steering the paused
 child, the waiting root and a child that never started, then pausing, leaves the first two records ending on their
-prompts, each injected once, and the third withdrawn and said so; the Continue's resumed agents each read their prompt
+prompts, each injected once, and the third recorded as not delivered and said so; the Continue's resumed agents each read their prompt
 as the last message of their first request, and nothing is injected a second time. A child steered while summarising and
 then stopped resumes `running`, takes a step over the prompt and reports. On the code before the repair the first case's
-record ended on the tool results with no prompt, and the second moved straight back to `summarizing`.
+record ended on the tool results with no prompt, and the second moved straight back to `summarizing`. Two further cases
+beside the explicit cancel that lands while teardown runs its hooks: a steer, for the paused child or the root, after the
+rest is recorded and while the `session_end` hooks run, is refused and nothing of it reaches the timeline; and a steer
+while a completed run's teardown runs its hooks is refused. Both acknowledged the steer on the first build.
 `apps/desktop/scripts/part-j-proof.mjs`'s scenario 3b drives it in the built app: a steer submitted while the entry
 role's step is held, then a pause, then the Continue; the root's record holds the prompt after the read's result and
 before the resumed step, injected once by the pause. On a build of the code before the repair the scenario failed ("the

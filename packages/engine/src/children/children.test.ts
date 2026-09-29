@@ -1306,7 +1306,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'iteration_paused')!.metadata)).toMatchObject({ iteration: 1, interruption: 'pause', paused_agents: 3 });
     });
 
-    it('REQ-MONITOR-134 with clause 4, the repair of a-steering-prompt-pending-at-a-rest-is-lost: a prompt pending when the run comes to rest is delivered into the record of the paused agent it names, marked injected once, and the resumed agent reads it at its first step; one for an agent with no record yet is withdrawn, and said so', async () => {
+    it('REQ-MONITOR-134 with clause 4, the repair of a-steering-prompt-pending-at-a-rest-is-lost: a prompt pending when the run comes to rest is delivered into the record of the paused agent it names, marked injected once, and the resumed agent reads it at its first step; one for an agent with no record yet is recorded as not delivered, and said so', async () => {
       const { sessions, client, release } = heldPair();
       const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
       await settle(() => children(sid).length === 2 && byName(sid, 'two').state === 'waiting_on_model_slot');
@@ -1326,11 +1326,11 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(recordOf(root).at(-1)).toEqual({ role: 'user', content: [{ kind: 'text', text: '[Steering prompt] mind the tests' }] });
       const injected = () => dal.timelineOf(sid).filter((t) => t.name === 'steering_injected').map((t) => (JSON.parse(t.metadata) as { prompt_id: string }).prompt_id);
       expect(injected().sort()).toEqual([toOne, toRoot].sort());
-      // `two` has no conversation to carry it: the prompt is withdrawn, in the timeline and the transcript.
-      const withdrawn = dal.timelineOf(sid).filter((t) => t.name === 'steering_withdrawn');
-      expect(withdrawn.map((t) => (JSON.parse(t.metadata) as { prompt_id: string }).prompt_id)).toEqual([toTwo]);
-      expect(withdrawn[0]!.message).toMatch(/^The steering prompt for two \([0-9a-f]{8}\) was not delivered/);
-      expect(dal.residentRows(sid).some((r) => r.kind === 'system' && r.body === withdrawn[0]!.message)).toBe(true);
+      // `two` has no conversation to carry it: the prompt is recorded as not delivered, in the timeline and the transcript.
+      const undelivered = dal.timelineOf(sid).filter((t) => t.name === 'steering_not_delivered');
+      expect(undelivered.map((t) => (JSON.parse(t.metadata) as { prompt_id: string }).prompt_id)).toEqual([toTwo]);
+      expect(undelivered[0]!.message).toMatch(/^The steering prompt for two \([0-9a-f]{8}\) was not delivered/);
+      expect(dal.residentRows(sid).some((r) => r.kind === 'system' && r.body === undelivered[0]!.message)).toBe(true);
       // Resumed, each reads its prompt as the last message of its first request, and it is marked injected no second time.
       const asked = client.requests.length;
       expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
@@ -2220,6 +2220,48 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const results = dal.eventsOfKind(sid, 'result').map((e) => JSON.parse(e.payload) as { result: { iterations_completed: number } });
       expect(results.at(-1)!.result.iterations_completed).toBe(1);
       expect(dal.residentRows(sid).filter((r) => r.kind === 'system').at(-1)!.body).toBe('Run paused: interrupted by user.');
+    });
+
+    it('REQ-MONITOR-133/134 with clause 4 (the repair of a-steering-prompt-pending-at-a-rest-is-lost, found by its review): a steer that lands after the rest is recorded, while teardown runs its hooks, is refused, not acknowledged and left undelivered for an agent that resumes', async () => {
+      let releaseHook!: () => void;
+      const hookHold = new Promise<void>((r) => { releaseHook = r; });
+      let ending = false;
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event) => { if (event === 'session_end') { ending = true; await hookHold; } return []; }, advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      const g = gate();
+      const { sessions } = scriptedChild([() => ({ parts: [{ hold: g.hold }, ...look().parts] })], { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'work')?.state === 'running');
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      g.open();
+      await settle(() => ending);
+      expect(byName(sid, 'work')).toMatchObject({ state: 'paused', interruption: 'pause' });
+      // The rest is recorded: nothing of this run takes another step, so a steer now is refused, for a child or the root.
+      expect(sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: byName(sid, 'work').task_id, text: 'go left' } })).toEqual({ ok: false });
+      expect(sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: RUN_AGENT_ID, text: 'mind the tests' } })).toEqual({ ok: false });
+      releaseHook();
+      expect((await sessions.running(sid)!).status).toBe('interrupted');
+      expect(dal.timelineOf(sid).filter((t) => t.name.startsWith('steering_'))).toEqual([]);
+      expect(byName(sid, 'work')).toMatchObject({ state: 'paused', resume_state: 'running' });
+    });
+
+    it('REQ-MONITOR-133 with OQ-122 (found by the review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): once the run\'s teardown has begun a steer is refused, not acknowledged for a step no agent will take', async () => {
+      let releaseHook!: () => void;
+      const hookHold = new Promise<void>((r) => { releaseHook = r; });
+      let ending = false;
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event) => { if (event === 'session_end') { ending = true; await hookHold; } return []; }, advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      const { sessions } = scriptedChild([look], { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => ending);
+      expect(sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: RUN_AGENT_ID, text: 'mind the tests' } })).toEqual({ ok: false });
+      releaseHook();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(dal.timelineOf(sid).filter((t) => t.name.startsWith('steering_'))).toEqual([]);
     });
 
     it('clause 3 (found by phase 3\'s third review): an explicit cancel that lands once teardown can no longer close anything is refused, not lost', async () => {

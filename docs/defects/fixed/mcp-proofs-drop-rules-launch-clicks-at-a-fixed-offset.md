@@ -52,10 +52,14 @@ elsewhere.
 
 What the driver client gained for it: `until` (a wait on a condition that is not one selector), `choose` (a native
 `<select>` confirmed once the control shows the value, since a controlled select snaps back on the turn of the change
-event; the design system's `SearchableSelect` by two real clicks) and `stopApp` (the driver's quit, then SIGTERM, a
-grace and SIGKILL from `lib/bounded-launch.mjs` for an application that does not exit, reported as a failure). Each
-driven launch writes `<name>.steps.json`: every step, when it began, how long it took and what it answered.
-`lib/bounded-launch.test.ts` pins the ending against real child processes.
+event; the design system's `SearchableSelect` by two real clicks) and `stopApp` (the closing picture and the driver's
+quit, each within a bound, then SIGTERM, a grace and SIGKILL from `lib/bounded-launch.mjs` for an application that does
+not exit, reported as a failure with its log tail). `startApp` ends a launch whose driver never answers before it
+reports the failure. Each driven launch writes `<name>.steps.json`: every step, when it began, how long it took and
+what it answered. `lib/bounded-launch.test.ts` pins the ending against real child processes, and `lib/driver.test.ts`
+pins `stopApp` against a socket that accepts and never answers, `until`, and `choose` in both kinds, the native
+snap-back included. (The bounds on the picture, the quit and the connect were added in the verification round, after
+a verifier showed `stopApp` still pending 40 s into a quit nobody answered.)
 
 Evidence: `pnpm mcp-proof --skip-build` under Xvfb, as root on Linux, Node 24, three runs in a row, **all three exit 0**
 with every launch that applies on Linux passing (2 min 20 s, 2 min 19 s, 2 min 23 s). Another agent's Electron proofs
@@ -65,3 +69,9 @@ offsets had allowed 14 s. The relaunch's steps finished in 1.4, 1.4 and 2.2 s. L
 kind; alpha was contacted twice. What this cannot show is the red it replaces: the loaded-host timing that made
 the offsets miss was not reproduced on demand, so the repair is argued from the steps (none has a time) and the three
 runs, not from a red turned green.
+
+Re-run after the verification round's bounds (the same day's record, same host and command): three runs in a row,
+**all three exit 0** with every launch that applies on Linux passing (2 min 19 s, 2 min 20 s, 2 min 19 s), the
+`.cmd` runner check stated not applicable on linux in each. Another agent's transcript proof was running in a
+different worktree during the first two. Launch 6's steps finished in 9.9, 9.9 and 10.0 s, the relaunch's in 1.4 s
+each, launch 7's in 3.2, 3.2 and 3.4 s; no step recorded an error.

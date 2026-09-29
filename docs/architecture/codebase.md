@@ -1189,8 +1189,10 @@ main's own `runCommand`, never around it) and `quit`. The client is `scripts/lib
 the one-command-at-a-time CLI over it and `pnpm driver-proof` is its proof. Since 2026-09-28 the client also carries
 `until` (a wait on a condition that is not one selector — a store row, an attribute), `choose` (either chooser kind: a
 native `<select>` confirmed once the control shows the value, or the design system's `SearchableSelect` by two real
-clicks) and `stopApp` (the quit, then SIGTERM, a grace and SIGKILL through `lib/bounded-launch.mjs` for an application
-that does not exit, reported rather than absorbed); `mcp-proof`'s launches 6 and 7 were the first to use them.
+clicks) and `stopApp` (the closing picture and the quit, each within a bound, then SIGTERM, a grace and SIGKILL
+through `lib/bounded-launch.mjs` for an application that does not exit, reported rather than absorbed), and `startApp`
+ends a launch whose driver never answers before it throws (`lib/driver.test.ts`); `mcp-proof`'s launches 6 and 7 were
+the first to use them.
 
 **Why it exists, stated as the thing it replaces.** The sixty-seven `ROTARIS_CAPTURE_*` seams share one shape: a
 step scheduled at a wall-clock offset, fired at whatever the window is showing then, read back by grepping the

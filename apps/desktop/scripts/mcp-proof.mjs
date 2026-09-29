@@ -34,7 +34,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
-import { choose, startApp, stopApp, until } from './lib/driver.mjs';
+import { choose, startApp, stopApp, stopOverrunMessage, until } from './lib/driver.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -166,8 +166,9 @@ const results = {};
  *
  * Each step is recorded in `<name>.steps.json` beside the launch's log — when it began (`at`), how long it took (`ms`)
  * and what it answered — so a red names the step that did not happen. The launch is bounded (`boundMs`) and ended by
- * `stopApp`, which reports an application that does not exit on the driver's quit rather than leaving it running
- * beside the next launch.
+ * `stopApp`, whose closing picture and quit are each bounded and which ends (SIGTERM, a grace, SIGKILL) and reports an
+ * application that does not exit on the driver's quit rather than leaving it running beside the next launch; a launch
+ * whose driver never answers is ended by `startApp` itself.
  */
 const SETTLED = new Set(['completed', 'failed', 'stopped', 'interrupted', 'paused', 'paused_message_limit']);
 async function drivenLaunch(name, extra, { files = {}, boundMs = 150_000 } = {}, steps) {
@@ -213,13 +214,14 @@ async function drivenLaunch(name, extra, { files = {}, boundMs = 150_000 } = {},
   } finally {
     clearTimeout(bound);
   }
-  await launched.driver.screenshot(png).catch(() => undefined);
-  const stopped = await stopApp(launched);
+  // The closing picture and the quit are each bounded inside `stopApp`: a main process that stopped answering its
+  // driver is ended (SIGTERM, a grace, SIGKILL), not waited on.
+  const stopped = await stopApp(launched, { screenshot: png });
   const log = existsSync(appLog) ? readFileSync(appLog, 'utf8') : '';
   writeFileSync(join(output, `${name}.log`), log);
   writeFileSync(join(output, `${name}.steps.json`), `${JSON.stringify(trail, null, 2)}\n`);
   if (failure) throw new Error(`${name}: ${failure.message}; see ${name}.log and ${name}.steps.json`);
-  if (stopped.overran) throw new Error(`${name} did not exit within ${stopped.overran.afterQuitMs} ms of the driver's quit; ${stopped.overran.endedBy} ended it; see ${name}.log`);
+  if (stopped.overran) throw new Error(`${stopOverrunMessage(name, stopped, log)}\n(see ${name}.log)`);
   if (stopped.exit.code !== 0) throw new Error(`${name} exited ${stopped.exit.code ?? stopped.exit.signal} on the driver's quit; see ${name}.log`);
   return { log, value, elapsedMs: Date.now() - started, png };
 }

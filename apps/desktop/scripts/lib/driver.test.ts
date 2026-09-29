@@ -2,7 +2,9 @@
  * R-062: the driver client's waiting and ending, pinned without the app. `stopApp` and `connectOrEnd` are pinned
  * against REAL child processes and a REAL socket that accepts and never answers — the shape of a main process that
  * has stopped serving its driver — because what is pinned is that no step of ending a driven launch waits without a
- * bound; and that a store wait a proof has given up on stops polling.
+ * bound; and that a store wait a proof has given up on stops polling. `until` and `choose` are pinned against a fake
+ * driver: the controlled native select that snaps back before it shows the choice (what mcp-proof's secrets select
+ * did), and the design system's chooser driven by two clicks.
  * No product code runs here.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -12,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 // @ts-expect-error — the module is plain ESM beside the scripts that run it.
-import { connect, connectOrEnd, stopApp, stopOverrunMessage, until, within } from './driver.mjs';
+import { choose, connect, connectOrEnd, stopApp, stopOverrunMessage, until, within } from './driver.mjs';
 
 const alive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch { return false; } };
 const cleanups: (() => void)[] = [];
@@ -115,11 +117,64 @@ describe('R-062: a driven launch ends within a bound', () => {
   });
 });
 
-describe('R-062: a wait given up on stops', () => {
+describe('R-062: waiting on a condition, and choosing in either chooser kind', () => {
+  it('until returns the first accepted value, and at its bound names what it waited for and the last value seen', async () => {
+    let n = 0;
+    expect(await until(async () => ++n, (v: number) => v === 3, { intervalMs: 5 })).toBe(3);
+    await expect(until(async () => 'draft', (v: string) => v === 'done', { timeoutMs: 60, intervalMs: 10, what: 'the store row' }))
+      .rejects.toThrow(/^the store row did not hold within 60 ms; last seen "draft"$/);
+  });
+
   it('until stops at its next poll once its signal is aborted', async () => {
     const controller = new AbortController();
     const waiting = until(async () => 'draft', () => false, { timeoutMs: 60_000, intervalMs: 10, what: 'the session settling', signal: controller.signal });
     controller.abort(new Error('the launch was given up'));
     await expect(waiting).rejects.toThrow('the session settling: abandoned (the launch was given up)');
+  });
+
+  /** A fake driver over one control: `kind` decides what the page says it is; `shown` is what the select shows, read by read. */
+  function fake(kind: 'native' | 'design-system', { shown = [] as (string | null)[], options = ['alpha', 'beta'] } = {}) {
+    const calls: string[] = [];
+    let reads = 0;
+    return {
+      calls,
+      reads: () => reads,
+      driver: {
+        waitFor: async (selector: string) => { calls.push(`waitFor ${selector}`); },
+        click: async (selector: string) => {
+          calls.push(`click ${selector}`);
+          const wanted = /data-value="([^"]*)"/.exec(selector)?.[1];
+          if (wanted !== undefined && !options.includes(wanted)) throw new Error(`nothing matched ${selector}`);
+        },
+        eval: async (expression: string) => {
+          if (expression.includes('instanceof HTMLSelectElement')) return kind;
+          if (expression.includes('dispatchEvent')) return options.some((o) => expression.includes(JSON.stringify(o)) && expression.includes(`o.value === ${JSON.stringify(o)}`)) ? 'dispatched' : 'no such option';
+          reads += 1;
+          return shown[Math.min(reads - 1, shown.length - 1)] ?? null;
+        },
+      },
+    };
+  }
+
+  it('choose waits, on a controlled native select, until the control shows the choice — through its snap-back', async () => {
+    const f = fake('native', { shown: ['alpha', 'alpha', 'beta'] });
+    expect(await choose(f.driver, '#secret', 'beta', { timeoutMs: 2_000 })).toEqual({ kind: 'native', value: 'beta' });
+    expect(f.reads()).toBe(3);
+  });
+
+  it('choose refuses a native select that offers no such value, and one that never shows the choice', async () => {
+    await expect(choose(fake('native').driver, '#secret', 'gamma', { timeoutMs: 200 })).rejects.toThrow('#secret offers no "gamma"');
+    await expect(choose(fake('native', { shown: ['alpha'] }).driver, '#secret', 'beta', { timeoutMs: 200 })).rejects.toThrow(/#secret showing "beta" did not hold within 200 ms; last seen "alpha"/);
+  });
+
+  it('choose drives the design system\'s chooser by two clicks, the trigger then the option, and fails when the option never appears', async () => {
+    const f = fake('design-system');
+    expect(await choose(f.driver, '.wait-header button[aria-label="Change model"]', 'beta')).toEqual({ kind: 'design-system', value: 'beta' });
+    expect(f.calls).toEqual([
+      'waitFor .wait-header button[aria-label="Change model"]',
+      'click .wait-header button[aria-label="Change model"]',
+      'click [role="option"][data-value="beta"]',
+    ]);
+    await expect(choose(fake('design-system').driver, '.chooser', 'gamma')).rejects.toThrow('nothing matched [role="option"][data-value="gamma"]');
   });
 });

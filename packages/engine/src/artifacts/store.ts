@@ -319,7 +319,10 @@ export class ArtifactStore {
    * duplicating", so a second entry for the same artifact would report an event that did not happen.
    */
   materialiseChildReport(input: ChildReportInput): Res<{ readonly record: ArtifactRecord; readonly created: boolean }> {
-    const existingRow = this.dal.artifactByTask(this.sessionId, input.taskId) ?? this.dal.artifactByCanonical(this.sessionId, input.canonicalName);
+    // REQ-LIBRARY-092 as amended (OQ-113, R-067): keyed on the task id; the canonical name keys only a record that carries
+    // no task id, and finds only an artifact no task wrote — so two children with different task ids (a later iteration's
+    // `build` beside an earlier one's) never share or overwrite one artifact.
+    const existingRow = input.taskId.trim() !== '' ? this.dal.artifactByTask(this.sessionId, input.taskId) : this.dal.artifactByCanonical(this.sessionId, input.canonicalName);
     const status = isArtifactStatus(input.status) ? input.status : 'failed';
     const tags = normaliseArtifactTags(input.tags);
     // A report's tags were already narrowed to the six by the summarising pass; anything else is dropped here

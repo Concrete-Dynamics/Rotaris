@@ -637,7 +637,8 @@ export class StoreDal {
       artifactById: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND id = ?'),
       artifactBySlug: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND slug = ?'),
       artifactByTask: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND source_task_id = ?'),
-      artifactByCanonical: db.prepare("SELECT * FROM artifacts WHERE session_id = ? AND canonical_name = ? AND kind = 'child_report' ORDER BY created_at, id"),
+      // REQ-LIBRARY-092 as amended (OQ-113): the name keys only a report no task wrote.
+      artifactByCanonical: db.prepare("SELECT * FROM artifacts WHERE session_id = ? AND canonical_name = ? AND kind = 'child_report' AND (source_task_id IS NULL OR source_task_id = '') ORDER BY created_at, id"),
       slugsLike: db.prepare('SELECT slug FROM artifacts WHERE session_id = ? AND (slug = ? OR slug LIKE ?)'),
       // REQ-LIBRARY-094: only the body's timestamp moves here — the body itself is a file, so the row records that it changed and nothing more.
       touchArtifactEdited: db.prepare('UPDATE artifacts SET edited_at = ? WHERE session_id = ? AND id = ?'),
@@ -1255,6 +1256,10 @@ export class StoreDal {
   artifactByTask(id: SessionId, taskId: string): ArtifactRow | undefined {
     return this.stmts['artifactByTask']!.get(id, taskId) as ArtifactRow | undefined;
   }
+  /**
+   * REQ-LIBRARY-092's fallback key as amended 2026-09-29 (OQ-113): the earliest child report under `canonicalName` that
+   * carries no task id — never one a task wrote, which only its own task id finds (`artifactByTask`).
+   */
   artifactByCanonical(id: SessionId, canonicalName: string): ArtifactRow | undefined {
     return (this.stmts['artifactByCanonical']!.all(id, canonicalName) as ArtifactRow[])[0];
   }

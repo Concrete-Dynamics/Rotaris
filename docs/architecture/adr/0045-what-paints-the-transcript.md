@@ -560,7 +560,7 @@ The coordinate contract remains `translateY(measuredOffset)`: offsets retain the
 
 *Reported here because this record fixed the measurement point — the double `requestAnimationFrame` — and predicted that
 appending would cost the frame cadence and nothing more. The defect note
-`docs/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md` holds every run and figure;
+`docs/defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md` holds every run and figure;
 this is what the round found about the point itself and about the recycler.*
 
 **The point measures the queue in front of an update, and the proof had been measuring a queue without knowing it.**
@@ -624,6 +624,39 @@ three re-runs' traced pairs the loaded side's script is 1.2–4.2 ms higher per 
 the per-increment cost is at parity: on fix round 2's build it is at parity in two traced pairs of eight. What it can
 say is unchanged — the cost per increment is no longer the whole window's projection — and the comparison is not
 claimed.
+
+**The CPU-profile round, 2026-09-29 (R-062, R-048's order continued) — repaired.** Fix round 3 left the per-increment
+script 1.2–4.2 ms higher on the loaded side with no trace naming it: Chromium's `FunctionCall` names only the entry
+point React's scheduler was called through. The traced launches now carry V8's sampling profiler
+(`disabled-by-default-v8.cpu_profiler`, a sample about every 170 µs), attributed per increment to functions and source
+modules by the trace account's own bucket rule (`lib/trace-summary.mjs`; `append.json`'s `profile`). Over three traced
+pairs in the proof's own launch order it named the extra: +1.50 ms of script an increment, 1.03 ms of it the
+transcript's own code walking every displayed row — the offset table rebuilt whole two or three times an increment, the
+bounded projection filtering and searching the whole previous display for its cut, the places and the update shape over
+every row, and a whole-window projection each time `running` flipped. So this record's "the per-increment cost is no
+longer the whole window's projection" was true of the fold and not of the recycler's own bookkeeping around it, which
+was still the whole window's. Repaired in the recycler only where the profile named it, each form answering what the
+whole pass answered and pinned by a test that fails on the first form: the offset table is rebuilt from the first height
+that changed, reading a height only for a row that changed or that the measurement pass re-measured (the caches report
+their evictions to the same ledger); the places and the update shape are carried from the previous array; the reusable
+prefix is found by bisection over a carried reach; a run beginning or ending is bounded from the first row that settles
+with it. Nothing this record decided moved: the pool, its capacity, the slot index as key, the measured heights and the
+anchor are as they were. **Measured after:** twelve consecutive runs of the proof passed both cuts (every update −19.5
+to +11.7 ms, median −3.9; the loaded side above at the median in four of twelve); five more passed four of five, sixteen
+of seventeen in all, none of them on a host that stayed quiet — no other Electron process and a load under 4.0 at every
+sample — for the whole run; over the twelve traced pairs the loaded side's script is +0.24 ms an increment (+1.50
+before) and the transcript's modules +0.25 (+1.03). What is left of the rows held is a residue of pointer comparisons,
+copies and field tests — about 0.2 ms an increment at 1,234 rows, under 0.03 ms in any one function — which REQ-CHAT-055
+forbids only to the extent that it moves the shown-update figure, and which these runs do not show moving it. What this
+record can now say: the cost per increment is the visible rows' and that residue, and the comparison holds on this host
+whenever the host is not saturated (its one red since the repair ran at a load of 9 on four vCPUs, and the run beside it
+under the same load passed by as much the other way); the note is in `fixed/`, with a series on a host that stays quiet
+for its whole length still owed — no run on this shared host could be shown to have had one. The profile also measured
+what the repair does not touch and the note leaves to OQ-89: at a part-empty viewport — the comparison's first empty
+launch — an append binds one new slot, while at the tail of a full one it moves the bound range and rebinds every slot,
+which after the repair still costs the loaded side about 1.6 ms an increment (layout the pin forces over twice the
+layout objects +0.84, React's DOM writes +0.21, style, paint and native time +0.6). That is visible-row work, which
+REQ-CHAT-055's first sentence permits, and the pooled comparison passes with it.
 
 **What the point still does not do, unchanged:** it says a frame boundary passed after the change was committed, not
 that a frame carrying it was presented. And one reading the round surfaced is on the register rather than settled here

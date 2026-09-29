@@ -97,4 +97,4 @@ in the render loop is not free, and the bound that made it visible was already t
 `packages/ui/src/transcript/cache.ts:133` with `reuseKey` built on it, and `wrappedLines` models the wrap
 in `pool.ts:51`, gutter included (`roleLines`, line 72). The note recorded its own repair and was never
 moved. What the repair's own measurement found — the append comparison — is open separately as
-[`appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`](../appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md).*
+[`appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`](appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md).*

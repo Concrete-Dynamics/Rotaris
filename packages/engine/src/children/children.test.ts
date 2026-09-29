@@ -1880,6 +1880,31 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         expect(holdings(sid)).toEqual(before);
       });
 
+      it('the explicit cancel: a child\'s model step that ignores it is awaited within the 30 s grace, then given up on, and streams no row and counts no usage when it returns', async () => {
+        const g = gate();
+        const rootStep = { calls: 0 };
+        // The root delegates, then takes a step that honours the cancel; the child's step streams and ignores it.
+        const { sessions, seen } = scriptedChild([() => ({ parts: [{ part: { kind: 'text', delta: 'Before. ' } }, { hold: g.hold }, ...answer('Child words after the run ended.', { input: 7, output: 3 }).parts] })], {
+          deaf: ['child'],
+          root: (turn) => { rootStep.calls = turn; return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : { parts: [{ hold: new Promise<void>(() => undefined) }, ...answer('never').parts] }; },
+        });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await settle(() => rootStep.calls === 2 && seen.childSteps === 1 && dal.residentRows(sid).some((r) => r.kind === 'agent' && r.name === 'work' && r.body === 'Before. '));
+        expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: RUN_AGENT_ID } })).toEqual({ ok: true });
+        await new Promise((r) => setTimeout(r, 20));
+        // The root has returned; the run waits for the child's execution only within the grace.
+        expect(dal.eventsOfKind(sid, 'session.end')).toHaveLength(0);
+        clock.advance(30_000);
+        await sessions.running(sid)!;
+        expect(byName(sid, 'work')).toMatchObject({ state: 'cancelled' });
+        expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'closed', outcome: 'cancelled' }]);
+        expect(warnings.some((w) => /child executions still running at the stop's 30 s grace were given up on/.test(w))).toBe(true);
+        const before = holdings(sid);
+        g.open();
+        await new Promise((r) => setTimeout(r, 30));
+        expect(holdings(sid)).toEqual(before);
+      });
+
       it('a root\'s model step the stop\'s grace gave up on streams no row and counts no usage when it returns', async () => {
         const g = gate();
         const { sessions } = sessionsWith((persona) => (persona === 'orchestrator' ? { parts: [{ hold: g.hold }, ...answer('Root words after the run ended.', { input: 7, output: 3 }).parts] } : answer('done')), { deaf: ['orchestrator'] });

@@ -250,9 +250,10 @@ same first request (`Run.stopGraceLeft` → `IterationChildren.rest(cause, grace
 still executes is detached at once), so a stop ends within the one 30 s. The root is left `paused` by a stop or a quit,
 its open call answered as interrupted; under the explicit cancel its open call is answered as cut off, naming no rest. The
 explicit cancel rests nothing: it drains the active background children (REQ-ORCH-080, bounded by the drain's own
-timeout, whether the root returned or was given up on — **OQ-119**) and settles every child record (`finalize`); after a
-root given up on, what still executes beside it is detached with it (`IterationChildren.outlast`, given what is left of
-the grace: none). The repair of `a-root-call-that-ignores-the-stop-holds-the-run-open.md`. Every agent the rest leaves paused, the root included, has any call it never
+timeout, whether the root returned or was given up on — **OQ-119**), settles every child record (`finalize`), then
+awaits what still executes within what is left of the grace and detaches it (`IterationChildren.outlast`: none is left
+after a root given up on), so a child's step that ignored the cancel writes nothing when it returns. So does any stop that
+rests nothing (one the run raises itself, a plan cycle's). The repair of `a-root-call-that-ignores-the-stop-holds-the-run-open.md`. Every agent the rest leaves paused, the root included, has any call it never
 returned from or raised out of answered in its record as interrupted, its row settled (`answerOpenCalls`, which the crash
 record uses for a dead run's agents too), so a resume sends a conversation whose every call has its result; a call of
 that step that completed keeps what it returned, read back from its settled row. A rest that finds nothing unfinished closes the iteration as before. The cause is

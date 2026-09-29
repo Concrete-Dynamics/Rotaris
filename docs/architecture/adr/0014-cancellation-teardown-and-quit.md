@@ -221,8 +221,8 @@ naming no rest. The rest that follows is given what is left of the grace, counte
 children together. *First built as "what is left of the grace, which is nothing (`IterationChildren.rest(cause, 0)`)",
 given only after a root given up on, while a root that returned gave the rest a fresh 30 s; a root returning at 29 s
 therefore let the stop take 59 s. Corrected the same day, found by the verifier of the repair.* Under the explicit
-cancel, which rests nothing, the child executions still running beside a root given up on are detached with it once the
-records are settled (`IterationChildren.outlast`), and such a root drains the background children as one
+cancel, which rests nothing, the child executions still running once the records are settled are awaited within what is
+left of the same grace and detached past it (`IterationChildren.outlast`), and a root given up on drains the background children as one
 that returned does, bounded by REQ-ORCH-080's own timeout (OQ-119). The root is counted from the first request, so a
 stop forced at once still gives a root that honours the abort the moment to record its step.
 

@@ -3878,8 +3878,11 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   streaming model step writes as it finishes is not stopped" no longer holds either. Teardown closes every tool port the
   run built before anything terminal is written: a call its gate still has open settles then, as failed with the rest's
   interrupted statement, and the gate writes nothing after it. A model step the rest detached streams no row, settles
-  none and counts no usage when it returns
-  (`docs/defects/fixed/a-detached-call-still-writes-through-its-tool-gate.md`).*
+  none and counts no usage when it returns, and so does one the explicit cancel leaves running past the grace: the
+  cancel's children are awaited within what is left of it after their records are settled, and detached past it
+  (`docs/defects/fixed/a-detached-call-still-writes-through-its-tool-gate.md`). *First reported without that last
+  clause, when only a rest detached: a child step that ignored the explicit cancel still wrote its row and usage after
+  `result` (found by the verifier of the repair, corrected the same day).*
 - **A call cut by no rest.** A call cut by its agent's limit, by the cancellation of that agent or by the explicit
   cancel is recorded as cut off, and its statement names no rest. Only a pause, a stop, a quit or a crash is named as
   what interrupted a call.

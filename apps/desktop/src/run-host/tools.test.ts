@@ -313,6 +313,7 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     const pending = port.dispatch({ callId: 's1', name: 'slow_tool', rawArgs: '{}', persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' }, new AbortController().signal);
     await vi.waitFor(() => expect(dal.eventsOfKind(sid, 'tool.start')).toHaveLength(1));
     const statement = 'This call was interrupted by the stop before it completed, and it was not re-run. Issue it again if it is still needed.';
+    const settles = vi.spyOn(writer, 'settleToolCall');
     port.close?.(statement);
     const ring = () => dal.db.prepare('SELECT status, is_error, entry FROM tool_calls WHERE session_id = ?').all(sid) as { status: string; is_error: number; entry: string }[];
     expect(ring()).toHaveLength(1);
@@ -326,6 +327,9 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     // The gate still answers its caller — the engine has stopped listening — but nothing reaches the session.
     expect(r).toMatchObject({ isError: true, text: 'it failed after the run ended' });
     expect(holdings()).toEqual(before);
+    // The close's settle is the only one: the late return does not reach the writer at all, not even as a settle the
+    // store would refuse (the sink's own guard, pinned here).
+    expect(settles).toHaveBeenCalledTimes(1);
     expect(hooked).toEqual(['pre']);
     // A second close finds nothing open and writes nothing.
     port.close?.(statement);

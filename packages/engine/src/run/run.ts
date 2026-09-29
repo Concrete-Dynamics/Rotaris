@@ -1311,11 +1311,12 @@ export class Run {
         const n = children.finalize(this.stop.requested ? 'cancelled: the run was stopped while this child was in flight' : 'cancelled during iteration cleanup');
         if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) settled cancelled at exit (REQ-ORCH-052)`);
         /*
-         * REQ-SESSION-094: a root given up on under the explicit cancel has spent the stop's grace, and so has every child
-         * execution beside it. What still executes is detached with it, so a child's step or call that ignored the
-         * cancel writes nothing into the finished session when it returns.
+         * REQ-SESSION-092 / REQ-SESSION-094: a stop that rests nothing — the explicit cancel, a stop the run raises itself,
+         * a plan cycle's — aborted every child execution with the root. Each is awaited within what is left of the grace
+         * (none after a root given up on), and what still executes then is detached, so a child's step or call that
+         * ignored the stop writes nothing into the finished session when it returns.
          */
-        if (rootDetached && await children.outlast(this.stopGraceLeft())) this.deps.warn(`iteration ${iteration}: child executions still running at the stop's 30 s grace were given up on (REQ-SESSION-092)`);
+        if (this.stop.requested && await children.outlast(this.stopGraceLeft())) this.deps.warn(`iteration ${iteration}: child executions still running at the stop's 30 s grace were given up on (REQ-SESSION-092)`);
       }
       // A root given up on that no rest paused — the explicit cancel — still leaves no call row running (REQ-SESSION-129):
       // its open call is recorded cut off, naming no rest (OQ-96, "A call cut by no rest").

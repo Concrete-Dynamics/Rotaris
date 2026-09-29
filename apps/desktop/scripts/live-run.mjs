@@ -36,6 +36,11 @@
  *                 files on disk, from `git diff`, and by running `node --test` again in this script. The work is
  *                 split between two children writing IN PARALLEL, each under a declared write scope (PD-TOOLS-006):
  *                 both delegated with a scope, live at once, told the live scopes at start, and any refusal named.
+ *   3b. resume  — PD-ORCH-005 against a real model: a delegating run paused through the composer's own Pause while a
+ *                 child runs, the paused composer read, and the run continued through its own Continue. Asserted
+ *                 from the store and the traffic: the iteration left open and resumed, every paused child resumed
+ *                 under its task id with its record continuing across the pause, and its next request carrying
+ *                 what it recorded last; the notes it was asked for are read back from disk.
  *
  * Every scenario that reads a session also asserts its PRICE (PD-MONITOR-001 revision 2): at registered prices the
  * cost reads `configured` and equals the store's tokens times those prices exactly. One run, several mechanisms —
@@ -103,7 +108,7 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
-import { cleanEnvironment, configDirFor, findDatabases, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
 import { LONG_OUTPUT_LINES, diagnosticOf, longOutputReading, outputOf, terminalShapes } from './lib/terminal-shapes.mjs';
 
@@ -200,7 +205,7 @@ const RUN_WAIT_MS = Number(process.env['LIVE_RUN_WAIT_MS'] ?? 420_000);
  * work, and the prompt closes the detour.
  */
 const EDIT_WAIT_MS = Number(process.env['LIVE_RUN_EDIT_WAIT_MS'] ?? RUN_WAIT_MS * 2);
-const OPTIONAL = ['ask', 'edit', 'requirements', 'shell', 'frictions', 'faults', 'terminal'];
+const OPTIONAL = ['ask', 'edit', 'resume', 'requirements', 'shell', 'frictions', 'faults', 'terminal'];
 /**
  * Scenarios that `--only` accepts and the default set never contains.
  *
@@ -746,7 +751,8 @@ async function launch(name, extra, timeoutMs = 180_000) {
   const paced = budget > 0 && extra['ROTARIS_CAPTURE_PNG_AT'] === undefined
     ? { ROTARIS_CAPTURE_PNG_AT: `${join(dir, `${name}.early.png`)}@${Math.round(budget * 0.2)};;${join(dir, `${name}.mid.png`)}@${Math.round(budget * 0.6)}` }
     : {};
-  const result = await runElectron([join(app, 'out', 'main', 'index.js'), workspace], {
+  // `hostSwitches`: Chromium refuses to start as root without `--no-sandbox`, as the driver's launch already knows.
+  const result = await runElectron([join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     timeout: timeoutMs,
     env: {
       ...cleanEnvironment(),
@@ -951,7 +957,7 @@ function finish(code) {
   // A red names the assertion, never the run.
   for (const c of checks) console.log(`  ${c.noted ? 'NOTE' : c.passed ? 'PASS' : 'FAIL'}  ${c.what}${c.detail === null ? '' : `  — ${c.detail}`}`);
   const tokens = results.tokens ? `${results.tokens.input} in / ${results.tokens.output} out` : 'none recorded';
-  console.log(`\nspend: ${typeof results.spentUsd === 'number' ? `${results.spentUsd.toFixed(4)} USD (${accountingKind === 'provider' ? "the provider's figure" : 'estimated from the registered prices'}) of the ${BUDGET.toFixed(2)} USD ceiling` : `no money figure for this endpoint; ${tokens} of the ${MAX_TOKENS} token ceiling`}`);
+  console.log(`\nspend: ${typeof results.spentUsd === 'number' ? `${results.spentUsd.toFixed(4)} USD (${accountingKind === 'provider' ? "the provider's figure" : 'estimated from the registered prices'}) of the ${BUDGET.toFixed(2)} USD ceiling` : accountingKind === 'unmetered' ? `no money figure for this endpoint; ${tokens}, no ceiling (registered unmetered)` : `no money figure for this endpoint; ${tokens} of the ${MAX_TOKENS} token ceiling`}`);
   console.log(`evidence: ${output}`);
   const packed = Object.entries(scenarioEvidence).filter(([, e]) => Array.isArray(e.wrote) && e.wrote.length > 0);
   if (packed.length > 0) console.log(`autopsy:  ${packed.map(([name, e]) => `${name} (${e.wrote.join(', ')})`).join('; ')}`);
@@ -1157,6 +1163,91 @@ if (wanted.includes('edit')) {
   cpSync(join(workspace, 'src'), join(scenarioDir('edit'), 'changed'), { recursive: true });
   results.scenarios.edit = { writeScopes: { scopedChildren: scopedIds.length, overlapped, told: told.length, refusals: refusals.length }, cost: { total: read?.session.cost ?? null, qualifier: read?.session.cost_qualifier ?? null }, status: read?.session.execution_status, iterations: read?.session.iterations_completed, tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output }, tools: names, toolCallTotal: read?.session.tool_calls ?? null, toolCallsByAgent: byAgent, diffstat: diff, suiteExit: suiteRun.status };
   if (read) preserveRun('edit', read.session.session_id);
+  await budgetGate();
+}
+
+// ── 3b. A paused run resumes every agent from its own record ────────────────────────────────────────────────
+/*
+ * PD-ORCH-005, measured against a real model. A delegating run is paused through the composer's own Pause as soon as
+ * a child is running, and continued through the composer's own Continue as soon as the paused composer has been
+ * read. What is asserted comes from the store and the recorded traffic, never from the model's prose:
+ * - the pause left the iteration open and its unfinished children `paused` by `pause` (clauses 2 and 3), and the
+ *   composer drew them `paused` with the Continue action's count (clauses 6, 13 and 19);
+ * - the continue resumed that same iteration and every child it paused, under the same task ids (clause 4);
+ * - each resumed child carried on from its own record: entries before the pause and after it under one task id, and
+ *   the first request after the continue carried what that child had recorded last (clauses 1 and 4);
+ * - the run finished the work, read back from the files on disk.
+ */
+if (wanted.includes('resume')) {
+  const PAUSE = '.workspace:has(.agent-row[data-state="running"]) button[aria-label="Pause the run"]';
+  // Read the paused composer once, and mark the read on <body> so the Continue press waits for it.
+  const READ_PAUSED = "(document.body.dataset.pausedRead = '1', JSON.stringify({ paused: document.querySelectorAll('.agent-row[data-state=\"paused\"]').length, count: document.getElementById('composer-resume-count')?.textContent ?? null, run: document.querySelector('[data-testid=\"run-header\"]')?.dataset.state ?? null }))";
+  const CONTINUE = 'body[data-paused-read="1"] button[aria-label="Continue run"]';
+  const log = await launch('resume', {
+    ROTARIS_CAPTURE_PROMPT: 'Write two short notes in parallel. In ONE turn, delegate two coding-agent children in the background: one reads src/todos.js and then writes docs/notes-functions.md listing each exported function with one sentence on what it does; the other reads src/todos.test.js and then writes docs/notes-tests.md listing each test with one sentence on what it checks. Wait for both with wait_for_tasks, then reply with the two file names. Delegate nothing else.',
+    ROTARIS_CAPTURE_CLICKS: [`${PAUSE}@~${EDIT_WAIT_MS}`, `${CONTINUE}@~${EDIT_WAIT_MS}`].join(';;'),
+    ROTARIS_CAPTURE_EVAL_AT: `${READ_PAUSED}>>button[aria-label="Continue run"]@~${EDIT_WAIT_MS}`,
+    ROTARIS_CAPTURE_WAIT: `js:document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed'`,
+    ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
+  }, EDIT_WAIT_MS + 90_000);
+  check(/capture: clicked ".*Pause the run/.test(log), 'the composer\'s Pause was pressed while a child was running');
+  check(/capture: clicked ".*Continue run/.test(log), 'the paused composer\'s Continue was pressed');
+  check(!/capture: wait for js timed out|capture: wait for .* timed out/.test(log), 'the resumed run completed inside the wait');
+  const shown = (() => { try { return JSON.parse(JSON.parse(/capture: eval-at \S+ .* → (".*")$/m.exec(log)?.[1] ?? 'null')); } catch { return null; } })();
+  check(shown !== null && shown.paused > 0, 'the paused composer drew its paused children as `paused` (clause 13)', JSON.stringify(shown));
+  check(shown !== null && /agents? will resume/.test(shown.count ?? ''), 'the paused composer stated the Continue action\'s count (clauses 6 and 19)', shown?.count ?? 'no count');
+  const read = readSession();
+  checkPricing('resume', read?.session);
+  check(read?.session.execution_status === 'completed', 'the session completed', `${read?.session.execution_status} (${read?.session.stop_reason})`);
+  const Database = require('better-sqlite3');
+  const db = new Database(oneDatabase(), { readonly: true });
+  let rest = null;
+  try {
+    const sid = read?.session.session_id ?? '';
+    const timeline = db.prepare("SELECT ordinal, at, name, metadata FROM timeline WHERE session_id = ? AND name IN ('iteration_paused', 'iteration_resumed', 'child_paused', 'child_resumed') ORDER BY ordinal").all(sid)
+      .map((t) => ({ ...t, meta: JSON.parse(t.metadata) }));
+    const iterationPaused = timeline.find((t) => t.name === 'iteration_paused' && t.meta.interruption === 'pause');
+    const iterationResumed = timeline.find((t) => t.name === 'iteration_resumed' && t.ordinal > (iterationPaused?.ordinal ?? Infinity));
+    check(iterationPaused !== undefined, 'the pause left the iteration open, recorded as paused by the pause (clause 2)', iterationPaused ? `iteration ${iterationPaused.meta.iteration}, ${iterationPaused.meta.paused_agents} agent(s)` : 'no iteration_paused entry');
+    check(iterationResumed !== undefined && iterationResumed.meta.iteration === iterationPaused?.meta.iteration, 'the continue resumed that same iteration (clause 4)', iterationResumed ? `iteration ${iterationResumed.meta.iteration}` : 'no iteration_resumed entry after the pause');
+    const pausedChildren = timeline.filter((t) => t.name === 'child_paused' && t.meta.interruption === 'pause').map((t) => t.meta.task_id);
+    const resumedChildren = new Set(timeline.filter((t) => t.name === 'child_resumed').map((t) => t.meta.task_id));
+    check(pausedChildren.length > 0, 'the pause left at least one child `paused` (clause 3)', pausedChildren.join(', ') || 'none');
+    check(pausedChildren.every((id) => resumedChildren.has(id)), 'every paused child resumed under its own task id (clause 4)', `${pausedChildren.length} paused, ${pausedChildren.filter((id) => resumedChildren.has(id)).length} resumed`);
+    const iterations = db.prepare('SELECT iteration, state, outcome, interruption FROM iterations WHERE session_id = ? ORDER BY iteration').all(sid);
+    check(iterations.length > 0 && iterations.every((it) => it.state === 'closed') && iterations.some((it) => it.outcome === 'succeeded'), 'the resumed iteration closed succeeded', JSON.stringify(iterations));
+    // Each resumed child carried on from its own record: entries on both sides of the pause, under one task id.
+    const pausedAt = iterationPaused?.at ?? '';
+    const records = pausedChildren.map((id) => {
+      const entries = db.prepare('SELECT seq, kind, body, at FROM agent_messages WHERE session_id = ? AND task_id = ? ORDER BY seq').all(sid, id);
+      return { id, before: entries.filter((e) => e.at <= pausedAt), after: entries.filter((e) => e.at > pausedAt) };
+    });
+    check(records.length > 0 && records.every((r) => r.before.length > 0 && r.after.length > 0), 'each resumed child\'s record continues across the pause (clause 1)', records.map((r) => `${r.id}: ${r.before.length} before, ${r.after.length} after`).join('; '));
+    /*
+     * What the model was sent. The last entry a child recorded before the pause can only reach a request made after
+     * it, and the pause stops every agent before its next model step (clause 15), so a request carrying it is the
+     * resumed step. A fragment is looked for as the request body spells it: plain words, no quote, backslash or line.
+     */
+    const traffic = readTraffic('resume').filter((r) => String(r.path ?? '').includes('/chat/completions'));
+    const carried = records.map((r) => {
+      const last = r.before.at(-1);
+      let text = '';
+      try {
+        const message = JSON.parse(last?.body ?? '{}');
+        text = (message.content ?? []).map((part) => part.kind === 'text' ? part.text : part.kind === 'tool-result' ? part.result : part.kind === 'tool-call' ? JSON.stringify(part.args ?? {}) : '').join(' ');
+      } catch { /* an entry that will not parse offers no fragment */ }
+      const fragment = (text.match(/[A-Za-z0-9 ,.:()_-]{24,}/g) ?? []).sort((a, b) => b.length - a.length)[0]?.slice(0, 48) ?? null;
+      return { id: r.id, fragment, sent: fragment === null ? null : traffic.some((t) => String(t.requestBody ?? '').includes(fragment)) };
+    });
+    const unreadable = carried.filter((c) => c.fragment === null);
+    check(carried.filter((c) => c.fragment !== null).every((c) => c.sent), 'each resumed child\'s next request carried what it recorded before the pause (clause 4)', carried.map((c) => `${c.id}: ${c.fragment === null ? 'no plain fragment' : c.sent ? 'carried' : 'NOT carried'}`).join('; '));
+    if (unreadable.length > 0) noted('children whose last entry offered no plain fragment to look for', unreadable.map((c) => c.id).join(', '));
+    rest = { pausedChildren: pausedChildren.length, iteration: iterationPaused?.meta.iteration ?? null, records: records.map((r) => ({ id: r.id, before: r.before.length, after: r.after.length })), carried, shown, iterations };
+  } finally { db.close(); }
+  const notes = ['notes-functions.md', 'notes-tests.md'].map((name) => ({ name, text: existsSync(join(workspace, 'docs', name)) ? readFileSync(join(workspace, 'docs', name), 'utf8') : '' }));
+  check(notes.every((n) => n.text.trim() !== ''), 'both notes were written after the continue', notes.map((n) => `${n.name}: ${n.text.length} chars`).join(', '));
+  results.scenarios.resume = { ...rest, status: read?.session.execution_status, tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output } };
+  if (read) preserveRun('resume', read.session.session_id);
   await budgetGate();
 }
 

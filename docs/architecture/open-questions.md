@@ -4629,7 +4629,12 @@ say what the decline's wording means before the crash is recorded.
 - **The lock.** `Sessions.prompt` tries to re-claim a lock it no longer holds, but it cannot: `resume` returns early for
   a session already live in this process. A probe placed in that branch was never reached on any crash-left path, so
   `continueSession` does not copy it
-  (`docs/defects/a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`).
+  (`docs/defects/fixed/a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`). *Repaired 2026-09-29
+  (R-067), and this bullet reported back in place: every continue — `prompt`, `continueSession` and `planDecision` —
+  now claims the lock before its first write and the run it launches holds it (`holdForContinue`, through the at-rest
+  cancel's `claimLockReaping`), so a crash-left session's continue reaps the dead local holder its crash left, or
+  refuses with REQ-SESSION-048's words while another live process holds the lock. The dead branch in `prompt` is gone.
+  ADR-0005's section "the lock a continue takes back" records the first execution.*
 
 **What a ruling decides.** Whether a crash-left session's strip should draw the two continues in the send pill's place,
 as built, or keep the send pill (REQ-CHAT-005) with the Continue action and the decline in the notices row, since

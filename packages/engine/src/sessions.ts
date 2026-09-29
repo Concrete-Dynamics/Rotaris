@@ -393,6 +393,20 @@ function effectiveRootOf(row: SessionRow): { readonly root: string; readonly bin
 }
 
 /** A bound session whose tree is gone cannot be continued in it; the refusal states which path (REQ-GIT-157: after-acceptance, nothing changed). */
+/** Where a continue leaves the release of a lock it took, for its public entry to call when no run was launched (ADR-0005). */
+interface HoldSlot { release?: () => void }
+
+/**
+ * REQ-SESSION-048's refusal for a session whose lock another process holds, as a load (`Sessions.resume`) and a continue
+ * (`Sessions.holdForContinue`) state it: a holder on this machine is named by its pid, one on another machine by the
+ * machine and when it took the lock, with what this instance cannot establish.
+ */
+function lockHeldRefusal(sessionId: SessionId, thisHost: MachineId, holder: { readonly pid: number; readonly host: string; readonly acquiredAt: string }): { readonly code: string; readonly reason: string } {
+  return holder.host === thisHost
+    ? { code: 'lock-held-local', reason: `Session ${sessionId} is held by another run in this application (pid ${holder.pid}). Finish or stop that run first.` }
+    : { code: 'lock-held-foreign', reason: `Session ${sessionId} is held by a different machine (${holder.host}) since ${holder.acquiredAt}. This instance cannot establish whether that run is still going; explicitly release the lock after resolving why this machine-local store is reachable there.` };
+}
+
 function missingWorktree(row: SessionRow): { readonly code: string; readonly reason: string } | null {
   const binding = parseBinding(row.worktree);
   if (binding && !existsSync(binding.worktree_path)) return { code: 'worktree-missing', reason: `Session ${row.session_id} is bound to the worktree at ${binding.worktree_path}, which no longer exists. Recreate or re-attach the worktree before continuing this session.` };
@@ -943,10 +957,7 @@ export class Sessions {
       log?.close();
       if (opened.error.code === 'no-session') return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
       if (opened.error.code === 'store') return err({ code: 'store', reason: `Session ${sessionId} could not be loaded: ${opened.error.reason}` });
-      const h = opened.error.holder;
-      return err(h.host === this.deps.host
-        ? { code: 'lock-held-local', reason: `Session ${sessionId} is held by another run in this application (pid ${h.pid}). Finish or stop that run first.` }
-        : { code: 'lock-held-foreign', reason: `Session ${sessionId} is held by a different machine (${h.host}) since ${h.acquiredAt}. This instance cannot establish whether that run is still going; explicitly release the lock after resolving why this machine-local store is reachable there.` });
+      return err(lockHeldRefusal(sessionId, this.deps.host, opened.error.holder));
     }
     const writer = opened.value;
     const owner = new ProjectionOwner({
@@ -1102,7 +1113,15 @@ export class Sessions {
 
   /** REQ-SESSION-114..116: append first, then continue through the ordinary Run lifecycle. */
   prompt(sessionId: SessionId, prompt: string, inputs: readonly ImageAttachmentInput[] = []): Result<TranscriptRow, { code: string; reason: string }> {
-    let s = this.live.get(sessionId);
+    // ADR-0005: a lock the continue took is given back when it launches no run; a launched run's teardown releases it.
+    const hold: HoldSlot = {};
+    const r = this.promptHeld(sessionId, prompt, inputs, hold);
+    if (!r.ok) hold.release?.();
+    return r;
+  }
+
+  private promptHeld(sessionId: SessionId, prompt: string, inputs: readonly ImageAttachmentInput[], hold: HoldSlot): Result<TranscriptRow, { code: string; reason: string }> {
+    const s = this.live.get(sessionId);
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
     const storeFailure = storeFailureOf(s.dal, s.writer);
     if (storeFailure !== null) return err({ code: 'store-failed', reason: `The workspace store requires recovery before continuing work: ${storeFailure}` });
@@ -1115,14 +1134,13 @@ export class Sessions {
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
     const gone = missingWorktree(stored);
     if (gone) return err(gone);
-    const lock = s.dal.getLock(sessionId);
-    if (!lock || lock.pid !== this.deps.pid || lock.host !== this.deps.host) {
-      const reopened = this.resume(s.dal, stored.workspace_root, sessionId);
-      if (!reopened.ok) return reopened;
-      s = this.live.get(sessionId)!;
-    }
     const todo = parseTodoDocument(stored);
     if (!todo.ok) return todo;
+    // ADR-0005: the lock is taken back before the first write, and the run launched below holds it (`holdForContinue`).
+    // This replaces a re-claim through `resume`, which returns at once for a session live here and so claimed nothing.
+    const held = this.holdForContinue(s);
+    if (!held.ok) return held;
+    hold.release = held.value.release;
     const payload = buildContinuationPayload(s.dal, stored, prompt, todo.value);
     const attachments = persistAttachments(this.deps.sessionFilesDir(s.dal, sessionId), inputs);
     if (!attachments.ok) return err({ code: 'attachment-invalid', reason: attachments.reason });
@@ -1661,16 +1679,50 @@ export class Sessions {
    * and `store_failed` when the store could not be read or written to take it, where no other process is involved.
    */
   private lockForWrite(dal: StoreDal, sid: SessionId, warn: (m: string) => void): { readonly release: () => void } | { readonly refusal: ControlRefusal } {
+    const hold = this.claimHold(dal, sid, warn);
+    if ('release' in hold) return hold;
+    if ('holder' in hold) return { refusal: { code: 'session_locked', message: 'Another process holds this session, so the agent was not cancelled.' } };
+    warn(`taking the lock of ${sid} for a cancel failed: ${hold.failure}`);
+    return { refusal: { code: 'store_failed', message: `The workspace store could not take this session's lock, so the agent was not cancelled: ${hold.failure}` } };
+  }
+
+  /**
+   * ADR-0005, REQ-SESSION-047/048/083: the lock a continue writes and runs under. Every run releases the session's lock at
+   * its teardown while the session stays live in this process, so a continue by message (`prompt`), the Continue action
+   * and the message-limit resolution (`continueSession`) and a plan decision (`planDecision`) each take it back before
+   * their first write — reaping a dead local holder once, as a load does — and the run they launch holds it until its own
+   * teardown releases it. A lock this process already holds (a session loaded here, or held at the plan gate) is kept. A
+   * lock another live process holds refuses the continue with REQ-SESSION-048's words and nothing written; a store that
+   * could not be read or written to take it refuses as the load does (`store`). `release` gives back only a lock this
+   * call took, for a continue that ends without launching a run (the repair of
+   * `a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md` and
+   * `a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`, R-067).
+   */
+  private holdForContinue(s: Live): Result<{ readonly release: () => void }, { readonly code: string; readonly reason: string }> {
+    const sid = s.writer.sessionId;
+    const warn = (m: string) => { s.log?.warn(m); this.deps.warn(m); };
+    const hold = this.claimHold(s.dal, sid, warn);
+    if ('release' in hold) return ok(hold);
+    if ('holder' in hold) return err(lockHeldRefusal(sid, this.deps.host, hold.holder));
+    return err({ code: 'store', reason: `Session ${sid} could not be continued: its lock could not be taken (${hold.failure})` });
+  }
+
+  /**
+   * The one claim of a live session's lock outside a load (ADR-0005): kept when this process already holds it, taken
+   * through `claimLockReaping` (the one copy of REQ-SESSION-047's reap) otherwise, with a `release` that gives back only
+   * what this call took; the holder when another process keeps it; the store's failure when it could not be read or
+   * written.
+   */
+  private claimHold(dal: StoreDal, sid: SessionId, warn: (m: string) => void): { readonly release: () => void } | { readonly holder: { readonly pid: number; readonly host: string; readonly acquiredAt: string } } | { readonly failure: string } {
     const { pid, host } = this.deps;
     try {
       const held = dal.getLock(sid);
       if (held && held.pid === pid && held.host === host) return { release: () => undefined };
       const claimed = claimLockReaping(dal, sid, pid, host, toIsoUtc(this.deps.clocks.wall.instant()), this.deps.isProcessAlive ?? (() => true));
-      if (!claimed.claimed) return { refusal: { code: 'session_locked', message: 'Another process holds this session, so the agent was not cancelled.' } };
-      return { release: () => { try { dal.releaseLock(sid, pid, host); } catch (cause) { warn(`releasing the lock of ${sid} after a cancel failed: ${String(cause)}`); } } };
+      if (!claimed.claimed) return { holder: { pid: claimed.holder.pid, host: claimed.holder.host, acquiredAt: claimed.holder.acquired_at } };
+      return { release: () => { try { dal.releaseLock(sid, pid, host); } catch (cause) { warn(`releasing the lock of ${sid} failed: ${String(cause)}`); } } };
     } catch (cause) {
-      warn(`taking the lock of ${sid} for a cancel failed: ${String(cause)}`);
-      return { refusal: { code: 'store_failed', message: `The workspace store could not take this session's lock, so the agent was not cancelled: ${String(cause)}` } };
+      return { failure: String(cause) };
     }
   }
 
@@ -1738,6 +1790,14 @@ export class Sessions {
    * writer, as the continue by message (`prompt`) and the plan decision are (OQ-103).
    */
   continueSession(sessionId: SessionId, action: 'continue' | 'double' | 'cancel', opts: { readonly withoutPaused?: boolean } = {}): Result<{ readonly resumed: boolean; readonly messageLimit: number | null }, { readonly code: string; readonly reason: string }> {
+    // ADR-0005: a lock the continue took is given back when it launches no run; a launched run's teardown releases it.
+    const hold: HoldSlot = {};
+    const r = this.continueSessionHeld(sessionId, action, opts, hold);
+    if (!(r.ok && r.value.resumed)) hold.release?.();
+    return r;
+  }
+
+  private continueSessionHeld(sessionId: SessionId, action: 'continue' | 'double' | 'cancel', opts: { readonly withoutPaused?: boolean }, hold: HoldSlot): Result<{ readonly resumed: boolean; readonly messageLimit: number | null }, { readonly code: string; readonly reason: string }> {
     const s = this.live.get(sessionId);
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
     const storeFailure = storeFailureOf(s.dal, s.writer);
@@ -1752,6 +1812,10 @@ export class Sessions {
     if (busyLeft && this.liveness(s.dal, sessionId) !== 'not-live') return err({ code: 'run-active', reason: `Session ${sessionId} is still marked ${stored.execution_status}, and the process that ran it may still be running it.` });
     const crashLeft = busyLeft || stored.execution_status === 'interrupted';
     if (!atLimit && !crashLeft && stored.execution_status !== 'paused') return err({ code: 'not-paused', reason: `Session ${sessionId} is not paused (${stored.execution_status}).` });
+    // ADR-0005: the lock is taken back before the first write — the resolution's own, or the run's (`holdForContinue`).
+    const held = this.holdForContinue(s);
+    if (!held.ok) return held;
+    hold.release = held.value.release;
     let limit = stored.message_limit;
     if (atLimit) {
       if (action === 'cancel') {
@@ -1871,6 +1935,14 @@ export class Sessions {
    * that was settled.
    */
   planDecision(sessionId: SessionId, decision: PlanDecision, changes = ''): Result<{ readonly relaunched: boolean; readonly cycle: number }, { readonly code: string; readonly reason: string }> {
+    // ADR-0005: a lock the decision took is given back when it launches no run; a launched run's teardown releases it.
+    const hold: HoldSlot = {};
+    const r = this.planDecisionHeld(sessionId, decision, changes, hold);
+    if (!(r.ok && r.value.relaunched)) hold.release?.();
+    return r;
+  }
+
+  private planDecisionHeld(sessionId: SessionId, decision: PlanDecision, changes: string, hold: HoldSlot): Result<{ readonly relaunched: boolean; readonly cycle: number }, { readonly code: string; readonly reason: string }> {
     const s = this.live.get(sessionId);
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
     const storeFailure = storeFailureOf(s.dal, s.writer);
@@ -1883,6 +1955,10 @@ export class Sessions {
     const cycle = stored.plan_cycle;
     const row = s.dal.planCycle(sessionId, cycle);
     if (!row) return err({ code: 'no-cycle', reason: `Session ${sessionId} has no record of plan cycle ${cycle}.` });
+    // ADR-0005: the lock is taken back before the first write — the gate's resolution, or the relaunched run's.
+    const held = this.holdForContinue(s);
+    if (!held.ok) return held;
+    hold.release = held.value.release;
     // REQ-ORCH-154: "the edited text is the plan the run carries out".
     const text = row.edited ?? row.plan;
     if (decision === 'cancel') {

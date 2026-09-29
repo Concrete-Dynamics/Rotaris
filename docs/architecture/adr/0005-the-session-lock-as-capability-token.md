@@ -544,6 +544,12 @@ status is active and no live holder can be shown, and reaps nothing (`REQ-SESSIO
 app the resumed session's lock was claimed by the second process, held through the continued run, and
 released by its teardown: `session_locks` was empty at exit.
 
+*Corrected 2026-09-29 (R-067): "held through the continued run" was true of the **first** continue after a load only.
+That teardown released the lock while the session stayed loaded in the same process, and no later continue there took it
+back — `prompt`'s re-claim went through `resume`, which returns at once for a session already live, and the Continue
+action and the plan decision claimed nothing — so every run after a process's first ran with no lock row. The claim is
+kept as it was measured; what the later continue does now is the section "the lock a continue takes back" below.*
+
 **Found: nothing in this record.**
 
 ## First execution — 2026-09-06, the explicit repair on demand (Part U)
@@ -579,3 +585,27 @@ because the lock is the capability that authorises writing the session's rows (t
 not write a session's rows without holding its lock"); what the requirement's ordering exists to forbid — the release
 preceding the status — holds. The alternative, an entry written after the release, would be a row written without the
 lock, which this record forbids outright.
+
+## First execution — 2026-09-29, the lock a continue takes back
+
+*Recorded under R-067; the repair of `../../defects/fixed/a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md`
+and `../../defects/fixed/a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`.*
+
+**Built and run:** "the lock is still the capability … the run host must not write a session's rows without holding its
+lock" now holds for every run in a process, not only its first. A continue — by message (`Sessions.prompt`), the
+Continue action and the message-limit resolution (`continueSession`), a plan decision (`planDecision`) — claims the lock
+before its first write (`holdForContinue`): kept when this process already holds it, taken through `claimLockReaping`
+(REQ-SESSION-047's one reap, the claim `SessionWriter.open` makes) otherwise, and refused with `resume`'s REQ-SESSION-048
+words and nothing written while another live process holds it (REQ-SESSION-083: "does not steal the holder's lock").
+The run it launches holds the lock until its own teardown releases it; a continue that launches no run gives back what it
+took. The claim is one function beside the at-rest cancel's (`claimHold`, which `lockForWrite` now calls). Pinned by
+five tests in `session-resume.test.ts` (a second and a third run each hold the row; the Continue action, and its
+`cancel` giving the lock back; a live local and a foreign holder refused with nothing written; a dead local holder
+reaped; a loaded session's lock kept) and one in `run/plan-gate.test.ts` (a plan decision refused under a live holder
+and holding the lock once free). In the built app, `part-j-proof`'s pause scenario now samples the store every 50 ms
+from a worker thread while the app runs: the pause's teardown left no lock row, and every sample of the continued run
+while active named this process's pid. On the code before the repair the same proof failed with the continued run
+`running` and no lock row.
+
+**Found: the claim this record made on 2026-09-05 was true of a process's first continue only** — corrected in place
+above, with its measurement kept. Nothing in the decision moves.

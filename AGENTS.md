@@ -30,7 +30,7 @@ wrong.
 | Area | Script | What it measures |
 |---|---|---|
 | **The run** | `part-h-proof` | the loop supervisor and `continue` (ADR-0059) |
-| | `part-j-proof` | the control channel: a queued message at the iteration boundary, a steer, a graceful pause, the message-limit pause |
+| | `part-j-proof` | the control channel: a queued message at the iteration boundary, a steer, a graceful pause (and the session lock the Continue holds for its run, sampled while the app runs), the message-limit pause |
 | | `plan-gate-proof` | the plan gate held, edited, answered (ADR-0062) |
 | | `resilience-proof` | the model ladder, the waits, the fallbacks, against scripted faults; its `override` launch addresses a native `<select>` the wait header no longer draws, and **as root on Linux that launch outlived its 180 s timeout: SIGTERM did not end it, it was alive 649 s in, and only a SIGKILL from outside ended it** — expect to kill it (`docs/defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md`) |
 | | `compression-proof` | context compression and its timeline entries (ADR-0060) |

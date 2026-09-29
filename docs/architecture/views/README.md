@@ -57,7 +57,7 @@ repairs `the-run-level-agent-is-known-by-its-entry-persona-alone.md`. The **runt
 role's snapshot fields (`entryContext`, `entryTools`, `artifacts`) says so. No package, edge, process, channel, message
 kind, command or store column changed.
 
-**A steering prompt pending at a rest is kept (REQ-MONITOR-134 with PD-ORCH-005 clause 4, OQ-127, 2026-09-29, R-067).**
+**A steering prompt pending at a rest is kept (REQ-MONITOR-134 with PD-ORCH-005 clause 4, OQ-128, 2026-09-29, R-067).**
 `Run.turn`'s rest delivers every prompt still pending for a `paused` agent with a record into that record, as the marked
 message its next step would have injected, marked injected once (`deliverSteeringAtRest`); a child resumed `summarizing`
 whose record ends on one resumes `running` (`IterationChildren.resumePaused`). Steering closes once no agent takes another

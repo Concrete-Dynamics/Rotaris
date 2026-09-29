@@ -117,7 +117,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: false });
   });
 
-  it('REQ-MONITOR-133 with OQ-127 (found by the third review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): once the plan cycle\'s turn has returned a steer is refused while the park is still forwarded, not acknowledged for a step no agent of the held run takes', async () => {
+  it('REQ-MONITOR-133 with OQ-128 (found by the third review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): once the plan cycle\'s turn has returned a steer is refused while the park is still forwarded, not acknowledged for a step no agent of the held run takes', async () => {
     let release!: () => void;
     const parkHold = new Promise<void>((r) => { release = r; });
     let parking = false;
@@ -138,7 +138,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
    * not delivered because "the run was held at the plan gate" — a gate that never opened. Only the park names the gate; an
    * end that takes teardown is recorded by teardown's own close, as the run ending.
    */
-  for (const how of ['stopped', 'quit', 'failed'] as const) it(`REQ-MONITOR-134 with OQ-127: a steer pending when the plan cycle's turn is ${how === 'failed' ? 'ended by a failed model step' : `${how} while its call runs`} is recorded as not delivered because the run ended, never as held at a plan gate that did not open`, async () => {
+  for (const how of ['stopped', 'quit', 'failed'] as const) it(`REQ-MONITOR-134 with OQ-128: a steer pending when the plan cycle's turn is ${how === 'failed' ? 'ended by a failed model step' : `${how} while its call runs`} is recorded as not delivered because the run ended, never as held at a plan gate that did not open`, async () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
     let calling = false;

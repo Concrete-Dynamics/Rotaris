@@ -2463,7 +2463,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(byName(sid, 'work')).toMatchObject({ state: 'paused', resume_state: 'running' });
     });
 
-    it('REQ-MONITOR-133 with OQ-127 (found by the second review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): once the rest is recorded a steer is refused, while the open iteration still waits on a blocking consumer and before teardown begins', async () => {
+    it('REQ-MONITOR-133 with OQ-128 (found by the second review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): once the rest is recorded a steer is refused, while the open iteration still waits on a blocking consumer and before teardown begins', async () => {
       let releaseDrain!: () => void;
       const drainHold = new Promise<void>((r) => { releaseDrain = r; });
       let holding = false;
@@ -2486,7 +2486,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(byName(sid, 'work')).toMatchObject({ state: 'paused', resume_state: 'running' });
     });
 
-    it('REQ-MONITOR-133 with OQ-127 (found by the review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): once the run\'s teardown has begun a steer is refused, not acknowledged for a step no agent will take', async () => {
+    it('REQ-MONITOR-133 with OQ-128 (found by the review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): once the run\'s teardown has begun a steer is refused, not acknowledged for a step no agent will take', async () => {
       let releaseHook!: () => void;
       const hookHold = new Promise<void>((r) => { releaseHook = r; });
       let ending = false;

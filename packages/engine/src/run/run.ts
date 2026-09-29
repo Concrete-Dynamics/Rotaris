@@ -423,7 +423,7 @@ export class Run {
   /** REQ-MONITOR-133/134: pending steering per conversation (`root` for the entry role, the task id for a child). */
   private readonly steering = new Map<string, { id: string; text: string }[]>();
   /**
-   * REQ-MONITOR-133 with OQ-127: set once no agent of this run will take another step — when the iteration's rest is
+   * REQ-MONITOR-133 with OQ-128: set once no agent of this run will take another step — when the iteration's rest is
    * recorded (after `deliverSteeringAtRest`), or when the run stops stepping (`closeSteering`: teardown, the pause at the
    * message limit, the park at the plan gate) — so a later steer is refused rather than acknowledged for a step nothing
    * would take.
@@ -1376,7 +1376,7 @@ export class Run {
           // REQ-MONITOR-134 with clause 4: a steering prompt still pending reaches the record its agent resumes from.
           this.deliverSteeringAtRest({ taskId: rootTaskId, name: rootName }, iteration, this.restCause);
         }
-        // OQ-127: the rest is recorded and no agent of this run takes another step, so no steer is accepted from here — one
+        // OQ-128: the rest is recorded and no agent of this run takes another step, so no steer is accepted from here — one
         // acknowledged now would reach no record while its agent sits `paused`, to resume on the continue without it.
         this.steeringClosed = true;
       } else if (children) {
@@ -1474,7 +1474,7 @@ export class Run {
    * carry on from: as the marked message its next step would have injected, after the answers to the calls the rest cut,
    * and marked injected then, once. The resumed agent reads it at its first step. A prompt for an agent with no record — a
    * child that never started — stays pending, and the run's end reports it not delivered (`closeSteering`,
-   * OQ-127). Once this has run, the rest closes steering: a steer after it is refused.
+   * OQ-128). Once this has run, the rest closes steering: a steer after it is refused.
    */
   private deliverSteeringAtRest(root: { readonly taskId: string; readonly name: string }, iteration: number, cause: Interruption | null): void {
     for (const [key, pending] of [...this.steering]) {
@@ -1495,7 +1495,7 @@ export class Run {
   }
 
   /**
-   * REQ-MONITOR-133/134 at the run's end (OQ-127): no steer is accepted from here, and a prompt no step injected and no rest
+   * REQ-MONITOR-133/134 at the run's end (OQ-128): no steer is accepted from here, and a prompt no step injected and no rest
    * delivered — its agent never started, ended first, or was cancelled — is recorded as not delivered: a
    * `steering_not_delivered` timeline entry and a transcript line, so an acknowledged submission is never lost without a
    * word. The specification has no word for such a prompt; the entry takes REQ-MONITOR-134's "delivered".
@@ -1664,7 +1664,7 @@ export class Run {
     const { writer, owner, bus } = this.deps;
     const count = this.iterationsCompleted;
     this.pausedAtLimit = { count, limit };
-    // REQ-MONITOR-133/134 with OQ-127: no agent of this run steps again, so steering closes before anything is awaited and
+    // REQ-MONITOR-133/134 with OQ-128: no agent of this run steps again, so steering closes before anything is awaited and
     // a prompt still pending — for the entry role, whose iteration has closed — is recorded as not delivered.
     this.closeSteering('the run paused at the message limit');
     writer.appendRow('system', `Paused: ${count} message${count === 1 ? '' : 's'} reached the limit of ${limit}. Continue, double the limit, or cancel the run.`, true);
@@ -1754,7 +1754,7 @@ export class Run {
       return await this.teardown('agent_session_aborted');
     }
     /*
-     * REQ-MONITOR-133/134 with OQ-127: the run parks, and no agent of it steps again — the gate's release starts the next
+     * REQ-MONITOR-133/134 with OQ-128: the run parks, and no agent of it steps again — the gate's release starts the next
      * run — so steering closes here, as the park begins and before anything is awaited, and a prompt still pending is
      * recorded as not delivered because the run was held at the plan gate. Only here, on the path that parks: the close
      * sat above the two branches that end the run instead, and named a gate that never opened for a stopped cycle or a
@@ -1961,7 +1961,7 @@ export class Run {
     // from here. Each is closed before anything terminal is written: a call still open settles now, and one that returns
     // later writes nothing through its gate into the finished session, or into a later run's.
     this.closePorts();
-    // REQ-MONITOR-133/134 with OQ-127: no agent takes another step from here, so steering closes before anything is awaited
+    // REQ-MONITOR-133/134 with OQ-128: no agent takes another step from here, so steering closes before anything is awaited
     // — a steer while the hooks run is refused, not acknowledged for nothing to deliver — and what is still pending is
     // recorded as not delivered.
     this.closeSteering();

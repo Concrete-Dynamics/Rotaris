@@ -192,7 +192,7 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     expect(dal.getSession(sid)!.paused_at_count).not.toBeNull();
   });
 
-  it('REQ-MONITOR-133/134 with OQ-127 (found by the third review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): a root steer still pending at the message-limit pause is recorded as not delivered, and a steer once the pause is reached is refused', async () => {
+  it('REQ-MONITOR-133/134 with OQ-128 (found by the third review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): a root steer still pending at the message-limit pause is recorded as not delivered, and a steer once the pause is reached is refused', async () => {
     let releaseEnd!: () => void;
     const endHold = new Promise<void>((r) => { releaseEnd = r; });
     let releasePause!: () => void;

@@ -44,7 +44,7 @@ dropped without a word, and never delivered after the continue — this note's o
 had not reached, since neither end calls teardown. The plan-gate park had the same gap.) (The first build closed steering only at the end of teardown, and called the undelivered prompt "withdrawn";
 its review found a steer submitted after the rest, while teardown ran its hooks, acknowledged and never delivered to the
 paused agent it named, and the glossary's "withdrawn" is an approval's or a question's, not a prompt's.) The reading,
-and what it leaves to a ruling, is [OQ-127](../../architecture/open-questions.md).
+and what it leaves to a ruling, is [OQ-128](../../architecture/open-questions.md).
 
 Evidence: `packages/engine/src/children/children.test.ts`, two cases under "PD-ORCH-005 phase 3": steering the paused
 child, the waiting root and a child that never started, then pausing, leaves the first two records ending on their

@@ -1142,7 +1142,7 @@ card and injected; Pause then the composer's Continue run leave the pause row an
 sampling the store while the app runs shows the pause released the lock and the continued run held it throughout
 (ADR-0005, 2026-09-29, R-067) and the paused session's summary naming no stop (REQ-ORCH-082 rule 1, OQ-118); a steer
 submitted while the entry role's step is held, then a pause, reaches the root's record at the rest, injected once, and
-the Continue's resumed root reads it (REQ-MONITOR-134, OQ-127, 2026-09-29, R-067); a `message_limit`
+the Continue's resumed root reads it (REQ-MONITOR-134, OQ-128, 2026-09-29, R-067); a `message_limit`
 of one pauses the run, the dialog answers "double" and the doubled limit persists; a session left paused at the limit
 is resumed on relaunch through the one reap and its dialog answers "cancel"; a user-initiated close during a run
 records `application_shutdown` with the terminal pair and no lock. Its evidence lands under `.proof/part-j-proof/`. The queue

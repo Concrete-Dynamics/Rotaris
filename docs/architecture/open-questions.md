@@ -5612,13 +5612,13 @@ run. The reading built says it does not — the last three messages that carry t
 with tool-only steps between them now declare a loop where the code before the repair, which compared the last three
 events whatever they held, did not.
 
-**OQ-127 — What becomes of a steering prompt still pending when the run comes to rest, or ends?** *(REQ-MONITOR-133, "the
+**OQ-128 — What becomes of a steering prompt still pending when the run comes to rest, or ends?** *(REQ-MONITOR-133, "the
 prompt is pending until injected"; REQ-MONITOR-134, "all pending steering prompts for an agent are delivered into its
 conversation … marked injected exactly once"; REQ-MONITOR-136; REQ-ORCH-094; `PD-ORCH-005` clauses 2 and 4. Raised
 2026-09-29 by the repair of
 [`a-steering-prompt-pending-at-a-rest-is-lost.md`](../defects/fixed/a-steering-prompt-pending-at-a-rest-is-lost.md)
-under [R-067](../product/requests.md#r-067). Open. Raised as OQ-122 and renumbered OQ-127 at the merge, main having
-taken OQ-122 to OQ-126.)*
+under [R-067](../product/requests.md#r-067). Open. Raised as OQ-122, renumbered OQ-127 when main had
+taken OQ-122 to OQ-126, and renumbered OQ-128 at the merge, OQ-127 having been taken on `main` meanwhile.)*
 
 A prompt is pending until the step of its agent that injects it. Clause 2 stops every agent before its next model step,
 so a prompt submitted while its agent's step or call was under way, and still pending at the pause, a stop or a quit,

@@ -947,6 +947,9 @@ and deliberately not repaired here. The row is in
 
 ### PD-MONITOR-001 — a cost the provider reported is carried and shown under its own qualifier
 
+*Revision 3 (2026-09-29, [R-067](requests.md#r-067)) — **the floor**: ESC-42's ruling carried into the rendering of a
+figure with no currency, below. The label table is unchanged.*
+
 *Revision 2 (2026-09-23, [R-049](requests.md#r-049)) — **configured rates price a request the provider did
 not**, below. Revision 1 (2026-09-16, [R-026](requests.md#r-026)) is quoted where it is replaced, never
 deleted. A changed directive takes a revision and never a new number ([`README.md`](README.md)).*
@@ -986,9 +989,20 @@ The qualifier is recorded with the total, so a label read back later is the labe
 > undecided (OQ-21, ADR-0031). Both are now decided: prices are decimal strings, and multiplying a decimal
 > by a whole token count is exact in `money.ts`'s representation with no library.
 
-A figure whose currency the provider does not name SHALL be rendered as the amount alone, under the
-rounding of `REQ-PROVIDER-121` — half-up, two decimal places, four below one hundredth — and SHALL NOT
-be given a currency symbol the product chose for it.
+A figure whose currency the provider does not name SHALL be rendered as the amount alone, under
+`REQ-PROVIDER-121`'s rule — half-up, two decimal places, four below one hundredth, and the floor `< 0.0001` for an
+amount greater than zero that would otherwise read as zero — and SHALL NOT be given a currency symbol the product
+chose for it (revision 3). The floor fills a label's `<amount>` as any rendered figure does, so the table above is
+unchanged: a run whose priced requests came to more than zero and less than 0.00005 reads `< 0.0001 at configured
+rates`, `< 0.0001 reported by the provider`, or `at least < 0.0001; some requests have no price`, and each of those is
+true. The figure recorded with the qualifier is the exact one; the floor is rendering only.
+
+> **Revision 2 said, and no longer governs:** "A figure whose currency the provider does not name SHALL be rendered as
+> the amount alone, under the rounding of `REQ-PROVIDER-121` — half-up, two decimal places, four below one hundredth —
+> and SHALL NOT be given a currency symbol the product chose for it." Under that rounding a run priced at more than
+> zero and less than 0.00005 read `0.0000 at configured rates`: a figure that says it was priced and reads as nothing,
+> which `REQ-SHELL-045` says never happens. ESC-42 was ruled option (b) on 2026-09-29, and `REQ-PROVIDER-121` now
+> carries the floor this sentence restates.
 
 **Why.** Observed live 2026-09-16, run `a26918e8` (logged as [R-026](requests.md#r-026)): a whole run
 against a metered provider, `cost` = `"0"`, the label reading *"price not established"*. That is
@@ -1060,7 +1074,7 @@ adding to it.
 > **Narrows:** REQ-MONITOR-166, REQ-PROVIDER-121
 
 *Raised by the owner, 2026-09-16; logged as [R-026](requests.md#r-026). Revised 2026-09-23; logged as
-[R-049](requests.md#r-049).*
+[R-049](requests.md#r-049). Revision 3, 2026-09-29, logged as [R-067](requests.md#r-067) with the ruling of ESC-42.*
 
 > **First execution, 2026-09-16, the day it was raised:** it found the reading half harder than the
 > asking half, and the corpus friendlier than expected. The SDK's usage mapping keeps the token fields

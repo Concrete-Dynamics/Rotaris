@@ -1388,7 +1388,9 @@ export class Run {
     const list = this.steering.get(key) ?? [];
     list.push({ id, text });
     this.steering.set(key, list);
-    this.deps.writer.appendTimeline('steering_submitted', 'user', `A steering prompt was submitted for ${key === 'root' ? this.rootName : key} (${id.slice(0, 8)}).`, { prompt_id: id, agent: key });
+    // Named as its injection names it: the root by `rootName`, a child by its instance name (the metadata keeps the key).
+    const who = key === 'root' ? this.rootName : this.children?.ledger.get(key)?.canonical_name ?? key;
+    this.deps.writer.appendTimeline('steering_submitted', 'user', `A steering prompt was submitted for ${who} (${id.slice(0, 8)}).`, { prompt_id: id, agent: key });
     return id;
   }
   private steeringFor(conversationId: string): () => readonly { id: string; text: string }[] {

@@ -1315,6 +1315,10 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const toOne = steer(byName(sid, 'one').task_id, 'go left');
       const toRoot = steer('run', 'mind the tests');
       const toTwo = steer(byName(sid, 'two').task_id, 'hurry');
+      // Each submission names its agent as its injection does: a child by its instance name, not its task id.
+      const submitted = (id: string) => dal.timelineOf(sid).find((t) => t.name === 'steering_submitted' && (JSON.parse(t.metadata) as { prompt_id: string }).prompt_id === id)!.message;
+      expect(submitted(toOne)).toMatch(/^A steering prompt was submitted for one \(/);
+      expect(submitted(toTwo)).toMatch(/^A steering prompt was submitted for two \(/);
       expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
       release();
       expect((await sessions.running(sid)!).status).toBe('interrupted');

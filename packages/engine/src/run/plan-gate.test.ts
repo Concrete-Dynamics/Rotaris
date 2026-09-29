@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -115,6 +115,21 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     const result = await sessions.running(sid)!;
     expect(result.execution_status).toBe('awaiting_plan_decision');
     expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: false });
+  });
+
+  it('REQ-MONITOR-133 with OQ-122 (found by the third review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): once the plan cycle\'s turn has returned a steer is refused while the park is still forwarded, not acknowledged for a step no agent of the held run takes', async () => {
+    let release!: () => void;
+    const parkHold = new Promise<void>((r) => { release = r; });
+    let parking = false;
+    const sessions = sessionsWith(scripted([answer('Step 1: do it.')]).backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    // REQ-EVENTS-165: the park's drain waits on this consumer once the gate is recorded, before the run has ended.
+    sessions.bus.attach(sid, { mode: 'blocking', deliver: () => { if (dal.timelineOf(sid).some((t) => t.name === 'plan_gate_opened')) { parking = true; return parkHold; } return undefined; } });
+    await vi.waitFor(() => { expect(parking).toBe(true); });
+    expect(sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: 'run', text: 'mind the tests' } })).toEqual({ ok: false });
+    release();
+    expect((await sessions.running(sid)!).execution_status).toBe('awaiting_plan_decision');
+    expect(dal.timelineOf(sid).filter((t) => t.name.startsWith('steering_'))).toEqual([]);
   });
 
   it('PD-ORCH-003 revision 2: a continue that resumes an open iteration runs it without holding, and with no new work after it no plan cycle opens', async () => {

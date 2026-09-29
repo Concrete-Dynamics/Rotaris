@@ -49,8 +49,9 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 `Run.turn`'s rest delivers every prompt still pending for a `paused` agent with a record into that record, as the marked
 message its next step would have injected, marked injected once (`deliverSteeringAtRest`); a child resumed `summarizing`
 whose record ends on one resumes `running` (`IterationChildren.resumePaused`). Steering closes once no agent takes another
-step — when the rest is recorded, or when teardown begins — so a later steer is refused; teardown records what is left as
-not delivered (`reportUndeliveredSteering`: a `steering_not_delivered` entry and a transcript line). This repairs
+step — when the rest is recorded, when teardown begins, at the message-limit pause or at the plan-gate park — so a later
+steer is refused; that close records what is left as not delivered (`closeSteering`: a `steering_not_delivered` entry and
+a transcript line naming the end). This repairs
 `a-steering-prompt-pending-at-a-rest-is-lost.md`. The **runtime view**'s §5 steer row says so. No package, edge, process,
 channel, message kind or store column changed.
 

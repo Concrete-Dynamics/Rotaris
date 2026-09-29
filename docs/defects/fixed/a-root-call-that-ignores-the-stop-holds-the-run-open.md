@@ -30,16 +30,28 @@ rest detaches a child execution. Its turn's `detached` reads true, so when its c
 (REQ-SESSION-094). A stop or a quit leaves it `paused` with its open call answered as interrupted (`answerOpenCalls`).
 Under the explicit cancel the iteration closes `cancelled` and that call is answered as cut off, naming no rest
 (`answerOpenCalls` now takes a null cause; OQ-96's "A call cut by no rest"), so no row is left `running`
-(REQ-SESSION-129). The children's rest that follows is given what is left of the grace, which is none
-(`IterationChildren.rest(cause, grace)`): every child execution was aborted by the same request, so the one 30 s bounds
-the root and the children together instead of the root's 30 s and then a second 30 s for the children.
+(REQ-SESSION-129). The children's rest that follows is given what is left of the grace, counted from the same first
+request (`Run.stopGraceLeft`, passed to `IterationChildren.rest(cause, grace)`): none after a root given up on, and one
+second after a root that returned at 29 s. Every child execution was aborted by the same request, so the one 30 s bounds
+the root and the children together instead of the root's time and then a second 30 s for the children. *As first built
+the rest was given none only after a root given up on and a fresh 30 s otherwise, so a root that returned just short of
+the grace still let the stop take about 60 s, which the record above already claimed prevented (found by the verifier
+of this repair, 2026-09-29).* Under the explicit cancel, what still executes beside the root is detached with it once
+the records are settled (`IterationChildren.outlast`), so a child's step or call that ignored the cancel writes nothing
+into the finished session either, and a root given up on still drains the active background children as REQ-ORCH-080
+asks, bounded by the drain's own timeout (OQ-119). *As first built the explicit cancel settled the children's records
+and left their executions attached, so a child step that ignored the cancel appended its rows and `usage.update` after
+`result`; and the early return of a root given up on skipped the drain (both found by the same verifier).*
 
-Evidence: five cases in `packages/engine/src/children/children.test.ts` ("a root call that ignores the stop no longer
+Evidence: eight cases in `packages/engine/src/children/children.test.ts` ("a root call that ignores the stop no longer
 holds the run open"): a stop ends at 30 s and not at 29 s, releases the lock, leaves the iteration open by `stop` and
 answers the root's call; a stop forced at its first activation still waits the whole grace; a root and a child that both
 ignore the stop end at the one 30 s; the explicit cancel closes the iteration and answers the call as cut off; a call
 that returns after the run ended writes no event, row or record entry. All five failed on the code before the repair
-(the run never ended), and reverting each limb in turn turned exactly its case red. ADR-0014 carries the first
+(the run never ended), and reverting each limb in turn turned exactly its case red. The repair round added three: under
+the explicit cancel a child step beside the root given up on writes nothing when it returns; a root given up on still
+drains a background child and records `background_child_drain_timeout`; a root that returns at 29 s leaves the rest one
+second, so the stop ends at 30 s. All three failed on the first build of this repair. ADR-0014 carries the first
 execution, and OQ-96's bullet "An execution the stop's grace gives up on" is reported back in place.
 
 The tool gate's own writes when the detached call returns were

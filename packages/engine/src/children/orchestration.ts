@@ -414,15 +414,10 @@ export class IterationChildren implements DelegationOps {
     this.beginRest();
     // A stop and a quit have aborted every execution; REQ-SESSION-092's grace bounds how long their ends are awaited. A
     // pause waits for the step in flight, whose own model timeout bounds it (REQ-MONITOR-123). `grace` is what is left of
-    // it: none when the run already spent it waiting for its root (`Run.turn`), so what still executes is detached now.
-    const executions = Promise.allSettled([...this.executing]).then(() => false);
-    if (cause === 'pause') await executions;
-    else if (grace <= 0) this.detached = this.executing.size > 0;
-    else {
-      let timer: TimerHandle | undefined;
-      this.detached = await Promise.race([executions, new Promise<boolean>((r) => { timer = this.deps.clocks.timers.after(grace, () => r(true)); })]);
-      timer?.cancel();
-    }
+    // it, counted from the first stop request (`Run.stopGraceLeft`): none when the run already spent it waiting for its
+    // root, so what still executes is detached now, and never a fresh 30 s after a root that returned late.
+    if (cause === 'pause') await Promise.allSettled([...this.executing]);
+    else await this.outlast(grace);
     // Clause 3: an explicit cancel that arrived meanwhile is final — nothing more is paused; the caller settles the rest.
     if ((this.deps.restCause?.() ?? null) === null) return 0;
     for (const c of this.ledger.all()) {
@@ -889,6 +884,26 @@ export class IterationChildren implements DelegationOps {
     const left = this.ledger.all().filter((c) => !isTerminalChildState(c.state));
     if (left.length > 0) this.deps.writer.recordIssue({ kind: 'background_child_drain_timeout', severity: 'warning', actor: 'rotaris', message: `${left.length} background child(ren) still running after the ${timeoutMs / 1000} s drain: ${left.map((c) => c.canonical_name).join(', ')}.` });
     return left.length;
+  }
+
+  /**
+   * REQ-SESSION-092 / REQ-SESSION-094: every execution in flight — each aborted by the stop — is awaited within `grace`,
+   * what is left of the stop's 30 s, and whatever still executes after that is detached: it streams, settles and records
+   * nothing more when it returns, whatever its record says by then. A rest calls it for a stop or a quit, and `Run.turn`
+   * for a stop that brings the iteration to no rest (the explicit cancel), after `finalize`. Returns whether any execution
+   * was detached.
+   */
+  async outlast(grace: Millis): Promise<boolean> {
+    if (this.executing.size === 0) return false;
+    if (grace <= 0) this.detached = true;
+    else {
+      let timer: TimerHandle | undefined;
+      const executions = Promise.allSettled([...this.executing]).then(() => false);
+      const cut = await Promise.race([executions, new Promise<boolean>((r) => { timer = this.deps.clocks.timers.after(grace, () => r(true)); })]);
+      timer?.cancel();
+      if (cut) this.detached = true;
+    }
+    return this.detached;
   }
 
   /** REQ-ORCH-052: every exit path leaves every record terminal. */

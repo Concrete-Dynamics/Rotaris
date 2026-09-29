@@ -245,10 +245,14 @@ step streams no row, settles none and counts no usage (2026-09-29), and teardown
 writes nothing when its call returns. **The root is bounded the same way (REQ-SESSION-092 / REQ-MONITOR-129, 2026-09-29):**
 `turn()` awaits the root's turn no longer than `stopGraceSpent`, which settles `STOP_GRACE` after the first stop
 request, forced or not. A root still in a call then is detached like a child — its turn's `detached` reads true, so it
-writes nothing when the call returns — and the rest that follows waits for no child execution again
-(`IterationChildren.rest(cause, 0)`: what still executes is detached at once), so a stop ends within the one 30 s. The
-root is left `paused` by a stop or a quit, its open call answered as interrupted; under the explicit cancel its open call
-is answered as cut off, naming no rest. The repair of `a-root-call-that-ignores-the-stop-holds-the-run-open.md`. Every agent the rest leaves paused, the root included, has any call it never
+writes nothing when the call returns — and the rest that follows is given what is left of the grace, counted from the
+same first request (`Run.stopGraceLeft` → `IterationChildren.rest(cause, grace)`: none after a root given up on, so what
+still executes is detached at once), so a stop ends within the one 30 s. The root is left `paused` by a stop or a quit,
+its open call answered as interrupted; under the explicit cancel its open call is answered as cut off, naming no rest. The
+explicit cancel rests nothing: it drains the active background children (REQ-ORCH-080, bounded by the drain's own
+timeout, whether the root returned or was given up on — **OQ-119**) and settles every child record (`finalize`); after a
+root given up on, what still executes beside it is detached with it (`IterationChildren.outlast`, given what is left of
+the grace: none). The repair of `a-root-call-that-ignores-the-stop-holds-the-run-open.md`. Every agent the rest leaves paused, the root included, has any call it never
 returned from or raised out of answered in its record as interrupted, its row settled (`answerOpenCalls`, which the crash
 record uses for a dead run's agents too), so a resume sends a conversation whose every call has its result; a call of
 that step that completed keeps what it returned, read back from its settled row. A rest that finds nothing unfinished closes the iteration as before. The cause is

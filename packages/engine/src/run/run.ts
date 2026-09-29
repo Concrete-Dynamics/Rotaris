@@ -325,6 +325,8 @@ export class Run {
    */
   private readonly stopGraceSpent: Promise<void>;
   private spendStopGrace: (() => void) | null = null;
+  /** When `stopGraceSpent` settles, on the monotonic clock: what is left of the grace is read from it (`stopGraceLeft`). */
+  private stopGraceDeadline: Millis | null = null;
   private iterationsCompleted = 0;
   private initialIterations = 0;
   private lastFailure: string | null = null;
@@ -497,7 +499,11 @@ export class Run {
       // The root's bound: the grace counted from the first request, forced at its first activation or not, so a root that
       // honours the abort a moment after a forced stop still records what its step did.
       const spend = this.spendStopGrace;
-      if (spend !== null) { this.spendStopGrace = null; this.deps.clocks.timers.after(STOP_GRACE, spend); }
+      if (spend !== null) {
+        this.spendStopGrace = null;
+        this.stopGraceDeadline = millis(this.deps.clocks.monotonic.now() + STOP_GRACE);
+        this.deps.clocks.timers.after(STOP_GRACE, spend);
+      }
       if (s.forced || this.hardCancel) return;
       // REQ-SESSION-092 / REQ-MONITOR-129: graceful first; the 30 s deadline hard-cancels and sweeps again.
       this.hardCancel = Budget.begin(this.deps.clocks.monotonic.now(), STOP_GRACE);
@@ -1256,14 +1262,19 @@ export class Run {
         // The turn's end is no longer awaited, so its raise must be handled here or it is an unhandled rejection.
         running.catch(() => undefined);
         this.deps.warn(`iteration ${iteration}: the root ${config.persona} did not return within the stop's 30 s grace and was given up on (REQ-SESSION-092)`);
-        return { status: 'succeeded', text: '', usage: { input: 0, output: 0 } };
+      } else {
+        outcome = settled;
+        this.aggregates.addToolCalls(outcome.toolCallCount);
       }
-      outcome = settled;
-      this.aggregates.addToolCalls(outcome.toolCallCount);
-      // REQ-ORCH-080: a stop with active background children drains before anything is cancelled — only a stop that
-      // cancels them (the explicit cancel); a stop that brings the run to rest leaves them paused (PD-ORCH-005).
+      /*
+       * REQ-ORCH-080: a stop with active background children drains before anything is cancelled — only a stop that
+       * cancels them (the explicit cancel); a stop that brings the run to rest leaves them paused (PD-ORCH-005). A root
+       * given up on drains them as one that returned does: the drain is bounded by its own timeout, not by the stop's
+       * grace (OQ-119).
+       */
       if (children && this.stop.requested && this.restCause === null && children.scheduler.hasNonTerminal) await children.drain(this.deps.drainTimeoutMs ?? millis(120_000));
-      return outcome.report;
+      // A root given up on reports nothing of its own: `iterate` reads the stop before the report (REQ-SESSION-092).
+      return outcome?.report ?? { status: 'succeeded', text: '', usage: { input: 0, output: 0 } };
     } finally {
       /*
        * PD-ORCH-005 clause 2 (narrowing REQ-ORCH-052): an iteration that comes to rest with work unfinished — the root
@@ -1275,9 +1286,10 @@ export class Run {
       /** Whether the root's open calls were answered as interrupted by a rest. */
       let answered = false;
       if (rest !== null && (!rootFinished || (children?.scheduler.hasNonTerminal ?? false))) {
-        // A root given up on has spent the stop's grace, and every child's execution had the same grace beside it: the rest
-        // waits for none of them again, so the stop stays bounded at the one 30 s (REQ-SESSION-092).
-        if (children) { const n = await children.rest(rest, rootDetached ? millis(0) : STOP_GRACE); if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) left paused by ${rest} (PD-ORCH-005)`); }
+        // Every child's execution had the stop's grace beside the root's, counted from the same first request: the rest
+        // is given what is left of it — none after a root given up on, and never a fresh 30 s after a root that returned
+        // late — so the stop stays bounded at the one 30 s (REQ-SESSION-092).
+        if (children) { const n = await children.rest(rest, this.stopGraceLeft()); if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) left paused by ${rest} (PD-ORCH-005)`); }
         /*
          * Clause 3: the explicit cancel is final even when it arrives while the run is coming to rest — the rest waits on
          * every execution, which can take the pause's whole tool deadline. Read again once the rest is done: cancelled
@@ -1298,11 +1310,25 @@ export class Run {
         // REQ-ORCH-052: every exit path from an iteration leaves every child record terminal.
         const n = children.finalize(this.stop.requested ? 'cancelled: the run was stopped while this child was in flight' : 'cancelled during iteration cleanup');
         if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) settled cancelled at exit (REQ-ORCH-052)`);
+        /*
+         * REQ-SESSION-094: a root given up on under the explicit cancel has spent the stop's grace, and so has every child
+         * execution beside it. What still executes is detached with it, so a child's step or call that ignored the
+         * cancel writes nothing into the finished session when it returns.
+         */
+        if (rootDetached && await children.outlast(this.stopGraceLeft())) this.deps.warn(`iteration ${iteration}: child executions still running at the stop's 30 s grace were given up on (REQ-SESSION-092)`);
       }
       // A root given up on that no rest paused — the explicit cancel — still leaves no call row running (REQ-SESSION-129):
       // its open call is recorded cut off, naming no rest (OQ-96, "A call cut by no rest").
       if (rootDetached && !answered && this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: config.persona }, iteration, null);
     }
+  }
+
+  /**
+   * REQ-SESSION-092: what is left of the stop's 30 s grace, counted from the first stop request — the whole of it when no
+   * stop has been requested.
+   */
+  private stopGraceLeft(): Millis {
+    return this.stopGraceDeadline === null ? STOP_GRACE : millis(Math.max(0, this.stopGraceDeadline - this.deps.clocks.monotonic.now()));
   }
 
   /**

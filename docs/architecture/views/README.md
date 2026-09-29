@@ -55,8 +55,9 @@ package, edge, process, channel, message kind or store column changed.
 **A root call that ignores the stop no longer holds the run open (REQ-SESSION-092, REQ-MONITOR-129, REQ-SESSION-094,
 2026-09-29, R-067).** `Run.turn` awaits the root's turn no longer than the stop's 30 s grace, counted from the first
 stop request (`stopGraceSpent`); a root still in a call then is detached as a child execution is, left `paused` by a
-stop or a quit with its open call answered, and the rest that follows gives the children none of the grace again
-(`IterationChildren.rest`'s `grace`). This repairs `a-root-call-that-ignores-the-stop-holds-the-run-open.md`. The
+stop or a quit with its open call answered, and the rest that follows gives the children only what is left of that
+grace (`Run.stopGraceLeft`, `IterationChildren.rest`'s `grace`). Under the explicit cancel a root given up on still
+drains (REQ-ORCH-080, OQ-119), and what still executes past the grace is detached (`IterationChildren.outlast`). This repairs `a-root-call-that-ignores-the-stop-holds-the-run-open.md`. The
 **runtime view**'s §2 says so. No package, edge, process, channel, message kind or store column changed.
 
 **A continue in the process that ran the session takes the lock back (ADR-0005, REQ-SESSION-047/048/083, 2026-09-29,

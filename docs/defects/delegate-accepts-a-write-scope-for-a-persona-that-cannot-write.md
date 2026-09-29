@@ -6,7 +6,7 @@ report can still read `succeeded` over its own "I have no file-writing tool".
 
 Live-run finding: D6 (live runs of 2026-09-29)
 
-**Ruled 2026-09-29 — [OQ-111](../architecture/open-questions.md), [`PD-TOOLS-006`](../product/directives.md#pd-tools-006) revision 3,
+**Ruled 2026-09-29 — [OQ-112](../architecture/open-questions.md), [`PD-TOOLS-006`](../product/directives.md#pd-tools-006) revision 3,
 [R-067](../product/requests.md#r-067).** A delegation carrying a `write_scope` to a persona that holds no file-writing
 tool (`write_file`, `haet_edit` or its alias `haet`) is refused with status `rejected` and no record, beside
 REQ-TOOLS-152's other refusals; the reason says the persona cannot write files and names the personas that can, where
@@ -14,7 +14,7 @@ the catalogue says. That refusal is this note's repair.
 
 ## Specs
 
-- `PD-TOOLS-006` revision 3 (OQ-111), narrowing `REQ-TOOLS-152`. `REQ-ORCH-095`'s text-only completion is what let the
+- `PD-TOOLS-006` revision 3 (OQ-112), narrowing `REQ-TOOLS-152`. `REQ-ORCH-095`'s text-only completion is what let the
   child end `succeeded`, and it is unchanged.
 
 ## Evidence

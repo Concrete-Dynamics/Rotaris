@@ -1928,9 +1928,9 @@ so a child that genuinely loops is still stopped at the same point.
 >
 > **What it found beside the directive.** Nothing in the text was wrong. Two costs showed, each recorded elsewhere:
 > revision 2's "nothing of the continued child is injected" had `d2` make 34 reads before its first edit (6 min 40 s of
-> its 515 s), re-deriving what `d` knew — put to the owner as [OQ-113](../architecture/open-questions.md); and the first thing `d2` read was
+> its 515 s), re-deriving what `d` knew — put to the owner as [OQ-114](../architecture/open-questions.md); and the first thing `d2` read was
 > `d`'s report artifact, whose summary denied the edits `d` had made, because the summariser read only the transcript's
-> head (`a-long-childs-report-denies-the-edits-it-made.md`, ruled as OQ-110). The duress run's own check "no child ended
+> head (`a-long-childs-report-denies-the-edits-it-made.md`, ruled as OQ-111). The duress run's own check "no child ended
 > failed with nothing to say" flagged `d`, a false positive of the harness
 > (`the-duress-silent-child-check-flags-a-cut-off-child.md`).
 >
@@ -2044,7 +2044,7 @@ are not recorded, and cannot be recovered afterwards.
 ### PD-TOOLS-006 — a delegated child may declare a write scope that its siblings may not write into
 
 *Revision 3 (2026-09-29, [R-067](requests.md#r-067)) — **what else `delegate` refuses, and what `session_id` names**,
-a section added after "The disclosure"; the owner's rulings on OQ-111 and on OQ-66's open part. Nothing is replaced. This
+a section added after "The disclosure"; the owner's rulings on OQ-112 and on OQ-66's open part. Nothing is replaced. This
 directive is the one that narrows REQ-TOOLS-152, and the symbol generator admits one narrowing directive per requirement,
 so a narrowing of `delegate`'s fields lands here whatever it is about.*
 

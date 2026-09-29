@@ -7,7 +7,7 @@ two refusals reads exactly like a run that met none, so the retries cannot be di
 
 Live-run finding: L3 (live runs of 2026-09-29)
 
-**Ruled 2026-09-29 — [OQ-109](../architecture/open-questions.md), [R-067](../product/requests.md#r-067).** The dispatch layer's retries (REQ-CONFIG-086's
+**Ruled 2026-09-29 — [OQ-110](../architecture/open-questions.md), [R-067](../product/requests.md#r-067).** The dispatch layer's retries (REQ-CONFIG-086's
 `num_retries`, default 5) come first, and the ladder (REQ-ORCH-091/092) takes over when they are exhausted; nothing is
 added to the ladder. Each retry the dispatch layer absorbs is written to the session log with the status it met and the
 delay it waited. That line is this note's repair. The live run's ladder check is the harness's half, recorded in
@@ -15,8 +15,8 @@ delay it waited. That line is this note's repair. The live run's ladder check is
 
 ## Specs
 
-- `REQ-CONFIG-086` (the dispatch layer's default of 5) before `REQ-ORCH-091` (c) and `REQ-ORCH-092`, as OQ-109 rules.
-- `REQ-SESSION-142`, the session log, where OQ-109 puts the line; no line is written today.
+- `REQ-CONFIG-086` (the dispatch layer's default of 5) before `REQ-ORCH-091` (c) and `REQ-ORCH-092`, as OQ-110 rules.
+- `REQ-SESSION-142`, the session log, where OQ-110 puts the line; no line is written today.
 
 ## Evidence
 

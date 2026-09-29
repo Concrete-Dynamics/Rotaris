@@ -104,12 +104,12 @@ root the handoff's artifact is taken from), **OQ-107** (which offers a later ite
 OQ-108** (what the audit of clause 15, clause 19, `PD-CHAT-001` revision 4 and `PD-CHAT-002` revision 2 leaves
 undecided), each stating the reading the build proceeds under. The fifteen were raised as OQ-67 to OQ-81 on their branch and renumbered at the merge, OQ-67 to OQ-93 having been taken on `main`. **On 2026-09-29 the owner ruled eight decisions as recommended ([R-067](../product/requests.md#r-067))**: OQ-96's
 stop status, OQ-103's last question and OQ-66's open part among the questions already here, and ESC-42 in
-`owner-decisions.md`; and four were **raised and ruled in the same entry — OQ-109** (the dispatch layer's retries come
-before the ladder's), **OQ-110** (what the report summariser reads), **OQ-111** (a `write_scope` for a persona that cannot
-write is refused) **and OQ-112** (REQ-LIBRARY-092's fallback, answered by amendment). **Three more were raised the same day
-from the live runs and left open: OQ-113** (the specification's fixed figures on a reasoning model's critical path, and a
-continuation that starts from nothing), **OQ-114** (the code-intelligence server's imperative tool description, rendered
-verbatim) **and OQ-115** (the displayed tool-call total during a long execution pass). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+`owner-decisions.md`; and four were **raised and ruled in the same entry — OQ-110** (the dispatch layer's retries come
+before the ladder's), **OQ-111** (what the report summariser reads), **OQ-112** (a `write_scope` for a persona that cannot
+write is refused) **and OQ-113** (REQ-LIBRARY-092's fallback, answered by amendment). **Three more were raised the same day
+from the live runs and left open: OQ-114** (the specification's fixed figures on a reasoning model's critical path, and a
+continuation that starts from nothing), **OQ-115** (the code-intelligence server's imperative tool description, rendered
+verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -5043,7 +5043,7 @@ move into the notices row, a layout change. Whether a stop during a plan cycle s
 its own rather than a stop's `paused` and "came to rest".
 
 
-**OQ-109 — Which retries come first when a model call fails: the dispatch layer's, or the ladder's?** *(REQ-CONFIG-086, whose `num_retries` "overrides the dispatch layer's default of **5**"; REQ-ORCH-091 (c), the suspended wait on a 429 without Retry-After, with its `model_wait` issue; REQ-ORCH-092, the transient budget (default 1), its delay min(2.0, n) and its `transient_llm_error` issue; REQ-SESSION-142, the session log. Raised 2026-09-29 from the first live run's finding L3 under [R-067](../product/requests.md#r-067), and ruled in the same entry.)*
+**OQ-110 — Which retries come first when a model call fails: the dispatch layer's, or the ladder's?** *(REQ-CONFIG-086, whose `num_retries` "overrides the dispatch layer's default of **5**"; REQ-ORCH-091 (c), the suspended wait on a 429 without Retry-After, with its `model_wait` issue; REQ-ORCH-092, the transient budget (default 1), its delay min(2.0, n) and its `transient_llm_error` issue; REQ-SESSION-142, the session log. Raised 2026-09-29 from the first live run's finding L3 under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-109 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 In the live run of 2026-09-29 (pack `2026-09-29T02-41-56-779Z`, scenario `faults-ladder`, session `474a2d22`) the
 recording proxy answered one completion 429 and the next 500. Both were retried inside the model client by the SDK's own
@@ -5064,7 +5064,7 @@ corrected in place, its falsified reason kept beside the replacement, and the li
 can see: that the run survived the refusals, not that the ladder handled them. Nothing is built by the ruling; the
 session-log line is owed to the note that records L3, and the check to the note that records H3.
 
-**OQ-110 — Which part of a long child's transcript does the report summariser read?** *(REQ-ORCH-110, which caps the transcript the report-producing pass is given at 12,000 characters in total and 2,000 per event, and does not say which part is kept; REQ-ORCH-108, which has parents consume the report in place of the transcript; REQ-ORCH-109, whose runner-owned fields the summariser cannot write; `PD-LIBRARY-001`, the report's commands. Raised 2026-09-29 from the duress live run's finding D1 under [R-067](../product/requests.md#r-067), and ruled in the same entry.)*
+**OQ-111 — Which part of a long child's transcript does the report summariser read?** *(REQ-ORCH-110, which caps the transcript the report-producing pass is given at 12,000 characters in total and 2,000 per event, and does not say which part is kept; REQ-ORCH-108, which has parents consume the report in place of the transcript; REQ-ORCH-109, whose runner-owned fields the summariser cannot write; `PD-LIBRARY-001`, the report's commands. Raised 2026-09-29 from the duress live run's finding D1 under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-110 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 `packages/engine/src/children/report.ts` builds the pass's transcript by joining the events and cutting the result to
 12,000 characters from its head (`transcriptText`, line 79). In the duress live run of 2026-09-29 (pack
@@ -5084,7 +5084,7 @@ nothing; the facts are what REQ-ORCH-109 already keeps runner-owned, given to th
 overwrite. Nothing is built by the ruling; the repair is owed to the note that records D1.
 
 
-**OQ-111 — May `delegate` give a `write_scope` to a persona that holds no file-writing tool?** *(`PD-TOOLS-006` over REQ-TOOLS-152; REQ-ORCH-095, whose text-only completion let the child end `succeeded`. Raised 2026-09-29 from the duress live run's finding D6 under [R-067](../product/requests.md#r-067), and ruled in the same entry.)*
+**OQ-112 — May `delegate` give a `write_scope` to a persona that holds no file-writing tool?** *(`PD-TOOLS-006` over REQ-TOOLS-152; REQ-ORCH-095, whose text-only completion let the child end `succeeded`. Raised 2026-09-29 from the duress live run's finding D6 under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-111 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 `PD-TOOLS-006` validates a `write_scope`'s patterns — empty, absolute, outside the root — and says nothing of the persona
 that declares it. In the duress live run of 2026-09-29 (pack `2026-09-29T03-06-14-929Z`, session `379f1490`, tool call
@@ -5103,7 +5103,7 @@ for the child, after REQ-TOOLS-006's controls. REQ-TOOLS-152 is narrowed by `PD-
 amended in place. REQ-ORCH-095 is untouched: a child with no scope that answers in text still ends as that requirement
 says. Nothing is built by this ruling; the finding's note is D6's in `docs/defects/`.
 
-**OQ-112 — When does REQ-LIBRARY-092's materialisation fall back to the canonical agent name?** *(REQ-LIBRARY-092, "idempotent keyed on the task id (falling back to the canonical agent name)", and its "Every terminal child report is materialized"; REQ-SESSION-115's handoff artifact as `PD-ORCH-005` clause 20 chooses it. Raised 2026-09-29 from the open note under [R-067](../product/requests.md#r-067), and ruled in the same entry.)*
+**OQ-113 — When does REQ-LIBRARY-092's materialisation fall back to the canonical agent name?** *(REQ-LIBRARY-092, "idempotent keyed on the task id (falling back to the canonical agent name)", and its "Every terminal child report is materialized"; REQ-SESSION-115's handoff artifact as `PD-ORCH-005` clause 20 chooses it. Raised 2026-09-29 from the open note under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-112 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 `materialiseChildReport` (`packages/engine/src/artifacts/store.ts:322`) looks the artifact up by the child's task id
 and, when that finds none, by its canonical name. A child of a later iteration whose name repeats an earlier child's
@@ -5118,10 +5118,10 @@ against the same requirement's next sentence.
 materialisation falls back to the canonical name only for a record that carries no task id, and two children with
 different task ids never share or overwrite an artifact. The requirement disagreed with itself under the reading built,
 so it is corrected in place rather than narrowed by a directive: `REQ-LIBRARY-092`'s parenthesis now says when the
-fallback applies, with the inline mark "accepted amendment 2026-09-29, OQ-112", and domain 14's resolution record
+fallback applies, with the inline mark "accepted amendment 2026-09-29, OQ-113", and domain 14's resolution record
 carries the note. Nothing is built by the ruling; the repair is owed to the note above.
 
-**OQ-113 — Do the specification's fixed figures still hold when the model on the critical path reasons before it answers?** *(REQ-ORCH-108 and REQ-ORCH-110, the report-producing pass before the parent resumes, two attempts within 120 s; REQ-ORCH-007 and REQ-ORCH-008, the 12.0 s intent bound and its fallback; REQ-TOOLS-006, whose `coordinator_only` control removes the orchestrator's terminal; REQ-CONFIG-467 and REQ-ORCH-104, the 2.0 s loop-classification bound and its fallback; REQ-LIBRARY-127 and REQ-CONFIG-118, analysis cancelled at shutdown and its 60 s bound; REQ-TOOLS-039 under REQ-TOOLS-033, the recursive-delete deny rule; `PD-ORCH-004` revision 2, "nothing of the continued child is injected". Raised 2026-09-29 from the live runs' frictions F1 to F5 and the duress run's continuation under [R-067](../product/requests.md#r-067). Open.)*
+**OQ-114 — Do the specification's fixed figures still hold when the model on the critical path reasons before it answers?** *(REQ-ORCH-108 and REQ-ORCH-110, the report-producing pass before the parent resumes, two attempts within 120 s; REQ-ORCH-007 and REQ-ORCH-008, the 12.0 s intent bound and its fallback; REQ-TOOLS-006, whose `coordinator_only` control removes the orchestrator's terminal; REQ-CONFIG-467 and REQ-ORCH-104, the 2.0 s loop-classification bound and its fallback; REQ-LIBRARY-127 and REQ-CONFIG-118, analysis cancelled at shutdown and its 60 s bound; REQ-TOOLS-039 under REQ-TOOLS-033, the recursive-delete deny rule; `PD-ORCH-004` revision 2, "nothing of the continued child is injected". Raised 2026-09-29 from the live runs' frictions F1 to F5 and the duress run's continuation under [R-067](../product/requests.md#r-067). Open. Raised as OQ-113 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 The live runs of 2026-09-29 ran the built product against the owner's self-hosted endpoint (`qwen3.8-flash-next`, a
 model that reasons before it answers; packs `2026-09-29T02-41-56-779Z` and `2026-09-29T03-06-14-929Z`). The product met
@@ -5147,7 +5147,7 @@ each requirement below as written, and each written figure cost the run time or 
   workspace (`edit`, tool call #38), as REQ-TOOLS-039 states it.
 - **The continuation that starts from nothing.** `PD-ORCH-004` gives a continuation no part of the continued child, and
   the duress run's continuation `d2` of the cut-off `d` made 34 reads before its first edit — 6 min 40 s of its 515 s —
-  re-deriving what `d` had known, beside a report whose summary denied `d`'s edits (OQ-110).
+  re-deriving what `d` had known, beside a report whose summary denied `d`'s edits (OQ-111).
 
 **What the build proceeds under.** Every figure as written; nothing here is a defect of the code.
 
@@ -5159,7 +5159,7 @@ recursive-delete rule should admit a scratch directory, and whether a continuati
 record or report beyond the offer. Each is a change to a requirement or a directive that states the behavioural target
 or the owner's choice, so each would be a directive or a revision, not a repair.
 
-**OQ-114 — Should the bundled code-intelligence server's tool descriptions reach the system prompt verbatim?** *(REQ-MCP-101, which renders each tool's description text in the persona's MCP section; REQ-MCP-015, which puts usage-instruction retrieval in the READ tier every persona carrying the server holds. Raised 2026-09-29 from the first live run's finding L8 under [R-067](../product/requests.md#r-067). Open.)*
+**OQ-115 — Should the bundled code-intelligence server's tool descriptions reach the system prompt verbatim?** *(REQ-MCP-101, which renders each tool's description text in the persona's MCP section; REQ-MCP-015, which puts usage-instruction retrieval in the READ tier every persona carrying the server holds. Raised 2026-09-29 from the first live run's finding L8 under [R-067](../product/requests.md#r-067). Open. Raised as OQ-114 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 `packages/config/src/mcp/prompt.ts:29` renders each server tool's description as REQ-MCP-101 requires, and the bundled
 server's usage-instruction tool describes itself imperatively ("IMPORTANT: If you have not yet read the manual, call this
@@ -5178,7 +5178,7 @@ product rewrite a server's own description, and REQ-MCP-015 grants the tool.
 product-owned override the manifest carries), whether usage-instruction retrieval should leave the READ tier or the
 built-in grants, or whether the cost stands. Each departs from REQ-MCP-101 or REQ-MCP-015, which state the target.
 
-**OQ-115 — Is a run's displayed tool-call total the persisted one while a long pass is still running?** *(REQ-ORCH-097, which accumulates per-child tool-call counters "after each successful execution pass"; REQ-MONITOR-102, which persists a session-wide total and has a displayed total be the persisted value. Raised 2026-09-29 from the duress live run's finding D4 under [R-067](../product/requests.md#r-067). Open.)*
+**OQ-116 — Is a run's displayed tool-call total the persisted one while a long pass is still running?** *(REQ-ORCH-097, which accumulates per-child tool-call counters "after each successful execution pass"; REQ-MONITOR-102, which persists a session-wide total and has a displayed total be the persisted value. Raised 2026-09-29 from the duress live run's finding D4 under [R-067](../product/requests.md#r-067). Open. Raised as OQ-115 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 The root's calls are added to the persisted total after its turn returns, and a child's when it settles
 (`packages/engine/src/run/run.ts`, `packages/engine/src/children/orchestration.ts`). In the duress run of 2026-09-29 (pack

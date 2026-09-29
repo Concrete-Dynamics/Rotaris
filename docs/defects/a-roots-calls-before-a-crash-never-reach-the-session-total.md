@@ -26,4 +26,4 @@ Live-run finding: D4 (live runs of 2026-09-29), its crash half. Pack `.live-run/
 running child `f`'s **15** were not either (`children.tool_calls` 0 for `f`, which never settled). The autopsy's header
 said 240 above its own per-tool breakdown summing to 309. The session stayed `running`, `stop_reason` NULL. The same
 figures are the lag half of the finding, which REQ-ORCH-097's "after each successful execution pass" permits while the
-pass runs, and which is [OQ-115](../architecture/open-questions.md), open.
+pass runs, and which is [OQ-116](../architecture/open-questions.md), open.

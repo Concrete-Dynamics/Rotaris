@@ -9,14 +9,14 @@
 
 Live-run finding: H3 (live runs of 2026-09-29)
 
-**Ruled in part 2026-09-29 — [OQ-109](../architecture/open-questions.md), [R-067](../product/requests.md#r-067):** the dispatch layer's retries come
+**Ruled in part 2026-09-29 — [OQ-110](../architecture/open-questions.md), [R-067](../product/requests.md#r-067):** the dispatch layer's retries come
 first, as the specification states, and "the live run's ladder check says what it can see". The first check's repair is
 to claim only that the run survived the refusals, or to read the ladder's own trace (an issue, a wait, a timeline entry,
-or OQ-109's session-log line) before claiming the ladder handled them.
+or OQ-110's session-log line) before claiming the ladder handled them.
 
 ## Specs
 
-- None; harness. OQ-109 (`REQ-CONFIG-086` before `REQ-ORCH-091/092`); `REQ-TOOLS-006`.
+- None; harness. OQ-110 (`REQ-CONFIG-086` before `REQ-ORCH-091/092`); `REQ-TOOLS-006`.
 
 ## Evidence
 

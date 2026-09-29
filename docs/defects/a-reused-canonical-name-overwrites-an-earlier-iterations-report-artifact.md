@@ -32,7 +32,7 @@ narrowing would use the fallback only for a record that carries no task id. It i
 
 ## Ruled 2026-09-29 (R-067), not repaired
 
-The fallback is ruled as OQ-112 ([R-067](../product/requests.md#r-067)) and answered by amendment: materialisation falls
+The fallback is ruled as OQ-113 ([R-067](../product/requests.md#r-067)) and answered by amendment: materialisation falls
 back to the canonical name only for a record that carries no task id, and two children with different task ids never
 share or overwrite an artifact. `REQ-LIBRARY-092` carries the amendment. This note stays open until
 `materialiseChildReport` is repaired.

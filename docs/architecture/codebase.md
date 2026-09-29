@@ -326,7 +326,7 @@ in `configuration.ts`'s header.)
    timeline entry rehydrated on resume (the wire-event catalogue is closed at 23, so no event); the unresponsive-model
    fallback after `llm_response_timeout` on the first model event; the hard child timeout's one retry on the role's
    fallback; per-model `timeout` and `num_retries` (the dispatch layer's retries, which come before the ladder's — ruled
-2026-09-29, OQ-109). The record's `wait` and the Workspace header that counts down and
+2026-09-29, OQ-110). The record's `wait` and the Workspace header that counts down and
    offers keep waiting (no operation), change model (`setModel`) and cancel — REQ-MONITOR-004's enumeration stays at
    twenty-two. `pnpm resilience-proof` drives nine launches through scripted fault steps. **Found — four defects in
    existing code:** the transient retry re-ran the whole turn and would have replayed executed tool calls under fresh ids
@@ -758,7 +758,7 @@ timeout is still collapsed into the flag a user's stop sets and reported as `use
 first of the two frictions the `frictions` scenario records as uncoverable inducible on demand. **Neither
 product check has yet run against a real endpoint**: the mechanism is unit-tested against a loopback upstream,
 what the checks claim about the product is unverified, and that first execution owes its row in
-`first-executions.md`. *Both ran live on 2026-09-22 (the row is there). The ladder half is corrected 2026-09-29 (R-067, OQ-109): the
+`first-executions.md`. *Both ran live on 2026-09-22 (the row is there). The ladder half is corrected 2026-09-29 (R-067, OQ-110): the
 429 and the 500 are retried by the model client's dispatch layer (REQ-CONFIG-086's `num_retries`, default 5) before the
 ladder sees them, which the owner ruled is the specification's order; the scenario shows the run surviving the refusals,
 not the ladder waiting or falling back.*

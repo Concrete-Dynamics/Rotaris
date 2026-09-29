@@ -10,7 +10,7 @@ Live-run finding: H-h (live runs of 2026-09-29)
 
 ## Specs
 
-- None; harness. The time the specification spends on the critical path is OQ-113's question.
+- None; harness. The time the specification spends on the critical path is OQ-114's question.
 
 ## Evidence
 

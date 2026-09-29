@@ -7,7 +7,7 @@ the artifact carries it, and the sibling index hands it to every later child.
 
 Live-run finding: D1 (live runs of 2026-09-29)
 
-**Ruled 2026-09-29 — [OQ-110](../architecture/open-questions.md), [R-067](../product/requests.md#r-067).** Within REQ-ORCH-110's 12,000-character cap
+**Ruled 2026-09-29 — [OQ-111](../architecture/open-questions.md), [R-067](../product/requests.md#r-067).** Within REQ-ORCH-110's 12,000-character cap
 the transcript the summariser reads keeps its start (the task as given) and its most recent part, with the omission
 marked between them, and the pass is also given the report's deterministic facts (edited files, commands run and their
 outcomes), so a report never denies work the record shows. That is this note's repair.
@@ -15,7 +15,7 @@ outcomes), so a report never denies work the record shows. That is this note's r
 ## Specs
 
 - `REQ-ORCH-108` (the report stands in for the transcript; the pass condenses what happened) and `REQ-ORCH-110` (the
-  cap, and now OQ-110's selection).
+  cap, and now OQ-111's selection).
 
 ## Evidence
 

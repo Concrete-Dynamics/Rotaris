@@ -31,6 +31,8 @@ skipped: [code-intelligence-setup, verification-consent]` after it.
 - `apps/desktop/src/main/initialization.ts`: `skip`, which filters only `attempting`.
 - `packages/config/src/init/execute.ts`: `recordSkip`.
 - `packages/config/src/init/state.ts`: `recordPatch`, which moves an id between the two lists.
+- `packages/config/src/init/execute.ts`: `executeTasks`' recording, which built its patch from a read taken outside the
+  write order (`reread`, now `commit`).
 
 ## Outcome
 
@@ -43,6 +45,25 @@ Repaired 2026-09-29 under R-062. `InitializationCoordinator.skip` (`apps/desktop
   state, and logs it. The filter runs in the same turn as the last await. A run clears `attempting` only after its
   outcome is in the state, so the two describe the same moment. This covers the resolution's own last view read,
   which a skip performed before the resolution still waits behind.
+
+*(Corrected 2026-09-29, the fix round's fourth verifier.)* The second bullet's reason, "A run clears `attempting` only
+after its outcome is in the state, so the two describe the same moment", held for the coordinator's in-memory state and
+not for the file. `e.state` reaches the run's outcome only once the run's marker write has returned, one round trip to
+the workspace service after the write was sent, and the skip built its patch from `e.state`. Both patches replace the
+two lists whole (REQ-CONFIG-050), so whichever landed second erased the other. The verifier showed both orders with a
+harness whose marker writes land in the order sent: (A) a skip while the run's completion write was in flight left the
+id to the run, but wrote `completed: []` after the run's `completed: [code-intelligence-setup]`, so the file ended with
+nothing completed (REQ-WORKSPACE-084); (B) a skip whose write was in flight when the task finished was read past by the
+run's `reread`, which the run then wrote over, so the file ended with nothing skipped and the prompt would return on the
+next open (REQ-WORKSPACE-111, REQ-WORKSPACE-086). The branch had made both reachable by keeping Skip and Escape live for
+the whole background run. **Repaired the same day:** the coordinator makes every marker write through one queue
+(`InitializationCoordinator.marker`), one at a time in the order asked, and each turn is handed the file as the previous
+write left it. The skip decides what it leaves out and builds its patch inside its turn, each of a run's recordings is
+built inside its own (`ExecuteDeps.commit`, which replaces `reread`), and so is the silent stamp. The coordinator's
+harness now applies marker writes in the order sent and can hold them, and two more cases pin the two orders: "keeps
+the run's completed outcome when a skip arrives while the completion write is in flight" and "keeps a skip whose write
+is in flight when the background run records its outcome". Both fail on the code before the queue. Under the ordered
+harness the first case below fails on that code too, by order (B).
 
 It does not drop an id that is no longer applicable. Knowing that needs the applicability read the repair removes, and
 recording such an id as skipped changes nothing the user can see: the view filters both lists to applicable tasks.

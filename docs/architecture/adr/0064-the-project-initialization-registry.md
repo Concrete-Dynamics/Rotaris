@@ -129,7 +129,9 @@ itself. Two separate things were wrong once the user answered:
 - A run computes each outcome patch from the state it began with, and the patch replaces both lists
   wholesale (`REQ-CONFIG-050`). So the skip written seconds earlier was gone the moment the task
   finished. The repair is a `reread` port on the execution: the persisted state is read again
-  immediately before each recording, so the one writer writes over what is actually there.
+  immediately before each recording, so the one writer writes over what is actually there. *(Superseded 2026-09-29,
+  "Fourth round": a read taken before the write, outside the order the writes land in, still missed a skip whose write
+  was in flight; the recording is now built inside its turn of one marker-write queue, `ExecuteDeps.commit`.)*
 - A task the live run is **attempting** is not the user's to skip at all: `REQ-WORKSPACE-084` owes every
   attempted task exactly one outcome, and a skip is not that outcome. The coordinator now drops such ids
   from a skip and says so in the log.
@@ -247,7 +249,10 @@ between the lists). The verifier reproduced it with the coordinator's harness. T
 given **pending** task id") and REQ-WORKSPACE-084 (a success "is recorded as completed"). **The repair:** a skip after
 the open's resolution awaits that resolution and reads nothing more. A skip before it still performs it (OQ-122). After
 the last await, in one turn, the skip leaves out an id the live run is attempting and an id already recorded
-completed. A run clears `attempting` only after its outcome is in the state, so the two cannot disagree. An id no longer
+completed. A run clears `attempting` only after its outcome is in the state, so the two cannot disagree. *(Falsified
+2026-09-29 by the fourth verifier: they cannot disagree in memory, but the state reaches the run's outcome only when its
+write returns, and the skip wrote from that state, so its patch could land after the run's and empty `completed`; see
+"Fourth round".)* An id no longer
 applicable is not dropped: that would need the read the repair removes, and the view shows no inapplicable id either
 way. Two cases in `initialization.test.ts` fail on the code before the repair. The second also fails with the first
 change alone, so it pins the completed filter. REQ-WORKSPACE-105's "any run" reading in `packages/config/src/init/sets.ts`
@@ -261,3 +266,30 @@ disabled. Every Escape recorded `skipped verification-consent` and left the runn
 `code-intelligence-setup → success` followed 1.8 to 2.0 s later and stayed completed on disk. Every reopen read "Not run
 yet: Verification consent task." **Not shown:** a built-app run in which the background run ends inside a skip; only
 the unit cases hold that interval. Also not shown: the Windows orders, and REQ-WORKSPACE-110's flip in the built app.
+
+**Fourth round (2026-09-29): the third round's reason held in memory and not in the file.** The fix round's fourth
+verifier found that a skip and the background run's recording could still erase each other. Both write a patch that
+replaces the two lists whole (REQ-CONFIG-050). The skip built its patch from the coordinator's `state`, which reaches the
+run's outcome only once the run's write has returned. The run built its patch from a `reread` taken before its write, and
+that read could miss a skip whose write was still in flight. With a harness whose marker writes land in the order sent,
+the verifier showed both orders. (A) A skip while the run's completion write was in flight left the file with
+`completed: []`, against REQ-WORKSPACE-084. (B) A skip whose write was in flight when the task finished left it with
+`skipped: []`, so the prompt would return on the next open, against REQ-WORKSPACE-111 and REQ-WORKSPACE-086. The second
+round had made both reachable by keeping Skip and Escape live for the whole background run. The third round's sentence
+above is kept with its falsification beside it. **The repair:** the coordinator makes every marker write through one
+queue (`InitializationCoordinator.marker`), one at a time in the order asked, and hands each turn the file as the
+previous write left it. The skip decides what it leaves out and builds its patch inside its turn. Each of a run's
+recordings is built inside its own turn (`ExecuteDeps.commit`, which replaces the first execution's `reread`), and so is
+the silent stamp. REQ-WORKSPACE-085's one writer is unchanged: it is still main's coordinator. The coordinator's harness
+now applies marker writes in the order sent and can hold them. Two new cases pin the two orders, and both fail on the
+code before the queue. Under the ordered harness, the third round's first case also fails on that code, by order (B).
+**Measured** as root under Xvfb on Linux, Node 24, after `pnpm symbols` and one `pnpm build`, after `origin/main` was
+merged in: `init-proof --skip-build` passed two runs in a row (171 s and 172 s), all five scenarios. Another agent's
+Electron processes were on the host for parts of both runs (none at the start of run 1, 14 at its end, 11 at the end of run 2). Run 2 took the
+Escape-first path. The skip performed the resolution, and the background task started 7 ms after the skip arrived. The
+skip left that task to its run, recorded `skipped verification-consent` 46 ms after arriving, and
+`code-intelligence-setup → success` followed 2.0 s later. The workspace file then held `completed:
+[code-intelligence-setup]` and `skipped: [verification-consent]`. Run 1's app log was overwritten by run 2, so its path is
+not recorded. `code-intel-proof --skip-build` passed twice (526 s and 525 s). **Not shown:** a built-app run in which the
+run's completion write and a skip's write are in flight together. Only the unit cases hold those orders. Also not shown:
+the Windows orders.

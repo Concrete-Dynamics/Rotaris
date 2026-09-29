@@ -83,7 +83,8 @@ record already decides, and every ruling it needs is named as the owner's rather
   resolution swallowing the background task ([fixed](../defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md)),
   and behind it the setup dialog drawing that background run as its own and refusing Escape
   ([fixed](../defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md); OQ-123), whose repair let a skip move
-  a task completed during it into skipped until the skip stopped reading after the resolution
+  a task completed during it into skipped until the skip stopped reading after the resolution, and let a skip and
+  the run's recording erase each other until both went through one marker-write queue
   ([fixed](../defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md)),
   and `code-intel-proof`'s were three harness defects
   ([token order](../defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md),

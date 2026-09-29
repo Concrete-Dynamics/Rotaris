@@ -7,7 +7,7 @@ approval, a question, a dependency or a model slot, or one still queued, is draw
 reads `waiting` where it would read `waiting · 1m 3s`, and the table reads `—` — although it has a spawn timestamp and
 is live in REQ-MONITOR-045's sense (running, waiting or queued). *Corrected at the repair: REQ-MONITOR-045 calls an
 agent live exactly when its presentation state is running; "running, waiting or queued" is REQ-MONITOR-064's wider sense
-of the word. The defect stands on REQ-MONITOR-111's fallback rule, which does not depend on it (OQ-122).* The behaviour predates `PD-ORCH-005` revision 4. It was
+of the word. The defect stands on REQ-MONITOR-111's fallback rule, which does not depend on it (OQ-124).* The behaviour predates `PD-ORCH-005` revision 4. It was
 noticed while the merged revision 4 build's eleventh review round restricted the transcript's "This task" to dropping the
 time for a `paused` agent only (OQ-100), where a waiting or queued agent keeps its time as REQ-CHAT-069 asks. Not
 repaired here: it is not the directive's, and which predicate should gate the clock (REQ-MONITOR-045's live set, or
@@ -37,7 +37,7 @@ every non-terminal agent other than `paused`) is a reading the repair must make.
 ## Repaired — 2026-09-29
 
 Repaired 2026-09-29 under R-067. The reading the note left open is made, and raised as
-[OQ-122](../../architecture/open-questions.md): the clock has a predicate of its own, `clockAdvances` in
+[OQ-124](../../architecture/open-questions.md): the clock has a predicate of its own, `clockAdvances` in
 `packages/ui/src/AgentTree.tsx` — an agent not ended, holding a parseable spawn timestamp, presented running, waiting or
 queued — and `elapsedShown` (ended, or `clockAdvances`) gates the figure. The tree meta, the Mission table's Elapsed cell
 (which also takes the surface's clock for such a row, not its completion), the inspector meta and the persona window's

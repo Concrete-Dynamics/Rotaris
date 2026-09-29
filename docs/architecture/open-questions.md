@@ -4272,7 +4272,7 @@ no more; its last sentence settles "every other unfinished agent of a session at
   table and the inspector drop a waiting or queued agent's time too, as they did before revision 4
   ([`a-waiting-agents-elapsed-time-is-not-shown.md`](../defects/fixed/a-waiting-agents-elapsed-time-is-not-shown.md)); that
   is not this directive's, and is not repaired here. *Repaired 2026-09-29 under R-067: the tree, the table, the inspector and
-  the persona window show a waiting or queued agent's time, advancing, by a clock predicate of their own (OQ-122); a
+  the persona window show a waiting or queued agent's time, advancing, by a clock predicate of their own (OQ-124); a
   `paused` agent keeps this reading.*
 - **A live agent's cancel.** Its confirmation and cascade note name every descendant its cancel ends — live and
   paused, through a finished one (`cancelCascade`) — so that neither understates what the cancel ends; the body and
@@ -5444,9 +5444,10 @@ given what is left of the grace, or the drain replaced by the grace for the canc
 whether REQ-ORCH-080's drain should still apply to the explicit cancel at all, now that `PD-ORCH-005` has a stop leave
 the background children paused rather than cancelled.
 
-**OQ-122 — Which agents' elapsed clocks advance: REQ-MONITOR-045's "live", or every agent neither ended nor paused?** *(REQ-MONITOR-107, "While the agent is live the figure advances"; REQ-MONITOR-045, "An agent is \"live\" exactly when its presentation state is running"; REQ-MONITOR-064, whose "live (running, waiting, or queued)" uses the word in a second, wider sense; REQ-MONITOR-110/111 with resolution item 25 of `docs/spec/resolutions/02-run-monitoring-steering.md`, "A surface holding a spawn timestamp and showing a fallback … is now a defect"; OQ-100, whose reading keeps a `paused` agent's figure off "This task". Raised 2026-09-29 by the repair of
+**OQ-124 — Which agents' elapsed clocks advance: REQ-MONITOR-045's "live", or every agent neither ended nor paused?** *(REQ-MONITOR-107, "While the agent is live the figure advances"; REQ-MONITOR-045, "An agent is \"live\" exactly when its presentation state is running"; REQ-MONITOR-064, whose "live (running, waiting, or queued)" uses the word in a second, wider sense; REQ-MONITOR-110/111 with resolution item 25 of `docs/spec/resolutions/02-run-monitoring-steering.md`, "A surface holding a spawn timestamp and showing a fallback … is now a defect"; OQ-100, whose reading keeps a `paused` agent's figure off "This task". Raised 2026-09-29 by the repair of
 [`a-waiting-agents-elapsed-time-is-not-shown.md`](../defects/fixed/a-waiting-agents-elapsed-time-is-not-shown.md)
-under [R-067](../product/requests.md#r-067). Open.)*
+under [R-067](../product/requests.md#r-067). Open. Raised as OQ-122 and renumbered OQ-124 at the merge, main having
+taken OQ-122 and OQ-123.)*
 
 REQ-MONITOR-107 has the figure advance "while the agent is live" and fixed "once the agent is terminal", and says nothing of
 an agent that is neither. Read with REQ-MONITOR-045's definition, a waiting or queued agent is not live, so the
@@ -5473,9 +5474,10 @@ advancing. No path is known to leave a child unfinished under an `idle` session;
 `paused` agent should show a figure — fixed at its pause, or advancing — rather than OQ-100's fallback, which
 REQ-MONITOR-111's "a surface that has a spawn timestamp and shows a fallback … is a defect" reads against.
 
-**OQ-123 — What does an agent surface's artifact link open, and which artifacts does it list as an agent's?** *(REQ-MONITOR-052 and REQ-MONITOR-069, "artifact links", which name no target; REQ-MONITOR-044, "artifacts (name, producer, ready flag), produced and received artifact ids"; REQ-MONITOR-068's persona-wide card; REQ-LIBRARY-102, which lets "actions" deep-link to the Library's artifacts tab; REQ-LIBRARY-131's modeless, per-window artifact inspector; REQ-LIBRARY-136, which hides superseded artifacts from the Library's table. Raised 2026-09-29 by the repair of
+**OQ-125 — What does an agent surface's artifact link open, and which artifacts does it list as an agent's?** *(REQ-MONITOR-052 and REQ-MONITOR-069, "artifact links", which name no target; REQ-MONITOR-044, "artifacts (name, producer, ready flag), produced and received artifact ids"; REQ-MONITOR-068's persona-wide card; REQ-LIBRARY-102, which lets "actions" deep-link to the Library's artifacts tab; REQ-LIBRARY-131's modeless, per-window artifact inspector; REQ-LIBRARY-136, which hides superseded artifacts from the Library's table. Raised 2026-09-29 by the repair of
 [`the-inspector-says-no-artifact-store-and-no-tools.md`](../defects/fixed/the-inspector-says-no-artifact-store-and-no-tools.md)
-(live-run finding K1) under [R-067](../product/requests.md#r-067). Open.)*
+(live-run finding K1) under [R-067](../product/requests.md#r-067). Open. Raised as OQ-123 and renumbered OQ-125 at
+the merge, main having taken OQ-122 and OQ-123.)*
 
 The specification asks for artifact links on three agent surfaces and says what an agent carries about its artifacts,
 but not what following a link does, nor whether a superseded artifact is still one of an agent's.

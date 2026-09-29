@@ -43,7 +43,7 @@ Repaired 2026-09-29 under R-067, as the feature `docs/architecture/codebase.md`'
   received artifacts as links with their ready flag in words, and the false sentence is gone (`NO_ARTIFACTS` now reads "This
   agent has produced and received no artifacts yet."); a link deep-links to the Library's Artifacts tab and opens the
   artifact inspector. The persona window's persona-wide card lists every instance's artifacts and its tools card the
-  instance's own links, which open the artifact inspector in that window. The reading of what a link opens is OQ-123.
+  instance's own links, which open the artifact inspector in that window. The reading of what a link opens is OQ-125.
 
 Evidence:
 - Unit: `packages/ui/src/inspector-links.test.ts`, `packages/engine/src/agent-links.test.ts`,

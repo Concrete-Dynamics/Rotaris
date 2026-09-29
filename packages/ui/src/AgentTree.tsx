@@ -42,7 +42,7 @@ export function treeRows(agents: readonly AgentRecord[], collapsed: ReadonlySet<
 }
 
 /**
- * REQ-MONITOR-107/110/111 (resolution item 25; the note "a waiting agent's elapsed time is not shown", R-067, OQ-122): the
+ * REQ-MONITOR-107/110/111 (resolution item 25; the note "a waiting agent's elapsed time is not shown", R-067, OQ-124): the
  * agent's elapsed clock advances — every agent neither ended nor `paused` that holds a spawn timestamp, so running,
  * waiting or queued (REQ-MONITOR-064's "live (running, waiting, or queued)"). It is NOT `AgentRecord.live`: that is
  * REQ-MONITOR-045's running-only sense, which drives the pulse and the inspector's writability and stays as it is. A

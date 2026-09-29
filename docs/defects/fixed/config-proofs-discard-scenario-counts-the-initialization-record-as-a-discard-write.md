@@ -12,7 +12,7 @@ one other writer. The byte comparison cannot tell it apart from a write by Disca
 The task succeeds only where the bundled code-intelligence runtime is present
 (`apps/desktop/resources/code-intelligence/`, built by `pnpm code-intel:bundle`). Without it the task fails,
 records nothing (REQ-WORKSPACE-084), and the scenario passes. That is why the same `main` was green in a tree
-without the bundle and red in the sweep tree that had one. Reproduced 2026-09-29 in the same worktree, both
+without the bundle and red in the sweep tree that had one. Reproduced 2026-09-28 in the same worktree, both
 ways. Without the bundle the log reads `initialization: code-intelligence-setup → failure` and the file is the
 seed. With the bundle copied in, it reads `→ success` 0.5 s before the Discard click, and the file is the seed
 followed by the six-line `initialization:` block.
@@ -45,4 +45,30 @@ are never read back.
   silent on a miss.
 - `packages/ui/src/SettingsView.tsx`: the category list (`.settings__categories .nav-list__item`), Models by default.
 
-Noticed 2026-09-28 by the Linux proof sweep under R-062, and diagnosed 2026-09-29.
+Noticed and diagnosed 2026-09-28, by the Linux proof sweep under R-062.
+
+## Repaired — 2026-09-28, under R-062
+
+Only the harness changed; the product was right. In `apps/desktop/scripts/config-proof.mjs`:
+
+- **The Discard seed is a workspace initialized before.** Scenario 3's `agents.yaml` is the old seed followed by an
+  `initialization:` section that records `code-intelligence-setup` as completed (`INITIALIZED`). Resolution on open
+  finds nothing pending (REQ-WORKSPACE-081, REQ-WORKSPACE-083), so no other writer is due during the launch. The
+  byte-identity check is unchanged and is now made against that seed. The launch also fails if its log shows
+  `initialization: running`, so a seed that stops holding cannot hide a write again.
+- **Every click is read back** (`clicked`, over `unpressedClicks` in the new `apps/desktop/scripts/lib/capture-clicks.mjs`,
+  pinned by 5 cases in `capture-clicks.test.ts`). Scenarios 1 and 3 fail by name when a step logged no press, or
+  pressed a point another element covers.
+- **The steps wait for their controls.** The Runtime category is chosen by a click step with a deadline
+  (`.settings__categories .nav-list__item>>Runtime@~6000`), because the view seam's own single click can miss. The
+  toggles, the confirmation, Save and Discard moved from fixed offsets to `@~` deadlines. Each fires as soon as
+  its control is drawn. Discard is drawn only while the form is dirty (REQ-CONFIG-281), so it cannot fire before
+  the toggle has taken.
+- **Discard's outcome is read on screen as well as on disk.** The save-status probe must read "All changes saved"
+  (REQ-CONFIG-280) at the capture.
+
+Verified as root under Xvfb, Node 24, after one `pnpm build`, with the bundled code-intelligence runtime present,
+which is the red's condition. Before the change, one run went red exactly as the sweep's did. After it, three runs
+in a row were green, the last two with another worktree's Electron proofs running beside them. One more run with
+the bundle moved aside was also green. The view seam's silent single category click in
+`apps/desktop/src/main/capture/seams.ts` is not changed. Other proofs share it, and this proof no longer depends on it.

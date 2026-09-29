@@ -142,7 +142,7 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, 'a\nb', 'S', 'E')).toBe("printf '%s\\n' 'S'; eval \"$(printf '%b' 'a\\nb')\"; printf 'E:%s\\n' \"$?\"");
     expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, "x='q'\ny", 'S', 'E')).toContain(`'x='\\''q'\\''\\ny'`);
   });
-  it('OQ-132: a signal death\'s status — killed (−1) for a signal the session delivered, failed (128 + n) for one it did not, an exit code as ever (REQ-TOOLS-109/179, live-run L4)', () => {
+  it('OQ-133: a signal death\'s status — killed (−1) for a signal the session delivered, failed (128 + n) for one it did not, an exit code as ever (REQ-TOOLS-109/179, live-run L4)', () => {
     const none = new Set<string>();
     expect(endOfExit(0, null, none)).toEqual({ status: 'completed', exitCode: 0 });
     expect(endOfExit(3, null, none)).toEqual({ status: 'failed', exitCode: 3 });
@@ -233,7 +233,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     // before this one leaves `sleep 3` running soft-paused in this shared session, and a call that named none queued
     // behind it for ~1.45 s against the 1.5 s no-output window. Under load it paused, the product never saw it
     // complete, and the reset restored an older snapshot without the variable: the `[]` of
-    // docs/defects/fixed/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md (OQ-133, pinned below).
+    // docs/defects/fixed/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md (OQ-134, pinned below).
     const set = await t.execute(args({ command: SH.setVar('ROTARIS_GONE', 'set'), timeout: 15 }), ctx());
     expect(diag(set.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
     const r = await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('late')}`, timeout: 1 }), ctx());
@@ -249,12 +249,12 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     expect(output(after.text)).toBe('[set]');
     expect(diag(after.text)['session_reinitialized']).toBe(true);
   }, 30_000);
-  it('PD-TOOLS-001 (OQ-133): a reset restores the snapshot of the last command the product saw complete, so a soft-paused command that completed unseen is not in it', async () => {
+  it('PD-TOOLS-001 (OQ-134): a reset restores the snapshot of the last command the product saw complete, so a soft-paused command that completed unseen is not in it', async () => {
     // A session of its own, so no other case's snapshot or paused command stands in it.
     const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
     const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
     // The variable's command also writes the variable's value to this file, so the case can see, from outside the
-    // terminal, that the shell ran it and held the variable — before the reset, which is what OQ-133 is about.
+    // terminal, that the shell ran it and held the variable — before the reset, which is what OQ-134 is about.
     const marker = join(root, 'oq133-unseen.txt');
     rmSync(marker, { force: true });
     try {
@@ -472,7 +472,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     // the group and reports it sent in every one of those runs
     // (docs/defects/fixed/a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md); what the window still
     // costs the product, outside this case, is recorded open (docs/defects/a-sigint-that-reaches-a-command-as-sh-starts-
-    // it-does-not-stop-the-session.md, OQ-134).
+    // it-does-not-stop-the-session.md, OQ-135).
     const command = PS ? `Write-Output 'up'; ${SH.sleep(30)}` : `printf 'up\\n'; exec sleep 30`;
     const started = await t.execute(args({ command, background: true }), ctx());
     const id = /ts_[0-9a-f]{8}/.exec(started.text)![0];
@@ -495,7 +495,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     }
     expect((await t.execute(args({ session_action: 'list' }), ctx())).text).toContain(`✗ ${id}`);
   }, 40_000);
-  it('REQ-TOOLS-109/179, OQ-132 (live-run L4): a session the agent ends with send_signal SIGINT reads killed (−1) at warning, not an error', async () => {
+  it('REQ-TOOLS-109/179, OQ-133 (live-run L4): a session the agent ends with send_signal SIGINT reads killed (−1) at warning, not an error', async () => {
     const t = await tool();
     // As in the OQ-10 case above: the command becomes the long-lived process, and the signal waits for its marker.
     const command = PS ? `Write-Output 'up'; ${SH.sleep(30)}` : `printf 'up\\n'; exec sleep 30`;
@@ -518,7 +518,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     expect(diag(q.text)).toMatchObject({ session_status: 'killed', exit_code: -1, outcome_kind: 'background_terminal', outcome_severity: 'warning' });
     expect(q.isError).toBe(false);
   }, 40_000);
-  it.skipIf(PS)('OQ-132: a signal death the product did not send reads failed with 128 + n, never the −1 of killed', async () => {
+  it.skipIf(PS)('OQ-133: a signal death the product did not send reads failed with 128 + n, never the −1 of killed', async () => {
     const t = await tool();
     // The shell ends itself by SIGTERM: a death by a signal no `send_signal` delivered.
     const id = /ts_[0-9a-f]{8}/.exec((await t.execute(args({ command: 'kill -TERM $$', background: true }), ctx())).text)![0];

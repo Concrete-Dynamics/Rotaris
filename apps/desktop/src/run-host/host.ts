@@ -380,6 +380,8 @@ export function createRunHost() {
     planWithholds: withheldUnderPlanGate,
     tools: (ctx) => createToolPort(ctx, {
       clocks, presenter, nextSequence: () => ++approvalSequence, fileStates, terminal, mcp, configured: () => configuredRuns.get(ctx.sessionId) ?? null,
+      // PD-ORCH-005 clause 9: the quit closed the last window and its shutdown is still to come (`PresenterRegistry.quitting`).
+      quitting: () => presenters.quitting,
       runtime: () => configuredRuns.get(ctx.sessionId)?.runtime ?? configureRunFallback(),
       personas: () => configuredRuns.get(ctx.sessionId)?.personas ?? null,
       // REQ-WORKSPACE-059 (ADR-0063): the cataloged skill directories as additional READ roots, so an agent can

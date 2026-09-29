@@ -45,6 +45,44 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**The application log survives the loss of its reader (REQ-MONITOR-131, R-067).** Main's log writes through
+`standardStreamWriter` (`main/app-log.ts`) instead of `console.log`: the stream's `error` event is listened for, and from
+its first failure nothing more is written to it; standard error gets the same listener. A quit whose standard output
+has been closed no longer loops on its own EPIPE. This repairs `a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`.
+The **process view**'s application-log paragraph says so. No package, edge, process, message kind, channel, command or
+store column changed.
+
+**A child main ended itself is not a loss in the application log (PD-MONITOR-002, R-067, live-run finding L13).** The
+run host's `kill` that `endBeforeMain` sends goes through `ChildrenEndedByMain` (`main/exit.ts`), which records it by
+service name, and the `child-process-gone` handler writes Electron's `killed` report of that end at `info`, saying main
+ended it; every other end but `clean-exit` stays `error`. This repairs `an-orderly-quit-logs-the-run-host-gone-at-error.md`.
+The **process view**'s application-log paragraph says so. No package, edge, process, message kind, channel, command or
+store column changed.
+
+**What is asked of a person in the quit's gap is held for the quit to withdraw (PD-ORCH-005 clause 9, R-067, OQ-132).**
+`presenter.revoke` gains an optional `quitting`, which main sets from `QuitState`; the run host's `PresenterRegistry.quitting`
+holds from such a revoke until a window registers. Meanwhile the gate holds an ask unshown in `pending_approvals` instead
+of denying it headless, a present answered "not shown" is held too, `ask_questions` records its prompt pending, and
+`PendingApprovals` and `PendingQuestions` arm an expiring budget again; the shutdown withdraws every one by `quit`. This
+repairs `an-approval-asked-after-the-last-window-closes-is-denied.md`. The **sequences view**'s §2 (the diagram and a new
+paragraph) and the **process view**'s message list say so. No package, edge, process, channel, command or store column
+changed.
+
+**A small non-zero cost renders as the floor `< 0.0001`, never as zero (ESC-42 ruled option (b) under R-067, 2026-09-29).**
+`formatAmount` (`kernel/money.ts`) returns `AMOUNT_FLOOR` where REQ-PROVIDER-121's half-up rounding brings an amount
+greater than zero to zero; `costLabelOf` is unchanged and every label takes the floor as its `<amount>`. This repairs
+`a-cost-below-five-hundred-thousandths-renders-as-zero.md`. The **runtime view**'s §3 ("What a step costs") says so. No
+package, edge, process, channel, message kind, command or store column changed.
+
+**A retry the dispatch layer absorbs is written to the session log (OQ-110 ruled under R-067, 2026-09-29).** REQ-CONFIG-086's
+`num_retries` stay the dispatch layer's, spent inside the model client before the ladder; the client's decorated fetch
+now reports each retry as it is sent (`ModelRequest.onRetry`, with the status met and the delay waited on the monotonic
+clock `AiSdkClientOptions` now takes), `DefaultAgentBackend` forwards it to `TurnSink.retried`, and the turn writes
+`dispatchRetryLine` through the run's `warn` to the session log. This repairs `a-retry-the-dispatch-layer-absorbs-leaves-no-trace.md`.
+An exhausted budget now reaches the ladder as the last attempt's error (`fromError` unwraps the SDK's `RetryError`), which
+repairs `an-exhausted-dispatch-layer-hands-the-ladder-a-failure-it-cannot-classify.md`. The **runtime view**'s §3 (the ladder's paragraph) says so. No package, edge, process, channel, message kind, command or
+store column changed.
+
 **A follow-up by `session_id` resumes a settled child from its record (PD-ORCH-005 clause 22, PD-TOOLS-006 revision 3,
 2026-09-29, R-067; OQ-131, raised as OQ-130 on its branch and renumbered at the merge).** `delegate` forwards `session_id`. `IterationChildren.followUp` refuses an id that is no
 settled child of the caller, and waits for a cancelled child's execution to wind down. It re-claims the stored write

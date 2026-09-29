@@ -401,7 +401,7 @@ restored and the detail says so. The timeout test now asserts the variable survi
 soft-paused (REQ-TOOLS-098) and finished while the next call waited behind it is never seen. Its effects are then
 missing from the snapshot a later reset re-applies, although they happened before the respawn PD-TOOLS-001 names.
 The test had run into that, and now names its own timeout. Whether the directive asks for more is
-[OQ-133](../open-questions.md).*
+[OQ-134](../open-questions.md).*
 
 **The exit-1 map is narrowed, not widened.** The run''s `git diff --no-index` with differences exited 1
 carrying the payload and read as `shell_failure`, which the agent had to explain away. REQ-TOOLS-112 test 4

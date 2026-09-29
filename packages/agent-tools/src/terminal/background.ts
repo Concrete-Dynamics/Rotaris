@@ -21,7 +21,7 @@ export const DEFAULT_MAX_BACKGROUND = 20;
 export const DEFAULT_BACKGROUND_TIMEOUT_S = 3600;
 
 /**
- * REQ-TOOLS-109/179 with OQ-132: the status and exit code a background session ends with, from what its process's
+ * REQ-TOOLS-109/179 with OQ-133: the status and exit code a background session ends with, from what its process's
  * `exit` reported. An exit code is the command's own outcome — `completed` for 0, `failed` for any other. A death by a
  * signal carries no exit code: one the product delivered at the agent's or the user's request (`send_signal`, the
  * stream-control interrupt) ends it `killed` with −1, as an explicit kill does, because the agent or the user ended it
@@ -67,7 +67,7 @@ export class BackgroundSession {
   private exited: Promise<void>;
   /** Part AL: the live stream's taps (REQ-TOOLS-127: `bg:<id>` publishes what the pipe produces). */
   private taps: ((chunk: string) => void)[] = [];
-  /** OQ-132: the signals `signal` delivered to the session's group, so a death by one of them reads `killed`. */
+  /** OQ-133: the signals `signal` delivered to the session's group, so a death by one of them reads `killed`. */
   private readonly delivered = new Set<string>();
 
   constructor(readonly command: string, private readonly child: ChildProcess, id: string, startedAt: string, timeoutMs: number, private readonly deps: BackgroundDeps) {

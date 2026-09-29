@@ -465,8 +465,10 @@ none of the three. `Aggregates.addRequest` adds the figure to the run's total in
 `configured` (every request priced, at least one at configured rates). The qualifier is persisted with the total
 (`sessions.cost_qualifier`, v21) and rebuilt on a continuation from it and the token totals. The total reaches
 `usage.update` and `session.end` in the payload's existing `cost.total`; the label is `costLabelOf(cost,
-qualifier)`, rendered half-up to two places or four below one hundredth and with no currency symbol, because no
-figure names a currency and the product picks none. A configured price reaches the entry exact because the loader
+qualifier)`, rendered half-up to two places or four below one hundredth — and, for an amount greater than zero that
+this rounding would bring to zero, as the floor `< 0.0001` (`formatAmount`'s `AMOUNT_FLOOR`; ESC-42, REQ-PROVIDER-121 as
+amended), zero itself reading `0.00` — and with no currency symbol, because no figure names a currency and the product
+picks none. The floor is rendering only; the persisted total stays exact. A configured price reaches the entry exact because the loader
 reads it from the YAML scalar's source text (`config/prices.ts`, `exactPrices`) before the plain value's double is
 used — the discovery snapshot's prices likewise. **Every agent's requests are counted**: the entry agent's turn
 and every delegated child's turn, at any depth, hand each completed request to the one `Run.onRequestUsage`
@@ -540,7 +542,15 @@ inclusive). If it did, and the child then ends failed on that timeout, the store
 the workspace paths its own `write_file`/`haet_edit`/`haet` calls changed with `ok` (the name matched in lower case, as the
 gate's fallback dispatches it; resolved lexically against the root; both attempts, in the order first changed, each once), and — unless the child is itself a continuation — the offer naming `continuation_of`. The report block and
 `background_output` render it after the result text; nothing resumes the child. See §4 for the continuation.
-Per-model `timeout` / `num_retries` ride the choice (REQ-ORCH-145). On resume the memory is
+Per-model `timeout` / `num_retries` ride the choice (REQ-ORCH-145). **`num_retries` is the dispatch layer's, not the
+ladder's** (REQ-CONFIG-086, default 5; OQ-110): the model client hands it to the SDK as `maxRetries`, so a 429, a 5xx or a
+connection failure is retried inside the call, with the SDK's own backoff, before any rung above sees it, and the ladder
+takes over only when those retries are exhausted. Each retry absorbed there is reported as it is sent — the decorated
+fetch sees a request follow a failed attempt of the same call, and calls `ModelRequest.onRetry` with the status met and the
+delay waited on the monotonic clock; `DefaultAgentBackend` forwards it to `TurnSink.retried`, and the turn writes it through
+the run's `warn` to the session log at WARNING (`dispatchRetryLine`, REQ-SESSION-142) — no issue and no timeline entry,
+because the ladder was not reached. An exhausted budget is handed on as the **last attempt's** error (the SDK's
+`RetryError` unwrapped in `fromError`), so its status and `retry-after` reach the ladder's classification. On resume the memory is
 rehydrated from the timeline (`ResilienceMemory.rehydrate`), so a continuation never returns to an exhausted pair and keeps the
 user's choice (REQ-SESSION-196).
 

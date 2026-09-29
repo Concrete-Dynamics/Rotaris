@@ -95,6 +95,12 @@ export interface ToolPortDeps {
   /** ADR-0034 (Part S): the run host's MCP holder and the run's configuration; null means no MCP surface (tests). */
   readonly mcp?: McpHost | null | undefined;
   readonly configured?: ((workspaceRoot: string) => ConfiguredRun | null) | undefined;
+  /**
+   * PD-ORCH-005 clause 9: the application's quit has closed its last window and its shutdown is still to come. What an
+   * agent asks of a person meanwhile — an approval or a question — waits, unshown, for the quit to withdraw it, and no
+   * budget expires on it. Absent in a test that never quits.
+   */
+  readonly quitting?: (() => boolean) | undefined;
 }
 
 /** REQ-TOOLS-104/106: the backend by presence alone; the PTY factory loaded once. Null when no shell exists on the host. */
@@ -308,12 +314,15 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
    * (REQ-CHAT-094). The budget is REQ-TOOLS-178's shared `runtime.approval_timeout_seconds`, whose 300 s default is
    * REQ-CHAT-093's figure and whose 0 means no limit.
    */
-  const questions = new PendingQuestions(deps.clocks.timers);
+  const quitting = (): boolean => deps.quitting?.() === true;
+  const questions = new PendingQuestions(deps.clocks.timers, { held: quitting });
   const conversationId = ctx.parentId ?? 'root';
   executors.set('ask_questions', askQuestionsTool({
     pending: questions, conversationId, agentId: ctx.agentName, timeoutMs: runtime.approvalTimeoutMs,
     publish: () => {
-      if (!ctx.attended()) return false;
+      // PD-ORCH-005 clause 9 with PD-CHAT-002 revision 2: a prompt put while the quit is under way is held for the quit to
+      // withdraw — published to the record, never discarded as unshowable (REQ-CHAT-094's cancellation).
+      if (!ctx.attended() && !quitting()) return false;
       return ctx.writer.save(ctx.writer.currentStatus).ok;
     },
   }) as ToolExecutor);
@@ -345,11 +354,11 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const pin = persona.permissionMode ?? null;
   let mode: PermissionPreset = selectRequestedMode({ pin, override: ctx.modeOverride ?? null, runtime: ctx.requestedMode });
   const policy = new PolicyContext(buildPolicy({ preset: mode, workspaceRoot: root }));
-  const approvals = new PendingApprovals(deps.clocks.timers);
+  const approvals = new PendingApprovals(deps.clocks.timers, { held: quitting });
   const writes = writerSink(ctx.writer, ctx.sessionId, deps.clocks, ctx.warn);
   const toolHooks = ctx.hooks ?? null;
   const gate = new Gate({
-    sessionId: ctx.sessionId, workspaceRoot: root, policy, approvals, attended: ctx.attended, presenter: deps.presenter,
+    sessionId: ctx.sessionId, workspaceRoot: root, policy, approvals, attended: ctx.attended, presenter: deps.presenter, quitting,
     headlessPolicy: runtime.headlessPolicy, abortHook: ctx.abortRun, approvalTimeoutMs: runtime.approvalTimeoutMs,
     executors: callable, resolvePath: (p) => { try { return realPathOf(p); } catch { return null; } },
     // PD-TOOLS-004: a name is the public tool's when the callable map holds the very executor `executorsFor` built

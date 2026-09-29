@@ -34,7 +34,7 @@ the product is not repaired. Recorded 2026-09-29 under R-067.
 - `REQ-TOOLS-128`: the stream-control interrupt for a background session is SIGINT.
 - `REQ-TOOLS-110`: `send_signal` sends the signal. That part is met, since every process of the group receives it.
 - Whether the product owes more than the delivery is
-  [OQ-134](../architecture/open-questions.md): re-delivering the signal, or launching a lone command by `exec`. Each
+  [OQ-135](../architecture/open-questions.md): re-delivering the signal, or launching a lone command by `exec`. Each
   repair changes what a command receives or how it is started.
 
 ## Relevant files

@@ -100,6 +100,10 @@ describe('REQ-MONITOR-166 the run samples the token history', () => {
     expect(costLabelOf('0.00154', 'reported')).toEqual({ text: '0.0015 reported by the provider', qualifier: 'reported' });
     expect(costLabelOf('0.006', 'configured')).toEqual({ text: '0.0060 at configured rates', qualifier: 'configured' });
     expect(costLabelOf('1.5', 'incomplete')).toEqual({ text: 'at least 1.50; some requests have no price', qualifier: 'incomplete' });
+    // ESC-42 option (b): a priced total too small for four places reads as the floor, in every label's own template.
+    expect(costLabelOf('0.0000050', 'configured')).toEqual({ text: '< 0.0001 at configured rates', qualifier: 'configured' });
+    expect(costLabelOf('0.000004', 'reported')).toEqual({ text: '< 0.0001 reported by the provider', qualifier: 'reported' });
+    expect(costLabelOf('0.000004', 'incomplete')).toEqual({ text: 'at least < 0.0001; some requests have no price', qualifier: 'incomplete' });
     // The label is the RECORDED qualifier's, never re-derived from the amount; a malformed total or qualifier reads unknown.
     expect(costLabelOf('0.12', 'unknown')).toEqual({ text: 'price not established', qualifier: 'unknown' });
     expect(costLabelOf('nonsense', 'reported')).toEqual({ text: 'nonsense (price not established)', qualifier: 'unknown' });

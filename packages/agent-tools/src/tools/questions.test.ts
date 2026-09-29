@@ -103,6 +103,22 @@ describe('REQ-CHAT-093/094/096 — the wait registry', () => {
     expect(pending.create(prompt({ request_id: 'q2' }), 300_000)).not.toBeNull();
   });
 
+  it('PD-ORCH-005 clause 9: a budget expiring while the quit holds the prompt is not a timeout; the quit withdraws it', async () => {
+    const timers = new TestTimers();
+    let held = true;
+    const pending = new PendingQuestions(timers, { held: () => held });
+    const wait = pending.create(prompt(), 300_000)!;
+    timers.advance(300_000);
+    timers.advance(300_000);
+    expect(pending.size).toBe(1);
+    expect(pending.withdrawAll('quit')).toBe(1);
+    expect(await wait).toEqual({ kind: 'withdrawn', cause: 'quit' });
+    held = false;
+    const later = pending.create(prompt({ request_id: 'q2' }), 300_000)!;
+    timers.advance(300_000);
+    expect(await later).toEqual({ kind: 'timed_out', afterSeconds: 300 });
+  });
+
   it('REQ-CHAT-096: a stale prompt id resolves nothing; teardown and the bulk cancel release the rest', async () => {
     const timers = new TestTimers();
     const pending = new PendingQuestions(timers);

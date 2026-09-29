@@ -13,7 +13,7 @@
  * standard output and error, so the application's first quit-path line (`quit: requested (before-quit)`) fails with
  * EPIPE, and the main process's uncaught-exception handler logs that failure to the same closed stream — a loop at full
  * CPU that never reaches the quit, and a `spawnSync` that never returns
- * (`docs/defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`). Here the pipes stay open and
+ * (`docs/defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`, repaired 2026-09-29). Here the pipes stay open and
  * read until the process has exited, so SIGTERM reaches the quit path the way a person's `kill` does.
  *
  * Nothing here is product code. It runs only from the proofs; `bounded-launch.test.ts` pins it against real children.

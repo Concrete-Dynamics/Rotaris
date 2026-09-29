@@ -56,5 +56,5 @@ Evidence:
 
 Residual: a window whose confirmed close never completes stays counted as closing, so a dialog it later closes sends
 no Deny. The approval then waits with nothing on screen. This needs a renderer that hangs in `beforeunload`, and it is
-not repaired. [`an-approval-asked-after-the-last-window-closes-is-denied.md`](../an-approval-asked-after-the-last-window-closes-is-denied.md)
-is the same class of defect, on a path this repair does not reach.
+not repaired. [`an-approval-asked-after-the-last-window-closes-is-denied.md`](an-approval-asked-after-the-last-window-closes-is-denied.md)
+is the same class of defect, on a path this repair does not reach; it was repaired there on 2026-09-29 under R-067.

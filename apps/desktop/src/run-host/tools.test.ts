@@ -109,12 +109,16 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     writer = created.value;
     warnings.length = 0;
     presented.length = 0;
+    presence.attended = true;
+    presence.quitting = false;
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
   const presented: ApprovalPayload[] = [];
   /** The port's clocks, advanced by the PD-TOOLS-005 case to expire an approval wait. */
   let portClock = new FakeClock();
+  /** PD-ORCH-005 clause 9: the presenter fact as the quit leaves it — no window, the quit under way. */
+  const presence = { attended: true, quitting: false };
   function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor' | 'planGateHeld' | 'presence' | 'hooks'> = {}, surface: { tools?: string; mcp?: readonly ToolExecutor[] } = {}) {
     mkdirSync(join(dir, '.rotaris'), { recursive: true });
     writeFileSync(join(dir, '.rotaris', 'agents.yaml'), yaml(pin, surface.tools ?? null));
@@ -128,6 +132,7 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
       presenter: { present: async (p) => { presented.push(p); return { ok: true }; }, close: () => undefined },
       nextSequence: () => 1, fileStates: new Map(), terminal: null,
       egress: () => permissivePolicyRead,
+      quitting: () => presence.quitting,
       // A stand-in MCP host whose one server offers the given executors (ADR-0034's surface, without a server process).
       ...(surface.mcp ? {
         mcp: { prepare: async () => undefined, surfaceFor: () => ({ persona: 'coding-agent', active: [], dropped: [] }), section: () => '', executorsFor: () => [...(surface.mcp ?? [])] } as unknown as McpHost,
@@ -136,7 +141,7 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     };
     return createToolPort({
       sessionId: asSessionId('S1'), workspaceRoot: dir, writer, persona: 'coding-agent', agentName: 'coding-agent',
-      requestedMode: 'ask', modeOverride, attended: () => true, warn: (m) => warnings.push(m), abortRun: () => undefined, ...extra,
+      requestedMode: 'ask', modeOverride, attended: () => presence.attended, warn: (m) => warnings.push(m), abortRun: () => undefined, ...extra,
     }, deps);
   }
 
@@ -246,6 +251,48 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     const timeline = dal.timelineOf(asSessionId('S1'));
     expect(JSON.parse(timeline.find((t) => t.name === 'question_withdrawn')!.metadata)).toMatchObject({ tool: 'ask_questions', interruption: 'stop' });
     expect(dal.issuesOf(asSessionId('S1')).map((i) => i.kind)).not.toContain('tool_error');
+  });
+
+  /*
+   * Defect `an-approval-asked-after-the-last-window-closes-is-denied` (R-067): the last window's revoke comes at once, the
+   * run host's shutdown only after REQ-GIT-101's checkpoint wait. What an agent asks in that gap is the quit's to withdraw.
+   */
+  it('PD-ORCH-005 clause 9 through the port: an approval asked after the quit closed the last window waits unshown, outlives its budget, and the quit withdraws it — nothing denied', async () => {
+    const port = portFor(null, null);
+    presence.attended = false;
+    presence.quitting = true;
+    const pending = port.dispatch({ callId: 'c1', name: 'write_file', rawArgs: JSON.stringify({ operation: 'create', path: 'w.txt', content: 'x' }), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' }, new AbortController().signal);
+    // It is in `pending_approvals` — a wait, not REQ-TOOLS-064's headless resolution — and nothing is shown.
+    await vi.waitFor(() => expect(JSON.parse(dal.getSession(asSessionId('S1'))?.pending_approvals ?? '[]')).toHaveLength(1));
+    portClock.advance(3_600_000);
+    await Promise.resolve();
+    expect(presented).toEqual([]);
+    expect(dal.auditOf(asSessionId('S1'))).toEqual([]);
+    expect(port.withdrawPending?.('quit')).toBe(1);
+    const r = await pending;
+    expect(r).toMatchObject({ status: 'blocked', isError: true, interrupted: true });
+    expect(r.text).toBe('The approval this call was waiting on was withdrawn by quitting the application; the call was not run.');
+    expect(existsSync(join(dir, 'w.txt'))).toBe(false);
+    expect(dal.auditOf(asSessionId('S1'))).toEqual([]);
+    expect(dal.issuesOf(asSessionId('S1')).map((i) => i.kind)).not.toContain('permission_denied');
+  });
+
+  it('PD-ORCH-005 clause 9 with PD-CHAT-002 revision 2 through the port: a question put after the quit closed the last window is held, not discarded, and the quit withdraws it', async () => {
+    const port = portFor(null, null, {}, { tools: '[read_file, ask_questions]' });
+    const call = { callId: 'q1', name: 'ask_questions', rawArgs: JSON.stringify({ steps: [{ id: 'a', title: 'Which one?' }] }), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' };
+    const pending = port.dispatch(call, new AbortController().signal);
+    await vi.waitFor(() => expect(presented).toHaveLength(1));
+    // The quit lands after the call's approval was given and before its question is put.
+    presence.attended = false;
+    presence.quitting = true;
+    expect(port.answerApproval(presented[0]!.request_id, 'once')).toBe(true);
+    await vi.waitFor(() => expect(port.pendingQuestions?.()).toHaveLength(1));
+    portClock.advance(3_600_000);
+    expect(port.pendingQuestions?.()).toHaveLength(1);
+    expect(port.withdrawPending?.('quit')).toBe(1);
+    const r = await pending;
+    expect(r).toMatchObject({ status: 'blocked', isError: true, interrupted: true });
+    expect(r.text).toBe('The questions were withdrawn by quitting the application before the user answered. Nothing was answered; ask again if the answers are still needed.');
   });
 
   /**

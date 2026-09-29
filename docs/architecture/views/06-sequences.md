@@ -174,7 +174,9 @@ sequenceDiagram
 
   A->>G: tool call
   G->>G: policy: allow / deny / ask
-  alt not attended
+  alt the quit closed the last window (presenter.revoke {quitting})
+    G->>G: held unshown in pending_approvals, no budget expiring, until the quit's shutdown withdraws it
+  else not attended
     G-->>A: deny (no presenter)
   else ask
     G->>RH: presenter.present(payload)
@@ -205,6 +207,14 @@ The parts that are easy to get wrong:
   and during a plan cycle too, where the cycle's agents end rather than rest (PD-ORCH-005 clauses 9 and 15; OQ-108). The question
   dock's cancellation is held back at a quit the same way. *Until phase 7 the quit's close sent a Deny first, and the
   agent stepped on it: `docs/defects/fixed/a-quit-denies-the-approval-it-should-withdraw.md`.*
+- **The quit's gap is not unattended.** Main revokes the last window's presenter as it closes, but sends `shutdown`
+  only after `window-all-closed` has waited on the checkpoint operation (REQ-GIT-101). The revoke the quit causes
+  carries `quitting` (from `QuitState`), and until a window registers again `PresenterRegistry.quitting` holds what is
+  asked: an approval is published `brokered` and waits unshown, a present that crossed the close and came back "not
+  shown" waits too, a question is recorded pending, and no timer expires on any of them (`PendingApprovals`'
+  and `PendingQuestions`' `held`). The shutdown then withdraws them by `quit` (PD-ORCH-005 clause 9; OQ-132). *Until
+  2026-09-29 an ask in the gap met no presenter and was denied by the headless policy:
+  `docs/defects/fixed/an-approval-asked-after-the-last-window-closes-is-denied.md`.*
 - Presentation order is **oldest first by the published sequence**, and that sequence orders presentation
   *across* windows, not within one.
 - A dialog that cannot be shown is not a hang: `approval.shown {ok: false}` comes back, the pending request is

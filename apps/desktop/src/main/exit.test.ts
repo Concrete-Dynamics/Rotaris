@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProcessReply } from '@rotaris/contracts';
 import { FakeClock, millis } from '@rotaris/kernel';
-import { CHILD_CLOSE_BOUND_MS, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
+import { CHILD_CLOSE_BOUND_MS, ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
 
 /** A window whose destruction reports `closed` at once, later, or never. */
 function win(opts: { parent: boolean; closes?: 'now' | 'never' }, log: string[], name: string): ClosableWindow & { closed: () => void } {
@@ -300,5 +300,51 @@ describe('main is gone only after the run host — a session lock ends with the 
     await settle(clock, endBeforeMain({ kill: () => { throw new Error('already gone'); } }, exit, clock, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, () => said.push('still running')));
     expect(exit.code).toBe(0);
     expect(said).toEqual([]);
+  });
+});
+
+/**
+ * Live-run finding L13 (R-067): an immediate exit ends the run host itself (`endBeforeMain` with a grace of 0), and
+ * Electron then reports the child `killed, exit 15`. PD-MONITOR-002's first execution wrote every reason but
+ * `clean-exit` at `error`, so an orderly quit ended on an `error` line — 9 of 11 launches of that day's live runs.
+ */
+describe('PD-MONITOR-002: a child process main ended itself is not a loss (live-run finding L13)', () => {
+  const RUN_HOST = { type: 'Utility', name: 'rotaris-run-host', reason: 'killed', exitCode: 15 } as const;
+  it('the run host an immediate exit ended is reported killed at info, and says main ended it', async () => {
+    const ended = new ChildrenEndedByMain();
+    const clock = new FakeClock();
+    let listener: ((code: number) => void) | null = null;
+    const host = { once: (_e: 'exit', l: (code: number) => void) => { listener = l; }, kill: () => { clock.after(millis(1), () => listener?.(0)); return true; } };
+    const exit = watchChildExit(host);
+    const done = endBeforeMain(ended.endable(RUN_HOST.name, host), exit, clock, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, () => undefined);
+    clock.advance(1);
+    await done;
+    expect(ended.gone(RUN_HOST)).toEqual({ level: 'info', message: 'CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit 15); main ended it at its exit' });
+  });
+
+  it('a child killed by anything else — main never ended it — is still a loss at error, as is any end but a clean exit', () => {
+    const ended = new ChildrenEndedByMain();
+    // Measured by PD-MONITOR-002's first execution: SIGKILL from outside, then the last window closed.
+    expect(ended.gone({ ...RUN_HOST, exitCode: 9 })).toEqual({ level: 'error', message: 'CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit 9)' });
+    const other = new ChildrenEndedByMain();
+    other.endable('rotaris-run-host', { kill: () => true }).kill();
+    expect(other.gone({ ...RUN_HOST, reason: 'crashed', exitCode: 11 }).level).toBe('error');
+    expect(other.gone({ type: 'Utility', name: 'rotaris-workspace-service', reason: 'killed', exitCode: 15 }).level).toBe('error');
+    expect(other.gone({ type: 'GPU', reason: 'killed', exitCode: 15 }).level).toBe('error');
+    expect(other.gone({ type: 'Utility', name: 'rotaris-run-host', reason: 'clean-exit', exitCode: 0 })).toEqual({ level: 'info', message: 'CHILD PROCESS GONE (Utility rotaris-run-host: clean-exit, exit 0)' });
+  });
+
+  it('a run host that exits by itself inside the grace is never ended, so nothing is recorded as main\'s', async () => {
+    const ended = new ChildrenEndedByMain();
+    const clock = new FakeClock();
+    let listener: ((code: number) => void) | null = null;
+    let kills = 0;
+    const host = { once: (_e: 'exit', l: (code: number) => void) => { listener = l; }, kill: () => { kills += 1; return true; } };
+    const exit = watchChildExit(host);
+    const done = endBeforeMain(ended.endable(RUN_HOST.name, host), exit, clock, { graceMs: RUN_HOST_END_BOUND_MS, boundMs: RUN_HOST_END_BOUND_MS }, () => undefined);
+    listener!(0);
+    await done;
+    expect(kills).toBe(0);
+    expect(ended.gone(RUN_HOST).level).toBe('error');
   });
 });

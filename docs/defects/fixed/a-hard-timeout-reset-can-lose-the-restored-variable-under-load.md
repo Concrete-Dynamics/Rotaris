@@ -52,13 +52,13 @@ calls that read a shell do, so it cannot soft-pause and is seen to complete. The
 succeeded, so a future coupling fails on its cause and not three steps later. The product's part is a reading
 PD-TOOLS-001 does not settle. "Snapshot … before the respawn" cannot be taken from a wedged shell. The build takes the
 snapshot after each command it sees complete, so a soft-paused command that finishes unseen is not in it. That is
-raised as [OQ-133](../../architecture/open-questions.md), with the reading pinned by a new case, not changed here.
+raised as [OQ-134](../../architecture/open-questions.md), with the reading pinned by a new case, not changed here.
 
 **Pinned by** `terminal.test.ts`:
 - "REQ-TOOLS-097/099: the hard timeout kills the tree, …": red in its old form under the widened leftover, as above.
   In its new form it was green in 20 of 20 loaded runs of the file (`pnpm vitest run
   packages/agent-tools/src/terminal/terminal.test.ts`, eight CPU burners, Node 24).
-- "PD-TOOLS-001 (OQ-133): a reset restores the snapshot of the last command the product saw complete, …": the
+- "PD-TOOLS-001 (OQ-134): a reset restores the snapshot of the last command the product saw complete, …": the
   flake's mechanism in a session of its own. The variable's call soft-pauses behind a `sleep 8`. The case then waits
   until that call has written the variable's value to a file, so the shell has run it and holds the variable, and only
   then resets the shell by a hard timeout; the read gives `[]`. Beside it, the same sequence with a timeout restores

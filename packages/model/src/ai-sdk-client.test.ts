@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { Timers } from '@rotaris/kernel';
+import { millis, type MonotonicClock, type Timers } from '@rotaris/kernel';
 import { AiSdkModelClient, outputDowngrade, redactHeaders, type FetchLike } from './ai-sdk-client.js';
-import type { ModelRequest, StreamPart } from './ports.js';
+import type { DispatchRetry, ModelRequest, StreamPart } from './ports.js';
 
 /**
  * Spike 6's structural half, against a fake fetch: which URL each dialect
@@ -21,6 +21,8 @@ const realTimers: Timers = {
   after: (delay, fn) => { const h = setTimeout(fn, delay); return { cancel: () => clearTimeout(h) }; },
   every: (period, fn) => { const h = setInterval(fn, period); return { cancel: () => clearInterval(h) }; },
 };
+
+const realMonotonic: MonotonicClock = { now: () => millis(performance.now()) };
 
 function sse(lines: string[]): Response {
   const body = lines.map((l) => `data: ${l}\n\n`).join('');
@@ -52,7 +54,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
       return sse([chatChunk('Hel', null), chatChunk('lo', null), chatChunk(null, 'stop', { prompt_tokens: 7, completion_tokens: 2 }), '[DONE]']);
     };
     const logged: Record<string, string>[] = [];
-    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://acme.example/v1', headers: { 'editor-version': 'rotaris/0.1' }, fetch: fake, onRequest: (i) => logged.push(i.headers) });
+    const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', headers: { 'editor-version': 'rotaris/0.1' }, fetch: fake, onRequest: (i) => logged.push(i.headers) });
     const { parts, error } = await collect(client.stream(request('chat')));
     expect(error).toBeNull();
     expect(seen[0]!.url).toBe('https://acme.example/v1/chat/completions');
@@ -72,7 +74,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
       seen.push(String(init?.body ?? ''));
       return sse([chatChunk('done', null), costChunk, '[DONE]']);
     };
-    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://openrouter.ai/api/v1', fetch: fake });
+    const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://openrouter.ai/api/v1', fetch: fake });
     const { parts, error } = await collect(client.stream(request('chat')));
     expect(error).toBeNull();
     // The ask, in the endpoint's own field — the SDK has no option for it, so it goes through `transformRequestBody`.
@@ -86,7 +88,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
       seen.push(String(init?.body ?? ''));
       return sse([chatChunk('done', 'stop', { prompt_tokens: 3, completion_tokens: 1 }), '[DONE]']);
     };
-    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://api.openai.com/v1', fetch: fake });
+    const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://api.openai.com/v1', fetch: fake });
     const { parts, error } = await collect(client.stream(request('chat')));
     expect(error).toBeNull();
     // A strict OpenAI-shaped API rejects an unrecognised body key with a 400, so the ask is never sent to one.
@@ -99,7 +101,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
       seen.push(String(init?.body ?? ''));
       return sse([chatChunk('{"intent":"question"}', 'stop', { prompt_tokens: 3, completion_tokens: 4 }), '[DONE]']);
     };
-    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://acme.example/v1', fetch: fake });
+    const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: fake });
     const schema = { type: 'object', properties: { intent: { type: 'string' } }, required: ['intent'], additionalProperties: false };
     const { error } = await collect(client.stream(request('chat', { output: { kind: 'json_schema', name: 'intent_classification', schema } })));
     expect(error).toBeNull();
@@ -121,7 +123,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
       seen.push(`${init?.method ?? 'GET'} ${String(input)} auth=${new Headers(init?.headers).get('authorization')}`);
       return new Response(JSON.stringify({ error: { message: 'bad key for acme', type: 'invalid_request_error' } }), { status: 401, headers: { 'content-type': 'application/json' } });
     };
-    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://acme.example/v1', fetch: fake });
+    const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: fake });
     const { error } = await collect(client.stream(request('responses')));
     expect(seen[0]).toBe('POST https://acme.example/v1/responses auth=Bearer sk-test-secret');
     expect(error).not.toBeNull();
@@ -129,10 +131,60 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
     expect(error!.status).toBe(401);
     expect(error!.providerMessage).toContain('bad key for acme');
   });
+  it('OQ-110 (REQ-CONFIG-086, REQ-SESSION-142): each retry the dispatch layer absorbs is reported as it is sent, with the status it met and the delay it waited', async () => {
+    const statuses = [429, 500];
+    let n = 0;
+    const fake: FetchLike = async () => {
+      const status = statuses[n++];
+      // The SDK honours `retry-after-ms`, which keeps the test's real waits short; the delay reported is MEASURED, not read off the header.
+      if (status !== undefined) return new Response(JSON.stringify({ error: { message: `refused ${status}` } }), { status, headers: { 'content-type': 'application/json', 'retry-after-ms': String(40 * n) } });
+      return sse([chatChunk('ok', null), chatChunk(null, 'stop', { prompt_tokens: 3, completion_tokens: 1 }), '[DONE]']);
+    };
+    const retries: DispatchRetry[] = [];
+    const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: fake });
+    const { parts, error } = await collect(client.stream(request('chat', { retries: 5, onRetry: (r) => retries.push(r) })));
+    expect(error).toBeNull();
+    expect(parts.at(-1)).toEqual({ kind: 'finish', reason: 'stop' });
+    expect(n).toBe(3);
+    expect(retries.map(({ delayMs: _d, ...r }) => r)).toEqual([{ attempt: 1, of: 5, status: 429 }, { attempt: 2, of: 5, status: 500 }]);
+    // A timer may fire a fraction of a millisecond early against the monotonic reading; never a whole 5 ms.
+    expect(retries[0]!.delayMs).toBeGreaterThanOrEqual(35);
+    expect(retries[1]!.delayMs).toBeGreaterThanOrEqual(75);
+    expect(retries[1]!.delayMs).toBeLessThan(5_000);
+  });
+  it('OQ-110: a connection failure the dispatch layer retries is reported with no status and the failure beneath it; a call that met none reports nothing', async () => {
+    let n = 0;
+    const fake: FetchLike = async () => {
+      n += 1;
+      if (n === 1) throw Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:9'), { code: 'ECONNREFUSED' }) });
+      return sse([chatChunk('ok', null), chatChunk(null, 'stop', { prompt_tokens: 3, completion_tokens: 1 }), '[DONE]']);
+    };
+    const retries: DispatchRetry[] = [];
+    // A controlled clock: the failure is met at 5,000 and the retry sent at 7,000 (the SDK's own 2 s wait passes in real time).
+    const readings = [5_000, 7_000];
+    const client = new AiSdkModelClient({ timers: realTimers, monotonic: { now: () => millis(readings.shift() ?? 9_999) }, baseUrl: 'https://acme.example/v1', fetch: fake });
+    const { error } = await collect(client.stream(request('chat', { retries: 1, onRetry: (r) => retries.push(r) })));
+    expect(error).toBeNull();
+    expect(retries).toEqual([{ attempt: 1, of: 1, status: null, failure: 'fetch failed (ECONNREFUSED)', delayMs: 2_000 }]);
+    retries.length = 0;
+    await collect(client.stream(request('chat', { retries: 5, onRetry: (r) => retries.push(r) })));
+    expect(retries).toEqual([]);
+  });
+  it('OQ-110 (REQ-ORCH-091/092): when the dispatch layer\'s retries are exhausted the ladder is handed the last attempt\'s error, its status and retry-after intact', async () => {
+    const refuse = (status: number): FetchLike => async () => new Response(JSON.stringify({ error: { message: `refused ${status}` } }), { status, headers: { 'content-type': 'application/json', 'retry-after-ms': '5', 'retry-after': '7' } });
+    const rateLimited = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: refuse(429) });
+    const limited = await collect(rateLimited.stream(request('chat', { retries: 2 })));
+    // Before: `unknown`, not transient, no status — "Failed after 3 attempts" — so REQ-ORCH-091 (c)'s wait never began.
+    expect(limited.error).toMatchObject({ code: 'http', status: 429, retryAfterMs: 7_000, retryAfter: '7' });
+    expect(limited.error?.providerMessage).toContain('refused 429');
+    const overloaded = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: refuse(503) });
+    const failed = await collect(overloaded.stream(request('chat', { retries: 1 })));
+    expect(failed.error).toMatchObject({ code: 'http', status: 503, transient: true });
+  });
   it('a 503 is transient, a 400 is not (REQ-ORCH-092 decided on the status, not on prose)', async () => {
     const at = (status: number): FetchLike => async () => new Response('{"error":{"message":"x"}}', { status, headers: { 'content-type': 'application/json' } });
-    const e503 = (await collect(new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://a.example/v1', fetch: at(503) }).stream(request('chat')))).error!;
-    const e400 = (await collect(new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://a.example/v1', fetch: at(400) }).stream(request('chat')))).error!;
+    const e503 = (await collect(new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://a.example/v1', fetch: at(503) }).stream(request('chat')))).error!;
+    const e400 = (await collect(new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://a.example/v1', fetch: at(400) }).stream(request('chat')))).error!;
     expect((e503 as { transient?: boolean }).transient).toBe(true);
     expect((e400 as { transient?: boolean }).transient).toBe(false);
   });
@@ -148,7 +200,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
       });
       return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
     };
-    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://a.example/v1', fetch: fake });
+    const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://a.example/v1', fetch: fake });
     const it = client.stream(request('chat', { signal: ac.signal }))[Symbol.asyncIterator]();
     const first = await it.next();
     expect(first.value).toEqual({ ok: true, value: { kind: 'text', delta: 'part' } });
@@ -171,7 +223,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
       });
       return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
     };
-    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://a.example/v1', fetch: fake });
+    const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://a.example/v1', fetch: fake });
     const { parts, error } = await collect(client.stream(request('chat', { timeoutMs: 300 })));
     expect(parts.some((p) => p.kind === 'text')).toBe(true);
     expect(error).not.toBeNull();
@@ -201,7 +253,7 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
       });
       return new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
     };
-    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://a.example/v1', fetch: fake });
+    const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://a.example/v1', fetch: fake });
     const { parts, error } = await collect(client.stream(request('chat', { timeoutMs: 300 })));
     expect(error).toBeNull();
     expect(parts.filter((p) => p.kind === 'text').map((p) => (p as { delta: string }).delta).join('')).toBe('d0 d1 d2 d3 d4 d5 d6 d7 ');
@@ -216,7 +268,7 @@ describe('model — a system message reaches the provider (spike 6, live half: t
   it('chat: the system text travels as instructions and lands in the request body; the stream still maps across', async () => {
     const seen: string[] = [];
     const fake: FetchLike = async (_input, init) => { seen.push(String(init?.body ?? '')); return sse([chatChunk('ok', null), chatChunk(null, 'stop', { prompt_tokens: 3, completion_tokens: 1 }), '[DONE]']); };
-    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://acme.example/v1', fetch: fake });
+    const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: fake });
     const req = request('chat', { messages: [{ role: 'system', content: [{ kind: 'text', text: 'You are the orchestrator.' }] }, { role: 'user', content: [{ kind: 'text', text: 'hi' }] }] });
     const { parts, error } = await collect(client.stream(req));
     expect(error).toBeNull();

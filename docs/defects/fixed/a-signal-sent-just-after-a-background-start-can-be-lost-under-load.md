@@ -83,7 +83,7 @@ race reading holds. The window is microseconds on an idle host and wider under l
 script starts. It is recorded in
 [`a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session`](../a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md).
 Whether the product owes more than the delivery (re-delivery, `exec`, another shell) is
-[OQ-134](../../architecture/open-questions.md).
+[OQ-135](../../architecture/open-questions.md).
 
 *Corrected 2026-09-29 in the branch's verification round: this section first read "Repair: the case's own timing,
 already landed, with no product change", and called the exposure "the shell's" with no open record of it. That moved

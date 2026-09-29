@@ -70,7 +70,7 @@ record already decides, and every ruling it needs is named as the owner's rather
   two). **`resilience-proof` repaired 2026-09-28 under R-062, in the proof and not the product:** scenario 4 chooses the
   model through the driver and every launch is bounded, and all ten scenario blocks (eleven launches) pass as root on Linux. The overrun it
   showed was a product loop, not an ignored signal: a quit whose standard output has been closed never ends
-  ([note](../defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md), open; REQ-MONITOR-131's
+  ([note](../defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md), repaired 2026-09-29 under R-067; REQ-MONITOR-131's
   backstop). `sandbox-proof` reads the host's own verdict since 2026-09-28 ([Windows verdict, fixed](../defects/fixed/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md)).
   It is green on Linux without `bwrap`. On Linux with `bwrap` it is red on a **product** defect that IC-8's first Linux
   execution found ([absent-subpath residue](../defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md)).

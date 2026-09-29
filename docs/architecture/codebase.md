@@ -326,7 +326,8 @@ in `configuration.ts`'s header.)
    timeline entry rehydrated on resume (the wire-event catalogue is closed at 23, so no event); the unresponsive-model
    fallback after `llm_response_timeout` on the first model event; the hard child timeout's one retry on the role's
    fallback; per-model `timeout` and `num_retries` (the dispatch layer's retries, which come before the ladder's — ruled
-2026-09-29, OQ-110). The record's `wait` and the Workspace header that counts down and
+2026-09-29, OQ-110; each one it absorbs is a WARNING line in the session log, `ModelRequest.onRetry` → `TurnSink.retried`
+→ `dispatchRetryLine`, and an exhausted budget hands the ladder the last attempt's error, built the same day). The record's `wait` and the Workspace header that counts down and
    offers keep waiting (no operation), change model (`setModel`) and cancel — REQ-MONITOR-004's enumeration stays at
    twenty-two. `pnpm resilience-proof` drives nine launches through scripted fault steps. **Found — four defects in
    existing code:** the transient retry re-ran the whole turn and would have replayed executed tool calls under fresh ids
@@ -1045,7 +1046,8 @@ through `lib/bounded-launch.mjs` by SIGTERM, a grace, then SIGKILL and reporting
 scenario runs to its end with its failure listed in `results.json`
 ([note](../defects/fixed/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md)).
 `spawnSync`'s own timeout could not bound a launch: it closes the pipes as it signals, and the application's quit then
-loops on its own EPIPE ([note](../defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md), open).
+loops on its own EPIPE ([note](../defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md); repaired
+2026-09-29 under R-067 — the application log's writer, `standardStreamWriter`, absorbs a failed write and stops).
 
 **A probe is a deadline, not an appointment (2026-09-12).** Three of this proof's assertions were mid-run DOM probes
 fired at a fixed instant — `.wait-header@1700` — and they failed intermittently on a busy machine with nothing wrong

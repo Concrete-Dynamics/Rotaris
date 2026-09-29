@@ -442,7 +442,8 @@ repaint or repopulate every live window.
 **Main ↔ run host (`RunHostRequestSchema` / `ProcessReplySchema` / `ProcessEventSchema`).** Since 2026-09-09 (Part AL): the seven `terminal.*` requests, the `terminal.streams` reply and the `publish.terminal` event, listed above. Requests:
 `workspace.opened/closing/refuseRuns/renewLease/closeStore/release`, `session.*` (start, list, resume,
 continue, prompt, attach, detach, reconcile, pageOlder, control), `runs.active`, `circuit_breaker.status`,
-`config.liveState`, `presenter.register/revoke/pollReply`, `approval.shown/queued`, `hooks.*`, `playbooks.catalogue`,
+`config.liveState`, `presenter.register/revoke/pollReply` (a revoke the application's quit causes carries `quitting`,
+PD-ORCH-005 clause 9 — `06-sequences.md` §2), `approval.shown/queued`, `hooks.*`, `playbooks.catalogue`,
 `checkpoint.list/recordSafety/recordRestore` (Part P), `prompts.read/push/take` (Part X, session-less like
 `session.list` — REQ-LIBRARY-137/138), `timeline.append` (Part V, REQ-NOTIFY-268; its optional
 `severity` is REQ-SESSION-134's vocabulary and `info` where absent, while the entry's `id` is minted by the writer
@@ -477,7 +478,10 @@ a dialog it could not present, which is `warning`. An exit status of 0 is not pr
 reports 0 for a child it tears down at quit, too, which is why the unanswered `shutdown` has a line of its own. The quit
 races each `shutdown` against that child's exit (`shutdownAtQuit`, `main/exit.ts`), watched from the fork: a child that
 exits has ended even when its answer was lost to the exit, so only one still running when its bound elapses, or one that
-answers with a refusal (its `shutdown` threw, so it closed nothing and Electron's teardown will report 0), is said. Main then waits for the run host's exit itself, bounded, ending it if it has not come, before it quits — and an immediate exit ends it at once — so main is gone only after the run host and no session lock outlives the instance (`endBeforeMain`, 2026-09-28); a run host still running past that bound is said at `error`. A
+answers with a refusal (its `shutdown` threw, so it closed nothing and Electron's teardown will report 0), is said. Main then waits for the run host's exit itself, bounded, ending it if it has not come, before it quits — and an immediate exit ends it at once — so main is gone only after the run host and no session lock outlives the instance (`endBeforeMain`, 2026-09-28); a run host still running past that bound is said at `error`. The run host main ends that way is recorded (`ChildrenEndedByMain`, `main/exit.ts`, 2026-09-29): Electron reports its end `killed` after its own `exit` has said 0, and that report is `info` and says main ended it; a child killed any other way, or crashed, stays a loss at `error` (live-run finding L13). The writer onto standard output is `standardStreamWriter` (`main/app-log.ts`, 2026-09-29): it
+listens for the stream's `error` and, from its first failure, writes nothing more, and standard error carries the same
+listener — so a reader that has gone (EPIPE) never becomes an uncaught exception that the uncaught-exception handler
+logs to the same stream without end, which had starved the quit and REQ-MONITOR-131's backstop. A
 line below the threshold is not written. The threshold is `info`, and the environment variable `ROTARIS_APP_LOG_LEVEL`,
 read once when main's module is evaluated, is the only thing that moves it; no message kind, command, configuration key
 or setting reaches it, and it is a different thing from the per-session `session.log`, whose level is

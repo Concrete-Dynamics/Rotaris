@@ -109,7 +109,7 @@ before the ladder's), **OQ-111** (what the report summariser reads), **OQ-112** 
 write is refused) **and OQ-113** (REQ-LIBRARY-092's fallback, answered by amendment). **Three more were raised the same day
 from the live runs and left open: OQ-114** (the specification's fixed figures on a reasoning model's critical path, and a
 continuation that starts from nothing), **OQ-115** (the code-intelligence server's imperative tool description, rendered
-verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-117** (what an iteration is told of a task it takes up that is not the run's own) was raised the same day by the repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` and left open. **OQ-119** (whether the task the report summariser keeps as its start may pass REQ-ORCH-110's 2,000 per event) **and OQ-120** (the size of the facts given to the report summariser) were raised the same day by the repair of D1 and left open, as OQ-118 and OQ-119 on their branch, renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. **And OQ-122** (whether the window may open the setup dialog before the open's resolution, and what a skip answered in that interval records — built as: the dialog opens on the values, and such a skip performs the open's one automatic resolution first), raised 2026-09-29 by repairing `init-proof`'s red on Linux under R-062. **And OQ-123** (which run REQ-WORKSPACE-105's "no run is in progress" means — built as a run the user started, so a background run neither withdraws the setup prompt nor is drawn in its dialog), raised the same day by the same repair's second round. The two were raised as OQ-109 and OQ-110 on their branch, renumbered there to OQ-118 and OQ-119 when OQ-109 to OQ-117 had been taken on `main`, and renumbered again at the merge, OQ-118 to OQ-121 having been taken on `main` meanwhile. **One more was raised on 2026-09-29 by building REQ-ORCH-089's stall watchdog and REQ-NOTIFY-111/112's corrective message under R-067: OQ-127** (what counts as "an outcome that produced no output within `child_stall_timeout`" when the watchdog never cancels, and what the watchdog counts, writes and calls — including the three records REQ-ORCH-139's timeline vocabulary has no word for, written to the session log instead, and whether REQ-MONITOR-119's issue at every evaluation may evict REQ-SESSION-133's ring), raised as OQ-109 on its branch, renumbered there to OQ-126 when OQ-109 to OQ-125 had been taken on `main`, and renumbered again at the merge, OQ-126 having been taken on `main` meanwhile. **And OQ-129** (what REQ-MONITOR-128's optimistic cancel of one agent shows, where, and until when — built as the agents' activity text, in the window that sent the cancel, until the engine's next record), raised 2026-09-29 by the repair of `cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md` under R-067, raised as OQ-128 on its branch and renumbered at the merge, OQ-128 having been taken on `main` meanwhile. **And OQ-130** (whether the iteration the record of an accepted explicit cancel closes takes REQ-GIT-051's capture — built as: none is captured), raised the same day by the repair of `a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md` under OQ-103's ruling, raised as OQ-129 on its branch and renumbered at the merge, OQ-129 having been taken on `main` meanwhile. **And OQ-131** (what a follow-up by `delegate`'s `session_id` does beyond what `PD-ORCH-005` clause 22 states — built as: the child resumes into `queued` and starts as any queued child does, only the call's `task` is read, a child that never started is given its payload first, and a follow-up waits for an execution still winding down; a child the user cancelled may be followed up), raised 2026-09-29 by building clause 22 under R-067, raised as OQ-130 on its branch and renumbered at the merge, OQ-130 having been taken on `main` meanwhile. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-117** (what an iteration is told of a task it takes up that is not the run's own) was raised the same day by the repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` and left open. **OQ-119** (whether the task the report summariser keeps as its start may pass REQ-ORCH-110's 2,000 per event) **and OQ-120** (the size of the facts given to the report summariser) were raised the same day by the repair of D1 and left open, as OQ-118 and OQ-119 on their branch, renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. **And OQ-122** (whether the window may open the setup dialog before the open's resolution, and what a skip answered in that interval records — built as: the dialog opens on the values, and such a skip performs the open's one automatic resolution first), raised 2026-09-29 by repairing `init-proof`'s red on Linux under R-062. **And OQ-123** (which run REQ-WORKSPACE-105's "no run is in progress" means — built as a run the user started, so a background run neither withdraws the setup prompt nor is drawn in its dialog), raised the same day by the same repair's second round. The two were raised as OQ-109 and OQ-110 on their branch, renumbered there to OQ-118 and OQ-119 when OQ-109 to OQ-117 had been taken on `main`, and renumbered again at the merge, OQ-118 to OQ-121 having been taken on `main` meanwhile. **One more was raised on 2026-09-29 by building REQ-ORCH-089's stall watchdog and REQ-NOTIFY-111/112's corrective message under R-067: OQ-127** (what counts as "an outcome that produced no output within `child_stall_timeout`" when the watchdog never cancels, and what the watchdog counts, writes and calls — including the three records REQ-ORCH-139's timeline vocabulary has no word for, written to the session log instead, and whether REQ-MONITOR-119's issue at every evaluation may evict REQ-SESSION-133's ring), raised as OQ-109 on its branch, renumbered there to OQ-126 when OQ-109 to OQ-125 had been taken on `main`, and renumbered again at the merge, OQ-126 having been taken on `main` meanwhile. **And OQ-129** (what REQ-MONITOR-128's optimistic cancel of one agent shows, where, and until when — built as the agents' activity text, in the window that sent the cancel, until the engine's next record), raised 2026-09-29 by the repair of `cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md` under R-067, raised as OQ-128 on its branch and renumbered at the merge, OQ-128 having been taken on `main` meanwhile. **And OQ-130** (whether the iteration the record of an accepted explicit cancel closes takes REQ-GIT-051's capture — built as: none is captured), raised the same day by the repair of `a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md` under OQ-103's ruling, raised as OQ-129 on its branch and renumbered at the merge, OQ-129 having been taken on `main` meanwhile. **And OQ-131** (what a follow-up by `delegate`'s `session_id` does beyond what `PD-ORCH-005` clause 22 states — built as: the child resumes into `queued` and starts as any queued child does, only the call's `task` is read, a child that never started is given its payload first, and a follow-up waits for an execution still winding down; a child the user cancelled may be followed up), raised 2026-09-29 by building clause 22 under R-067, raised as OQ-130 on its branch and renumbered at the merge, OQ-130 having been taken on `main` meanwhile. **And OQ-132** (what is asked of a person in the quit's gap, after the last window closes and before the shutdown — built as: held unshown for the quit to withdraw, no budget expiring meanwhile, never denied), raised 2026-09-29 by the repair of `an-approval-asked-after-the-last-window-closes-is-denied.md` under R-067. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -5226,6 +5226,30 @@ corrected in place, its falsified reason kept beside the replacement, and the li
 can see: that the run survived the refusals, not that the ladder handled them. Nothing is built by the ruling; the
 session-log line is owed to the note that records L3, and the check to the note that records H3.
 
+**Built 2026-09-29 under R-067 — the session-log line.** The decorated fetch of `packages/model/src/ai-sdk-client.ts` is the
+one place a dispatch-layer retry is seen: one call makes one request per attempt, so a request that follows a failed
+attempt of the same call is a retry. The client calls `ModelRequest.onRetry` as the retry is sent, with the status the
+attempt before it met (or none, and the failure beneath it, for a connection failure) and the delay waited, **measured on
+the monotonic clock** (`AiSdkClientOptions.monotonic`) rather than recomputed from the SDK's backoff rule, which the next pin
+may change. `DefaultAgentBackend` forwards it to `TurnSink.retried`, and the turn writes `dispatchRetryLine` through the
+run's `warn` — so the line is in the session log at its default WARNING level, and in the application log beside it. The
+level is this build's reading: the ruling names the session log and not a level, and at INFO the line would be absent from
+every session log left at REQ-SESSION-142's default. Nothing is added to the ladder; no issue and no timeline entry is
+written for an absorbed retry. Pinned by `ai-sdk-client.test.ts` (the two cases "OQ-110 …: each retry the dispatch layer
+absorbs is reported …" and "… a connection failure …") and `run/turn.test.ts` ("OQ-110 …: a retry the dispatch layer
+absorbed is written to the session log …"), each failing with the report withdrawn. Shown live the same day
+(`pnpm live-run --only=faults` against `katalyst`, pack `2026-09-29T19-39-22-466Z`): `faults-ladder`'s session log reads
+`met HTTP 429 and waited 2002 ms before retry 1 of 5` and `met HTTP 500 and waited 4003 ms before retry 2 of 5`, the
+proxy's record showing the same two gaps; the row is in `first-executions.md`.
+
+**Found by building it — the ladder did not take over when the dispatch layer was exhausted.** The ruling's second half
+("the ladder takes over when they are exhausted") did not hold: the SDK reports an exhausted budget as a `RetryError`
+wrapping every attempt, which has no status, so `fromError` classified it `unknown` and fatal — a 429 that outlasted the
+five retries failed the step outright and REQ-ORCH-091 (c)'s wait never began; a 503 did the same instead of spending
+REQ-ORCH-092's transient budget. `fromError` now classifies the last attempt's error. Recorded and repaired the same day,
+[`../defects/fixed/an-exhausted-dispatch-layer-hands-the-ladder-a-failure-it-cannot-classify.md`](../defects/fixed/an-exhausted-dispatch-layer-hands-the-ladder-a-failure-it-cannot-classify.md);
+pinned by `ai-sdk-client.test.ts` ("OQ-110 (REQ-ORCH-091/092): when the dispatch layer's retries are exhausted …").
+
 **OQ-111 — Which part of a long child's transcript does the report summariser read?** *(REQ-ORCH-110, which caps the transcript the report-producing pass is given at 12,000 characters in total and 2,000 per event, and does not say which part is kept; REQ-ORCH-108, which has parents consume the report in place of the transcript; REQ-ORCH-109, whose runner-owned fields the summariser cannot write; `PD-LIBRARY-001`, the report's commands. Raised 2026-09-29 from the duress live run's finding D1 under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-110 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 `packages/engine/src/children/report.ts` builds the pass's transcript by joining the events and cutting the result to
@@ -5988,11 +6012,44 @@ becomes of the call's other fields, or what a child with no recorded conversatio
 **What a ruling decides.** Whether each reading above stands, the retry and the user's cancel most of all. A ruling that a follow-up resumes
 straight into `running`, as a resumed child does, would take it out of REQ-ORCH-050's cap.
 
-**OQ-132 — Which status does a background session take when its process dies of a signal?** *(REQ-TOOLS-109,
+**OQ-132 — What is asked of a person in the quit's gap — after the last window closes, before the shutdown?** *(`PD-ORCH-005`
+clauses 9 and 15, `PD-CHAT-002` revision 2; REQ-TOOLS-052, REQ-TOOLS-054, REQ-TOOLS-058, REQ-TOOLS-061, REQ-TOOLS-064,
+REQ-EVENTS-049, REQ-CHAT-094, REQ-GIT-101, which the directive does not name. Raised 2026-09-29 by the repair of
+[`an-approval-asked-after-the-last-window-closes-is-denied.md`](../defects/fixed/an-approval-asked-after-the-last-window-closes-is-denied.md)
+under [R-067](../product/requests.md#r-067). Open.)*
+
+Main revokes the last window's presenter as the window closes, and sends the run host its `shutdown` only once
+`window-all-closed` has waited on the checkpoint operation in flight (REQ-GIT-101) — a gap as long as that operation.
+Clause 9 withdraws an approval or a question pending "when the run comes to rest … by a quit", and clause 15 has the quit
+answer nothing through a dialog it closes. Neither says what an ask made inside the gap is: the run has not come to rest
+yet, and REQ-TOOLS-064 read alone resolves it through the headless policy — a denial the quit caused.
+
+**What the build proceeds under** (`PresenterRegistry.quitting`, `Gate.broker`, the `held` predicate of `PendingApprovals`
+and `PendingQuestions`):
+- **The quit, not the person, took the window.** A revoke main's `QuitState` says the quit caused marks the run host
+  quitting until a window registers again. Meanwhile an ask is not REQ-TOOLS-064's headless case: it is published
+  `brokered` (REQ-TOOLS-061) with the configured `timeout_seconds` (REQ-EVENTS-049), waits unshown in
+  `pending_approvals`, and the quit's shutdown withdraws it as clause 9 says.
+- **A present that crossed the close** and was answered "not shown" once the quit was under way is held the same way,
+  not denied `presenter-error` (REQ-TOOLS-058).
+- **No budget expires while the quit holds a wait.** The timer is armed again, so the gap never turns an approval
+  (REQ-TOOLS-052's timeout) or a question into a denial or a timeout, whether it was asked before the quit or during it.
+  The `timeout_seconds` the request announced is therefore not the bound it waited under.
+- **A question put in the gap is recorded pending and withdrawn by the quit**, not discarded as REQ-CHAT-094's "could not
+  be shown".
+- **A user treated as away (PD-TOOLS-005) is still resolved at once,** as the window open would have resolved it.
+- **Left as it was:** an agent built in the gap resolves its tool set with `userPromptChannel` read from attendedness,
+  so `ask_questions` is removed from it (REQ-TOOLS-053/069); and a run started in the gap reads attendedness at its start.
+  Neither was reached by the defect, and neither is changed.
+
+**What a ruling decides.** Whether the quit's gap is part of the quit's rest for clause 9, so that REQ-TOOLS-064,
+REQ-TOOLS-058 and REQ-CHAT-094 yield to it there, and whether a held request should announce a `timeout_seconds` it will
+not be held to. A ruling that REQ-TOOLS-064 governs the gap would restore the denial the defect note records.
+**OQ-133 — Which status does a background session take when its process dies of a signal?** *(REQ-TOOLS-109,
 REQ-TOOLS-110, REQ-TOOLS-112, REQ-TOOLS-128, REQ-TOOLS-179; OQ-10 as ruled in [R-044](../product/requests.md#r-044).
 Raised 2026-09-29 by the repair of live-run finding L4 under [R-067](../product/requests.md#r-067),
 [`a-background-session-ended-by-a-signal-reads-failed.md`](../defects/fixed/a-background-session-ended-by-a-signal-reads-failed.md).
-Open.)*
+Open; numbered OQ-132 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
 
 REQ-TOOLS-109's vocabulary is `completed` (exit 0), `failed` (nonzero), `killed` (the explicit kill, −1) and `timeout`
 (124). REQ-TOOLS-179 keeps −1 for `killed` alone on a background session. A process that dies of a signal has no exit
@@ -6018,10 +6075,10 @@ every signal death read `failed (exit -1)`: an error, a `tool_error` issue, and 
 the exit code of a signal death the product did not cause. A ruling that every signal death is `killed` would drop
 the second reading. A ruling that every one is `failed` would need a code other than −1 for it.
 
-**OQ-133 — Which shell state does a hard-timeout reset restore when a command completed that the product never saw
+**OQ-134 — Which shell state does a hard-timeout reset restore when a command completed that the product never saw
 complete?** *(`PD-TOOLS-001`, which narrows REQ-TOOLS-099; REQ-TOOLS-097, REQ-TOOLS-098. Raised 2026-09-29 by the
 repair of [`a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md`](../defects/fixed/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md)
-under [R-067](../product/requests.md#r-067). Open.)*
+under [R-067](../product/requests.md#r-067). Open; numbered OQ-133 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
 
 `PD-TOOLS-001` says the product "SHALL snapshot the shell's working directory and exported variables before the
 respawn". The respawn follows a wedged command, and a wedged shell cannot be asked for its state. So the build takes
@@ -6041,7 +6098,7 @@ snapshot included, took 1,486 to 1,707 ms. Under load it soft-paused, and the re
 older command.
 
 **What the build proceeds under:** the snapshot of the last command the product saw complete, as ADR-0020 records.
-The case `PD-TOOLS-001 (OQ-133): …` in `terminal.test.ts` pins that reading. Its paused command writes the variable's
+The case `PD-TOOLS-001 (OQ-134): …` in `terminal.test.ts` pins that reading. Its paused command writes the variable's
 value to a file, and the case waits for that file before the reset, so the variable was set before the respawn; the
 read after it gives `[]`. The case is red under a temporary change that snapshots a finished paused command before the
 next command runs. (Its first form reset the shell before the paused command had run, which pinned only
@@ -6055,13 +6112,13 @@ and through the live stream REQ-TOOLS-127 holds faithful to what the command wro
 snapshot when a poll hands over a finished paused command, which covers the agent that polls and not the one that
 moves on.
 
-**OQ-134 — Does `send_signal SIGINT` owe the session's stop when the shell discards the signal?** *(REQ-TOOLS-110,
+**OQ-135 — Does `send_signal SIGINT` owe the session's stop when the shell discards the signal?** *(REQ-TOOLS-110,
 REQ-TOOLS-128; OQ-10 as ruled in [R-044](../product/requests.md#r-044). Raised 2026-09-29 under
 [R-067](../product/requests.md#r-067) by the verification of the repair of
 [`a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md`](../defects/fixed/a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md),
 for the exposure recorded open in
 [`a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md`](../defects/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md).
-Open.)*
+Open; numbered OQ-134 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
 
 REQ-TOOLS-110 says `send_signal` *sends* the signal. The product sends it to every process of the session's group and
 reports it sent. R-044's ruling reads "SIGINT stops a background session". Where `/bin/sh` is `dash`, a SIGINT that

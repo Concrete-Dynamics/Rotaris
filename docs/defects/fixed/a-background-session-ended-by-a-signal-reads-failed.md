@@ -27,7 +27,7 @@ Live-run finding: L4 (live runs of 2026-09-29)
 
 ## Repaired — 2026-09-29 under R-067
 
-**The status of a signal death was unspecified, so it is [OQ-132](../../architecture/open-questions.md), and the build
+**The status of a signal death was unspecified, so it is [OQ-133](../../architecture/open-questions.md), and the build
 keeps REQ-TOOLS-179's −1 for `killed` alone.** A new `endOfExit` in `background.ts` decides the end from the `exit`
 event's code and its signal. The exit handler used to ignore the signal.
 - An exit code decides the status as before: `completed` for 0, `failed` for any other.
@@ -38,10 +38,10 @@ event's code and its signal. The exit handler used to ignore the signal.
 So the live run's session, stopped by the agent's own SIGINT, now reads `killed (exit -1)` at `warning`. Its
 observation is not an error, so the gate files no `tool_error` for it (`gate.ts` files one only for `isError`).
 
-**Pinned by** `terminal.test.ts`: "OQ-132: a signal death's status…" (the pure decision, every branch), and two
-cases against a real shell. "REQ-TOOLS-109/179, OQ-132 (live-run L4): a session the agent ends with send_signal
+**Pinned by** `terminal.test.ts`: "OQ-133: a signal death's status…" (the pure decision, every branch), and two
+cases against a real shell. "REQ-TOOLS-109/179, OQ-133 (live-run L4): a session the agent ends with send_signal
 SIGINT reads killed (−1) at warning, not an error" failed before the change with `failed` / `-1` / `error`.
-"OQ-132: a signal death the product did not send reads failed with 128 + n" had also read −1 before. The live
+"OQ-133: a signal death the product did not send reads failed with 128 + n" had also read −1 before. The live
 run's `frictions` scenario, run again on the built branch against the same endpoint, passed with its new check "no
 background session read failed (exit -1) after the agent's signal": the agent's SIGINT, then `query`, read `Session
 ts_382d1dae is killed (exit -1).`, `is_error` 0, and the session filed no `tool_error` issue (pack

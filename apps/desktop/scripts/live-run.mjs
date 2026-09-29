@@ -1528,7 +1528,7 @@ if (wanted.includes('frictions')) {
   check(signalled, 'the probe run attempted the SIGINT stop', signalled ? 'send_signal dispatched' : 'no send_signal in the record — the model did not attempt it');
   const sigint = calls.filter((call) => call.tool_name === 'terminal' && resultOf(call).includes('cannot be delivered'));
   check(sigint.length === 0, 'SIGINT was delivered without a platform refusal', sigint.length === 0 ? 'no refusal in the record' : `${sigint.length} refusal(s), e.g. ordinal ${sigint[0].ordinal} (${sigint[0].agent_name})`);
-  // Live-run finding L4 (OQ-132): the session the agent stopped with its own signal read `failed (exit -1)`, an error
+  // Live-run finding L4 (OQ-133): the session the agent stopped with its own signal read `failed (exit -1)`, an error
   // that filed a tool_error. It reads `killed` now; a `failed (exit -1)` anywhere in the record is the old shape.
   const signalDeath = calls.filter((call) => call.tool_name === 'terminal' && /is failed \(exit -1\)/.test(resultOf(call)));
   const readKilled = calls.filter((call) => call.tool_name === 'terminal' && /is killed \(exit -1\)/.test(resultOf(call)));

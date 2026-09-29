@@ -50,7 +50,17 @@ process death leaves a call held by one and not the other:
 
 *Found while building it:* a resumed child's credit reached the run's aggregate only, its `tool_calls` left as the rest
 wrote it, so a crash record counting children from their records would have counted twice a child resumed after a stop
-and then lost to a crash. That is why the child's count now moves with the total.
+and then lost to a crash. That is why the child's count now moves with the total. *Corrected at the verifier's review
+(2026-09-29):* as first committed, that claim, and the settle's persist beside it, were pinned by no case — reverting either
+left every test green. Two `children.test.ts` cases now pin them: the credit's — a child the stop's grace gave up on,
+credited from its record by the continue, one more call, a crash — reads a total of **6** where **4** is due without the
+child's count in the credit (the run's token sampler had saved the credited total before the death); the settle's — a
+child that settles, then a crash while the root's next step runs — reads **1** where **3** is due without it.
+
+*Found by building the credit's case:* a root that **returned** before the stop's grace ran out — while the rest waited for
+its children — was counted a second time, from its record, because the grace's timer sets `rootDetached` whatever the
+race had already decided. Only a root that never returned (`outcome === null`) is now counted from its record; the same
+case reads a total of **2** where **1** is due without that guard. The double count never reached `main`.
 
 What it does not do: a record a compression replaced holds fewer calls than were made, so what the crash record adds from
 it may fall short (never over); a plan cycle has no `iterations` row, so a crash during one still loses its root's calls
@@ -58,14 +68,21 @@ it may fall short (never over); a plan cycle has no `iterations` row, so a crash
 a child the stop's grace gave up on and a continue then declined still counts nothing
 ([`a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`](../a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md));
 and the total still lags during a pass (OQ-116, open). The agents panel still derives the root's figure as the total less
-the children's.
+the children's. A store a pre-v26 build crashed, continued and let crash again — a child credited from its record at that
+continue, its `tool_calls` never persisted with the credit — has that credit counted a second time when a v26 build records
+the second crash; the case is narrow and is not repaired. A root whose turn raises (neither a crash nor given up on)
+counts none of its calls: [`a-root-whose-turn-raises-never-counts-its-calls.md`](../a-root-whose-turn-raises-never-counts-its-calls.md).
 
 Pinned by: `packages/engine/src/run/crash.test.ts` — "the root's beyond its iteration's count and each unfinished child's
 beyond its own…", "a root whose count is not known…", "the calls the root and a child made before the crash reach the
 session total when it is repaired…" and "a continue after the crash counts what the crash left once…";
 `packages/engine/src/children/children.test.ts` — "a root given up on counts the call it made from its record, and its
-resume counts only the calls it adds"; `packages/store/src/store.test.ts` — the v25 → v26 migration. All five engine cases
-failed on the code before the repair (totals 0, 1 or 6 where 4, 3 and 9 were due).
+resume counts only the calls it adds", and, added at the verifier's review, "a child the stop's grace gave up on, credited
+from its record by the continue and then lost to a crash, is counted once…", "a child's settle persists the total with its
+own count…" and "a resumed root given up on at a second stop counts only what its record gained in that execution" (**6**
+where **4** is due without `recordedAtStart`); `packages/store/src/store.test.ts` — the v25 → v26 migration. The first five
+engine cases failed on the code before the repair (totals 0, 1 or 6 where 4, 3 and 9 were due); each of the three added
+fails with the one piece of the repair it names removed.
 
 **Measured live, 2026-09-29.** `pnpm live-run --confirm --skip-build --only=duress` on the repaired branch against the
 unmetered `katalyst` endpoint, pack `.live-run/runs/2026-09-29T12-40-51-800Z/` (the `fix-turn-accounting` worktree;

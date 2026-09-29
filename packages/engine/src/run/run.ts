@@ -1341,9 +1341,11 @@ export class Run {
       /*
        * REQ-MONITOR-102 (the repair of `a-roots-calls-before-a-crash-never-reach-the-session-total.md`): a root given up on
        * never returns its count, so its calls are counted from its record — once its open calls are answered, so a call it
-       * asked for and never started is not one — less what the record held when this execution began.
+       * asked for and never started is not one — less what the record held when this execution began. Only a root that
+       * never returned: the grace's timer still sets `rootDetached` when it runs out after the root returned — while the
+       * rest waits for its children — and that root's calls were counted with its outcome above.
        */
-      if (rootDetached && this.deps.dal) {
+      if (rootDetached && outcome === null && this.deps.dal) {
         const gained = Math.max(0, callsRun(this.record.load(rootTaskId)) - recordedAtStart);
         this.aggregates.addToolCalls(gained);
         this.persistToolCalls(rootCount === null ? {} : { root: { iteration: rootCount, add: gained } });

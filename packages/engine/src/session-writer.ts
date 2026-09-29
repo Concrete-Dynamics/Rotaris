@@ -1112,6 +1112,38 @@ export class SessionWriter {
     return ok(dal.getChild(sessionId, taskId)!);
   }
 
+  /**
+   * REQ-MONITOR-102 (the repair of `a-roots-calls-before-a-crash-never-reach-the-session-total.md`): calls that join the
+   * session's tool-call total, and the per-agent counts that say the total holds them — the root's
+   * (`iterations.root_tool_calls`, raised by `root.add`) and each child's (`children.tool_calls`, set to `calls` where that
+   * is more than it holds) — in one transaction, so no process death leaves a call held by one and not the other. `total`
+   * is the session's new total, as a run's aggregates hold it; absent, the stored total is raised by what the agents'
+   * counts gained. Returns the total written. The save that follows publishes it.
+   */
+  countToolCalls(counts: { readonly root?: { readonly iteration: number; readonly add: number }; readonly children?: readonly { readonly taskId: string; readonly calls: number }[] }, total?: number): Result<number, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId } = this.deps;
+    try {
+      return ok(dal.transaction(() => {
+        let gained = 0;
+        if (counts.root && counts.root.add > 0 && dal.addIterationRootCalls(sessionId, counts.root.iteration, counts.root.add)) gained += counts.root.add;
+        for (const c of counts.children ?? []) {
+          const current = dal.getChild(sessionId, c.taskId);
+          if (!current || c.calls <= current.tool_calls) continue;
+          dal.setChildTodo(sessionId, c.taskId, current.todo, c.calls);
+          gained += c.calls - current.tool_calls;
+        }
+        const stored = dal.getSession(sessionId)?.tool_calls ?? 0;
+        if (total === undefined && gained === 0) return stored;
+        const written = total ?? stored + gained;
+        dal.updateSessionRun(sessionId, { tool_calls: written });
+        return written;
+      }));
+    } catch (cause) {
+      return this.fail(cause);
+    }
+  }
+
   /** PD-ORCH-005: the interruption that left the open iteration open, or NULL when it resumes. Its own transaction. */
   recordIterationInterruption(iteration: number, interruption: Interruption | null): Result<boolean, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });

@@ -5314,7 +5314,7 @@ deadline `sessions.tool_calls` read 240 against 309 `tool_calls` rows — the or
 to 309. REQ-ORCH-097's "after each successful execution pass" is met to the letter, and a surface following REQ-MONITOR-102
 shows a figure 69 calls behind the record for as long as the pass lasts. The crash half of the same finding — calls made
 before a crash that never reach the total — is a defect of its own,
-[`a-roots-calls-before-a-crash-never-reach-the-session-total.md`](../defects/a-roots-calls-before-a-crash-never-reach-the-session-total.md).
+[`a-roots-calls-before-a-crash-never-reach-the-session-total.md`](../defects/fixed/a-roots-calls-before-a-crash-never-reach-the-session-total.md), repaired 2026-09-29 without moving this cadence.
 
 **What the build proceeds under.** REQ-ORCH-097 as written: accumulated at the end of each pass.
 

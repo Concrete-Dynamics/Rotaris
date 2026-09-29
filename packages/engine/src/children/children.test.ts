@@ -1885,6 +1885,26 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         expect(warnings.some((w) => /root.*did not return within the stop's 30 s grace/.test(w))).toBe(true);
       });
 
+      it('REQ-MONITOR-102 (the repair of a-roots-calls-before-a-crash-never-reach-the-session-total.md): a root given up on counts the call it made from its record, and its resume counts only the calls it adds', async () => {
+        const probe: TestTool = (name) => (name === 'hang' ? new Promise<PortToolResult>(() => undefined) : name === 'probe' ? Promise.resolve({ text: 'probed', isError: false, status: 'ok', durationMs: 1, label: 'probe', args: {} }) : undefined);
+        const { sessions } = sessionsWith((persona, turn) => {
+          if (persona !== 'orchestrator') return answer('done');
+          // Two calls before the one that hangs, then — resumed — one more before its answer.
+          return turn === 1 ? toolCalls([{ callId: 'q1', name: 'probe', args: {} }, { callId: 'q2', name: 'probe', args: {} }]) : turn === 2 ? toolCalls([{ callId: 'h1', name: 'hang', args: {} }]) : turn === 3 ? toolCalls([{ callId: 'q3', name: 'probe', args: {} }]) : answer('Done.');
+        }, { tool: probe });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await settle(() => rootHangRow(sid) !== undefined);
+        expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+        expect(await endsAfter(sessions, sid, 30_000)).toBe(true);
+        // q1, q2 and the cut h1 — none of which a returned turn counted.
+        expect(dal.getSession(sid)!.tool_calls).toBe(3);
+        expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', interruption: 'stop', root_tool_calls: 3 }]);
+        expect(sessions.prompt(sid, 'go on').ok).toBe(true);
+        expect((await sessions.running(sid))!.status).toBe('completed');
+        expect(dal.getSession(sid)!.tool_calls).toBe(4);
+        expect(dal.iterationsOf(sid)[0]).toMatchObject({ state: 'closed', root_tool_calls: 4 });
+      });
+
       it('a stop forced at its first activation still gives the root the whole grace before it is given up on', async () => {
         const { sessions } = sessionsWith((persona, turn) => (persona === 'orchestrator' ? hangs(turn) : answer('done')), { tool: hang });
         const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;

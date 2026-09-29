@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A root's calls before a crash reach the session total (REQ-MONITOR-102, R-067, 2026-09-29).** The root had no persisted
+tool-call count, so a crash — which ends its turn without returning — lost its calls. `iterations.root_tool_calls` (store
+**v26**) holds the calls of the root the total holds; `SessionWriter.countToolCalls` writes the total with the root's or a
+child's count in one transaction; the crash record adds what the root's and each unfinished child's record hold beyond their
+counts, and a root the stop's grace gave up on is counted from its record. REQ-ORCH-097's cadence is unchanged. The
+**runtime view**'s §7 `iterations` row and a **state-ownership view** row name it.
+
 **A child is recorded under its model's `models:` key (REQ-CONFIG-094, REQ-MONITOR-020/049, live-run finding D5, R-067,
 2026-09-29).** `children.model_key` was the model's bare id, so `modelCapFor` and `contextLimitFor`, keyed by the
 `models:` key, never matched a qualified key. `childModelKey` now records the role's `Persona.modelKey` (set by the run

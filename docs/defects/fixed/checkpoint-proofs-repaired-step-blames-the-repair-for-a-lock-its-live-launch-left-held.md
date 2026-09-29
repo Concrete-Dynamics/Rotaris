@@ -100,5 +100,10 @@ proofs.
 
 Each `results.json` holds all twelve scenarios through `disabled`.
 
+**Re-run at the later branch head** (after `6232e35`, the log-reading failure sentence, and after the second round's
+`sessions-proof` commits, which change nothing this proof runs). The same build and `--skip-build`. Three more runs
+in a row exited 0 in 168 s, 170 s and 169 s, each with all twelve scenarios through `disabled` (lock pids 11780,
+16300, 22540). The load at the start was 1.2 to 4.7, with 16 or 17 Electron processes from another tree running.
+
 **Not shown:** the new check failing on the built app. The window closed with `459e7c8`, and it was not reopened
 to watch the check fire. Its failure path is shown only by the unit cases above.

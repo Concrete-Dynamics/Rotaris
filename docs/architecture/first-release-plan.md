@@ -61,7 +61,12 @@ record already decides, and every ruling it needs is named as the owner's rather
   ([override select](../defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md),
   [Windows verdict](../defects/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md), and
   [code intelligence as root](../defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md) for the last
-  two).
+  two). **2026-09-28, R-062:** `init-proof`'s later red was a product race, a skip answered before the open's
+  resolution swallowing the background task ([fixed](../defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md)),
+  and `code-intel-proof`'s were two harness defects
+  ([token order](../defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md),
+  [setup collision](../defects/fixed/code-intel-proofs-setup-launches-collide-with-the-background-initialization.md));
+  both proofs pass three runs in a row as root on Linux.
 - The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005` (**built 2026-09-28**, R-062), `PD-ORCH-004` and `PD-MONITOR-002`.
 - The macOS and Linux artifacts, which are bound by IC-3 and IC-8 and now also by `PD-STARTUP-001`.
 

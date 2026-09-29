@@ -6,7 +6,7 @@ import {
   type InitializationStateView, type InitRunReport, type McpSetupStatus,
 } from '@rotaris/contracts';
 import {
-  deriveSets, executeTasks, labelFor, promptOwed, readInitializationState, recordSkip, stampOnly,
+  deriveSets, executeTasks, isResolved, labelFor, promptOwed, readInitializationState, recordSkip, stampOnly,
   TaskRegistry, viewOf, type InitializationState, type InitializationTask, type PlainMap,
   type TaskResult, type TaskSets, type WorkspaceClassification,
 } from '@rotaris/config';
@@ -84,6 +84,15 @@ interface WorkspaceEntry {
    * takes real seconds.
    */
   attempting: ReadonlySet<string>;
+  /**
+   * True from the open until a resolution has started the background work it found. The window reads the state as it
+   * mounts and main resolves 800 ms after the workspace is acknowledged, so the dialog can open, listing the runnable
+   * tasks, before the background task has started. A skip answered then found `attempting` empty and recorded the
+   * background task as skipped, and the resolution started nothing (`init-proof` on Linux, 2026-09-28). A task the open
+   * owes a start is not the user's to skip either (REQ-WORKSPACE-083, REQ-WORKSPACE-088), so `skip` leaves it out
+   * while this holds.
+   */
+  backgroundOwed: boolean;
   lastError: string | null;
   resolutionFailed: boolean;
   /** REQ-WORKSPACE-102: exactly one automatic resolution per workspace open. A "Check again" is additional. */
@@ -188,7 +197,7 @@ export class InitializationCoordinator {
   private entry(root: string, agentsFile: string): WorkspaceEntry {
     let e = this.workspaces.get(root);
     if (!e) {
-      e = { root, agentsFile, state: readInitializationState(agentsFile), report: EMPTY_RUN_REPORT, running: null, attempting: new Set(), lastError: null, resolutionFailed: false, resolvedOnce: false };
+      e = { root, agentsFile, state: readInitializationState(agentsFile), report: EMPTY_RUN_REPORT, running: null, attempting: new Set(), backgroundOwed: true, lastError: null, resolutionFailed: false, resolvedOnce: false };
       this.workspaces.set(root, e);
     }
     return e;
@@ -269,6 +278,7 @@ export class InitializationCoordinator {
           e.state = await stampOnly(e.state, null, { nowIso: this.nowIso, write: this.write(e.root), log: this.deps.log });
           this.deps.log(`initialization: ${e.root} has no applicable task; marked initialized`);
         }
+        e.backgroundOwed = false;
         await this.publish(e);
         return await this.viewFor(e);
       }
@@ -277,11 +287,14 @@ export class InitializationCoordinator {
       // REQ-WORKSPACE-083: background work starts regardless of whether a prompt is also due, and no
       // marker is written up front — it is stamped once that work has run.
       if (sets.background.length > 0 && e.running === null) void this.run(e, sets.background, true);
+      // From here a live run's `attempting` keeps its tasks out of a skip, so the open owes no start any more.
+      e.backgroundOwed = false;
       // REQ-WORKSPACE-082: the prompt is owed on a pending consent task; the window opens the dialog.
       if (promptOwed(sets)) this.deps.log(`initialization: ${e.root} owes the setup prompt`);
       return await this.viewFor(e);
     } catch (cause) {
       // REQ-WORKSPACE-102: the window stays fully usable and the composer gate stays OFF.
+      e.backgroundOwed = false;
       e.resolutionFailed = true;
       this.deps.log(`initialization: resolution failed for ${e.root} (${String(cause)})`, 'warn');
       this.deps.banner(RESOLUTION_FAILED_HEADLINE, RESOLUTION_FAILED_DETAIL);
@@ -356,8 +369,11 @@ export class InitializationCoordinator {
     const e = this.current();
     if (!e) return { ok: false, reason: 'no workspace is open' };
     // A task the live run is attempting is not the user's to skip; its own outcome is owed (see `attempting`).
-    const mine = ids.filter((id) => !e.attempting.has(id));
-    if (mine.length !== ids.length) this.deps.log(`initialization: ${ids.filter((id) => e.attempting.has(id)).join(', ')} is already running, so the skip leaves its outcome to the run`);
+    // Nor is a pending background task this open has not started yet; its start is owed (see `backgroundOwed`).
+    const owed = (id: string): boolean => e.backgroundOwed && !isResolved(e.state, id) && this.registry.get(id) !== undefined && this.registry.get(id)?.requiresConsent !== true;
+    const mine = ids.filter((id) => !e.attempting.has(id) && !owed(id));
+    if (ids.some((id) => e.attempting.has(id))) this.deps.log(`initialization: ${ids.filter((id) => e.attempting.has(id)).join(', ')} is already running, so the skip leaves its outcome to the run`);
+    if (ids.some(owed)) this.deps.log(`initialization: ${ids.filter(owed).join(', ')} starts by itself on this open, so the skip leaves it to the resolution`);
     const r = await recordSkip(e.state, mine, { nowIso: this.nowIso, write: this.write(e.root) });
     if (!r.ok) return r;
     e.state = r.state;

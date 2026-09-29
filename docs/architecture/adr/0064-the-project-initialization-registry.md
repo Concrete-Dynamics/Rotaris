@@ -170,3 +170,27 @@ not a proof of the happy path.
 was demonstrated there; no implementation condition is raised and none is discharged. **IC-7 is
 untouched**: running `project create` for real is the first time the product's own flow provokes the
 language-server question that condition describes, and the observation is recorded without changing it.
+
+## On Linux as root — 2026-09-28 (`pnpm init-proof`, R-062): a third order of the same race
+
+**The race of finding (2) has a third order, and on Linux the product lost it.** Finding (2) covered a skip answered
+**while** the background task ran. On Linux under Xvfb the window mounts fast enough that a skip can land **before** the
+task has started. The window reads the state as it mounts, which shows a consent task pending and no run in progress,
+so it opens the dialog. The automatic resolution comes 800 ms after the workspace is acknowledged (REQ-WORKSPACE-141's
+slot). `init-proof`'s Escape, pressed as soon as the dialog exists, landed about 100 ms before the resolution in every
+run measured, the sweep's and this reproduction's. The skip recorded both listed ids, the resolution found nothing
+pending, and `code-intelligence-setup` never started: against REQ-WORKSPACE-083's "an immediate-start list regardless
+of whether a prompt is also due" and REQ-WORKSPACE-088's "starts by itself when the workspace opens". Scenario 3b caught
+it at the sidebar hint (`../../defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
+
+**The repair follows finding (2)'s reading, one step earlier.** A task the open still owes a start is not the user's
+to skip, any more than a task the live run is attempting: until a resolution has started the background work it
+found, `skip` leaves a pending task that needs no consent out of what it records, and says so in the log. The mount
+read and the resolution's slot are unchanged. A dialog raised before the resolution is not itself against a
+requirement: REQ-WORKSPACE-105's prompt is due on the values the read returns. What was wrong was what its answer did.
+`initialization.test.ts` pins both halves (the case fails on the previous coordinator). `init-proof` now also asserts
+that the background task started beside the consent prompt and was recorded completed. It passed three runs in a row
+as root under Xvfb, and in each the Escape still came first and went through the repaired path.
+
+**Not shown:** the Windows order after the change; a skip landing while the resolution awaits the applicability check
+(the same flag covers it, but no run landed there).

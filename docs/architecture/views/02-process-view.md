@@ -401,7 +401,9 @@ terminate then tree-killed after 5 s on cancel or timeout; the category polls th
 (REQ-WORKSPACE-115's refresh — the persisted section as it is on disk, nothing else disturbed),
 `initialization.resolve` (REQ-WORKSPACE-102's "Check again", additional to the one automatic resolution per
 workspace open), `initialization.start`, `initialization.skip {ids}` and `initialization.cancel`. Each answers with
-the whole state. Main is the coordinator because REQ-WORKSPACE-085 gives the marker **one writer** and that file
+the whole state. A skip records the listed ids except two kinds, each logged: an id the live run is attempting, and,
+until the open's resolution has started the background work it owes, a pending task that needs no consent. The window
+can open the dialog from its mount read before that resolution runs (2026-09-28, R-062; REQ-WORKSPACE-083/088). Main is the coordinator because REQ-WORKSPACE-085 gives the marker **one writer** and that file
 is the workspace service's (`config.setField`, Tier A) while the one shipped task's work is the run host's
 (`mcp.setup`) — and the matrix gives neither of those two an edge to the other. The run host gained one event,
 `mcp.setupStatus`, pushed on every change of the setup's status: the task follows a live setup through it rather

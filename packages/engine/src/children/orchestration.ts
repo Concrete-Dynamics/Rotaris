@@ -195,6 +195,13 @@ export class IterationChildren implements DelegationOps {
   private readonly disclosures = new Map<string, ScopeDisclosure>();
   /** PD-ORCH-005: every child execution in flight, so a rest can wait for each to come to rest before it sweeps. */
   private readonly executing = new Set<Promise<void>>();
+  /**
+   * REQ-HOOKS-076 / REQ-HOOKS-080 (the repair of `a-child-completed-hook-can-finish-after-its-iteration-ends.md`): each
+   * child whose settle has made its terminal move and is running its `child_completed` hook, in line with the run, until
+   * the scheduler is told it settled. Its parent takes it as ended only then (`settlesOf`), as a parent the settle wakes
+   * does, so the hook finishes before the parent goes on and before the iteration's own hooks.
+   */
+  private readonly settles = new Map<string, Promise<void>>();
   /** REQ-ORCH-133 / REQ-MONITOR-128: each executing child's own abort, so cancelling one child stops it (and only it). */
   private readonly controllers = new Map<string, AbortController>();
   /** PD-ORCH-005 clause 2: the run is coming to rest — no child starts, every agent stops before its next model step. */
@@ -398,6 +405,9 @@ export class IterationChildren implements DelegationOps {
       if (!mine.some((c) => c.task_id === id)) return { refused: 'An agent can wait only for its direct child tasks.' };
     }
     const set = taskIds.length > 0 ? taskIds : mine.filter((c) => c.background === 1 && !isTerminalChildState(c.state)).map((c) => c.task_id);
+    // REQ-HOOKS-080: a task that has ended is complete once its settle's `child_completed` hook is done.
+    const settling = this.settlesOf(set);
+    if (settling) await settling;
     const already = set.every((id) => { const r = this.ledger.get(id); return !r || isTerminalChildState(r.state); });
     if (already) {
       const rows = set.map((id) => this.ledger.get(id)).filter((r): r is ChildRow => r !== undefined);
@@ -405,6 +415,10 @@ export class IterationChildren implements DelegationOps {
       return { immediate: true, requested: set.length, text: set.length === 0 ? 'There was nothing to wait for: no task ids were given and no background children are active.' : `All ${set.length} requested task(s) were already complete.\n\n${rows.map(reportBlock).join('\n\n')}` };
     }
     await this.scheduler.waitFor(set);
+    // REQ-HOOKS-080: the settle that released the wait may not be the last to finish — another task of the set can have
+    // ended before it and still be running its hook.
+    const settled = this.settlesOf(set);
+    if (settled) await settled;
     // PD-ORCH-005: the run came to rest while the caller waited; the tasks it waited on are paused with the run.
     if (this.resting && !set.every((id) => { const r = this.ledger.get(id); return !r || isTerminalChildState(r.state); })) {
       return { interrupted: `The wait for ${set.join(', ')} was interrupted by ${interruptionPhrase(this.deps.restCause?.() ?? '')}: the tasks were paused with the run and resume when it is continued. Wait for them again then.` };
@@ -422,6 +436,23 @@ export class IterationChildren implements DelegationOps {
     const done = () => { this.executing.delete(execution); };
     void execution.then(done, done);
     return execution;
+  }
+
+  /** REQ-HOOKS-080: `taskId`'s settle runs its hook from here; the function returned ends it, once the scheduler is told. */
+  private beginSettle(taskId: string): () => void {
+    let end!: () => void;
+    this.settles.set(taskId, new Promise<void>((resolve) => { end = resolve; }));
+    return () => { this.settles.delete(taskId); end(); };
+  }
+
+  /**
+   * REQ-HOOKS-080: the settles still running among `taskIds`, to be awaited before any of them is taken as ended — or
+   * null when none is, so an agent with none to wait for does not yield.
+   */
+  private settlesOf(taskIds: readonly string[]): Promise<unknown> | null {
+    if (this.settles.size === 0) return null;
+    const running = taskIds.flatMap((id) => { const settle = this.settles.get(id); return settle === undefined ? [] : [settle]; });
+    return running.length === 0 ? null : Promise.all(running);
   }
 
   /**
@@ -574,6 +605,10 @@ export class IterationChildren implements DelegationOps {
       const unobserved = mine.filter((c) => isTerminalChildState(c.state) && c.observed === 0);
       if (pending.length === 0 && unobserved.length === 0) break;
       if (unobserved.length === 0) await this.awaitTerminal(agentId);
+      // REQ-HOOKS-080: a child that has ended is taken once its settle's `child_completed` hook is done — as a parent the
+      // settle wakes takes it — never while the hook still runs because the parent found it ended on its own.
+      const settling = this.settlesOf(mine.map((c) => c.task_id));
+      if (settling) await settling;
       if (signal.aborted || this.resting) break;
       const newly = this.ledger.takeNewlyTerminal(agentId);
       if (newly.length === 0) continue;
@@ -583,6 +618,15 @@ export class IterationChildren implements DelegationOps {
       outcome = await turn(message, history);
       history = outcome.messages;
       toolCalls += outcome.toolCallCount;
+    }
+    /*
+     * REQ-HOOKS-076 / REQ-HOOKS-080: an agent that ends with a child of its own still in its settle — its turn failed, say —
+     * ends after that child's `child_completed` hook, so the hook comes before the agent's own settle and before the
+     * iteration's hooks. A rest and a stop wait for the settles themselves, as executions (`rest`, `outlast`).
+     */
+    if (!signal.aborted && !this.resting && this.settles.size > 0) {
+      const settling = this.settlesOf(this.ledger.childrenOf(agentId).map((c) => c.task_id));
+      if (settling) await settling;
     }
     /*
      * PD-ORCH-005 clause 2: an agent the rest stopped while children of its own are unfinished, or ended with reports it
@@ -637,8 +681,12 @@ export class IterationChildren implements DelegationOps {
     deps.writer.appendTimeline('child_end', 'rotaris', `Child ${row.canonical_name} (${row.task_id}) ended failed.`, { task_id: row.task_id, state: 'failed', at: toIsoUtc(deps.clocks.wall.instant()) });
     deps.writer.appendTimeline('child_result', 'rotaris', `Child ${row.canonical_name} reported failed: ${message.slice(0, 120)}`, { task_id: row.task_id, status: 'failed' });
     deps.writer.appendTimeline('child_conversation_closed', 'rotaris', `Child ${row.canonical_name}'s conversation closed.`, { task_id: row.task_id });
-    if (deps.hooks) await deps.hooks.fireLifecycle('child_completed', { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: 'failed', status: 'failed', summary: message });
-    this.scheduler.settled(this.ledger.get(row.task_id) ?? t.row);
+    // REQ-HOOKS-080: the hook runs in line — the parent takes this child as ended once the scheduler is told (`settles`).
+    const endSettle = this.beginSettle(row.task_id);
+    try {
+      if (deps.hooks) await deps.hooks.fireLifecycle('child_completed', { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: 'failed', status: 'failed', summary: message });
+      this.scheduler.settled(this.ledger.get(row.task_id) ?? t.row);
+    } finally { endSettle(); }
   }
 
   /**
@@ -976,10 +1024,14 @@ export class IterationChildren implements DelegationOps {
     deps.writer.appendTimeline('child_end', 'rotaris', `Child ${row.canonical_name} (${row.task_id}) ended ${terminal}.`, { task_id: row.task_id, state: terminal, at });
     deps.writer.appendTimeline('child_result', 'rotaris', `Child ${row.canonical_name} reported ${report.status}: ${report.summary.slice(0, 120)}`, { task_id: row.task_id, status: report.status });
     deps.writer.appendTimeline('child_conversation_closed', 'rotaris', `Child ${row.canonical_name}'s conversation closed.`, { task_id: row.task_id });
-    // REQ-HOOKS-075: child_completed with the child's terminal state and its report status side by side.
-    if (deps.hooks) await deps.hooks.fireLifecycle('child_completed', { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: terminal, status: report.status, summary: report.summary });
-    const settledRow = this.ledger.get(row.task_id);
-    if (settledRow) this.scheduler.settled(settledRow);
+    // REQ-HOOKS-075: child_completed with the child's terminal state and its report status side by side. REQ-HOOKS-080: it
+    // runs in line — the parent takes this child as ended once the scheduler is told (`settles`).
+    const endSettle = this.beginSettle(row.task_id);
+    try {
+      if (deps.hooks) await deps.hooks.fireLifecycle('child_completed', { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: terminal, status: report.status, summary: report.summary });
+      const settledRow = this.ledger.get(row.task_id);
+      if (settledRow) this.scheduler.settled(settledRow);
+    } finally { endSettle(); }
   }
 
   /**

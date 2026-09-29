@@ -653,6 +653,20 @@ not decode. The child ends `failed` with a `child_exception` issue and a report 
 settle in `execute` writes (REQ-ORCH-098): `child_end`, `child_result`, `child_conversation_closed` and
 `child_completed`. So no child is left `running` with no execution behind it.
 
+**A settle's hook runs in line (REQ-HOOKS-076 / REQ-HOOKS-080; repaired 2026-09-29).** Both settles, the one at the end
+of `execute` and `settleRaised`, make the terminal move and write the teardown. Then they run the `child_completed` hook
+before they tell the scheduler (`scheduler.settled`), which wakes a parent waiting on the child. From the hook's start
+until that call, the child is held in `IterationChildren.settles`. A parent that finds the child ended on its own waits
+for that settle first (`settlesOf`):
+- in `runWithChildren`, before it takes its newly ended children;
+- in `wait_for_tasks`, before it checks its set, and again after the wait.
+
+An agent whose loop ends while a child of its own is still settling waits for that settle before it returns. This
+happens, for example, when its turn failed. A rest and a stop await the settles as executions. So the hook finishes
+before the parent is given the report, and before `iteration_end` and `session_end`. Before this repair, a normal end
+did not wait for a settle: a parent took a child's report as soon as it found the child ended
+([`a-child-completed-hook-can-finish-after-its-iteration-ends.md`](../../defects/fixed/a-child-completed-hook-can-finish-after-its-iteration-ends.md)).
+
 **The stall watch and the corrective message (REQ-ORCH-089, REQ-MONITOR-117..120, REQ-NOTIFY-111/112;
 `children/stall.ts`; OQ-127).** Each attempt of a child's execution runs a `StallWatch` on the clock port. Its
 threshold is the role's `stall_timeout`, else `runtime.child_stall_timeout`, 90 s by default, and it is the same window

@@ -9,6 +9,12 @@ between the transition and that call raises — the hook port is an interface, a
 returns without calling `scheduler.settled`. The parent waiting in `runWithChildren`'s resume loop, or in a
 `wait_for_tasks` on that child, is then never released by it, and the run waits on a child that has ended.
 
+The repair of
+[`a-child-completed-hook-can-finish-after-its-iteration-ends.md`](fixed/a-child-completed-hook-can-finish-after-its-iteration-ends.md)
+(2026-09-29) changes one case. A parent that finds a child ended on its own now waits for that child's settle
+(`IterationChildren.settles`). The settle's mark ends in a `finally`, so a raise from the hook does not hold that
+parent. A parent waiting for `scheduler.settled` itself is still not released.
+
 Calling `scheduler.settled` on that branch is not obviously safe: the same branch is taken for a child the user
 cancelled (REQ-ORCH-133), whose cancel path already fired the terminal listeners, and firing them twice could deliver
 its report to the parent twice. Which of the two a terminal child reaching `settleRaised` was is not recorded.

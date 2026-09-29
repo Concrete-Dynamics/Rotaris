@@ -58,8 +58,10 @@ command or store table changes.
 The scheduler's blocking cascade stores each blocked child's `blocked` report and artifact before its parent is told.
 A child whose execution raises outside its turn, on either start path, is settled `failed` with its report by
 `IterationChildren.executeSettling` and `settleRaised`, instead of being left `running`. So is a resumed child whose
-record cannot be decoded. The **runtime view**'s §4 names both. No package, edge, process, channel, command or store
-table changes.
+record cannot be decoded. A settle's `child_completed` hook now runs in line (REQ-HOOKS-076/080). A parent takes a
+child as ended only once its settle is done (`IterationChildren.settles`), and an agent does not return while one of
+its children's settles still runs. So the hook comes before `iteration_end` and `session_end`. The **runtime view**'s
+§4 names all three. No package, edge, process, channel, command or store table changes.
 
 **The inspector shows the run-level agent's tools and every agent's artifact links (REQ-MONITOR-052/060/061/068/069,
 live-run finding K1, R-067, 2026-09-29).** `SessionRecord` gains `entryTools` (the root port's resolution — a new optional

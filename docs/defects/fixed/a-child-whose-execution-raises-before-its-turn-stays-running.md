@@ -70,3 +70,13 @@ still running did not wait for it, so the run could come to rest with the settle
 callbacks after it, still in flight. `resumePaused` now tracks it as the fresh path does. `children.test.ts`'s "the
 resume path: the rest waits for the settle" holds a second child's resumed step and the settle's hook, pauses, and
 releases the step first; it fails without the tracking, because the rest ends while the hook still holds.
+
+**Found by the verifier's fourth round, 2026-09-29, and repaired.** The paragraph above held for a rest, but a normal
+end did not wait for the settle. `settleRaised` makes the terminal move before it runs the hook. A parent that found the
+child ended took its report at once, and nothing at an iteration's end waits for an execution. On both start paths the
+raise settles the child at once, so every time this repair settled a child, the root was given the report and the run
+reached `iteration_end` and `session_end` while the `child_completed` hook still ran. The settle at the end of
+`execute` had the same gap, reached by a race. The repair is recorded in
+[`a-child-completed-hook-can-finish-after-its-iteration-ends.md`](a-child-completed-hook-can-finish-after-its-iteration-ends.md).
+Since then, a parent takes a child as ended only once its settle, hook included, is done. A normal end now waits for
+it too.

@@ -10,7 +10,11 @@ pid in the lock probes dead (REQ-SESSION-056, REQ-GIT-093, REQ-GIT-160).
 
 In the failing run, `live.log` ends at `main process exiting ... 23:46:15.057` with no `run host exited` line.
 `repaired.log` opens with `instance claimed ... 23:46:15.285`, 0.22 s later, and has no repair line. The passing
-re-run's `live.log` has `run host exited (0)` before main's exit. The failing run is the signature of the
+re-run, on the same tree, logs `run host exited (0)` 5 ms **after** main's exit (`live.log` lines 79 to 81:
+`main process exiting` at 23:48:34.628, `run host exited (0)` at 23:48:34.633). On that tree main always left
+first; what separates the two runs is how long the holder lagged behind it. In the pass the lag was 5 ms. In the
+failure the exit is not logged at all, so the holder outlived main's logger and was still alive when the next
+launch was claimed 0.22 s later. The failing run is the signature of the
 product defect recorded and repaired the same day in
 [`a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`](a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md).
 Before that repair, main left before its run host, and Electron's teardown of the run host took 1.57 to 1.81 s in

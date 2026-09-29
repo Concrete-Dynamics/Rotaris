@@ -5448,6 +5448,40 @@ given what is left of the grace, or the drain replaced by the grace for the canc
 whether REQ-ORCH-080's drain should still apply to the explicit cancel at all, now that `PD-ORCH-005` has a stop leave
 the background children paused rather than cancelled.
 
+**OQ-122 — What becomes of a steering prompt still pending when the run comes to rest, or ends?** *(REQ-MONITOR-133, "the
+prompt is pending until injected"; REQ-MONITOR-134, "all pending steering prompts for an agent are delivered into its
+conversation … marked injected exactly once"; REQ-MONITOR-136; REQ-ORCH-094; `PD-ORCH-005` clauses 2 and 4. Raised
+2026-09-29 by the repair of
+[`a-steering-prompt-pending-at-a-rest-is-lost.md`](../defects/fixed/a-steering-prompt-pending-at-a-rest-is-lost.md)
+under [R-067](../product/requests.md#r-067). Open.)*
+
+A prompt is pending until the step of its agent that injects it. Clause 2 stops every agent before its next model step,
+so a prompt submitted while its agent's step or call was under way, and still pending at the pause, a stop or a quit,
+met no step to inject it. It lived only in the run's memory, and the run ended with it: acknowledged with an identifier
+and never delivered. Neither requirement says what a rest, or the end of a run, does with a pending prompt, and the
+specification has no word for a prompt that was not delivered.
+
+**The reading built.**
+
+- **At a rest, delivered into the record.** A prompt pending for an agent the rest leaves `paused`, whose conversation
+  record holds something to carry on from, is delivered into that record as the marked message its next step would have
+  injected (`[Steering prompt] …`), after the answers to the calls the rest cut, and is marked injected then, once
+  (`steering_injected`, its metadata naming the rest). The resumed agent carries on from its record (clause 4), so the
+  prompt is the last message of its first request, which is a step: a root that had answered and was waiting takes one,
+  and a child restored `summarizing` resumes `running` to take it, as one told of its background sessions does
+  (REQ-MONITOR-136's "another round").
+- **At the run's end, withdrawn and said so.** A prompt no step injected and no rest delivered — its agent had not
+  started and has no record, had ended, or was cancelled; or a prompt for the entry role pending when a rest came at an
+  iteration boundary, where no iteration is left open — is recorded as withdrawn: a `steering_withdrawn` timeline entry
+  naming it, and a transcript line saying it was not delivered. From that moment the run accepts no steer, so none is
+  acknowledged that nothing could deliver. A crash still loses what was pending, since only the run's memory held it.
+
+**What a ruling decides.** Whether a prompt for a child that has not started should instead be kept, durably, for its
+first step when it resumes; whether the entry role's prompt pending at an iteration boundary should reach the next
+iteration's root after a continue; whether a prompt should be persisted at submission so a crash does not lose it; and
+what the withdrawn prompt is called, since the specification's vocabulary has no word for it (the build borrows
+clause 9's "withdrawn").
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

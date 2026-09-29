@@ -195,12 +195,28 @@ export interface TurnOutcome {
   readonly paused?: boolean | undefined;
 }
 
+/** REQ-MONITOR-134: the message a steering prompt joins a conversation as, explicitly marked as a steering prompt. */
+export function steeringMessage(prompt: SteeringPrompt): ChatMessage {
+  return { role: 'user', content: [{ kind: 'text', text: `${STEERING_MARK}${prompt.text}` }] };
+}
+const STEERING_MARK = '[Steering prompt] ';
+
+/** Whether `message` is a steering prompt as `steeringMessage` writes it. */
+export function isSteeringMessage(message: ChatMessage | undefined): boolean {
+  return message !== undefined && message.role === 'user' && message.content.some((p) => p.kind === 'text' && p.text.startsWith(STEERING_MARK));
+}
+
+/** REQ-MONITOR-134: the prompt is marked injected — once, wherever it joined the agent's conversation. */
+export function recordSteeringInjected(writer: SessionWriter, agentName: string, prompt: SteeringPrompt, extra: Readonly<Record<string, unknown>> = {}): void {
+  writer.appendTimeline('steering_injected', 'user', `A steering prompt reached ${agentName} (${prompt.id.slice(0, 8)}).`, { prompt_id: prompt.id, agent: agentName, ...extra });
+}
+
 /** REQ-MONITOR-134: delivered as a message explicitly marked as a steering prompt; the supervisor counts it as a user instruction. */
 function injectSteering(deps: TurnDeps, conversation: Conversation): number {
   const pending = deps.steering?.() ?? [];
   for (const s of pending) {
-    conversation.push({ role: 'user', content: [{ kind: 'text', text: `[Steering prompt] ${s.text}` }] });
-    deps.writer.appendTimeline('steering_injected', 'user', `A steering prompt reached ${deps.agentName} (${s.id.slice(0, 8)}).`, { prompt_id: s.id, agent: deps.agentName });
+    conversation.push(steeringMessage(s));
+    recordSteeringInjected(deps.writer, deps.agentName, s);
     deps.supervisor?.noteUserInstruction();
   }
   return pending.length;

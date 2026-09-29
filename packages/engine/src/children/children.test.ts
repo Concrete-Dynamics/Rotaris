@@ -1306,6 +1306,42 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'iteration_paused')!.metadata)).toMatchObject({ iteration: 1, interruption: 'pause', paused_agents: 3 });
     });
 
+    it('REQ-MONITOR-134 with clause 4, the repair of a-steering-prompt-pending-at-a-rest-is-lost: a prompt pending when the run comes to rest is delivered into the record of the paused agent it names, marked injected once, and the resumed agent reads it at its first step; one for an agent with no record yet is withdrawn, and said so', async () => {
+      const { sessions, client, release } = heldPair();
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => children(sid).length === 2 && byName(sid, 'two').state === 'waiting_on_model_slot');
+      const steer = (agentId: string, text: string): string => { const r = sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId, text } }); if (!r.ok || !r.value) throw new Error('steer'); return r.value; };
+      // `one` is mid-step, the root waits on its children, and `two` has not started: none takes another step before the pause.
+      const toOne = steer(byName(sid, 'one').task_id, 'go left');
+      const toRoot = steer('run', 'mind the tests');
+      const toTwo = steer(byName(sid, 'two').task_id, 'hurry');
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      expect((await sessions.running(sid)!).status).toBe('interrupted');
+      const root = dal.iterationsOf(sid)[0]!.root_task_id;
+      const recordOf = (taskId: string) => conversationOf(dal.agentConversation(sid, taskId));
+      // Each paused agent's record ends on its prompt, after the answers to the calls the pause cut (clauses 3 and 4).
+      expect(recordOf(byName(sid, 'one').task_id).slice(-2).map((m) => m.role)).toEqual(['tool', 'user']);
+      expect(recordOf(byName(sid, 'one').task_id).at(-1)).toEqual({ role: 'user', content: [{ kind: 'text', text: '[Steering prompt] go left' }] });
+      expect(recordOf(root).at(-1)).toEqual({ role: 'user', content: [{ kind: 'text', text: '[Steering prompt] mind the tests' }] });
+      const injected = () => dal.timelineOf(sid).filter((t) => t.name === 'steering_injected').map((t) => (JSON.parse(t.metadata) as { prompt_id: string }).prompt_id);
+      expect(injected().sort()).toEqual([toOne, toRoot].sort());
+      // `two` has no conversation to carry it: the prompt is withdrawn, in the timeline and the transcript.
+      const withdrawn = dal.timelineOf(sid).filter((t) => t.name === 'steering_withdrawn');
+      expect(withdrawn.map((t) => (JSON.parse(t.metadata) as { prompt_id: string }).prompt_id)).toEqual([toTwo]);
+      expect(withdrawn[0]!.message).toMatch(/^The steering prompt for two \([0-9a-f]{8}\) was not delivered/);
+      expect(dal.residentRows(sid).some((r) => r.kind === 'system' && r.body === withdrawn[0]!.message)).toBe(true);
+      // Resumed, each reads its prompt as the last message of its first request, and it is marked injected no second time.
+      const asked = client.requests.length;
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const resumed = client.requests.slice(asked);
+      const firstWith = (text: string) => resumed.find((r) => r.messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text === text)));
+      expect(firstWith('[Steering prompt] go left')?.messages.at(-1)).toEqual({ role: 'user', content: [{ kind: 'text', text: '[Steering prompt] go left' }] });
+      expect(firstWith('[Steering prompt] mind the tests')?.messages.at(-1)).toEqual({ role: 'user', content: [{ kind: 'text', text: '[Steering prompt] mind the tests' }] });
+      expect(injected().sort()).toEqual([toOne, toRoot].sort());
+    });
+
     it('clause 3: a quit (the application closing its sessions) leaves the same state, recorded as quit', async () => {
       const { sessions, release } = heldPair();
       const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
@@ -1436,6 +1472,30 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       // No third step: it wrote its report from its record, as it would have before the stop.
       expect(seen.childSteps).toBe(2);
       expect(byName(sid, 'work')).toMatchObject({ state: 'succeeded', report_stored: 1 });
+    });
+
+    it('REQ-MONITOR-134 and REQ-MONITOR-136 with clause 4 (the repair of a-steering-prompt-pending-at-a-rest-is-lost): a child steered while summarising, then stopped, resumes `running` and reads the prompt at a step of its own before it reports', async () => {
+      const g = gate();
+      const { sessions, seen, client } = scriptedChild([() => answer('I did it.'), () => answer('I did it, really.'), () => answer('Went left, done.')], { summary: () => ({ parts: [{ hold: g.hold }, ...answer('{"summary":"s"}').parts] }) });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'work')?.state === 'summarizing' && seen.summaries === 1);
+      const steered = sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: byName(sid, 'work').task_id, text: 'go left' } });
+      expect(steered.ok).toBe(true);
+      sessions.control({ op: 'cancel', sessionId: sid, args: {} });
+      await sessions.running(sid)!;
+      const work = byName(sid, 'work');
+      expect(work).toMatchObject({ state: 'paused', resume_state: 'summarizing' });
+      expect(conversationOf(dal.agentConversation(sid, work.task_id)).at(-1)).toEqual({ role: 'user', content: [{ kind: 'text', text: '[Steering prompt] go left' }] });
+      g.open();
+      const asked = client.requests.length;
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await sessions.running(sid)!;
+      // Its two steps before the stop (REQ-ORCH-095's one re-prompt among them), then a step of its own over the prompt.
+      expect(seen.childSteps).toBe(3);
+      expect(client.requests.slice(asked).some((r) => r.messages.at(-1)?.role === 'user' && r.messages.at(-1)?.content.some((p) => p.kind === 'text' && p.text === '[Steering prompt] go left'))).toBe(true);
+      const moves = dal.eventsOfKind(sid, 'child.transition').map((e) => JSON.parse(e.payload) as { child_id: string; to_state: string }).filter((t) => t.child_id === work.task_id).map((t) => t.to_state);
+      expect(moves.slice(moves.lastIndexOf('paused') + 1)).toEqual(['running', 'summarizing', 'succeeded']);
+      expect(JSON.parse(byName(sid, 'work').report!)).toMatchObject({ final_response: 'Went left, done.' });
     });
 
     it('clause 10 (found by phase 4\'s review): a child that was summarising and is told of its background sessions resumes `running`, since it takes a step to read the notice', async () => {

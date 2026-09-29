@@ -10,7 +10,7 @@ import { classifyStop, statusForResult, stopCondition, summarise, type StopReaso
 import { StopRequest } from './stop-request.js';
 import { Todo, type Task, type TodoDocument } from './todo.js';
 import { planRequestSection, resumedWorkSection } from './plan-text.js';
-import { runTurn, type ToolPort, type TurnOutcome } from './turn.js';
+import { recordSteeringInjected, runTurn, steeringMessage, type ToolPort, type TurnOutcome } from './turn.js';
 import { IterationChildren } from '../children/orchestration.js';
 import type { DelegationOps } from '../children/delegation.js';
 import type { Budget as ChildBudget } from '../children/ledger.js';
@@ -414,6 +414,8 @@ export class Run {
   private planHeld = false;
   /** REQ-MONITOR-133/134: pending steering per conversation (`root` for the entry role, the task id for a child). */
   private readonly steering = new Map<string, { id: string; text: string }[]>();
+  /** REQ-MONITOR-133: set once the run's end has withdrawn what was still pending (`withdrawSteering`); a later steer is refused. */
+  private steeringClosed = false;
   /** REQ-MONITOR-142: the entry model/reasoning switched mid-run; applied from the next iteration. */
   private entryOverride: { model?: ModelRef; thinking?: ThinkingLevel } = {};
   /** Part Q: the waits parked on a provider limit (REQ-NOTIFY-263 reads `current()`), the memory, the catalogue. */
@@ -1320,6 +1322,8 @@ export class Run {
           // interrupted, as a child's is.
           if (this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: rootName }, iteration, this.restCause);
           answered = true;
+          // REQ-MONITOR-134 with clause 4: a steering prompt still pending reaches the record its agent resumes from.
+          this.deliverSteeringAtRest({ taskId: rootTaskId, name: rootName }, iteration, this.restCause);
         }
       } else if (children) {
         // REQ-ORCH-052: every exit path from an iteration leaves every child record terminal.
@@ -1370,7 +1374,7 @@ export class Run {
 
   /** REQ-MONITOR-133: a steer is pending until its conversation's next step; the id is the control's string value. */
   steer(agentId: string, text: string): string | null {
-    if (this.ended || text.trim() === '' || agentId.trim() === '') return null;
+    if (this.ended || this.steeringClosed || text.trim() === '' || agentId.trim() === '') return null;
     const key = this.isRootAgent(agentId) ? 'root' : agentId;
     if (key !== 'root' && !this.children?.ledger.get(key)) return null;
     const id = randomUUID();
@@ -1383,6 +1387,46 @@ export class Run {
   private steeringFor(conversationId: string): () => readonly { id: string; text: string }[] {
     const key = this.isRootAgent(conversationId) ? 'root' : conversationId;
     return () => { const list = this.steering.get(key) ?? []; this.steering.delete(key); return list; };
+  }
+
+  /**
+   * REQ-MONITOR-134 with PD-ORCH-005 clause 4, the repair of `a-steering-prompt-pending-at-a-rest-is-lost.md`: a steering
+   * prompt still pending when the iteration comes to rest — its agent stopped before the step that would have injected it —
+   * is delivered into the conversation record of the agent it names, when that agent is left `paused` with a record to
+   * carry on from: as the marked message its next step would have injected, after the answers to the calls the rest cut,
+   * and marked injected then, once. The resumed agent reads it at its first step. A prompt for an agent with no record — a
+   * child that never started — stays pending, and the run's end withdraws it (`withdrawSteering`, OQ-122).
+   */
+  private deliverSteeringAtRest(root: { readonly taskId: string; readonly name: string }, iteration: number, cause: Interruption | null): void {
+    for (const [key, pending] of [...this.steering]) {
+      const child = key === 'root' ? null : this.children?.ledger.get(key) ?? null;
+      const agent = key === 'root' ? { ...root, iteration } : child?.state === 'paused' ? { taskId: child.task_id, name: child.canonical_name, iteration: child.iteration } : null;
+      if (agent === null || pending.length === 0 || this.record.load(agent.taskId).length === 0) continue;
+      this.steering.delete(key);
+      const recorder = this.record.recorder(agent.taskId, agent.iteration);
+      for (const s of pending) {
+        recorder.appended(steeringMessage(s));
+        recordSteeringInjected(this.deps.writer, agent.name, s, { interruption: cause });
+      }
+    }
+  }
+
+  /**
+   * REQ-MONITOR-133/134 at the run's end (OQ-122): no steer is accepted from here, and a prompt no step injected and no rest
+   * delivered — its agent never started, ended first, or was cancelled — is withdrawn: the timeline records it and the
+   * transcript says it was not delivered, so an acknowledged submission is never lost without a word.
+   */
+  private withdrawSteering(): void {
+    this.steeringClosed = true;
+    for (const [key, pending] of this.steering) {
+      const who = key === 'root' ? this.rootName : this.children?.ledger.get(key)?.canonical_name ?? key;
+      for (const s of pending) {
+        const message = `The steering prompt for ${who} (${s.id.slice(0, 8)}) was not delivered: the run ended before ${who} took another step.`;
+        this.deps.writer.appendTimeline('steering_withdrawn', 'rotaris', message, { prompt_id: s.id, agent: key });
+        this.deps.writer.appendRow('system', message, true);
+      }
+    }
+    this.steering.clear();
   }
 
   /**
@@ -1847,6 +1891,7 @@ export class Run {
         if (await this.closeOpenIteration(() => 'the run was cancelled after it had come to rest', () => 'Cancelled: the user cancelled the run after it had come to rest.', this.restedIteration) && this.rootRecord) this.rootRecord.state = 'cancelled';
       } catch (cause) { this.deps.warn(`closing the rested iteration of ${this.sessionId} after the cancel failed: ${String(cause)}`); }
     }
+    try { this.withdrawSteering(); } catch (cause) { this.deps.warn(`withdrawing the pending steering of ${this.sessionId} failed: ${String(cause)}`); }
     this.cancelWindowClosed = true;
     const result: RunResult = {
       status: classified.result, session_id: this.sessionId, stop_reason: stopReason, summary: summary.message,

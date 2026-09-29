@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A steering prompt pending at a rest is kept (REQ-MONITOR-134 with PD-ORCH-005 clause 4, OQ-122, 2026-09-29, R-067).**
+`Run.turn`'s rest delivers every prompt still pending for a `paused` agent with a record into that record, as the marked
+message its next step would have injected, marked injected once (`deliverSteeringAtRest`); a child resumed `summarizing`
+whose record ends on one resumes `running` (`IterationChildren.resumePaused`). The run's teardown withdraws what is left
+(`withdrawSteering`: a `steering_withdrawn` entry and a transcript line) and refuses a later steer. This repairs
+`a-steering-prompt-pending-at-a-rest-is-lost.md`. The **runtime view**'s §5 steer row says so. No package, edge, process,
+channel, message kind or store column changed.
+
 **A root resumed as the entry role keeps its rows' name (PD-ORCH-005 clauses 3 and 4, OQ-97, 2026-09-29, R-067).**
 `Run.turn` names the root's rows, its tool port and its open calls by the persona its iteration was opened with
 (`rootName`: `iterations.root_persona` for a resumed root), not by the persona the run is set up as, so a root resumed as

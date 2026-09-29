@@ -7,7 +7,8 @@ import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolat
 
 /**
  * The control channel's first execution in the built app (Part J step 3): a queued message consumed at the
- * iteration boundary; a steer reaching the entry role; a graceful pause and the composer's Continue; the
+ * iteration boundary; a steer reaching the entry role; a graceful pause and the composer's Continue; a steer still
+ * pending at a pause, delivered into the root's record and read by the resumed root; the
  * message-limit pause with its dialog answered "double", then the relaunch finding a session paused at the
  * limit and its dialog answered "cancel"; a user-initiated quit during a run. Every assertion reads the store.
  */
@@ -181,6 +182,34 @@ launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTUR
   const restSummary = samples.find((x) => x.runStarts === 1 && x.status === 'paused')?.summary ?? null;
   if (restSummary !== "The run came to rest at the user's request.") throw new Error(`the paused session's summary reads ${JSON.stringify(restSummary)}`);
   results.pause = { status: session.execution_status, runStarts: list.filter((n) => n === 'run_start').length, lockWhileContinued: [...new Set(continued.map((x) => x.lock))], restSummary, samples };
+}
+
+// 3b. A steer still pending when the run comes to rest (the repair of a-steering-prompt-pending-at-a-rest-is-lost.md,
+// R-067, REQ-MONITOR-134 with PD-ORCH-005 clause 4). The entry role's second step is held 7 s and then asks for a read
+// (`wait:` prefixes the step after it), so the steer submitted meanwhile and the pause that follows it both land inside
+// that step: the pause lets the read finish and stops the root before the step that would have injected the steer. The
+// rest delivers it into the root's record, marked injected once by the pause, and the Continue's resumed root reads it
+// as the last message of its first request, whose answer follows it in the record.
+const s3b = scenario('steer-rest', []);
+launch('steer-rest', s3b, { ROTARIS_SCRIPT: 'read,wait:7000,read,read', ROTARIS_CAPTURE_PROMPT: 'steer then pause', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Steer the run"]@1900;;.dialog-actions .btn-primary>>Steer@2600;;[data-testid="composer-strip"] [aria-label="Pause the run"]@~3400;;.composer__strip .btn-primary[aria-label="Continue run"]@~24000', ROTARIS_CAPTURE_TYPE: 'go left>>no-enter@2300', ROTARIS_CAPTURE_AFTER_MS: '27000' });
+{
+  const db = open(s3b);
+  const session = db.prepare('SELECT session_id, execution_status FROM sessions').get();
+  const sid = session.session_id;
+  const iterations = db.prepare('SELECT iteration, root_task_id, state, interruption FROM iterations WHERE session_id = ? ORDER BY iteration').all(sid);
+  const record = db.prepare("SELECT body FROM agent_messages WHERE session_id = ? AND task_id = ? AND kind = 'message' ORDER BY seq").all(sid, iterations[0]?.root_task_id ?? '').map((r) => JSON.parse(r.body));
+  const steering = db.prepare("SELECT name, metadata FROM timeline WHERE session_id = ? AND name LIKE 'steering%' ORDER BY ordinal").all(sid).map((r) => ({ name: r.name, ...JSON.parse(r.metadata) }));
+  const list = names(db, sid);
+  db.close();
+  const text = (m) => (m?.content ?? []).filter((c) => c.kind === 'text').map((c) => c.text).join('');
+  const at = record.findIndex((m) => m.role === 'user' && text(m) === '[Steering prompt] go left');
+  if (!list.includes('run_pause_requested') || list.filter((n) => n === 'run_start').length < 2) throw new Error(`the pause and the continuation are not both recorded: ${list.join(',')}`);
+  if (at < 0) throw new Error(`the steer never reached the root's record: ${JSON.stringify(record.map((m) => [m.role, text(m).slice(0, 60)]))}`);
+  if (record[at - 1]?.role !== 'tool' || record[at + 1]?.role !== 'assistant') throw new Error(`the steer is not where the rest delivers it, after the read's result and before the resumed step: ${JSON.stringify(record.map((m) => m.role))}`);
+  const injected = steering.filter((e) => e.name === 'steering_injected');
+  if (steering.filter((e) => e.name === 'steering_submitted').length !== 1 || injected.length !== 1 || injected[0].interruption !== 'pause') throw new Error(`the steer was not submitted once and injected once, by the pause: ${JSON.stringify(steering)}`);
+  if (session.execution_status !== 'completed' || iterations[0]?.state !== 'closed') throw new Error(`the continued run did not complete its resumed iteration: ${JSON.stringify({ session, iterations })}`);
+  results.steerRest = { steering, roles: record.map((m) => m.role), iterations };
 }
 
 // 4. The message limit: paused durably with the dialog, "double" continues; a second launch finds the session paused and "cancel" resolves it.

@@ -146,8 +146,12 @@ export interface RunDeps {
   readonly config: RunConfig;
   /** Null: no tool surface — the model is offered no tool and a requested call ends the turn. */
   readonly tools: ToolPort | null;
-  /** Part B: the tool surface for an agent with a delegation identity (the root and every child). Absent: no delegation. */
-  readonly toolsFor?: ((persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => ToolPort | null) | undefined;
+  /**
+   * Part B: the tool surface for an agent with a delegation identity (the root and every child). Absent: no delegation.
+   * `canonicalName` is the instance name its publishes record as `created_by` (REQ-LIBRARY-093) — the root's, whose
+   * `agentName` is its persona; absent for a child, whose `agentName` is its canonical name.
+   */
+  readonly toolsFor?: ((persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string) => ToolPort | null) | undefined;
   readonly dal?: StoreDal | undefined;
   /** Part Y (REQ-ORCH-149): the session artifact store, shared across iterations; absent means no artifacts exist. */
   readonly artifacts?: ArtifactStore | undefined;
@@ -1210,7 +1214,7 @@ export class Run {
       }, iteration)
       : null;
     this.children = children;
-    const tools = children && this.deps.toolsFor ? this.portFor(config.persona, rootName, children, this.rootId, 0) : this.register(this.deps.tools);
+    const tools = children && this.deps.toolsFor ? this.portFor(config.persona, rootName, children, this.rootId, 0, rootCanonical) : this.register(this.deps.tools);
     // PD-ORCH-005 clause 4: a resumed iteration's agents are restored first, so the root resumes among them.
     // The timeline records each agent resumed (`child_resumed`), so a resume is not a warning (phase 4's review).
     if (resume && children) children.resumePaused();
@@ -1359,8 +1363,8 @@ export class Run {
     if (port) this.ports.add(port);
     return port;
   }
-  private readonly portFor = (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number): ToolPort | null => {
-    const p = this.deps.toolsFor ? this.deps.toolsFor(persona, agentName, delegation, parentId, depth) : null;
+  private readonly portFor = (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string): ToolPort | null => {
+    const p = this.deps.toolsFor ? this.deps.toolsFor(persona, agentName, delegation, parentId, depth, canonicalName) : null;
     return this.register(p);
   };
 

@@ -482,6 +482,45 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
     expect(handoffArtifact(sid)).toBe('a0000003');
   });
 
+  it('REQ-LIBRARY-093: a root\'s publish names the root instance by its canonical name, never its persona, in a run\'s first iteration and in a continue\'s (docs/defects/fixed/a-roots-publish-names-its-persona-as-its-author.md)', async () => {
+    const script: ScriptedCall[] = [
+      toolCalls([{ callId: 'w1', name: 'publish', args: {} }], 'Publishing.'), answer('Published.'),
+      toolCalls([{ callId: 'w2', name: 'publish', args: {} }], 'Publishing again.'), answer('Published again.'),
+    ];
+    const backend = new DefaultAgentBackend(new ScriptedModelClient(script));
+    let n = 0;
+    const port = (ops: ArtifactOps | undefined): ToolPort => ({
+      specs: () => [{ name: 'publish', description: 'publish', parameters: { type: 'object' } }],
+      dispatch: async () => {
+        n += 1;
+        const r = ops?.write({ slug: `the-plan-${n}`, title: 'The plan', body: 'Plan body.', tags: [], supersedes: null });
+        return { text: r?.ok ? r.id : 'failed', isError: !r?.ok, status: r?.ok ? 'ok' : 'failed', durationMs: 1, label: 'publish', args: {} };
+      },
+      cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+    });
+    // A persona id the canonicaliser rewrites: its space becomes a hyphen in the instance's canonical name.
+    const sessions = new Sessions({
+      clocks: clock, publisher: { increment: () => undefined, snapshot: () => undefined }, pid: 82, host: HOST,
+      retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-root-author',
+      model: null, sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid), attended: () => true,
+      tools: (ctx) => port(ctx.artifacts),
+      configure: () => ({ ok: true, value: {
+        model: { backend, config: { ...RUN_CONFIG_DEFAULTS, persona: 'Lead Planner', model: MODEL, credentialFor: () => async () => '' } },
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0 },
+      } }),
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'plan it') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(sessions.prompt(sid, 'next').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const roots = dal.iterationsOf(sid);
+    expect(roots.map((r) => [r.root_canonical_name, r.root_persona])).toEqual([['Lead-Planner', 'Lead Planner'], ['Lead-Planner', 'Lead Planner']]);
+    const published = dal.artifactsOf(sid).filter((a) => a.kind === 'agent_published');
+    // One publish by each iteration's root (the fake clock stamps both alike, so they are compared in root order).
+    const byRoot = (a: { conversation_id: string | null }, b: { conversation_id: string | null }) => (a.conversation_id ?? '').localeCompare(b.conversation_id ?? '');
+    expect([...published].sort(byRoot).map((a) => [a.created_by, a.source_persona, a.conversation_id])).toEqual([...roots].map((r) => ({ conversation_id: r.root_task_id })).sort(byRoot).map((r) => ['Lead-Planner', 'Lead Planner', r.conversation_id]));
+  });
+
   it('end to end: a root\'s publish carries its task id as its conversation, and the next iteration\'s handoff names it over a later report', async () => {
     const calls: unknown[] = [];
     const script: ScriptedCall[] = [

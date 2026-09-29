@@ -4915,8 +4915,10 @@ from the launch content computed when the run began.
   clause names one iteration's root.
 - **The root is known by its task id.** A root's publish carries its task id as the artifact's `conversation_id` (its
   own tool port writes it; a child's report and a child's publish carry the child's), and the iteration's row records
-  that id. `created_by` is not used: every root records its persona there
-  (`a-roots-publish-names-its-persona-as-its-author.md`), so it cannot tell one iteration's root from another's.
+  that id. `created_by` is not used: every iteration's root records the one canonical name its persona gives, so it
+  cannot tell one iteration's root from another's. *As built on 2026-09-28 every root recorded its persona there
+  (`a-roots-publish-names-its-persona-as-its-author.md`); since that repair (2026-09-29, R-067) it records the root's
+  canonical name, as REQ-LIBRARY-093 asks, which is no more distinct across iterations, so the reading stands.*
 - **A plan cycle's root is not an iteration's root.** Its publishes count only as "of any kind"; the approve path
   carries the plan itself in its own section.
 - **Work that follows a plan cycle follows no iteration.** A plan cycle is never recorded as an iteration, so on the

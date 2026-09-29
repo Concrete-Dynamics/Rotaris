@@ -2012,8 +2012,13 @@ are not recorded, and cannot be recovered afterwards.
 > `error   CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit 15)` after "run host exited (0)" and "quit: exiting
 > with status 0" — main kills the run host itself and logs Electron's report of the kill at `error`. One such exit writing
 > nothing was the race going the other way. Recorded as
-> [`an-orderly-quit-logs-the-run-host-gone-at-error.md`](../defects/an-orderly-quit-logs-the-run-host-gone-at-error.md)
-> (live-run finding L13); the last-window close's 24 clean quits are not contradicted.* The review's run of the same close found the first version of the unanswered-`shutdown` line firing on
+> [`an-orderly-quit-logs-the-run-host-gone-at-error.md`](../defects/fixed/an-orderly-quit-logs-the-run-host-gone-at-error.md)
+> (live-run finding L13); the last-window close's 24 clean quits are not contradicted. Repaired the same day under
+> [R-067](requests.md#r-067): main records the run host it ends itself (`ChildrenEndedByMain`, `main/exit.ts`), and
+> Electron's `killed` report of that end is written at `info`, saying main ended it — so "a child process gone for any
+> reason but `clean-exit`" above now reads "… but `clean-exit`, or `killed` by main's own end"; a child killed from
+> outside, one that crashed and one main never ended stay `error`. `pnpm live-run --only=ask` then ended both of its
+> launches through the immediate exit with that line at `info` and no `error` line of main's.* The review's run of the same close found the first version of the unanswered-`shutdown` line firing on
 > orderly quits (3 in 26, each waiting out the 30 s bound), because a child's answer can lose the race with its own
 > exit; the quit now races each `shutdown` against the child's exit, recorded as
 > [`a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md`](../defects/fixed/a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md).
@@ -2044,6 +2049,16 @@ are not recorded, and cannot be recovered afterwards.
 > The levels are this directive's: a run host ended at quit reports exit 0 and writes its `info` line; one still running
 > past the bound after it was ended is a loss, written at `error`. A driven close at the default level wrote no
 > `warning` or `error` line from the close onwards, and main was gone 103 ms after it.
+
+> **2026-09-29, under [R-067](requests.md#r-067):** the log's one writer wrote through `console.log`, and a standard output
+> whose reader had gone failed each write with EPIPE, reported as an `error` event nothing listened for — an uncaught
+> exception the uncaught-exception handler logged to the same stream, without end, so the quit and REQ-MONITOR-131's
+> backstop starved. The writer is now `standardStreamWriter` (`main/app-log.ts`): it listens for the stream's failure and
+> writes nothing more after it, and standard error gets the same listener. Measured on the built app by closing the
+> pipes of a running launch and sending SIGTERM: it exited in about 60 ms, where the writer put back to `console.log`
+> spun at full CPU until SIGKILL. The note is moved to
+> [`a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`](../defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md)
+> and the row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -2777,6 +2792,22 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > first said fifteen cases; that counted the two outer cases twice, and the case for a later iteration's root, added
 > since, had not been written. **What was not
 > measured.** No built-app or live run followed a child up. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **The quit's gap, repaired 2026-09-29 under [R-067](requests.md#r-067):** clause 9's withdrawal by a quit was built for
+> what is pending when the run host's `shutdown` arrives, and main sends it only after `window-all-closed` has waited on
+> REQ-GIT-101's checkpoint operation. The last window's presenter is revoked as it closes, so an approval asked in that
+> gap met no presenter and was denied by the headless policy. Main now marks the revoke its quit causes (`quitting`, from
+> `QuitState`), and the run host holds what is asked meanwhile — an approval unshown in `pending_approvals`, a present
+> that crossed the close, a question — with no budget expiring on it, for the shutdown to withdraw by `quit`. The same
+> hold keeps an approval asked before the quit from timing out into a denial while the checkpoint operation runs.
+> [OQ-132](../architecture/open-questions.md) states the reading against REQ-TOOLS-064, REQ-TOOLS-058, REQ-EVENTS-049 and
+> REQ-CHAT-094. The note is repaired:
+> [`an-approval-asked-after-the-last-window-closes-is-denied.md`](../defects/fixed/an-approval-asked-after-the-last-window-closes-is-denied.md).
+> **What was measured.** Eight unit cases across `gate.test.ts`, `questions.test.ts`, the run host's `tools.test.ts` and
+> `dispatch.test.ts`; the first was red on the code before the repair, and each limb's cases were red with it removed.
+> **What was not measured.** No built-app quit with a checkpoint operation in flight and an ask made during it was
+> driven; main's `revokePresenter` is wiring no unit reaches. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---

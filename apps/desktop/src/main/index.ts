@@ -48,8 +48,8 @@ import { sessionCommands } from './commands/session.js';
 import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
-import { closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
-import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
+import { ChildrenEndedByMain, closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
+import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, standardStreamWriter, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
 import { withoutRuntimeRequests } from './runtime-requests.js'; // REQ-STARTUP-160
 // The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
@@ -81,6 +81,10 @@ const launchArtifact = takeArtifactVariables(process.env);
 const clocks = nodeClocks();
 /** PD-ORCH-005 clause 9: what tells a surface the application's quit closed from one a person closed (`exit.ts`). */
 const quit = new QuitState();
+/** The run host's service name, which Electron reports it by (`child-process-gone`'s `name`). */
+const RUN_HOST_SERVICE_NAME = 'rotaris-run-host';
+/** PD-MONITOR-002 (live-run finding L13): the children main ends itself, whose `killed` report is not a loss (`exit.ts`). */
+const endedByMain = new ChildrenEndedByMain();
 /**
  * Main's end waits for the run host's (`endBeforeMain`, `exit.ts`): a run host that outlives main keeps every session it
  * held refused to the next launch until its pid stops answering. Nothing to wait for until the run host is forked.
@@ -109,7 +113,9 @@ if (!catalogue.ok) throw new Error(`the provider catalogue is invalid: ${catalog
  * the credential store, the settings store, the provider service) now does, rather than having its `warn` dropped.
  */
 const appLogLevel = appLogThreshold(process.env[APP_LOG_LEVEL_VARIABLE]);
-const logAt = createAppLog({ threshold: appLogLevel.threshold, now: () => toIsoUtc(clocks.wall.instant()), write: (line) => console.log(line) });
+// A standard stream whose reader has gone must not turn the log into an endless uncaught EPIPE (`standardStreamWriter`).
+standardStreamWriter(process.stderr);
+const logAt = createAppLog({ threshold: appLogLevel.threshold, now: () => toIsoUtc(clocks.wall.instant()), write: standardStreamWriter(process.stdout) });
 const log = (m: string, level: AppLogLevel = 'info'): void => { logAt(level, null, m); };
 // ADR-0019's prohibition, from the other side: an uncaught exception in main would raise the platform's native
 // error box — a synchronous modal that blocks the loop and every poll reply. Log it instead; nothing here may hang.
@@ -137,12 +143,14 @@ app.on('session-created', (created) => { withoutRuntimeRequests(created, (m) => 
 app.on('before-quit', () => { log('quit: requested (before-quit)'); });
 app.on('quit', (_e, code) => { log(`quit: exiting with status ${code}`); });
 // PD-MONITOR-002: a process lost for any reason but `clean-exit` is an `error`, so a log kept at `warning` or `error`
-// still says a crash happened; `clean-exit` is the one reason in Electron's vocabulary that is not a loss.
+// still says a crash happened; `clean-exit` is the one reason in Electron's vocabulary that is not a loss — and a child
+// main ended itself is not lost either (`ChildrenEndedByMain`, `exit.ts`; live-run finding L13).
 app.on('render-process-gone', (_e, contents, details) => {
   log(`RENDERER GONE (${details.reason}, exit ${details.exitCode}) for ${contents.getURL() || 'a destroyed frame'}`, details.reason === 'clean-exit' ? 'info' : 'error');
 });
 app.on('child-process-gone', (_e, details) => {
-  log(`CHILD PROCESS GONE (${details.type}${details.name === undefined ? '' : ` ${details.name}`}: ${details.reason}, exit ${details.exitCode})`, details.reason === 'clean-exit' ? 'info' : 'error');
+  const gone = endedByMain.gone(details);
+  log(gone.message, gone.level);
 });
 process.on('exit', (code) => { log(`main process exiting with status ${code}`); });
 
@@ -238,7 +246,9 @@ async function main(): Promise<void> {
   // REQ-MCP-033 / OQ-82: the run host builds the reserved token's launch of this executable, and that launch carries the
   // sandbox switch THIS process was started with (`--no-sandbox`, as root on Linux). A utility process's argv is what it
   // is forked with, not the parent's, so the switch is handed over here; the run host reads it back from its own argv.
-  const runHostChild = utilityProcess.fork(join(__dirname, 'run-host.js'), [...inheritedChromiumSwitches(process.argv)], { serviceName: 'rotaris-run-host' });
+  const runHostChild = utilityProcess.fork(join(__dirname, 'run-host.js'), [...inheritedChromiumSwitches(process.argv)], { serviceName: RUN_HOST_SERVICE_NAME });
+  // PD-MONITOR-002 (live-run finding L13): main's own end of the run host is recorded, so Electron's `killed` is not a loss.
+  const runHostEndable = endedByMain.endable(RUN_HOST_SERVICE_NAME, runHostChild);
   // Watched from the fork so the quit can race its `shutdown` against it and never miss the event (`exit.ts`).
   const runHostExit = watchChildExit(runHostChild);
   const runHost = new ProcessLink<RunHostRequest>(portOf(runHostChild), clocks.timers);
@@ -273,7 +283,7 @@ async function main(): Promise<void> {
   // An immediate exit asked nothing of the run host, so it is ended at once; the orderly quit below gives it the grace
   // its answered `shutdown` needs (a 0 ms timer) before ending it. Either way the next launch finds its pid dead.
   const runHostStillRunning = (): void => { log(`quit: the run host (pid ${runHostChild.pid ?? '?'}) was still running ${RUN_HOST_END_BOUND_MS} ms after it was ended; a session it held is refused to the next launch until it exits`, 'error'); };
-  endRunHost = () => endBeforeMain(runHostChild, runHostExit, clocks.timers, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
+  endRunHost = () => endBeforeMain(runHostEndable, runHostExit, clocks.timers, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
 
   const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest>; exit: ChildExit }>();
   let cancelImprovementWorkspace = (_workspaceRoot: string): void => undefined;
@@ -1093,7 +1103,10 @@ async function main(): Promise<void> {
     },
     revokePresenter: (wcId) => {
       parentWindowIds.delete(String(wcId));
-      void runHost.request({ kind: 'presenter.revoke', windowId: String(wcId) }, millis(5_000)).catch(() => undefined);
+      // PD-ORCH-005 clause 9: the run host's shutdown follows only after `window-all-closed` has waited on the checkpoint
+      // operation (REQ-GIT-101). A revoke the quit causes says so, and what an agent asks in that gap waits for the quit
+      // to withdraw it instead of meeting no presenter and being denied.
+      void runHost.request({ kind: 'presenter.revoke', windowId: String(wcId), quitting: quitting() }, millis(5_000)).catch(() => undefined);
     },
     forgetTerminalFrames: (wcId) => terminalFrames.forget(wcId),
     closeConfirmed: (wcId) => { quit.closeConfirmed(wcId); },
@@ -1612,7 +1625,7 @@ async function main(): Promise<void> {
       // REQ-GIT-101 again, one process down: each workspace service finishes its in-flight checkpoint Git before it exits.
       await Promise.all([...services].map(([key, s]) => shutdownAtQuit(() => s.link.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(330_000)), s.exit, (cause) => { log(`quit: the workspace service for ${key} did not complete its shutdown (${String(cause)}); its in-flight work may be lost`, 'error'); })));
       // The run host is gone before main is, so no session lock it held outlives this instance (`endBeforeMain`).
-      await endBeforeMain(runHostChild, runHostExit, clocks.timers, { graceMs: RUN_HOST_END_BOUND_MS, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
+      await endBeforeMain(runHostEndable, runHostExit, clocks.timers, { graceMs: RUN_HOST_END_BOUND_MS, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
       app.quit();
     })();
   });

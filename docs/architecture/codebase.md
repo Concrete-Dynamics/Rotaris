@@ -1046,7 +1046,8 @@ through `lib/bounded-launch.mjs` by SIGTERM, a grace, then SIGKILL and reporting
 scenario runs to its end with its failure listed in `results.json`
 ([note](../defects/fixed/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md)).
 `spawnSync`'s own timeout could not bound a launch: it closes the pipes as it signals, and the application's quit then
-loops on its own EPIPE ([note](../defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md), open).
+loops on its own EPIPE ([note](../defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md); repaired
+2026-09-29 under R-067 — the application log's writer, `standardStreamWriter`, absorbs a failed write and stops).
 
 **A probe is a deadline, not an appointment (2026-09-12).** Three of this proof's assertions were mid-run DOM probes
 fired at a fixed instant — `.wait-header@1700` — and they failed intermittently on a busy machine with nothing wrong

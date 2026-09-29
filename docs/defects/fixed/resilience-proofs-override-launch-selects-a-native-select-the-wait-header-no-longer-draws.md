@@ -67,7 +67,8 @@ ends of the child's pipes as it signals. The quit path's first line (`quit: requ
 EPIPE, and main's uncaught-exception handler logged that failure to the same closed stream, again and again, at full
 CPU. A launch whose pipes stay open quits on SIGTERM in about 60 ms with `quit: exiting with status 0`. The log
 showed no `before-quit` line because the pipe that line needed was already closed. The product defect is recorded,
-not repaired: [`a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`](../a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md)
+not repaired: [`a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`](a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md)
+(repaired 2026-09-29 under R-067)
 (REQ-MONITOR-131's 30 s backstop never fires). `bounded-launch.test.ts` pins that `spawnBounded` keeps the pipes open
 across SIGTERM, so a quit line reaches the proof.
 

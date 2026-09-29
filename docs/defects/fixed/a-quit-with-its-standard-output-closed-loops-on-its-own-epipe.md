@@ -52,3 +52,22 @@ output that can break this way was not measured.
 
 Noticed 2026-09-28 while investigating the override launch's overrun under R-062, in the thirty minutes the task
 allowed. Not repaired: product code, outside a harness-only repair.
+
+## Repaired — 2026-09-29
+
+Repaired 2026-09-29 under R-067, with live-run finding L13 on the same logging path. The application log no longer
+writes through `console.log`: `standardStreamWriter` (`apps/desktop/src/main/app-log.ts`) listens for the stream's
+`error` event, so a failed write is never an uncaught exception, and from the stream's first failure (or a write that
+throws at once) it writes nothing more to it — nobody is left to read the line. `index.ts` builds the log over
+`standardStreamWriter(process.stdout)` and gives standard error the same listener. The uncaught-exception handler is
+unchanged: with the stream's failure absorbed there is nothing for it to loop on, and any other exception it logs to a
+broken stream goes nowhere instead of failing again.
+
+Pinned by `apps/desktop/src/main/app-log.test.ts` (the four cases "REQ-MONITOR-131: a standard stream whose reader has
+gone …": a whole stream's lines; an emitted EPIPE that throws without the listener and is absorbed with it, the lines
+after it written nowhere; a write that throws at once, tried once; the logger over a broken stream silent). Measured on
+the built app as root under Xvfb, Node 24, by a scratch probe that launches `out/main/index.js` with piped standard
+output and error, waits 12 s, closes its ends of both pipes and sends SIGTERM — this note's fifth row: with the repair
+the application exited 0 in 55, 65 and 53 ms over three launches; the same build with the writer put back to
+`console.log` was still running 20 s after the SIGTERM, main thread in state R with 19.7 s of user CPU, and was
+SIGKILLed. The `spawnSync` rows were not re-run.

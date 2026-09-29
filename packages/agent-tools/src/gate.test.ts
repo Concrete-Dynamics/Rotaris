@@ -62,10 +62,10 @@ function recordingSink() {
   return { sink, decisions, requested, issues, timeline, opens, settles, pending, warnings };
 }
 
-function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null; planGateHeld?: boolean; planGateWithheldNames?: readonly string[]; writeClaimFor?: GateDeps['writeClaimFor']; root?: string; publicTool?: GateDeps['publicTool']; resolvePath?: GateDeps['resolvePath']; presence?: GateDeps['presence'] } = {}) {
+function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null; planGateHeld?: boolean; planGateWithheldNames?: readonly string[]; writeClaimFor?: GateDeps['writeClaimFor']; root?: string; publicTool?: GateDeps['publicTool']; resolvePath?: GateDeps['resolvePath']; presence?: GateDeps['presence']; quitting?: () => boolean } = {}) {
   const clock = new FakeClock();
   const rec = recordingSink();
-  const approvals = new PendingApprovals(clock);
+  const approvals = new PendingApprovals(clock, opts.quitting ? { held: opts.quitting } : {});
   const policy = new PolicyContext(buildPolicy({ preset: opts.preset ?? 'ask', workspaceRoot: opts.root ?? ROOT }));
   const executed: Record<string, unknown>[] = [];
   const executors = new Map();
@@ -84,6 +84,7 @@ function harness(opts: { preset?: string; attended?: boolean; presenter?: Presen
     planGateWithheldNames: () => new Set(opts.planGateWithheldNames ?? []),
     ...(opts.writeClaimFor ? { writeClaimFor: opts.writeClaimFor } : {}),
     ...(opts.presence ? { presence: opts.presence } : {}),
+    ...(opts.quitting ? { quitting: opts.quitting } : {}),
   });
   const call = (name: string, args: unknown): ToolCall => ({ callId: `c-${name}`, name, rawArgs: typeof args === 'string' ? args : (args as Record<string, unknown>), persona: 'orchestrator', agentId: 'orchestrator', agentName: 'orchestrator' });
   return { gate, clock, rec, approvals, policy, executed, call };
@@ -291,6 +292,60 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     expect((await p).status).toBe('blocked');
   });
 
+  /*
+   * Defect `an-approval-asked-after-the-last-window-closes-is-denied` (R-067): the quit revokes the last presenter at once
+   * but shuts the run host down only after REQ-GIT-101's checkpoint wait. An ask in that gap met no presenter and was
+   * resolved as the headless case — denied — where PD-ORCH-005 clause 9 has the quit withdraw it.
+   */
+  it('PD-ORCH-005 clause 9: an ask made after the quit closed the last window is held unshown, outlives its timeout, and is withdrawn by the quit — never denied', async () => {
+    let shown = 0;
+    const h = harness({ attended: false, quitting: () => true, presenter: { present: async () => { shown += 1; return { ok: true }; }, close: () => undefined } });
+    const a = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
+    await Promise.resolve();
+    expect(h.rec.requested[0]).toMatchObject({ resolver: 'brokered', unattended_reason: '', request_id: 'req1' });
+    expect(h.rec.pending.at(-1)).toHaveLength(1);
+    expect(shown).toBe(0);
+    // The checkpoint wait can outlast the approval budget; the quit's gap never turns the held ask into a timeout's denial.
+    h.clock.advance(900_000);
+    await Promise.resolve();
+    expect(h.approvals.size).toBe(1);
+    expect(h.rec.decisions).toEqual([]);
+    expect(h.approvals.withdrawAll('quit')).toBe(1);
+    const r = await a;
+    expect(r).toMatchObject({ status: 'blocked', isError: true, interrupted: true, decision: null, text: 'The approval this call was waiting on was withdrawn by quitting the application; the call was not run.' });
+    expect(h.executed).toEqual([]);
+    expect(h.rec.decisions).toEqual([]);
+    expect(h.rec.issues).toEqual([]);
+    expect(h.rec.timeline).toEqual(['approval_withdrawn']);
+    expect(h.rec.pending.at(-1)).toEqual([]);
+  });
+
+  it('PD-ORCH-005 clause 9: a present that crossed the last window\'s close, answered "not shown" once the quit is under way, is held for the quit — not REQ-TOOLS-058\'s presenter-error denial', async () => {
+    let quitting = false;
+    const h = harness({ quitting: () => quitting, presenter: { present: async () => { quitting = true; return { ok: false, error: 'no main window is open' }; }, close: () => undefined } });
+    const a = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
+    await vi.waitFor(() => expect(quitting).toBe(true));
+    await Promise.resolve();
+    expect(h.approvals.size).toBe(1);
+    expect(h.rec.decisions).toEqual([]);
+    expect(h.approvals.withdrawAll('quit')).toBe(1);
+    expect(await a).toMatchObject({ status: 'blocked', interrupted: true, decision: null });
+    expect(h.rec.decisions).toEqual([]);
+    // With no quit under way the same failure is REQ-TOOLS-058's, as before.
+    const h2 = harness({ quitting: () => false, presenter: { present: async () => ({ ok: false, error: 'no main window is open' }), close: () => undefined } });
+    expect(await h2.gate.dispatch(h2.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal)).toMatchObject({ status: 'blocked' });
+    expect(h2.rec.decisions[0]).toMatchObject({ source: 'presenter-error' });
+  });
+
+  it('PD-ORCH-005 clause 9 with PD-TOOLS-005: a run whose user is treated as away still resolves an ask at once in the quit\'s gap, as it would with the window open', async () => {
+    const h = harness({ attended: false, quitting: () => true, presence: { away: () => ({ afterSeconds: 300 }), markAway: () => undefined } });
+    const r = await h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
+    expect(r.status).toBe('blocked');
+    expect(h.rec.decisions[0]).toMatchObject({ source: 'headless-policy' });
+    expect(String(h.rec.decisions[0]!['reason'])).toContain('treated as away');
+    expect(h.approvals.size).toBe(0);
+  });
+
   it('REQ-TOOLS-064/065/066: unattended → headless, timeout null, no wait; abort invokes the hook, degrades to deny without one', async () => {
     const h = harness({ attended: false });
     const r = await h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
@@ -447,6 +502,40 @@ describe('PendingApprovals (REQ-TOOLS-054) and PresenterRegistry (ADR-0019)', ()
     reg.revoke('w1');
     expect(reg.attended).toBe(false);
     reg.stop();
+  });
+
+  it('PD-ORCH-005 clause 9: a revoke the quit sends marks the application quitting until a window registers again; an ordinary revoke does not', () => {
+    const clock = new FakeClock();
+    const reg = new PresenterRegistry({ monotonic: clock, timers: clock, poll: () => undefined, onLapse: () => undefined });
+    reg.register('w1');
+    reg.register('w2');
+    reg.revoke('w1', true);
+    // Another main window still presents, so nothing is held for the quit.
+    expect(reg.quitting).toBe(false);
+    expect(reg.attended).toBe(true);
+    reg.revoke('w2', true);
+    expect(reg.attended).toBe(false);
+    expect(reg.quitting).toBe(true);
+    // Main keeps answering the liveness poll with no window; that never ends the quit.
+    reg.pollReplied([]);
+    expect(reg.quitting).toBe(true);
+    reg.register('w3');
+    expect(reg.quitting).toBe(false);
+    reg.revoke('w3');
+    expect(reg.quitting).toBe(false);
+  });
+
+  it('PD-ORCH-005 clause 9: a wait whose budget expires while the quit holds it is not timed out; once nothing holds it, the next expiry is REQ-TOOLS-054\'s timeout', async () => {
+    const clock = new FakeClock();
+    let held = true;
+    const p = new PendingApprovals(clock, { held: () => held });
+    const w = p.create(payload('a'), 1_000);
+    clock.advance(1_000);
+    clock.advance(1_000);
+    expect(p.has('a')).toBe(true);
+    held = false;
+    clock.advance(1_000);
+    expect(await w).toEqual({ kind: 'timed_out', afterSeconds: 1 });
   });
 });
 

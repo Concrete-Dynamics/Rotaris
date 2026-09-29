@@ -243,7 +243,8 @@ unresponsive fallback, the 8 s child timeout with and without a fallback, the 50
 **Found a product loop in the quit path while tracing the overrun.** The signal was not ignored: `spawnSync` had
 closed the pipes, and the quit's first log line met EPIPE, which main's uncaught-exception handler logs to the same
 closed stream without end
-([note](../../defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md), recorded and not repaired).
+([note](../../defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md), recorded and not repaired
+then; repaired 2026-09-29 under R-067).
 The repair is in [the proof's note](../../defects/fixed/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md).
 **Could not show:** the ladder against a real provider's 429 (unchanged from above); anything on Windows (IC-3).
 

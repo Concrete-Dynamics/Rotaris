@@ -45,6 +45,29 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**The application log survives the loss of its reader (REQ-MONITOR-131, R-067).** Main's log writes through
+`standardStreamWriter` (`main/app-log.ts`) instead of `console.log`: the stream's `error` event is listened for, and from
+its first failure nothing more is written to it; standard error gets the same listener. A quit whose standard output
+has been closed no longer loops on its own EPIPE. This repairs `a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`.
+The **process view**'s application-log paragraph says so. No package, edge, process, message kind, channel, command or
+store column changed.
+
+**A child main ended itself is not a loss in the application log (PD-MONITOR-002, R-067, live-run finding L13).** The
+run host's `kill` that `endBeforeMain` sends goes through `ChildrenEndedByMain` (`main/exit.ts`), which records it by
+service name, and the `child-process-gone` handler writes Electron's `killed` report of that end at `info`, saying main
+ended it; every other end but `clean-exit` stays `error`. This repairs `an-orderly-quit-logs-the-run-host-gone-at-error.md`.
+The **process view**'s application-log paragraph says so. No package, edge, process, message kind, channel, command or
+store column changed.
+
+**What is asked of a person in the quit's gap is held for the quit to withdraw (PD-ORCH-005 clause 9, R-067, OQ-132).**
+`presenter.revoke` gains an optional `quitting`, which main sets from `QuitState`; the run host's `PresenterRegistry.quitting`
+holds from such a revoke until a window registers. Meanwhile the gate holds an ask unshown in `pending_approvals` instead
+of denying it headless, a present answered "not shown" is held too, `ask_questions` records its prompt pending, and
+`PendingApprovals` and `PendingQuestions` arm an expiring budget again; the shutdown withdraws every one by `quit`. This
+repairs `an-approval-asked-after-the-last-window-closes-is-denied.md`. The **sequences view**'s §2 (the diagram and a new
+paragraph) and the **process view**'s message list say so. No package, edge, process, channel, command or store column
+changed.
+
 **A small non-zero cost renders as the floor `< 0.0001`, never as zero (ESC-42 ruled option (b) under R-067, 2026-09-29).**
 `formatAmount` (`kernel/money.ts`) returns `AMOUNT_FLOOR` where REQ-PROVIDER-121's half-up rounding brings an amount
 greater than zero to zero; `costLabelOf` is unchanged and every label takes the floor as its `<amount>`. This repairs

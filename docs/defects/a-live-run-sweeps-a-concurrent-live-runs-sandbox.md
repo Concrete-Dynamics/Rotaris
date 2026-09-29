@@ -22,3 +22,21 @@ workspace bounded by the endpoint's own accounting. The overlapped run spends it
 
 - `apps/desktop/scripts/live-run.mjs`: `SANDBOX_ROOT` and the startup sweep loop, which calls `dropCredentials` and
   `rmSync` on every entry not marked `KEPT`.
+
+Recurred 2026-09-29: a `--only=faults,edit` run started at 20:59:46 in `/home/user/Rotaris-crw-wt-traffic`; another
+worktree's live run started at 21:01:07, and when the first run's `edit` launch completed at 21:10:34 it died the same way
+(`expected one workspace database below /tmp/rotaris-live-run/2026-09-29T20-59-46-627Z/local; found 0`). Its app and its
+recording proxy kept working through the deletion — the `edit` pack's `model-traffic.jsonl` holds all 72 calls — so the
+run spent its tokens and lost only its store.
+
+Recurred again 2026-09-29, twice more. The verifier's first attempt on this branch (started 21:48:35) was swept by the
+`/home/user/Rotaris-crw-wt-termout` live run that started at 21:52:23. The repairer's rerun of `--only=faults,edit`
+(started 22:03:45, sandbox `/tmp/rotaris-live-run/2026-09-29T22-03-45-462Z`) was swept by the same worktree's live run
+started at 22:08:13. It died reading `faults-stall`'s store back (`expected one workspace database … found 0`, at
+`readSession` from the stall scenario), after `faults-ladder` had run.
+
+Recurred a fourth time the same evening. The repairer's round-1 rerun of `--only=faults,edit` on `fix-traffic-proxy`
+(started 22:44:39, sandbox `/tmp/rotaris-live-run/2026-09-29T22-44-40-230Z`) was swept by the
+`/home/user/Rotaris-crw-wt-termout` live run (`--only=terminal`) that started at 22:46:42, and died at `readSession` with
+`expected one workspace database … found 0` before any check was printed. The rerun that followed was held until no other
+worktree's `node …/live-run.mjs` process was running — a workaround at the caller, not a repair of the sweep.

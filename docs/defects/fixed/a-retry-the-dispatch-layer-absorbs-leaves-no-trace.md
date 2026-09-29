@@ -11,7 +11,7 @@ Live-run finding: L3 (live runs of 2026-09-29)
 `num_retries`, default 5) come first, and the ladder (REQ-ORCH-091/092) takes over when they are exhausted; nothing is
 added to the ladder. Each retry the dispatch layer absorbs is written to the session log with the status it met and the
 delay it waited. That line is this note's repair. The live run's ladder check is the harness's half, recorded in
-`../two-live-run-checks-cannot-see-what-they-claim.md`.
+`two-live-run-checks-cannot-see-what-they-claim.md`.
 
 ## Specs
 
@@ -52,7 +52,7 @@ is reported as it is sent …", "OQ-110: a connection failure the dispatch layer
 `packages/engine/src/run/turn.test.ts` ("OQ-110 (REQ-CONFIG-086, REQ-SESSION-142): a retry the dispatch layer absorbed is
 written to the session log …"), each red with the report withdrawn. OQ-110 carries the report-back; the 2026-09-22 row of
 `first-executions.md` was corrected in place by the ruling. The live run's ladder check stays with
-`../two-live-run-checks-cannot-see-what-they-claim.md`.
+`two-live-run-checks-cannot-see-what-they-claim.md`.
 
 Shown live the same day with `pnpm live-run --confirm --skip-build --only=faults` against `katalyst` (pack
 `.live-run/runs/2026-09-29T19-39-22-466Z`, git-ignored): `faults-ladder/session.log` reads

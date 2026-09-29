@@ -735,7 +735,15 @@ it is a raw pipe, forwarding chunks as they arrive, because a buffering proxy wo
 loop is built on and leave every assertion green — the harness measuring a product that exists only while it is
 measured, which is the shape of the two false-symptom repairs above. `model-traffic.test.ts` pins that property
 with a case that hangs if the pipe ever buffers, verified by making it buffer. Credentials are replaced in the
-record before it is written and the `ask` scenario asserts it.
+record before it is written and the `ask` scenario asserts it. *Since 2026-09-29 (R-067, live-run findings H1 and H-g)
+a call the product aborts is let go at the endpoint too and written `aborted`, a record lands in the file of the scenario
+that made the call rather than the one current when it ended, and a call still open when the proxy closes is written
+`in-flight at close`: the first live run had nine aborted calls finish upstream and land `complete` in the next scenario's
+file, and the duress pack was one record short of its log
+(`docs/defects/fixed/the-recording-proxy-does-not-pass-a-client-abort-upstream.md`,
+`docs/defects/fixed/the-recording-proxy-writes-nothing-for-a-call-in-flight-at-close.md`). Shown live the same day
+(pack `2026-09-29T21-11-24-678Z`): `faults-stall`'s stalled call was let go at 120.5 s, the product's own idle bound,
+not the rule's 300 s hold, and every scenario's records matched its log's `model request POST` lines.*
 
 **The proxy's own first execution found that it could not answer a single call, and the reason is kept beside
 its replacement.** The script launched every scenario with `spawnSync`, which blocks the Node event loop until
@@ -762,7 +770,9 @@ what the checks claim about the product is unverified, and that first execution 
 `first-executions.md`. *Both ran live on 2026-09-22 (the row is there). The ladder half is corrected 2026-09-29 (R-067, OQ-110): the
 429 and the 500 are retried by the model client's dispatch layer (REQ-CONFIG-086's `num_retries`, default 5) before the
 ladder sees them, which the owner ruled is the specification's order; the scenario shows the run surviving the refusals,
-not the ladder waiting or falling back.*
+not the ladder waiting or falling back. Its check once passed on the call count alone; since 2026-09-29 it reads, for each
+injected refusal, the session log's dispatch-layer line or the ladder's own issue, and names which layer it was
+(`docs/defects/fixed/two-live-run-checks-cannot-see-what-they-claim.md`).*
 
 **Two scenarios enter the gap this page names below** — "short tasks against an unmetered endpoint, so no
 generation near the model timeout, no multi-line command, and no re-spawn", where all seven of one session's

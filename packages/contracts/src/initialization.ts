@@ -98,7 +98,7 @@ export const InitializationStateSchema = z.object({
    * The run `report` describes was started by the resolution for pending background tasks (REQ-WORKSPACE-083), not by
    * the user. Nothing renders such a run's progress live (REQ-WORKSPACE-103), so the setup dialog takes its report only
    * once the user has pressed Initialize (REQ-WORKSPACE-110), and it neither answers nor withdraws the setup prompt
-   * (OQ-110). False before any run.
+   * (OQ-119). False before any run.
    */
   backgroundRun: z.boolean(),
 });

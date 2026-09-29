@@ -268,7 +268,7 @@ describe('the skip path and the start refusals', () => {
    * `docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`: the resolution a skip performs first
    * publishes the background run while the skip is still in flight, and the dialog is still open. Main cannot order a
    * push behind the command's reply, so every view that shows that run must say it is a background run. That is what
-   * the dialog reads to leave it undrawn (REQ-WORKSPACE-103) and what keeps the prompt due (OQ-110).
+   * the dialog reads to leave it undrawn (REQ-WORKSPACE-103) and what keeps the prompt due (OQ-119).
    */
   it('marks every view published during a skip that shows a run in progress as a background run (REQ-WORKSPACE-083, REQ-WORKSPACE-103)', async () => {
     const h = harness();

@@ -131,7 +131,7 @@ export function dialogReport(state: InitializationStateView, adopted: boolean): 
 
 /**
  * REQ-WORKSPACE-105: the setup prompt is due when a consent-requiring task is pending and no run is in progress. As
- * built under OQ-110, the run meant is one the user started. A background run starts "regardless of whether a prompt is
+ * built under OQ-119, the run meant is one the user started. A background run starts "regardless of whether a prompt is
  * also due" (REQ-WORKSPACE-083) and answers nothing, so it neither withdraws the prompt nor lifts the composer gate of
  * REQ-WORKSPACE-112. The window's auto-open and the composer gate both read this one answer.
  */

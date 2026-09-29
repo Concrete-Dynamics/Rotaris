@@ -298,7 +298,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
    * (REQ-WORKSPACE-105) and otherwise only when the user asks for it from the sidebar's Project section.
    */
   const init = useInitialization();
-  // REQ-WORKSPACE-105/112: a background run in progress does not lift the gate (OQ-110; `setupPromptDue`).
+  // REQ-WORKSPACE-105/112: a background run in progress does not lift the gate (OQ-119; `setupPromptDue`).
   const promptDue = setupPromptDue(init.state);
   const openProjectSetup = useShellState((s) => s.openProjectSetup);
   return <>
@@ -1243,7 +1243,7 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   const autoOpenProjectSetup = useShellState((s) => s.autoOpenProjectSetup);
   const closeProjectSetup = useShellState((s) => s.closeProjectSetup);
   // REQ-WORKSPACE-105: due on the same reading as the composer gate, so a background run in progress does not hold the
-  // automatic opening back until it ends (OQ-110).
+  // automatic opening back until it ends (OQ-119).
   const promptDueNow = setupPromptDue(initialization.state);
   const autoOpened = useRef(false);
   useEffect(() => {

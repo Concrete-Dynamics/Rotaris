@@ -404,10 +404,10 @@ workspace open), `initialization.start`, `initialization.skip {ids}` and `initia
 the whole state. A skip records every listed id except one the live run is attempting, which it logs (ADR-0064,
 finding (2)). The window can open the dialog from its mount read before main's 800 ms slot, so a skip that arrives
 before the open's one automatic resolution performs that resolution first (or waits for the one under way), and the
-background task it starts is then attempted (2026-09-28, R-062; REQ-WORKSPACE-083/084/086/102; OQ-109). The state
+background task it starts is then attempted (2026-09-28, R-062; REQ-WORKSPACE-083/084/086/102; OQ-118). The state
 carries `backgroundRun` beside the run report: whether that report describes a run the resolution started for background
 tasks. The window reads it twice. A background run neither withdraws the setup prompt nor lifts the composer gate
-(`setupPromptDue`, OQ-110). The dialog draws that run's report only once Initialize has been pressed (REQ-WORKSPACE-103/110;
+(`setupPromptDue`, OQ-119). The dialog draws that run's report only once Initialize has been pressed (REQ-WORKSPACE-103/110;
 2026-09-29, R-062). Main is the coordinator because REQ-WORKSPACE-085 gives the marker **one writer** and that file
 is the workspace service's (`config.setField`, Tier A) while the one shipped task's work is the run host's
 (`mcp.setup`) — and the matrix gives neither of those two an edge to the other. The run host gained one event,

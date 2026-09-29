@@ -191,7 +191,7 @@ REQ-WORKSPACE-111 ("SHALL persist the listed task ids as skipped") both name tha
 REQ-WORKSPACE-083 lists and REQ-WORKSPACE-106 draws a card for. The earlier text here also said a dialog raised before
 the resolution "is not itself against a requirement". That was a reading, not a finding: REQ-WORKSPACE-083 makes the
 prompt request a product of the resolution, and REQ-WORKSPACE-141 puts the resolution in the interactive slot.
-**OQ-109** now carries the question.
+**OQ-118** now carries the question.
 
 **The repair built follows the specification's order (revised 2026-09-29).** The prompt a skip answers is a product
 of the open's resolution. So a skip that arrives before the open's one automatic resolution performs that resolution
@@ -224,7 +224,7 @@ recorded no decision. That is against REQ-WORKSPACE-103 ("nothing renders their 
 command's reply, so the repair is in what the window draws, not in holding main's publishes. The state carries
 `backgroundRun` beside the report, and REQ-WORKSPACE-105's nine values are unchanged. The dialog draws that run only
 once Initialize is pressed (REQ-WORKSPACE-110's flip). A background run neither withdraws the setup prompt nor lifts the
-gate (`setupPromptDue`, **OQ-110**). `init-proof` now reads the dialog before its Escape, and no assertion changed.
+gate (`setupPromptDue`, **OQ-119**). `init-proof` now reads the dialog before its Escape, and no assertion changed.
 **Measured** as root under Xvfb on Linux, Node 24, on 2026-09-29, after one `pnpm build` at `19aef49`:
 `init-proof --skip-build` passed six runs in a row (175, 175, 172, 172, 173 and 173 s), all five scenarios. At the end
 of the runs, another agent's Electron processes on the host numbered 0, 6, 9, 9, 16 and 16. The runs took three orders.

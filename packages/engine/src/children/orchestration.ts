@@ -13,10 +13,10 @@ import type { ArtifactStore } from '../artifacts/store.js';
 import { ChildLedger, storeChildReport, userCancellation, type Budget } from './ledger.js';
 import { childPayload, completionNotification, inheritedContextBlock, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
 import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, type CutOff } from './cut-off.js';
-import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver, type RoleName } from './personas.js';
+import { BUILT_IN_PERSONAS, resolveRole, type Persona, type PersonaResolver, type RoleName } from './personas.js';
 import { fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
-import { validateWriteScope, WriteClaims, writeScopeBlock, type ClaimHit, type ScopeDisclosure } from './write-scope.js';
+import { fileWriters, scopeWithoutWriterReason, validateWriteScope, WriteClaims, writeScopeBlock, writesFiles, type ClaimHit, type ScopeDisclosure } from './write-scope.js';
 import type { HookPort } from '../hooks-port.js';
 import { withContextUnits, withPlaybook } from '../run/run.js';
 import { STOP_GRACE } from '../run/grace.js';
@@ -224,6 +224,17 @@ export class IterationChildren implements DelegationOps {
     // PD-TOOLS-006: a scope that cannot be honoured refuses the delegation before a record exists, like every refusal here.
     const scope = validateWriteScope(req.writeScope ?? []);
     if (!scope.ok) return { status: 'rejected', canonicalName: req.taskName, message: scope.reason };
+    /*
+     * PD-TOOLS-006 revision 3 (OQ-112): a scope for a persona that cannot write files. The persona is the one the ledger
+     * will resolve, an alias included — `personaOf`'s built-in path reads the table alone, so `playwright` would pass
+     * as unknown and the ledger would then accept it as `ui-verifier` (found by the branch's verification). Its other
+     * readers above are recorded in `docs/defects/delegate-reads-no-alias-on-the-built-in-table.md`. An unknown persona
+     * is the ledger's refusal.
+     */
+    const named = this.deps.personas ? persona : resolveRole(req.persona)?.persona;
+    if (scope.patterns.length > 0 && named !== undefined && !writesFiles(named)) {
+      return { status: 'rejected', canonicalName: req.taskName, message: scopeWithoutWriterReason(named.name, fileWriters(this.deps.personas)) };
+    }
     // PD-ORCH-004: a continuation is admitted only for the caller's own child that offered one, and only once.
     const continuationOf = req.continuationOf ?? '';
     if (continuationOf !== '') {
@@ -803,7 +814,7 @@ export class IterationChildren implements DelegationOps {
     this.controllers.set(row.task_id, summarising);
     const onRunAbortWhileSummarising = () => { if ((deps.restCause?.() ?? null) !== null) summarising.abort(); };
     deps.runSignal.addEventListener('abort', onRunAbortWhileSummarising, { once: true });
-    const reportInput: ReportInput = { agentName: row.canonical_name, role: row.persona, status, messages, toolCallCount: toolCalls, toolsUsed: [...new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-call' ? [p.name] : []))))], lastText, finalTextIsFinal: finalIsFinal, errors };
+    const reportInput: ReportInput = { agentName: row.canonical_name, role: row.persona, status, messages, toolCallCount: toolCalls, toolsUsed: [...new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-call' ? [p.name] : []))))], lastText, finalTextIsFinal: finalIsFinal, errors, task: row.task };
     let produced: Awaited<ReturnType<typeof produceReport>>;
     try {
       produced = await produceReport(reportInput, cancelled || this.resting ? null : deps.summariser, summarising.signal, this.resting && !cancelled ? 'the run was coming to rest, so no summarising call was made' : undefined, () => this.resting);

@@ -1270,7 +1270,7 @@ export class Run {
        * REQ-ORCH-080: a stop with active background children drains before anything is cancelled — only a stop that
        * cancels them (the explicit cancel); a stop that brings the run to rest leaves them paused (PD-ORCH-005). A root
        * given up on drains them as one that returned does: the drain is bounded by its own timeout, not by the stop's
-       * grace (OQ-119).
+       * grace (OQ-121).
        */
       if (children && this.stop.requested && this.restCause === null && children.scheduler.hasNonTerminal) await children.drain(this.deps.drainTimeoutMs ?? millis(120_000));
       // A root given up on reports nothing of its own: `iterate` reads the stop before the report (REQ-SESSION-092).

@@ -223,7 +223,7 @@ given only after a root given up on, while a root that returned gave the rest a 
 therefore let the stop take 59 s. Corrected the same day, found by the verifier of the repair.* Under the explicit
 cancel, which rests nothing, the child executions still running once the records are settled are awaited within what is
 left of the same grace and detached past it (`IterationChildren.outlast`), and a root given up on drains the background children as one
-that returned does, bounded by REQ-ORCH-080's own timeout (OQ-119). The root is counted from the first request, so a
+that returned does, bounded by REQ-ORCH-080's own timeout (OQ-121). The root is counted from the first request, so a
 stop forced at once still gives a root that honours the abort the moment to record its step.
 
 **Executed:** five cases in `children/children.test.ts` over the fake clock, all red before the change. Each limb (the

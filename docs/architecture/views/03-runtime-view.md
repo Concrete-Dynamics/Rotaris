@@ -250,7 +250,7 @@ same first request (`Run.stopGraceLeft` → `IterationChildren.rest(cause, grace
 still executes is detached at once), so a stop ends within the one 30 s. The root is left `paused` by a stop or a quit,
 its open call answered as interrupted; under the explicit cancel its open call is answered as cut off, naming no rest. The
 explicit cancel rests nothing: it drains the active background children (REQ-ORCH-080, bounded by the drain's own
-timeout, whether the root returned or was given up on — **OQ-119**), settles every child record (`finalize`), then
+timeout, whether the root returned or was given up on — **OQ-121**), settles every child record (`finalize`), then
 awaits what still executes within what is left of the grace and detaches it (`IterationChildren.outlast`: none is left
 after a root given up on), so a child's step that ignored the cancel writes nothing when it returns. So does any stop that
 rests nothing (one the run raises itself, a plan cycle's). The repair of `a-root-call-that-ignores-the-stop-holds-the-run-open.md`. Every agent the rest leaves paused, the root included, has any call it never
@@ -603,7 +603,10 @@ a time, re-runnable, cancellable; the status held in the run host for the applic
 into the **ledger** (one row per child, every transition one transaction with its `child.transition` event);
 the **scheduler** is a pass to quiescence triggered by a state change, never a timer (cascade `blocked`, admit
 on `succeeded` + report stored, promote one held child per freed model slot, claim starts); a child runs its own
-turn loop under its persona's tools, model, credential and supervisor; its **report** comes from a bounded summarising pass on `default_summary_model` (REQ-CONFIG-065) or the entry model;
+turn loop under its persona's tools, model, credential and supervisor; its **report** comes from a bounded summarising pass on `default_summary_model` (REQ-CONFIG-065) or the entry model,
+which reads the task as given (the ledger row's, the payload's blocks ahead of it marked omitted) and the most recent
+part of the transcript within 12,000 characters, the omission marked between them, beside the report's deterministic
+facts — edited files, commands and exit codes (OQ-111; OQ-119 and OQ-120 ask its two bounds);
 the parent resumes with the report. Every exit from an iteration leaves every child record terminal — except a rest
 (PD-ORCH-005), which leaves every unfinished child `paused`.
 
@@ -628,7 +631,10 @@ finds its record terminal writes nothing further, so the cancellation's report s
 
 **Write scopes (PD-TOOLS-006; `children/write-scope.ts`).** A `delegate` call may carry `write_scope`, path
 patterns in the `glob` tool's dialect (the one compiler, `kernel/glob.ts`). `IterationChildren.delegate` validates
-them before admission (an empty, absolute or root-escaping pattern is a `rejected` delegation with no record) and,
+them before admission (an empty, absolute or root-escaping pattern is a `rejected` delegation with no record; so,
+since revision 3, is a scope for a known persona, or an alias of one, that cannot write files — `writesFiles`:
+`write_file`, `haet_edit` or `haet` surviving `coordinator_only` and `read_only` — whose reason names the catalogue's
+writers, `fileWriters`) and,
 once the ledger has accepted the child, records its **claim** in `WriteClaims` — in memory, in acceptance order —
 together with the child's **disclosure**: its own scope and the live scopes of the others as they
 stand at that moment. The disclosure is rendered as a block immediately after the workspace-root line of the child's

@@ -57,8 +57,22 @@ package, edge, process, channel, message kind or store column changed.
 stop request (`stopGraceSpent`); a root still in a call then is detached as a child execution is, left `paused` by a
 stop or a quit with its open call answered, and the rest that follows gives the children only what is left of that
 grace (`Run.stopGraceLeft`, `IterationChildren.rest`'s `grace`). Under the explicit cancel a root given up on still
-drains (REQ-ORCH-080, OQ-119). This repairs `a-root-call-that-ignores-the-stop-holds-the-run-open.md`. The
+drains (REQ-ORCH-080, OQ-121). This repairs `a-root-call-that-ignores-the-stop-holds-the-run-open.md`. The
 **runtime view**'s §2 says so. No package, edge, process, channel, message kind or store column changed.
+
+**`delegate` refuses a write scope for a persona that cannot write files (`PD-TOOLS-006` revision 3, OQ-112,
+2026-09-29).** `IterationChildren.delegate` rejects the delegation before any record exists when its `write_scope` names
+patterns and the persona — resolved as the ledger resolves it, an alias included — holds no `write_file`, `haet_edit`
+or `haet` after `coordinator_only` and `read_only` (`writesFiles`). The reason names the catalogue's personas that can (`fileWriters`). The **runtime view**'s write-scopes
+paragraph names it; no package, edge, message or store table changes.
+
+**The report's pass reads the task and the most recent part, beside the facts (OQ-111, REQ-ORCH-110, 2026-09-29).**
+`produceReport` gives the summarising pass `reportTranscript`: the task as given (`ReportInput.task`, the ledger row's;
+the blocks the payload puts ahead of it marked omitted) and the most recent part, within 12,000 characters, with
+`… [N characters omitted] …` between them. It also gives `reportFacts`, the
+edited files and each command with its exit code, derived from the whole transcript. The head-only `transcriptText`
+remains the compressor's alone. The **runtime view**'s children paragraph names it; no package, edge, message or store
+table changes.
 
 **A continue in the process that ran the session takes the lock back (ADR-0005, REQ-SESSION-047/048/083, 2026-09-29,
 R-067).** `prompt`, `continueSession` and `planDecision` claim the session's lock before their first write

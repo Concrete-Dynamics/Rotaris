@@ -39,7 +39,7 @@ the grace still let the stop take about 60 s, which the record above already cla
 of this repair, 2026-09-29).* Under the explicit cancel, what still executes beside the root is detached with it once
 the records are settled (`IterationChildren.outlast`), so a child's step or call that ignored the cancel writes nothing
 into the finished session either, and a root given up on still drains the active background children as REQ-ORCH-080
-asks, bounded by the drain's own timeout (OQ-119). *As first built the explicit cancel settled the children's records
+asks, bounded by the drain's own timeout (OQ-121). *As first built the explicit cancel settled the children's records
 and left their executions attached, so a child step that ignored the cancel appended its rows and `usage.update` after
 `result`; and the early return of a root given up on skipped the drain (both found by the same verifier).*
 

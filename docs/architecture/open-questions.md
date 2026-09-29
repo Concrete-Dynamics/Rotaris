@@ -109,7 +109,7 @@ before the ladder's), **OQ-111** (what the report summariser reads), **OQ-112** 
 write is refused) **and OQ-113** (REQ-LIBRARY-092's fallback, answered by amendment). **Three more were raised the same day
 from the live runs and left open: OQ-114** (the specification's fixed figures on a reasoning model's critical path, and a
 continuation that starts from nothing), **OQ-115** (the code-intelligence server's imperative tool description, rendered
-verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-117** (what an iteration is told of a task it takes up that is not the run's own) was raised the same day by the repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` and left open. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-117** (what an iteration is told of a task it takes up that is not the run's own) was raised the same day by the repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` and left open. **OQ-119** (whether the task the report summariser keeps as its start may pass REQ-ORCH-110's 2,000 per event) **and OQ-120** (the size of the facts given to the report summariser) were raised the same day by the repair of D1 and left open, as OQ-118 and OQ-119 on their branch, renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3869,7 +3869,7 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   is given what is left of the grace, counted from the first request, so the stop ends within the one 30 s rather than
   the root's time and then a second 30 s for the children. Under the explicit cancel, which rests nothing, the child
   executions still running once their records are settled are detached with the root, and a root given up on still
-  drains the background children, bounded by REQ-ORCH-080's own timeout (OQ-119)
+  drains the background children, bounded by REQ-ORCH-080's own timeout (OQ-121)
   (`docs/defects/fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md`). *First reported as "A rest that
   follows a detached root waits for no child execution again", which was true and not enough: a root that returned at
   29 s still gave the rest a fresh 30 s, and under the explicit cancel the children stayed attached and the drain was
@@ -5177,6 +5177,24 @@ denies work the record shows. REQ-ORCH-110 fixes how much and not which part, so
 nothing; the facts are what REQ-ORCH-109 already keeps runner-owned, given to the pass to condense and never to
 overwrite. Nothing is built by the ruling; the repair is owed to the note that records D1.
 
+**Built 2026-09-29 under [R-067](../product/requests.md#r-067).** `produceReport` reads `reportTranscript` and hands the
+pass `reportFacts` beside it. The transcript's start is the ledger row's task, as one event cut to REQ-ORCH-110's 2,000;
+the blocks the payload puts ahead of the task are replaced by a marker stating their size. Then comes the marker, then
+the most recent part, 12,000 characters with the markers. The note is
+[`a-long-childs-report-denies-the-edits-it-made`](../defects/fixed/a-long-childs-report-denies-the-edits-it-made.md),
+repaired. Two bounds the ruling leaves to the build are raised as questions of their own: a task longer than 2,000
+characters (OQ-119) and the size of the facts (OQ-120).
+Live on 2026-09-29 (duress, session `b4a768a2`), none of the six stored reports denied its own edited files, where the
+earlier run had five of seven. The reconciling child's request left 57,547 characters out and still ended on its edits.
+
+*The build's first claim, falsified by the branch's verification and kept beside its correction:* "the first event, the
+task as given". The first event is the child's whole REQ-TOOLS-154 payload, and the task comes last in it. In that same
+live run every summarising request's start began `user: Workspace root: …` and was cut inside the task, and the request
+for the last child lost its task's `EXPECTED OUTCOME` and `MUST DO`. The facts, the most recent part and the stored
+reports measured above are unaffected; the start was not the task. The start built since is the task itself. Live
+again on 2026-09-29 (duress, session `059ae1d7`), all six summarising requests started with the child's task, whole,
+with 313 to 1,653 characters of payload blocks marked omitted ahead of it, and none of the six summaries denied its facts.
+
 
 **OQ-112 — May `delegate` give a `write_scope` to a persona that holds no file-writing tool?** *(`PD-TOOLS-006` over REQ-TOOLS-152; REQ-ORCH-095, whose text-only completion let the child end `succeeded`. Raised 2026-09-29 from the duress live run's finding D6 under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-111 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
@@ -5196,6 +5214,20 @@ where the persona catalogue shows any, names the personas that can. A persona's 
 for the child, after REQ-TOOLS-006's controls. REQ-TOOLS-152 is narrowed by `PD-TOOLS-006`, and its back-pointer is
 amended in place. REQ-ORCH-095 is untouched: a child with no scope that answers in text still ends as that requirement
 says. Nothing is built by this ruling; the finding's note is D6's in `docs/defects/`.
+
+**Built 2026-09-29 under [R-067](../product/requests.md#r-067).** `IterationChildren.delegate` refuses the scope straight
+after the scope's own validation (`writesFiles`, `scopeWithoutWriterReason` and `fileWriters` in
+`children/write-scope.ts`); the note is
+[`delegate-accepts-a-write-scope-for-a-persona-that-cannot-write`](../defects/fixed/delegate-accepts-a-write-scope-for-a-persona-that-cannot-write.md),
+repaired. "After REQ-TOOLS-006's controls" is read as the two a child's grant meets, `coordinator_only` and
+`read_only`: the run-scoped allow-list binds the entry agent alone, and the `tool_restrictions` map is applied to no
+agent's grant today (recorded as a defect of its own), so the check follows the grant the tool port builds.
+The persona checked is the one the ledger resolves, an alias included; the first build read the built-in table without
+its aliases, so `playwright` with a scope was accepted as `ui-verifier` (found by the branch's verification, repaired).
+Live again on 2026-09-29 (duress, session `059ae1d7`), scopes given to `codebase-analyst` and to `verifier` were both
+refused, and each task went next to a writer.
+Live on 2026-09-29 (duress, session `b4a768a2`) the orchestrator gave a scope to `verifier`. It was refused with the
+writers named, and 15 s later it delegated the task to `docs-writer`.
 
 **OQ-113 — When does REQ-LIBRARY-092's materialisation fall back to the canonical agent name?** *(REQ-LIBRARY-092, "idempotent keyed on the task id (falling back to the canonical agent name)", and its "Every terminal child report is materialized"; REQ-SESSION-115's handoff artifact as `PD-ORCH-005` clause 20 chooses it. Raised 2026-09-29 from the open note under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-112 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
@@ -5351,13 +5383,43 @@ in the summary (a directive naming it, or a stop reason of the pause's own in RE
 one notice a rest raises can say which it was and whether a continue resumes its agents; or whether the neutral wording
 stands and the row and the Continue action are where the difference is told.
 
-**OQ-119 — Does the explicit cancel's drain wait past the stop's 30 s?** *(REQ-ORCH-080, "wait up to the shutdown-drain
+**OQ-119 — May the task the report summariser keeps as its start be longer than REQ-ORCH-110's 2,000 characters per event?** *(REQ-ORCH-110, "2000 characters for any one event"; OQ-111's ruling, whose kept start is "the task as given"; REQ-TOOLS-154, whose payload carries the task last. Raised 2026-09-29 by the repair of D1 under [R-067](../product/requests.md#r-067), from the branch's verification; raised as OQ-118 on its branch and renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. Open.)*
+
+OQ-111's first build kept the transcript's first event as its start. That event is the child's whole REQ-TOOLS-154
+payload, which puts the workspace root, the write scopes, the sibling index, the attached artifacts and the inherited
+reports ahead of the task, so the per-event cut kept those blocks and lost the task's tail. In the duress live run of
+2026-09-29 (pack `2026-09-29T07-18-48-658Z`, session `b4a768a2`), every one of the six summarising requests began
+`user: Workspace root: …` and was cut inside the task, 297 to 3,017 of its characters omitted. A payload with a sibling
+index and inherited reports ahead of the task lost the task entirely. The repair keeps the ledger row's task itself as
+the start, with the blocks ahead of it replaced by a marker stating their size. The delegations in that run carried
+tasks of 105 to 3,447 characters, and six of the twelve were longer than 2,000.
+
+**What the build proceeds under.** The start is one event, so REQ-ORCH-110's per-event cut applies to it: a task longer
+than 2,000 characters keeps its first 2,000 (the marker ahead of it included), and the rest is marked omitted like any
+event's. The task's closing sections are the ones lost.
+
+**What a ruling decides.** Whether the task as given is exempt from the per-event cap, so its whole is kept within the
+12,000 total. That would narrow REQ-ORCH-110's per-event figure for this one event. The alternative is that the cut stands.
+
+**OQ-120 — How large may the facts given to the report summariser be, and which are kept when they are larger?** *(OQ-111's ruling, which gives the pass the report's deterministic facts and no bound on them; REQ-ORCH-110, "The report-producing pass MUST be bounded"; REQ-ORCH-109. Raised 2026-09-29 by the repair of D1 under [R-067](../product/requests.md#r-067), from the branch's verification; raised as OQ-119 on its branch and renumbered at the merge. Open.)*
+
+The ruling adds the edited files and the commands with their outcomes to what the pass reads, and says nothing of their
+size. A child that ran many long commands would make the pass unbounded, which REQ-ORCH-110 forbids.
+
+**What the build proceeds under.** REQ-ORCH-110's two figures, borrowed: each command is cut to 2,000 characters, and the
+block to 12,000 from its head, which keeps the edited files and the earliest commands. In the duress live run of
+2026-09-29 no block came near either figure.
+
+**What a ruling decides.** Whether those figures are the facts' own, or the facts count within the transcript's 12,000;
+and, where the block is cut, whether it keeps the earliest commands or, as the transcript does, the most recent.
+
+**OQ-121 — Does the explicit cancel's drain wait past the stop's 30 s?** *(REQ-ORCH-080, "wait up to the shutdown-drain
 timeout (default 120 s; 0 disables) for still-running background children without cancelling them"; REQ-SESSION-092,
 "if the loop has not reached a stop check within 30.0 seconds, a hard cancel follows"; REQ-MONITOR-129; `PD-ORCH-005`
 clause 3, which keeps the explicit cancel "as today", and OQ-96's "The explicit cancel and a child summarising". Raised
 2026-09-29 by the repair round of
 [`a-root-call-that-ignores-the-stop-holds-the-run-open.md`](../defects/fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md)
-under [R-067](../product/requests.md#r-067). Open.)*
+under [R-067](../product/requests.md#r-067). Numbered OQ-119 on its branch; renumbered OQ-121 at the merge, origin/main's OQ-119 and OQ-120 having taken the numbers first. Open.)*
 
 A stop that brings the run to rest leaves the background children `paused` and drains nothing (`PD-ORCH-005`). The
 explicit cancel cancels them, so REQ-ORCH-080's drain applies to it: the run waits up to the drain timeout for them,

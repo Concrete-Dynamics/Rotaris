@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { validateWriteScope, WriteClaims, writeScopeBlock } from './write-scope.js';
+import { fileWriters, scopeWithoutWriterReason, validateWriteScope, WriteClaims, writeScopeBlock, writesFiles } from './write-scope.js';
+import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver } from './personas.js';
 
 describe('PD-TOOLS-006 — the write_scope argument', () => {
   it('rejects an empty pattern, an absolute one and one reaching outside the root, naming the pattern', () => {
@@ -71,5 +72,36 @@ describe('PD-TOOLS-006 — the disclosure block', () => {
       "  - api: 'src/api/**', 'tests/api/**'",
       "  - lead: 'src/**' (you work under this agent, so its scope does not fence you)",
     ]);
+  });
+});
+
+describe('PD-TOOLS-006 revision 3 (OQ-112) — a write scope is for a persona that can write files (REQ-TOOLS-152, REQ-TOOLS-006)', () => {
+  const p = (name: string, tools: readonly string[], extra: Partial<Persona> = {}): Persona => ({ name, tools, coordinatorOnly: false, readOnly: false, systemPrompt: '', implementer: false, ...extra });
+
+  it('a persona writes files when it would be granted write_file, haet_edit or haet after the controls', () => {
+    expect(writesFiles(BUILT_IN_PERSONAS['codebase-analyst'])).toBe(false);
+    expect(writesFiles(BUILT_IN_PERSONAS['docs-writer'])).toBe(true);
+    expect(writesFiles(p('editor', ['read_file', 'haet']))).toBe(true);
+    expect(writesFiles(p('writer', ['write_file']))).toBe(true);
+    // REQ-TOOLS-006: coordinator_only removes all three, and read_only keeps only the read-only class, which holds none.
+    expect(writesFiles(BUILT_IN_PERSONAS.orchestrator)).toBe(false);
+    expect(writesFiles(p('locked', ['read_file', 'write_file'], { readOnly: true }))).toBe(false);
+    // The directive's stated cost: a tool the claim does not fence is not a file-writing tool here.
+    expect(writesFiles(BUILT_IN_PERSONAS.verifier)).toBe(false);
+  });
+
+  it("the catalogue's writers: the built-in table in its order, or the configured known roles resolved", () => {
+    expect(fileWriters(undefined)).toEqual(['coding-agent', 'tester', 'docs-writer', 'refactorer']);
+    const table: Record<string, Persona> = { orchestrator: BUILT_IN_PERSONAS.orchestrator, scribe: p('scribe', ['haet_edit']), 'codebase-analyst': BUILT_IN_PERSONAS['codebase-analyst'], frozen: p('frozen', ['write_file'], { readOnly: true }) };
+    const resolver: PersonaResolver = { resolve: (n) => (table[n] ? { persona: table[n]!, alias: null } : null), knownRoles: () => Object.keys(table) };
+    expect(fileWriters(resolver)).toEqual(['scribe']);
+    expect(fileWriters({ ...resolver, knownRoles: () => ['codebase-analyst'] })).toEqual([]);
+  });
+
+  it('the reason says the persona cannot write files and names those that can, where there are any', () => {
+    expect(scopeWithoutWriterReason('codebase-analyst', ['coding-agent', 'docs-writer'])).toBe(
+      "write_scope was given to 'codebase-analyst', which cannot write files: it holds no file-writing tool (write_file, haet_edit). The delegation was not started. Personas that can write files: coding-agent, docs-writer. Delegate the writing to a persona that can, or delegate to 'codebase-analyst' without a write_scope.",
+    );
+    expect(scopeWithoutWriterReason('librarian', [])).not.toContain('Personas that can write files');
   });
 });

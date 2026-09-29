@@ -52,6 +52,12 @@ export interface ReportInput {
   readonly lastText: string;
   readonly finalTextIsFinal: boolean;
   readonly errors?: readonly { type: string; message: string }[];
+  /**
+   * OQ-111: the child's task as given — the ledger row's `task`, which REQ-TOOLS-154's payload carries LAST, behind the
+   * prior-agent context, the workspace root, the write scopes, the sibling index and the inherited reports. The report's
+   * pass keeps it as the transcript's start. Absent, the transcript's first event is its start.
+   */
+  readonly task?: string;
 }
 
 export interface SummariserDeps {
@@ -67,8 +73,8 @@ function cut(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n)}… [${s.length - n} characters omitted]` : s;
 }
 
-/** The transcript as text, each event cut to 2,000 and the whole to 12,000. */
-export function transcriptText(messages: readonly ChatMessage[]): string {
+/** Each event as one line of text, cut to 2,000 characters. */
+function eventTexts(messages: readonly ChatMessage[]): string[] {
   const parts: string[] = [];
   for (const m of messages) {
     for (const p of m.content) {
@@ -76,7 +82,79 @@ export function transcriptText(messages: readonly ChatMessage[]): string {
       if (text) parts.push(cut(text, EVENT_CAP));
     }
   }
-  return cut(parts.join('\n'), TRANSCRIPT_CAP);
+  return parts;
+}
+
+/**
+ * The transcript as text, each event cut to 2,000 and the whole to 12,000 from its head. The compressor's reader
+ * (`run/compression.ts`); the report's pass reads `reportTranscript` below.
+ */
+export function transcriptText(messages: readonly ChatMessage[]): string {
+  return cut(eventTexts(messages).join('\n'), TRANSCRIPT_CAP);
+}
+
+/**
+ * REQ-ORCH-110 as OQ-111 rules it: the transcript the report's pass reads, each event cut to 2,000 characters and the
+ * whole held to 12,000 — the marker included — keeping its START (the task as given) and its MOST RECENT part, with the
+ * omission marked between them and saying how much was left out.
+ *
+ * The start is `task`, the ledger row's own, where it is given. The child's first event is its REQ-TOOLS-154 payload,
+ * which carries the task LAST: where that event is recognised (a user message ending with the task), what the payload
+ * puts ahead of the task is replaced by a marker saying how many characters it held, so the first event reads
+ * `user: … [N characters omitted] … <the task>`. Where it is not — a compression replaced the conversation — the task
+ * is put ahead of the events as given. Either way the start is ONE event and is cut to REQ-ORCH-110's 2,000 from its
+ * head: a task longer than that keeps its head, and OQ-119 asks whether it may be kept whole.
+ *
+ * The reasons it did not, kept beside their replacement: (1) it was cut to 12,000 from its head. For a long child that
+ * is the task and its first reads, and the edits come after the cut; in the duress live run of 2026-09-29 the request
+ * that summarised child `d` ended `… [63288 characters omitted]` before `d`'s first edit, and five of seven stored
+ * reports denied the edits their own `edited_files` listed. (2) Its first repair kept the FIRST EVENT as the start,
+ * cut to 2,000 — but the first event is the whole payload, and the task comes last in it. In the next duress run every
+ * summarising request's start began `user: Workspace root: …` and ended inside the task, its MUST DO and EXPECTED
+ * OUTCOME lost; a payload with a sibling index and inherited reports ahead of the task lost the task entirely (found by
+ * the branch's verification).
+ */
+export function reportTranscript(messages: readonly ChatMessage[], task?: string): string {
+  let parts = eventTexts(messages);
+  if (task !== undefined) {
+    const first = messages[0];
+    const opening = first?.role === 'user' ? first.content[0] : undefined;
+    const payload = opening?.kind === 'text' && opening.text.endsWith(task) ? opening.text : null;
+    const ahead = payload === null ? 0 : payload.length - task.length;
+    const start = cut(`user: ${ahead > 0 ? `${marker(ahead)} ` : ''}${task}`, EVENT_CAP);
+    parts = [start, ...(payload === null ? parts : parts.slice(1))];
+  }
+  const whole = parts.join('\n');
+  if (whole.length <= TRANSCRIPT_CAP || parts.length < 2) return cut(whole, TRANSCRIPT_CAP);
+  const head = parts[0]!;
+  const rest = parts.slice(1).join('\n');
+  // The marker's length depends on the count it states, which is never more than `rest`'s own length: reserve that
+  // widest marker, so the whole never passes the cap whatever the count turns out to be.
+  const omitted = rest.length - (TRANSCRIPT_CAP - head.length - marker(rest.length).length - 2);
+  return `${head}\n${marker(omitted)}\n${rest.slice(omitted)}`;
+}
+
+/** OQ-111's omission marker: how many characters were left out at the place it stands. */
+function marker(n: number): string {
+  return `… [${n} characters omitted] …`;
+}
+
+/**
+ * OQ-111: the report's deterministic facts — the files the child edited and the commands it ran with their outcomes —
+ * given to the pass beside the transcript, so a summary written over a transcript whose middle is omitted cannot deny
+ * work the record shows. They are REQ-ORCH-109's runner-owned kind, derived from the WHOLE transcript by the same
+ * functions that fill the report's fields; the pass condenses them and never writes them. Each command is cut to 2,000
+ * characters and the block to 12,000, REQ-ORCH-110's two figures, so the pass stays bounded — the build's reading, asked as OQ-120.
+ */
+export function reportFacts(messages: readonly ChatMessage[]): string {
+  const edited = editedFilesFrom(messages);
+  const ran = commandsFrom(messages);
+  const lines = [
+    `Edited files: ${edited.length > 0 ? edited.join(', ') : '(none)'}`,
+    `Commands run: ${ran.length > 0 ? '' : '(none)'}`.trimEnd(),
+    ...ran.map((c) => `- ${cut(c.command, EVENT_CAP)} → ${c.exit_code === null ? 'no exit code' : `exit code ${c.exit_code}`}`),
+  ];
+  return cut(lines.join('\n'), TRANSCRIPT_CAP);
 }
 
 /**
@@ -247,7 +325,8 @@ export async function produceReport(input: ReportInput, s: SummariserDeps | null
   const tester = deterministicTesterReport(input);
   if (tester) return tester;
   if (!s) return fallbackReport(input, unsummarised);
-  const transcript = transcriptText(input.messages);
+  const transcript = reportTranscript(input.messages, input.task);
+  const facts = reportFacts(input.messages);
   const timeout = s.timeoutMs ?? SUMMARY_TIMEOUT_MS;
   let complaint = '';
   for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -257,7 +336,7 @@ export async function produceReport(input: ReportInput, s: SummariserDeps | null
     signal.addEventListener('abort', onAbort, { once: true });
     const timer = s.timers.after(timeout, () => controller.abort());
     try {
-      const ask = `Condense the transcript below into a JSON object with exactly these keys: "summary" (one paragraph), "key_findings" (an array of short strings), "next_actions" (array of strings), "edited_files" (array of paths), "tags" (from: research, planning, implementation, review, verification, errors). Report only what happened; do not continue the task.${complaint ? `\n\nYour previous attempt was unusable: ${complaint}` : ''}\n\nTranscript:\n${transcript}`;
+      const ask = `Condense the transcript below into a JSON object with exactly these keys: "summary" (one paragraph), "key_findings" (an array of short strings), "next_actions" (array of strings), "edited_files" (array of paths), "tags" (from: research, planning, implementation, review, verification, errors). Report only what happened; do not continue the task. The facts below are the run's own record of what the agent did, taken from its whole transcript: your summary must agree with them and never deny them. The transcript keeps its start (the task as given) and its most recent part; where its middle is marked omitted, what is not shown there is not evidence that it did not happen.${complaint ? `\n\nYour previous attempt was unusable: ${complaint}` : ''}\n\nFacts:\n${facts}\n\nTranscript:\n${transcript}`;
       const r = await s.backend.runTurn(
         { persona: 'summariser', systemPrompt: 'You summarise a finished agent transcript. Output JSON only.', messages: [{ role: 'user', content: [{ kind: 'text', text: ask }] }], tools: [], model: s.model, thinking: s.thinking, timeoutMs: timeout, retries: 0, resolveCredential: s.credentialFor(s.model) },
         { delta: () => undefined, reasoning: () => undefined, usage: () => undefined },

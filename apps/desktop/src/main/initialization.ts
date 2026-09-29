@@ -7,7 +7,7 @@ import {
 } from '@rotaris/contracts';
 import {
   deriveSets, executeTasks, labelFor, promptOwed, readInitializationState, recordSkip, stampOnly,
-  TaskRegistry, viewOf, type InitializationState, type InitializationTask, type PlainMap,
+  TaskRegistry, viewOf, type InitializationState, type InitializationTask, type MarkerCommit, type PlainMap,
   type TaskResult, type TaskSets, type WorkspaceClassification,
 } from '@rotaris/config';
 
@@ -86,8 +86,18 @@ interface WorkspaceEntry {
   attempting: ReadonlySet<string>;
   lastError: string | null;
   resolutionFailed: boolean;
-  /** REQ-WORKSPACE-102: exactly one automatic resolution per workspace open. A "Check again" is additional. */
-  resolvedOnce: boolean;
+  /**
+   * Whether `report` describes a run the resolution started for background tasks (REQ-WORKSPACE-083) rather than one the
+   * user started. Published beside the report, because the dialog must not draw such a run as its own
+   * (REQ-WORKSPACE-103; `docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`).
+   */
+  background: boolean;
+  /**
+   * REQ-WORKSPACE-102: exactly one automatic resolution per workspace open, held from the moment it begins so that whoever
+   * needs it finished — the 800 ms slot or a skip answered before it (see `skip`) — waits on the same one. A "Check again"
+   * is additional and is not held here.
+   */
+  automatic: Promise<void> | null;
 }
 
 /** REQ-WORKSPACE-091: the step names the log and the dialog show, in the requirement's order. */
@@ -99,6 +109,18 @@ export class InitializationCoordinator {
   private active: string | null = null;
   /** The live setup's step sink, set for as long as `code-intelligence-setup` is running. */
   private setupListener: ((status: McpSetupStatus) => void) | null = null;
+  /**
+   * REQ-WORKSPACE-084/085/086: every marker write this coordinator makes to one workspace's file, one at a time, in the
+   * order asked, keyed by the workspace root. Each patch replaces both lists whole (REQ-CONFIG-050), so a patch is built
+   * inside its turn from the file as the previous write left it (see `marker`). Before this, a skip built its patch from
+   * the in-memory state while the background run's completion write was in flight, and the run built its patch from a
+   * read taken before a skip's write had landed: whichever landed second erased the other
+   * (`docs/defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`). One queue per root, not one for the
+   * coordinator: each root's marker is its own file written by its own workspace service, so nothing orders it against
+   * another root's, and a workspace just opened is not made to wait behind the last recording of the one it replaced,
+   * which can take the whole 30 s write timeout (REQ-WORKSPACE-013).
+   */
+  private readonly markerQueues = new Map<string, Promise<unknown>>();
 
   constructor(private readonly deps: InitializationDeps) {
     this.registry.register(this.codeIntelligenceTask());
@@ -188,7 +210,7 @@ export class InitializationCoordinator {
   private entry(root: string, agentsFile: string): WorkspaceEntry {
     let e = this.workspaces.get(root);
     if (!e) {
-      e = { root, agentsFile, state: readInitializationState(agentsFile), report: EMPTY_RUN_REPORT, running: null, attempting: new Set(), lastError: null, resolutionFailed: false, resolvedOnce: false };
+      e = { root, agentsFile, state: readInitializationState(agentsFile), report: EMPTY_RUN_REPORT, running: null, attempting: new Set(), lastError: null, resolutionFailed: false, background: false, automatic: null };
       this.workspaces.set(root, e);
     }
     return e;
@@ -215,6 +237,25 @@ export class InitializationCoordinator {
     return (patch) => this.deps.writeMarker(root, patch);
   }
 
+  /**
+   * One turn of the root's queue in `markerQueues`: `work` runs once every write asked for before it on the same root
+   * has landed, and is handed the state on disk read at that moment, from which it builds its own patch. Nothing else
+   * may write the marker (REQ-WORKSPACE-085). A root's queue is dropped once its last turn has settled.
+   */
+  private marker<T>(e: WorkspaceEntry, work: (current: InitializationState) => Promise<T>): Promise<T> {
+    const tail = this.markerQueues.get(e.root) ?? Promise.resolve();
+    const turn = tail.then(async () => await work(readInitializationState(e.agentsFile)));
+    const settled = turn.catch(() => undefined);
+    this.markerQueues.set(e.root, settled);
+    void settled.then(() => { if (this.markerQueues.get(e.root) === settled) this.markerQueues.delete(e.root); });
+    return turn;
+  }
+
+  /** The run's recordings, each built inside its turn of the queue (`ExecuteDeps.commit`). */
+  private commit(e: WorkspaceEntry): MarkerCommit {
+    return async (build) => await this.marker(e, async (current) => await this.deps.writeMarker(e.root, build(current)));
+  }
+
   private nowIso = (): string => toIsoUtc(this.deps.clocks.wall.instant());
 
   private async sets(e: WorkspaceEntry): Promise<TaskSets> {
@@ -231,7 +272,7 @@ export class InitializationCoordinator {
       labels[id] = labelFor(this.registry, id);
       descriptions[id] = this.registry.get(id)?.description ?? '';
     }
-    return { view, labels, descriptions, report: e.report, resolutionFailed: e.resolutionFailed };
+    return { view, labels, descriptions, report: e.report, resolutionFailed: e.resolutionFailed, backgroundRun: e.background };
   }
 
   private async publish(e: WorkspaceEntry): Promise<void> {
@@ -241,7 +282,7 @@ export class InitializationCoordinator {
   /** REQ-WORKSPACE-115: the persisted section as it is on disk right now, and nothing else disturbed. */
   async read(): Promise<InitializationStateView> {
     const e = this.current();
-    if (!e) return { view: EMPTY_INITIALIZATION_VIEW, labels: {}, descriptions: {}, report: EMPTY_RUN_REPORT, resolutionFailed: false };
+    if (!e) return { view: EMPTY_INITIALIZATION_VIEW, labels: {}, descriptions: {}, report: EMPTY_RUN_REPORT, resolutionFailed: false, backgroundRun: false };
     // In-progress and last-error describe this session only and are NOT taken from disk.
     e.state = readInitializationState(e.agentsFile);
     const state = await this.viewFor(e);
@@ -256,9 +297,18 @@ export class InitializationCoordinator {
    */
   async resolve(automatic: boolean): Promise<InitializationStateView> {
     const e = this.current();
-    if (!e) return { view: EMPTY_INITIALIZATION_VIEW, labels: {}, descriptions: {}, report: EMPTY_RUN_REPORT, resolutionFailed: false };
-    if (automatic && e.resolvedOnce) return await this.viewFor(e);
-    if (automatic) e.resolvedOnce = true;
+    if (!e) return { view: EMPTY_INITIALIZATION_VIEW, labels: {}, descriptions: {}, report: EMPTY_RUN_REPORT, resolutionFailed: false, backgroundRun: false };
+    if (!automatic) return await this.resolution(e);
+    if (e.automatic === null) {
+      let done: () => void = () => undefined;
+      e.automatic = new Promise<void>((r) => { done = r; });
+      try { return await this.resolution(e); } finally { done(); }
+    }
+    await e.automatic;
+    return await this.viewFor(e);
+  }
+
+  private async resolution(e: WorkspaceEntry): Promise<InitializationStateView> {
     try {
       e.state = readInitializationState(e.agentsFile);
       const sets = await this.sets(e);
@@ -266,7 +316,7 @@ export class InitializationCoordinator {
       if (sets.applicable.length === 0 && sets.pending.length === 0) {
         // REQ-WORKSPACE-083: nothing shown, nothing started — and the never-initialized state is left behind.
         if (e.state.lastRun === null) {
-          e.state = await stampOnly(e.state, null, { nowIso: this.nowIso, write: this.write(e.root), log: this.deps.log });
+          e.state = await this.marker(e, async (current) => await stampOnly(current, null, { nowIso: this.nowIso, write: this.write(e.root), log: this.deps.log }));
           this.deps.log(`initialization: ${e.root} has no applicable task; marked initialized`);
         }
         await this.publish(e);
@@ -313,6 +363,7 @@ export class InitializationCoordinator {
   private async run(e: WorkspaceEntry, tasks: readonly InitializationTask[], background: boolean): Promise<void> {
     const controller = new AbortController();
     e.running = controller;
+    e.background = background;
     e.attempting = new Set(tasks.map((t) => t.id));
     e.lastError = null;
     this.deps.log(`initialization: running ${tasks.map((t) => t.id).join(', ')} for ${e.root}${background ? ' (background)' : ''}`);
@@ -321,10 +372,10 @@ export class InitializationCoordinator {
         workspaceRoot: e.root,
         nowIso: this.nowIso,
         write: this.write(e.root),
+        commit: this.commit(e),
         signal: controller.signal,
         log: this.deps.log,
         publish: (report) => { e.report = report; void this.publish(e); },
-        reread: () => readInitializationState(e.agentsFile),
       });
       e.state = result.state;
       e.report = result.report;
@@ -351,14 +402,43 @@ export class InitializationCoordinator {
     }
   }
 
-  /** REQ-WORKSPACE-086/111: every listed id recorded as skipped, and the marker stamped even for an empty list. */
+  /**
+   * REQ-WORKSPACE-086/111: every listed id recorded as skipped, and the marker stamped even for an empty list — except an id
+   * the live run is attempting or one already recorded completed, neither of which is pending.
+   */
   async skip(ids: readonly string[]): Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }> {
     const e = this.current();
     if (!e) return { ok: false, reason: 'no workspace is open' };
+    // REQ-WORKSPACE-083: the prompt a skip answers is a product of the open's resolution, and the same resolution starts
+    // the background tasks. The window's mount read can open the dialog before main's 800 ms slot (OQ-122), so a skip
+    // answered in that interval performs the open's one automatic resolution first (REQ-WORKSPACE-102; the window is
+    // plainly accepting input, since it answered) and is recorded against what that resolution left. Without it the
+    // skip wrote `code-intelligence-setup` as skipped before it had started, and the resolution then started nothing
+    // (`init-proof` on Linux, `docs/defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
+    // Once that resolution is made, or under way, the skip waits for it and reads nothing more: a view recomputed here
+    // would cost a run-host status read, and a background run could end inside it.
+    if (e.automatic === null) {
+      this.deps.log(`initialization: a skip arrived before ${e.root} was resolved, so the open's resolution runs first`);
+      await this.resolve(true);
+    } else {
+      await e.automatic;
+    }
+    // What is recorded is decided inside the skip's turn of the marker queue, from the file as every write asked for
+    // before it left it, in the same turn as `attempting` is read: a run clears `attempting` only after its recording has
+    // landed, and a recording asked for after the skip is built from the file the skip left (see `markerQueues`).
     // A task the live run is attempting is not the user's to skip; its own outcome is owed (see `attempting`).
-    const mine = ids.filter((id) => !e.attempting.has(id));
-    if (mine.length !== ids.length) this.deps.log(`initialization: ${ids.filter((id) => e.attempting.has(id)).join(', ')} is already running, so the skip leaves its outcome to the run`);
-    const r = await recordSkip(e.state, mine, { nowIso: this.nowIso, write: this.write(e.root) });
+    // REQ-WORKSPACE-084/086: nor is a task already recorded completed. A skip names what the dialog last drew, and a
+    // background run can finish between that draw and the skip, or while the skip performs the resolution; recording
+    // it moved the id out of `completed` (`docs/defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`).
+    const { r, mine } = await this.marker(e, async (current) => {
+      const completed = new Set(current.completed);
+      const running = ids.filter((id) => e.attempting.has(id));
+      const done = ids.filter((id) => !e.attempting.has(id) && completed.has(id));
+      const mine = ids.filter((id) => !e.attempting.has(id) && !completed.has(id));
+      if (running.length > 0) this.deps.log(`initialization: ${running.join(', ')} is already running, so the skip leaves its outcome to the run`);
+      if (done.length > 0) this.deps.log(`initialization: ${done.join(', ')} is already completed, so the skip leaves it completed`);
+      return { r: await recordSkip(current, mine, { nowIso: this.nowIso, write: this.write(e.root) }), mine };
+    });
     if (!r.ok) return r;
     e.state = r.state;
     this.deps.log(`initialization: skipped ${mine.length === 0 ? '(nothing)' : mine.join(', ')} for ${e.root}`);

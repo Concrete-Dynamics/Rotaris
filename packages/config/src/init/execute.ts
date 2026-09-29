@@ -25,6 +25,11 @@ export interface MarkerWriter {
   (patch: PlainMap): Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }>;
 }
 
+/** A write whose patch is built from the persisted state as it stands when the write is made (see `ExecuteDeps.commit`). */
+export interface MarkerCommit {
+  (build: (current: InitializationState) => PlainMap): Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }>;
+}
+
 export interface ExecuteDeps {
   readonly workspaceRoot: string;
   readonly nowIso: () => string;
@@ -34,17 +39,20 @@ export interface ExecuteDeps {
   /** Published after every change, which is what makes REQ-WORKSPACE-109's live progress live. */
   readonly publish: (report: InitRunReport) => void;
   /**
-   * The persisted state as it stands **now**, read immediately before each recording.
+   * The recording as one step: the persisted state read **at the moment the write is made**, the patch built from it,
+   * and the write — so a writer that serializes its marker writes can make the read and the write one turn of its queue.
+   * When supplied, every recording goes through it and `write` is not called.
    *
-   * Found by ADR-0064's first execution in the built app. A run holds its starting state to compute each
-   * patch from, and the patch replaces both lists wholesale (REQ-CONFIG-050) — so anything written to
-   * `initialization:` *while* the run was in flight was erased by the run's next recording. It is
-   * reachable in the shipped product, not only in a contrived test: a fresh workspace starts its
-   * background task at open and may raise the setup prompt in the same moment (REQ-WORKSPACE-083), and
-   * answering that prompt with Skip writes to the same section seconds before the task finishes. Absent,
-   * the run's in-memory state is used, which is the old behaviour and is correct when nothing else writes.
+   * Found by ADR-0064's first execution in the built app, in two rounds. A run holds its starting state to compute each
+   * patch from, and the patch replaces both lists wholesale (REQ-CONFIG-050) — so anything written to `initialization:`
+   * *while* the run was in flight was erased by the run's next recording. It is reachable in the shipped product: a fresh
+   * workspace starts its background task at open and may raise the setup prompt in the same moment (REQ-WORKSPACE-083),
+   * and answering that prompt with Skip writes to the same section while the task runs. The first repair was a `reread`
+   * taken just before the write; it read the disk before a skip whose write was still in flight had landed, and then
+   * erased it (`docs/defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`, fourth round). Absent, the run's
+   * in-memory state is used, which is correct when nothing else writes.
    */
-  readonly reread?: (() => InitializationState) | undefined;
+  readonly commit?: MarkerCommit | undefined;
 }
 
 /** REQ-WORKSPACE-084: a task that ends without reporting one of the three outcomes is a failure, and says what went wrong. */
@@ -101,9 +109,11 @@ export async function executeTasks(tasks: readonly InitializationTask[], startSt
 
     const outcome: RecordedOutcome = { id: task.id, outcome: result.status === 'success' ? 'completed' : 'skipped' };
     const now = deps.nowIso();
-    // Re-read first: another writer may have touched the section since this run began (see `reread`).
-    state = deps.reread?.() ?? state;
-    const written = await deps.write(recordPatch(state, [outcome], result.classification, now));
+    // Built from the state on disk when the write is made: another writer may have touched the section since this run
+    // began, or be writing it now (see `commit`).
+    let basis = state;
+    const build = (current: InitializationState): PlainMap => { basis = current; return recordPatch(current, [outcome], result.classification, now); };
+    const written = deps.commit !== undefined ? await deps.commit(build) : await deps.write(build(state));
     if (!written.ok) {
       // REQ-WORKSPACE-085: a success whose marker write failed is a RETRYABLE FAILURE, never a success.
       deps.log(`initialization: the marker write for '${task.id}' failed (${written.reason})`);
@@ -112,7 +122,7 @@ export async function executeTasks(tasks: readonly InitializationTask[], startSt
       publish();
       continue;
     }
-    state = applyRecord(state, [outcome], result.classification, now);
+    state = applyRecord(basis, [outcome], result.classification, now);
     done.push(reportOf(task, result, steps));
     current = null;
     publish();

@@ -409,7 +409,19 @@ terminate then tree-killed after 5 s on cancel or timeout; the category polls th
 (REQ-WORKSPACE-115's refresh — the persisted section as it is on disk, nothing else disturbed),
 `initialization.resolve` (REQ-WORKSPACE-102's "Check again", additional to the one automatic resolution per
 workspace open), `initialization.start`, `initialization.skip {ids}` and `initialization.cancel`. Each answers with
-the whole state. Main is the coordinator because REQ-WORKSPACE-085 gives the marker **one writer** and that file
+the whole state. A skip records every listed id except one the live run is attempting, which it logs (ADR-0064,
+finding (2)), and one already recorded completed, which it leaves completed (REQ-WORKSPACE-084/086; 2026-09-29,
+R-062). Main makes every marker write through one queue per workspace root, one at a time in the order asked, and builds each patch
+(a skip's, each of a run's recordings, the silent stamp) inside its turn from the file as the previous write left it,
+because a patch replaces both lists whole (REQ-CONFIG-050); which ids a skip leaves out is decided in that turn too
+(REQ-WORKSPACE-084/086/111; 2026-09-29, R-062). The window can open the dialog from its mount read before main's 800 ms slot, so a skip that arrives
+before the open's one automatic resolution performs that resolution first (or waits for the one under way, and after it
+reads nothing more before recording), and the
+background task it starts is then attempted (2026-09-28, R-062; REQ-WORKSPACE-083/084/086/102; OQ-122). The state
+carries `backgroundRun` beside the run report: whether that report describes a run the resolution started for background
+tasks. The window reads it twice. A background run neither withdraws the setup prompt nor lifts the composer gate
+(`setupPromptDue`, OQ-123). The dialog draws that run's report only once Initialize has been pressed (REQ-WORKSPACE-103/110;
+2026-09-29, R-062). Main is the coordinator because REQ-WORKSPACE-085 gives the marker **one writer** and that file
 is the workspace service's (`config.setField`, Tier A) while the one shipped task's work is the run host's
 (`mcp.setup`) — and the matrix gives neither of those two an edge to the other. The run host gained one event,
 `mcp.setupStatus`, pushed on every change of the setup's status: the task follows a live setup through it rather

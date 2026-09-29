@@ -5,7 +5,8 @@ issue when the child goes silent, and it calls its stall callback on every evalu
 stalled. `IterationChildren.execute` passes that callback nowhere. No host listens to it, so:
 - nothing reaches the child's `AgentRecord`;
 - no surface draws a stalled badge, a stalled activity text or a countdown that advances with each evaluation;
-- a recovery is recorded in the timeline and is not notified to any surface.
+- a recovery is written as a session-log line (`child stall recovered: …`) through the run's `warn` (OQ-109), and is
+  not notified to any surface.
 
 The entry agent (the root) is not watched at all. The watch is built into a child's execution only, and wiring it into
 the root's turn would mean editing `Run.turn`, which another bundle owned in the round that built the watch.

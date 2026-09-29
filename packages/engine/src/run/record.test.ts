@@ -36,6 +36,14 @@ describe('conversationOf — the decode a resume reads (PD-ORCH-005)', () => {
     expect(record.everRecorded('t')).toEqual([user('a'), user('told once'), user('a again'), user('summary')]);
     expect(new ConversationRecord(undefined as unknown as SessionWriter, undefined, asSessionId('s')).everRecorded('t')).toEqual([]);
   });
+
+  it('everRecorded: a row that does not decode is skipped, so the per-task count never makes a resume stricter than `load` (REQ-NOTIFY-112, PD-ORCH-005)', () => {
+    const corrupt: AgentMessageRow = { ...row(2, 'message', null), body: '{not json' };
+    const rows = [row(1, 'message', user('told once')), corrupt, row(3, 'replacement', [user('summary')]), row(4, 'message', user('b'))];
+    const record = new ConversationRecord(undefined as unknown as SessionWriter, { agentMessagesOf: () => rows, agentConversation: () => rows.slice(2) } as unknown as StoreDal, asSessionId('s'));
+    expect(record.load('t')).toEqual([user('summary'), user('b')]);
+    expect(record.everRecorded('t')).toEqual([user('told once'), user('summary'), user('b')]);
+  });
 });
 
 describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () => {

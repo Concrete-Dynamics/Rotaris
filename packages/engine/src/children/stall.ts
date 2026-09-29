@@ -92,8 +92,9 @@ export class StallWatch {
 
   /**
    * The run gave the child something to answer — its payload, its record at a resume, its children's reports, a re-prompt
-   * or the corrective message: the silence starts again, so a wait on its own children before it is not counted as the
-   * child's silence (REQ-NOTIFY-112).
+   * or the corrective message: the silence starts again, so a wait on its own children before it is not counted in the
+   * silence REQ-NOTIFY-112's recovery reads (`quietFor`); the watch's own evaluation still reports the child stalled
+   * while such a wait lasts (OQ-109).
    */
   activity(): void {
     const now = this.clocks.monotonic.now();

@@ -612,7 +612,11 @@ as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds
 - every streamed part (`TurnSink.event`, then `TurnDeps.onModelEvent`);
 - each tool call's start and end (`onToolStarted`, `onToolCompleted`);
 - every turn the run starts for the child (the `turn` closure in `execute`): its payload or record, its children's
-  reports, a re-prompt, the corrective message — so a wait on its own children is never counted as its silence.
+  reports, a re-prompt, the corrective message — so a wait on its own children is not counted in the silence
+  REQ-NOTIFY-112's recovery reads (`quietFor`). The watch's own evaluation still counts such a wait, and reports the
+  child stalled while it waits
+  ([`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../defects/a-child-waiting-on-its-own-children-is-reported-stalled.md),
+  OQ-109).
 
 What it writes:
 - a silence of the threshold with no call in flight: a `stall` issue at every evaluation (REQ-MONITOR-119), and a
@@ -627,7 +631,8 @@ Its per-evaluation callback has no listener yet. A child's turn can end `failed`
 with no call in flight. Unless the outcome is one REQ-NOTIFY-112 excludes, that child is given one corrective message:
 the next user message of the conversation the failed turn left, run through the resume loop. It is given once per
 child task: across the fallback retry, and across PD-ORCH-005's resume, whose execution reads the task's whole
-conversation record (`ConversationRecord.everRecorded`) for a message it was already given.
+conversation record (`ConversationRecord.everRecorded`) for a message it was already given. That read skips a row that
+does not decode, so it never fails a resume that `load`, which reads from the last replacement on, allows.
 
 **Write scopes (PD-TOOLS-006; `children/write-scope.ts`).** A `delegate` call may carry `write_scope`, path
 patterns in the `glob` tool's dialect (the one compiler, `kernel/glob.ts`). `IterationChildren.delegate` validates

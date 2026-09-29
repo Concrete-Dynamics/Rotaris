@@ -73,7 +73,8 @@ Evidence:
 - `stall.test.ts`, twelve unit cases over `FakeClock`: the cadence, the throttle, entry and repeat, the recovery, the
   wait on tools, the diagnostics, output against model events, eligibility against every excluded outcome, the
   composed and fixed instructions, and which conversations carry a corrective message.
-- `record.test.ts`, one case: `everRecorded` returns the messages a compression or the retry's restart replaced.
+- `record.test.ts`, two cases: `everRecorded` returns the messages a compression or the retry's restart replaced, and
+  skips a row that does not decode (the second added by the third round).
 - `children.test.ts`, "a child that produces no output is given its one corrective message", nine end-to-end cases
   through `Sessions`:
   - the stall is warned while the child still runs, and the message follows its task and lets it succeed;
@@ -122,3 +123,15 @@ and OQ-109 now records the gap and the reading built.
   reason that the session log was out of reach without editing `Run.turn`. It was not: the run's `warn`, which the
   children already hold, is the channel OQ-76's lines reach the session log through. They are session-log lines now,
   and OQ-109 keeps the question of their words for the owner.
+
+**Corrected by the verifier's third round, 2026-09-29.** Two statements and one edge:
+- *The wait on its own children.* The second round's "a wait on its own children is never counted as its silence" is
+  true of the silence REQ-NOTIFY-112's recovery reads (`quietFor`) and false of the watch's own evaluation, which reads
+  the last event and so still reports such a child stalled while the wait lasts. The runtime view and the
+  first-executions row now say so, and that half stays recorded in
+  [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../a-child-waiting-on-its-own-children-is-reported-stalled.md).
+- *The recovery.* [`a-stalled-child-is-never-shown-stalled.md`](../a-stalled-child-is-never-shown-stalled.md) still
+  said a recovery is recorded in the timeline; it is the session-log line `child stall recovered: …`.
+- *A row that does not decode.* `ConversationRecord.everRecorded` parsed every row, the ones before the last
+  replacement that `load` never reads included, so one corrupt early row failed a resume `load` allowed. It now skips
+  a row that does not decode; `record.test.ts`'s "a row that does not decode is skipped" fails without it.

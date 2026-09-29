@@ -115,7 +115,7 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
   const presented: ApprovalPayload[] = [];
   /** The port's clocks, advanced by the PD-TOOLS-005 case to expire an approval wait. */
   let portClock = new FakeClock();
-  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor' | 'planGateHeld' | 'presence'> = {}, surface: { tools?: string; mcp?: readonly ToolExecutor[] } = {}) {
+  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor' | 'planGateHeld' | 'presence' | 'hooks'> = {}, surface: { tools?: string; mcp?: readonly ToolExecutor[] } = {}) {
     mkdirSync(join(dir, '.rotaris'), { recursive: true });
     writeFileSync(join(dir, '.rotaris', 'agents.yaml'), yaml(pin, surface.tools ?? null));
     const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
@@ -293,6 +293,47 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     writeFileSync(join(dir, 'notes.md'), 'x\n');
     expect((await publicPort.dispatch(call, new AbortController().signal)).status).toBe('ok');
     expect(presented).toHaveLength(1);
+  });
+
+  /**
+   * REQ-SESSION-094 (the repair of `a-detached-call-still-writes-through-its-tool-gate.md`): when its run ends the engine
+   * closes each port. The call it still has open is settled then, before the run's terminal pair, with the statement the
+   * engine hands it; when that call returns later its gate writes nothing more — no settle, no `tool.finish`, no issue.
+   */
+  it('REQ-SESSION-094: a port closed at its run\'s end settles the call it still has open, and the call writes nothing through its gate when it returns', async () => {
+    let release!: () => void;
+    const late = new Promise<void>((r) => { release = r; });
+    const slow = simpleExecutor('slow_tool', 'a call that outlives its run', anySchema, async () => { await late; return { text: 'it failed after the run ended', isError: true }; });
+    // The run's tool hooks: a `post_tool` hook the straggler would fire writes into the session and runs a command.
+    const hooked: string[] = [];
+    const hooks = { preTool: async () => { hooked.push('pre'); return { blocked: false, refusal: '' }; }, postTool: async () => { hooked.push('post'); return { feedback: '' }; } };
+    const port = portFor(null, 'autonomous', { hooks }, { tools: '[read_file]', mcp: [slow] });
+    await port.ready?.();
+    const sid = asSessionId('S1');
+    const pending = port.dispatch({ callId: 's1', name: 'slow_tool', rawArgs: '{}', persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' }, new AbortController().signal);
+    await vi.waitFor(() => expect(dal.eventsOfKind(sid, 'tool.start')).toHaveLength(1));
+    const statement = 'This call was interrupted by the stop before it completed, and it was not re-run. Issue it again if it is still needed.';
+    const settles = vi.spyOn(writer, 'settleToolCall');
+    port.close?.(statement);
+    const ring = () => dal.db.prepare('SELECT status, is_error, entry FROM tool_calls WHERE session_id = ?').all(sid) as { status: string; is_error: number; entry: string }[];
+    expect(ring()).toHaveLength(1);
+    expect(ring()[0]).toMatchObject({ status: 'failed', is_error: 1 });
+    expect(JSON.parse(ring()[0]!.entry)).toMatchObject({ result: statement });
+    expect(dal.eventsOfKind(sid, 'tool.finish')).toHaveLength(1);
+    const holdings = () => ({ events: dal.eventsFrom(sid, 1, 10_000).map((e) => e.kind), ring: ring(), issues: dal.issuesOf(sid).length, timeline: dal.timelineOf(sid).length, audit: dal.auditOf(sid).length });
+    const before = holdings();
+    release();
+    const r = await pending;
+    // The gate still answers its caller — the engine has stopped listening — but nothing reaches the session.
+    expect(r).toMatchObject({ isError: true, text: 'it failed after the run ended' });
+    expect(holdings()).toEqual(before);
+    // The close's settle is the only one: the late return does not reach the writer at all, not even as a settle the
+    // store would refuse (the sink's own guard, pinned here).
+    expect(settles).toHaveBeenCalledTimes(1);
+    expect(hooked).toEqual(['pre']);
+    // A second close finds nothing open and writes nothing.
+    port.close?.(statement);
+    expect(holdings()).toEqual(before);
   });
 
   it('an agent built after a mid-run switch takes the session override, not the start-of-run mode', () => {

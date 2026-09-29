@@ -240,7 +240,20 @@ hard-cancel budget — and leaves each unfinished child `paused` where it stood 
 execution record `paused`, and the iteration open (above). A child whose `child_timeout` expired during the rest ends
 `failed` as it would have without one, unsummarised; one whose execution raised is left `paused`, as the root is
 (**OQ-96**). An execution a stop's grace gave up on is **detached**: when it returns it writes nothing — no row, no
-record, no report (REQ-SESSION-094). Every agent the rest leaves paused, the root included, has any call it never
+record, no report (REQ-SESSION-094). Its model step writes nothing either: while `TurnDeps.detached` reads true the
+step streams no row, settles none and counts no usage (2026-09-29), and teardown closes its tool port (§6), so its gate
+writes nothing when its call returns. **The root is bounded the same way (REQ-SESSION-092 / REQ-MONITOR-129, 2026-09-29):**
+`turn()` awaits the root's turn no longer than `stopGraceSpent`, which settles `STOP_GRACE` after the first stop
+request, forced or not. A root still in a call then is detached like a child — its turn's `detached` reads true, so it
+writes nothing when the call returns — and the rest that follows is given what is left of the grace, counted from the
+same first request (`Run.stopGraceLeft` → `IterationChildren.rest(cause, grace)`: none after a root given up on, so what
+still executes is detached at once), so a stop ends within the one 30 s. The root is left `paused` by a stop or a quit,
+its open call answered as interrupted; under the explicit cancel its open call is answered as cut off, naming no rest. The
+explicit cancel rests nothing: it drains the active background children (REQ-ORCH-080, bounded by the drain's own
+timeout, whether the root returned or was given up on — **OQ-121**), settles every child record (`finalize`), then
+awaits what still executes within what is left of the grace and detaches it (`IterationChildren.outlast`: none is left
+after a root given up on), so a child's step that ignored the cancel writes nothing when it returns. So does any stop that
+rests nothing (one the run raises itself, a plan cycle's). The repair of `a-root-call-that-ignores-the-stop-holds-the-run-open.md`. Every agent the rest leaves paused, the root included, has any call it never
 returned from or raised out of answered in its record as interrupted, its row settled (`answerOpenCalls`, which the crash
 record uses for a dead run's agents too), so a resume sends a conversation whose every call has its result; a call of
 that step that completed keeps what it returned, read back from its settled row. A rest that finds nothing unfinished closes the iteration as before. The cause is
@@ -790,7 +803,12 @@ crash-left session too, which that revision prescribes only on a paused one (OQ-
 
 ## 6. End
 
-`teardown(reason)` runs every step guarded even on exception (REQ-SESSION-094): the pause's tool deadline cancelled; for a
+`teardown(reason)` runs every step guarded even on exception (REQ-SESSION-094): **every tool port this run built closed
+first** (`Run.closePorts` → `ToolPort.close(cutOff)`, 2026-09-29): a call a port still has open — only one the stop's
+grace detached can be — settles at once in the tool-call ring and with its `tool.finish`, as failed with the rest's
+interrupted statement, and from then on nothing the port's gate writes reaches the session (`writerSink` in
+`run-host/tools.ts`) and no `post_tool` hook fires for its call, so a straggler writes nothing into the finished session
+or a later run of it; the pause's tool deadline cancelled; for a
 run at rest, its agents' background sessions recorded and, for a stop or a quit, ended (PD-ORCH-005 clause 10) → the stop reason classified to the
 terminal result (REQ-MONITOR-301) and the persisted status (REQ-SESSION-093 / REQ-MONITOR-029) →
 `session_end` hooks → `run_end` timeline entry → pending publications flushed → **the terminal transaction**

@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
-import { authProvidersOf, classifierSlotsOf, configureRun, credentialResolver, egressReader, entryTierOf, personaResolverFor, runtimeFromConfiguration } from './configuration.js';
+import { authProvidersOf, classifierSlotsOf, configureRun, contextLimitsOf, credentialResolver, egressReader, entryTierOf, personaResolverFor, runtimeFromConfiguration } from './configuration.js';
+import { childModelKey } from '@rotaris/engine';
 import { nodeClocks } from '@rotaris/platform';
 import { loadConfiguration, type ModelEntry } from '@rotaris/config';
 
@@ -259,5 +260,59 @@ personas:
     const r = configureRun(join(dir, 'ws'), true, deps({}), { entryPersona: 'gone-role' });
     expect(r.ok && r.value.model.config.persona).toBe('coding-agent');
     expect(r.ok && r.value.warnings).toContain("configuration: the open iteration's root ran as 'gone-role', which this configuration no longer knows; it resumes as the entry role 'coding-agent' (PD-ORCH-005).");
+  });
+});
+
+/**
+ * Live-run finding D5 (REQ-CONFIG-094, REQ-MONITOR-049, REQ-MONITOR-020): a child is recorded under the `models:` key of
+ * the model it runs on, so the cap and the context limit configuration states under that key are found. The live run's
+ * shape: a qualified key whose model id is the bare name, a role on a synthetic copy, a role on the run's model.
+ */
+describe('a child is recorded under its model\'s models: key (live-run finding D5)', () => {
+  const KEY = 'openai-compatible--katalyst/qwen3.8-flash-next';
+  const agents = `default_persona: orchestrator
+models:
+  ${KEY}:
+    provider: openai-compatible
+    model_id: qwen3.8-flash-next
+    base_url: https://katalyst.example/v1
+    api_key: k
+    max_input_tokens: 262144
+    max_parallel: 2
+large_model: ${KEY}
+medium_model: ${KEY}
+small_model: ${KEY}
+personas:
+  orchestrator:
+    name: Orchestrator
+    model: ${KEY}
+  coding-agent:
+    name: Coding agent
+    model: ${KEY}
+    thinking: low
+`;
+
+  it('REQ-CONFIG-094: the role\'s key (a synthetic copy unwrapped) and the run\'s key are the qualified key, under which the cap and the limit are found', () => {
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), agents);
+    const r = configureRun(join(dir, 'ws'), true, deps({}));
+    if (!r.ok) throw new Error(r.error.reason);
+    const run = r.value.model.config;
+    expect(run.model.modelId).toBe('qwen3.8-flash-next');
+    expect(run.modelKey).toBe(KEY);
+    const personas = r.value.personas!;
+    // The role on a synthetic copy (REQ-CONFIG-081) counts against the entry it was copied from.
+    expect(r.value.cfg.personas['coding-agent']?.model).toBe('__persona__:coding-agent');
+    expect(personas.resolve('coding-agent')!.persona.modelKey).toBe(KEY);
+    const coder = childModelKey(personas.resolve('coding-agent')!.persona, run);
+    // A role configuration does not name runs on the run's model, and is recorded under the run's key.
+    const tester = childModelKey(personas.resolve('tester')!.persona, run);
+    expect([coder, tester]).toEqual([KEY, KEY]);
+    const runtime = runtimeFromConfiguration(r.value.cfg);
+    expect(runtime.modelCapFor!(coder)).toBe(2);
+    expect(contextLimitsOf(r.value.cfg)[coder]).toBe(262_144);
+    // What was recorded before: the bare id, under which nothing is configured.
+    expect(runtime.modelCapFor!('qwen3.8-flash-next')).toBeNull();
+    expect(contextLimitsOf(r.value.cfg)['qwen3.8-flash-next']).toBeUndefined();
   });
 });

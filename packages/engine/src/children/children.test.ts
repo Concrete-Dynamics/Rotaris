@@ -296,7 +296,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
    * model accept image input. `pending`: request ids every port reports as its own live approval or question set, so an
    * id-routed answer finds a holder.
    */
-  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; personas?: PersonaResolver } = {}) {
+  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; personas?: PersonaResolver; capFor?: (modelKey: string) => number | null; modelKey?: string } = {}) {
     // The scripted client answers by persona and by the number of calls that persona has made.
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
@@ -312,8 +312,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     const built: { persona: string; mode: PermissionPreset }[] = [];
     /** Each agent's tool-port context, by canonical name, as the engine built it. */
     const contexts = new Map<string, ToolPortContext>();
-    const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: over.images === true ? { ...MODEL, acceptsImageInput: true } : MODEL, credentialFor: () => async () => 'k' };
-    const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', modelConcurrencyCap: over.cap ?? null, drainTimeoutMs: over.drainTimeoutMs ?? 0, ...(over.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: over.childStallTimeoutMs }), ...(over.childTimeoutMs === undefined ? {} : { childTimeoutMs: over.childTimeoutMs }) } as const;
+    const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: over.images === true ? { ...MODEL, acceptsImageInput: true } : MODEL, ...(over.modelKey === undefined ? {} : { modelKey: over.modelKey }), credentialFor: () => async () => 'k' };
+    const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', modelConcurrencyCap: over.cap ?? null, ...(over.capFor ? { modelCapFor: over.capFor } : {}), drainTimeoutMs: over.drainTimeoutMs ?? 0, ...(over.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: over.childStallTimeoutMs }), ...(over.childTimeoutMs === undefined ? {} : { childTimeoutMs: over.childTimeoutMs }) } as const;
     const sessions = new Sessions({
       clocks: clock, publisher: over.publisher ?? NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++n}`,
       model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
@@ -1295,6 +1295,55 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     const trans = dal.eventsOfKind(sid, 'child.transition').map((e) => JSON.parse(e.payload) as { child_id: string; from_state: string; to_state: string });
     const two = rows.find((c) => c.canonical_name === 'two')!.task_id;
     expect(trans.filter((t) => t.child_id === two).map((t) => t.to_state)).toEqual(['queued', 'starting', 'running', 'summarizing', 'succeeded']);
+  });
+
+  describe('live-run finding D5: a child is recorded, capped and measured under its model\'s models: key (REQ-CONFIG-094, REQ-MONITOR-020, REQ-MONITOR-049)', () => {
+    /** Two coding-agent children in one turn, the first holding its slot until the second has been delegated. */
+    async function twoChildren(over: { personas?: PersonaResolver; capFor: (modelKey: string) => number | null; modelKey?: string }) {
+      let releaseFirst!: () => void;
+      const hold = new Promise<void>((r) => { releaseFirst = r; });
+      let childCalls = 0;
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'one', task: 'TASK: one' } }, { callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'two', task: 'TASK: two' } }]);
+          return answer('both done');
+        }
+        if (persona === 'summariser') return answer('{"summary":"ok"}');
+        childCalls += 1;
+        return childCalls === 1 ? { parts: [{ hold }, { part: { kind: 'text', delta: 'done' } }, { part: { kind: 'finish', reason: 'stop' } }] } : answer('done');
+      }, over);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 200 && !(children(sid).length === 2 && children(sid)[1]!.state !== 'queued'); i += 1) await new Promise((r) => setTimeout(r, 5));
+      const parked = children(sid).map((c) => c.state).sort();
+      releaseFirst();
+      await sessions.running(sid)!;
+      const delegateRows = dal.residentRows(sid).filter((r) => r.kind === 'tool' && r.tool_name === 'delegate');
+      return { parked, rows: children(sid), second: delegateRows[1]!.output };
+    }
+
+    it('REQ-CONFIG-094: a child on the run\'s model is recorded under the run\'s models: key, and the cap stated under that key parks the second', async () => {
+      const KEY = 'openai-compatible--katalyst/m';
+      const { parked, rows, second } = await twoChildren({ modelKey: KEY, capFor: (k) => (k === KEY ? 1 : null) });
+      expect(rows.map((c) => c.model_key)).toEqual([KEY, KEY]);
+      expect(parked).toEqual(['running', 'waiting_on_model_slot']);
+      expect(second).toMatch(new RegExp(`waiting_on_model_slot — Queued behind model '${KEY}''s slot cap: 1 of 1 slots in use`));
+    });
+
+    it('REQ-CONFIG-094: a child of a role with its own model is recorded under that role\'s models: key, not the model\'s bare id', async () => {
+      const KEY = 'openai-compatible--other/bare-id';
+      const personas: PersonaResolver = {
+        resolve: (name) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: name === 'coding-agent' ? { ...base, modelRef: { providerId: 'openai-compatible', modelId: 'bare-id', dialect: 'chat' }, modelKey: KEY } : base, alias: null } : null; },
+        knownRoles: () => Object.keys(BUILT_IN_PERSONAS),
+      };
+      const { parked, rows } = await twoChildren({ personas, modelKey: 'run-key', capFor: (k) => (k === KEY ? 1 : null) });
+      expect(rows.map((c) => c.model_key)).toEqual([KEY, KEY]);
+      expect(parked).toEqual(['running', 'waiting_on_model_slot']);
+    });
+
+    it('where no configuration names a key, the model id stands in, as before', async () => {
+      const { rows } = await twoChildren({ capFor: () => null });
+      expect(rows.map((c) => c.model_key)).toEqual(['m', 'm']);
+    });
   });
 
   it('REQ-MONITOR-009 / REQ-ORCH-133: cancelAgent settles one child cancelled with the user\'s timeline entry; the reserved id cancels the run; unknown ids refuse', async () => {

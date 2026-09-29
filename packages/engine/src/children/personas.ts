@@ -16,6 +16,11 @@ export interface Persona {
   readonly implementer: boolean;
   /** REQ-CONFIG-098: the role's own model once configuration resolves it; absent means the run's model. */
   readonly modelRef?: ModelRef | undefined;
+  /**
+   * REQ-CONFIG-094: the `models:` key `modelRef` was resolved from, a loader-owned synthetic copy unwrapped to the entry
+   * it was copied from — the key a child of this role is recorded and capped under. Absent with `modelRef`.
+   */
+  readonly modelKey?: string | undefined;
   readonly thinking?: ThinkingLevel | undefined;
   /** REQ-CONFIG-110 / REQ-ORCH-144: the role's own `fallback_model`; absent means the run-level slot (REQ-CONFIG-065). */
   readonly fallbackModel?: ModelRef | undefined;

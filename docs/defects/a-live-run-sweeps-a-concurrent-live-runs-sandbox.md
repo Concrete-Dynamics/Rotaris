@@ -22,3 +22,9 @@ workspace bounded by the endpoint's own accounting. The overlapped run spends it
 
 - `apps/desktop/scripts/live-run.mjs`: `SANDBOX_ROOT` and the startup sweep loop, which calls `dropCredentials` and
   `rmSync` on every entry not marked `KEPT`.
+
+Recurred 2026-09-29: a `--only=faults,edit` run started at 20:59:46 in `/home/user/Rotaris-crw-wt-traffic`; another
+worktree's live run started at 21:01:07, and when the first run's `edit` launch completed at 21:10:34 it died the same way
+(`expected one workspace database below /tmp/rotaris-live-run/2026-09-29T20-59-46-627Z/local; found 0`). Its app and its
+recording proxy kept working through the deletion — the `edit` pack's `model-traffic.jsonl` holds all 72 calls — so the
+run spent its tokens and lost only its store.

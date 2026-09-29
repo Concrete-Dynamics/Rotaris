@@ -40,21 +40,30 @@ interface Harness {
 /** A hold a test can set at any moment: every setup status read taken while it is set waits on it. */
 interface StatusHold { current: Promise<void> | null }
 
-function harness(options: { applicable?: boolean; startFails?: boolean; writeFails?: string | null; modelReachable?: boolean; statusGate?: Promise<void>; hold?: StatusHold; onStart?: () => void } = {}): Harness {
+function harness(options: { applicable?: boolean; startFails?: boolean; writeFails?: string | null; modelReachable?: boolean; statusGate?: Promise<void>; hold?: StatusHold; onStart?: () => void; writeHold?: StatusHold } = {}): Harness {
   const { root, agents } = workspace();
   const published: InitializationStateView[] = [];
   const banners: { headline: string; detail: string }[] = [];
   const writes: PlainMap[] = [];
   const clock = new FakeClock(0, Date.parse('2026-09-15T12:00:00Z'));
+  // The workspace service applies marker writes one at a time, in the order they are sent; a write sent while
+  // `writeHold` is set lands only once it is released, and every write sent after it lands after it.
+  let applied: Promise<unknown> = Promise.resolve();
   const coordinator = new InitializationCoordinator({
     clocks: clock,
     log: () => undefined,
-    writeMarker: async (_root, patch) => {
-      if (options.writeFails) return { ok: false, reason: options.writeFails };
-      writes.push(patch);
-      // The real path is the workspace service's `commitConfigFields`, which is this call plus a reload.
-      const r = await writeConfigFields(agents, patch);
-      return r.ok ? { ok: true } : { ok: false, reason: r.error.fault };
+    writeMarker: (_root, patch) => {
+      const held = options.writeHold?.current ?? null;
+      const landed = applied.then(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
+        await held;
+        if (options.writeFails) return { ok: false, reason: options.writeFails };
+        writes.push(patch);
+        // The real path is the workspace service's `commitConfigFields`, which is this call plus a reload.
+        const r = await writeConfigFields(agents, patch);
+        return r.ok ? { ok: true } : { ok: false, reason: r.error.fault };
+      });
+      applied = landed;
+      return landed;
     },
     setup: {
       start: async () => { options.onStart?.(); return options.startFails ? { ok: false, reason: 'not a local launch' } : { ok: true, status: status() }; },
@@ -358,6 +367,63 @@ describe('the skip path and the start refusals', () => {
     release();
     expect(await skipped).toEqual({ ok: true });
     for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
+    const after = readInitializationState(h.agents);
+    expect(after.completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    expect(after.skipped).toEqual(['verification-consent']);
+  });
+
+  /**
+   * The verifier's two orderings of a skip against the background run's own recording, both reachable because Skip and
+   * Escape stay live for the whole background run (`docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`).
+   * Both patches replace the two lists whole (REQ-CONFIG-050), so whichever lands second erased the other unless it was
+   * built from what the first left on disk. (A) The skip arrives while the run's completion write is in flight: it was
+   * built from the in-memory state, which the write had not yet reached, and erased `completed` (REQ-WORKSPACE-084).
+   */
+  it('keeps the run\'s completed outcome when a skip arrives while the completion write is in flight (REQ-WORKSPACE-084, REQ-WORKSPACE-086)', async () => {
+    const writeHold: StatusHold = { current: null };
+    const h = harness({ writeHold });
+    h.coordinator.registry.register(consentTask);
+    await h.coordinator.resolve(true);
+    await new Promise((r) => setImmediate(r));
+    expect(h.published.at(-1)!.view.running).toBe(true);
+    let release: () => void = () => undefined;
+    writeHold.current = new Promise<void>((r) => { release = r; });
+    h.push(status({ state: 'finished', outcome: 'completed', containsCode: false, steps: [step('create', 'succeeded', 'made')] }));
+    for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
+    // The run's completion write is sent and held; nothing is on disk yet.
+    expect(readInitializationState(h.agents).completed).toEqual([]);
+    const skipped = h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
+    for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
+    release();
+    expect(await skipped).toEqual({ ok: true });
+    for (let i = 0; i < 8; i += 1) await new Promise((r) => setImmediate(r));
+    const after = readInitializationState(h.agents);
+    expect(after.completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    expect(after.skipped).toEqual(['verification-consent']);
+  });
+
+  /**
+   * (B) The skip's write is in flight when the task finishes: the run re-read the disk before the skip had landed and its
+   * recording then erased the skip, so the prompt returned on the next open (REQ-WORKSPACE-111, REQ-WORKSPACE-086).
+   */
+  it('keeps a skip whose write is in flight when the background run records its outcome (REQ-WORKSPACE-086, REQ-WORKSPACE-111)', async () => {
+    const writeHold: StatusHold = { current: null };
+    const h = harness({ writeHold });
+    h.coordinator.registry.register(consentTask);
+    await h.coordinator.resolve(true);
+    await new Promise((r) => setImmediate(r));
+    expect(h.published.at(-1)!.view.running).toBe(true);
+    let release: () => void = () => undefined;
+    writeHold.current = new Promise<void>((r) => { release = r; });
+    const skipped = h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
+    for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
+    // The skip's write is sent and held; nothing is on disk yet.
+    expect(readInitializationState(h.agents).skipped).toEqual([]);
+    h.push(status({ state: 'finished', outcome: 'completed', containsCode: false, steps: [step('create', 'succeeded', 'made')] }));
+    for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
+    release();
+    expect(await skipped).toEqual({ ok: true });
+    for (let i = 0; i < 8; i += 1) await new Promise((r) => setImmediate(r));
     const after = readInitializationState(h.agents);
     expect(after.completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
     expect(after.skipped).toEqual(['verification-consent']);

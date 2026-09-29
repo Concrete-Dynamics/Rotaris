@@ -53,7 +53,9 @@ store column or owner of state changed. **Its second round (2026-09-29):** the s
 background run out of the setup dialog and to keep the prompt due beside it (REQ-WORKSPACE-103/110, OQ-119). It is one
 more field on an existing message; no message kind changed. **Its third round (2026-09-29):** the paragraph adds that a
 skip leaves an id already recorded completed where it is, and that a skip after the resolution reads nothing more before
-it records; nothing else in any view moved.
+it records; nothing else in any view moved. **Its fourth round (2026-09-29):** the paragraph adds that main makes every
+marker write through one queue and builds each patch inside its turn from the file as it stands, and that a skip decides
+what it leaves out in that turn. No message, channel or owner of state changed; the writer is still main's coordinator.
 
 **The notices generator reads the shipped setup manifest (2026-09-28, R-062).** `tools/notices/notices.mjs` reads
 `apps/desktop/resources/setup-manifest.json` rather than `pins.json` as REQ-STARTUP-142's manifest, by a copy of

@@ -380,9 +380,10 @@ describe('one execution', () => {
   /**
    * The defect ADR-0064's first execution found in the built app: a run computes each patch from the
    * state it started with, and a patch replaces both lists wholesale — so a skip answered while the run
-   * was in flight was erased by the run's own next recording.
+   * was in flight was erased by the run's own next recording. The patch is now built from the state the
+   * commit reads when it writes, and the run goes on from that state.
    */
-  it('re-reads the persisted state before each recording, so a concurrent skip survives', async () => {
+  it('builds each recording from the state the commit reads when it writes, so a concurrent skip survives', async () => {
     const patches: PlainMap[] = [];
     let onDisk: InitializationState = NEVER_INITIALIZED;
     const tasks = [task('slow', {
@@ -392,16 +393,18 @@ describe('one execution', () => {
         return { status: 'success', steps: [], classification: null, error: '', retryable: false, summary: '' };
       },
     })];
-    await executeTasks(tasks, NEVER_INITIALIZED, deps({
-      reread: () => onDisk,
-      write: async (p) => { patches.push(p); return { ok: true }; },
+    const r = await executeTasks(tasks, NEVER_INITIALIZED, deps({
+      commit: async (build) => { patches.push(build(onDisk)); return { ok: true }; },
+      write: async () => { throw new Error('write is not called when a commit is supplied'); },
     }));
     const section = patches[0]!['initialization'] as Record<string, unknown>;
     expect(section['completed']).toEqual(['slow']);
     expect(section['skipped']).toEqual(['asks']);
+    expect(r.state.skipped).toEqual(['asks']);
+    expect(r.state.completed).toEqual(['slow']);
   });
 
-  it('uses the run\'s own state when no re-read is supplied', async () => {
+  it('uses the run\'s own state when no commit is supplied', async () => {
     const patches: PlainMap[] = [];
     await executeTasks([task('a')], { completed: [], skipped: ['b'], lastRun: 'x', classification: null }, deps({ write: async (p) => { patches.push(p); return { ok: true }; } }));
     expect((patches[0]!['initialization'] as Record<string, unknown>)['skipped']).toEqual(['b']);

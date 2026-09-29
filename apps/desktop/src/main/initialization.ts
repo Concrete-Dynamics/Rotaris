@@ -7,7 +7,7 @@ import {
 } from '@rotaris/contracts';
 import {
   deriveSets, executeTasks, labelFor, promptOwed, readInitializationState, recordSkip, stampOnly,
-  TaskRegistry, viewOf, type InitializationState, type InitializationTask, type PlainMap,
+  TaskRegistry, viewOf, type InitializationState, type InitializationTask, type MarkerCommit, type PlainMap,
   type TaskResult, type TaskSets, type WorkspaceClassification,
 } from '@rotaris/config';
 
@@ -109,6 +109,14 @@ export class InitializationCoordinator {
   private active: string | null = null;
   /** The live setup's step sink, set for as long as `code-intelligence-setup` is running. */
   private setupListener: ((status: McpSetupStatus) => void) | null = null;
+  /**
+   * REQ-WORKSPACE-084/085/086: every marker write this coordinator makes, one at a time, in the order asked. Each patch
+   * replaces both lists whole (REQ-CONFIG-050), so a patch is built inside its turn from the file as the previous write
+   * left it (see `marker`). Before this, a skip built its patch from the in-memory state while the background run's
+   * completion write was in flight, and the run built its patch from a read taken before a skip's write had landed:
+   * whichever landed second erased the other (`docs/defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`).
+   */
+  private markerQueue: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly deps: InitializationDeps) {
     this.registry.register(this.codeIntelligenceTask());
@@ -225,6 +233,21 @@ export class InitializationCoordinator {
     return (patch) => this.deps.writeMarker(root, patch);
   }
 
+  /**
+   * One turn of `markerQueue`: `work` runs once every write asked for before it has landed, and is handed the state on
+   * disk read at that moment, from which it builds its own patch. Nothing else may write the marker (REQ-WORKSPACE-085).
+   */
+  private marker<T>(e: WorkspaceEntry, work: (current: InitializationState) => Promise<T>): Promise<T> {
+    const turn = this.markerQueue.then(async () => await work(readInitializationState(e.agentsFile)));
+    this.markerQueue = turn.catch(() => undefined);
+    return turn;
+  }
+
+  /** The run's recordings, each built inside its turn of the queue (`ExecuteDeps.commit`). */
+  private commit(e: WorkspaceEntry): MarkerCommit {
+    return async (build) => await this.marker(e, async (current) => await this.deps.writeMarker(e.root, build(current)));
+  }
+
   private nowIso = (): string => toIsoUtc(this.deps.clocks.wall.instant());
 
   private async sets(e: WorkspaceEntry): Promise<TaskSets> {
@@ -285,7 +308,7 @@ export class InitializationCoordinator {
       if (sets.applicable.length === 0 && sets.pending.length === 0) {
         // REQ-WORKSPACE-083: nothing shown, nothing started — and the never-initialized state is left behind.
         if (e.state.lastRun === null) {
-          e.state = await stampOnly(e.state, null, { nowIso: this.nowIso, write: this.write(e.root), log: this.deps.log });
+          e.state = await this.marker(e, async (current) => await stampOnly(current, null, { nowIso: this.nowIso, write: this.write(e.root), log: this.deps.log }));
           this.deps.log(`initialization: ${e.root} has no applicable task; marked initialized`);
         }
         await this.publish(e);
@@ -341,10 +364,10 @@ export class InitializationCoordinator {
         workspaceRoot: e.root,
         nowIso: this.nowIso,
         write: this.write(e.root),
+        commit: this.commit(e),
         signal: controller.signal,
         log: this.deps.log,
         publish: (report) => { e.report = report; void this.publish(e); },
-        reread: () => readInitializationState(e.agentsFile),
       });
       e.state = result.state;
       e.report = result.report;
@@ -392,19 +415,22 @@ export class InitializationCoordinator {
     } else {
       await e.automatic;
     }
-    // Everything below runs in one turn after the last await, so `attempting` and `state` describe the same moment: a run
-    // clears `attempting` only after its outcome is in `state`.
+    // What is recorded is decided inside the skip's turn of the marker queue, from the file as every write asked for
+    // before it left it, in the same turn as `attempting` is read: a run clears `attempting` only after its recording has
+    // landed, and a recording asked for after the skip is built from the file the skip left (see `markerQueue`).
     // A task the live run is attempting is not the user's to skip; its own outcome is owed (see `attempting`).
     // REQ-WORKSPACE-084/086: nor is a task already recorded completed. A skip names what the dialog last drew, and a
     // background run can finish between that draw and the skip, or while the skip performs the resolution; recording
     // it moved the id out of `completed` (`docs/defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`).
-    const completed = new Set(e.state.completed);
-    const running = ids.filter((id) => e.attempting.has(id));
-    const done = ids.filter((id) => !e.attempting.has(id) && completed.has(id));
-    const mine = ids.filter((id) => !e.attempting.has(id) && !completed.has(id));
-    if (running.length > 0) this.deps.log(`initialization: ${running.join(', ')} is already running, so the skip leaves its outcome to the run`);
-    if (done.length > 0) this.deps.log(`initialization: ${done.join(', ')} is already completed, so the skip leaves it completed`);
-    const r = await recordSkip(e.state, mine, { nowIso: this.nowIso, write: this.write(e.root) });
+    const { r, mine } = await this.marker(e, async (current) => {
+      const completed = new Set(current.completed);
+      const running = ids.filter((id) => e.attempting.has(id));
+      const done = ids.filter((id) => !e.attempting.has(id) && completed.has(id));
+      const mine = ids.filter((id) => !e.attempting.has(id) && !completed.has(id));
+      if (running.length > 0) this.deps.log(`initialization: ${running.join(', ')} is already running, so the skip leaves its outcome to the run`);
+      if (done.length > 0) this.deps.log(`initialization: ${done.join(', ')} is already completed, so the skip leaves it completed`);
+      return { r: await recordSkip(current, mine, { nowIso: this.nowIso, write: this.write(e.root) }), mine };
+    });
     if (!r.ok) return r;
     e.state = r.state;
     this.deps.log(`initialization: skipped ${mine.length === 0 ? '(nothing)' : mine.join(', ')} for ${e.root}`);

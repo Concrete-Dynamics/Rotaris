@@ -306,7 +306,7 @@ describe('rows — REQ-CHAT-068/069, delegation and scope', () => {
     id: 'c1', name: 'helper', givenName: 'helper', persona: 'coding-agent', state: 'running', presentationState: 'running', parentId: 'run',
     dependencies: [], activity: '', model: 'm', depth: 1, background: true, category: 'implementation', spawnedAt: AT, completedAt: null,
     toolCalls: 0, delegationTask: 'a'.repeat(400), reasoning: 'high', contextUsed: 0, contextLimit: 1, grantedTools: [], calledTools: [],
-    activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0,
+    activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null,
   };
 
   it('REQ-CHAT-068: three facts, the task compacted to 110 characters with an ellipsis where it is cut', () => {

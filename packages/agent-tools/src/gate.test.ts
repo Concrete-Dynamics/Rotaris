@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,6 +13,7 @@ import { terminalTool, TERMINAL_DEFAULTS, type TerminalManager } from './termina
 import { askQuestionsTool, PendingQuestions } from './tools/questions.js';
 import { realPathOf } from './tools/fence.js';
 import { FileToolState, haetEditTool, writeFileTool } from './tools/files.js';
+import { INTERRUPTED_FAILURE_KIND } from './tools/types.js';
 
 const ROOT = 'D:/ws';
 
@@ -249,6 +250,36 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     expect(String(h.rec.decisions[2]!['reason'])).toMatch(/the approval request was cancelled\.$/);
   });
 
+  it('PD-ORCH-005 clause 9: an approval withdrawn by a rest is never a denial — nothing is audited or raised, the timeline names the interruption, the call settles blocked, interrupted and never run, and asked again it asks afresh', async () => {
+    const h = harness();
+    const s = new AbortController().signal;
+    const a = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), s);
+    await Promise.resolve();
+    expect(h.approvals.withdrawAll('stop')).toBe(1);
+    const r = await a;
+    expect(r).toMatchObject({ status: 'blocked', isError: true, interrupted: true, decision: null, text: 'The approval this call was waiting on was withdrawn by the stop; the call was not run.' });
+    expect(h.executed).toEqual([]);
+    expect(h.rec.decisions).toEqual([]);
+    expect(h.rec.issues).toEqual([]);
+    expect(h.rec.timeline).toEqual(['approval_withdrawn']);
+    expect(h.rec.pending.at(-1)).toEqual([]);
+    expect(h.rec.settles.at(-1)).toMatchObject({ failure_kind: 'interrupted' });
+    const again = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), s);
+    await Promise.resolve();
+    expect(h.rec.requested).toHaveLength(2);
+    expect(h.approvals.resolve(h.approvals.pending()[0]!.request_id, 'once')).toBe(true);
+    expect(await again).toMatchObject({ status: 'ok' });
+    expect(h.executed).toHaveLength(1);
+  });
+
+  it('PD-ORCH-005: an executor that reports its rest cut it short (the interrupted failure kind) settles the call interrupted', async () => {
+    const h = harness({ preset: 'autonomous', extraExecutors: [['todo', simpleExecutor('todo', 'todo', z.object({ operation: z.string() }), async () => ({ text: 'released by the pause', isError: true, failureKind: INTERRUPTED_FAILURE_KIND }))]] });
+    const r = await h.gate.dispatch(h.call('todo', { operation: 'list' }), new AbortController().signal);
+    expect(r).toMatchObject({ status: 'failed', interrupted: true, text: 'released by the pause' });
+    const plain = harness({ preset: 'autonomous', extraExecutors: [['todo', simpleExecutor('todo', 'todo', z.object({ operation: z.string() }), async () => ({ text: 'broke', isError: true, failureKind: 'execution_error' }))]] });
+    expect((await plain.gate.dispatch(plain.call('todo', { operation: 'list' }), new AbortController().signal)).interrupted).toBeUndefined();
+  });
+
   it('REQ-TOOLS-055: a timeout of 0 registers no deadline; only an answer or a cancellation releases the wait', async () => {
     const h = harness({ timeoutMs: 0 });
     const p = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
@@ -282,6 +313,37 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     expect(r.status).toBe('blocked');
     expect(h.rec.decisions[0]).toMatchObject({ source: 'presenter-error' });
     expect(h.approvals.size).toBe(0);
+  });
+
+  /*
+   * REQ-TOOLS-063: a request queued behind another dialog is shown only when that dialog closes, so its presentation
+   * may never come. A timeout or a cancellation while it is queued drops it unshown, and it counts as cancelled
+   * (REQ-TOOLS-054). An answer given elsewhere while it is queued is honoured. Before the gate raced the presentation
+   * against its own wait, a presenter that never confirmed held the call until the presenter's bound denied it.
+   */
+  it('REQ-TOOLS-063/054: a queued request whose wait times out is dropped unshown and counts as cancelled', async () => {
+    const closed: string[] = [];
+    const h = harness({ timeoutMs: 1_000, presenter: { present: () => new Promise(() => undefined), close: (id) => { closed.push(id); } } });
+    const p = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
+    await vi.waitFor(() => expect(h.approvals.size).toBe(1));
+    h.clock.advance(1_000);
+    const r = await p;
+    expect(r.status).toBe('blocked');
+    expect(h.rec.decisions[0]).toMatchObject({ source: 'cancelled', request_id: 'req1' });
+    expect(closed).toEqual(['req1']);
+    expect(h.approvals.size).toBe(0);
+    expect(h.executed).toHaveLength(0);
+  });
+
+  it('REQ-TOOLS-063: a queued request answered elsewhere before it is shown is honoured', async () => {
+    const h = harness({ presenter: { present: () => new Promise(() => undefined), close: () => undefined } });
+    const p = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
+    await vi.waitFor(() => expect(h.approvals.size).toBe(1));
+    expect(h.approvals.resolve('req1', 'once')).toBe(true);
+    const r = await p;
+    expect(r.status).toBe('ok');
+    expect(h.rec.decisions[0]).toMatchObject({ source: 'user-once', request_id: 'req1' });
+    expect(h.executed).toHaveLength(1);
   });
 
   it('REQ-TOOLS-026: approval resolution that raises denies with source fail-closed', async () => {
@@ -426,6 +488,17 @@ describe('the two hook slots (ADR-0015, REQ-HOOKS-004/005/047/068/071/072/074)',
     expect(bad.followUp).toBe("Hook 'P' reported after the call: noted");
     expect(rh.calls[3]!.call.results).toEqual([{ kind: 'error', text: bad.text }]);
   });
+  it('PD-ORCH-005 clause 9 (found by phase 3\'s second review): a question the rest withdrew never ran — blocked, recorded as withdrawn, no post_tool hook and no tool error', async () => {
+    const rh = recordingHooks();
+    const withdrawn = simpleExecutor('ask_questions', 'q', anySchema, async () => ({ text: 'The questions were withdrawn by the pause.', isError: true, failureKind: INTERRUPTED_FAILURE_KIND, withdrawnBy: 'pause' as const }));
+    const h = harness({ preset: 'autonomous', hooks: rh.hooks, extraExecutors: [['ask_questions', withdrawn]] });
+    const r = await h.gate.dispatch(h.call('ask_questions', {}), new AbortController().signal);
+    expect(r).toMatchObject({ status: 'blocked', interrupted: true, blockedReason: 'The questions were withdrawn by the pause.' });
+    expect(rh.calls.map((c) => c.slot)).toEqual(['pre']);
+    expect(h.rec.timeline).toContain('question_withdrawn');
+    expect(h.rec.issues).toEqual([]);
+  });
+
   it('REQ-HOOKS-004/068: a call the policy denies starts no hook; no hook port means one lookup and nothing more', async () => {
     const rh = recordingHooks();
     const h = harness({ preset: 'autonomous', hooks: rh.hooks });

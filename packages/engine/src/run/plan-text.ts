@@ -1,4 +1,5 @@
 import type { PlanDecision } from '@rotaris/contracts';
+import { cut } from './cut.js';
 
 /**
  * REQ-ORCH-153 / REQ-ORCH-154 (ADR-0062): the two things a plan cycle is told, kept side by side because they
@@ -29,6 +30,31 @@ export function planRequestSection(): string {
     '- Approval releases those tools for the rest of the run and hands the approved plan back to you to carry out. Revision asks you for another plan, with what the user said.',
     '',
     'The task to plan for follows.',
+  ].join('\n');
+}
+
+/**
+ * PD-ORCH-003 revision 2: what a plan cycle held after a resumed iteration is told, after `planRequestSection`. The
+ * launch content it is also given is the continue that resumed the iteration, so the work to plan for is the todo's
+ * pending tasks, stated first and in the order the run takes them up — the first twenty, the count the handoff shows of
+ * its todo (REQ-SESSION-115), each cut to 500 characters rather than the handoff's 80, since here a task's text is the
+ * work to plan and not a display title (OQ-104). `message` is what became of the continues' messages the resumed iteration
+ * held (PD-ORCH-005 clause 17): `done` when it succeeded, `pending` when it closed otherwise — they are then among the
+ * pending tasks, taken up first — and `none` when it held none. The iteration is said to have been "left open", not by
+ * what: a rest or a crash left it, and a crash-left session's continues take this path too (OQ-104).
+ */
+export function resumedWorkSection(iteration: number, pending: readonly string[], message: 'done' | 'pending' | 'none'): string {
+  const shown = pending.slice(0, 20).map((text) => `- ${cut(text, 500)}`);
+  if (pending.length > 20) shown.push('- [... additional pending tasks elided]');
+  return [
+    `This run resumed iteration ${iteration}, which was left open, and that iteration has closed. What follows it is new work, and the plan is for that work: the tasks still pending, in the order the run takes them up.`,
+    '',
+    'Pending tasks:',
+    ...(shown.length > 0 ? shown : ['- (none)']),
+    '',
+    message === 'done' ? 'The request that continued the session follows as context; the resumed iteration has already carried out its message.'
+      : message === 'pending' ? 'The request that continued the session follows as context; the resumed iteration did not finish its message, which is among the pending tasks above and is taken up first.'
+        : 'The request that continued the session follows as context.',
   ].join('\n');
 }
 

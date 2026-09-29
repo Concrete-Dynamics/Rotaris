@@ -771,7 +771,7 @@ increment, to the loaded side), and the proof on Windows, which this Linux conta
 recorded, not repaired:
 [`a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`](../a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md),
 [`the-update-shape-never-answers-extend.md`](../the-update-shape-never-answers-extend.md), and — running the proofs whose
-surfaces this round touched — [`terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md`](../terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md)
+surfaces this round touched — [`terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md`](terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md) (a duplicate of a note `main` had already repaired; settled at the merge)
 and [`chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`](../chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md);
 `rows-proof`, `questions-proof`, `layout-proof`, `compression-proof` and `plan-gate-proof` passed. The runs' logs,
 `append.json` files and traces were kept beside the work; `.proof/transcript-proof/` holds only the last. Reported back

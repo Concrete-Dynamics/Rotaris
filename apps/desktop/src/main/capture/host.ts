@@ -225,6 +225,17 @@ export async function settleAt(host: CaptureHost, step: CaptureStep): Promise<vo
   }
 }
 
+/**
+ * The step a SELECT waits on: the control's presence alone. A select step's `arg` is the value to choose, not
+ * text the control carries, so handing it to the match probe would wait for a `<select>` whose text is `deny`
+ * and never find one. Until 2026-09-28 the select seam read only the instant and dropped the `~`, so a
+ * `select>>value@~ms` fired at `ms` whether or not the control was drawn
+ * (`docs/defects/fixed/the-select-seam-ignores-the-waiting-form.md`).
+ */
+export function selectWait(step: CaptureStep): CaptureStep {
+  return { ...step, arg: null };
+}
+
 /** Schedules `body` for the step's instant, or for the moment its selector matches. */
 export function onStep(host: CaptureHost, step: CaptureStep, body: () => void | Promise<void>): void {
   void (async () => {

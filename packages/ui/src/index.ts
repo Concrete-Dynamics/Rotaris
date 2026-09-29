@@ -31,6 +31,7 @@ export * from './ProviderDialog.js';
 export * from './OverviewView.js';
 export * from './GitView.js';
 export * from './ConfirmDialog.js';
+export * from './AgentCancelConfirm.js';
 export * from './WorktreeDialog.js';
 export * from './StartSessionDialog.js';
 export * from './CheckpointDialogs.js';

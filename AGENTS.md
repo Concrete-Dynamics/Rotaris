@@ -46,7 +46,7 @@ wrong.
 | | `skills-proof` | portable skill discovery, with a scratch home and a scratch machine-wide root (ADR-0063; `ROTARIS_CAPTURE_SKILLS_MACHINE`, off Windows only); the `/skills` listing written as one saved system row and read back after a reopen (REQ-CHAT-162) |
 | | `injection-proof` | workspace-context injection as the model port **received** it — order, the per-file switches, OQ-64, a worktree's execution root — and REQ-WORKSPACE-049's cold-cache p95 over 20 separate processes (`--skip-latency` skips it; cold only on Linux) |
 | | `sandbox-proof` | OS-level confinement (ADR-0022). The proof reads the host's own verdict (`process.platform`, the launcher on `PATH`, its own trial) and asserts the product's answer for that case (`docs/defects/fixed/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md`). On `win32` and on Linux without `bwrap` it proves the refusal path. **Where the backend is available it also runs REQ-SANDBOX-127's six effects (IC-8)**, and on Linux with `bwrap` it is **red** on REQ-SANDBOX-077's absent-subpath residue, a product defect (`docs/defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`). Read `results.json` → `effects` |
-| | `terminal-stream-proof` | the stream in the run host against a **real PTY** (ADR-0021) |
+| | `terminal-stream-proof` | the stream in the run host against a **real PTY** (ADR-0021), each command spelled in the host's shell: PowerShell on Windows, the POSIX shell elsewhere (REQ-TOOLS-104). Before 2026-09-28 it spoke PowerShell everywhere and measured nothing off Windows (`docs/defects/fixed/terminal-stream-proofs-real-pty-half-speaks-powershell-to-a-posix-shell.md`) |
 | **Configuration and startup** | `config-proof` | hand-authored, commented files surviving every write (ADR-0036/0037) |
 | | `init-proof` | project initialization resolved once per workspace open (ADR-0064) |
 | | `workspace-proof` | reaching a project folder from inside the application: resolution, gates, switch |
@@ -63,7 +63,7 @@ wrong.
 | | `library-proof` | the Library shell and its Prompts tab |
 | | `mission-proof` | the Mission view, the per-agent inspector, the persona windows |
 | | `git-proof` | the Git view and the worktrees |
-| | `terminal-proof` | the terminal grid, the pop-out window, the transcript preview (ADR-0047) |
+| | `terminal-proof` | the terminal grid, the pop-out window, the transcript preview (ADR-0047). Its live section spells the size probe, the motion command and the flood in the shell its harness reports (REQ-TOOLS-104). Before 2026-09-28 they were PowerShell everywhere, and off Windows four checks measured nothing (`docs/defects/fixed/terminal-proofs-live-section-drives-a-posix-shell-with-powershell.md`) |
 | | `improvements-proof` | the reviewed-improvement lifecycle end to end |
 | | `retrospective-proof` | the retrospective pass, driven from its surfaces against the built app (PD-LIBRARY-002) |
 | | `theme-proof` | the themes and scales, rendered — plus two counterfactuals that must stay red |

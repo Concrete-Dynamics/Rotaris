@@ -56,5 +56,5 @@ non-applicability (a POSIX kernel does not execute `runner.cmd`); launch 9's dis
 application exited 1,028 ms after the quit. The first run of the same tree stopped at launch 6 with the beta row's
 toggle "not on screen" at the 2,200 ms click; the second run passed it, and my own timing probe found the rows on
 screen at 1,500 ms — a fixed offset on a shared 4-vCPU host, recorded as
-[`mcp-proofs-drop-rules-launch-clicks-at-a-fixed-offset.md`](../mcp-proofs-drop-rules-launch-clicks-at-a-fixed-offset.md),
+[`mcp-proofs-drop-rules-launch-clicks-at-a-fixed-offset.md`](mcp-proofs-drop-rules-launch-clicks-at-a-fixed-offset.md),
 not repaired here. Not re-run on Windows: no Windows host here (IC-3), and the win32 spelling is unchanged.

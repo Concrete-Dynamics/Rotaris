@@ -61,10 +61,14 @@ record already decides, and every ruling it needs is named as the owner's rather
   red: REQ-CHAT-027's partial shade at 4.06:1 on the ground the composer dock paints, every other check passing in a
   diagnostic run ([note](../defects/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md);
   ADR-0050's fourth execution). On Linux as
-  root, `resilience-proof`, `notice-proof` and `init-proof` are red for their recorded notes
-  ([override select](../defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md), and
+  root, ~~`resilience-proof`,~~ `notice-proof` and `init-proof` are red for their recorded notes
+  ([override select](../defects/fixed/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md), and
   [code intelligence as root](../defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md) for the last
-  two). `sandbox-proof` reads the host's own verdict since 2026-09-28 ([Windows verdict, fixed](../defects/fixed/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md)).
+  two). **`resilience-proof` repaired 2026-09-28 under R-062, in the proof and not the product:** scenario 4 chooses the
+  model through the driver and every launch is bounded, and all ten scenario blocks (eleven launches) pass as root on Linux. The overrun it
+  showed was a product loop, not an ignored signal: a quit whose standard output has been closed never ends
+  ([note](../defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md), open; REQ-MONITOR-131's
+  backstop). `sandbox-proof` reads the host's own verdict since 2026-09-28 ([Windows verdict, fixed](../defects/fixed/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md)).
   It is green on Linux without `bwrap`. On Linux with `bwrap` it is red on a **product** defect that IC-8's first Linux
   execution found ([absent-subpath residue](../defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md)).
 - The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005` (**built 2026-09-28**, R-062), `PD-ORCH-004` and `PD-MONITOR-002`.

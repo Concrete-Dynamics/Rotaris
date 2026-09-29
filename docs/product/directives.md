@@ -2167,6 +2167,21 @@ revision 3 as [R-067](requests.md#r-067).*
 > **What was not measured.** No built-app run declared a scope. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **First execution of revision 3's scope refusal, 2026-09-29, built under [R-067](requests.md#r-067):** the refusal
+> was built as written ([OQ-112](../architecture/open-questions.md)). `IterationChildren.delegate` refuses a
+> `write_scope` for a known persona that cannot write files, straight after the scope's own validation, with status
+> `rejected`, no record and no task id. The reason names the catalogue's writers. The phrase "after REQ-TOOLS-006's
+> controls" met one gap in the build. The per-persona `tool_restrictions` map, the fourth control, narrows no agent's
+> grant today ([`a-personas-tool-restrictions-never-narrow-its-grant`](../defects/a-personas-tool-restrictions-never-narrow-its-grant.md)).
+> The check therefore reads the two controls a child's grant does meet, `coordinator_only` and `read_only`. The
+> clause's text is not wrong; the build lacks a control it names. Two existing scripted cases had scoped a read-only
+> `codebase-analyst`, which the directive now forbids, and they scope a `docs-writer` instead. Revision 3's other
+> refusal, a `session_id` naming no settled child, is not part of this build.
+>
+> **What was measured.** A scripted end-to-end case in `children.test.ts` over the duress call's shape, red with the
+> check removed, and the predicate, the catalogue and the reason in `write-scope.test.ts`. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-startup-001"></a>

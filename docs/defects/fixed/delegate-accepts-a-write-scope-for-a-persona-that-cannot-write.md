@@ -1,0 +1,56 @@
+## `delegate` accepts a write scope for a persona that cannot write
+
+A delegation's `write_scope` is validated for its patterns and never against the persona's tools. A read-only persona
+given a scope is accepted, claims the path — fencing the parent and every sibling out of it — cannot write it, and its
+report can still read `succeeded` over its own "I have no file-writing tool".
+
+Live-run finding: D6 (live runs of 2026-09-29)
+
+**Ruled 2026-09-29 — [OQ-112](../../architecture/open-questions.md), [`PD-TOOLS-006`](../../product/directives.md#pd-tools-006) revision 3,
+[R-067](../../product/requests.md#r-067).** A delegation carrying a `write_scope` to a persona that holds no file-writing
+tool (`write_file`, `haet_edit` or its alias `haet`) is refused with status `rejected` and no record, beside
+REQ-TOOLS-152's other refusals; the reason says the persona cannot write files and names the personas that can, where
+the catalogue says. That refusal is this note's repair.
+
+## Specs
+
+- `PD-TOOLS-006` revision 3 (OQ-112), narrowing `REQ-TOOLS-152`. `REQ-ORCH-095`'s text-only completion is what let the
+  child end `succeeded`, and it is unchanged.
+
+## Evidence
+
+- Pack `.live-run/runs/2026-09-29T03-06-14-929Z/` (the sweep worktree; git-ignored), session `379f1490`, tool call #24: `delegate` to `codebase-analyst` with `write_scope: ["docs/overview.md"]`,
+  "queued — Accepted". The child `c` (`bg_a879a419`) ran 03:07:35.708–03:10:22.727 with read-only `granted_tools` and
+  reported `succeeded` over "Blocker: I have no file-writing tool…"; the orchestrator re-commissioned `c2`
+  (`bg_d49ce6f8`, `docs-writer`) for the same file.
+
+## Relevant files
+
+- `packages/engine/src/children/orchestration.ts:224-238` — the scope's validation and the spawn, with no check against
+  `persona.tools`.
+- `packages/engine/src/children/write-scope.ts` — `validateWriteScope`.
+- `packages/agent-tools/src/tools/delegation.ts` — the tool's schema and refusal rendering.
+
+## Repaired — 2026-09-29
+
+Repaired 2026-09-29 under [R-067](../../product/requests.md#r-067), as [`PD-TOOLS-006`](../../product/directives.md#pd-tools-006)
+revision 3 ([OQ-112](../../architecture/open-questions.md)) states. `IterationChildren.delegate` now refuses a delegation
+whose `write_scope` holds patterns for a known persona that cannot write files. The check comes straight after the
+scope's own validation, before any record exists. The refusal carries status `rejected` and no task id. The check is
+`writesFiles` in `write-scope.ts`: the persona holds `write_file`, `haet_edit` or `haet`, and neither `coordinator_only`
+nor `read_only` removes them. Those are the two REQ-TOOLS-006 controls that reach a child's grant; the run-scoped
+allow-list binds the entry agent alone. The reason, `scopeWithoutWriterReason`, reads "write_scope was given to
+'<persona>', which cannot write files: it holds no file-writing tool (write_file, haet_edit). The delegation was not
+started." It then names the catalogue's writers (`fileWriters`) when there are any: the configured known roles, the
+same list the unknown-persona refusal gives, or the built-in table (`coding-agent, tester, docs-writer, refactorer`).
+An unknown persona is still refused by the ledger, with the list of known personas. A delegation without a scope is
+unchanged, as is REQ-ORCH-095's text-only completion.
+
+Evidence: `packages/engine/src/children/children.test.ts`, "PD-TOOLS-006 revision 3 (OQ-112, live-run finding D6)…".
+It is the duress call's shape: `codebase-analyst` with `write_scope: ["docs/overview.md"]`. The test checks that the call
+is rejected, that no child is recorded, that the resumed parent reads the reason with the writers named, and that no
+task id appears. It fails with the check removed. `write-scope.test.ts`, "PD-TOOLS-006 revision 3 (OQ-112)…", pins three
+things: the predicate over the controls (`haet` alone writes; `read_only`, `coordinator_only` and `terminal`-only
+personas do not), the catalogue's writers for the built-in table and for a configured resolver, and the reason's text.
+Two earlier write-scope cases in `children.test.ts` scoped a `codebase-analyst` and now scope a `docs-writer`, since
+the directive forbids the earlier form.

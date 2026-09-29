@@ -5130,6 +5130,14 @@ for the child, after REQ-TOOLS-006's controls. REQ-TOOLS-152 is narrowed by `PD-
 amended in place. REQ-ORCH-095 is untouched: a child with no scope that answers in text still ends as that requirement
 says. Nothing is built by this ruling; the finding's note is D6's in `docs/defects/`.
 
+**Built 2026-09-29 under [R-067](../product/requests.md#r-067).** `IterationChildren.delegate` refuses the scope straight
+after the scope's own validation (`writesFiles`, `scopeWithoutWriterReason` and `fileWriters` in
+`children/write-scope.ts`); the note is
+[`delegate-accepts-a-write-scope-for-a-persona-that-cannot-write`](../defects/fixed/delegate-accepts-a-write-scope-for-a-persona-that-cannot-write.md),
+repaired. "After REQ-TOOLS-006's controls" is read as the two a child's grant meets, `coordinator_only` and
+`read_only`: the run-scoped allow-list binds the entry agent alone, and the `tool_restrictions` map is applied to no
+agent's grant today (recorded as a defect of its own), so the check follows the grant the tool port builds.
+
 **OQ-113 — When does REQ-LIBRARY-092's materialisation fall back to the canonical agent name?** *(REQ-LIBRARY-092, "idempotent keyed on the task id (falling back to the canonical agent name)", and its "Every terminal child report is materialized"; REQ-SESSION-115's handoff artifact as `PD-ORCH-005` clause 20 chooses it. Raised 2026-09-29 from the open note under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-112 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 `materialiseChildReport` (`packages/engine/src/artifacts/store.ts:322`) looks the artifact up by the child's task id

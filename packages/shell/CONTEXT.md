@@ -162,7 +162,8 @@ The pinned declaration of what setup provisions — per tool a probe, a version,
 artifacts with their hashes, a licence and the capabilities it enables. — `REQ-STARTUP-058`
 
 **Platform key**:
-The per-platform selector a manifest's artifacts are chosen by. — `REQ-STARTUP-059`
+The per-platform selector shared by release artifact naming, updater asset selection and manifest artifact
+selection — one of the three fixed keys, or a raw fallback for anything else. — `REQ-STARTUP-060`
 
 **Probe**:
 Running a tool's declared command to learn whether it is present and at what version. —

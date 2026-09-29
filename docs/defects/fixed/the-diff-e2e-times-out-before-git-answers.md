@@ -34,7 +34,7 @@ Noticed 2026-09-18 while verifying the `plan_cycles` cascade branch (`pnpm check
 this branch's area, and raising the budget without knowing which side is slow would be guessing.
 
 **Repaired 2026-09-22**, with
-[`the-real-git-diff-terminal-test-times-out-on-win32.md`](fixed/the-real-git-diff-terminal-test-times-out-on-win32.md),
+[`the-real-git-diff-terminal-test-times-out-on-win32.md`](the-real-git-diff-terminal-test-times-out-on-win32.md),
 which is the same failure seen twice. Of the two candidates this note refused to choose between — a slow
 spawn inside conpty, or a cost the first `git diff` pays in a fresh PTY — neither was it. The cause is the
 pager: git starts one because a pseudo-terminal is a tty, and `less` under `TERM=dumb` waits for RETURN.

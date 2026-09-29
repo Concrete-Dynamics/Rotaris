@@ -3,8 +3,9 @@
  *
  * Six launches against the built product, with a scratch profile **and a scratch home directory**, so the
  * user-scope roots and the disable manifest are fixtures rather than whatever this machine happens to hold.
- * `HOME`, `USERPROFILE` and `HOMEPATH` are all set, because Node's `homedir()` reads a different one per
- * platform and a proof that set only one would silently read the operator's own skills on the other. The
+ * User-scope discovery reads that home through the `ROTARIS_CAPTURE_SKILLS_HOME` seam on every platform, not through
+ * `HOME`/`USERPROFILE`: overriding those kills Electron before it paints on Windows (see `launch`). Off Windows the
+ * launch's `HOME` is the same scratch home too, because `proofIsolationEnv` sets it on every POSIX launch. The
  * machine-wide root, `/etc/codex/skills` (REQ-WORKSPACE-051, off Windows only), is a fixture too: it is redirected
  * into the scratch tree by `ROTARIS_CAPTURE_SKILLS_MACHINE` and holds one skill there, so the seam is exercised in
  * the built app on every host that has an `/etc` hierarchy and the operator's own `/etc/codex` is never read.

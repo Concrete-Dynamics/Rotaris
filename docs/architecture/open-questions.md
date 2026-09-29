@@ -3192,7 +3192,7 @@ Reading the rest of the closure found three more kinds:
 - **text**: it carries a licence;
 - **a reference**: it only names a licence on one line. Or it is at most 2,000 characters, it sends the reader
   elsewhere, and it carries no grant of its own. "Sends elsewhere" is one of: "see the LICENSE" (a markdown link,
-  "see the [LICENSE](LICENSE)", included), "found in LICENSE", "obtain a copy of the License", "can obtain one at",
+  "see the `[LICENSE](LICENSE)`", included), "found in LICENSE", "obtain a copy of the License", "can obtain one at",
   "should have received a copy of the". The grants checked are those of the licences short enough to sit beside such
   words: MIT and Boost, ISC and 0BSD, the BSD family, zlib, the Unlicense and SQLite's blessing. Every full text
   that quotes its own notice in an appendix (Apache-2.0, the GPL family, MPL-2.0) is far longer than the bound;

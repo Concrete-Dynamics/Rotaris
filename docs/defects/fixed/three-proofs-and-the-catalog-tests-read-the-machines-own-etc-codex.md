@@ -77,7 +77,7 @@ fourth root on Windows whatever `machineDir` names.
 
 **What was run.** `pnpm settings-proof` and `pnpm injection-proof --skip-latency` under Xvfb, and `pnpm skills-proof`
 up to the point its policy launch fails on Linux for the reason
-[`../skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`](../skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)
+[`skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`](skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)
 records. The launches before it (discover, commands, listing, listing-reopen) ran and read the machine root from the
 scratch directory; the run launch after it reads the root too, and its assertion is the one that proves the injected
 catalog names `machine-skill`, so on this host that assertion is written and not observed until that note is repaired.

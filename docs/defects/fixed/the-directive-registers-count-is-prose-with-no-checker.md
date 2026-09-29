@@ -8,7 +8,7 @@ that records this note, but the gap that let it drift is not closed.
 
 This is the same failure the request log already suffered and already fixed. `docs/product/requests.md`
 carried seventeen rows under the heading "Sixteen" until
-[`tools/check-request-log.mjs`](../../tools/check-request-log.mjs) was written for it, and that checker
+[`tools/check-request-log.mjs`](../../../tools/check-request-log.mjs) was written for it, and that checker
 now runs in `pnpm lint` and refuses a duplicate, a gap, an anchor disagreeing with its number, and a
 declared count that is not the count. The directive register has the identical shape — contiguous
 per-domain identifiers, anchors cited from other documents, a declared total — and none of that
@@ -49,7 +49,7 @@ stale, recording the seventeen-rows-under-"Sixteen" case as the reason the reque
   generated artifact cannot catch this.
 - `packages/kernel/src/generated/requirements.ts` — the generated artifact; never hand-written.
 
-**Repaired 2026-09-22.** [`tools/check-directive-register.mjs`](../../tools/check-directive-register.mjs)
+**Repaired 2026-09-22.** [`tools/check-directive-register.mjs`](../../../tools/check-directive-register.mjs)
 is written and runs in `pnpm lint`, beside the sibling it is modelled on. It holds five things: the anchor
 agrees with the identifier its heading prints; no identifier appears twice; identifiers are contiguous from
 001 within each domain; the declared total is the number of entries; and every `directives.md#pd-…` citation

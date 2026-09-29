@@ -864,7 +864,7 @@ minted as a numbered defect: it was written and found inside the same hour and n
 **One defect was found beside it, in code this change only passed through**: a `PopoverMenu` option's
 accessible name fuses its label and its hint with no separator — `Auto` + `start at once` announces as
 *"Autostart at once"* — which reaches every chip built on the component and predates this directive. Recorded
-as [`a-chip-option-announces-its-label-and-hint-as-one-word.md`](../defects/a-chip-option-announces-its-label-and-hint-as-one-word.md)
+as [`a-chip-option-announces-its-label-and-hint-as-one-word.md`](../defects/fixed/a-chip-option-announces-its-label-and-hint-as-one-word.md)
 and deliberately not repaired here. The row is in
 [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
@@ -979,7 +979,7 @@ adding to it.
 - **Discovery prices are not read.** Whether a price may come from a provider's model list is the first
   half of OQ-62 and stays open.
 - **Children must be counted.** A delegated child's requests are the run's requests. The repair of
-  [`a-delegated-childs-provider-requests-never-reach-the-runs-totals.md`](../defects/a-delegated-childs-provider-requests-never-reach-the-runs-totals.md)
+  [`a-delegated-childs-provider-requests-never-reach-the-runs-totals.md`](../defects/fixed/a-delegated-childs-provider-requests-never-reach-the-runs-totals.md)
   is part of building this revision.
 
 > **Narrows:** REQ-MONITOR-166, REQ-PROVIDER-121
@@ -1447,7 +1447,7 @@ banner containing `failed` in any casing still warns through the banner check.
 > checks that the line reached the output at exit 0 with no marker warning and no `suspicious_success`, a regression
 > guard as `diff-exit-1` is for ESC-41. Writing that guard's positive half found that the here-string's own check
 > reads its command back and cannot fail, recorded as
-> [`the-here-string-check-reads-its-own-command-back.md`](../defects/the-here-string-check-reads-its-own-command-back.md).
+> [`the-here-string-check-reads-its-own-command-back.md`](../defects/fixed/the-here-string-check-reads-its-own-command-back.md).
 > Two things were not measured. Run `2e21e324`'s git line is not recorded verbatim anywhere in the record, so only its
 > docker line is replayed. And the guard has not run against a real endpoint; the next live run of `terminal` is its
 > first. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
@@ -1749,7 +1749,7 @@ so a child that genuinely loops is still stopped at the same point.
 > lower-case name. What was not
 > measured: no built-app run exercised the mechanism. `pnpm resilience-proof`, the proof nearest this path, could not
 > launch the app as root and made no assertion
-> ([`resilience-proof-cannot-launch-the-app-as-root.md`](../defects/resilience-proof-cannot-launch-the-app-as-root.md)).
+> ([`resilience-proof-cannot-launch-the-app-as-root.md`](../defects/fixed/resilience-proof-cannot-launch-the-app-as-root.md)).
 > No live run was made, so the offer's wording has not met a real model. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
@@ -1805,7 +1805,7 @@ are not recorded, and cannot be recovered afterwards.
 > REQ-HOOKS-102 oblige no line, they constrain text, which a threshold can only drop. REQ-HOOKS-138's hook lines in
 > this log are `info` and `warning`, but the hook engine's own sink — documented "the application log only" — is wired
 > to the per-session log at `INFO`, where the default `WARNING` drops it; that is recorded as
-> [`hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`](../defects/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md)
+> [`hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`](../defects/fixed/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md)
 > and not changed here, because it is a question of which log, not of this one's threshold. Three proof readers
 > matched the old shape and two proofs read `debug` lines; the readers were updated and those two launches set the
 > variable. Measured on a driven launch in a Linux container as root, without the bundled runtime, so the 141 stderr

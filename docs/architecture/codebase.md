@@ -94,6 +94,12 @@ plain process with no React and the restore run against a fake run host with a c
   them to police.
 - **Icons are `@phosphor-icons/web` classes** (`ph ph-<name>`), imported in the renderer root; the
   design assets carry the same two fonts and are not referenced directly.
+- **A relative link in the record reaches what it names** — `tools/check-record-links.mjs` (in `pnpm lint`, beside
+  `check-request-log.mjs` and `check-directive-register.mjs`) fails on a Markdown link under `docs/`, in
+  `CONTEXT-MAP.md`, `AGENTS.md`, `CLAUDE.md` or a `packages/**/CONTEXT.md` whose target file does not exist or
+  whose `#fragment` names no heading or anchor in it; fenced and inline code and HTML comments are text, not links.
+  A defect note moved to `docs/defects/fixed/` takes every link to it along in the same commit, or the gate says
+  which one stayed behind (since 2026-09-28, R-062).
 - **A design-equivalent control is written once** — `tools/check-ui-language.mjs` (in `pnpm lint`, beside
   `check-theme-colours.mjs`) fails on a raw `button`, `input`, `textarea`, `select` or `table` anywhere under
   `packages/ui/src` or `apps/desktop/src/renderer` except `design-system/` itself, which is where they live.

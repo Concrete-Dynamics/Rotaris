@@ -10,7 +10,7 @@ REQ-CHAT-032 check — although the chip did open: the very next line at 5,950 m
 
 Both offsets entered together in `eade970` (2026-09-18), when the timetable was renumbered; the check has been red
 since, hidden behind the badge assertion that stopped the proof at its first catalogue check from 2026-09-15 to
-2026-09-28 ([fixed](fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)). Measured 2026-09-28 as
+2026-09-28 ([fixed](slash-proof-expects-every-built-in-to-carry-the-action-badge.md)). Measured 2026-09-28 as
 root under Xvfb on Linux: the proof passes the popup's checks (rows, names, badges, focus, geometry, the row texts),
 the four token colours and their contrast, Tab completion and the usage notice, and stops here; every check after it
 (REQ-CHAT-029..033, REQ-CHAT-159, REQ-LIBRARY-142, REQ-CHAT-042..044, the three later launches) is unmeasured until the

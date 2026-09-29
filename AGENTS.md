@@ -34,8 +34,8 @@ wrong.
 | | `plan-gate-proof` | the plan gate held, edited, answered (ADR-0062) |
 | | `resilience-proof` | the model ladder, the waits, the fallbacks, against scripted faults; the `override` launch is driven (the chooser the wait header draws), every launch is bounded (`lib/bounded-launch.mjs`: an overrun is ended by SIGTERM, a grace, then SIGKILL and reported with its log tail), and every scenario runs to its end with failures listed in `results.json` |
 | | `compression-proof` | context compression and its timeline entries (ADR-0060) |
-| | `checkpoint-proof` | the capture at iteration close through to the desktop restore (ADR-0039) |
-| | `sessions-proof` | the session browser's actions: repair, delete with ref cleanup, the exports |
+| | `checkpoint-proof` | the capture at iteration close through to the desktop restore (ADR-0039); the `live` launch's lock is probed dead the moment it returns (`lib/lock-holder.mjs`), so a lock that outlives the application fails there and is not blamed on the `repaired` step (`docs/defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`) |
+| | `sessions-proof` | the session browser's actions: repair, delete with ref cleanup, the exports; its planted locks read the machine identifier where the product mints it on the running platform (`machineIdFileFor`; `docs/defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`) |
 | **Tools** | `fetch-proof` | `fetch` and its egress policy, read from saved configuration at **every** call |
 | | `questions-proof` | `ask_questions`, the trailer row, the stepper, the two control operations |
 | | `todo-proof` | the todo source priority, write-through edits, the pane |

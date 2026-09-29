@@ -1964,15 +1964,13 @@ if (wanted.includes('duress')) {
     else {
       check(coherent('null summary on stopped run') === 'false', 'a stopped run did not end with a null summary', `autopsy says ${coherent('null summary on stopped run')}`);
       /*
-       * "Zero cost with tokens" is only incoherent where a cost COULD have been computed. On an endpoint
-       * registered `--unmetered` with no prices, the product has no figure to record and `cost` is correctly
-       * `0` — asserting otherwise would report a product fault that is not one. Caught before it was spent:
-       * the 2026-09-22 `faults` pack shows this line reading `true` on katalyst against 18,810 tokens, with
-       * nothing wrong. Where a money figure DOES exist, the original question stands.
+       * "Zero cost with tokens" is only incoherent where a cost COULD have been computed. This check used to condition
+       * itself on the endpoint's accounting kind, because the reader answered `true` for any zero cost beside tokens —
+       * on katalyst, unpriced, that read `true` against 18,810 tokens with nothing wrong (the 2026-09-22 `faults` pack).
+       * The reader now reads the session's own `cost_qualifier` and answers `false` where no request had a figure
+       * (`lib/autopsy-coherence.mjs`, live-run finding K2(b), 2026-09-29), so the question is asked as it stands.
        */
-      const priceable = accountingKind === 'provider' || accountingKind === 'priced';
-      if (priceable) check(coherent('zero cost with tokens') === 'false', 'tokens were not recorded against a zero cost', `autopsy says ${coherent('zero cost with tokens')}`);
-      else noted('the zero-cost reading is not a question on this endpoint', `accounting is ${accountingKind}: no money figure exists, so cost 0 against real tokens is correct (autopsy says ${coherent('zero cost with tokens')})`);
+      check(coherent('zero cost with tokens') === 'false', 'tokens were not recorded against a zero cost where a figure existed', `autopsy says ${coherent('zero cost with tokens')}`);
     }
 
     const Database = require('better-sqlite3');

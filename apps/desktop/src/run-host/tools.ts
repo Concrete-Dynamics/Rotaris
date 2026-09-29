@@ -336,7 +336,17 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     // literal `false` until this part, because there was no executor for it to be true of.
     delegationRuntime: delegationAvailable, userPromptChannel: ctx.attended(), artifactStore: artifacts !== undefined, canPublishArtifacts: artifacts !== undefined, terminalBackend: executors.has('terminal'), executors: new Set(executors.keys()),
   }, isEntry);
-  for (const r of resolved.removals) ctx.warn(`tool '${r.tool}' removed from ${ctx.persona} by ${r.control}${r.reason ? ` (${r.reason})` : ''} (REQ-TOOLS-004/006)`);
+  /*
+   * REQ-TOOLS-006: "every removal is logged together with the persona and the control that removed it", at no level the
+   * requirement names. A narrowing control's removal (the run's allow-list, `coordinator_only`, `read_only`,
+   * `tool_restrictions`) is the configuration doing what it says — every coordinated run removes the orchestrator's four
+   * write and command tools — so it is `info`: PD-MONITOR-002's default threshold keeps it in the application log, and the
+   * session log's default `WARNING` (REQ-SESSION-142) leaves it out. Until live-run finding L14 it was a warning, four
+   * per coordinated run, and the only warnings most sessions carried. A REQ-TOOLS-004 prerequisite's removal is a
+   * declared tool this run cannot provide ("degrade availability") and stays a warning.
+   */
+  const logInfo = ctx.info ?? ctx.warn;
+  for (const r of resolved.removals) (r.control === 'prerequisite' ? ctx.warn : logInfo)(`tool '${r.tool}' removed from ${ctx.persona} by ${r.control}${r.reason ? ` (${r.reason})` : ''} (REQ-TOOLS-004/006)`);
   const callable = new Map<string, ToolExecutor>();
   for (const n of resolved.tools) { const e = executors.get(n); if (e) callable.set(n, e); }
   const specs = [...callable.values()].map(toolSpec);

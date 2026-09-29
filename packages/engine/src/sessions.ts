@@ -97,6 +97,13 @@ export interface ToolPortContext {
   readonly modeOverride?: string | null | undefined;
   readonly attended: () => boolean;
   readonly warn: (message: string) => void;
+  /**
+   * A line at `info`: the application log (PD-MONITOR-002, whose default threshold keeps it) and the session log at
+   * `INFO` (REQ-SESSION-142, whose default `WARNING` threshold drops it). For what the configuration does by design and
+   * a requirement obliges the port to log — REQ-TOOLS-006's removal by a narrowing control, which was a warning on every
+   * coordinated run until live-run finding L14. Absent means such a line goes through `warn`.
+   */
+  readonly info?: ((message: string) => void) | undefined;
   /** REQ-TOOLS-065's abort hook: stops this run. */
   readonly abortRun: () => void;
   /** Part B: the agent's delegation identity — its operations, its own id as a parent, and its depth. */
@@ -1139,7 +1146,7 @@ export class Sessions {
     // PD-TOOLS-005: one away holder per RUN, on the same terms — reached by every agent through `baseCtx`, discarded with the run.
     const presence = new UserPresence({ record: warn });
     live.presence = presence;
-    const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
+    const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, info: (m: string) => { log?.info(m); this.deps.log?.(m); }, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     // With delegation the run creates the root's port itself (its own identity); the base port exists only without it.
     const tools: ToolPort | null = null;
     live.tools = tools;
@@ -1298,7 +1305,7 @@ export class Sessions {
     // PD-TOOLS-005: a continuation is a new run, so it starts with the user present — a previous run's away stretch is not inherited.
     const presence = new UserPresence({ record: warn });
     s.presence = presence;
-    const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
+    const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, info: (m: string) => { s.log?.info(m); this.deps.log?.(m); }, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     s.tools = null;
     // PD-ORCH-005 clause 3: what a crash left is recorded before the settle, which leaves every `paused` agent as it is.
     this.recordCrashOf(s.dal, s.writer, sessionId, warn, artifacts);

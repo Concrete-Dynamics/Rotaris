@@ -26,7 +26,11 @@ import { CALL_TIMEOUT_DEFAULT_MS, HealthProbe, runSetupSteps, SessionConnections
  * reloads, REQ-MCP-047), the probe path, the per-session connection registries (closed at shutdown, the one place
  * the engine releases session locks today), the session override of REQ-MCP-094 (never on disk, discarded at
  * exit), the ONE diagnostic sink, and the per-persona surface memo keyed on the versions of its three inputs so the
- * spawn-time evidence and the tool port read literally one resolution (REQ-TOOLS-010, REQ-MCP-065).
+ * spawn-time evidence and the tool port read literally one resolution (REQ-TOOLS-010, REQ-MCP-065). *Falsified
+ * 2026-09-29 (live-run finding D7; the sentence is kept as written):* the key also carries the reserved names, and the
+ * evidence reserves none while the port reserves the persona's native tools, so a spawn resolves twice. The two differ
+ * only where a server tool collides with a native name and is offered under its prefix; the second resolution now
+ * writes no line the first already wrote (`announced`), which is what the doubled log lines were.
  */
 export interface McpHostDeps {
   readonly clocks: Clocks;
@@ -104,6 +108,14 @@ export class McpHost {
   private configurationVersion = 0;
   private readonly sessions = new Map<string, SessionConnections>();
   private readonly surfaces = new Map<string, SurfaceMemo>();
+  /**
+   * Live-run finding D7 (R-067): what each persona's resolutions have already written, per surface key WITHOUT the
+   * reserved names. The spawn evidence resolves with none reserved and the tool port with the persona's native names, so
+   * the one spawn resolves twice; a line the first resolution wrote (the surface line, an unkeyed diagnostic such as
+   * REQ-MCP-059's grant count) is not written again by the second. A surface the reserved names changed — a collision
+   * offered under its prefix — renders a different surface line, which is written. Cleared with the memo it shadows.
+   */
+  private readonly announced = new Map<string, Set<string>>();
   private readonly preparing = new Map<string, Promise<void>>();
   private readonly mcpLog: McpLog;
 
@@ -145,6 +157,7 @@ export class McpHost {
       this.configurationVersion += 1;
       this.discovery.invalidate();
       this.surfaces.clear();
+      this.announced.clear();
       this.preparing.clear();
     }
     this.sink.newLoad();
@@ -156,6 +169,7 @@ export class McpHost {
     if (enabled) this.overrides.delete(name); else this.overrides.add(name);
     this.overrideVersion += 1;
     this.surfaces.clear();
+    this.announced.clear();
     this.deps.log(`mcp: server '${name}' ${enabled ? 'enabled' : 'disabled'} for this session by the settings toggle (REQ-MCP-094; not persistent)`);
   }
   isOverridden(name: string): boolean {
@@ -208,7 +222,8 @@ export class McpHost {
 
   /** REQ-TOOLS-010 / REQ-MCP-061: the surface for a persona, memoised on the versions of its inputs; the same object feeds the prompt, the callable set and the spawn evidence. */
   surfaceFor(cfg: LoadedConfiguration, workspaceRoot: string, role: string, ctx: McpSessionContext | null, reserved: ReadonlySet<string> = new Set()): PersonaMcpSurface {
-    const key = `${workspaceRoot}|${role}|${this.configurationVersion}|${this.overrideVersion}|${this.discovery.version}|${[...reserved].sort(compareCodePoints).join(',')}`;
+    const base = `${workspaceRoot}|${role}|${this.configurationVersion}|${this.overrideVersion}|${this.discovery.version}`;
+    const key = `${base}|${[...reserved].sort(compareCodePoints).join(',')}`;
     const memo = this.surfaces.get(key);
     if (memo) return memo.surface;
     const entry = cfg.personas[role];
@@ -218,7 +233,13 @@ export class McpHost {
       sessionDisabled: this.overrides, availability: (n) => this.availabilityOf(cfg, n), reservedNames: reserved,
       discovered: (n) => { const s = cfg.mcp.servers[n]; if (!s) return null; const d = this.discovery.peek({ name: n, description: this.descriptionOf(s), workspaceRoot }); return d ? { tools: d.tools, failed: d.failed } : null; },
     });
-    for (const d of r.diagnostics) this.deliver(d, ctx);
+    let said = this.announced.get(base);
+    if (!said) { said = new Set(); this.announced.set(base, said); }
+    for (const d of r.diagnostics) {
+      if (d.key === '' && said.has(d.message)) continue;
+      if (d.key === '') said.add(d.message);
+      this.deliver(d, ctx);
+    }
     // REQ-MCP-041's detailed line, once per server per process, beside the per-persona warning.
     for (const dropped of r.value.dropped) {
       if (dropped.reason !== 'unavailable') continue;
@@ -226,7 +247,8 @@ export class McpHost {
       if (s) this.deliver({ severity: 'info', scope: 'process', key: `mcp.unavailable-detail.${dropped.name}`, channels: 'log', message: `unavailable — raw command '${s.entry.command ?? ''}', resolved '${s.resolved?.command ?? ''}' [${(s.resolved?.args ?? []).join(' ')}] was not found on PATH (REQ-MCP-041)`, server: dropped.name });
     }
     this.surfaces.set(key, { key, surface: r.value, diagnostics: r.diagnostics });
-    this.deps.log(`mcp: surface for ${role} — callable ${r.value.active.map((a) => `${a.name}[${a.tools.map((t) => t.callable).join(',')}]`).join(' ') || '(none)'}; dropped ${r.value.dropped.map((d) => `${d.name}:${d.reason}`).join(' ') || '(none)'}; section ${JSON.stringify(renderMcpSection(r.value))}`);
+    const line = `mcp: surface for ${role} — callable ${r.value.active.map((a) => `${a.name}[${a.tools.map((t) => t.callable).join(',')}]`).join(' ') || '(none)'}; dropped ${r.value.dropped.map((d) => `${d.name}:${d.reason}`).join(' ') || '(none)'}; section ${JSON.stringify(renderMcpSection(r.value))}`;
+    if (!said.has(line)) { said.add(line); this.deps.log(line); }
     return r.value;
   }
 

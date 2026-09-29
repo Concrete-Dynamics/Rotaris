@@ -22,3 +22,22 @@ product breaching the bound.
 
 - `packages/hooks/src/engine.test.ts` — the `s2` window that encloses `await import('./payload.js')`.
 - `packages/hooks/src/payload.ts` — `buildToolPayload` and `serializePayload`, the operation the bound names.
+
+## Repaired 2026-09-29 under R-067
+
+Repaired 2026-09-29 under [R-067](../../product/requests.md#r-067). `engine.test.ts` imports `buildToolPayload` and
+`serializePayload` statically with the file, so the `s2` window now holds only the build and the serialisation that
+REQ-HOOKS-139's 10 ms bound names. The bound, the payload size and the assertion are unchanged.
+
+**What confirmed it first.** A probe run in vitest measured `await import('./payload.js')` inside the same window:
+- 720.9 ms where the module was not yet loaded;
+- 0.02 to 0.06 ms where it was loaded, as it is in `engine.test.ts` through `engine.js`.
+
+Even the cached import was a trip through vitest's module runner, charged to the budget. The payload operation itself
+measured 1.3 to 2.5 ms. The probe was a scratch file and was not kept.
+
+**Pinned by** the case itself, "REQ-HOOKS-139: resolving/gating 100 entries and building a 100 KB payload stay inside
+their bounds". Its window no longer contains an import. It passed three runs of the file alone
+(`pnpm vitest run packages/hooks/src/engine.test.ts`, 23 of 23 each) and the full `pnpm check` under Node 24 as root.
+The original red came from host load, so no run can show it red on demand; this repair removes a cost the requirement
+excludes, and does not claim a flake rate.

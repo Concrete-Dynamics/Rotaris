@@ -153,6 +153,9 @@ export const ACCEPTED_CANCEL_REPORT = 'Cancelled: the user cancelled the run, an
  *   its task goes back to `pending` in ("the task stays anchored"), and a continue's message it held with it (clause 17);
  * - the session's count moves past it, as the run's close of a cancelled iteration moves it.
  *
+ * It writes no timeline entry of its own: REQ-ORCH-139's vocabulary is closed and names none for this record. The close
+ * is the vocabulary's `iteration.end` event above, and the caller warns it to the session log (OQ-76's channel).
+ *
  * No checkpoint is captured: the record runs from a repair, which has no Git port, or before a continue's run exists
  * (OQ-129). The pending approvals and the background sessions are the crash's to record, as for any dead run.
  */
@@ -178,7 +181,6 @@ function recordAcceptedCancel(dal: StoreDal, writer: SessionWriter, sessionId: S
   if (!closed.ok) { warn(`closing iteration ${open.iteration} of ${sessionId} as the accepted cancel failed: ${closed.error.code}`); return cancelled; }
   const completed = dal.getSession(sessionId)?.iterations_completed ?? 0;
   if (completed < open.iteration) writer.save(writer.currentStatus, { iterations_completed: open.iteration });
-  writer.appendTimeline('iteration_cancelled', 'rotaris', `Iteration ${open.iteration} closed as cancelled: the run's cancel was accepted, and the process running it ended before carrying it out. ${cancelled === 1 ? 'One unfinished agent ends' : `${cancelled} unfinished agents end`} cancelled and ${cancelled === 1 ? 'is' : 'are'} not resumed.`, { iteration: open.iteration, cancelled_agents: cancelled, cancel_accepted_at: open.cancel_accepted_at });
   return cancelled;
 }
 

@@ -269,7 +269,9 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       // REQ-ORCH-135: the task stays anchored; the count moves past the closed iteration.
       expect(decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases[0]!.tasks).toMatchObject([{ id: 't', state: 'pending' }]);
       expect(dal.getSession(sid)!.iterations_completed).toBe(2);
-      expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'iteration_cancelled')!.metadata)).toMatchObject({ iteration: 2, cancelled_agents: 3 });
+      // The close is the vocabulary's `iteration.end`; REQ-ORCH-139's closed timeline vocabulary gains no word for it.
+      expect(dal.eventsOfKind(sid, 'iteration.end').map((e) => JSON.parse(e.payload) as { iteration: number; outcome: string })).toMatchObject([{ iteration: 2, outcome: 'cancelled' }]);
+      expect(dal.timelineOf(sid).map((t) => t.name)).not.toContain('iteration_cancelled');
       expect(resumableOf(dal, dal.getSession(sid)!)).toBeNull();
 
       const before = { messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length };

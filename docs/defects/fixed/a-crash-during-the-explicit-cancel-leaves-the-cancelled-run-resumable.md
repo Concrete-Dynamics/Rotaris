@@ -62,7 +62,10 @@ An OPEN iteration carrying the mark is read as that cancel wherever the build re
   Continue action, "continue without them", a continue by message — end those agents and close the iteration first.
 - `crashLeftOf` names none of them, `resumableOf` states nothing to resume (the Continue action counts none of them), and
   the new `cancelLeftOf` names them while no run carries the cancel out, so every agent surface presents them
-  `cancelled`, ended with the run (`AgentFacts.cancelLeft`), never `paused` by `crash`.
+  `cancelled`, ended with the run (`AgentFacts.cancelLeft`), never `paused` by `crash`. The run-level agent the surfaces
+  synthesise (`runLevelAgent`, `packages/ui/src/agents.ts`) presents `cancelled` and not live in REQ-CHAT-008's
+  recovery state with nothing to resume, offered neither Steer nor Cancel — the build first left it drawn `running` and
+  live there, found at verification and pinned in `packages/ui/src/agents.test.ts`.
 - A continue is set up as the entry role (`resumedPersona`), since nothing is resumed.
 
 Pinned by `packages/engine/src/run/crash.test.ts`, "PD-ORCH-005 clause 3 with REQ-MONITOR-126 (OQ-103 ruled): …" — the

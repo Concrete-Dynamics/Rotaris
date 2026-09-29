@@ -4737,15 +4737,24 @@ crash record reads it before anything else (`recordCrash` → `recordAcceptedCan
 unanswered are answered and counted as for a crash, every agent of the iteration not in a terminal state — `paused` ones
 included, where the cancel overtook a rest — ends `cancelled` with its report stored and materialised
 (REQ-LIBRARY-092), and the iteration closes `cancelled` with its task back to `pending` in the same transaction
-(REQ-ORCH-135), `iterations_completed` moved past it and an `iteration_cancelled` timeline entry written; the stored
-approvals and the background sessions are recorded as for any dead run. `crashLeftOf` names none of those agents,
+(REQ-ORCH-135), recorded by the vocabulary's `iteration.end`, and `iterations_completed` moved past it; the close is
+warned to the session log (OQ-76's channel) and no timeline word is minted for it, since REQ-ORCH-139's vocabulary is
+closed and names none (the build first wrote an `iteration_cancelled` timeline entry, withdrawn at verification); the
+stored approvals and the background sessions are recorded as for any dead run. `crashLeftOf` names none of those agents,
 `resumableOf` states nothing to resume, `cancelLeftOf` names them while no run carries the cancel out so every surface
-presents them `cancelled` and ended with the run, and a continue is set up as the entry role. So the repair closes the
+presents them `cancelled` and ended with the run, and a continue is set up as the entry role. The run-level agent the
+surfaces synthesise is presented the same way: in REQ-CHAT-008's recovery state with nothing to resume, `runLevelAgent`
+(`packages/ui/src/agents.ts`) presents it `cancelled` and not live, as the repair's `interrupted` then leaves it, and
+offers it neither Steer nor Cancel. The build first left it drawn `running` and live there, since `resumableOf`'s null
+took it out of `runLevelResting` and nothing else stopped it — a presentation `main` already gave a crash between
+iterations, which the same change ends (found at verification, pinned in `packages/ui/src/agents.test.ts`). So the repair closes the
 iteration, and the Continue action and a continue by message resume nothing of it: the session goes on as a new
 iteration, which takes the cancelled task up as REQ-ORCH-135 anchors it — as a send after a cancel carried out does.
 What the ruling left to the build, read here: the repair still writes REQ-SESSION-060's `interrupted`, so the session is
 one a crash left under clause 18 with nothing open to resume ("Nothing open to resume", above) — the ruling bars
-resuming the cancelled agents, not the Continue action. One reading departs from a requirement and is raised as
+resuming the cancelled agents, not the Continue action. That is what a cancel carried out by its own run leaves too:
+`resilience-proof`'s `cancel` launch rests `paused` with nothing open to resume (its iteration closed `cancelled`), and
+the next send takes the cancelled task up as a new iteration, as here. One reading departs from a requirement and is raised as
 **OQ-129**: no checkpoint is captured for the iteration the record closes (REQ-GIT-051). The first execution — the unit
 tests in `run/crash.test.ts` ("PD-ORCH-005 clause 3 with REQ-MONITOR-126 (OQ-103 ruled): …", at the store and at
 `Sessions`: the mark at acceptance and at an iteration opened after it, the repair, and the Continue action, "continue

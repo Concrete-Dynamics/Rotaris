@@ -10,6 +10,13 @@ recorded (REQ-WORKSPACE-084). The same shared sink also means the old run's abor
 by the new run's sink as its own finish. Found by reading, during the fix-proofs-b5 verification round of 2026-09-29;
 not reproduced in a test or the built app. Pre-existing on `main`; the branch did not introduce it.
 
+Added 2026-09-29: main never calls `close`
+([a-workspace-switch-never-cancels-the-outgoing-initialization-run.md](a-workspace-switch-never-cancels-the-outgoing-initialization-run.md)),
+so the path reachable today is a workspace switch. The incoming root's run installs its own `setupListener` over the
+outgoing run's, which is never aborted. The outgoing run's `followSetup` promise may then never resolve, and its entry
+stays `running`. A repair of that note that starts calling `close` opens the path described above, so the two are
+repaired together.
+
 ## Specs
 
 - REQ-WORKSPACE-109: each step of the running task is reported the moment it finishes, and the task reaches its own

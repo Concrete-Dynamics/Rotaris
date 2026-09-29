@@ -1,7 +1,9 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { EMPTY_INITIALIZATION_VIEW, EMPTY_RUN_REPORT, type InitializationView, type InitRunReport } from '@rotaris/contracts';
+import { EMPTY_INITIALIZATION_VIEW, EMPTY_RUN_REPORT, type InitializationStateView, type InitializationView, type InitRunReport } from '@rotaris/contracts';
 import { PROJECT_INIT_STATES, projectInitCard, projectSidebarSection } from './project-init.js';
-import { setupDialogState, setupIntro, setupLog, stepGlyph, taskWord } from '../ProjectSetupDialog.js';
+import { dialogReport, ProjectSetupDialog, setupDialogState, setupIntro, setupLog, setupPromptDue, stepGlyph, taskWord } from '../ProjectSetupDialog.js';
 
 const LABELS = { a: 'Task A', b: 'Task B', 'code-intelligence-setup': 'Code intelligence project setup' };
 const view = (over: Partial<InitializationView> = {}): InitializationView => ({ ...EMPTY_INITIALIZATION_VIEW, ...over });
@@ -165,5 +167,63 @@ describe('the project setup dialog', () => {
     // REQ-WORKSPACE-093: a cancellation leaves the task exactly as a failure would, so the dialog does
     // not headline a run that was stopped as "Project setup finished".
     expect(setupDialogState(report({ outcome: 'cancelled' }))).toBe('error');
+  });
+});
+
+/**
+ * `docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`: a run the resolution started for background
+ * tasks is not the dialog's. Taking the one shared report whatever its run, the dialog switched to "running" under the
+ * user's own Escape, or ignored Escape so no decision was recorded, and the window lifted the composer gate while the
+ * consent task was unanswered.
+ */
+describe('the project setup dialog beside a background run (REQ-WORKSPACE-103/107/110, OQ-110)', () => {
+  const live: InitRunReport = {
+    ...EMPTY_RUN_REPORT, running: true, current: 'code-intelligence-setup', currentLabel: 'Code intelligence project setup',
+    currentSteps: [{ name: 'Project configuration', status: 'succeeded', detail: '' }],
+  };
+  const state = (over: Partial<InitializationStateView> = {}, view: Partial<InitializationView> = {}): InitializationStateView => ({
+    view: { ...EMPTY_INITIALIZATION_VIEW, pending: ['code-intelligence-setup', 'verification-consent'], consentPending: ['verification-consent'], running: true, ...view },
+    labels: { 'code-intelligence-setup': 'Code intelligence project setup', 'verification-consent': 'Verification consent task' },
+    descriptions: {},
+    report: live,
+    resolutionFailed: false,
+    backgroundRun: true,
+    ...over,
+  });
+  const draw = (s: InitializationStateView) => renderToStaticMarkup(createElement(ProjectSetupDialog, {
+    state: s, auto: true, onInitialize: async () => ({ ok: true as const }), onSkip: async () => ({ ok: true as const }), onClose: () => undefined,
+  }));
+
+  it('REQ-WORKSPACE-103: draws no report for a background run the user has not asked to see', () => {
+    expect(dialogReport(state(), false)).toEqual(EMPTY_RUN_REPORT);
+    expect(setupDialogState(dialogReport(state(), false), 2)).toBe('prompt');
+    // A failed background run reaches the banner, not the dialog's error state.
+    const failed = state({ report: { ...EMPTY_RUN_REPORT, outcome: 'reported', tasks: [{ id: 'code-intelligence-setup', label: 'Code intelligence project setup', status: 'failure', steps: [], error: 'x', retryable: true, summary: '' }] } }, { running: false });
+    expect(setupDialogState(dialogReport(failed, false), 2)).toBe('prompt');
+  });
+
+  it('REQ-WORKSPACE-110: draws the background run once Initialize has been pressed, and a user-started run always', () => {
+    expect(dialogReport(state(), true)).toBe(live);
+    expect(setupDialogState(dialogReport(state(), true), 1)).toBe('running');
+    expect(dialogReport(state({ backgroundRun: false }), false)).toBe(live);
+  });
+
+  it('REQ-WORKSPACE-106/107: stays in its prompt state with Skip live, the intro drawn and every card Pending', () => {
+    const html = draw(state());
+    expect(html).toContain('data-setup-state="prompt"');
+    expect(html).toContain('data-testid="project-setup-intro"');
+    expect(html).toContain('2 one-time setup tasks can run');
+    expect(html).not.toContain('data-setup-word="Running"');
+    expect(html).not.toContain('data-testid="project-setup-log"');
+    expect(html).not.toMatch(/<button[^>]*disabled[^>]*data-action="setup-skip"/);
+    expect(html).not.toContain('Initializing…');
+  });
+
+  it('REQ-WORKSPACE-105/112: a background run in progress neither withdraws the prompt nor lifts the gate; a user-started one does', () => {
+    expect(setupPromptDue(state())).toBe(true);
+    expect(setupPromptDue(state({ backgroundRun: false }))).toBe(false);
+    expect(setupPromptDue(state({ report: EMPTY_RUN_REPORT, backgroundRun: false }, { running: false }))).toBe(true);
+    expect(setupPromptDue(state({}, { consentPending: [] }))).toBe(false);
+    expect(setupPromptDue(null)).toBe(false);
   });
 });

@@ -264,6 +264,50 @@ describe('the skip path and the start refusals', () => {
     expect(readInitializationState(h.agents).skipped).toEqual([CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
   });
 
+  /**
+   * `docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`: the resolution a skip performs first
+   * publishes the background run while the skip is still in flight, and the dialog is still open. Main cannot order a
+   * push behind the command's reply, so every view that shows that run must say it is a background run. That is what
+   * the dialog reads to leave it undrawn (REQ-WORKSPACE-103) and what keeps the prompt due (OQ-110).
+   */
+  it('marks every view published during a skip that shows a run in progress as a background run (REQ-WORKSPACE-083, REQ-WORKSPACE-103)', async () => {
+    const h = harness();
+    h.coordinator.registry.register(consentTask);
+    expect((await h.coordinator.read()).backgroundRun).toBe(false);
+    const before = h.published.length;
+    expect(await h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent'])).toEqual({ ok: true });
+    const during = h.published.slice(before);
+    expect(during.some((v) => v.view.running)).toBe(true);
+    for (const v of during.filter((x) => x.view.running || x.report.running)) expect(v.backgroundRun).toBe(true);
+    h.push(status({ state: 'finished', outcome: 'completed', containsCode: false, steps: [step('create', 'succeeded', 'made')] }));
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+    // The finished report still describes the background run, so a dialog still open does not take its outcome either.
+    const last = h.published.at(-1)!;
+    expect(last.view.running).toBe(false);
+    expect(last.report.outcome).toBe('reported');
+    expect(last.backgroundRun).toBe(true);
+  });
+
+  /** REQ-WORKSPACE-106/110: a run the user starts is the dialog's own, so it is published as no background run. */
+  it('publishes a run the user starts as no background run (REQ-WORKSPACE-106, REQ-WORKSPACE-110)', async () => {
+    const h = harness({ applicable: false });
+    let finish: () => void = () => undefined;
+    const held = new Promise<void>((r) => { finish = r; });
+    h.coordinator.registry.register({ ...consentTask, run: async () => { await held; return await consentTask.run(); } });
+    await h.coordinator.resolve(true);
+    const before = h.published.length;
+    expect(await h.coordinator.start()).toEqual({ ok: true });
+    await new Promise((r) => setImmediate(r));
+    finish();
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+    const during = h.published.slice(before);
+    expect(during.some((v) => v.report.running)).toBe(true);
+    for (const v of during) expect(v.backgroundRun).toBe(false);
+    expect(readInitializationState(h.agents).completed).toEqual(['verification-consent']);
+  });
+
   /** Once the open's resolution has run and nothing is running, a listed background task is skipped as listed (REQ-WORKSPACE-086/111). */
   it('records a listed background task as skipped once the open has resolved and nothing is running (REQ-WORKSPACE-086, REQ-WORKSPACE-111)', async () => {
     const h = harness({ startFails: true });

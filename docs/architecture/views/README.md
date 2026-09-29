@@ -48,7 +48,10 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 **A skip before the open's resolution (2026-09-28, R-062).** The **process view**'s `initialization.*` paragraph says
 which listed ids a skip leaves out (only one the live run is attempting) and that a skip arriving before the open's
 one automatic resolution performs that resolution first (OQ-109). No package, edge, process, channel, message kind,
-store column or owner of state changed.
+store column or owner of state changed. **Its second round (2026-09-29):** the same paragraph now names the
+`backgroundRun` field the initialization state carries on its existing channel. The window reads it to keep a
+background run out of the setup dialog and to keep the prompt due beside it (REQ-WORKSPACE-103/110, OQ-110). It is one
+more field on an existing message; no message kind changed.
 
 **The notices generator reads the shipped setup manifest (2026-09-28, R-062).** `tools/notices/notices.mjs` reads
 `apps/desktop/resources/setup-manifest.json` rather than `pins.json` as REQ-STARTUP-142's manifest, by a copy of

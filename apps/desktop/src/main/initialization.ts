@@ -87,6 +87,12 @@ interface WorkspaceEntry {
   lastError: string | null;
   resolutionFailed: boolean;
   /**
+   * Whether `report` describes a run the resolution started for background tasks (REQ-WORKSPACE-083) rather than one the
+   * user started. Published beside the report, because the dialog must not draw such a run as its own
+   * (REQ-WORKSPACE-103; `docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`).
+   */
+  background: boolean;
+  /**
    * REQ-WORKSPACE-102: exactly one automatic resolution per workspace open, held from the moment it begins so that whoever
    * needs it finished — the 800 ms slot or a skip answered before it (see `skip`) — waits on the same one. A "Check again"
    * is additional and is not held here.
@@ -192,7 +198,7 @@ export class InitializationCoordinator {
   private entry(root: string, agentsFile: string): WorkspaceEntry {
     let e = this.workspaces.get(root);
     if (!e) {
-      e = { root, agentsFile, state: readInitializationState(agentsFile), report: EMPTY_RUN_REPORT, running: null, attempting: new Set(), lastError: null, resolutionFailed: false, automatic: null };
+      e = { root, agentsFile, state: readInitializationState(agentsFile), report: EMPTY_RUN_REPORT, running: null, attempting: new Set(), lastError: null, resolutionFailed: false, background: false, automatic: null };
       this.workspaces.set(root, e);
     }
     return e;
@@ -235,7 +241,7 @@ export class InitializationCoordinator {
       labels[id] = labelFor(this.registry, id);
       descriptions[id] = this.registry.get(id)?.description ?? '';
     }
-    return { view, labels, descriptions, report: e.report, resolutionFailed: e.resolutionFailed };
+    return { view, labels, descriptions, report: e.report, resolutionFailed: e.resolutionFailed, backgroundRun: e.background };
   }
 
   private async publish(e: WorkspaceEntry): Promise<void> {
@@ -245,7 +251,7 @@ export class InitializationCoordinator {
   /** REQ-WORKSPACE-115: the persisted section as it is on disk right now, and nothing else disturbed. */
   async read(): Promise<InitializationStateView> {
     const e = this.current();
-    if (!e) return { view: EMPTY_INITIALIZATION_VIEW, labels: {}, descriptions: {}, report: EMPTY_RUN_REPORT, resolutionFailed: false };
+    if (!e) return { view: EMPTY_INITIALIZATION_VIEW, labels: {}, descriptions: {}, report: EMPTY_RUN_REPORT, resolutionFailed: false, backgroundRun: false };
     // In-progress and last-error describe this session only and are NOT taken from disk.
     e.state = readInitializationState(e.agentsFile);
     const state = await this.viewFor(e);
@@ -260,7 +266,7 @@ export class InitializationCoordinator {
    */
   async resolve(automatic: boolean): Promise<InitializationStateView> {
     const e = this.current();
-    if (!e) return { view: EMPTY_INITIALIZATION_VIEW, labels: {}, descriptions: {}, report: EMPTY_RUN_REPORT, resolutionFailed: false };
+    if (!e) return { view: EMPTY_INITIALIZATION_VIEW, labels: {}, descriptions: {}, report: EMPTY_RUN_REPORT, resolutionFailed: false, backgroundRun: false };
     if (!automatic) return await this.resolution(e);
     if (e.automatic === null) {
       let done: () => void = () => undefined;
@@ -326,6 +332,7 @@ export class InitializationCoordinator {
   private async run(e: WorkspaceEntry, tasks: readonly InitializationTask[], background: boolean): Promise<void> {
     const controller = new AbortController();
     e.running = controller;
+    e.background = background;
     e.attempting = new Set(tasks.map((t) => t.id));
     e.lastError = null;
     this.deps.log(`initialization: running ${tasks.map((t) => t.id).join(', ')} for ${e.root}${background ? ' (background)' : ''}`);

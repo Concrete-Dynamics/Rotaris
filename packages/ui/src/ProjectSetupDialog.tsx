@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import type { InitRunReport, InitStepResult, InitTaskReport, InitializationStateView } from '@rotaris/contracts';
+import { EMPTY_RUN_REPORT, type InitRunReport, type InitStepResult, type InitTaskReport, type InitializationStateView } from '@rotaris/contracts';
 import { Button as DesignButton } from './design-system/index.js';
 
 /**
@@ -115,6 +115,31 @@ export function setupDialogState(report: InitRunReport, stillPending = 0): Setup
   return stillPending > 0 ? 'prompt' : 'done';
 }
 
+/**
+ * The run report the dialog draws. A run the resolution started for background tasks is not the dialog's: nothing
+ * renders its progress live (REQ-WORKSPACE-103), and a failed one reaches a banner, not this dialog. Until the user
+ * presses Initialize, the dialog draws no report at all for it and stays in its prompt state, where Escape and "Skip
+ * for now" are live (REQ-WORKSPACE-107). Pressing Initialize while it runs starts nothing and flips the dialog to its
+ * in-progress state (REQ-WORKSPACE-110), and from then on the dialog draws that run as its own (`adopted`).
+ * Taking the report whatever its run, the dialog switched to "running" under the user's own Escape, and in the other
+ * order it ignored Escape, so no decision was recorded
+ * (`docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`).
+ */
+export function dialogReport(state: InitializationStateView, adopted: boolean): InitRunReport {
+  return state.backgroundRun && !adopted ? EMPTY_RUN_REPORT : state.report;
+}
+
+/**
+ * REQ-WORKSPACE-105: the setup prompt is due when a consent-requiring task is pending and no run is in progress. As
+ * built under OQ-110, the run meant is one the user started. A background run starts "regardless of whether a prompt is
+ * also due" (REQ-WORKSPACE-083) and answers nothing, so it neither withdraws the prompt nor lifts the composer gate of
+ * REQ-WORKSPACE-112. The window's auto-open and the composer gate both read this one answer.
+ */
+export function setupPromptDue(state: InitializationStateView | null): boolean {
+  if (state === null) return false;
+  return state.view.consentPending.length > 0 && !(state.view.running && !state.backgroundRun);
+}
+
 export interface ProjectSetupDialogProps {
   readonly state: InitializationStateView;
   /** Whether the window opened this by itself; a manually opened dialog is never auto-closed (REQ-WORKSPACE-107). */
@@ -128,7 +153,10 @@ export function ProjectSetupDialog({ state, auto, onInitialize, onSkip, onClose 
   const titleId = useId();
   const [message, setMessage] = useState<string | null>(null);
   const resolved = useRef(false);
-  const { view, labels, report } = state;
+  // REQ-WORKSPACE-110: set by pressing Initialize, which is what makes a live background run this dialog's to draw.
+  const [adopted, setAdopted] = useState(false);
+  const { view, labels } = state;
+  const report = dialogReport(state, adopted);
   // REQ-WORKSPACE-108: the error state REOPENS the decision, so closing now records a skip again.
   const listed = view.pending.length > 0 ? view.pending : [...view.skipped];
   const stillPending = listed.filter((id) => taskWord(id, report) === 'Pending').length;
@@ -159,6 +187,9 @@ export function ProjectSetupDialog({ state, auto, onInitialize, onSkip, onClose 
 
   const initialize = async (): Promise<void> => {
     setMessage(null);
+    // REQ-WORKSPACE-110: with a background run live, Initialize starts nothing and the dialog shows that run from now on.
+    // With none live, the run it starts is the user's own and is drawn without adopting anything.
+    if (state.view.running && state.backgroundRun) setAdopted(true);
     const r = await onInitialize();
     if (!r.ok) setMessage(r.message);
   };

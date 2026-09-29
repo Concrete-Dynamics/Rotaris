@@ -1139,7 +1139,9 @@ if (wanted.includes('edit')) {
   const suiteCalls = calls.filter((c) => c.tool_name === 'terminal' && /\bnode\s+--test\b/.test(String(c.args.command ?? '')));
   const ROOT = 'orchestrator';
   check(suiteCalls.some((c) => c.agent_name !== ROOT), 'a child ran `node --test` through the terminal tool', suiteCalls.length === 0 ? `no terminal call ran node --test; tools used: ${names.join(', ')}` : [...new Set(suiteCalls.map((c) => c.agent_name))].join(', '));
-  check(!calls.some((c) => c.tool_name === 'terminal' && c.agent_name === ROOT), 'the orchestrator made no terminal call (REQ-TOOLS-006 coordinator_only)', `${calls.filter((c) => c.agent_name === ROOT).length} orchestrator call(s)`);
+  // At least one call by ROOT is required too: a renamed entry agent would otherwise pass this vacuously.
+  const rootCalls = calls.filter((c) => c.agent_name === ROOT);
+  check(rootCalls.length > 0 && !rootCalls.some((c) => c.tool_name === 'terminal'), 'the orchestrator made no terminal call (REQ-TOOLS-006 coordinator_only)', `${rootCalls.length} orchestrator call(s)`);
   // REQ-MONITOR-102: the session's own counter is SESSION-wide, so it must agree with the ring the gate wrote
   // across every agent that dispatched. The first live run found it holding the entry agent's calls alone, which
   // left the Overview card short and the synthetic run row reading zero on any run that delegated.

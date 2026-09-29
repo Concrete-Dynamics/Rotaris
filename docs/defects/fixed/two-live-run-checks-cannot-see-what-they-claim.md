@@ -44,7 +44,8 @@ Repaired 2026-09-29 under R-067, as OQ-110 rules. Each check now says what it ca
   so the prompt no longer asks it to run the suite "yourself": it says it holds no terminal and asks it to tell each
   child to run `node --test` before reporting. The check reads the store for a `terminal` call whose command runs
   `node --test` by an agent other than the orchestrator ("a child ran `node --test` through the terminal tool", naming
-  the children), and a second check asserts the orchestrator made no terminal call.
+  the children), and a second check asserts the orchestrator made at least one call and no terminal call — so an entry
+  agent carrying another name turns it red rather than passing it vacuously (added at the verifier's round 1).
 
 No unit test covers `live-run.mjs`'s checks; they are shown by the live run. `pnpm live-run --confirm --skip-build
 --only=faults,edit` against `katalyst` (pack `.live-run/runs/2026-09-29T21-11-24-678Z`, git-ignored) passed:

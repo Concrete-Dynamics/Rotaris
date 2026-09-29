@@ -42,5 +42,8 @@ observation is not an error, so the gate files no `tool_error` for it (`gate.ts`
 cases against a real shell. "REQ-TOOLS-109/179, OQ-132 (live-run L4): a session the agent ends with send_signal
 SIGINT reads killed (−1) at warning, not an error" failed before the change with `failed` / `-1` / `error`.
 "OQ-132: a signal death the product did not send reads failed with 128 + n" had also read −1 before. The live
-run's `frictions` scenario was run again on the built branch; the round's report gives its pack. Repaired 2026-09-29
+run's `frictions` scenario, run again on the built branch against the same endpoint, passed with its new check "no
+background session read failed (exit -1) after the agent's signal": the agent's SIGINT, then `query`, read `Session
+ts_382d1dae is killed (exit -1).`, `is_error` 0, and the session filed no `tool_error` issue (pack
+`.live-run/runs/2026-09-29T20-06-26-897Z` of the `fix-terminal-flakes` worktree; git-ignored). Repaired 2026-09-29
 under R-067.

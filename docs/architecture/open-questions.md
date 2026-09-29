@@ -5639,9 +5639,9 @@ specification has no word for a prompt that was not delivered.
 - **At the run's end, recorded as not delivered and said so.** A prompt no step injected and no rest delivered — its
   agent had not started and has no record, had ended, or was cancelled; or a prompt for the entry role pending when a
   rest came at an iteration boundary, where no iteration is left open — is recorded when the run stops stepping: when
-  teardown begins, at the message-limit pause, or at the plan-gate park, each before anything is awaited. The park is
-  only a run that parks: a plan cycle stopped, quit, or ended on a failed turn ends in teardown, and is recorded as the
-  run ending. It is a `steering_not_delivered` timeline entry naming it, and a transcript line saying it was not
+  teardown begins, at the message-limit pause, or at the plan-gate park, each before anything is awaited. Only a run
+  that parks meets the park: a plan cycle stopped, quit, or ended on a failed turn ends in teardown, and is recorded as
+  the run ending. It is a `steering_not_delivered` timeline entry naming it, and a transcript line saying it was not
   delivered (REQ-MONITOR-134's own verb) and which end it met (the run ended, paused at the message limit, or was held at
   the plan gate). Like the transcript line each of those two ends writes of itself ("Paused: …", "A plan is ready …"), it
   is written as that end begins, before the end's durable record; a recording failure at that record ends the run with

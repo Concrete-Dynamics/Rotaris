@@ -63,10 +63,14 @@ record already decides, and every ruling it needs is named as the owner's rather
   [code intelligence as root](../defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md) for the last
   two). **2026-09-28, R-062:** `init-proof`'s later red was a product race, a skip answered before the open's
   resolution swallowing the background task ([fixed](../defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md)),
-  and `code-intel-proof`'s were two harness defects
+  and `code-intel-proof`'s were three harness defects
   ([token order](../defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md),
-  [setup collision](../defects/fixed/code-intel-proofs-setup-launches-collide-with-the-background-initialization.md));
-  both proofs pass three runs in a row as root on Linux.
+  [setup collision](../defects/fixed/code-intel-proofs-setup-launches-collide-with-the-background-initialization.md),
+  and, found in the fix round, [fixed-offset presses](../defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md)).
+  One more stays open: the shared capture seam's Settings press, which a notice can deflect
+  ([open](../defects/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md)). `code-intel-proof`
+  corrects the category for itself, and the other nine proofs that use the seam are exposed to it until it is repaired.
+  Both proofs pass three runs in a row as root on Linux.
 - The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005` (**built 2026-09-28**, R-062), `PD-ORCH-004` and `PD-MONITOR-002`.
 - The macOS and Linux artifacts, which are bound by IC-3 and IC-8 and now also by `PD-STARTUP-001`.
 

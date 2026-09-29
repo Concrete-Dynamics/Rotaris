@@ -35,6 +35,9 @@ them.
 
 ## Repaired 2026-09-28 under R-062
 
+*The heading carries the date this repair round was set under. The defect was recorded, repaired and measured on
+2026-09-29.*
+
 **What changed.** `apps/desktop/scripts/code-intel-proof.mjs` only. Each setup launch now presses `MCP Servers` again
 at 3 s and at 6 s, if it is still not the selected category. The selector is
 `.nav-list__item:not(.is-selected)>>MCP Servers`, so a press that finds it selected matches nothing and presses

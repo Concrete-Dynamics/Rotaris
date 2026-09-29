@@ -553,6 +553,9 @@ export class StoreDal {
       // REQ-ORCH-049: the start claim is ONE conditional update; its affected-row count is the claim's outcome.
       claimChildStart: db.prepare("UPDATE children SET state = 'starting', launch_generation = launch_generation + 1 WHERE session_id = ? AND task_id = ? AND state = 'queued'"),
       setChildReport: db.prepare('UPDATE children SET report = ?, report_stored = 1 WHERE session_id = ? AND task_id = ?'),
+      // PD-ORCH-005 clause 22: a follow-up takes a settled child out of its terminal state — its completion time, its
+      // report and its parent's having observed it are cleared, since it ends, reports and is observed again.
+      reopenChild: db.prepare('UPDATE children SET state = ?, completed_at = NULL, report = NULL, report_stored = 0, observed = 0 WHERE session_id = ? AND task_id = ?'),
       setChildObserved: db.prepare('UPDATE children SET observed = 1 WHERE session_id = ? AND task_id = ?'),
       setChildContextInjected: db.prepare('UPDATE children SET context_injected = 1 WHERE session_id = ? AND task_id = ?'),
       setChildTodo: db.prepare('UPDATE children SET todo = ?, tool_calls = ? WHERE session_id = ? AND task_id = ?'),
@@ -710,6 +713,10 @@ export class StoreDal {
   }
   setChildReport(id: SessionId, taskId: string, report: string): void {
     this.stmts['setChildReport']!.run(report, id, taskId);
+  }
+  /** PD-ORCH-005 clause 22: a settled child followed up moves to `state` with its completion, report and observation cleared. */
+  reopenChild(id: SessionId, taskId: string, state: string): boolean {
+    return this.stmts['reopenChild']!.run(state, id, taskId).changes === 1;
   }
   setChildObserved(id: SessionId, taskId: string): void {
     this.stmts['setChildObserved']!.run(id, taskId);

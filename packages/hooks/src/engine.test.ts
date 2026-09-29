@@ -3,6 +3,7 @@ import { FakeClock } from '@rotaris/kernel';
 import type { HookEntry } from '@rotaris/config';
 import type { HookFinishPayload, HookStartPayload } from '@rotaris/contracts';
 import { HookEngine, type HookSinks } from './engine.js';
+import { buildToolPayload, serializePayload } from './payload.js';
 import type { Outcome } from './verdict.js';
 import { hook } from './hooks.test.js';
 
@@ -139,8 +140,10 @@ describe('the HookEngine', () => {
     const t = harness(many);
     expect(Number(process.hrtime.bigint() - s1) / 1e6).toBeLessThan(50);
     const big = { command: 'x'.repeat(100_000) };
+    // REQ-HOOKS-139 times "the named operation alone": building and serialising the payload. The module is imported with
+    // the file, so no import's resolution is charged to the window (the repair of
+    // the-hooks-payload-bound-test-times-a-module-import-with-the-payload.md).
     const s2 = process.hrtime.bigint();
-    const { buildToolPayload, serializePayload } = await import('./payload.js');
     serializePayload(buildToolPayload({ event: 'pre_tool', toolName: 'terminal', arguments: big, sessionId: 's', workspace: 'w', command: big.command }));
     expect(Number(process.hrtime.bigint() - s2) / 1e6).toBeLessThan(10);
     expect(t.engine.hasHooksFor('pre_tool')).toBe(true);

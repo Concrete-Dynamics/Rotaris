@@ -57,4 +57,4 @@ installation" — the fail-in-seconds this note asked for. The proof's own launc
 full application starts, takes the token for a workspace path and never answers, so section 1 fails at the guard with
 its message — three minutes at the proof's `callTimeoutMs`, not for ever — and the exit reads the application's own.
 That is a second, separate harness defect, recorded and not repaired here
-([note](../code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md)).
+([note](code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md)).

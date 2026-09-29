@@ -117,7 +117,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: false });
   });
 
-  it('REQ-MONITOR-133 with OQ-122 (found by the third review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): once the plan cycle\'s turn has returned a steer is refused while the park is still forwarded, not acknowledged for a step no agent of the held run takes', async () => {
+  it('REQ-MONITOR-133 with OQ-127 (found by the third review of the repair of a-steering-prompt-pending-at-a-rest-is-lost): once the plan cycle\'s turn has returned a steer is refused while the park is still forwarded, not acknowledged for a step no agent of the held run takes', async () => {
     let release!: () => void;
     const parkHold = new Promise<void>((r) => { release = r; });
     let parking = false;

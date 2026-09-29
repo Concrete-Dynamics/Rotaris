@@ -4,7 +4,7 @@ import type { ChildRow, IterationRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
 import { treeOf } from '../children/ledger.js';
 import { conversationOf } from './record.js';
-import { answerUnanswered, interruptedResult } from './interruption.js';
+import { answerUnanswered, callsRun, interruptedResult } from './interruption.js';
 
 /** The children of a stored iteration: every child descending from its root, as the live ledger would hold them. */
 export function iterationAgents(dal: StoreDal, sessionId: SessionId, open: IterationRow): ChildRow[] {
@@ -104,6 +104,7 @@ export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: Ses
     // the entry role keeps), a child's its canonical name.
     const unfinished = agents.filter((c) => !isTerminalChildState(c.state)).map((c) => ({ taskId: c.task_id, name: c.canonical_name }));
     for (const agent of [{ taskId: open.root_task_id, name: open.root_persona }, ...unfinished]) answerOpenCalls(dal, writer, sessionId, agent, open.iteration, 'crash');
+    countCrashedCalls(dal, writer, sessionId, open, unfinished.map((c) => c.taskId), warn);
     writer.appendTimeline('iteration_paused', 'rotaris', `Iteration ${open.iteration} was left open by ${interruptionPhrase('crash')}; its unfinished agents are paused and resume when the session is continued.`, { iteration: open.iteration, interruption: 'crash', paused_agents: paused });
   }
   const withdrawn = withdrawStoredApprovals(dal, writer, sessionId);
@@ -114,6 +115,23 @@ export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: Ses
     if (r.ok && r.value) terminals += 1;
   }
   return { iteration, paused, withdrawn, terminals };
+}
+
+/**
+ * REQ-MONITOR-102 (the repair of `a-roots-calls-before-a-crash-never-reach-the-session-total.md`): the calls a dead run's
+ * agents made that no count held — the root's are counted when its turn returns and a child's when its execution rests or
+ * settles, and a crash ends both without either — join the session's total, read from each agent's record once its open
+ * calls are answered (so a call the crash cut before it started is not one): the root's beyond its iteration's
+ * `root_tool_calls`, and each unfinished child's beyond its `tool_calls`. Both counts move with the total in one
+ * transaction, so a second recording, and a resumed child's own credit from its record (`IterationChildren.execute`), find
+ * nothing more to add. A root whose count is not known — an iteration opened before store v26 — adds nothing, as before.
+ * A record a compression replaced holds fewer calls than were made, so what it adds may fall short; it never exceeds.
+ */
+function countCrashedCalls(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, open: IterationRow, unfinished: readonly string[], warn: (m: string) => void): void {
+  const recorded = (taskId: string): number => callsRun(conversationOf(dal.agentConversation(sessionId, taskId)));
+  const root = open.root_tool_calls === null ? 0 : Math.max(0, recorded(open.root_task_id) - open.root_tool_calls);
+  const r = writer.countToolCalls({ root: { iteration: open.iteration, add: root }, children: unfinished.map((taskId) => ({ taskId, calls: recorded(taskId) })) });
+  if (!r.ok) warn(`the calls a crash left uncounted in ${sessionId} were not counted: ${r.error.code}`);
 }
 
 /** Clause 9 after a crash: every approval the dead run left listed as pending leaves the list, recorded as withdrawn. */

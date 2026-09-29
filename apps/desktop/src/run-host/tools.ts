@@ -331,6 +331,9 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const callable = new Map<string, ToolExecutor>();
   for (const n of resolved.tools) { const e = executors.get(n); if (e) callable.set(n, e); }
   const specs = [...callable.values()].map(toolSpec);
+  // REQ-MONITOR-060/061 (live-run finding K1): the native tools the one resolution kept AND that hold an executor — the
+  // names the agent can call, before the MCP surface joins the callable map on `ready()` (those are shown per server).
+  const nativeResolved = [...callable.keys()];
 
   /*
    * REQ-TOOLS-048 (narrowed by PD-TOOLS-002): the requested mode is SELECTED here, at agent construction, from
@@ -413,6 +416,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
 
   return {
     specs: () => specs,
+    // REQ-MONITOR-060/061 (live-run finding K1): the native callable set — what the inspector shows.
+    resolvedTools: () => nativeResolved,
     ready,
     promptSection: () => mcpSection,
     dispatch: async (call: PortToolCall, signal): Promise<PortToolResult> => {

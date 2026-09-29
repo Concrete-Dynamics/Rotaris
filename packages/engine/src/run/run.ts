@@ -1,6 +1,6 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { IterationRow, SessionRow } from '@rotaris/store';
-import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -34,7 +34,7 @@ import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
 import { ConversationRecord } from './record.js';
 import { answerOpenCalls, iterationAgents } from './crash.js';
-import { interruptedResult } from './interruption.js';
+import { callsRun, interruptedResult } from './interruption.js';
 import { firstTurn, resumedStart, resumeNoticeOf, type TurnStart } from './resume.js';
 import { offersForFirstMessage } from './offers.js';
 import { randomUUID } from 'node:crypto';
@@ -61,6 +61,12 @@ export interface RunConfig {
   readonly persona: string;
   readonly systemPrompt: string;
   readonly model: ModelRef;
+  /**
+   * REQ-CONFIG-094 / REQ-MONITOR-049: the `models:` key `model` was resolved from — what a child that runs on the run's
+   * model is recorded under, so its cap and its context limit are found. Absent where no configuration names one (a
+   * test, the process-wide model); the model's id then stands in.
+   */
+  readonly modelKey?: string | undefined;
   readonly thinking: ThinkingLevel;
   readonly modelTimeoutMs: number;
   readonly modelRetries: number;
@@ -380,6 +386,8 @@ export class Run {
   }
   /** Every tool port this run created — the root's and each child's — so an answer, a cancel or a mode change reaches all of them (REQ-TOOLS-030). */
   private readonly ports = new Set<ToolPort>();
+  /** Live-run finding K1: the port the current iteration's root dispatches through — the one resolution `entryTools` reports. */
+  private rootPort: ToolPort | null = null;
   /** REQ-HOOKS-087: the session's hook attachment, removed at the end of the run. */
   private hooks: HookPort | null;
   private preflight: Preflight | null = null;
@@ -415,7 +423,7 @@ export class Run {
   /** REQ-MONITOR-133/134: pending steering per conversation (`root` for the entry role, the task id for a child). */
   private readonly steering = new Map<string, { id: string; text: string }[]>();
   /**
-   * REQ-MONITOR-133 with OQ-122: set once no agent of this run will take another step — when the iteration's rest is
+   * REQ-MONITOR-133 with OQ-127: set once no agent of this run will take another step — when the iteration's rest is
    * recorded (after `deliverSteeringAtRest`), or when the run stops stepping (`closeSteering`: teardown, the pause at the
    * message limit, the park at the plan gate) — so a later steer is refused rather than acknowledged for a step nothing
    * would take.
@@ -648,6 +656,16 @@ export class Run {
     const model = this.entryOverride.model ?? this.deps.config.model;
     const advertised = this.deps.compression?.triggerFor(model).advertisedInputLimit ?? null;
     return { used: this.deps.writer.activity.contextUsed(this.rootName), limit: advertised !== null && advertised > 0 ? advertised : DEFAULT_CONTEXT_CAPACITY };
+  }
+  /**
+   * REQ-MONITOR-060/061 (live-run finding K1, R-067): the entry role's tools as the run-level agent presents them — the native
+   * set its port's one resolution kept (policy narrowing applied), and its called and in-flight tools from the tracker the
+   * writer feeds, keyed by the persona the root dispatches under. Like `entryContext`, the entry role has no `children` row.
+   */
+  get entryTools(): EntryToolsPayload {
+    const persona = this.deps.config.persona;
+    const activity = this.deps.writer.activity;
+    return { resolved: [...(this.rootPort?.resolvedTools?.() ?? [])], called: activity.calledTools(persona), active: activity.activeTools(persona) };
   }
   /** REQ-MONITOR-048 (Part R): the persona's configured thinking level as this run resolved it; null when the persona is unknown or states none. */
   reasoningFor(persona: string): string | null {
@@ -1192,7 +1210,7 @@ export class Run {
       ? new IterationChildren({
         rootRecord,
         // REQ-GIT-019: the children are told the root they work in — the worktree for an isolated run.
-        sessionId: this.sessionId, workspaceRoot: this.deps.effectiveRoot ?? this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, thinking: config.thinking,
+        sessionId: this.sessionId, workspaceRoot: this.deps.effectiveRoot ?? this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, ...(config.modelKey === undefined ? {} : { modelKey: config.modelKey }), thinking: config.thinking,
         modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn,
         // Part Q: each child gets its own cell over the shared memory, catalogue and wait registry.
         resilience: { forChild: (persona, current, bound) => { const effective = this.memory.effective(withSettings(this.catalogue, current), this.catalogue); return this.resilienceFor(agentCell(effective, this.fallbackFor(persona, effective)), bound); } },
@@ -1200,8 +1218,9 @@ export class Run {
         compressionFor: this.compressionFor,
         // REQ-ORCH-024: the BUDGET cell only narrows; with no pre-flight the configured policy stands unchanged.
         budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
-        // REQ-MONITOR-102: a child's tool calls are the session's too; the entry agent's own are added at the turn below.
-        countToolCalls: (n) => this.aggregates.addToolCalls(n),
+        // REQ-MONITOR-102: a child's tool calls are the session's too; the entry agent's own are added at the turn below. The
+        // child's own count is persisted with the total, in one transaction, so a crash leaves the two agreeing.
+        countToolCalls: (n, child) => { this.aggregates.addToolCalls(n); if (child) this.persistToolCalls({ children: [child] }); },
         // REQ-EVENTS-053, PD-MONITOR-001: a child's provider requests are the run's, counted where the entry agent's are.
         onRequestUsage: this.onRequestUsage,
         summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), ...(this.deps.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: this.deps.childStallTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
@@ -1225,6 +1244,7 @@ export class Run {
       : null;
     this.children = children;
     const tools = children && this.deps.toolsFor ? this.portFor(config.persona, rootName, children, this.rootId, 0, rootCanonical) : this.register(this.deps.tools);
+    this.rootPort = tools;
     // PD-ORCH-005 clause 4: a resumed iteration's agents are restored first, so the root resumes among them.
     // The timeline records each agent resumed (`child_resumed`), so a resume is not a warning (phase 4's review).
     if (resume && children) children.resumePaused();
@@ -1274,6 +1294,13 @@ export class Run {
       }, text, history, this.abort.signal, content);
     };
     let outcome: TurnOutcome | null = null;
+    /**
+     * REQ-MONITOR-102: the calls the root's record held when this execution began — every one of them already counted, when
+     * its earlier execution returned or by the crash record — so a root given up on counts only what its record gained.
+     */
+    const recordedAtStart = resume ? callsRun(this.record.load(rootTaskId)) : 0;
+    /** An execution iteration's root has a count on its row (`iterations.root_tool_calls`); a plan cycle's has no row. */
+    const rootCount = iterationOverride === undefined ? iteration : null;
     try {
       const start: TurnStart = resume ? this.resumedRootStart(rootTaskId) : { kind: 'fresh', task };
       const running = children ? children.runWithChildren(this.rootId, turnFn, start, this.abort.signal) : firstTurn(turnFn, start);
@@ -1290,6 +1317,9 @@ export class Run {
       } else {
         outcome = settled;
         this.aggregates.addToolCalls(outcome.toolCallCount);
+        // REQ-MONITOR-102: the root's count on its iteration moves with the total, in one transaction (REQ-ORCH-097's
+        // cadence: when its turn returns).
+        this.persistToolCalls(rootCount === null ? {} : { root: { iteration: rootCount, add: outcome.toolCallCount } });
       }
       /*
        * REQ-ORCH-080: a stop with active background children drains before anything is cancelled — only a stop that
@@ -1333,7 +1363,7 @@ export class Run {
           // REQ-MONITOR-134 with clause 4: a steering prompt still pending reaches the record its agent resumes from.
           this.deliverSteeringAtRest({ taskId: rootTaskId, name: rootName }, iteration, this.restCause);
         }
-        // OQ-122: the rest is recorded and no agent of this run takes another step, so no steer is accepted from here — one
+        // OQ-127: the rest is recorded and no agent of this run takes another step, so no steer is accepted from here — one
         // acknowledged now would reach no record while its agent sits `paused`, to resume on the continue without it.
         this.steeringClosed = true;
       } else if (children) {
@@ -1351,7 +1381,29 @@ export class Run {
       // A root given up on that no rest paused — the explicit cancel — still leaves no call row running (REQ-SESSION-129):
       // its open call is recorded cut off, naming no rest (OQ-96, "A call cut by no rest").
       if (rootDetached && !answered && this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: rootName }, iteration, null);
+      /*
+       * REQ-MONITOR-102 (the repair of `a-roots-calls-before-a-crash-never-reach-the-session-total.md`): a root given up on
+       * never returns its count, so its calls are counted from its record — once its open calls are answered, so a call it
+       * asked for and never started is not one — less what the record held when this execution began. Only a root that
+       * never returned: the grace's timer still sets `rootDetached` when it runs out after the root returned — while the
+       * rest waits for its children — and that root's calls were counted with its outcome above.
+       */
+      if (rootDetached && outcome === null && this.deps.dal) {
+        const gained = Math.max(0, callsRun(this.record.load(rootTaskId)) - recordedAtStart);
+        this.aggregates.addToolCalls(gained);
+        this.persistToolCalls(rootCount === null ? {} : { root: { iteration: rootCount, add: gained } });
+      }
     }
+  }
+
+  /**
+   * REQ-MONITOR-102: the run's tool-call total as its aggregates hold it, written with the per-agent counts that now hold
+   * the calls just added (`SessionWriter.countToolCalls`) — so a process death after this never finds a call one of them
+   * counts and the other does not. The next save publishes it.
+   */
+  private persistToolCalls(counts: Parameters<SessionWriter['countToolCalls']>[0]): void {
+    const r = this.deps.writer.countToolCalls(counts, this.aggregates.figures.toolCalls);
+    if (!r.ok) this.deps.warn(`the tool-call count of ${this.sessionId} was not persisted: ${r.error.code}`);
   }
 
   /**
@@ -1409,7 +1461,7 @@ export class Run {
    * carry on from: as the marked message its next step would have injected, after the answers to the calls the rest cut,
    * and marked injected then, once. The resumed agent reads it at its first step. A prompt for an agent with no record — a
    * child that never started — stays pending, and the run's end reports it not delivered (`closeSteering`,
-   * OQ-122). Once this has run, the rest closes steering: a steer after it is refused.
+   * OQ-127). Once this has run, the rest closes steering: a steer after it is refused.
    */
   private deliverSteeringAtRest(root: { readonly taskId: string; readonly name: string }, iteration: number, cause: Interruption | null): void {
     for (const [key, pending] of [...this.steering]) {
@@ -1430,7 +1482,7 @@ export class Run {
   }
 
   /**
-   * REQ-MONITOR-133/134 at the run's end (OQ-122): no steer is accepted from here, and a prompt no step injected and no rest
+   * REQ-MONITOR-133/134 at the run's end (OQ-127): no steer is accepted from here, and a prompt no step injected and no rest
    * delivered — its agent never started, ended first, or was cancelled — is recorded as not delivered: a
    * `steering_not_delivered` timeline entry and a transcript line, so an acknowledged submission is never lost without a
    * word. The specification has no word for such a prompt; the entry takes REQ-MONITOR-134's "delivered".
@@ -1598,7 +1650,7 @@ export class Run {
     const { writer, owner, bus } = this.deps;
     const count = this.iterationsCompleted;
     this.pausedAtLimit = { count, limit };
-    // REQ-MONITOR-133/134 with OQ-122: no agent of this run steps again, so steering closes before anything is awaited and
+    // REQ-MONITOR-133/134 with OQ-127: no agent of this run steps again, so steering closes before anything is awaited and
     // a prompt still pending — for the entry role, whose iteration has closed — is recorded as not delivered.
     this.closeSteering('the run paused at the message limit');
     writer.appendRow('system', `Paused: ${count} message${count === 1 ? '' : 's'} reached the limit of ${limit}. Continue, double the limit, or cancel the run.`, true);
@@ -1678,7 +1730,7 @@ export class Run {
     } catch (cause) {
       this.lastFailure = String(cause);
     }
-    // REQ-MONITOR-133/134 with OQ-122: the plan cycle's one turn has returned and no agent steps again in this run — the
+    // REQ-MONITOR-133/134 with OQ-127: the plan cycle's one turn has returned and no agent steps again in this run — the
     // gate's release starts the next — so steering closes here, before anything is awaited, and a prompt still pending is
     // recorded as not delivered. Teardown, on the two paths below that take it, finds nothing left.
     this.closeSteering('the run was held at the plan gate');
@@ -1889,7 +1941,7 @@ export class Run {
     // from here. Each is closed before anything terminal is written: a call still open settles now, and one that returns
     // later writes nothing through its gate into the finished session, or into a later run's.
     this.closePorts();
-    // REQ-MONITOR-133/134 with OQ-122: no agent takes another step from here, so steering closes before anything is awaited
+    // REQ-MONITOR-133/134 with OQ-127: no agent takes another step from here, so steering closes before anything is awaited
     // — a steer while the hooks run is refused, not acknowledged for nothing to deliver — and what is still pending is
     // recorded as not delivered.
     this.closeSteering();

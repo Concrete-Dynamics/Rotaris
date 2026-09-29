@@ -257,8 +257,10 @@ export interface ChildRow {
   readonly resume_state: string | null;
   /** v23 — PD-TOOLS-006 revision 2: the child's declared write scope, a JSON array of patterns; `'[]'` when it declared none. */
   readonly write_scope: string;
+  /** v25 — REQ-TOOLS-152: `1` when the `delegate` call set `suppress_auto_context`, so the child's payload omits the sibling index. */
+  readonly suppress_auto_context: number;
 }
-export type ChildInsert = Omit<ChildRow, 'completed_at' | 'report' | 'report_stored' | 'observed' | 'context_injected' | 'tool_calls' | 'launch_generation' | 'todo' | 'continuation_of' | 'interruption' | 'resume_state' | 'write_scope'> & { readonly todo?: string | null; readonly continuation_of?: string | null; readonly write_scope?: string };
+export type ChildInsert = Omit<ChildRow, 'completed_at' | 'report' | 'report_stored' | 'observed' | 'context_injected' | 'tool_calls' | 'launch_generation' | 'todo' | 'continuation_of' | 'interruption' | 'resume_state' | 'write_scope' | 'suppress_auto_context'> & { readonly todo?: string | null; readonly continuation_of?: string | null; readonly write_scope?: string; readonly suppress_auto_context?: number };
 
 /**
  * v23 — PD-ORCH-005 clause 1: one execution iteration and the task id of its root, open from the moment it begins until it
@@ -280,6 +282,11 @@ export interface IterationRow {
   readonly interruption: string | null;
   readonly opened_at: string;
   readonly closed_at: string | null;
+  /**
+   * v26 — REQ-MONITOR-102: the calls of this iteration's root the session's `tool_calls` holds — raised with the total when
+   * the root's turn returns, and by the crash record. NULL on a row written before v26: not known.
+   */
+  readonly root_tool_calls: number | null;
 }
 export type IterationInsert = Pick<IterationRow, 'session_id' | 'iteration' | 'root_task_id' | 'root_canonical_name' | 'root_persona' | 'todo_task_id' | 'task' | 'opened_at'>;
 
@@ -529,8 +536,8 @@ export class StoreDal {
       issuesOf: db.prepare('SELECT * FROM issues WHERE session_id = ? ORDER BY ordinal'),
 
       // ADR-0012: the child ledger. Every statement carries session_id (REQ-ORCH-151, asserted by a test over this text).
-      insertChild: db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, todo, spawned_at, continuation_of, write_scope)
-        VALUES (@session_id, @task_id, @canonical_name, @given_name, @persona, @state, @parent_id, @depth, @iteration, @model_key, @category, @background, @task, @depends_on, @inherited_context, @granted_tools, @granted_mcp, @todo, @spawned_at, @continuation_of, @write_scope)`),
+      insertChild: db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, todo, spawned_at, continuation_of, write_scope, suppress_auto_context)
+        VALUES (@session_id, @task_id, @canonical_name, @given_name, @persona, @state, @parent_id, @depth, @iteration, @model_key, @category, @background, @task, @depends_on, @inherited_context, @granted_tools, @granted_mcp, @todo, @spawned_at, @continuation_of, @write_scope, @suppress_auto_context)`),
       getChild: db.prepare('SELECT * FROM children WHERE session_id = ? AND task_id = ?'),
       // Acceptance order: children accepted in the same millisecond keep the order they were inserted in, which the
       // resume's re-claim of their write scopes depends on (PD-TOOLS-006 revision 2; found by phase 4's review).
@@ -549,13 +556,16 @@ export class StoreDal {
       pausedChildrenOfIteration: db.prepare("SELECT * FROM children WHERE session_id = ? AND iteration = ? AND state = 'paused' ORDER BY spawned_at, rowid"),
 
       // v23 — PD-ORCH-005: the iterations, each carrying its root's task id.
-      insertIteration: db.prepare(`INSERT INTO iterations (session_id, iteration, root_task_id, root_canonical_name, root_persona, todo_task_id, task, state, opened_at)
-        VALUES (@session_id, @iteration, @root_task_id, @root_canonical_name, @root_persona, @todo_task_id, @task, 'open', @opened_at)`),
+      // v26: an iteration opened from this version holds a root count, starting at 0 (REQ-MONITOR-102).
+      insertIteration: db.prepare(`INSERT INTO iterations (session_id, iteration, root_task_id, root_canonical_name, root_persona, todo_task_id, task, state, opened_at, root_tool_calls)
+        VALUES (@session_id, @iteration, @root_task_id, @root_canonical_name, @root_persona, @todo_task_id, @task, 'open', @opened_at, 0)`),
       getIteration: db.prepare('SELECT * FROM iterations WHERE session_id = ? AND iteration = ?'),
       openIterationOf: db.prepare("SELECT * FROM iterations WHERE session_id = ? AND state = 'open' ORDER BY iteration DESC LIMIT 1"),
       iterationsOf: db.prepare('SELECT * FROM iterations WHERE session_id = ? ORDER BY iteration'),
       closeIteration: db.prepare("UPDATE iterations SET state = 'closed', outcome = ?, closed_at = ? WHERE session_id = ? AND iteration = ? AND state = 'open'"),
       setIterationInterruption: db.prepare("UPDATE iterations SET interruption = ? WHERE session_id = ? AND iteration = ? AND state = 'open'"),
+      // v26 — REQ-MONITOR-102: a NULL count (a row older than v26) is not known and stays NULL.
+      addIterationRootCalls: db.prepare('UPDATE iterations SET root_tool_calls = root_tool_calls + ? WHERE session_id = ? AND iteration = ? AND root_tool_calls IS NOT NULL'),
 
       // v23 — PD-ORCH-005: the agents' conversations. The sequence is per agent and taken inside the insert, as the slot queue's is.
       insertAgentMessage: db.prepare(`INSERT INTO agent_messages (session_id, task_id, seq, iteration, kind, body, at)
@@ -609,6 +619,8 @@ export class StoreDal {
         @highlight_paths, @snippets, @edited_files, @created_files, @commands, @tags, @supersedes, @superseded_by, @created_by, @consumed_by, @timeline_event_id, @conversation_id, @importance, @created_at, @edited_at, @body_file)`),
       // REQ-LIBRARY-096: ascending by creation time, the index's own order; the plan is asserted in `store.test.ts`.
       artifactsOf: db.prepare('SELECT * FROM artifacts WHERE session_id = ? ORDER BY created_at, id'),
+      // Live-run finding K1: the few columns an agent surface links by, read at every snapshot — never the bodies.
+      artifactLinksOf: db.prepare('SELECT id, slug, title, status, created_by, canonical_name, consumed_by FROM artifacts WHERE session_id = ? AND superseded_by IS NULL ORDER BY created_at, id'),
       artifactById: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND id = ?'),
       artifactBySlug: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND slug = ?'),
       artifactByTask: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND source_task_id = ?'),
@@ -664,7 +676,7 @@ export class StoreDal {
   }
 
   insertChild(row: ChildInsert): void {
-    this.stmts['insertChild']!.run({ ...row, todo: row.todo ?? null, continuation_of: row.continuation_of ?? null, write_scope: row.write_scope ?? '[]' });
+    this.stmts['insertChild']!.run({ ...row, todo: row.todo ?? null, continuation_of: row.continuation_of ?? null, write_scope: row.write_scope ?? '[]', suppress_auto_context: row.suppress_auto_context ?? 0 });
   }
   getChild(id: SessionId, taskId: string): ChildRow | undefined {
     return this.stmts['getChild']!.get(id, taskId) as ChildRow | undefined;
@@ -724,6 +736,10 @@ export class StoreDal {
   /** The rest that left an open iteration open; a resume sets it back to NULL, so a later crash is not read as the earlier rest. */
   setIterationInterruption(id: SessionId, iteration: number, interruption: string | null): boolean {
     return this.stmts['setIterationInterruption']!.run(interruption, id, iteration).changes === 1;
+  }
+  /** v26 — REQ-MONITOR-102: `n` more of the root's calls held by the session total; false when the count is not known (NULL). */
+  addIterationRootCalls(id: SessionId, iteration: number, n: number): boolean {
+    return this.stmts['addIterationRootCalls']!.run(n, id, iteration).changes === 1;
   }
   insertAgentMessage(row: Omit<AgentMessageRow, 'seq'>): void {
     this.stmts['insertAgentMessage']!.run(row);
@@ -1194,6 +1210,13 @@ export class StoreDal {
   /** REQ-LIBRARY-096: ascending by creation time. Hydration reads this and tolerates whatever it finds (REQ-LIBRARY-091). */
   artifactsOf(id: SessionId): ArtifactRow[] {
     return this.stmts['artifactsOf']!.all(id) as ArtifactRow[];
+  }
+  /**
+   * REQ-MONITOR-044/052 (live-run finding K1): the session's artifacts not superseded, as the agent surfaces link them —
+   * the columns a link needs and no body, in the index's own order (`artifacts_by_created`), read at every snapshot.
+   */
+  artifactLinksOf(id: SessionId): Pick<ArtifactRow, 'id' | 'slug' | 'title' | 'status' | 'created_by' | 'canonical_name' | 'consumed_by'>[] {
+    return this.stmts['artifactLinksOf']!.all(id) as Pick<ArtifactRow, 'id' | 'slug' | 'title' | 'status' | 'created_by' | 'canonical_name' | 'consumed_by'>[];
   }
   /** REQ-LIBRARY-096: lookup accepts an id or a slug; the id is tried first, so a slug that looks like an id cannot shadow one. */
   artifactByRef(id: SessionId, ref: string): ArtifactRow | undefined {

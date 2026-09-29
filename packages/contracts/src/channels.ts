@@ -189,6 +189,26 @@ export type TranscriptIncrement = z.infer<typeof TranscriptIncrementSchema>;
 export const COST_QUALIFIERS = ['unknown', 'incomplete', 'configured', 'reported'] as const;
 export type CostQualifier = (typeof COST_QUALIFIERS)[number];
 
+/**
+ * REQ-MONITOR-060/061 (live-run finding K1, R-067): the run-level agent's tools. The entry role holds no `children` row, so
+ * `AgentRecord`'s grant, history and active set never reached the synthetic root; this carries them. `resolved` is the
+ * native set the live run's root port resolved — policy narrowing applied, so a coordinator's withheld write, terminal and
+ * commit tools are absent (061) — and empty when no run is live, where the persona's declared tools stand in (060).
+ * `called` is the root's history from the incremental tracker (first-call order), `active` its calls in flight.
+ */
+export const EntryToolsSchema = z.object({ resolved: z.array(z.string()), called: z.array(z.string()), active: z.array(z.string()) });
+export type EntryToolsPayload = z.infer<typeof EntryToolsSchema>;
+/**
+ * REQ-MONITOR-044/052/068/069 (live-run finding K1, R-067): one of the session's artifacts as the agent surfaces link it —
+ * its name (the slug, with the title beside it), its producer (the creating instance's canonical name, REQ-LIBRARY-093/136),
+ * its ready flag (REQ-LIBRARY-136: `succeeded` or `published`) and the instances that consumed it (`consumed_by`, the
+ * received side). Superseded artifacts are left out, as the Library's table leaves them out (REQ-LIBRARY-136).
+ */
+export const SessionArtifactLinkSchema = z.object({
+  id: z.string(), slug: z.string(), title: z.string(), status: z.string(), producer: z.string(), ready: z.boolean(), consumedBy: z.array(z.string()),
+});
+export type SessionArtifactLink = z.infer<typeof SessionArtifactLinkSchema>;
+
 export const SessionRecordSchema = z.object({
   id: sessionId,
   executionStatus: z.string(),
@@ -306,6 +326,10 @@ export const SessionRecordSchema = z.object({
    * configuration states one, else REQ-MONITOR-080's default capacity.
    */
   entryContext: z.object({ used: z.number().int().nonnegative(), limit: z.number().int().nonnegative() }),
+  /** REQ-MONITOR-060/061 (live-run finding K1): the run-level agent's resolved tools, history and active calls. */
+  entryTools: EntryToolsSchema,
+  /** REQ-MONITOR-044/052/068/069 (live-run finding K1): the session's artifacts, for the agent surfaces' links. */
+  artifacts: z.array(SessionArtifactLinkSchema),
 });
 export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 

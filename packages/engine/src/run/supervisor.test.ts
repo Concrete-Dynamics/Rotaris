@@ -69,8 +69,9 @@ describe('loop supervisor (REQ-ORCH-099..107)', () => {
     for (let i = 0; i < 4; i += 1) tool(repetition, 'read_file', '{"path":"src/a.ts"}');
     expect(await repetition.check()).toMatchObject({ kind: 'inject' });
 
+    // A real turn records each step's text before its calls, `''` for a step that only called tools (live-run finding D3).
     const rawClear = new LoopSupervisor(sessionId, config({ toolThreshold: 3, repetitionThreshold: 99, cycleThreshold: 99 }), reject, new FakeClock());
-    for (let i = 0; i < 3; i += 1) tool(rawClear, `tool-${i}`, String(i));
+    for (let i = 0; i < 3; i += 1) { message(rawClear, ''); tool(rawClear, `tool-${i}`, String(i)); }
     expect((await rawClear.check()).kind).toBe('continue');
 
     const rawEvidence = new LoopSupervisor(sessionId, config({ messageThreshold: 3, repetitionThreshold: 99, cycleThreshold: 99 }), reject, new FakeClock());
@@ -80,6 +81,43 @@ describe('loop supervisor (REQ-ORCH-099..107)', () => {
     const stuck = new LoopSupervisor(sessionId, config(), classifier(async () => classification(false)), new FakeClock());
     stuck.observeStuck();
     expect((await stuck.check()).kind).toBe('inject');
+  });
+
+  describe('REQ-ORCH-104: a raw-count fallback never reads tool-only steps as identical messages (live-run finding D3)', () => {
+    const reject = classifier(async () => { throw new Error('offline'); });
+    /** One model step as a real turn records it (`runTurn`): its text first — `''` when it only called tools — then its calls. */
+    const step = (s: LoopSupervisor, text: string, ...calls: [string, string][]) => { message(s, text); for (const [name, args] of calls) tool(s, name, args); };
+    const raw = () => new LoopSupervisor(sessionId, config({ toolThreshold: 6, repetitionThreshold: 99, cycleThreshold: 99 }), reject, new FakeClock());
+
+    it('distinct edits and reads, each in a tool-only step, are counts alone: no loop is declared', async () => {
+      const s = raw();
+      for (let i = 0; i < 3; i += 1) step(s, '', ['edit_file', `{"path":"docs/${i}.md","old":"a${i}","new":"b${i}"}`], ['read_file', `{"path":"docs/${i}.md"}`]);
+      expect(await s.check()).toEqual({ kind: 'continue' });
+    });
+
+    it('whitespace-only texts are no message either', async () => {
+      const s = raw();
+      for (let i = 0; i < 3; i += 1) step(s, i === 1 ? ' \n\t' : '', ['edit_file', `{"path":"src/${i}.ts"}`], ['read_file', `{"path":"src/${i}.ts"}`]);
+      expect((await s.check()).kind).toBe('continue');
+    });
+
+    it('three identical assistant messages are still evidence when tool-only steps fall between them', async () => {
+      const s = raw();
+      step(s, 'Checking the file once more.', ['read_file', '{"path":"a.ts"}']);
+      step(s, '', ['edit_file', '{"path":"a.ts","n":1}']);
+      step(s, 'checking the file   once more.', ['grep', '{"q":"x"}']);
+      step(s, '', ['edit_file', '{"path":"a.ts","n":2}']);
+      step(s, 'Checking the file once more.', ['glob', '{"p":"*"}']);
+      step(s, '', ['write_file', '{"path":"b.ts"}']);
+      expect((await s.check()).kind).toBe('inject');
+    });
+
+    it('four consecutive same-tool calls are still evidence in tool-only steps', async () => {
+      const s = raw();
+      for (let i = 0; i < 3; i += 1) step(s, '', ['read_file', `{"path":"x${i}.ts"}`], ['edit_file', `{"path":"x${i}.ts"}`]);
+      for (let i = 0; i < 4; i += 1) step(s, '', ['grep', `{"q":"${i}"}`]);
+      expect((await s.check()).kind).toBe('inject');
+    });
   });
 
   it('resets event state after every activation and escalates the third consecutive activation', async () => {

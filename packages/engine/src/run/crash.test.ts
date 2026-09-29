@@ -141,6 +141,56 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 2, agents: 4 });
   });
 
+  describe('REQ-MONITOR-102: the calls a crash left uncounted join the session total (the repair of a-roots-calls-before-a-crash-never-reach-the-session-total.md)', () => {
+    const calls = (...ids: string[]): ChatMessage => ({ role: 'assistant', content: ids.map((id) => ({ kind: 'tool-call' as const, callId: id, name: 'grep', args: '{}' })) });
+    const results = (...ids: string[]): ChatMessage => ({ role: 'tool', content: ids.map((id) => ({ kind: 'tool-result' as const, callId: id, name: 'grep', isError: false, result: 'found' })) });
+    /**
+     * An iteration whose root had one call counted when an earlier execution returned (`r1`), then made two more (`r2`,
+     * and `r3`, whose row was still running at the death) and asked for a fourth it never started (`r4`, no row); a
+     * running child with one completed call its count does not hold; and five calls of other agents in the total.
+     */
+    function died(writer: SessionWriter, sid: SessionId): void {
+      dal.insertIteration({ session_id: sid, iteration: 1, root_task_id: ROOT, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
+      writer.countToolCalls({ root: { iteration: 1, add: 1 } }, 6);
+      writer.recordAgentMessage(ROOT, 1, 'message', text('user', 'work'));
+      writer.recordAgentMessage(ROOT, 1, 'message', calls('r1'));
+      writer.recordAgentMessage(ROOT, 1, 'message', results('r1'));
+      writer.recordAgentMessage(ROOT, 1, 'message', calls('r2'));
+      writer.recordAgentMessage(ROOT, 1, 'message', results('r2'));
+      writer.recordAgentMessage(ROOT, 1, 'message', calls('r3', 'r4'));
+      writer.appendRow('tool', 'grep', false, { name: 'orchestrator', toolName: 'grep', toolStatus: 'running', callKey: 'r3' });
+      writer.spawnChild({ ...child('bg_000000c1', 'running', ROOT), iteration: 1 });
+      writer.recordAgentMessage('bg_000000c1', 1, 'message', text('user', 'TASK'));
+      writer.recordAgentMessage('bg_000000c1', 1, 'message', calls('p1'));
+      writer.recordAgentMessage('bg_000000c1', 1, 'message', results('p1'));
+    }
+
+    it('the root\'s beyond its iteration\'s count and each unfinished child\'s beyond its own, with both counts, once — a call the crash cut before it started is not one', () => {
+      const sid = 'S-uncounted' as SessionId;
+      const writer = created(sid);
+      died(writer, sid);
+      expect(dal.getSession(sid)!.tool_calls).toBe(6);
+      recordCrash(dal, writer, sid, new Set(), () => undefined);
+      // The root's r2 and r3 (r1 was counted; r4 never started) and the child's p1.
+      expect(dal.getSession(sid)!.tool_calls).toBe(9);
+      expect(dal.getIteration(sid, 1)!.root_tool_calls).toBe(3);
+      expect(dal.getChild(sid, 'bg_000000c1')).toMatchObject({ state: 'paused', tool_calls: 1 });
+      // A second recording finds nothing more to count.
+      recordCrash(dal, writer, sid, new Set(), () => undefined);
+      expect(dal.getSession(sid)!.tool_calls).toBe(9);
+    });
+
+    it('a root whose count is not known — an iteration opened before store v26 — adds nothing; its children are still counted', () => {
+      const sid = 'S-unknown' as SessionId;
+      const writer = created(sid);
+      died(writer, sid);
+      dal.db.prepare('UPDATE iterations SET root_tool_calls = NULL WHERE session_id = ?').run(sid);
+      recordCrash(dal, writer, sid, new Set(), () => undefined);
+      expect(dal.getSession(sid)!.tool_calls).toBe(7);
+      expect(dal.getIteration(sid, 1)!.root_tool_calls).toBeNull();
+    });
+  });
+
   it('an iteration a rest left open is not a crash\'s: its interruption and its agents are left as they are', () => {
     const sid = 'S-rested' as SessionId;
     const writer = created(sid);
@@ -382,6 +432,40 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       const its = asked.filter((r) => r.messages.some((m) => m.content.some((p) => p.kind === 'tool-result' && p.callId === 'p1')));
       expect(its.length).toBeGreaterThan(0);
       expect(its.filter((r) => r.messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text.startsWith('Carry out the task now'))))).toEqual([]);
+    });
+
+    it('REQ-MONITOR-102 (the repair of a-roots-calls-before-a-crash-never-reach-the-session-total.md): the calls the root and a child made before the crash reach the session total when it is repaired, and a continue counts none of them twice', async () => {
+      const worked = (w: SessionWriter): void => {
+        // A call the root completed before the crash, after dieIn's two it never started (answered by the crash first).
+        w.recordAgentMessage(ROOT, 2, 'message', { role: 'tool', content: [{ kind: 'tool-result', callId: 'a', name: 'grep', isError: false, result: 'x' }, { kind: 'tool-result', callId: 'b', name: 'glob', isError: false, result: 'y' }] });
+        w.recordAgentMessage(ROOT, 2, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'r1', name: 'grep', args: '{}' }] });
+        w.recordAgentMessage(ROOT, 2, 'message', { role: 'tool', content: [{ kind: 'tool-result', callId: 'r1', name: 'grep', isError: false, result: 'found' }] });
+        w.recordAgentMessage('bg_000000c1', 2, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'p1', name: 'grep', args: '{}' }] });
+        w.recordAgentMessage('bg_000000c1', 2, 'message', { role: 'tool', content: [{ kind: 'tool-result', callId: 'p1', name: 'grep', isError: false, result: 'found' }] });
+      };
+      const repaired = await crashed(worked);
+      expect(dal.getSession(repaired)!.tool_calls).toBe(0);
+      sessionsAs(88).repair(dal, 'C:/ws', { sessionId: repaired });
+      // The root's a, b and r1, and the child's p1.
+      expect(dal.getSession(repaired)!.tool_calls).toBe(4);
+      expect(dal.getIteration(repaired, 2)!.root_tool_calls).toBe(3);
+      expect(dal.getChild(repaired, 'bg_000000c1')!.tool_calls).toBe(1);
+    });
+
+    it('REQ-MONITOR-102: a continue after the crash counts what the crash left once — the resumed agents add only their own new calls', async () => {
+      const sid = await crashed((w) => {
+        w.recordAgentMessage(ROOT, 2, 'message', { role: 'tool', content: [{ kind: 'tool-result', callId: 'a', name: 'grep', isError: false, result: 'x' }, { kind: 'tool-result', callId: 'b', name: 'glob', isError: false, result: 'y' }] });
+        w.recordAgentMessage('bg_000000c1', 2, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'p1', name: 'grep', args: '{}' }] });
+        w.recordAgentMessage('bg_000000c1', 2, 'message', { role: 'tool', content: [{ kind: 'tool-result', callId: 'p1', name: 'grep', isError: false, result: 'found' }] });
+      });
+      const next = sessionsAs(88);
+      expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      expect(next.prompt(sid, 'second').ok).toBe(true);
+      expect((await next.running(sid))!.status).toBe('completed');
+      // Every agent answers without a call here: the total is the crash's three, counted once.
+      expect(dal.getSession(sid)!.tool_calls).toBe(3);
+      expect(dal.getIteration(sid, 2)!.root_tool_calls).toBe(2);
+      expect(dal.getChild(sid, 'bg_000000c1')).toMatchObject({ state: 'succeeded', tool_calls: 1 });
     });
 
     describe('PD-ORCH-005 clauses 13 and 18 (OQ-100): before the crash is recorded, what it left presents as the record will leave it', () => {

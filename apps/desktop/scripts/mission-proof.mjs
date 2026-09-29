@@ -12,6 +12,8 @@ import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolat
  *
  *   1. painted     — Mission opened by Ctrl+3 during a run with three live children: the header, the run row, the tree,
  *                    the table with one row per agent and state text, elapsed advancing between two probes 1.5 s apart.
+ *   1b. waiting    — the model's slot cap one, two children waiting behind it: every row's Elapsed cell and tree meta
+ *                    carries a figure, and a waiting row's advances (REQ-MONITOR-107/111).
  *   2. parity      — the Mission tree, the Overview card and the Workspace sidebar probed in one run: identical ids and
  *                    states; then a 23-agent record (20 seeded) refreshed with Mission visible, the apply-to-paint time.
  *   3. pause       — a child selected → Pause refused with the explanation, no control sent; the run selected → accepted,
@@ -138,6 +140,38 @@ const s1 = scenario('painted');
   expect(endProbe(r.log, '.app-shell')?.[0]?.data?.['data-view'] === 'mission', 'the capture was not on Mission');
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
   results.painted = { subtitle, runRow, statesAt6s: states6, elapsedAt6s: e6, elapsedAt7_5s: e75, finalStates: endRows.map((p) => p.data['data-state']), png: join(output, 'mission.png') };
+}
+
+// 1b. A waiting agent's clock (REQ-MONITOR-107/111, resolution item 25; the note "a waiting agent's elapsed time is not
+// shown", R-067): the scripted model's slot cap is one, so two of the three children wait on the model slot while the first
+// runs; every row holds a spawn timestamp, so every Elapsed cell and every tree meta carries a figure, and a waiting row's
+// advances between the two probes as the running row's does. Before the repair a waiting row read an em-dash in the table
+// and its state alone in the tree.
+const s1b = scenario('waiting');
+{
+  const yaml = join(s1b.workspace, '.rotaris', 'agents.yaml');
+  writeFileSync(yaml, readFileSync(yaml, 'utf8').replace('model_id: scripted }', 'model_id: scripted, max_parallel: 1 }'));
+  const r = launch('waiting', s1b, {
+    ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:14000,read,answer', ROTARIS_CAPTURE_PROMPT: 'delegate to three agents behind one slot',
+    ROTARIS_CAPTURE_VIEWS: '3@3500',
+    ROTARIS_CAPTURE_PROBE_AT: '.agent-table__state-text@6000;;[data-testid="agent-elapsed"]@6000;;[data-testid="agent-elapsed"]@7500;;.mission__run-row + .agent-tree .agent-row__meta@6000;;.mission__run-row + .agent-tree .agent-row__meta@7500',
+    ROTARIS_CAPTURE_PNG_AT: `${join(output, 'mission-waiting.png')}@7000`,
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '1000',
+  });
+  const states6 = probesAt(r.log, 6000, '.agent-table__state-text')?.map((p) => p.text) ?? [];
+  const waitingAt6 = states6.map((t, i) => (t === 'waiting' || t === 'queued' ? i : -1)).filter((i) => i >= 0);
+  expect(states6.length === 3 && waitingAt6.length > 0, `no waiting or queued row at 6 s behind the slot cap: ${JSON.stringify(states6)}`);
+  const cells6 = (probesAt(r.log, 6000, '[data-testid="agent-elapsed"]') ?? []).map((p) => p.text);
+  const cells75 = (probesAt(r.log, 7500, '[data-testid="agent-elapsed"]') ?? []).map((p) => p.text);
+  const e6 = cells6.map(seconds); const e75 = cells75.map(seconds);
+  expect(e6.length === 3 && e75.length === 3 && e6.every((v) => v !== null), `an Elapsed cell showed the fallback although the agent holds a spawn timestamp: ${JSON.stringify(cells6)} at ${JSON.stringify(states6)} (REQ-MONITOR-111)`);
+  expect(waitingAt6.every((i) => e75[i] !== null && e75[i] > e6[i]), `a waiting row's elapsed did not advance: ${JSON.stringify(cells6)} → ${JSON.stringify(cells75)} at ${JSON.stringify(states6)} (REQ-MONITOR-107)`);
+  const meta6 = (probesAt(r.log, 6000, '.mission__run-row + .agent-tree .agent-row__meta') ?? []).map((p) => p.text);
+  const meta75 = (probesAt(r.log, 7500, '.mission__run-row + .agent-tree .agent-row__meta') ?? []).map((p) => p.text);
+  expect(meta6.length === 3 && meta6.every((t) => seconds(t) !== null), `a tree meta showed its state alone although the agent holds a spawn timestamp: ${JSON.stringify(meta6)} (REQ-MONITOR-111)`);
+  expect(meta6.some((t, i) => /^(waiting|queued) · /.test(t) && seconds(meta75[i] ?? '') > seconds(t)), `no waiting tree meta advanced: ${JSON.stringify(meta6)} → ${JSON.stringify(meta75)} (REQ-MONITOR-107)`);
+  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+  results.waiting = { statesAt6s: states6, elapsedAt6s: cells6, elapsedAt7_5s: cells75, treeMetaAt6s: meta6, treeMetaAt7_5s: meta75, png: join(output, 'mission-waiting.png') };
 }
 
 // 2. Parity across the three trees, then the 23-agent refresh with Mission visible.
@@ -306,7 +340,7 @@ const s6 = scenario('inspector');
   const r = launch('inspector', s6, {
     ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'wait:5000,read,wait:6000,answer', ROTARIS_CAPTURE_PROMPT: 'inspect an agent',
     ROTARIS_CAPTURE_CLICKS: '.agent-row@4000;;.inspector__actions .btn>>Steer@9200',
-    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="inspector-tag"]@3000;;[data-testid="inspector-name"]@3000;;[data-testid="inspector-tag"]@4500;;[data-testid="inspector-name"]@4500;;[data-testid="inspector-chips"] .chip@4500;;[data-testid="inspector-chips"] .chip@8500;;[data-testid="inspector-meta"]@8500;;[data-testid="inspector-controls-note"]@8500;;.ctx-ring@8500',
+    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="inspector-tag"]@3000;;[data-testid="inspector-name"]@3000;;[data-testid="inspector-chips"] .chip@3000;;[data-testid="inspector-tag"]@4500;;[data-testid="inspector-name"]@4500;;[data-testid="inspector-chips"] .chip@4500;;[data-testid="inspector-chips"] .chip@8500;;[data-testid="inspector-meta"]@8500;;[data-testid="inspector-controls-note"]@8500;;.ctx-ring@8500',
     ROTARIS_CAPTURE_PERSONA_STEER: 'keep going, but summarise first@11000',
     ROTARIS_CAPTURE_PERSONA_PROBE_AT: '[data-testid="persona-steer"]@12000;;[data-testid="persona-steer-error"]@12000',
     ROTARIS_CAPTURE_PNG_AT: `${join(output, 'inspector-live.png')}@8600`,
@@ -315,6 +349,11 @@ const s6 = scenario('inspector');
   const db = open(s6); const row = session(db); const kids = children(db, row.session_id); const entries = timeline(db, row.session_id); db.close();
   const tag3 = probesAt(r.log, 3000, '[data-testid="inspector-tag"]')?.[0]?.text; const name3 = probesAt(r.log, 3000, '[data-testid="inspector-name"]')?.[0]?.text;
   expect(tag3 === 'Following — tracking whichever agent wrote last' && name3 === 'orchestrator', `following at 3 s: tag "${tag3}", name "${name3}" (REQ-MONITOR-053/054)`);
+  // Live-run finding K1 (REQ-MONITOR-060/061): the running run-level agent shows the tools its run resolved — a coordinator,
+  // so none of the write, terminal and commit tools its policy withholds — marked from its own history (it has delegated).
+  const rootChips = (probesAt(r.log, 3000, '[data-testid="inspector-chips"] .chip') ?? []).map((p) => [p.data['data-tool'], p.data['data-state']]);
+  expect(rootChips.length > 0 && rootChips.some((c) => c[0] === 'delegate' && c[1] !== 'not used'), `the run-level agent's chips at 3 s: ${JSON.stringify(rootChips)} (REQ-MONITOR-060)`);
+  expect(!rootChips.some((c) => ['write_file', 'haet_edit', 'haet', 'terminal', 'git_commit'].includes(c[0])), `the running coordinator lists a tool its policy withholds: ${JSON.stringify(rootChips)} (REQ-MONITOR-061)`);
   const tag45 = probesAt(r.log, 4500, '[data-testid="inspector-tag"]')?.[0]?.text; const name45 = probesAt(r.log, 4500, '[data-testid="inspector-name"]')?.[0]?.text;
   expect(tag45 === 'Pinned by selection' && name45 === 'alpha', `pinned at 4.5 s: tag "${tag45}", name "${name45}"`);
   const chips45 = (probesAt(r.log, 4500, '[data-testid="inspector-chips"] .chip') ?? []).map((p) => [p.data['data-tool'], p.data['data-state']]);
@@ -333,7 +372,7 @@ const s6 = scenario('inspector');
   const box = personaProbesAt(r.log, 12000, '[data-testid="persona-steer"]')?.[0]?.text ?? null;
   expect(box === '', `the accepted steer did not clear the box: "${box}" (REQ-MONITOR-070)`);
   expect(/persona-steer-at 11000 → sent/.test(r.log), 'the steer card was not driven');
-  results.inspector = { following: { tag: tag3, name: name3 }, pinned: { tag: tag45, name: name45 }, chipsBefore: chips45, chipsAfter: chips85, meta, note, ring, steer: steered ? JSON.parse(steered.metadata) : null, png: join(output, 'inspector-live.png') };
+  results.inspector = { following: { tag: tag3, name: name3, chips: rootChips }, pinned: { tag: tag45, name: name45 }, chipsBefore: chips45, chipsAfter: chips85, meta, note, ring, steer: steered ? JSON.parse(steered.metadata) : null, png: join(output, 'inspector-live.png') };
 }
 
 // 7. The strategy selector and the depth control write their keys; Settings shows the same values; the pop-out toggle writes its preference.

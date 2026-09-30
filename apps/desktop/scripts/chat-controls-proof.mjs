@@ -212,7 +212,7 @@ const T1 = { arm: 13900, press: 14000, pressing: 14300, done: 15500 };
     expect(m.after_messages < m.before_messages, `${m.agent}'s conversation did not shrink: ${JSON.stringify(m)}`);
   }
   // The run host's own `manual compression:` line is the SESSION log's; main's stdout carries the acknowledgement it relayed and the control's answer.
-  expect(/acknowledgement from the run host: ok "Compressed context for 2 active agent\(s\)\."/.test(r.log) && /control forceCompression on \S+ → ok/.test(r.log), 'main did not relay the settled pass');
+  expect(/acknowledgement from the run host: ok "Compressed context for 2 active agents\."/.test(r.log) && /control forceCompression on \S+ → ok/.test(r.log), 'main did not relay the settled pass');
   results.compressTwo = { agents: metas.map((m) => ({ agent: m.agent, before: m.before_messages, after: m.after_messages, latencyMs: m.latency_ms })), pressing, done };
 }
 

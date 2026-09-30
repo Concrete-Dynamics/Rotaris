@@ -4,6 +4,7 @@ import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
 import { similarity } from '@rotaris/kernel';
 import { renderDiff } from './diff.js';
+import { lineCount, splitLines } from './lines.js';
 import { checkFence, relPosix, realPathOf, type FenceConfig } from './fence.js';
 import { errorObservation, observation, type Observation, type ToolExecutor } from './types.js';
 import { compileSearchPattern, IGNORE_COMPONENTS } from './search.js';
@@ -160,11 +161,12 @@ function missingPathMessage(resolved: string, rel: string, memoryTools?: MemoryN
 interface ReadRender { text: string; hash: string; totalLines: number }
 
 function renderRead(rel: string, content: string, offset: number, limit: number, grep: string | undefined, grepContext: number, extraHeader = ''): ReadRender {
-  const lines = content.split('\n');
+  const lines = splitLines(content);
   const totalLines = lines.length;
   const hash = sha256(content);
   let body: string[];
-  let shownFrom = offset;
+  // An empty file has no line to show; `1-0` would name a line that is not there.
+  let shownFrom = totalLines === 0 ? 0 : offset;
   let shownTo = Math.min(totalLines, offset + limit - 1);
   if (grep !== undefined) {
     let re: RegExp;
@@ -331,7 +333,15 @@ const writeSchema = z.object({
 export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExecutor<z.infer<typeof writeSchema>> {
   return {
     name: 'write_file',
-    description: 'Create, edit (old_string → new_string), overwrite, insert into, or undo the last write of a workspace file. Read a file before editing it.',
+    /*
+     * The field is named in the prose because the prose is what a model reads first. The live run of 2026-09-29
+     * (WF1) had two children send `path` and `content` with no `operation`, be refused, and regenerate their
+     * whole file: the schema they were sent names the field, but the sentence they acted on listed the
+     * operations as verbs and never said they were the values of a required selector. REQ-TOOLS-135 names the
+     * selector `operation` and nothing fixes this wording (docs/defects/fixed/
+     * write-files-first-use-refusal-recurred-under-duress.md).
+     */
+    description: 'Create, edit, overwrite, insert into, or undo the last write of a workspace file. Every call names its `operation` — one of create, edit, overwrite, insert, undo — with the fields that operation reads: create {path, content}; edit {path, old_string, new_string, replace_all?}; overwrite {path, content}; insert {path, content, insert_line} (0 = beginning); undo {path}. Example: {"operation": "create", "path": "notes.txt", "content": "hello\\n"}. Read a file before editing or overwriting it.',
     schema: writeSchema,
     /**
      * REQ-TOOLS-032's recoverable refusal, with the expected shape named: the run's first uses omitted
@@ -382,25 +392,31 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
             return errorObservation(`File already exists: ${rel}. Use 'overwrite' or 'edit'.`);
           }
           const content = a.content ?? '';
-          return commit(content, `Created ${rel}: ${content.split('\n').length} line(s) created.`);
+          return commit(content, `Created ${rel}: ${lineCount(content)} line(s) created.`);
         }
         case 'overwrite': {
           if (!exists) return errorObservation(`File does not exist: ${rel}. Use 'create'.`);
           const gate = mustHaveRead();
           if (gate) return gate;
           const content = a.content ?? '';
-          return commit(content, `Overwrote ${rel}: ${content.split('\n').length} line(s) replaced ${(before ?? '').split('\n').length}.`);
+          return commit(content, `Overwrote ${rel}: ${lineCount(content)} line(s) replaced ${lineCount(before ?? '')}.`);
         }
         case 'insert': {
           if (!exists) return errorObservation(`File does not exist: ${rel}. Use 'create'.`);
           const gate = mustHaveRead();
           if (gate) return gate;
           if (a.insert_line === undefined) return errorObservation('insert requires insert_line (0 = beginning).');
-          const lines = (before ?? '').split('\n');
+          // Positions count lines as `splitLines` does, so the one after a final newline is not a place to insert
+          // after, and a terminated `content` is its lines rather than its lines and a blank one. The result ends
+          // in a newline when the file did, or when the insert lands at the end and its own content does.
+          const text = before ?? '';
+          const lines = splitLines(text);
           if (a.insert_line > lines.length) return errorObservation(`insert_line ${a.insert_line} is beyond the end of ${rel} (${lines.length} lines).`);
-          const ins = (a.content ?? '').split('\n');
+          const content = a.content ?? '';
+          const ins = splitLines(content);
+          const terminated = text.endsWith('\n') || (a.insert_line === lines.length && content.endsWith('\n'));
           lines.splice(a.insert_line, 0, ...ins);
-          return commit(lines.join('\n'), `Inserted ${ins.length} line(s) into ${rel} at line ${a.insert_line}.`);
+          return commit(`${lines.join('\n')}${terminated && lines.length > 0 ? '\n' : ''}`, `Inserted ${ins.length} line(s) into ${rel} at line ${a.insert_line}.`);
         }
         case 'edit': {
           if (!exists) return errorObservation(`File does not exist: ${rel}. Use 'create'.`);
@@ -411,14 +427,14 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
           const lines = (before ?? '').split('\n');
           if (a.replace_all) {
             const count = (before ?? '').split(a.old_string).length - 1;
-            if (count === 0) return errorObservation(`old_string was not found in ${rel} (${lines.length} lines). Read the file again or use 'overwrite'.`);
+            if (count === 0) return errorObservation(`old_string was not found in ${rel} (${lineCount(before ?? '')} lines). Read the file again or use 'overwrite'.`);
             return commit((before ?? '').split(a.old_string).join(a.new_string), `Edited ${rel}: ${count} occurrence(s) replaced.`);
           }
           const m = matchEdit(lines, a.old_string);
-          if (!m) return errorObservation(`old_string was not found in ${rel} at any of the four match levels (exact, trailing-whitespace, indentation shift, fuzzy ≥ 0.85); the file has ${lines.length} lines. Read the file again or use 'overwrite'.`);
+          if (!m) return errorObservation(`old_string was not found in ${rel} at any of the four match levels (exact, trailing-whitespace, indentation shift, fuzzy ≥ 0.85); the file has ${lineCount(before ?? '')} lines. Read the file again or use 'overwrite'.`);
           if (m.starts.length > 1) return errorObservation(`Found ${m.starts.length} occurrences of old_str at lines ${m.starts.map((s) => s + 1).join(', ')}. Add surrounding context to make the match unique, or set replace_all.`);
           const start = m.starts[0] as number;
-          const k = a.old_string.split('\n').length;
+          const k = Math.max(1, lineCount(a.old_string));
           const after = applyMatch(before ?? '', lines, m, a.old_string, a.new_string);
           const note = m.level > 1 ? ` Match level: ${m.level}${m.level === 4 ? ` (similarity: ${m.similarity!.toFixed(2)}). Verify the result.` : '.'}` : '';
           return commit(after, `Edited ${rel}: ${k} line(s) changed at line ${start + 1}.${note}`);
@@ -428,7 +444,7 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
           if (previous === undefined) return errorObservation(`No edit history for ${rel}.`);
           const after = previous ?? '';
           atomicWrite(resolved, after);
-          return observation(`Restored ${rel} to its previous content (${after.split('\n').length} line(s)).`, { diff: renderDiff(rel, before, after) });
+          return observation(`Restored ${rel} to its previous content (${lineCount(after)} line(s)).`, { diff: renderDiff(rel, before, after) });
         }
         default:
           return errorObservation(`Unsupported operation: ${String(a.operation)}`);
@@ -492,6 +508,12 @@ export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'ha
           : `Your old_string is NO LONGER present in the current content — the edit may already have been applied, or the region was rewritten. Read it before deciding whether it is still wanted.`;
         return errorObservation(`${rel} changed since the hash you hold was taken. Read it again with haet_read before retrying. ${fate}`);
       }
+      // REQ-TOOLS-135's rule for `write_file`'s edit, read as binding its twin: REQ-TOOLS-189 fixes the same
+      // old_string/new_string surface and says nothing either way, and reports its other outcomes "as REQ-TOOLS-136
+      // reports them". Checked after the hash, as `write_file` checks it after its read gate. The live run of
+      // 2026-09-29 (L5) applied a no-op here — an undo entry, a rewrite of the same bytes, a line "changed"
+      // (docs/defects/fixed/haet-edit-applies-an-edit-that-changes-nothing.md).
+      if (a.old_string === a.new_string) return errorObservation('old_string and new_string are identical; nothing to change.');
       const before = decodeText(bytes).text;
       const lines = before.split('\n');
       let after: string;
@@ -506,7 +528,7 @@ export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'ha
         if (!m || m.level !== 1) return errorObservation(`old_string was not found exactly in ${rel}. Read it again with haet_read.`);
         if (m.starts.length > 1) return errorObservation(`Found ${m.starts.length} occurrences of old_str at lines ${m.starts.map((s) => s + 1).join(', ')}. Add surrounding context to make the match unique, or set replace_all.`);
         const start = m.starts[0] as number;
-        const k = a.old_string.split('\n').length;
+        const k = Math.max(1, lineCount(a.old_string));
         after = applyMatch(before, lines, m, a.old_string, a.new_string);
         message = `Edited ${rel}: ${k} line(s) changed at line ${start + 1}.`;
       }

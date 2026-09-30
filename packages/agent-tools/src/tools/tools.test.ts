@@ -65,7 +65,8 @@ describe('read_file (REQ-TOOLS-134)', () => {
   it('line-numbered content with the header; offset/limit; grep with context; a directory lists; binary is rejected', async () => {
     const t = readFileTool(state, fence);
     const r = await t.execute({ path: 'src/a.ts', offset: 1, limit: 2000, grep_context: 3 }, ctx());
-    expect(r.text.split('\n')[0]).toBe('[path: src/a.ts | total_lines: 4 | shown: lines 1-4 | truncated: false]');
+    // Three lines, each ended by a newline: 4 was the count before a final newline stopped starting a phantom line.
+    expect(r.text.split('\n')[0]).toBe('[path: src/a.ts | total_lines: 3 | shown: lines 1-3 | truncated: false]');
     expect(r.text).toContain('2: const b = 2;');
     const page = await t.execute({ file_path: 'src/a.ts', offset: 2, limit: 1, grep_context: 3 }, ctx());
     expect(page.text).toContain('shown: lines 2-2 | truncated: true');
@@ -179,9 +180,69 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
     expect(big.split('\n')).toHaveLength(52);
     expect(big.split('\n').at(-1)).toBe('… +30 more lines, diff truncated');
   });
+  it('REQ-TOOLS-135: write_file\'s description names its required `operation` field, each value, and the fields each reads', () => {
+    // Live run 2026-09-29 (WF1): two children's first write_file omitted `operation` and regenerated their whole file
+    // after the refusal. The prose the model reads first said "Create, edit … or undo" without naming the field.
+    const d = writeFileTool(state, fence).description;
+    expect(d).toContain('`operation`');
+    expect(d).toContain('create {path, content}');
+    expect(d).toContain('edit {path, old_string, new_string, replace_all?}');
+    expect(d).toContain('overwrite {path, content}');
+    expect(d).toContain('insert {path, content, insert_line}');
+    expect(d).toContain('undo {path}');
+    expect(d).toMatch(/Example: \{"operation": "create", "path": "[^"]+", "content": "[^"]*"\}/);
+  });
   it('REQ-TOOLS-188: matchEdit is deterministic — the lower line wins a fuzzy tie', () => {
     const m = matchEdit(['abcdefghij', 'x', 'abcdefghik'], 'abcdefghiz');
     expect(m).toMatchObject({ level: 4, starts: [0] });
+  });
+});
+
+describe('line counts: a trailing newline ends the last line, it does not start another (REQ-TOOLS-134, REQ-TOOLS-135, REQ-CHAT-050)', () => {
+  // Live run 2026-09-29 (L6): `probe-ok\n` was reported "2 line(s) created", its diff showed an empty line 2, and
+  // read_file said total_lines: 2 — the model spent a terminal call on `wc` to check. docs/defects/fixed/
+  // a-trailing-newline-counts-as-a-line.md.
+  it('create, read, overwrite, undo and the diff count a newline-terminated file by its lines', async () => {
+    const w = writeFileTool(state, fence);
+    const c = await w.execute({ operation: 'create', path: 'probe.txt', content: 'probe-ok\n', replace_all: false }, ctx());
+    expect(c.text).toMatch(/^Created probe\.txt: 1 line/);
+    expect(c.diff).toBe('probe.txt [Created] +1 -0\n[1]+ probe-ok');
+    const r = await readFileTool(state, fence).execute({ path: 'probe.txt', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    expect(r.text).toBe('[path: probe.txt | total_lines: 1 | shown: lines 1-1 | truncated: false]\n1: probe-ok');
+    const blank = await readFileTool(state, fence).execute({ path: 'probe.txt', offset: 1, limit: 2000, grep: '^$', grep_context: 0 }, ctx());
+    expect(blank.text).toMatch(/^No matches for pattern/);
+    const o = await w.execute({ operation: 'overwrite', path: 'probe.txt', content: 'a\nb\n', replace_all: false }, ctx());
+    expect(o.text).toMatch(/^Overwrote probe\.txt: 2 line\S* replaced 1\./);
+    const u = await w.execute({ operation: 'undo', path: 'probe.txt', replace_all: false }, ctx());
+    expect(u.text).toMatch(/\(1 line/);
+    // an unterminated last line is still a line, and an empty file has none
+    expect((await w.execute({ operation: 'create', path: 'bare.txt', content: 'one\ntwo', replace_all: false }, ctx())).text).toMatch(/: 2 line\S* created/);
+    writeFileSync(join(root, 'empty.txt'), '');
+    const e = await readFileTool(state, fence).execute({ path: 'empty.txt', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    expect(e.text.split('\n')[0]).toBe('[path: empty.txt | total_lines: 0 | shown: lines 0-0 | truncated: false]');
+  });
+  it('insert places lines between lines: no phantom line after the last, and a terminated insert adds no blank line', async () => {
+    const w = writeFileTool(state, fence);
+    writeFileSync(join(root, 'ins.txt'), 'a\nb\n');
+    await readFileTool(state, fence).execute({ path: 'ins.txt', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    const mid = await w.execute({ operation: 'insert', path: 'ins.txt', content: 'X\n', insert_line: 1, replace_all: false }, ctx());
+    expect(mid.text).toMatch(/^Inserted 1 line/);
+    expect(readFileSync(join(root, 'ins.txt'), 'utf8')).toBe('a\nX\nb\n');
+    const end = await w.execute({ operation: 'insert', path: 'ins.txt', content: 'Z', insert_line: 3, replace_all: false }, ctx());
+    expect(end.isError).toBe(false);
+    expect(readFileSync(join(root, 'ins.txt'), 'utf8')).toBe('a\nX\nb\nZ\n');
+    expect(await w.execute({ operation: 'insert', path: 'ins.txt', content: 'Q', insert_line: 5, replace_all: false }, ctx())).toMatchObject({ isError: true, text: expect.stringContaining('(4 lines)') });
+    // a file with no trailing newline keeps none
+    writeFileSync(join(root, 'bare.txt'), 'a\nb');
+    await readFileTool(state, fence).execute({ path: 'bare.txt', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    await w.execute({ operation: 'insert', path: 'bare.txt', content: 'c', insert_line: 2, replace_all: false }, ctx());
+    expect(readFileSync(join(root, 'bare.txt'), 'utf8')).toBe('a\nb\nc');
+  });
+  it('an edit that finds nothing names the file\'s true line count', async () => {
+    const w = writeFileTool(state, fence);
+    await readFileTool(state, fence).execute({ path: 'src/a.ts', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    const miss = await w.execute({ operation: 'edit', path: 'src/a.ts', old_string: 'nothing here at all', new_string: 'x', replace_all: false }, ctx());
+    expect(miss.text).toContain('the file has 3 lines');
   });
 });
 
@@ -209,6 +270,17 @@ describe('haet_read / haet_edit (REQ-TOOLS-137/189)', () => {
     expect(ok.text).toMatch(/content_hash: [0-9a-f]{64}$/);
     const fuzzy = await he.execute({ path: 'src/b.ts', content_hash: sha256(readFileSync(join(root, 'src/b.ts'))), old_string: 'import { a, b }   ', new_string: 'x', replace_all: false }, ctx());
     expect(fuzzy).toMatchObject({ isError: true });
+  });
+  it('an edit whose old and new strings are identical is refused and changes nothing, as write_file\'s edit is (REQ-TOOLS-135, REQ-TOOLS-189)', async () => {
+    // Live run 2026-09-29 (L5): haet_edit applied a no-op edit, pushed an undo entry and reported a line changed;
+    // the model noticed "the first one was a no-op which should have errored but didn't".
+    const hash = sha256(readFileSync(join(root, 'src/b.ts')));
+    const same = await haetEditTool(state, fence).execute({ path: 'src/b.ts', content_hash: hash, old_string: 'import { a }', new_string: 'import { a }', replace_all: false }, ctx());
+    expect(same).toMatchObject({ isError: true, text: 'old_string and new_string are identical; nothing to change.' });
+    const all = await haetEditTool(state, fence, 'haet').execute({ path: 'src/b.ts', content_hash: hash, old_string: 'a', new_string: 'a', replace_all: true }, ctx());
+    expect(all).toMatchObject({ isError: true, text: 'old_string and new_string are identical; nothing to change.' });
+    // nothing entered the undo history, so an undo has nothing to pop
+    expect(await writeFileTool(state, fence).execute({ operation: 'undo', path: 'src/b.ts', replace_all: false }, ctx())).toMatchObject({ isError: true, text: 'No edit history for src/b.ts.' });
   });
 });
 

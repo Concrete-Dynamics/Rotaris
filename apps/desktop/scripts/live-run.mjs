@@ -1552,6 +1552,13 @@ if (wanted.includes('frictions')) {
   const argsOf = (call) => entryOf(call).args ?? {};
   const writeOp = calls.filter((call) => call.tool_name === 'write_file' && call.status !== 'ok' && resultOf(call).includes('requires an operation'));
   check(writeOp.length === 0, 'write_file needed no operation repair on first use', writeOp.length === 0 ? 'no refusal in the record' : `${writeOp.length} refusal(s), e.g. ordinal ${writeOp[0].ordinal} (${writeOp[0].agent_name})`);
+  // Live-run finding L6: `probe-ok\n` was reported "2 line(s) created". A final newline ends a line, so every create
+  // reports the lines its content holds as `wc -l` counts them, plus an unterminated last line.
+  const linesIn = (text) => (text === '' ? 0 : text.split('\n').length - (text.endsWith('\n') ? 1 : 0));
+  const creates = calls.filter((call) => call.tool_name === 'write_file' && call.status === 'ok' && argsOf(call).operation === 'create' && typeof argsOf(call).content === 'string');
+  const miscounted = creates.filter((call) => { const reported = /: (\d+) line\S* created/.exec(resultOf(call)); return reported === null || Number(reported[1]) !== linesIn(argsOf(call).content); });
+  if (creates.length === 0) noted('no write_file create settled ok, so its line count was not observed', names.join(', '));
+  else check(miscounted.length === 0, 'every write_file create reported the lines its content holds (a final newline ends a line)', miscounted.length === 0 ? `${creates.length} settled, e.g. ${JSON.stringify(resultOf(creates[0]).split(' (sha256')[0])} for ${JSON.stringify(argsOf(creates[0]).content)}` : `ordinal ${miscounted[0].ordinal}: ${JSON.stringify(resultOf(miscounted[0]).slice(0, 120))} for ${JSON.stringify(argsOf(miscounted[0]).content)}`);
   const signalled = calls.some((call) => call.tool_name === 'terminal' && argsOf(call).session_action === 'send_signal');
   check(signalled, 'the probe run attempted the SIGINT stop', signalled ? 'send_signal dispatched' : 'no send_signal in the record — the model did not attempt it');
   const sigint = calls.filter((call) => call.tool_name === 'terminal' && resultOf(call).includes('cannot be delivered'));

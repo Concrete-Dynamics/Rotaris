@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the readers are plain ESM beside the script that runs them.
-import { PRODUCT_SHARE_BOUND, PROGRESSING_TAIL_MS, attributeWait, childrenThatRanCommands, compressionNote, compressionTrigger, deadlineReading, saysSomething, silentFailedChildren, trafficCall, usageOf } from './duress-checks.mjs';
+import { PRODUCT_SHARE_BOUND, PROGRESSING_TAIL_MS, attributeWait, childrenThatRanCommands, commandsReading, compressionNote, compressionTrigger, deadlineReading, saysSomething, silentFailedChildren, trafficCall, usageOf } from './duress-checks.mjs';
 
 type Report = Record<string, unknown>;
 const reportOf = (c: { report: Report | null }) => c.report ?? {};
@@ -59,6 +59,17 @@ describe('a child\'s terminal calls are found under its canonical name (H-b)', (
 
   it('leaves out a child that made no tool call', () => {
     expect(childrenThatRanCommands([{ ...b, tool_calls: 0 }], calls)).toEqual([]);
+  });
+
+  it('asks only a child with a report: `f`, paused at the 2026-09-30 deadline quit with no report, is unsettled, not mute', () => {
+    const settled = { ...b, state: 'succeeded', report: { commands: [{ command: 'node --test', exit_code: 0 }] } };
+    const silentOne = { ...b, canonical_name: 'g--x', state: 'succeeded', report: { commands: [] } };
+    const f = { canonical_name: 'f--verify-the-whole-result--write-docs-verification.md', given_name: 'f: verify', state: 'paused', tool_calls: 40, report: null };
+    const all = [...calls, { agent_name: 'g--x', tool_name: 'terminal' }, { agent_name: f.canonical_name, tool_name: 'terminal' }];
+    const r = commandsReading([settled, silentOne, f], all, (c: { report: Report | null }) => c.report ?? {});
+    expect(r.asked).toEqual([settled, silentOne]);
+    expect(r.mute).toEqual([silentOne]);
+    expect(r.unsettled).toEqual([f]);
   });
 });
 

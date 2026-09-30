@@ -28,3 +28,8 @@ one whose status is `idle`, `running`, `background` or `waiting`, the same four 
 long run never stopped", and checks the other two readings as before. Pinned by
 `apps/desktop/scripts/lib/autopsy-coherence.test.ts`: six readings, plus the reader run over a store holding a
 `running` session, which printed `false` before the repair and prints `unasked` after it.
+
+**Live, 2026-09-30** (pack `.live-run/runs/2026-09-30T05-29-56-712Z`). The deadline quit now brings the session to rest
+(`paused`, `application_shutdown`, PD-ORCH-005 clause 3) with its summary recorded, so the question was asked and passed:
+"null summary on stopped run: false (execution_status paused, application_shutdown, summary recorded)". The `unasked`
+path was not met live; the unit cases pin it.

@@ -30,3 +30,6 @@ not counted, because REQ-ORCH-110 makes one for every report. Pinned by `apps/de
 ("a failed child with something to say is not silent"): child `d`'s recorded report is not silent, and each of the four
 fields alone is something to say; a report with none of them, or no report, still is. Replayed over the 2026-09-29
 pack's store, the check now finds no silent child where it flagged `d`.
+
+**Live, 2026-09-30** (pack `.live-run/runs/2026-09-30T05-29-56-712Z`): no child ended `failed`, and the check passed.
+The cut-off shape was not met live this time; the unit cases pin it.

@@ -27,3 +27,12 @@ under it (`childrenThatRanCommands` in `apps/desktop/scripts/lib/duress-checks.m
 `apps/desktop/scripts/lib/duress-checks.test.ts` ("a child's terminal calls are found under its canonical name"): child
 `b` is found by its canonical name, where the given name found no child. Replayed over the 2026-09-29 pack's store, the
 check finds `b` and its 12 reported commands, and the question is asked.
+
+**What the live run found once the check could match (2026-09-30).** `pnpm live-run --confirm --skip-build --only=duress`
+ran against `katalyst` (pack `.live-run/runs/2026-09-30T05-29-56-712Z`, session `c95d822d`). The check found `b` and its
+6 reported commands. It then failed on `f`, which the deadline quit had paused mid-verification after 26 terminal
+calls, and whose `report` column was NULL because a paused child has no report until it settles. "Reported none" is not
+a reading of a child with no report. That was the check's gap, never visible while the names could not match. It now asks
+only a child with a report; a child that ran commands and has not settled is named in a NOTE (`commandsReading` in
+`duress-checks.mjs`, pinned by the case "asks only a child with a report"). Replayed over that pack's store, `b` is asked
+(6 commands, none mute) and `f` is unsettled.

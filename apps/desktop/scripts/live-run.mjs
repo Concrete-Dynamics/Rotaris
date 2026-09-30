@@ -113,7 +113,7 @@ import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
-import { attributeWait, childrenThatRanCommands, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall } from './lib/duress-checks.mjs';
+import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall } from './lib/duress-checks.mjs';
 import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
@@ -2038,9 +2038,10 @@ if (wanted.includes('duress')) {
       // The eighty-eighth: `commands: []` was hardcoded at all three construction sites, so a child that ran
       // eight commands reported none. Derived from the transcript now; this is the live reading of that.
       // A call names its agent by the canonical name, never the given one (H-b).
-      const ranCommands = childrenThatRanCommands(children, calls);
-      const mute = ranCommands.filter((c) => (reportOf(c).commands ?? []).length === 0);
-      if (ranCommands.length === 0) noted('no child ran a terminal command', 'the report.commands reading is unasked this run');
+      // And only a child with a report is asked: one paused at the deadline or still running has none yet.
+      const { asked: ranCommands, mute, unsettled } = commandsReading(children, calls, reportOf);
+      if (unsettled.length > 0) noted('a child that ran commands had not settled, so has no report to list them in', unsettled.map((c) => `${c.given_name} (${c.state})`).join('; '));
+      if (ranCommands.length === 0) noted('no settled child ran a terminal command', 'the report.commands reading is unasked this run');
       else check(mute.length === 0, 'every child that ran a command reported its commands', mute.length === 0 ? `${ranCommands.length} child(ren) reported theirs` : `${mute.length} reported none, e.g. ${mute[0].given_name}`);
     }
 

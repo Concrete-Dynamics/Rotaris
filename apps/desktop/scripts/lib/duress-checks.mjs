@@ -49,6 +49,20 @@ export function childrenThatRanCommands(children, calls) {
   return children.filter((c) => Number(c.tool_calls) > 0 && ran.has(c.canonical_name));
 }
 
+/**
+ * The commands question, asked only of a child that has a report to list them in. A child paused at the deadline quit
+ * (PD-ORCH-005 clause 3) or still running has no report yet — its `report` column is NULL until it settles — so
+ * "reported none" is not a reading of it. The second live execution (2026-09-30) failed the check on exactly such a
+ * child, `f`, paused mid-verification with 26 terminal calls and no report; those are `unsettled`, a NOTE.
+ */
+export function commandsReading(children, calls, reportOf) {
+  const ran = childrenThatRanCommands(children, calls);
+  const unsettled = ran.filter((c) => c.report === null || c.report === undefined || c.report === '');
+  const asked = ran.filter((c) => !unsettled.includes(c));
+  const mute = asked.filter((c) => (reportOf(c).commands ?? []).length === 0);
+  return { asked, mute, unsettled };
+}
+
 /** The token counts one recorded call's streamed usage chunk carries; each is null where the record holds none. */
 export function usageOf(record) {
   const body = typeof record?.responseBody === 'string' ? record.responseBody : '';

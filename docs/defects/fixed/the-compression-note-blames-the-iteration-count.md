@@ -29,3 +29,6 @@ prompt size was recorded. No count of iterations appears, and no literal "(s)" (
 `apps/desktop/scripts/lib/duress-checks.test.ts`. Replayed over the 2026-09-29 pack, the note reads: "the largest prompt
 any agent sent was 64,038 tokens, 24 % of the model's 262,144-token window and below the 60 % compression trigger,
 157,286 tokens (REQ-CONFIG-134)".
+
+**Shown live, 2026-09-30** (pack `.live-run/runs/2026-09-30T05-29-56-712Z`): "the largest prompt any agent sent was
+77,043 tokens, 29 % of the model's 262,144-token window and below the 60 % compression trigger, 157,286 tokens".

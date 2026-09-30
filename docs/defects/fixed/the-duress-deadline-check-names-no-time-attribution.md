@@ -47,3 +47,9 @@ Pinned by `apps/desktop/scripts/lib/duress-checks.test.ts` ("an overrun says whe
 2026-09-29 pack, the reading is `window`: "2,406 s of 2,400 s: endpoint generating 2,391 s (99 %; 200 requests, 234,130
 output tokens of which 178,627 reasoning), tools alone 6 s, launch 5 s, the product with nothing in flight 3 s (0 %);
 the last request or tool call ended 2 s before the launch did".
+
+**Shown live, 2026-09-30.** `pnpm live-run --confirm --skip-build --only=duress` ran against `katalyst` (pack
+`.live-run/runs/2026-09-30T05-29-56-712Z`, session `c95d822d`). The check read "NOTE the long run was bounded by the
+window, not by the product — 2,406 s of 2,400 s: endpoint generating 2,390 s (99 %; 218 requests, 215,916 output tokens of
+which 144,543 reasoning), tools alone 7 s, launch 7 s, the product with nothing in flight 1 s (0 %)". The run was in its
+third wave when the wait ran out, `f` verifying, and it came to rest `paused`, `application_shutdown`.

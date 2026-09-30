@@ -402,7 +402,14 @@ error are something to say (H-a). A child's terminal calls are found under its c
 records (H-b). A session that never stopped answers `unasked`, a NOTE, where it used to pass (H-c). A run that never
 compressed names its largest prompt against the REQ-CONFIG-134 trigger rather than its iteration count (H-d). And the
 deadline check says **where the time went** (H-h): endpoint, tools alone, launch, and the product with nothing in flight,
-each from the traffic and the store. The notes are in `docs/defects/fixed/`.
+each from the traffic and the store. The notes are in `docs/defects/fixed/`. **Run again on 2026-09-30** (pack
+`.live-run/runs/2026-09-30T05-29-56-712Z`, `katalyst`), the repaired checks read as they claim: the overrun was a NOTE
+(2,406 s of 2,400 s, 99 % the endpoint generating, 1 s of the product with nothing in flight); the session came to rest
+`paused`, `application_shutdown`, with its summary, so the null-summary question was asked and passed; no child
+failed; the no-compression note named a largest prompt of 77,043 tokens against a trigger of 157,286; and the prompt
+arrived with its line breaks (H-e). The commands question, asked at last, **failed falsely once more**: `f`, paused by
+the deadline quit after 26 terminal calls, had no report yet. It is now asked only of a child with a report, and
+an unsettled one is a NOTE — replayed over that pack, `b` is asked (6 commands) and `f` is noted.
 
 **`LIVE_RUN_DURESS_MS` — the default stays 40 minutes, and the check says when the window was the bound (decided
 2026-09-29).** The figure is the owner's of 2026-09-22, taken for this endpoint, and a harness repair does not reverse it.

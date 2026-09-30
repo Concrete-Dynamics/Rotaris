@@ -101,7 +101,12 @@ export async function connect(endpointFile, { timeoutMs = 60_000 } = {}) {
     screenshot: (path) => send('screenshot', { path }),
     resize: (width, height) => send('resize', { width, height }),
     command: (request) => send('command', { request }),
-    quit: () => send('quit').catch(() => undefined),
+    /**
+     * The application's quit — `app.quit()`, the run host's `shutdown` with it — or, with `{ immediate: true }`, the
+     * immediate exit, which leaves a live run as a crash leaves it. Resolves with the seam's `{ quitting, how }`, or
+     * `undefined` when the connection went first.
+     */
+    quit: (options = {}) => send('quit', options.immediate === true ? { immediate: true } : {}).catch(() => undefined),
     close: () => { socket.destroy(); },
   };
 }

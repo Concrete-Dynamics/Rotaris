@@ -1257,8 +1257,9 @@ connection dropped. The proof asserts both halves — the refusal, and that the 
 down with it.
 
 **What the first execution found.** The endpoint file **outlived the process it described**. Cleanup hung on
-`app.on('will-quit')`, and `app.exit()` — how the `quit` op ends the process, and how every capture seam beside it
-ends one — emits neither `will-quit` nor `quit`. The next `pnpm app:drive` command therefore read a live-looking
+`app.on('will-quit')`, and `app.exit()` — how the `quit` op ended the process until 2026-09-29 (it is now the
+immediate exit the op sends only when asked; see below), and how every capture seam beside it ends one — emits neither
+`will-quit` nor `quit`. The next `pnpm app:drive` command therefore read a live-looking
 port nothing was listening on and failed with a connection error where it should have said "no app is being
 driven". The falsified assumption is kept beside its replacement in `driver.ts`: an Electron exit path is not one
 path, and a cleanup that matters is called by the op that knows it is ending as well as hung on the event that
@@ -1359,6 +1360,27 @@ failed **thirteen of seventeen**; after it, seventeen of seventeen. Two more che
 the modal's hit test and its confirmation — and the second of those failed on its own first execution against
 correct behaviour, asserting an empty transcript where the product had legitimately rewritten the record under a
 live run. The assertion is the user row's absence now, and the reason is kept beside it.
+
+**The quit and the shot, repaired (2026-09-29, R-067).** Two claims this section made by omission were falsified by
+use. *The `quit` op ended the process the way a person's quit does*: it did not — it was the immediate exit
+(`exitCleanly`), which asks the run host nothing, so a driven quit during a live run left the session `running` with no
+stop reason, as a crash does (phase 7's rehearsal of `PD-ORCH-005`, and the duress live run's deadline quit through the
+capture seam's same exit; re-measured on the build before the repair: `running`, `stop_reason` NULL). `quit` now sends
+`app.quit()` — the close guards, then `window-all-closed`'s `shutdown` — and the seam stays up until `will-quit`, so a
+quit a close guard keeps can still be seen and answered; `{ immediate: true }` (`pnpm app:drive stop --crash`) is the old
+exit, kept for a drive that means to leave a crash. A capture whose wait timed out ends through the same quit
+(`CaptureHost.quit`), one whose wait was satisfied by the immediate exit as before. *A shot shows the window as it
+is*: `capturePage()` copies the frame last submitted, and straight after the first navigation to the Workspace it
+returned the Overview's bytes although the document already showed the Workspace — in 16 launches of 20 after one
+frame, 12 of 52 after two, 1 of 20 after three with three cores busy, none of 55 after four. `screenshot` now waits
+four of the renderer's frames (`PAINT_FRAMES`), bounded at 1 s for a window that presents none, and says in its reply
+whether the paint was confirmed; `theme-proof`, which measured a view's texts and then shot it, now reads the texts on
+both sides of the shot and retakes it until they agree, because a surface mounting in those four frames (the startup
+notice) moved the picture away from the metadata. `driver.test.ts` and `capture/probe.test.ts` pin both; `driver-proof` adds a live run
+quit through the driver (the session at rest, `application_shutdown`) and shots straight after each navigation. The
+register row is in `first-executions.md`
+([`the-drivers-quit-skips-the-applications-shutdown.md`](../defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md),
+[`the-drivers-shot-can-return-a-stale-frame.md`](../defects/fixed/the-drivers-shot-can-return-a-stale-frame.md)).
 
 **What is still owed.** No existing proof has been rewritten onto the driver — the protocol is proved by its own
 proof and not yet by a migrated one. And the strip covers **main only**: the renderer bundle still carries Part AA's

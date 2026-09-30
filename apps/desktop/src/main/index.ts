@@ -1556,7 +1556,9 @@ async function main(): Promise<void> {
       log,
       command: (request, selectedWindow) => runCommand(request, selectedWindow.webContents.id),
       deferProjectOffer: (selectedWindow, delayMs) => mainWindows.deferProjectOffer(selectedWindow.webContents.id, delayMs),
-      quit: () => exitCleanly(0),
+      // The application's quit is the default (`driver.ts`, `quit`); the immediate exit is asked for by name.
+      quit: () => { log('driver: quitting through the application\'s quit'); app.quit(); },
+      exit: () => exitCleanly(0),
     });
     app.on('will-quit', () => driver.close());
   }
@@ -1582,6 +1584,7 @@ async function main(): Promise<void> {
     themeName: () => currentTheme.name,
     resultSeen: () => resultSeen,
     exit: (code) => { exitCleanly(code); },
+    quit: () => { app.quit(); },
   });
 
   /*

@@ -44,7 +44,17 @@ export interface DriverDeps {
   command: (request: unknown, win: BrowserWindow) => Promise<CommandOutcome>;
   /** Verification only: arm REQ-SHELL-011's deferred offer for the selected main window. */
   deferProjectOffer: (win: BrowserWindow, delayMs: number) => void;
+  /**
+   * The application's quit — `app.quit()`, the path a person's quit takes: every main window closed through its close
+   * guard, then `window-all-closed` asks the run host and each workspace service to `shutdown`, so a live run comes to
+   * rest as PD-ORCH-005 clause 3 says a quit leaves it. What `quit` sends unless it is asked for the immediate exit.
+   */
   quit: () => void;
+  /**
+   * The immediate exit (`exitCleanly`, the capture seam's): the run host is asked nothing and ended at once, so a live
+   * run is left as a crash leaves it. Kept for a drive that means to leave that state (`quit` with `immediate`).
+   */
+  exit: () => void;
 }
 
 export interface Driver {
@@ -62,6 +72,8 @@ interface Request {
   chord?: string;
   /** A4: which main window an op acts on, and what `useWindow` selects for the ops after it. */
   window?: string;
+  /** `quit` only: the immediate exit rather than the application's quit. */
+  immediate?: boolean;
   enter?: boolean;
   width?: number;
   height?: number;
@@ -81,6 +93,24 @@ interface Found {
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const POLL_MS = 100;
+/** How long `screenshot` waits for the renderer to present a frame before it captures regardless, and says so. */
+export const PAINT_BOUND_MS = 1_000;
+
+/**
+ * How many frames `screenshot` lets the renderer begin before it captures. A frame the document has already changed for
+ * is not on screen when the NEXT frame begins: it is committed, then rastered, activated, drawn and submitted, and
+ * `capturePage()` copies what was last submitted. Measured 2026-09-29 on this Linux host (Xvfb, software compositing),
+ * a shot straight after the first navigation to the Workspace — the heaviest first paint the rail has — in fresh
+ * launches, with the document already showing the Workspace when the wait began: after one frame the shot still showed
+ * the Overview in 16 launches of 20, after two in 12 of 52, after three in none of 40 on a quiet machine but 1 of 20
+ * with three of the four cores busy, and after four in none of 55 (20 quiet, 20 with three cores busy, 15 at a load
+ * average near 20). Four is taken. It is a count of frames and not of milliseconds, so a loaded machine's slower frames
+ * lengthen it by themselves.
+ */
+export const PAINT_FRAMES = 4;
+
+/** Resolves once the renderer has begun `PAINT_FRAMES` frames after the call. Evaluated in the window before a capture. */
+export const PAINTED_SCRIPT = `new Promise((resolve) => { let left = ${PAINT_FRAMES}; const frame = () => { left -= 1; if (left === 0) resolve(true); else requestAnimationFrame(frame); }; requestAnimationFrame(frame); })`;
 
 /**
  * The one locator. A match is the first element matching `selector` — and, where `text` is given, whose trimmed
@@ -148,6 +178,9 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
    * with a connection error instead of "no app is being driven". The falsified assumption is kept here rather
    * than repaired quietly: an Electron exit path is not one path, and a cleanup that matters must be called by
    * the op that knows it is ending as well as hung on the event that usually fires.
+   *
+   * Since 2026-09-29 `quit` sends the application's quit unless asked for the immediate exit, and only the
+   * immediate exit calls this itself; the application's quit reaches `will-quit`, where main calls it.
    */
   const cleanup = (): void => {
     for (const socket of sockets) socket.destroy();
@@ -284,9 +317,27 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
       }
       case 'screenshot': {
         if (!request.path) throw new Error('screenshot needs a path');
-        const image = await windowOrThrow().webContents.capturePage();
+        /**
+         * A fresh frame first (`docs/defects/fixed/the-drivers-shot-can-return-a-stale-frame.md`). `capturePage()` copies
+         * the frame last presented, and a shot taken right after a click, a navigation or a dialog's close returned the
+         * frame from BEFORE the change: byte-identical to the previous shot while `eval` in the same step read the new
+         * document (measured again 2026-09-29 on the build before this repair: the first navigation of thirty-nine,
+         * Overview to Workspace). So the renderer is waited on for `PAINT_FRAMES` frames first, then the capture is
+         * taken (`webContents.invalidate()` was not taken: Electron documents it for offscreen rendering only). A window
+         * that presents no frame (hidden, minimised) is captured after `PAINT_BOUND_MS` regardless, and the reply
+         * says the paint was not confirmed rather than claiming a fresh picture.
+         */
+        const wc = windowOrThrow().webContents;
+        const painted = await new Promise<boolean>((resolve) => {
+          const bound = deps.timers.after(millis(PAINT_BOUND_MS), () => resolve(false));
+          void (wc.executeJavaScript(PAINTED_SCRIPT) as Promise<unknown>).then(
+            () => { bound.cancel(); resolve(true); },
+            () => { bound.cancel(); resolve(false); },
+          );
+        });
+        const image = await wc.capturePage();
         writeFileSync(request.path, image.toPNG());
-        return { path: request.path };
+        return { path: request.path, painted };
       }
       case 'maximize': {
         // Not the same as `resize` to the work area: the host decides a maximized window's frame, and a layout
@@ -325,10 +376,25 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
         return { windowId: win.webContents.id, delayMs: request.delayMs ?? 650 };
       }
       case 'quit':
-        // The reply goes out first, then the seam takes itself down, then the process ends. In that order: a
-        // client that is told "quitting" and then finds the endpoint file still there has been told a falsehood.
-        deps.timers.after(millis(50), () => { cleanup(); deps.quit(); });
-        return { quitting: true };
+        /**
+         * The application's quit unless the immediate exit is asked for
+         * (`docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`). This op used to be the immediate
+         * exit alone, which skips `window-all-closed`, where main asks the run host to `shutdown`: a driven quit was a
+         * crash to a live run, and the session stayed `running` with no stop reason (measured 2026-09-29 on the build
+         * before this repair). Now it is `app.quit()`, which a person's quit is.
+         *
+         * The immediate exit: the reply goes out first, then the seam takes itself down, then the process ends. In that
+         * order: a client that is told "quitting" and then finds the endpoint file still there has been told a
+         * falsehood. The application's quit leaves the seam up until `will-quit` (main closes it there): the shutdown
+         * takes as long as it takes, and a close guard may keep the application — a window with unsaved settings asks
+         * its person — which a driver must still be able to see and answer. The reply says which one was sent.
+         */
+        if (request.immediate === true) {
+          deps.timers.after(millis(50), () => { cleanup(); deps.exit(); });
+          return { quitting: true, how: 'immediate' };
+        }
+        deps.timers.after(millis(50), () => { deps.quit(); });
+        return { quitting: true, how: 'quit' };
       default:
         throw new Error(`unknown op ${JSON.stringify(request.op ?? '')}`);
     }

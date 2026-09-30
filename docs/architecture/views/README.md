@@ -45,6 +45,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**The driver's `quit` is the application's quit, a capture whose wait timed out ends the same way, and the driver's
+shot waits for a presented frame (R-067).** `driver.ts`'s `quit` sends `app.quit()` — the close guards, then
+`window-all-closed`'s `shutdown` — unless it names the immediate exit (`immediate`; `pnpm app:drive stop --crash`), and
+its seam stays up until `will-quit`; `capture/probe.ts` ends a capture whose wait timed out through the new
+`CaptureHost.quit` rather than `exitCleanly`; `screenshot` waits `PAINT_FRAMES` (four) of the renderer's frames before
+`capturePage()`. This repairs `the-drivers-quit-skips-the-applications-shutdown.md` and
+`the-drivers-shot-can-return-a-stale-frame.md`. The **process view**'s quit paragraph and main row, and the **runtime
+view**'s application's-end paragraph, say so. No package, edge, process, message kind, channel, command or store column
+changed.
+
 **The run-start mode hint says what `plan` does and states a session's release (REQ-ORCH-152, REQ-CONFIG-320,
 PD-ORCH-003, R-067).** The Settings Runtime category's hint no longer says the plan gate is not built: `runStartModeHint`
 (`ui/settings/ConfigSettings.tsx`) says what `plan` does and, when the followed session's `SessionRecord.planReleased` is

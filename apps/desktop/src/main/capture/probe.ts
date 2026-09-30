@@ -51,6 +51,15 @@ export function installPromptSeam(host: CaptureHost, prompt: string, resuming: b
  * proof can drive a run from the Workspace view and read the Overview afterwards.
  * `ROTARIS_CAPTURE_PROBE="selector;;…"`: each selector's text and `data-*` attributes logged as JSON
  * before the capture — what a proof asserts against.
+ *
+ * How the launch ends. A capture whose wait was satisfied, or that had none, ends by the immediate exit it always
+ * has: what it waited for has happened, and a proof may read what the immediate exit leaves (part-j-proof reads a
+ * paused session's lock surviving it). A capture whose wait TIMED OUT ends through the application's quit
+ * (`host.quit`) instead: what it waited for — a run's result, as a rule — has not happened, so a run may still be live,
+ * and the immediate exit left it as a crash leaves it, `running` with no stop reason and its last usage unwritten
+ * (the duress live run of 2026-09-29, session `379f1490`;
+ * `docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`). The quit brings it to rest as a
+ * person's quit at that moment would (PD-ORCH-005 clause 3).
  */
 export function installFinish(host: CaptureHost, capture: string, prompt: string | undefined): void {
   const after = Number(process.env['ROTARIS_CAPTURE_AFTER_MS'] ?? (prompt ? 3_000 : 1_500));
@@ -59,7 +68,7 @@ export function installFinish(host: CaptureHost, capture: string, prompt: string
   const endView = Number(process.env['ROTARIS_CAPTURE_END_VIEW'] ?? 0);
   const probes = parseSelectors(process.env['ROTARIS_CAPTURE_PROBE']);
 
-  const finish = () => host.clocks.timers.after(millis(after), async () => {
+  const finish = (timedOut = false) => host.clocks.timers.after(millis(after), async () => {
     if (endView > 0) {
       host.win.webContents.sendInputEvent({ type: 'keyDown', keyCode: String(endView), modifiers: ['control'] });
       host.win.webContents.sendInputEvent({ type: 'keyUp', keyCode: String(endView), modifiers: ['control'] });
@@ -74,6 +83,7 @@ export function installFinish(host: CaptureHost, capture: string, prompt: string
     const img = await host.win.webContents.capturePage();
     writeFileSync(capture, img.toPNG());
     host.log(`captured ${capture}`);
+    if (timedOut) { host.log('capture: ending through the application\'s quit (the wait timed out; a run may still be live)'); host.quit(); return; }
     host.exit(0);
   });
 
@@ -91,6 +101,6 @@ export function installFinish(host: CaptureHost, capture: string, prompt: string
         .catch(() => { jsHit = false; });
     }
     if (satisfied()) { poll.cancel(); host.log(`capture: wait for ${wait} satisfied after ${Math.round(host.clocks.monotonic.now() - started)} ms`); finish(); }
-    else if (host.clocks.monotonic.now() - started > waitBound) { poll.cancel(); host.log(`capture: wait for ${wait} timed out after ${waitBound} ms`); finish(); }
+    else if (host.clocks.monotonic.now() - started > waitBound) { poll.cancel(); host.log(`capture: wait for ${wait} timed out after ${waitBound} ms`); finish(true); }
   });
 }

@@ -2653,8 +2653,10 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 >   *(2026-09-29, R-067: repaired. A resumed agent now takes the step after the ones its own record holds, in the same
 >   process or after a relaunch; `part-j-proof`'s steer-at-rest scenario pins it.)*
 > - The driver's own quit is an immediate exit that skips the shutdown
->   ([`the-drivers-quit-skips-the-applications-shutdown.md`](../defects/the-drivers-quit-skips-the-applications-shutdown.md));
+>   ([`the-drivers-quit-skips-the-applications-shutdown.md`](../defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md));
 >   the quit above was a window close.
+>   *(2026-09-29, R-067: repaired. The driver's `quit` is now the application's quit unless it names the immediate exit,
+>   and `driver-proof` quits a live run through it and reads the session at rest.)*
 >
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 

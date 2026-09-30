@@ -20,7 +20,8 @@
  *   pnpm app:drive command '{"kind":"theme.set","name":"nocturne"}'
  *   pnpm app:drive windows
  *   pnpm app:drive log [--tail=40]
- *   pnpm app:drive stop
+ *   pnpm app:drive stop            (the application's quit: close guards, then the run host's shutdown)
+ *   pnpm app:drive stop --crash    (the immediate exit: a live run is left as a crash leaves it)
  *
  * Nothing here is product code, and nothing here is evidence: a proof asserts, this reports.
  */
@@ -106,13 +107,32 @@ switch (command) {
     started.driver.close();
     break;
   }
+  /*
+   * `stop` sends the application's quit — what a person's quit is: every main window closed through its close guard,
+   * then the run host and each workspace service asked to `shutdown`, so a live run comes to rest (PD-ORCH-005 clause
+   * 3) — and waits for the process to end. `stop --crash` sends the immediate exit instead, which asks the run host
+   * nothing and leaves a live run as a crash leaves it. Until 2026-09-29 `stop` sent the immediate exit and said
+   * nothing of it (`docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`).
+   *
+   * A quit a close guard keeps (a window with unsaved settings asks its person) leaves the application running and
+   * driven; `stop` says so and leaves the endpoint, so the dialog can be answered, or `stop --crash` sent.
+   */
   case 'stop': {
     if (!existsSync(endpointFile)) { print('nothing to stop'); break; }
+    const pidFile = join(root, 'app.pid');
+    const pid = existsSync(pidFile) ? Number(readFileSync(pidFile, 'utf8').trim()) : 0;
+    const alive = () => { if (!pid) return false; try { process.kill(pid, 0); return true; } catch { return false; } };
+    const crash = flag('crash', false) === true;
     const driver = await connect(endpointFile, { timeoutMs: 5_000 }).catch(() => null);
-    if (driver) { await driver.quit(); driver.close(); print('quit sent'); }
-    else {
-      const pidFile = join(root, 'app.pid');
-      const pid = existsSync(pidFile) ? Number(readFileSync(pidFile, 'utf8').trim()) : 0;
+    if (driver) {
+      const sent = await driver.quit({ immediate: crash });
+      driver.close();
+      const bound = Number(flag('timeout', 60_000));
+      const started = Date.now();
+      while (alive() && Date.now() - started < bound) await new Promise((r) => setTimeout(r, 200));
+      if (alive()) { print(`${crash ? 'the immediate exit' : "the application's quit"} was sent and ${pid} is still running after ${bound} ms — a close guard may be asking; answer it, or \`pnpm app:drive stop --crash\``); break; }
+      print(`${sent?.how === 'immediate' ? 'exited at once (the immediate exit)' : "quit (the application's quit)"}; ${pid ? `${pid} has ended` : 'no pid was recorded'}`);
+    } else {
       if (pid) { try { process.kill(pid); print(`killed ${pid}`); } catch { print(`no process ${pid}`); } }
       else print('no endpoint and no pid');
     }
@@ -166,5 +186,6 @@ switch (command) {
     await withClient((d) => d.ping());
     break;
   default:
-    print(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 26).map((l) => l.replace(/^ \* ?/, '')).join('\n'));
+    // The header comment, whatever its length: every line up to the one that closes it.
+    { const lines = readFileSync(new URL(import.meta.url), 'utf8').split('\n'); print(lines.slice(1, lines.indexOf(' */')).map((l) => l.replace(/^ \* ?/, '')).join('\n')); }
 }

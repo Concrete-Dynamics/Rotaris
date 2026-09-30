@@ -280,7 +280,7 @@ that carry a licence file (REQ-STARTUP-143), so this module is named for the sur
 make it true. `scripts/lib/staged-resources.mjs` is `settings-proof`'s, for staging the two files and giving them back;
 the proof also takes the writer's list of git's redirecting variables from `build-id.mjs`. `package.mjs` launches the
 packaged application through `scripts/lib/bounded-launch.mjs`'s `spawnBounded`, as every proof launch does since
-2026-09-29, so a launch that overruns its bound is ended and reported rather than waited on. **Edges unchanged**:
+2026-09-29, so a launch that overruns its bound is ended and reported as a failure with its log tail. **Edges unchanged**:
 `apps/desktop/scripts/**` and `tools/**` are outside the boundary rule, the scripts reach the tools and never the
 reverse, and no product code imports either.
 

@@ -82,9 +82,9 @@ async function launch(name, extra, timeoutMs = 240_000, electronArgs = []) {
   if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'} (see ${name}.log)`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
-  // `spawnSync` returns when MAIN exits; the run host is a child that can outlive it by a moment, and a session it
-  // held is refused to the next launch for as long as its pid answers ("held by another run in this application
-  // (pid …)"). Measured 2026-09-28: the behaviour launch opened S1200 1.5 s after the invariance launch's main exited
+  // The launch (`spawnBounded`; `spawnSync` until 2026-09-29) returns when MAIN exits; the run host is a child that
+  // can outlive it by a moment, and a session it held is refused to the next launch for as long as its pid answers
+  // ("held by another run in this application (pid …)"). Measured 2026-09-28: the behaviour launch opened S1200 1.5 s after the invariance launch's main exited
   // and was refused by the run host that launch had left exiting. So each launch ends only when its children are gone.
   // Since the repair of that window (`docs/defects/fixed/a-session-lock-outlives-…`) main ends its run host before it
   // exits, so this wait finds the run host gone; it stays as the guard that says so if that ever stops being true.

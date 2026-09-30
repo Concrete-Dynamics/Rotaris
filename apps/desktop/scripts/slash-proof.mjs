@@ -53,7 +53,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { cleanEnvironment, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { parseEvals, readEval } from './lib/capture-evals.mjs';
-import { spawn, spawnSync } from 'node:child_process'; // Part C2 — `spawn` writes a file WHILE a launch blocks this script.
+import { spawn, spawnSync } from 'node:child_process'; // Part C2 — `spawn` writes a file WHILE a launch runs (`writeDuringLaunch`).
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -480,9 +480,10 @@ function scratch(name) {
 }
 
 /**
- * A file written into the workspace WHILE the application is running, by a process of its own. `spawnSync` blocks this
- * script for the whole launch, so a file that must not exist when the catalogue is first built cannot be written from
- * here; this is the person who drops a prompt file into `.agents/prompts/` with the window open.
+ * A file written into the workspace WHILE the application is running, by a process of its own. Written when `spawnSync`
+ * blocked this script for the whole launch; the launch is `spawnBounded`'s since 2026-09-29 and no longer blocks, but
+ * the writer stays a process of its own, timed from its start: this is the person who drops a prompt file into
+ * `.agents/prompts/` with the window open, not a step of the proof's own.
  */
 function writeDuringLaunch(path, contents, delayMs) {
   const source = `const fs=require('node:fs');const p=require('node:path');setTimeout(()=>{fs.mkdirSync(p.dirname(${JSON.stringify(path)}),{recursive:true});fs.writeFileSync(${JSON.stringify(path)},${JSON.stringify(contents)});},${delayMs});`;

@@ -13,7 +13,9 @@
  * would be a rewrite of the evidence, and the driver (`lib/driver.mjs`) replaces the reason they diverged.
  * `launchOptions` below is the part they DO share, offered to new code rather than forced on old. The one call inside
  * every `launch` IS shared since 2026-09-29: `lib/bounded-launch.mjs`'s `spawnBounded`, because `spawnSync`'s timeout
- * cannot end a launch that overruns it (`lib/launch-sites.test.ts`, rule 4).
+ * reports a launch that overruns it as a clean exit, status 0 with only `error.code` `ETIMEDOUT`, and closes the pipes
+ * before the quit path's lines reach the log — before 2026-09-29 it did not return at all (`lib/launch-sites.test.ts`,
+ * rule 4).
  *
  * Nothing here is product code. It runs only from the proofs.
  */

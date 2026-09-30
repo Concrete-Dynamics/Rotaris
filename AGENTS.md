@@ -31,8 +31,10 @@ No proof hangs on a launch that overruns. Every launch a script starts itself go
 `lib/bounded-launch.mjs`'s `spawnBounded`, and a driven one through the driver's `stopApp`. At its bound the
 application is sent SIGTERM with its pipes still open, and it answers: its quit path runs and it exits within a
 fraction of a second. SIGKILL follows a grace only if it does not. The proof then fails with the launch's last log
-lines. `lib/launch-sites.test.ts` refuses a `spawnSync` launch of Electron, whose timeout closes the pipes as it signals
-and then waits without a bound
+lines. `lib/launch-sites.test.ts` refuses a `spawnSync` launch of Electron: its timeout closes the pipes as it signals,
+so the quit path's lines are lost, and it reports the overrun as exit status 0 with only `error.code` `ETIMEDOUT` to
+show it, which a check of the status passes as a clean exit. (Before the application's EPIPE loop was repaired on
+2026-09-29 it did not return at all.)
 ([note](docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md)).
 
 | Area | Script | What it measures |

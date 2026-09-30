@@ -7,7 +7,14 @@ application's quit path writes a line to the closed stream at once and loops on 
 (`a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`), so the process never exits and the proof never
 returns. *(2026-09-29, R-067: that loop is repaired — `fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`
 — and a launch whose pipes are closed as it is signalled now quits in about 60 ms, measured with an async launch; the
-`spawnSync` sites were not re-run. The sentence above is kept as it was written.)* Nothing is reported, and the proof hangs until something outside kills it. `resilience-proof`'s override launch
+`spawnSync` sites were not re-run. The sentence above is kept as it was written.)* *(Corrected 2026-09-30, R-067: re-run
+on this branch's build, the hang is gone. An application launched with `ROTARIS_CAPTURE_AFTER_MS=60000` under
+`spawnSync(electron, …, { timeout: 8000 })` returned after 8075, 8081 and 8098 ms in three runs, as root under Xvfb,
+with `status` 0, `signal` null and `error.code` `ETIMEDOUT`, and no `quit:` line in its captured output — its pipes were
+closed before the quit path wrote. So on this build the defect is a different one: an overrun under `spawnSync` is
+reported as a clean exit 0, with only `error.code === 'ETIMEDOUT'` to show it. Every `launch` checked only
+`status !== 0`, so an overrun passed that check silently, without its log tail, and the proof went on as if the launch
+had done its work. The hang described above is the 2026-09-28 reading, before the EPIPE repair.)* Nothing is reported, and the proof hangs until something outside kills it. `resilience-proof`'s override launch
 was seen alive 649 s into a 180 s timeout. On 2026-09-28 a scratch `spawnSync` of scenario 4's launch with a 20 s timeout
 had not returned at 70 s, when a second SIGTERM from outside ended it.
 
@@ -48,18 +55,26 @@ launch ended by itself within its bound", `terminal-proof`'s failures list, and 
 `part-j-proof`'s store sampler stays a worker thread; its comment no longer says the launch blocks the thread.
 
 Pinned by `apps/desktop/scripts/lib/launch-sites.test.ts`'s rule 4, "no launch of Electron goes through spawnSync, whose
-timeout cannot end an overrun launch". Before the change it failed naming all thirty-five sites; after it, it passes.
+timeout reports an overrun as a clean exit" (named, until 2026-09-30, "… whose timeout cannot end an overrun launch"). Before the change it failed naming all thirty-five sites; after it, it passes.
 It also asserts that the scan sees at least thirty-six `spawnBounded` launches, and that a `spawnSync` launch is still
 recognised when one is written. A launch with `ELECTRON_RUN_AS_NODE` starts no application and is exempt, as under
-rule 2 (`build-hooks.cjs`'s probe).
+rule 2 (`build-hooks.cjs`'s probe). A second case, "every script that launches through spawnBounded reports an overrun
+with overrunMessage's log tail", pins the report: `updater-proof`'s overrun check named only the bound and how the launch
+ended until 2026-09-30, when it failed that case alone, and it now carries `overrunMessage`'s tail as the others do.
 
 **Measured on the built app of this branch**, as root under Xvfb on Linux with Node 24. Another workflow was running on
 the same host; no other Electron was running at the first launch, and the load average stayed between 0.7 and 2.3.
 
 - `part-h-proof` with its bound cut to 6 s for one scratch run, then restored. The first launch was ended at the bound
   by SIGTERM in 96 ms. Its log tail ends with `quit: requested (before-quit)` … `quit: exiting with status 0`, and
-  the proof exited 1 after 7 s with `loop-supervisor overran its 6000 ms bound: SIGTERM ended it after 96 ms`. Under
-  `spawnSync` the same overrun had not returned at 70 s.
+  the proof exited 1 after 7 s with `loop-supervisor overran its 6000 ms bound: SIGTERM ended it after 96 ms`. ~~Under
+  `spawnSync` the same overrun had not returned at 70 s.~~ *(Falsified 2026-09-30: that is the 2026-09-28 measurement,
+  taken before the EPIPE repair, and it was not re-taken on this branch.)* Re-taken on this branch's build: the same kind
+  of overrun (`ROTARIS_CAPTURE_AFTER_MS=60000`, bound 8 s) under `spawnSync` returned in 8075–8098 ms over three runs with
+  `status` 0, `signal` null, `error.code` `ETIMEDOUT` and no quit-path line in its output; under `spawnBounded` it
+  returned in 8073 ms, `overran.endedBy` SIGTERM after 59 ms, and `overrunMessage` named it. The repair is still needed,
+  for that reason: under `spawnSync` the overrun passed every `launch`'s `status !== 0` check as a clean exit; under
+  `spawnBounded` it is a failure with its log tail.
 - With the bounds as written, these proofs exited 0: `part-h-proof`, `part-j-proof`, `overview-proof`, `config-proof`,
   `traceability-proof`, `terminal-proof` (116 of 116) and `updater-proof`, whose new check passed with exit 0 in
   10.6 s. `sessions-proof` exited 1 at its schema check, after every launch before it had returned. That red is

@@ -48,7 +48,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { startApp } from './lib/driver.mjs';
-import { endedHow, spawnBounded } from './lib/bounded-launch.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { app, buildDesktop, cleanEnvironment, electron, evidenceDirectory, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
 
 const output = evidenceDirectory('updater-proof');
@@ -155,8 +155,9 @@ const launched = await spawnBounded(electron, [mainEntry, ...hostSwitches, works
     ROTARIS_CAPTURE_AFTER_MS: '9000',
   },
 });
-writeFileSync(join(stage2, 'app.log'), `${launched.stdout ?? ''}\n${launched.stderr ?? ''}`);
-check('the capture launch ended by itself within its bound', launched.overran === null, launched.overran === null ? `exit ${launched.status ?? launched.signal} in ${launched.elapsedMs} ms` : `it overran its ${launched.overran.timeoutMs} ms bound: ${endedHow(launched.overran)}; see children/app.log`);
+const launchLog = `${launched.stdout ?? ''}\n${launched.stderr ?? ''}`;
+writeFileSync(join(stage2, 'app.log'), launchLog);
+check('the capture launch ended by itself within its bound', launched.overran === null, launched.overran === null ? `exit ${launched.status ?? launched.signal} in ${launched.elapsedMs} ms` : `${overrunMessage('the capture launch', launched, launchLog)}\n(see children/app.log)`);
 const written = join(workspace, environmentFile);
 const terminalEnvironment = existsSync(written) ? readFileSync(written, 'utf8').split(/\r?\n/) : null;
 const has = (name) => terminalEnvironment !== null && terminalEnvironment.some((l) => l.toUpperCase().startsWith(`${name}=`));

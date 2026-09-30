@@ -1237,8 +1237,12 @@ of the evidence rather than a move of it, and the driver below removes the press
 
 **Every launch a proof starts itself is bounded (2026-09-29, R-067).** Each script still keeps its own `launch`; what
 changed is the one call inside it. `spawnSync(electron|exe, …, { timeout })` stood at thirty-five sites in thirty-four
-scripts (`terminal-proof/packaged.mjs` among them), and its timeout could not end a launch: Node signals the child and
-closes its ends of the pipes at the same moment, then waits for an exit without a bound. Every one of them is now
+scripts (`terminal-proof/packaged.mjs` among them). ~~Its timeout could not end a launch: Node signals the child and
+closes its ends of the pipes at the same moment, then waits for an exit without a bound.~~ That was true until the
+application's EPIPE loop was repaired (2026-09-29); re-measured on 2026-09-30, the timeout does end the launch (SIGTERM,
+and the quit path runs), but `spawnSync` then reports the overrun as `status` 0 with only `error.code` `ETIMEDOUT` to
+show it, having closed the pipes before the quit path wrote, and every `launch` checked only `status`, so an overrun
+passed as a clean exit with no log tail. Every one of them is now
 `lib/bounded-launch.mjs`'s `spawnBounded` (SIGTERM with the pipes open and read, a grace, SIGKILL to the launch's process
 group), and an overrun is a failure named by `overrunMessage` with the launch's last thirty log lines — thrown by a
 `launch`, recorded as a failed check by `updater-proof`, `terminal-proof` and the packaged terminal launch, which report

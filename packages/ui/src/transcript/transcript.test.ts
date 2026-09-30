@@ -102,6 +102,23 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
     expect(updateShape(d(['a', 'b']), d(['a', 'b']))).toBe('replace');
     expect(updateShape(d(['a', 'b']), d(['a', 'b', 'c', 'd']))).toBe('append');
     expect(updateShape(d(['a', 'x']), d(['a', 'y', 'z']))).toBe('other');
+    // The fourth: the last row keeps its identity and grows while rows are appended after it. Its key is the same on
+    // both sides, so the keys alone read this as `append`; what tells it apart is the last row's content
+    // (docs/defects/fixed/the-update-shape-never-answers-extend.md).
+    const streamed = (body: string) => ({ shape: 'row' as const, key: 'row:1', row: row(1, { body, settled: false }) });
+    const a = { shape: 'row' as const, key: 'row:0', row: row(0) };
+    const before = [a, streamed('The answer')];
+    expect(updateShape(before, [a, streamed('The answer is'), { shape: 'row' as const, key: 'tool:c2', row: tool(2, 'bash') }])).toBe('extend');
+    // The same last row, unchanged (the same object, or a new object with the same content), with a row after it: `append`.
+    expect(updateShape(before, [a, before[1]!, { shape: 'row' as const, key: 'tool:c2', row: tool(2, 'bash') }])).toBe('append');
+    expect(updateShape(before, [a, streamed('The answer'), { shape: 'row' as const, key: 'tool:c2', row: tool(2, 'bash') }])).toBe('append');
+    // Extended with nothing after it is the same number of rows replaced in place: `replace`.
+    expect(updateShape(before, [a, streamed('The answer is')])).toBe('replace');
+    // A group is the last displayed row just as a row is: a run that gains a member while rows follow is an extension.
+    const run = (members: number) => asGroup(projectDisplay(options(Array.from({ length: members }, (_, i) => tool(10 + i, 'read_file', { callKey: `r${i}` }))))[0]);
+    expect(run(3).key).toBe(run(2).key);
+    expect(updateShape([a, run(2)], [a, run(3), { shape: 'row' as const, key: 'row:20', row: row(20) }])).toBe('extend');
+    expect(updateShape([a, run(2)], [a, run(2), { shape: 'row' as const, key: 'row:20', row: row(20) }])).toBe('append');
   });
 
   it('REQ-CHAT-168: the "N new updates" label is written for the count it carries, at zero, one and many', () => {
@@ -452,7 +469,7 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
     expect(evicted).toEqual(['a|1', 'b|1', 'c|1']);
   });
 
-  it('the update shape reads the keys only past the rows both arrays share, and answers what comparing every key answered', () => {
+  it('the update shape reads the keys only past the rows both arrays share, and answers what comparing every key answered (REQ-CHAT-053, REQ-CHAT-055)', () => {
     let reads = 0;
     const counted = (d: DisplayRow): DisplayRow => ({ shape: 'row', row: d.shape === 'row' ? d.row : row(0), get key() { reads += 1; return d.key; } });
     const before = Array.from({ length: 1_200 }, (_, i) => counted(displayed(i)));
@@ -461,7 +478,9 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
     // The first form mapped both arrays to their keys: 2,401 reads for one appended row.
     expect(reads).toBeLessThanOrEqual(4);
 
-    // Against the first form's answer, over pairs that share objects, share keys on new objects, and differ.
+    // Against the first form's answer, over pairs that share objects, share keys on new objects, and differ. The first
+    // form never answered `extend` (docs/defects/fixed/the-update-shape-never-answers-extend.md): its answer stands
+    // everywhere else, and where it said `append` the last row's content now decides between `append` and `extend`.
     const oracle = (a: readonly DisplayRow[], b: readonly DisplayRow[]) => {
       const x = a.map((d) => d.key);
       const y = b.map((d) => d.key);
@@ -469,9 +488,12 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
       const shared = Math.min(x.length, y.length);
       let common = 0;
       while (common < shared && x[common] === y[common]) common += 1;
-      if (common === x.length && y.length > x.length) return 'append';
+      if (common === x.length && y.length > x.length) {
+        const was = a[x.length - 1];
+        const now = b[x.length - 1];
+        return was !== undefined && now !== undefined && asRow(was).row.body !== asRow(now).row.body ? 'extend' : 'append';
+      }
       if (common === y.length && x.length > y.length) return 'truncate';
-      if (x.length > 0 && common === x.length - 1 && y.length >= x.length && x[x.length - 1] === y[x.length - 1]) return 'extend';
       return 'other';
     };
     let seed = 7;
@@ -481,7 +503,8 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
       const a = Array.from({ length: Math.floor(rand() * 6) }, (_, i) => displayed(i));
       let b: DisplayRow[] = [...a];
       const op = rand();
-      if (op < 0.25) b = [...b, displayed(a.length)];
+      if (op < 0.2) b = [...b, displayed(a.length)];
+      else if (op < 0.25 && b.length > 0) b = [...b.slice(0, -1), displayed(a.length - 1, 'grown in place'), displayed(a.length)];
       else if (op < 0.4 && b.length > 0) b = b.slice(0, -1);
       else if (op < 0.6 && b.length > 0) { const at = Math.floor(rand() * b.length); b[at] = displayed(at, 'same key, new object'); }
       else if (op < 0.75 && b.length > 0) { const at = Math.floor(rand() * b.length); b[at] = displayed(100 + at); }
@@ -490,7 +513,7 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
       seen.add(expected);
       expect(updateShape(a, b), `pair ${k}`).toBe(expected);
     }
-    expect([...seen].sort()).toEqual(['append', 'other', 'replace', 'truncate']);
+    expect([...seen].sort()).toEqual(['append', 'extend', 'other', 'replace', 'truncate']);
   });
 });
 

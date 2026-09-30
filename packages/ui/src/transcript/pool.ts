@@ -1,4 +1,4 @@
-import { measureKey } from './cache.js';
+import { measureKey, sourceTextOf } from './cache.js';
 import { OVERSCAN, ROW_MIN_HEIGHT } from './constants.js';
 import { FACT_SEPARATOR, segmentFacts } from './project.js';
 import { isMessageRow, isReasoningRow } from './Row.js';
@@ -413,14 +413,22 @@ export function restoreAnchor(display: readonly DisplayRow[], table: OffsetTable
 }
 
 /**
- * REQ-CHAT-053's four update shapes, decided by comparing the displayed keys before and after. Only a change
- * matching NONE of the four may reset the view, and such a reset must still restore by REQ-CHAT-071's anchor.
+ * REQ-CHAT-053's four update shapes, decided by comparing the displayed keys before and after — and, for the one
+ * shape keys cannot see, the content of the last row. Only a change matching NONE of the four may reset the view,
+ * and such a reset must still restore by REQ-CHAT-071's anchor.
  *
  *  - `append`  — rows added at the end and nothing else changed;
  *  - `truncate` — rows dropped from the end and nothing else changed;
  *  - `replace` — the same number of rows, replaced in place;
- *  - `extend`  — the last row extended (its key unchanged) while rows were appended after it;
+ *  - `extend`  — the last row extended (its key unchanged, its content changed) while rows were appended after it;
  *  - `other`   — anything else, which is the only case permitted to reset.
+ *
+ * **`extend` and `append` have the same keys.** A row extended in place keeps its identity (REQ-CHAT-059), so an
+ * extension with rows appended after it and a plain append differ only in whether the last row before the update
+ * drew something else after it. The first form compared keys alone, and its `extend` branch required the last key to
+ * be both the first that differed and equal on both sides, so it never answered `extend`
+ * (docs/defects/fixed/the-update-shape-never-answers-extend.md). The content is read for that ONE row only, so the
+ * cost stays that of the rows the update changed (REQ-CHAT-055).
  */
 export type UpdateShape = 'append' | 'truncate' | 'replace' | 'extend' | 'other';
 
@@ -434,12 +442,24 @@ export function updateShape(before: readonly DisplayRow[], after: readonly Displ
   while (common < shared && before[common] === after[common]) common += 1;
   while (common < shared && before[common]!.key === after[common]!.key) common += 1;
   if (common === before.length && before.length === after.length) return 'replace';
-  if (common === before.length && after.length > before.length) return 'append';
+  if (common === before.length && after.length > before.length) {
+    // Every row kept its identity and rows follow: REQ-CHAT-053's fourth shape when the last of them grew in place.
+    const last = before.length - 1;
+    return last >= 0 && changedInPlace(before[last]!, after[last]!) ? 'extend' : 'append';
+  }
   if (common === after.length && before.length > after.length) return 'truncate';
-  // The last displayed row kept its identity and grew, and rows were appended after it: REQ-CHAT-053's fourth shape.
-  const last = before.length - 1;
-  if (before.length > 0 && common === last && after.length >= before.length && before[last]!.key === after[last]!.key) return 'extend';
   return 'other';
+}
+
+/**
+ * Whether a displayed row under the same key draws something else now. The replica replaces a changed row rather than
+ * mutating it (`cache.ts`'s memo rests on the same fact), so the same object — or the same underlying row — is
+ * unchanged without reading its text; a group is rebuilt on every projection, so its text is compared.
+ */
+function changedInPlace(was: DisplayRow, now: DisplayRow): boolean {
+  if (was === now) return false;
+  if (was.shape === 'row' && now.shape === 'row' && was.row === now.row) return false;
+  return sourceTextOf(was) !== sourceTextOf(now);
 }
 
 /** REQ-CHAT-072: the count is in DISPLAYED rows, grouping-aware, and REQ-CHAT-168 fixes the wording at 0, 1 and many. */

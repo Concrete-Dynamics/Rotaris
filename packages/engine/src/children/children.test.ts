@@ -1950,7 +1950,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
      * Two sessions in one `Sessions` — one run host — each delegating one coding-agent child on the same `models:` key
      * with `max_parallel` 1. The first session's child holds its model call until released.
      */
-    function twoSessions() {
+    function twoSessions(onSecondChild: () => void = () => undefined) {
       let releaseFirst!: () => void;
       const hold = new Promise<void>((r) => { releaseFirst = r; });
       // The first session's root, once it has delegated, holds its every later turn until released — so that run is still
@@ -1966,7 +1966,9 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
           return answer('done');
         }
         if (persona === 'summariser') return answer('{"summary":"ok"}');
-        return /TASK: one/.test(all) ? { parts: [{ hold }, { part: { kind: 'text', delta: 'done' } }, { part: { kind: 'finish', reason: 'stop' } }] } : answer('done');
+        if (/TASK: one/.test(all)) return { parts: [{ hold }, { part: { kind: 'text', delta: 'done' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+        onSecondChild();
+        return answer('done');
       }, { modelKey: KEY, capFor: (k) => (k === KEY ? 1 : null) });
       return { ...setup, releaseFirst, releaseFirstRoot };
     }
@@ -2006,6 +2008,65 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const s2 = (sessions.start(dal, 'C:/ws', 'the second task') as { value: SessionId }).value;
       expect((await sessions.running(s2)!).status).toBe('completed');
       expect(dal.eventsOfKind(s2, 'child.transition').map((e) => (JSON.parse(e.payload) as { to_state: string }).to_state)).not.toContain('waiting_on_model_slot');
+    });
+
+    /**
+     * PD-ORCH-005 clause 4 with REQ-CONFIG-094 (OQ-149's reading): a child paused while it held a slot keeps that place
+     * while its session rests, so no other session takes it, and continuing never puts two on the key. The first session is
+     * paused with its child mid-step and comes to rest `interrupted`, its child `paused`.
+     */
+    async function pausedFirst(onSecondChild?: () => void) {
+      const setup = twoSessions(onSecondChild);
+      const { sessions, releaseFirst, releaseFirstRoot } = setup;
+      const s1 = (sessions.start(dal, 'C:/ws', 'the first task') as { value: SessionId }).value;
+      await until(() => children(s1)[0]?.state === 'running');
+      expect(sessions.control({ op: 'pause', sessionId: s1, args: {} })).toEqual({ ok: true });
+      releaseFirst(); releaseFirstRoot();
+      expect((await sessions.running(s1)!).status).toBe('interrupted');
+      expect(children(s1).map((c) => [c.state, c.resume_state])).toEqual([['paused', expect.stringMatching(/^(running|summarizing)$/)]]);
+      const s2 = (sessions.start(dal, 'C:/ws', 'the second task') as { value: SessionId }).value;
+      await until(() => children(s2).length === 1 && children(s2)[0]!.state !== 'queued');
+      return { ...setup, s1, s2 };
+    }
+    const holding = (sid: SessionId): number => children(sid).filter((c) => c.state === 'starting' || c.state === 'running' || c.state === 'summarizing').length;
+
+    it('PD-ORCH-005 clause 4: a paused child keeps its place while its session rests — another session\'s child is held, and a continue never runs two on the key', async () => {
+      const { sessions, s1, s2 } = await pausedFirst();
+      expect(children(s2).map((c) => c.state)).toEqual(['waiting_on_model_slot']);
+      expect(sessions.running(s2)).not.toBeNull();
+      // Sampled on every poll from the continue to both runs' ends: never more than the cap on the key across the process.
+      let most = 0;
+      expect(sessions.continueSession(s1, 'continue').ok).toBe(true);
+      const done = Promise.all([sessions.running(s1)!, sessions.running(s2)!]);
+      let settled = false; void done.then(() => { settled = true; });
+      while (!settled) { most = Math.max(most, holding(s1) + holding(s2)); await new Promise((r) => setTimeout(r, 1)); }
+      const [r1, r2] = await done;
+      expect([r1.status, r2.status]).toEqual(['completed', 'completed']);
+      expect(most).toBeLessThanOrEqual(1);
+      expect(children(s1).map((c) => c.state)).toEqual(['succeeded']);
+      expect(children(s2).map((c) => c.state)).toEqual(['succeeded']);
+    });
+
+    it('PD-ORCH-005 clause 6: continuing without the paused child gives its place up, and the other session\'s held child starts', async () => {
+      // What the first session had when the second's child made its first model call: the decline alone frees the place,
+      // not a later child of the first session's new iteration ending.
+      let firstHad: string[] | null = null;
+      const { sessions, s1, s2 } = await pausedFirst(() => { firstHad ??= children(s1).map((c) => c.state); });
+      expect(children(s2).map((c) => c.state)).toEqual(['waiting_on_model_slot']);
+      expect(sessions.continueSession(s1, 'continue', { withoutPaused: true }).ok).toBe(true);
+      expect((await sessions.running(s2)!).status).toBe('completed');
+      expect(children(s2).map((c) => c.state)).toEqual(['succeeded']);
+      expect(children(s1)[0]!.state).toBe('cancelled');
+      expect(firstHad).toEqual(['cancelled']);
+      await sessions.running(s1);
+    });
+
+    it('PD-ORCH-005 clause 16: cancelling the paused child while its session rests gives its place up at once', async () => {
+      const { sessions, s1, s2 } = await pausedFirst();
+      expect(children(s2).map((c) => c.state)).toEqual(['waiting_on_model_slot']);
+      expect(sessions.control({ op: 'cancelAgent', sessionId: s1, args: { agentId: children(s1)[0]!.task_id } }).ok).toBe(true);
+      expect((await sessions.running(s2)!).status).toBe('completed');
+      expect(children(s2).map((c) => c.state)).toEqual(['succeeded']);
     });
   });
 

@@ -68,6 +68,18 @@ export function storeChildReport(deps: { readonly writer: SessionWriter; readonl
 }
 
 /**
+ * REQ-CONFIG-094 / REQ-MONITOR-020 / REQ-ORCH-050: whether a child holds a place on its `models:` entry's cap — from the
+ * start claim (`starting`) until its terminal state, through `running` and `summarizing`. PD-ORCH-005 clause 4: "each
+ * agent keeps the place in every child limit it already held", so a child `paused` out of `running` or `summarizing` (its
+ * `resume_state`) keeps its place while its session rests, and resumes into it; one paused while it waited, or before its
+ * start was claimed, held none and holds none (OQ-149).
+ */
+export function holdsModelSlot(c: Pick<ChildRow, 'state' | 'resume_state'>): boolean {
+  if (c.state === 'starting' || c.state === 'running' || c.state === 'summarizing') return true;
+  return c.state === 'paused' && (c.resume_state === 'running' || c.resume_state === 'summarizing');
+}
+
+/**
  * ADR-0012: the ledger is the primary representation — one row per child, written through the session
  * writer, every state change one transaction with its event, every query carrying the session id
  * (REQ-ORCH-151). This class is the engine's view of it: admission (REQ-ORCH-046's five checks in order,
@@ -216,9 +228,9 @@ export class ChildLedger {
   slotsInUse(modelKey: string): number {
     return this.slotsInUseHere(modelKey) + (this.deps.slotsHeldElsewhere?.(modelKey) ?? 0);
   }
-  /** This iteration's children holding a slot on the key — what its run answers `ModelSlots` for. */
+  /** This iteration's children holding a slot on the key (`holdsModelSlot`). */
   slotsInUseHere(modelKey: string): number {
-    return this.all().filter((c) => c.model_key === modelKey && (c.state === 'starting' || c.state === 'running' || c.state === 'summarizing')).length;
+    return this.all().filter((c) => c.model_key === modelKey && holdsModelSlot(c)).length;
   }
   slotFree(modelKey: string): boolean {
     const cap = this.deps.modelCap(modelKey);

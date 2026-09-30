@@ -165,9 +165,10 @@ export interface RunDeps {
   readonly budget?: ChildBudget | undefined;
   readonly modelCap?: ((modelKey: string) => number | null) | undefined;
   /**
-   * REQ-CONFIG-094: the process-wide half of the per-model count — the slots the process's other runs hold on a key — and
-   * the signal that one of this run's children ended, so another run's held child can be promoted (`ModelSlots`, joined by
-   * `Sessions` for the run's lifetime). Absent: this run is the only one counted.
+   * REQ-CONFIG-094: the process-wide half of the per-model count — the slots the process's other sessions hold on a key,
+   * a paused child's kept place among them (PD-ORCH-005 clause 4) — and the signal that one of this run's children ended or
+   * gave its place up, so another run's held child can be promoted (`ModelSlots`, joined by `Sessions` while the session
+   * runs or rests holding a place). Absent: this run is the only one counted.
    */
   readonly modelSlots?: { readonly heldElsewhere: (modelKey: string) => number; readonly freed: () => void } | undefined;
   readonly summariser?: SummariserDeps | null | undefined;
@@ -621,10 +622,6 @@ export class Run {
   get isPlanGateHeld(): boolean {
     return this.planHeld;
   }
-  /** REQ-CONFIG-094: how many of this run's children hold a slot on the key now — its answer to `ModelSlots`. */
-  modelSlotsInUse(modelKey: string): number {
-    return this.children?.ledger.slotsInUseHere(modelKey) ?? 0;
-  }
   /** REQ-MONITOR-020: a slot freed in another run — this run's scheduler passes, so a child it holds can be promoted. */
   wakeForFreedSlot(): void {
     this.children?.scheduler.pass();
@@ -798,7 +795,12 @@ export class Run {
 
       // PD-ORCH-005 clauses 4 and 6: an iteration a previous run left open resumes before anything else runs, as the
       // loop's first iteration below; declined, it closes here.
-      if (this.resumeFrom === null) await this.closeLeftOpenIteration();
+      if (this.resumeFrom === null) {
+        await this.closeLeftOpenIteration();
+        // REQ-CONFIG-094 with PD-ORCH-005 clause 6: a declined iteration's paused agents gave up the places they kept, so
+        // another session's child held on one may start (OQ-149).
+        this.deps.modelSlots?.freed();
+      }
       // REQ-ORCH-153: a held run produces its plan and parks; it never enters the iteration loop, so it selects no
       // task, judges no completion and runs no check suite — the prohibition is structural rather than a branch.
       if (this.planHeld) return await this.parkAtPlanGate();

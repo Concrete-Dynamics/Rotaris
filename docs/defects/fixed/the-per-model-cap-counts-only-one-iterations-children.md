@@ -39,7 +39,7 @@ every other run under way holds on the key (`slotsHeldElsewhere`). A child's ter
 scheduler for one pass (`ChildrenDeps.onSlotFreed` → `ModelSlots.freed` → `Run.wakeForFreedSlot`), and so does a run's
 end, so a child another session holds `waiting_on_model_slot` is promoted when the slot frees. The held-child queue is
 still each session's; the release order across sessions is raised as
-[OQ-146](../../architecture/open-questions.md), with the reading built.
+[OQ-148](../../architecture/open-questions.md), with the reading built.
 
 Pinned by `packages/engine/src/children/children.test.ts` ("acceptance A13: the per-model cap counts every child in the
 process …", two cases: the second session's child is held `waiting_on_model_slot` with "1 of 1 slots in use", then promoted
@@ -52,3 +52,26 @@ Not shown in the built app or the live run: no proof and no live-run scenario st
 scenarios are one session each). `pnpm mission-proof --skip-build` after `pnpm build`, whose `waiting` scenario holds two
 children behind a `max_parallel: 1` cap in one session, passed with one child running and two waiting at 6 s, so the
 one-session path is unchanged. ADR-0012 carries the report back.
+
+### Corrected in verification, the same day: a paused child keeps its place
+
+The outcome above said every run "joins when it starts or continues and leaves when its run ends", counting children in
+`starting`, `running` or `summarizing`. That left the repair incomplete, and the branch's verifier showed it: a `paused`
+child was counted by nothing, and a run coming to rest left `ModelSlots`. With `max_parallel` 1, the first session was
+paused with its child mid-step; the second session's child then took the slot and ran; continuing the first resumed its
+child straight into `running` beside it — two slots held on a key capped at 1, through PD-ORCH-005's pause and continue.
+
+PD-ORCH-005 clause 4 says each resumed agent "keeps the place in every child limit it already held", and the correction
+reads it literally ([OQ-149](../../architecture/open-questions.md), with the reading built): a child `paused` out of
+`running` or `summarizing` holds its slot while its session rests (`holdsModelSlot` in
+`packages/engine/src/children/ledger.ts`), and it is each **session** that joins `ModelSlots` — from the first run of it
+until no run of it is under way and none of its children holds a place, answering from its store. Continuing without
+the paused agents (clause 6) or cancelling one at rest (clause 16) gives the place up and wakes the other sessions.
+
+Pinned by three more cases in the same describe of `children.test.ts`: "PD-ORCH-005 clause 4" (the second session's child
+is held while the first rests, and from the continue to both runs' ends no poll sees more than one child holding a slot
+across the two sessions), "clause 6" (declining frees the place before the first session's new iteration has any child)
+and "clause 16" (a cancel at rest frees it). Each fails without its part of the correction: all three with the paused
+state not counted; clause 6 with the decline's wake removed; clause 16 (timing out at 30 s) with the cancel's release
+removed. The key is summed by its string across workspaces whose configurations may define it differently
+([OQ-150](../../architecture/open-questions.md)). Corrected 2026-09-30 under R-067.

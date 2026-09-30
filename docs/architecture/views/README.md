@@ -47,10 +47,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 **The per-model cap counts every child in the process (REQ-CONFIG-094, REQ-MONITOR-020, REQ-ORCH-050, acceptance A13,
 R-067).** `ChildLedger.slotsInUse` counted one iteration's children, so two sessions under way in one run host could each
-fill a `max_parallel`. `Sessions` now holds a `ModelSlots` every run joins for as long as it is under way; the ledger adds
-the other runs' slots to its own, and a child's end or a run's end wakes the other runs' schedulers. This repairs
+fill a `max_parallel`. `Sessions` now holds a `ModelSlots` each session joins while a run of it is under way or while it
+rests with a paused child keeping its place (PD-ORCH-005 clause 4, OQ-149); the ledger adds the other sessions' slots to
+its own, and a child's end, a run's end, a decline or a cancel at rest wakes the other sessions' runs. This repairs
 `the-per-model-cap-counts-only-one-iterations-children.md`. The **runtime view**'s §4 and a **state-ownership view** row
-say so; OQ-146 asks the release order across sessions. No package, edge, process, message kind, channel, command or store
+say so; OQ-148 asks the release order across sessions, OQ-150 whether one key in two workspaces is one entry. No package, edge, process, message kind, channel, command or store
 column changed.
 
 **The post-run improvement capture never rejects (REQ-ORCH-137, REQ-LIBRARY-032, R-067).** `onRunResult`'s detached

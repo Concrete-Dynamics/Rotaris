@@ -52,6 +52,15 @@ no job with a log line rather than an unhandled rejection. This repairs
 `an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md`. The **process view**'s
 improvement-analyst paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
 
+**A persona's `tool_restrictions` narrow its grant (REQ-TOOLS-006 (4), REQ-CONFIG-103, OQ-145, R-067).** The engine
+`Persona` carries the map (`toolRestrictions`), and every child's `ToolPortContext` names its delegating persona
+(`parentPersona`, from `IterationChildren.parentPersonaOf`). The run host passes the lists `toolRestrictionsFor` reads to the
+registry's fourth stage, which now takes allowed-tool lists, and takes an MCP tool no list names off the surface
+before its executors and its prompt section are drawn from it (REQ-MCP-062). `writesFiles`
+reads the same lists. The **seams view**'s §4 and the **runtime view**'s write-scopes paragraph say so. This repairs
+[`a-personas-tool-restrictions-never-narrow-its-grant.md`](../../defects/fixed/a-personas-tool-restrictions-never-narrow-its-grant.md).
+No package, edge, process, message kind, channel, command or store column changed.
+
 **A session delete cascades to nineteen tables, and `sessions-proof` reads that from the schema (REQ-SESSION-166, PD-ORCH-005,
 R-067).** The **runtime view**'s §6a delete said "the fifteen dependent tables"; v20's `plan_cycles` and v23–v24's
 `iterations`, `agent_messages`, `agent_terminals` and `agent_fingerprints` make every table whose `session_id` references

@@ -120,6 +120,15 @@ describe('TerminalStreams — the sampling period is a ceiling (ADR-0021 Decisio
     expect(h.streams.list('s1')).toMatchObject([{ running: false, exitCode: 3 }]);
   });
 
+  it('REQ-TOOLS-179 (OQ-143): a background stream whose process could not be started ends with no exit code, never the −1 of a kill', () => {
+    const h = harness();
+    h.streams.begin(h.spec({ streamId: 'bg:ts_00000002', kind: 'background', command: 'printf never' }));
+    h.streams.end('bg:ts_00000002', { exitCode: null, finalText: '[spawn error] Error: spawn /missing ENOENT' });
+    expect(h.frames.at(-1)!.meta).toMatchObject({ running: false, acceptsInput: false, canKill: false });
+    expect(h.frames.at(-1)!.meta).not.toHaveProperty('exitCode');
+    expect(h.streams.list('s1')[0]).not.toHaveProperty('exitCode');
+  });
+
   it('the next command on the same stream re-opens it in place: the counter and the screen continue', () => {
     const h = harness();
     h.streams.begin(h.spec());

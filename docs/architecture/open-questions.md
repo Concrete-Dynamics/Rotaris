@@ -5322,6 +5322,10 @@ after the scope's own validation (`writesFiles`, `scopeWithoutWriterReason` and 
 repaired. "After REQ-TOOLS-006's controls" is read as the two a child's grant meets, `coordinator_only` and
 `read_only`: the run-scoped allow-list binds the entry agent alone, and the `tool_restrictions` map is applied to no
 agent's grant today (recorded as a defect of its own), so the check follows the grant the tool port builds.
+*Superseded 2026-09-29 under R-067 (acceptance finding A4):* the map now narrows the grant as OQ-145 builds it, and the
+check reads it too. It applies the lists the persona's own map and the delegating persona's map give the persona's name,
+and the writers the reason names are the ones the caller's map lets write (`writesFiles` and `fileWriters` take the
+persona of the parent agent). The sentence above is kept as the reason the check first read two controls.
 The persona checked is the one the ledger resolves, an alias included; the first build read the built-in table without
 its aliases, so `playwright` with a scope was accepted as `ui-verifier` (found by the branch's verification, repaired).
 Live again on 2026-09-29 (duress, session `059ae1d7`), scopes given to `codebase-analyst` and to `verifier` were both
@@ -6125,7 +6129,7 @@ REQ-TOOLS-128; OQ-10 as ruled in [R-044](../product/requests.md#r-044). Raised 2
 [R-067](../product/requests.md#r-067) by the verification of the repair of
 [`a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md`](../defects/fixed/a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md),
 for the exposure recorded open in
-[`a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md`](../defects/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md).
+[`a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md`](../defects/fixed/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md).
 Open; numbered OQ-134 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
 
 REQ-TOOLS-110 says `send_signal` *sends* the signal. The product sends it to every process of the session's group and
@@ -6142,12 +6146,143 @@ whether the product answers for that shell behaviour. Each repair changes someth
 - **Another shell.** REQ-TOOLS-104 sends POSIX hosts to a POSIX shell, and `findShell` names `/bin/sh`. Choosing `bash`
   where it exists would change what every background command runs under.
 
-**What the build proceeds under:** delivery once, as REQ-TOOLS-110 states, with the session reporting what its
+**What the build proceeds under:** ~~delivery once, as REQ-TOOLS-110 states, with the session reporting what its
 process does. A second `send_signal SIGINT` or interrupt stops a session the first one did not. The exposure is
-recorded open in the note above, not repaired.
+recorded open in the note above, not repaired.~~ *Replaced 2026-09-29 under R-067 (acceptance finding A8, which
+graded the exposure a product defect): the reading above left a dev server or a watcher running after "Sent SIGINT".
+Measured through the product's own manager, 45 of 200 sessions ran on under six CPU burners, and 12 of 200 on the
+shared host without them.*
+
+*The reading built 2026-09-29, falsified 2026-09-30 and kept beside its replacement below:*
+
+> The build now proceeds under a narrow form of the first repair: re-deliver only to a process that shows it never
+> received the signal. After a SIGINT to a session's group, on Linux, the session reads the process table at 250 ms and
+> again at 1.5 s while it is still running. `BackgroundSession.checkSigint` and `missedSigint` do the reading, over
+> `linuxProcessTable` in `@rotaris/platform`. A member is sent SIGINT once more, alone, only when all three hold:
+> - it is alive and stands at SIGINT's default — not catching, ignoring, blocking or already holding it;
+> - it was created within one second before the signal was sent;
+> - it has not been sent SIGINT again already.
+>
+> A process at the default that had received SIGINT would be gone, so such a member never received it. The re-delivery is
+> therefore its first SIGINT, not its second. A command that catches SIGINT — a server shutting down gracefully — is never
+> sent a second, however long it takes. The start-time bound spares one that restored the default after its first; a
+> command that started more than a second before the signal cannot have been in the window. A process started after the
+> signal is spared too. Each re-delivery is written to the log as a warning. After the repair, the same measurement left
+> 0 of 200 running under load (58 re-deliveries) and 0 of 200 without burners (12).
+
+*Falsified 2026-09-30 by the verifier of the same change: "a process at the default that had received SIGINT would be
+gone" is false of a command whose one-shot handler restores the default as it runs (`process.once('SIGINT')`, C's
+`SA_RESETHAND`). Signalled within a second of its start, such a command was sent a second SIGINT that cut its shutdown
+off, so "a command that catches SIGINT … is never sent a second" did not hold.*
+
+*The reading built 2026-09-30, falsified the same day and kept beside its replacement below:*
+
+> The build now proceeds under a narrower form: re-deliver only to a process the product **saw in the window**. On Linux,
+> the instant before a SIGINT is sent to a session's group, the session reads the group (`ProcessTable.tree`, a walk of
+> the shell's descendants through `/proc`, a few reads, so it does not push the signal past the window it is read for).
+> While the session still runs, it reads the group again at 250 ms and at 1.5 s. A member is sent SIGINT once more, alone
+> (`missedSigint`), only when all of these hold:
+> - the reading before the signal found it **the shell** — its name the shell's, not yet replaced by the command — and
+>   holding SIGINT off: catching it, blocking it or holding it pending (the reading of an aimed signal found `dash` and
+>   its `vfork`ed child both `blocked`);
+> - the later reading finds it alive, **running another image** (its name changed: it `exec`ed), and at SIGINT's default;
+> - it has not been sent SIGINT again already.
+>
+> That is the command `dash` was starting: the SIGINT was taken by the shell's handler in the shell's image and lost with it
+> at `exec`. A process the first reading found already running the command is never sent a second SIGINT, whatever it did
+> with the first, one-shot handlers included; a process started after the signal is not in the first reading. Two
+> exposures remain, both narrow: a command that `exec`s and installs a one-shot handler between the reading and the
+> delivery (one synchronous step) would be sent a second; and a command the window cost its SIGINT that installs a
+> handler of its own before the 250 ms reading stands `caught` and is not sent one. With this predicate, 0 of 200 ran on
+> under six CPU burners (twice; 18 and 14 re-deliveries) and 0 of 200 without them (none needed); with re-delivery
+> disabled after the same reading, 8 of 200 ran on under the burners. The second and third repairs were not taken, since
+> each changes what every command runs under. Off Linux nothing is checked: macOS's `/bin/sh` is `bash`, which has no
+> window, and on Windows every signal terminates the tree (OQ-10).
+
+*Falsified 2026-09-30 by the verifier of the same change (acceptance finding A8, fix round 2): "at SIGINT's default" and
+"its name changed" do not hold of the commands a dev server or a watcher is. Node installs its own SIGINT handler as it
+starts, as Python and a shell do, so a command that missed the signal stands `caught`; and a shell `exec`ing a shell
+(`sh -c '…'`, `sh script.sh`) keeps the name `sh`. Measured through the manager under six CPU burners, 27 of 150
+`node -e "setInterval(…)"` sessions, 39 of 200 `sh -c 'sleep 30; echo x'` sessions and 19 of 200 `sh x.sh` sessions
+signalled the instant they started still ran 3 s later, with 0, 3 and 6 re-deliveries. "Two exposures remain,
+both narrow" was false: the second was every Node command.*
+
+The build now proceeds under this form: re-deliver to a process the product **saw as the shell** when the signal was
+sent, and to what it has started since. On Linux, *where the session's shell is `dash` (added 2026-09-30, fix round 3:
+see the correction after the reason below)*, the instant before a SIGINT is sent to a session's group, the session
+reads the group (`ProcessTable.tree`, a walk of the shell's descendants through `/proc`: each member's name, parent,
+arguments and SIGINT standing, a few reads, so the reading does not push the signal past the window it is read for).
+While the session still runs, it reads the group again at 250 ms and at 1.5 s. `missedSigint` names:
+- a member the first reading found **the shell** (its name the shell's), not ignoring SIGINT, that is alive and **runs
+  another image**: its name or its arguments (`/proc/<pid>/cmdline`) changed, so a shell `exec`ing a shell counts. What
+  it now does with SIGINT is not asked;
+- where such a member had **started nothing** in the first reading and is still the shell, each child it has started
+  since. The shell took the signal as it started (the first reading can find `dash` still at the default, installing
+  its handler), went on, and started the command;
+- with each, its descendants alive that the first reading did not hold, since those started after the signal.
+
+A member already sent it again is not named again, nor is what it has started since. Each one named is sent SIGINT
+once, alone, and the re-delivery is logged as a warning. The reason: a member that was the shell took the signal into
+the shell's handler if it took it at all (at the default it would be gone), and a new image, or a child started after
+the signal, never received it. What a process does with SIGINT says nothing about whether it received one. A process the
+first reading found already running the command is never sent a second SIGINT, whatever it did with the first (one-shot
+handlers included), and neither is what it starts on receiving it, such as a clean-up. *(That reason holds of `dash`
+alone: corrected below.)*
+
+*Falsified 2026-09-30 by the verifier of the same change (acceptance finding A8, fix round 3), and kept above: the check
+was armed on every Linux host, whatever `/bin/sh` is, and "a member that was the shell took the signal into the shell's
+handler … and a new image … never received it" is false where `/bin/sh` is `bash` (Fedora, RHEL, Arch). There `bash`,
+waiting on a command that handles SIGINT, absorbs the signal; when that command exits 0 it goes on, and `exec`s the last
+command of its `-c` list in place (bash 5.1 on). That clean-up changes the shell member's name and arguments, so it was
+named and sent a second SIGINT that killed it, under a warning naming a "vfork window" bash does not have; and "neither
+is what it starts on receiving it, such as a clean-up" did not hold. Measured through the manager with a `sh` link to
+`/bin/bash` 5.2, the command `node -e "<SIGINT handler, exit 0 after 100 ms>"; node -e "<clean-up printing over 1.5 s>"`
+signalled 1 s and 5 s after its start, with `;` and with `&&`: the session read `killed` after "cleanup start", where
+with no reading it completed with exit 0 after "cleanup done". `dash` under `-c` ends on the signal once its running
+command ends and starts nothing more, so the same command under `dash` stops after the handler, with no re-delivery.*
+
+*Since then the check is armed only where the session's shell has the window: `dash`, told once per manager by the shell
+file's real path (`hasVforkWindow`; `/bin/sh` is a link to it on Debian and Ubuntu). Any other shell is not read, and
+its sessions are signalled once, as REQ-TOOLS-110 states. With `bash` as `/bin/sh` the same command now completes with
+exit 0 after "cleanup done", with no reading and no warning, at 1 s and at 5 s, with `;` and `&&`. The `dash` path is
+unchanged: aimed at the window without burners, 0 of 900 sessions ran on (29 re-deliveries; 20 of 900 with the code
+before this correction, the same rate within the spread).*
+
+The residue:
+- a member that `exec`s between the first reading and the delivery (one synchronous step, about 0.1 ms on this host)
+  received the signal as the command, and is sent a second if it is still alive at the check. That needs a handler
+  installed by the new image within that step;
+- a script that traps SIGINT (`trap … INT`) chose to absorb it, and is overridden: its command is sent the signal when
+  the script `exec`s it afterwards (`trap … INT; …; exec server`), and so are the commands its trap runs when the
+  signal found the shell with nothing started;
+- a shell other than `dash` that loses a SIGINT across its fork, if one does, is not read (none has been measured to;
+  `bash` has no window), nor is a `dash` a command starts itself where the session's shell is another.
+
+Measured 2026-09-30 through the product's own manager, each session signalled the instant it started and counted 3 s
+later, under six CPU burners unless stated, on a host shared with another workflow (load average 0.5 to 5):
+
+| command | this reading: still running (re-deliveries) | the check disabled (no reading) |
+|---|---|---|
+| `node -e "setInterval(()=>{},1000)"` | 0 of 150 (18) | 15 of 150 |
+| the same with its own SIGINT handler that exits | 0 of 150 (27) | 7 of 150 |
+| `sh -c 'sleep 30; echo x'` | 0 of 200 (49) | 18 of 200 |
+| `sh x.sh` (`sleep 30; echo done`) | 0 of 200 (45) | 28 of 200 |
+| `sleep 30` | 0 of 200 (13) | 5 of 200 |
+| without burners: Node, `sh -c`, `sleep` | 0 of 150, 0 of 200, 0 of 200 (1, 2, 1) | — |
+
+A command whose handler counts its SIGINTs and exits 2 s after the first, signalled the instant it started, received
+two in none of 150 sessions; 13 received exactly one, each by a re-delivery (the rest died of the signal before their
+handler was installed). The second and third repairs were not taken, since each changes what every command runs under.
+Off Linux nothing is checked: macOS's `/bin/sh` is `bash`, which has no window, and on Windows every signal terminates
+the tree (OQ-10). On Linux, a session whose shell is not `dash` is not read either (2026-09-30, fix round 3).
 
 **What a ruling decides.** Whether R-044's "stops" binds the product past delivery, and if so, which of the three
-repairs is acceptable, or whether the window is accepted as the shell's.
+repairs is acceptable, or whether the window is accepted as the shell's. Since 2026-09-29 the build takes the narrow
+re-delivery above, so a ruling against re-delivery removes it. ~~A ruling for it also decides whether the two remaining
+exposures stated above are accepted.~~ *(Replaced 2026-09-30: the second of those two was every Node command, and not
+narrow.)* A ruling for it also decides whether the residue stated above is accepted: a second SIGINT to a command that
+`exec`ed within the reading's step, and a trapping script's choice overridden; and whether a shell other than `dash`
+is left unread.
 
 **OQ-136 — How long does an empty poll wait for a soft-paused command?** *(REQ-TOOLS-096, whose empty `command`
 "polls for more output after a soft pause"; REQ-TOOLS-097, whose no-output window bounds the command's own call and
@@ -6354,13 +6489,147 @@ still holds `completed` yields no job and reads nothing.
 recorded, so that a failed recording leaves no stop reason to compare and REQ-ORCH-137's skip applies. Or whether the
 record governs even then, so that the capture must read the store before it may skip.
 
-**OQ-143 — Are keystrokes left without a line end cleared before the product submits the next command line?**
+**OQ-143 — Which status and exit code does a background session read when its process could not be started?**
+*(REQ-TOOLS-109, REQ-TOOLS-179, REQ-TOOLS-100, REQ-TOOLS-103, REQ-TOOLS-112. Raised 2026-09-30 by the repair of
+[`a-background-session-whose-spawn-fails-reads-failed-with-exit-minus-one.md`](../defects/fixed/a-background-session-whose-spawn-fails-reads-failed-with-exit-minus-one.md)
+under [R-067](../product/requests.md#r-067). Open; numbered OQ-142 on its branch, renumbered OQ-143 at the merge, OQ-142
+having been taken on `main`.)*
+
+Node reports some spawn failures synchronously and others — ENOENT and EACCES among them — only after `spawn` has
+returned, through the child's `error` event and never its `exit`. For the first kind the product already answers the
+start itself as an `execution_error` with no exit code (`The background command could not be started: …`). For the
+second, `start` has already returned `Background session started`, so the session exists, and the failure first
+shows at the poll. REQ-TOOLS-109's status vocabulary is closed — `running`, `completed` (exit 0), `failed` (nonzero),
+`killed`, `timeout` — and names no status for a command that never ran. REQ-TOOLS-179 gives −1 to `killed` alone on a
+background session, and keeps "0/nonzero" for "the command's real outcome", which a command that never ran does not
+have. REQ-TOOLS-103 makes any failure "before the command completes" an `execution_error` that quotes the error.
+Before this entry such a session read `failed (exit -1)`, `background_terminal`, with no `failure_kind`.
+
+**What the build proceeds under** (`BackgroundSession`'s `error` handler in
+`packages/agent-tools/src/terminal/background.ts`, `sessionAction`'s `finish` in `terminal/index.ts`):
+- **The status is `failed`.** It is the only terminal status of REQ-TOOLS-109 that is not an end the product
+  imposed, and REQ-TOOLS-112 already reads it at `error`.
+- **The exit code is null.** The command has none, as the synchronous refusal has none. The diagnostic block drops
+  the key (REQ-TOOLS-100), the list's structured entry carries `exit_code: null` and the text table `-`, and the
+  session's live stream ends with no exit code, which the terminal surface draws as `exited`.
+- **Every poll or termination of it is an `execution_error`**, error severity, `error_class` `ExecutionError`, with a
+  detail that states the session's status and then that terminal execution failed before completion, quoting the
+  error (REQ-TOOLS-103). REQ-TOOLS-112's first test decides the outcome, so it is not `background_terminal`.
+- **An `error` the child raises once it has a pid is not its end.** It is warned about, and the session keeps waiting
+  for its `exit`, which still comes.
+
+The case "REQ-TOOLS-100/103/179: a spawn that fails after start returns …" in `terminal/terminal.test.ts` pins this
+reading, and the case "REQ-TOOLS-179 (OQ-143): …" in `terminal/streams.test.ts` pins the stream's end.
+
+**What a ruling decides.** Whether REQ-TOOLS-109's `failed` covers a command that never ran with no exit code, or
+whether it needs a code of its own (126 is sandbox-unavailable's, and 127 is the shell's convention for a command it
+could not find), or a status the vocabulary does not have; and whether such a spawn should instead be answered at
+the start, by waiting for Node's `spawn` or `error` before `start` returns.
+
+**OQ-144 — What does a foreground call answer when its command replaces the session's shell, and what becomes of the
+session?** *(REQ-TOOLS-097, REQ-TOOLS-098, REQ-TOOLS-103, REQ-TOOLS-104, REQ-TOOLS-179; `PD-TOOLS-001`. Raised
+2026-09-30 by the repair of
+[`a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`](../defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md)
+under [R-067](../product/requests.md#r-067), acceptance finding A9. Open; numbered OQ-143 on its branch, renumbered
+OQ-144 at the merge, OQ-142 having been taken on `main`.)*
+
+A foreground command that replaces the shell — `exec bash`, `exec sh`, any `exec <program>` — keeps the shell's pid
+and never returns to the rest of the wrapped line, so the end frame never prints. Before this entry the call waited out
+the no-output window and returned a soft pause (REQ-TOOLS-098: exit −1, "The process may still be running") for a
+command that had finished at once, and every later call ran in the new program, not the shell the tool description
+names (REQ-TOOLS-104 on Windows, and the POSIX sentence live-run L1's repair added elsewhere). No requirement says
+whether a command may replace the session's shell, whether the tool refuses or warns about one, or what the call
+answers when one does. A PowerShell session has no `exec`, so the question is the POSIX backend's.
+
+**What the build proceeds under** (`ForegroundSession` in `packages/agent-tools/src/terminal/foreground.ts`, the
+detail and the description in `terminal/index.ts`):
+- **The session keeps the shell it started, and the call ends at once.** While a call runs, the product compares the
+  process behind the session's pid (its executable and argument vector, read from `/proc`) with the shell's own, read
+  when the shell last answered one of the product's lines. A different process ends the call within 200 ms. The
+  program is ended with its tree, and the session restarts on its shell with PD-TOOLS-001's snapshot re-applied, as a
+  hard-timeout reset does. A fresh shell answers one no-op line before its first command so that there is an identity
+  to compare with; a shell that does not answer it within the snapshot bound (15 s), a shell still busy with a
+  soft-paused command, and a host without `/proc` leave the call unwatched.
+- **The handshake honours the call's cancel and a kill from the terminal window.** The no-op line is awaited before
+  the call's command is written, so a run's stop or pause that lands on it ends the round trip where it stands: the
+  command is never written, and the call reads as any cancelled call does (`timeout`, 124, `session_reset`, "the call
+  was cancelled", the snapshot re-applied). A kill from the terminal window that lands on it reads as a killed call
+  (−1, `session_reset`, "killed from the terminal window"), and the command is not written to the shell the kill ended.
+  *(Added 2026-09-30 by acceptance round 1's verifier, who found both lost in the first form of this build: the cancel
+  was ignored and the command ran to its own end — 5,075 ms and `success` where origin/main answered the cancel in
+  310 ms — and after a kill the command was written to the PTY the kill had just ended, so the call waited out its
+  timeout. A signal already aborted before the command is written is now honoured on every call, the handshake or
+  not.)*
+- **The call is REQ-TOOLS-103's failure before completion.** `failure_kind` and `outcome_kind` are `execution_error`,
+  severity `error`, `error_class` `ExecutionError`, no exit code (the command never returned to a line that would
+  report one, so the diagnostic block drops the key and the live stream ends with none), and `kill_status`
+  `session_reset` or `reset_failed`. The detail says the command replaced the session's shell, that the session was
+  restarted with the shell this tool runs commands in, what was restored, and to run the program without `exec`, or
+  in the background.
+- **`exec` with redirections alone** (`exec 3>file`, `exec >log`) keeps the process, and is an ordinary command.
+- **The POSIX description says not to replace the shell** and what a call that does meets on the host it runs on: on
+  Linux that the call normally fails and the shell is restarted, elsewhere that the call reads as still running and
+  every later call runs in that program. *("Normally" added 2026-09-30 by acceptance round 1's second verifier: on
+  Linux too the watch is off in the cases listed under "What the build proceeds under", where the call reads as still
+  running.)*
+
+**What it does not reach.** `/proc` is Linux's, so on macOS the watch is off: such a call still soft-pauses there, and
+the description's sentence, which states that consequence there, is all that applies (no macOS artifact is built,
+IC-3). ~~only the description's sentence applies~~ *(corrected 2026-09-30, acceptance round 1's verifier: the sentence
+first told every POSIX host that such a call fails and the shell is restarted, which only Linux does.)* An `exec` of
+exactly the shell's own executable with exactly its arguments (`exec /bin/sh -i`) is indistinguishable from the shell
+and still soft-pauses. An `exec` inside a command that has already soft-paused is not watched either — the watch ends
+with the call at the pause — so the paused command's later polls read it as still running. The handshake's own wait
+(the fresh shell's startup and one round trip) is not counted toward the call's hard timeout.
+
+The case "REQ-TOOLS-097/098/103/104 (OQ-144, acceptance A9): …" in `terminal/terminal.test.ts` pins this reading, and
+the two cases "… (OQ-144, acceptance round 1): …" beside it pin the handshake's cancel and kill.
+
+**What a ruling decides.** Whether a command that replaces the shell is refused before it runs (an `invalid_request`
+REQ-TOOLS-101 does not list), answered as built, or adopted — the session carrying on in the new program, with the
+description then no longer naming the shell the next command runs in; and whether the call's code is `execution_error`
+with no exit code, as built, or something REQ-TOOLS-179 names.
+
+**OQ-145 — Whose grant does a persona's `tool_restrictions` map narrow, and what do its keys and lists mean?**
+*(REQ-TOOLS-006 (4), "the per-persona `tool_restrictions` map"; REQ-CONFIG-103, "map from name to allowed-tool list …
+restricts named entities; an entity absent from the map is unrestricted"; REQ-CONFIG-062, which canonicalises "every key
+of a role's `tool_restrictions` mapping" as a role name; REQ-CONFIG-046; `PD-TOOLS-006` revision 3's "after
+REQ-TOOLS-006's controls". Raised 2026-09-29 under [R-067](../product/requests.md#r-067) by the repair of
+[`a-personas-tool-restrictions-never-narrow-its-grant.md`](../defects/fixed/a-personas-tool-restrictions-never-narrow-its-grant.md),
+acceptance finding A4. Open; numbered OQ-141 on its branch, renumbered OQ-145 at the merge, OQ-141
+to OQ-144 having been taken on `main`.)*
+
+The map sits on a persona, and REQ-CONFIG-062 makes its keys role names. REQ-TOOLS-006 says it narrows "a persona's
+declared tool set". The requirements do not say whose set an entry narrows when it names a role other than the persona
+that holds the map, nor how an allowed-tool list treats an alias, `delegate`'s two companions or a tool-server tool. Three
+readings were weighed:
+- **The entry naming the holder only.** An entry naming another role would narrow nothing — a configured restriction
+  silently ignored, which is the defect's own shape.
+- **Every persona's entry for a role, everywhere.** A coordinator's restriction on a role would bind that role when a
+  different persona delegates it.
+- **The holder's own entry and the delegating persona's entry.** A map restricts the persona itself and the roles it
+  delegates to, the way `delegates_to`, the key REQ-CONFIG-062 canonicalises beside it, names the roles it delegates to.
+
+**What the build proceeds under:** the third. An agent's grant is narrowed by the allowed-tool list its own persona's
+map gives its persona's name, and by the list the map of the persona that delegated it gives that name (the entry agent
+has no parent agent; a grandparent's map is not read). A tool survives only when every binding list names it, after the
+first three controls, and nothing is restored or added. A name and its alias are one tool (`haet` is `haet_edit`), and a
+list naming `delegate` names `background_output` and `wait_for_tasks` with it (REQ-TOOLS-005). A tool-server tool the
+list does not name is withheld, since the list is closed and a withholding rule withholds a tool outside the registry
+(ADR-0016). Each removal is logged `by tool_restrictions` with the persona. `PD-TOOLS-006`'s write-scope refusal reads
+the same lists, including the delegating persona's. The writers its reason names are those the caller's map lets write.
+
+**What a ruling decides.** Which of the three readings binds, or another one. Whether a grandparent's map binds too.
+Whether an allowed-tool list may name a tool-server tool or reach tool-server tools at all.
+
+**OQ-146 — Are keystrokes left without a line end cleared before the product submits the next command line?**
 *(REQ-TOOLS-096, under which keystroke input "may be a special key" or text and is written as is; REQ-TOOLS-097 and
 REQ-TOOLS-098, under which a soft-paused command keeps running and the next call is typed behind it; REQ-TOOLS-127,
 under which the live stream and the observation carry what the command wrote. Raised 2026-09-29 by the repair of
 acceptance finding A10,
 [`keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md`](../defects/fixed/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md),
-under [R-067](../product/requests.md#r-067). Open.)*
+under [R-067](../product/requests.md#r-067). Open; numbered OQ-143 on its branch, renumbered OQ-146 at the merge,
+OQ-143 to OQ-145 having been taken on `main`.)*
 
 An agent's `is_input` text or a control surface's send-keys with no Enter after it waits in the shell's input as a
 partial line when nothing reads it, as under a soft-paused `sleep`. A person at a terminal would see it on the next
@@ -6385,12 +6654,13 @@ typing, and an editor such as `vi` scrolls. Without the `^U` that program would 
 to the agent's keystrokes instead, so neither reading hands it anything it asked for (added 2026-09-30 by A10's
 verification).
 
-**OQ-144 — What exit status does a soft-paused command report when it ended without printing its own?**
+**OQ-147 — What exit status does a soft-paused command report when it ended without printing its own?**
 *(REQ-TOOLS-098, whose advice is to interrupt a paused command with `C-c` and `is_input=true`; REQ-TOOLS-179, which
 names −1 for a soft pause in the foreground and for a kill in the background, and otherwise the command's real outcome.
 Raised 2026-09-30 by the verification of acceptance finding A10,
 [`keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md`](../defects/fixed/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md),
-under [R-067](../product/requests.md#r-067). Open.)*
+under [R-067](../product/requests.md#r-067). Open; numbered OQ-144 on its branch, renumbered OQ-147 at the merge,
+OQ-143 to OQ-145 having been taken on `main`.)*
 
 An interactive `sh` that takes the interrupt abandons the rest of the wrapper's line, so the paused call's end frame,
 which carries `$?`, never prints. The shell reaches the next call's line only once the paused one is done, so that

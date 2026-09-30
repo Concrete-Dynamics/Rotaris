@@ -35,7 +35,7 @@ branch: the case below, run against `/bin/sh` (dash) through a real PTY on the u
   again, so the capture starts after it and the live stream's `CommandRegion` opens on it. Keystrokes that end their
   own line clear nothing. PowerShell is unchanged: its first statement takes the prefix, not the start marker
   (reasoned, not measured on this Linux host). What becomes of a partial line no one ended is stated nowhere, so the
-  reading built is raised as [OQ-143](../../architecture/open-questions.md).
+  reading built is raised as [OQ-146](../../architecture/open-questions.md) (OQ-143 on its branch).
 - **The paused call's end frame is its own.** ~~`onData` matched only the active call's frame while a call was
   active, so a soft-paused command that ended behind the next call never read as finished, and the poll after it said
   "still running" with exit −1. Both frames are now matched, the paused one's first.~~ **That account was falsified by
@@ -55,7 +55,7 @@ branch: the case below, run against `/bin/sh` (dash) through a real PTY on the u
   listener at all: `onData` gives it its share of each chunk (`pausedShare`), which ends at its own end frame, or at the
   next call's PRINTED start marker, which the shell writes only once the paused line is done. It closes there — on its
   own frame with its own status, or at that marker with none: its poll reports −1 with the reason, not a soft pause
-  ([OQ-144](../../architecture/open-questions.md)) — and nothing after either boundary reaches its screen, however long
+  ([OQ-147](../../architecture/open-questions.md), OQ-144 on its branch) — and nothing after either boundary reaches its screen, however long
   the next call runs. The next call's end frame still closes it, with no status, should the marker not be seen on the
   raw stream. All three falsified readings are kept beside the replacement in `onData`. What a reset restores is
   unchanged: no snapshot is taken for a paused call's completion ([OQ-134](../../architecture/open-questions.md)). A

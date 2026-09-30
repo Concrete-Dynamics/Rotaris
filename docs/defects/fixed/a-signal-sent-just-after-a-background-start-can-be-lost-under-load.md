@@ -81,7 +81,7 @@ a command between `dash`'s `vfork` and its `exec` is reported sent, and the sess
 for a server, indefinitely. By this note's own Specs criterion that contradicts OQ-10 as ruled by R-044, now that the
 race reading holds. The window is microseconds on an idle host and wider under load, and it reopens at every command a
 script starts. It is recorded in
-[`a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session`](../a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md).
+[`a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session`](a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md).
 Whether the product owes more than the delivery (re-delivery, `exec`, another shell) is
 [OQ-135](../../architecture/open-questions.md).
 

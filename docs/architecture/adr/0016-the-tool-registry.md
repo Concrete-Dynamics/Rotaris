@@ -194,3 +194,24 @@ already made moot. `resolvePersonaMcp`'s prefix rule is unchanged. Measured by u
 the gate and the real port with a stand-in MCP host (`docs/defects/fixed/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`);
 the built app was not driven, since neither `plan-gate-proof` nor `mcp-proof` declares a server tool under a public
 name and both spawn Electron without the root host's `--no-sandbox` switch on this host.
+
+**Seventh execution, 2026-09-29, the fourth narrowing stage fed for the first time (acceptance finding A4, R-067).**
+The fold's `tool_restrictions` stage had been in the registry since the first execution, which recorded the four-stage
+fold as behaving. It had never run over a configured value. Its input was a map from a tool to `false`, a shape the
+loader never produced, and the run host never passed it. **Found: the stage was unreachable, and its shape was not
+REQ-CONFIG-103's.** The first execution's "four-stage narrowing fold … behaved" held for three stages. The fourth passed
+every tool through because it was never given anything, and no reading of the registry could see that. The stage now
+takes the allowed-tool lists that bind the agent (OQ-145's reading: the entry its own persona's map and its delegating
+persona's map give its persona's name). It keeps a tool only when every list names it, through `restrictionsAllow` in
+`@rotaris/contracts`, which the engine's write-scope refusal also reads. It still only removes, after the three earlier
+stages. ~~The MCP loop in `run-host/tools.ts` withholds a server's tool the lists do not name, the same fail-closed
+reading the fourth execution took for `read_only`.~~ *Falsified 2026-09-29 by the verifier of the same change, kept
+beside its replacement: the loop dropped the tool from the callable map and the listing, but the prompt's MCP section
+was still rendered from the unnarrowed surface, so it printed a name the agent could not call (REQ-MCP-062). The
+`read_only` withholding it claimed parity with empties the surface before rendering, and this did not.* The port now
+takes a server's tool the lists do not name off the **surface** itself, so the executors and the section both come
+from what is left, and a printed name stays callable (REQ-MCP-062); pinned by the MCP case in `run-host/tools.test.ts`,
+which renders through the real `renderMcpSection` and was red on the loop-only form. Measured by unit tests over the stage (`policy.test.ts`) and five
+cases through the loader and the real port (`run-host/tools.test.ts`), four of them red on the old code. The built app
+was not driven: no proof or live-run scenario configures `tool_restrictions`
+([the note](../../defects/fixed/a-personas-tool-restrictions-never-narrow-its-grant.md)).

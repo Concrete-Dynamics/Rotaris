@@ -73,7 +73,7 @@ export interface ChildrenDeps {
   readonly budget: Budget;
   readonly modelCap: (modelKey: string) => number | null;
   /** The tool surface for an agent — the root or a child — with its own delegation identity. */
-  readonly toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => ToolPort | null;
+  readonly toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string) => ToolPort | null;
   readonly summariser: SummariserDeps | null;
   readonly childTimeoutMs?: Millis;
   /**
@@ -267,8 +267,11 @@ export class IterationChildren implements DelegationOps {
      * is the ledger's refusal.
      */
     const named = this.deps.personas ? persona : resolveRole(req.persona)?.persona;
-    if (scope.patterns.length > 0 && named !== undefined && !writesFiles(named)) {
-      return { status: 'rejected', canonicalName: req.taskName, message: scopeWithoutWriterReason(named.name, fileWriters(this.deps.personas)) };
+    // REQ-TOOLS-006 (4), OQ-145: the parent agent's `tool_restrictions` bind the child's grant, so they bind this check too.
+    const parentName = this.parentPersonaOf(parentId);
+    const parentPersona = parentName === undefined ? undefined : this.deps.personas ? personaOf(this.deps, parentName) : resolveRole(parentName)?.persona;
+    if (scope.patterns.length > 0 && named !== undefined && !writesFiles(named, parentPersona)) {
+      return { status: 'rejected', canonicalName: req.taskName, message: scopeWithoutWriterReason(named.name, fileWriters(this.deps.personas, parentPersona)) };
     }
     // PD-ORCH-004: a continuation is admitted only for the caller's own child that offered one, and only once.
     const continuationOf = req.continuationOf ?? '';
@@ -404,6 +407,14 @@ export class IterationChildren implements DelegationOps {
    * iteration's own from an earlier run (found by phase 6's review). A plan cycle's root takes up none: a plan cycle is
    * not an iteration (REQ-ORCH-153).
    */
+  /**
+   * REQ-TOOLS-006 (4), OQ-145: the persona of the agent a delegation comes from — the root's for the root, a child's own
+   * for its children. Its `tool_restrictions` entry naming the delegated persona narrows the child's grant.
+   */
+  private parentPersonaOf(parentId: string): string | undefined {
+    return this.ledger.isRoot(parentId) ? this.ledger.root.persona : this.ledger.get(parentId)?.persona;
+  }
+
   private continuationRefusalFor(parentId: string, reference: string): string | null {
     const row = this.ledger.get(reference);
     const laterRoot = this.ledger.isRoot(parentId) && this.iteration >= 1;
@@ -849,7 +860,8 @@ export class IterationChildren implements DelegationOps {
     const resilience = deps.resilience?.forChild(persona, { model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking }, childTimeoutMs) ?? null;
     // Part AH: this child's own capacity and its own plan — the ledger row is where a child's task plan lives.
     const compression = deps.compressionFor?.({ model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking }, () => todoLinesFromStored(this.ledger.get(row.task_id)?.todo ?? null));
-    const tools = deps.toolsFor(row.persona, row.canonical_name, this, row.task_id, row.depth);
+    // REQ-TOOLS-006 (4), OQ-145: the delegating agent's persona, whose `tool_restrictions` may name this child's.
+    const tools = deps.toolsFor(row.persona, row.canonical_name, this, row.task_id, row.depth, undefined, this.parentPersonaOf(row.parent_id));
     const dispatched = new Map<string, string>();
     // REQ-ORCH-047 / REQ-TOOLS-154: the prior-agent-context block, exactly once, ahead of everything.
     let prior = '';

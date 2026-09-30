@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
 import { TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset } from '@rotaris/contracts';
-import { loadConfiguration } from '@rotaris/config';
+import { loadConfiguration, renderMcpSection, type PersonaMcpSurface } from '@rotaris/config';
 import { anySchema, gitReadTool, permissivePolicyRead, simpleExecutor, TodoList, todoTool, type ToolExecutor } from '@rotaris/agent-tools';
 import { SessionWriter, UserPresence, type ToolPortContext } from '@rotaris/engine';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
@@ -476,6 +476,147 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     const unpinned = portFor(null, null);
     expect(unpinned.setMode('autonomous', 'user')).toMatchObject({ effective: 'autonomous' });
     expect(unpinned.currentMode()).toBe<PermissionPreset>('autonomous');
+  });
+});
+
+/**
+ * Defect `a-personas-tool-restrictions-never-narrow-its-grant` (acceptance finding A4, R-067): the loader parsed a
+ * persona's `tool_restrictions`, the registry had a stage for it, and nothing connected the two, so a configured
+ * restriction removed nothing. Built under OQ-145's reading: the map's keys are role names (REQ-CONFIG-062), and an
+ * agent's grant is narrowed by the allowed-tool list its OWN persona's map gives its name and by the one the map of the
+ * persona that DELEGATED it gives that name; a tool survives only a list that names it (REQ-CONFIG-103).
+ */
+describe('REQ-TOOLS-006 (4): the per-persona tool_restrictions map narrows the grant', () => {
+  let dir: string;
+  let dal: StoreDal;
+  let writer: SessionWriter;
+  const warnings: string[] = [];
+  const infos: string[] = [];
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-port-restrictions-'));
+    const db = openStore(join(dir, 'workspace.db'));
+    migrateStore(db);
+    dal = new StoreDal(db);
+    const created = SessionWriter.create(
+      { dal, sessionId: asSessionId('S1'), wall: new FakeClock(), retentionCap: 0, warn: (m) => warnings.push(m), onCommitted: () => undefined },
+      { workspaceRoot: dir, pid: 1, host: mintMachineId('0000000000000000000000000000000a') },
+    );
+    if (!created.ok) throw new Error('writer');
+    writer = created.value;
+    warnings.length = 0;
+    infos.length = 0;
+  });
+  afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
+
+  function port(personas: string, persona: string, extra: Partial<ToolPortContext> = {}, mcp: readonly ToolExecutor[] = []) {
+    mkdirSync(join(dir, '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, '.rotaris', 'agents.yaml'), `default_persona: orchestrator
+models:
+  selected:
+    provider: openai
+    model_id: first
+    api_key: k
+large_model: selected
+medium_model: selected
+small_model: selected
+personas:
+${personas}runtime:
+  permission_mode: ask
+`);
+    const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
+    if (!loaded.ok) throw new Error('configuration');
+    const cfg = loaded.value;
+    const resolver = personaResolverFor(cfg, true, (m) => warnings.push(m));
+    const deps: ToolPortDeps = {
+      clocks: new FakeClock(), runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver,
+      presenter: { present: async () => ({ ok: true }), close: () => undefined }, nextSequence: () => 1, fileStates: new Map(), terminal: null,
+      egress: () => permissivePolicyRead,
+      ...(mcp.length > 0 ? {
+        // One server `srv` offering the given executors; the section is the real REQ-MCP-101 renderer and the executors
+        // are the ones the surface handed in still holds, so a narrowing that skips the surface shows in the section.
+        mcp: {
+          prepare: async () => undefined,
+          surfaceFor: (): PersonaMcpSurface => ({ persona, dropped: [], active: [{ name: 'srv', entry: { type: 'stdio', command: 'srv', args: [] }, origin: 'workspace', discoveryFailed: false, tools: mcp.map((e) => ({ callable: e.name, reported: e.name, description: e.description, inputSchema: {} })) }] }) as unknown as PersonaMcpSurface,
+          section: (surface: PersonaMcpSurface) => renderMcpSection(surface),
+          executorsFor: ({ surface }: { surface: PersonaMcpSurface }) => mcp.filter((e) => surface.active.some((s) => s.tools.some((t) => t.callable === e.name))),
+        } as unknown as McpHost,
+        configured: () => ({ cfg }) as unknown as ConfiguredRun,
+      } : {}),
+    };
+    return createToolPort({
+      sessionId: asSessionId('S1'), workspaceRoot: dir, writer, persona, agentName: persona,
+      requestedMode: 'ask', modeOverride: null, attended: () => true, warn: (m) => warnings.push(m), info: (m) => infos.push(m), abortRun: () => undefined, ...extra,
+    }, deps);
+  }
+
+  const coder = (restrictions: string) => `  coding-agent:
+    name: coding-agent
+    model: selected
+    tools: [read_file, grep, write_file, haet_edit]
+${restrictions}`;
+
+  it('REQ-TOOLS-006 (4) / REQ-CONFIG-103: the entry naming the persona in its own map is an allowed-tool list; every other declared tool is removed and logged with the control', async () => {
+    const p = port(coder('    tool_restrictions:\n      coding-agent: [read_file, grep]\n'), 'coding-agent');
+    await p.ready?.();
+    expect(p.resolvedTools?.()).toEqual(['read_file', 'grep']);
+    expect(p.specs().map((s) => s.name)).toEqual(['read_file', 'grep']);
+    expect(infos).toContain("tool 'write_file' removed from coding-agent by tool_restrictions (REQ-TOOLS-004/006)");
+    expect(infos).toContain("tool 'haet_edit' removed from coding-agent by tool_restrictions (REQ-TOOLS-004/006)");
+    // The gate refuses what the listing no longer holds.
+    const r = await p.dispatch({ callId: 'c1', name: 'write_file', rawArgs: JSON.stringify({ operation: 'create', path: 'w.txt', content: 'x' }), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' }, new AbortController().signal);
+    expect(r.isError).toBe(true);
+    expect(existsSync(join(dir, 'w.txt'))).toBe(false);
+  });
+
+  it('REQ-CONFIG-103: an entity absent from the map is unrestricted, and a map naming only other roles leaves the persona\'s own grant whole', async () => {
+    const p = port(coder('    tool_restrictions:\n      tester: [read_file]\n'), 'coding-agent');
+    await p.ready?.();
+    expect(p.resolvedTools?.()).toEqual(['read_file', 'grep', 'write_file', 'haet_edit']);
+    expect(infos.filter((l) => l.includes('by tool_restrictions'))).toEqual([]);
+  });
+
+  it('OQ-145: the map of the persona that delegated an agent narrows that agent by the entry naming it — an alias of a tool in the list is its canonical name', async () => {
+    const personas = `  orchestrator:
+    name: orchestrator
+    model: selected
+    tool_restrictions:
+      coding-agent: [read_file, haet]
+${coder('')}`;
+    const child = port(personas, 'coding-agent', { parentPersona: 'orchestrator', parentId: 'bg_0a1b2c3d', depth: 1 });
+    await child.ready?.();
+    expect(child.resolvedTools?.()).toEqual(['read_file', 'haet_edit']);
+    // The same persona delegated by a role whose map does not name it keeps its declared tools.
+    infos.length = 0;
+    const other = port(personas, 'coding-agent', { parentPersona: 'tester', parentId: 'bg_0a1b2c3e', depth: 1 });
+    await other.ready?.();
+    expect(other.resolvedTools?.()).toEqual(['read_file', 'grep', 'write_file', 'haet_edit']);
+  });
+
+  it('OQ-145: both lists bind at once — a tool survives only a list that names it — and neither can add a tool the persona did not declare', async () => {
+    const personas = `  orchestrator:
+    name: orchestrator
+    model: selected
+    tool_restrictions:
+      coding-agent: [read_file, write_file, terminal]
+${coder('    tool_restrictions:\n      coding-agent: [read_file, grep, terminal]\n')}`;
+    const child = port(personas, 'coding-agent', { parentPersona: 'orchestrator', parentId: 'bg_0a1b2c3d', depth: 1 });
+    await child.ready?.();
+    expect(child.resolvedTools?.()).toEqual(['read_file']);
+  });
+
+  it('OQ-145 / REQ-MCP-062: an MCP tool the list does not name is withheld from a restricted agent\'s listing and its prompt section, as a withholding rule withholds a tool outside the registry (ADR-0016)', async () => {
+    const serverTool = simpleExecutor('lookup', 'a server tool', anySchema, async () => ({ text: 'ok', isError: false }));
+    const restricted = port(coder('    tool_restrictions:\n      coding-agent: [read_file]\n'), 'coding-agent', {}, [serverTool]);
+    await restricted.ready?.();
+    expect(restricted.specs().map((s) => s.name)).toEqual(['read_file']);
+    expect(infos).toContain("tool 'lookup' removed from coding-agent by tool_restrictions (REQ-TOOLS-004/006)");
+    // REQ-MCP-062: a printed name is callable — the withheld tool is not printed under its server.
+    expect(restricted.promptSection?.()).toBe('## MCP servers\n\n- `srv`');
+    const named = port(coder('    tool_restrictions:\n      coding-agent: [read_file, lookup]\n'), 'coding-agent', {}, [serverTool]);
+    await named.ready?.();
+    expect(named.specs().map((s) => s.name)).toEqual(['read_file', 'lookup']);
+    expect(named.promptSection?.()).toBe('## MCP servers\n\n- **`srv`**\n  - `lookup` — a server tool');
   });
 });
 

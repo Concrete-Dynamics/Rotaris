@@ -21,7 +21,7 @@ poll read `^C` and `#` (the prompt), exit −1, `soft_pause`. Measured on `origi
 - `REQ-TOOLS-098`: the soft pause is "while its process keeps running"; here the process has ended, and the
   observation says it may still be running.
 - `REQ-TOOLS-179`: −1 is a soft pause in the foreground. A command that has ended reads as one.
-- What such a poll should report instead, once the end is known, is [OQ-144](../architecture/open-questions.md).
+- What such a poll should report instead, once the end is known, is [OQ-147](../architecture/open-questions.md).
 
 ## Relevant files
 

@@ -6,7 +6,7 @@ delivers inside that await is given to neither: it reaches the live stream (`reg
 paused call's screen, so no poll ever returns it. If that chunk carries the command's own end frame, the scan resolves
 the call's already-settled promise and clears `active`, and the paused call opened just after never sees its frame: it
 reads "still running" on every poll until a later call's start marker closes it, and then with no status of its own
-(OQ-144's −1). The window is the few milliseconds of one emulator write, at the moment the command has been silent for
+(OQ-147's −1). The window is the few milliseconds of one emulator write, at the moment the command has been silent for
 the whole no-output window, so it needs a command that writes again just then.
 
 Noticed 2026-09-30 while repairing A10's second verification findings under [R-067](../product/requests.md#r-067).

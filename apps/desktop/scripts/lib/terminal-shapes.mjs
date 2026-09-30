@@ -21,7 +21,7 @@ const PAD = 'x'.repeat(100);
 export const LONG_OUTPUT_LINES = 40;
 
 /**
- * The shapes, in the dialect of one platform: seven on Windows, eight elsewhere.
+ * The shapes, in the dialect of one platform: seven on Windows, nine elsewhere.
  *
  * `match` is a pattern rather than a substring because the question is whether the SHAPE was issued, not
  * whether the model reproduced this file's whitespace. Too strict and a call that happened reads as a call that
@@ -60,6 +60,11 @@ export function terminalShapes(platform = process.platform) {
     : [
       { id: 'here-string', match: /<<\s*'?EOF/, command: "cat <<'EOF'\nalpha-one\nbeta-two\nEOF" },
       { id: 'long-output', match: /LINE-/, command: `awk 'BEGIN{for(i=1;i<=${LONG_OUTPUT_LINES};i++)printf "LINE-%03d ${PAD}\\n", i}'` },
+      // Acceptance finding A9 (OQ-144), the verifier's live run of 2026-09-29 (pack `2026-09-29T22-08-13-005Z`, call #5): the
+      // model ran `exec bash`, which keeps the shell's pid and never returns to the wrapper's end frame, so it read as a
+      // soft pause after 30,027 ms, and every later call ran under bash. Ahead of `unexpandable` on purpose: that shape
+      // then shows which shell the next command met. POSIX only: PowerShell has no `exec`.
+      { id: 'replaces-shell', match: /^\s*exec\s+bash\b/, command: 'exec bash' },
       // Live-run finding L1, the tail of the edit scenario's recorded test command: a bash-ism `/bin/sh` (dash) cannot
       // expand, which abandoned the rest of the line — the wrapper's end frame with it — so a command that finished at
       // once read as a soft pause, exit −1, after 30 s. POSIX only: PowerShell has no such expansion, and its wrapper's `try` is the
@@ -134,6 +139,25 @@ export function unexpandableReading(result, elapsedMs) {
   const refused = !paused && badSubstitution && exit !== null && exit > 0;
   const expanded = !paused && !refused && /EXIT=\d+/.test(printed);
   return { kind: paused ? 'paused' : refused ? 'refused' : expanded ? 'expanded' : 'other', exit, badSubstitution, printed };
+}
+
+/**
+ * What the `replaces-shell` shape (acceptance A9, OQ-144) met, read from one recorded observation.
+ *
+ * - `restarted`: the call ended inside the no-output window as an `execution_error` with no exit code, and its detail
+ *   says the command replaced the session's shell — the product noticed, ended the program and restarted the shell.
+ * - `paused`: the call soft-paused, or returned exit −1, or took the whole no-output window — A9's signature, a FAIL.
+ * - `not-replaced`: it ended with an exit code of its own (no `bash` on the host: 127), so nothing was replaced and
+ *   the watch was never asked — a NOTE.
+ * - `other`: none of those — a NOTE.
+ */
+export function replacedShellReading(result, elapsedMs) {
+  const d = diagnosticOf(result);
+  const exit = typeof d?.exit_code === 'number' ? d.exit_code : null;
+  const paused = d?.outcome_kind === 'soft_pause' || exit === -1 || !(Number.isFinite(elapsedMs) && elapsedMs < 30_000);
+  const restarted = !paused && exit === null && d?.failure_kind === 'execution_error' && /replaced the session's shell/.test(String(d?.detail ?? ''));
+  const notReplaced = !paused && !restarted && exit !== null;
+  return { kind: paused ? 'paused' : restarted ? 'restarted' : notReplaced ? 'not-replaced' : 'other', exit, killStatus: d?.kill_status ?? null };
 }
 
 /**

@@ -343,7 +343,7 @@ whole screen kept — the paused call's late output and its own end frame with i
 On the POSIX backend a line the product submits after keystrokes left without a line end is now preceded by the line
 discipline's kill character, `^U`, which erases the partial line; the PowerShell wrapper's first statement already
 takes a prefix without losing the start marker (reasoned, not measured). What becomes of such a line is stated
-nowhere: [OQ-143](../open-questions.md), raised with this reading built. **A second reading is falsified and kept
+nowhere: [OQ-146](../open-questions.md) (OQ-143 on its branch), raised with this reading built. **A second reading is falsified and kept
 beside its replacement in `onData`:** "the active call's end marker, else the paused call's; a match closes both".
 ~~While a call was active, the paused call's frame ahead of it was never matched, so a paused command that ended
 behind the next call never read as finished and the poll after it said "still running" with exit −1. Both frames are
@@ -366,7 +366,7 @@ text and `printf '__rot_…_e:%s\n' "$?"` in the poll on both roads — the seco
 behind the next call, on `origin/main` too. **Now** the paused call is fed by `onData` its share of each chunk
 (`pausedShare`), which ends at its own end frame or at the next call's PRINTED start marker — which the shell writes
 only once the paused line is done — and it closes there: on its own frame with its own status, or at the marker with
-none, reported as −1 with the reason ([OQ-144](../open-questions.md), raised with that reading built). Nothing after
+none, reported as −1 with the reason ([OQ-147](../open-questions.md), OQ-144 on its branch, raised with that reading built). Nothing after
 either boundary reaches its screen. Every row an echoed POSIX wrapper occupies is dropped from any capture
 (`withoutEchoedWrappers`), and the paused call's `until` cut takes the first row carrying the next call's start marker
 in any form. Pinned by eight "(A10)" cases in `terminal.test.ts`: the first repair's two; two red on the old
@@ -376,6 +376,23 @@ verification — `C-c` then `seq 1 20000`, a 300-character next call on both roa
 `pausedShare` and the echo's removal. A poll made after the `C-c` but before any next call still reads "still running"; that is
 recorded, not repaired
 ([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../../defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).*
+
+*Reported back 2026-09-30 (R-067), from the verifier's live run of the `fix-terminal-output` branch
+([`a-command-that-replaces-the-shell-reads-as-a-soft-pause`](../../defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md),
+acceptance finding A9): **the marker protocol's premise — that the shell which printed the start frame is the one left
+to print the end frame — does not hold for a command that replaces the shell.** `exec bash` keeps the pid and never
+returns to the rest of the wrapped line; the call soft-paused after 30,027 ms and every later call ran under bash. It
+is L1's class by another road, and `command eval` is no guard against it, because `exec` succeeds. The session now
+watches the process behind its pid while a call runs, against the identity its shell had when it last answered one of
+the product's own lines (`/proc`'s executable and argument vector; a fresh shell answers one no-op line first). A
+different process ends the call within 200 ms as an `execution_error` with no exit code, and the session restarts on
+its shell with PD-TOOLS-001's snapshot re-applied. The POSIX description says not to replace the shell. Neither the
+answer nor the restart is stated anywhere: [OQ-144](../open-questions.md), raised with this reading built. Off on
+macOS, where `/proc` does not exist. Pinned by "REQ-TOOLS-097/098/103/104 (OQ-144, acceptance A9): …" in
+`terminal.test.ts`, red on the unwatched session (a soft pause after the whole window, and `sh` in place of
+`/bin/sh -i` for the next call). The no-op line is awaited before the call writes its command, so it carries the
+call's cancel and reports a kill from the terminal window: the first form lost both (acceptance round 1's verifier),
+and the call now ends on either before its command is written.*
 
 **Found — defect C: the agent's capture was VT-STRIPPED where every other surface was EMULATED.** Deleting a
 control sequence is not applying it. Measured against the real shell at the session's own 240×50: ConPTY
@@ -481,3 +498,48 @@ stands; the carve-out is the commands whose exit 1 IS the convention — `git di
 plus `findstr` on Windows — matched on the command''s own leading tokens, with a real failure kind still
 outranking it. Recorded as ESC-41; the amendment round writes the carve-out into the requirement. The e2e
 proof spells the search portably (`findstr` on Windows, `grep` on POSIX) because the suite runs on both.
+
+## Fourth first execution — 2026-09-29, a SIGINT the shell discarded, sent again (OQ-135, R-067)
+
+The background session's signal delivery (REQ-TOOLS-110, REQ-TOOLS-128; OQ-10 as ruled in R-044) had been executed as
+delivery once to the session's group. Acceptance finding A8 graded its known exposure a product defect. Where
+`/bin/sh` is `dash`, a SIGINT landing between `dash`'s `vfork` and its command's `exec` is discarded by the command,
+and the session runs on until the command ends. Measured through `BackgroundManager` on the branch before the repair,
+45 of 200 `sleep 30` sessions signalled the instant they started were still running 3 s later under six CPU burners.
+**Found: delivery reached every process, as decided, and did not stop the session, which R-044 rules it must.** The
+repair keeps delivery to the group and adds a check ~~on Linux, the one host whose `/bin/sh` has the window~~ *on Linux,
+where the session's shell is `dash` (corrected 2026-09-30, fix round 3; below)*. ~~At 250 ms and
+1.5 s, while the session runs, the process table (`linuxProcessTable`, `@rotaris/platform`) is read for members that
+never received the signal: alive at SIGINT's default, created within one second before it. Each is sent SIGINT once
+more, alone (`missedSigint`), and the re-delivery is logged. After it, 0 of 200 ran on, with and without the burners.
+A command that catches SIGINT is never sent a second.~~ *Falsified 2026-09-30 by the verifier, kept beside its
+replacement: "alive at the default, created within a second before the signal" is also how a command stands whose
+one-shot handler (`process.once('SIGINT')`) restored the default as it ran, so such a command signalled the instant it
+was up was sent a second SIGINT that cut its shutdown off.* The group is now read the instant before the signal
+(`ProcessTable.tree`, a walk of the shell's descendants, so the reading does not push the signal past the window), and
+again at 250 ms and 1.5 s while the session runs. ~~A member is sent SIGINT once more, alone (`missedSigint`), only when
+the first reading found it still the shell, holding SIGINT off (the aimed reading found `dash` and its `vfork`ed child
+both `blocked`), and the later one finds it running another image at SIGINT's default. A process the first reading
+found running the command is never sent a second. With that predicate 0 of 200 ran on under six burners (twice) and
+without them; with re-delivery disabled, 8 of 200 still ran on under the burners.~~ *Falsified 2026-09-30 by the
+verifier's second round, kept beside its replacement: "at SIGINT's default" and "its name changed" miss what a dev server
+or a watcher is. Node catches SIGINT as it starts (as Python and a shell do), and a shell `exec`ing a shell keeps the
+name `sh`; 27 of 150 Node sessions and 39 of 200 `sh -c 'sleep 30; echo x'` sessions still ran on under six burners,
+with `sleep 30` alone passing.* A member the first reading found still the shell and not ignoring SIGINT is now sent it
+again, alone, when it runs another image, told by its name **or its arguments** (`/proc/<pid>/cmdline`), whatever it now
+does with SIGINT; where it had started nothing and is still the shell, what it started since is sent it; and with each,
+its descendants the first reading did not hold. A process the first reading found running the command is never sent a
+second, nor what it starts on receiving it. With that predicate 0 ran on of 150 Node, 200 `sh -c`, 200 `sh x.sh` and 200
+`sleep 30` sessions under six burners, against 15, 18, 28 and 5 with the check disabled. *Falsified 2026-09-30 by the
+verifier's third round, kept beside its replacement: "on Linux, the one host whose `/bin/sh` has the window" and "nor
+what it starts on receiving it" hold of `dash` alone. Where `/bin/sh` is `bash` (Fedora, RHEL, Arch), `bash` absorbs a
+SIGINT its command handled, goes on when that command exits 0, and `exec`s the last command of its `-c` list in place,
+so that clean-up — a shell replaced after the signal, by name and arguments — was sent a second SIGINT that killed it,
+under a false "vfork window" warning (measured through the manager with a `sh` link to `/bin/bash` 5.2, signalled 1 s
+and 5 s after the start, with `;` and `&&`).* The check is now armed only where the session's shell is `dash`, told
+once per manager by the shell file's real path (`hasVforkWindow`); any other shell is signalled once, and the same
+command under `bash` completes with its clean-up and no warning. Aimed at `dash`'s window without burners, 0 of 900 ran
+on either side of that correction. OQ-135 records the reading,
+its residue (an `exec` inside the reading's step; a script that traps SIGINT overridden; a shell other than `dash` not
+read), and stays open
+([the note](../../defects/fixed/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md)).

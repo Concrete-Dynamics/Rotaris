@@ -603,6 +603,47 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(resumed).toContain("Task 'escape': rejected — write_scope pattern '../elsewhere/**' reaches outside the workspace root.");
       expect(resumed).not.toContain('task_id:');
     });
+
+    /*
+     * Acceptance finding A4 (R-067): "after REQ-TOOLS-006's controls" read the first three alone while the fourth narrowed
+     * no grant. Under OQ-145 the delegating persona's `tool_restrictions` entry naming the child's persona binds the child's
+     * grant, so it binds this refusal, and the writers the reason names are the ones this caller's map lets write.
+     */
+    it("PD-TOOLS-006 revision 3 with REQ-TOOLS-006 (4) (OQ-145): the parent agent's tool_restrictions bind the refusal — a writer it restricts to reading cannot take a scope, and is not named", async () => {
+      const personas: PersonaResolver = {
+        resolve: (name) => {
+          const base = BUILT_IN_PERSONAS[name as RoleName];
+          if (!base) return null;
+          return { persona: name === 'orchestrator' ? { ...base, toolRestrictions: { 'coding-agent': ['read_file', 'grep'], tester: ['read_file'] } } : base, alias: null };
+        },
+        knownRoles: () => Object.keys(BUILT_IN_PERSONAS),
+      };
+      const { sessions, client } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'api', task: 'TASK: api', write_scope: ['src/api/**'] } }], 'Delegating.') : answer('Understood.');
+        }
+        return answer('unreachable');
+      }, { personas });
+      const sid = (sessions.start(dal, 'C:/ws', 'build the api') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(children(sid)).toEqual([]);
+      const resumed = textOf(client.requests.at(-1)!);
+      expect(resumed).toContain("Task 'api': rejected — write_scope was given to 'coding-agent', which cannot write files");
+      expect(resumed).toContain('Personas that can write files: docs-writer, refactorer.');
+    });
+
+    it('REQ-TOOLS-006 (4) (OQ-145): a child\'s tool port is told the persona that delegated it; the root\'s is told none', async () => {
+      const { sessions, contexts } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'api', task: 'TASK: api', run_in_background: false } }], 'Delegating.') : answer('Done.');
+        }
+        return answer('Built it.');
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'build the api') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(contexts.get('api')?.parentPersona).toBe('orchestrator');
+      expect(contexts.get('orchestrator')?.parentPersona).toBeUndefined();
+    });
   });
 
   describe('REQ-TOOLS-152 / REQ-TOOLS-154 (3): suppress_auto_context omits the sibling-artifact index', () => {

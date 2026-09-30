@@ -39,3 +39,8 @@ cut at the recorder's body cap). The note now says "of the 213 calls that carrie
 count it compares — the endpoint's `prompt_tokens`, not the product's own `chars_per_token` estimate (REQ-CONFIG-132),
 which is what the product tests the trigger against. Pinned by the case "says which calls the largest prompt is the
 largest of, and whose count it is".
+
+**Live, second run of 2026-09-30** (pack `.live-run/runs/2026-09-30T06-33-14-401Z`): "the largest prompt of the 191
+calls that carried usage (6 did not) was 59,849 tokens, 23 % of the model's 262,144-token window and below the 60 %
+compression trigger, 157,286 tokens (REQ-CONFIG-134) — the run never grew that far, by the endpoint's `prompt_tokens`,
+not the product's own chars_per_token estimate (REQ-CONFIG-132)".

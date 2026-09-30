@@ -70,3 +70,10 @@ request the quit cut off (`aborted`, open for 30 s, ending at the quit). Replaye
 reading is still `window`: the last request or tool call to end on its own ended 31 s before the launch did, and the
 detail names the one request still open when the wait ran out. The two other `aborted` records ended at 05:41 and 05:43,
 mid-run, and count as ended on their own.*
+
+**Live, second run of 2026-09-30, after the correction** (pack `.live-run/runs/2026-09-30T06-33-14-401Z`, session
+`7099306f`): "NOTE the long run was bounded by the window, not by the product — 2,406 s of 2,400 s: endpoint generating
+2,381 s (99 %; 197 requests, 229,614 output tokens of which 160,127 reasoning), tools alone 15 s, launch 9 s, the product
+with nothing in flight 1 s (0 %); the last request or tool call to end on its own ended 68 s before the launch did; 1
+request still open when the wait ran out, the longest open for 68 s, cut off by the quit and not counted as progress".
+The run was in its third wave, `w3 verify all` paused by the quit.

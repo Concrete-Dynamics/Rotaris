@@ -411,7 +411,11 @@ each from the traffic and the store. The notes are in `docs/defects/fixed/`. **R
 failed; the no-compression note named a largest prompt of 77,043 tokens against a trigger of 157,286; and the prompt
 arrived with its line breaks (H-e). The commands question, asked at last, **failed falsely once more**: `f`, paused by
 the deadline quit after 26 terminal calls, had no report yet. It is now asked only of a child with a report, and
-an unsettled one is a NOTE — replayed over that pack, `b` is asked (6 commands) and `f` is noted.
+an unsettled one is a NOTE — replayed over that pack, `b` is asked (6 commands) and `f` is noted. **Run a third time
+the same day, after the verifier's fix round 1** (pack `.live-run/runs/2026-09-30T06-33-14-401Z`), the scenario
+**passed**: the overrun a NOTE naming the one request the quit cut off (the last to end on its own 68 s before the
+launch did), a cut-off child (`w2d`, `last_response` and `cut_off`) met live and not counted silent, the commands
+question asked of the one settled child that ran commands and the paused `w3` noted.
 
 **`LIVE_RUN_DURESS_MS` — the default stays 40 minutes, and the check says when the window was the bound (decided
 2026-09-29).** The figure is the owner's of 2026-09-22, taken for this endpoint, and a harness repair does not reverse it.

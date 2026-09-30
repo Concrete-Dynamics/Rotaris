@@ -45,3 +45,8 @@ nothing to say.*
 
 **Live, 2026-09-30** (pack `.live-run/runs/2026-09-30T05-29-56-712Z`): no child ended `failed`, and the check passed.
 The cut-off shape was not met live this time; the unit cases pin it.
+
+**Live, second run of 2026-09-30, after the correction** (pack `.live-run/runs/2026-09-30T06-33-14-401Z`, session
+`7099306f`): the cut-off shape was met live this time. `w2d reconcile docs` ended `failed`, cut off at its 1,200 s
+ceiling with an empty `final_response`, a 104-character `last_response`, a `cut_off` block and a `timeout` error; its
+continuation `w2d finish item 9` succeeded. The check passed: "every failed child reported".

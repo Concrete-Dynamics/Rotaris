@@ -32,10 +32,12 @@ describe('the todo-app fixture names a test command that works (live-run finding
     expect(named.some(([file]) => file === 'src/todos.js')).toBe(true);
   });
 
+  // Each case spawns a Node that runs the fixture's suite, the slowest cases here on a loaded host: the child's own
+  // bound is 60 s, and the case's is set above it so the case reports the child's failure rather than its own timeout.
   it.each(named)('%s: `%s` passes from the repository root on this Node', (_file, command) => {
     const args = command.split(/\s+/).slice(1);
     const run = spawnSync(process.execPath, args, { cwd: dir, encoding: 'utf8', timeout: 60_000 });
     expect(run.status, `${command}\n${run.stdout}\n${run.stderr}`).toBe(0);
     expect(run.stdout).toMatch(/(#|ℹ) pass [1-9]/);
-  });
+  }, 90_000);
 });

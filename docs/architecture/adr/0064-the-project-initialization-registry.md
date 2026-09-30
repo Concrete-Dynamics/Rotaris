@@ -311,3 +311,25 @@ two runs in a row (171 s and 172 s), all five scenarios, each ending with the sk
 `completed: [code-intelligence-setup]` and a reopen reading "Not run yet: Verification consent task."; `code-intel-proof`
 passed twice (523 s and 525 s). Another agent's Electron processes (8 to 11) were on the host through all four runs.
 **Not shown:** a built-app run with two workspaces' marker writes in flight together; only the unit case holds it.
+
+**Sixth round (2026-09-29, R-067): the switch-time cancellation, executed for the first time.** REQ-WORKSPACE-013
+cancels a background run still under way in a switch's outgoing window, on REQ-WORKSPACE-109's terms, and records
+nothing for it. The coordinator had `close` for it from the start, and nothing called it: main's workspace-open path
+called only `open` and `resolve(true)`, so a switch left the outgoing run going, its outcome was still recorded, and a
+return to the same root found that entry's automatic resolution spent, against REQ-WORKSPACE-102
+(`../../defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`). `MainWindows` now reports a
+workspace once no live main window holds it (`workspaceClosed`), and main calls `close`. `close` marks the entry closed
+before it aborts the run: the run's recordings are refused inside their turn of the marker queue, so a task under way
+that ends in success after the switch records nothing either — REQ-WORKSPACE-013's "nothing SHALL be recorded for the
+cancelled run" is the stronger clause for a switch, where REQ-WORKSPACE-109 alone would record it. Nothing of the
+closed entry is published on channel 12, which reaches every window, and no banner is raised for it. **Measured** in
+the built app by `workspace-proof`'s scenario 8b, as root under Xvfb on Linux, Node 24, `--skip-build` after one
+`pnpm build`: two projects whose `code_intelligence` entry is a stand-in runtime holding `project create` for 90 s. On
+the build without the change, four of the scenario's five checks failed: no cancellation was asked, the step's process
+was still running 5 s after the switch, the replacement's setup was refused as already running — and reported as "not
+a local launch" — and a return to the first project started nothing. With the change all five passed, the step's
+process gone 201 ms after the switch answered, and the proof's 39 checks passed. **Found by the execution:** the
+replacement's refused start. The run host holds one setup at a time, and a replacement opened while the outgoing setup
+is still ending can be refused; the next round serialises the coordinator's setups
+(`../../defects/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`). **Not shown:** the Windows
+orders; a plain close of one of two windows with a run under way, which only the unit cases hold.

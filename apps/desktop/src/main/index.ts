@@ -1155,6 +1155,8 @@ async function main(): Promise<void> {
     },
     // REQ-STARTUP-043/114: the update check, initiated from the post-show activation of every main window and nowhere else.
     postShowActivation: (window) => { void updater.activate({ windowId: window.wcId }); },
+    // REQ-WORKSPACE-013: a workspace no window holds any more has its initialization run cancelled, and nothing recorded.
+    workspaceClosed: (workspace) => { initialization.close(canonicalPath(workspace)); },
   });
   /**
    * REQ-SHELL-109: "when a stream changes while the window is closed, the preference is on, and that stream is running,

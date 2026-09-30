@@ -47,6 +47,9 @@ export const CODE_INTELLIGENCE_SUCCESS_NON_CODE = 'Code intelligence is set up f
 export const NOT_A_LOCAL_LAUNCH_ERROR = "This workspace's `code_intelligence` entry is not a local launch, so its setup commands cannot be derived from it.";
 export const NOT_A_LOCAL_LAUNCH_SUMMARY = 'Code intelligence project setup was skipped: the configured `code_intelligence` server is not one Rotaris can run setup commands against.';
 
+/** REQ-WORKSPACE-013: why a closed workspace's run records nothing — the reason its refused recording carries in the log. */
+export const CLOSED_WORKSPACE_RECORDS_NOTHING = 'the workspace was closed while its run was under way, so nothing is recorded for the cancelled run';
+
 export interface SetupPort {
   /** Starts the run host's setup; the reply is the status as it stands. */
   readonly start: () => Promise<{ readonly ok: true; readonly status: McpSetupStatus } | { readonly ok: false; readonly reason: string }>;
@@ -98,6 +101,11 @@ interface WorkspaceEntry {
    * is additional and is not held here.
    */
   automatic: Promise<void> | null;
+  /**
+   * REQ-WORKSPACE-013: the window that held this workspace has closed (`close`). A run still under way for it is
+   * cancelled, nothing is recorded for it and nothing of it is published — the entry is no longer any window's.
+   */
+  closed: boolean;
 }
 
 /** REQ-WORKSPACE-091: the step names the log and the dialog show, in the requirement's order. */
@@ -170,7 +178,8 @@ export class InitializationCoordinator {
         resolve(this.resultOf(status));
       };
       this.setupListener = drain;
-      const onAbort = (): void => { void this.deps.setup.cancel(); };
+      // REQ-WORKSPACE-092: the run host ends what the setup launched. A cancel that cannot be delivered is said, not dropped.
+      const onAbort = (): void => { this.deps.setup.cancel().catch((cause: unknown) => this.deps.log(`initialization: the setup's cancellation could not be delivered (${String(cause)})`, 'warn')); };
       signal.addEventListener('abort', onAbort, { once: true });
       drain(first);
     });
@@ -210,7 +219,7 @@ export class InitializationCoordinator {
   private entry(root: string, agentsFile: string): WorkspaceEntry {
     let e = this.workspaces.get(root);
     if (!e) {
-      e = { root, agentsFile, state: readInitializationState(agentsFile), report: EMPTY_RUN_REPORT, running: null, attempting: new Set(), lastError: null, resolutionFailed: false, background: false, automatic: null };
+      e = { root, agentsFile, state: readInitializationState(agentsFile), report: EMPTY_RUN_REPORT, running: null, attempting: new Set(), lastError: null, resolutionFailed: false, background: false, automatic: null, closed: false };
       this.workspaces.set(root, e);
     }
     return e;
@@ -222,11 +231,30 @@ export class InitializationCoordinator {
     this.entry(root, agentsFile);
   }
 
+  /**
+   * REQ-WORKSPACE-013: no window holds `root` any more — a workspace switch closed the outgoing window, or one of several
+   * windows closed (main calls this from `MainWindows`' `workspaceClosed`). A run still under way is cancelled on
+   * REQ-WORKSPACE-109's terms: no task that has not started begins, the task under way reaches its own conclusion and the
+   * run host ends every process it launched (REQ-WORKSPACE-092). Nothing is recorded for that run (see `commit`), so its
+   * tasks stay pending for the next open, and nothing of it is published or bannered: channel 12 reaches every live
+   * window, and none of them is this workspace's. The entry is dropped at once, without waiting for the run, so a later
+   * open of the same root is a new open with its own automatic resolution (REQ-WORKSPACE-102) and the replacement
+   * window's resolution never waits on the cancellation. Before this was called, a switch left the outgoing run going,
+   * recorded its outcome, and a return to the root found its automatic resolution already spent
+   * (`docs/defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`).
+   */
   close(root: string): void {
     const e = this.workspaces.get(root);
-    e?.running?.abort();
+    if (e) {
+      e.closed = true;
+      if (e.running !== null) {
+        this.deps.log(`initialization: ${root} was closed while its run was under way; the run is cancelled and nothing is recorded for it`);
+        e.running.abort();
+      }
+    }
     this.workspaces.delete(root);
-    if (this.active === root) this.active = null;
+    // The surfaces ask about the workspace most recently opened among those still open.
+    if (this.active === root) this.active = [...this.workspaces.keys()].at(-1) ?? null;
   }
 
   private current(): WorkspaceEntry | null {
@@ -253,7 +281,10 @@ export class InitializationCoordinator {
 
   /** The run's recordings, each built inside its turn of the queue (`ExecuteDeps.commit`). */
   private commit(e: WorkspaceEntry): MarkerCommit {
-    return async (build) => await this.marker(e, async (current) => await this.deps.writeMarker(e.root, build(current)));
+    // REQ-WORKSPACE-013: decided inside the turn, so a close that lands while a recording waits its turn still stops it.
+    return async (build) => await this.marker(e, async (current) => e.closed
+      ? { ok: false, reason: CLOSED_WORKSPACE_RECORDS_NOTHING }
+      : await this.deps.writeMarker(e.root, build(current)));
   }
 
   private nowIso = (): string => toIsoUtc(this.deps.clocks.wall.instant());
@@ -276,7 +307,10 @@ export class InitializationCoordinator {
   }
 
   private async publish(e: WorkspaceEntry): Promise<void> {
-    this.deps.publish(await this.viewFor(e));
+    // REQ-WORKSPACE-013: a closed workspace is no window's, and channel 12 reaches every window.
+    if (e.closed) return;
+    const view = await this.viewFor(e);
+    if (!e.closed) this.deps.publish(view);
   }
 
   /** REQ-WORKSPACE-115: the persisted section as it is on disk right now, and nothing else disturbed. */
@@ -361,6 +395,8 @@ export class InitializationCoordinator {
   }
 
   private async run(e: WorkspaceEntry, tasks: readonly InitializationTask[], background: boolean): Promise<void> {
+    // REQ-WORKSPACE-013: a resolution that was under way when its workspace closed starts nothing.
+    if (e.closed) return;
     const controller = new AbortController();
     e.running = controller;
     e.background = background;
@@ -381,7 +417,7 @@ export class InitializationCoordinator {
       e.report = result.report;
       const failed = result.report.tasks.filter((t) => t.status === 'failure');
       e.lastError = failed.length === 0 ? null : failed.map((t) => t.error).join(' ');
-      if (background && failed.length > 0) {
+      if (background && failed.length > 0 && !e.closed) {
         // REQ-WORKSPACE-103: a banner carrying the task's own summary, with the stated fallback.
         this.deps.banner(BACKGROUND_FAILED_HEADLINE, failed[0]?.summary ?? BACKGROUND_FAILED_FALLBACK);
       }
@@ -391,7 +427,7 @@ export class InitializationCoordinator {
       e.lastError = String(cause);
       e.report = { running: false, current: null, currentLabel: '', currentSteps: [], tasks: [], outcome: 'failed', error: String(cause) };
       this.deps.log(`initialization: the run broke down for ${e.root} (${String(cause)})`, 'warn');
-      if (background) this.deps.banner(BACKGROUND_FAILED_HEADLINE, `${BACKGROUND_FAILED_FALLBACK} ${BACKGROUND_BROKE_DOWN}`);
+      if (background && !e.closed) this.deps.banner(BACKGROUND_FAILED_HEADLINE, `${BACKGROUND_FAILED_FALLBACK} ${BACKGROUND_BROKE_DOWN}`);
     } finally {
       e.running = null;
       e.attempting = new Set();

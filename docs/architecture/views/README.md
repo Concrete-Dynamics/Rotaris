@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A workspace switch cancels the outgoing workspace's initialization run (REQ-WORKSPACE-013, R-067).** `MainWindows`
+gained `workspaceClosed`, called once the last live main window holding a workspace has closed, and main answers it with
+`InitializationCoordinator.close`, which nothing called before: the run is cancelled, nothing is recorded or published
+for it, and a return to the root resolves again (REQ-WORKSPACE-102). This repairs
+`a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`. The **process view**'s `initialization.*`
+paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
 **The update shape answers `extend` (REQ-CHAT-053, R-067).** `updateShape` in `ui/transcript/pool.ts` reads the
 content of one row besides the keys — the last row before the update — so an extension of that row with rows appended
 after it is `extend` rather than `append`; the first form's `extend` branch could not be reached. The pane still records

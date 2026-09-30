@@ -40,7 +40,7 @@ interface Harness {
 /** A hold a test can set at any moment: every setup status read taken while it is set waits on it. */
 interface StatusHold { current: Promise<void> | null }
 
-function harness(options: { applicable?: boolean; startFails?: boolean; writeFails?: string | null; modelReachable?: boolean; statusGate?: Promise<void>; hold?: StatusHold; onStart?: () => void; writeHold?: StatusHold } = {}): Harness {
+function harness(options: { applicable?: boolean; startFails?: boolean; writeFails?: string | null; modelReachable?: boolean; statusGate?: Promise<void>; hold?: StatusHold; onStart?: () => void; onCancel?: () => void; writeHold?: StatusHold } = {}): Harness {
   const { root, agents } = workspace();
   const published: InitializationStateView[] = [];
   const banners: { headline: string; detail: string }[] = [];
@@ -68,7 +68,7 @@ function harness(options: { applicable?: boolean; startFails?: boolean; writeFai
     },
     setup: {
       start: async () => { options.onStart?.(); return options.startFails ? { ok: false, reason: 'not a local launch' } : { ok: true, status: status() }; },
-      cancel: async () => undefined,
+      cancel: async () => { options.onCancel?.(); },
       status: async () => { await options.statusGate; await options.hold?.current; return status({ applicable: options.applicable !== false }); },
     },
     publish: (s) => published.push(s),
@@ -510,5 +510,107 @@ describe('the refresh', () => {
     expect(state.view.lastError).toBeNull();
     // Every other top-level key of the file is still there.
     expect(readFileSync(h.agents, 'utf8')).toContain('permission_mode: ask');
+  });
+});
+
+/** Lets every promise chain the coordinator has started run as far as it can. */
+async function settle(turns = 12): Promise<void> {
+  for (let i = 0; i < turns; i += 1) await new Promise((r) => setImmediate(r));
+}
+
+const completedSetup = (): McpSetupStatus => status({ state: 'finished', outcome: 'completed', containsCode: true, steps: [step('create', 'succeeded', 'made'), step('index', 'succeeded', 'indexed'), step('memory', 'succeeded', 'seeded')] });
+const cancelledSetup = (): McpSetupStatus => status({ state: 'finished', outcome: 'cancelled', message: 'The setup was cancelled; the workspace is only partly set up.', containsCode: true, steps: [step('create', 'succeeded', 'made'), step('index', 'failed', 'Setup was stopped before this step finished.'), step('memory', 'not-attempted')] });
+
+/**
+ * REQ-WORKSPACE-013: a workspace switch cancels the outgoing workspace's run on REQ-WORKSPACE-109's terms, records nothing
+ * for it, and resolves the replacement independently; a later open of the same root is a new open (REQ-WORKSPACE-102).
+ * `docs/defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`.
+ */
+describe('closing a workspace', () => {
+  it('cancels the closed workspace\'s live run, records nothing for it even when the task under way succeeds, and publishes nothing of it (REQ-WORKSPACE-013, REQ-WORKSPACE-109, REQ-WORKSPACE-092)', async () => {
+    let cancels = 0;
+    const h = harness({ onCancel: () => { cancels += 1; } });
+    await h.coordinator.resolve(true);
+    await settle();
+    expect(h.published.at(-1)?.view.running).toBe(true);
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents);
+    h.coordinator.close(h.root);
+    await settle();
+    // REQ-WORKSPACE-092: the run host is asked to end what the setup launched.
+    expect(cancels).toBe(1);
+    const publishedAtClose = h.published.length;
+    // The task under way reaches its own conclusion — here it completed before the cancellation reached it.
+    h.push(completedSetup());
+    await settle();
+    expect(readInitializationState(h.agents).completed).toEqual([]);
+    expect(readInitializationState(h.agents).lastRun).toBeNull();
+    expect(h.writes).toEqual([]);
+    // Nothing of the closed workspace reaches the windows, which are all another workspace's now.
+    expect(h.published).toHaveLength(publishedAtClose);
+    expect(h.banners).toEqual([]);
+  });
+
+  it('raises no banner for a closed workspace\'s background run that ends in failure (REQ-WORKSPACE-013, REQ-WORKSPACE-103)', async () => {
+    const h = harness();
+    await h.coordinator.resolve(true);
+    await settle();
+    h.coordinator.close(h.root);
+    h.push(cancelledSetup());
+    await settle();
+    expect(h.banners).toEqual([]);
+    expect(readInitializationState(h.agents).lastRun).toBeNull();
+  });
+
+  it('resolves automatically again when the closed workspace is opened again (REQ-WORKSPACE-102, REQ-WORKSPACE-013)', async () => {
+    let starts = 0;
+    const h = harness({ onStart: () => { starts += 1; } });
+    await h.coordinator.resolve(true);
+    await settle();
+    expect(starts).toBe(1);
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents);
+    h.coordinator.close(h.root);
+    h.push(cancelledSetup());
+    await settle();
+    // The switch back: a new open, with its own automatic resolution, which starts the still-pending task again.
+    h.coordinator.close(other.root);
+    h.coordinator.open(h.root, h.agents);
+    const state = await h.coordinator.resolve(true);
+    expect(state.view.pending).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    await settle();
+    expect(starts).toBe(2);
+    h.push(completedSetup());
+    await settle();
+    expect(readInitializationState(h.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+  });
+
+  it('starts nothing for a workspace closed while its resolution was still reading (REQ-WORKSPACE-013)', async () => {
+    let starts = 0;
+    const hold: StatusHold = { current: null };
+    const h = harness({ hold, onStart: () => { starts += 1; } });
+    let release: () => void = () => undefined;
+    hold.current = new Promise<void>((r) => { release = r; });
+    const resolving = h.coordinator.resolve(true);
+    await settle();
+    h.coordinator.close(h.root);
+    hold.current = null;
+    release();
+    await resolving;
+    await settle();
+    expect(starts).toBe(0);
+    expect(readInitializationState(h.agents).lastRun).toBeNull();
+  });
+
+  it('keeps answering for the workspace still open in another window when one of two closes (REQ-WORKSPACE-013)', async () => {
+    const h = harness({ applicable: false });
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents);
+    h.coordinator.close(other.root);
+    const state = await h.coordinator.resolve(true);
+    // The silent stamp lands in the workspace that is still open, and nowhere else.
+    expect(state.view.neverInitialized).toBe(false);
+    expect(readInitializationState(h.agents).lastRun).toBe('2026-09-15T12:00:00.000Z');
+    expect(readInitializationState(other.agents).lastRun).toBeNull();
   });
 });

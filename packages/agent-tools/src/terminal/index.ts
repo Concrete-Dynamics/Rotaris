@@ -432,7 +432,7 @@ function startBackground(a: TerminalArgs, manager: TerminalManager, ctx: ToolCon
   });
   if (opened) {
     const untap = s.onOutput((chunk) => manager.streams.data(streamId, chunk));
-    void s.whenExited().then(() => { untap(); manager.streams.end(streamId, { exitCode: s.exitCode ?? -1, finalText: s.readAll().replace(/\s+$/, '') }); });
+    void s.whenExited().then(() => { untap(); manager.streams.end(streamId, { exitCode: s.exitCode, finalText: s.readAll().replace(/\s+$/, '') }); });
   }
   const diag = diagnosticBlock({ backend: BACKEND_NAME, command: a.command, detail: `Background session started: ${s.id}`, exit_code: 0, outcome_kind: 'background_running', outcome_severity: 'info', session_id: s.id, session_status: 'running', warnings: [] });
   return observation(`Background session started: ${s.id}\ncommand: ${a.command}\nsession_status="running"\n${outputSection('', false)}\n${diag}`, { outcomeKind: 'background_running', exitCode: 0, warnings: [] });
@@ -454,10 +454,13 @@ function sessionAction(a: TerminalArgs, bg: BackgroundManager): Promise<Observat
   const finish = (text: string, output: string) => {
     // REQ-SANDBOX-085: a background spawn returns before a launcher failure is visible, so the test
     // is made here, on the whole captured stream, at the poll or the termination that first sees it.
-    const failureKind = relabelIfLauncherFailed(s.confined, null, s.exitCode, s.readAll());
-    const detail = failureKind === 'sandbox_unavailable' ? LAUNCHER_FAILED_DETAIL : text;
+    // REQ-TOOLS-103 (OQ-142): a process Node could not start is an `execution_error` whose detail quotes the cause.
+    const failureKind = relabelIfLauncherFailed(s.confined, s.spawnError === null ? null : 'execution_error', s.exitCode, s.readAll());
+    const detail = failureKind === 'sandbox_unavailable' ? LAUNCHER_FAILED_DETAIL
+      : failureKind === 'execution_error' ? `${text} Terminal execution failed before completion: the background command could not be started: ${s.spawnError ?? ''}`
+        : text;
     const { outcomeKind, severity } = classifyOutcome({ failureKind, exitCode: s.exitCode, output, command: s.command, backgroundStatus: s.status }, []);
-    const diag = diagnosticBlock({ backend: BACKEND_NAME, command: s.command, detail, exit_code: s.exitCode, failure_kind: failureKind, outcome_kind: outcomeKind, outcome_severity: severity, session_id: s.id, session_status: s.status, warnings: [], error_class: failureKind === 'sandbox_unavailable' ? SANDBOX_ERROR_CLASS : null });
+    const diag = diagnosticBlock({ backend: BACKEND_NAME, command: s.command, detail, exit_code: s.exitCode, failure_kind: failureKind, outcome_kind: outcomeKind, outcome_severity: severity, session_id: s.id, session_status: s.status, warnings: [], error_class: failureKind === 'sandbox_unavailable' ? SANDBOX_ERROR_CLASS : failureKind === 'execution_error' ? 'ExecutionError' : null });
     return observation(`${detail}\n${outputSection(output, false)}\n${diag}`, { outcomeKind, exitCode: s.exitCode, warnings: [], isError: severity === 'error', ...(failureKind === null ? {} : { failureKind }) });
   };
   switch (action) {

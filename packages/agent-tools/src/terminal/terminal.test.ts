@@ -676,6 +676,37 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
   }, 20_000);
 });
 
+describe('terminal — a background command whose process could not be started (REQ-TOOLS-100, 103, 109, 112, 179)', () => {
+  it('REQ-TOOLS-100/103/179: a spawn that fails after start returns reads failed with no exit code and failure_kind execution_error, never the −1 of killed', async () => {
+    // Node reports ENOENT and EACCES asynchronously, through the child's `error` event and never its `exit`: `start`
+    // returns a session, and the failure first shows at the poll. A shell file that does not exist is that case.
+    const missing = join(root, 'no-such-shell');
+    const m = new TerminalManager({ factory: { spawn: () => { throw new Error('unused'); } }, backend: { kind: shell?.kind ?? 'posix', file: missing }, clocks, config: TERMINAL_DEFAULTS, env: {}, warn: () => undefined });
+    try {
+      const t = terminalTool(m, TERMINAL_DEFAULTS);
+      const started = await t.execute(args({ command: 'printf never', background: true }), ctx());
+      const id = /ts_[0-9a-f]{8}/.exec(started.text)![0];
+      const endedBy = (clocks.monotonic.now() as number) + 10_000;
+      while (!(await t.execute(args({ session_action: 'list' }), ctx())).text.includes(`✗ ${id}`)) {
+        expect(clocks.monotonic.now() as number).toBeLessThan(endedBy);
+        await new Promise((res) => setTimeout(res, 20));
+      }
+      const q = await t.execute(args({ session_id: id, session_action: 'query' }), ctx());
+      // Before the repair: `Session ts_… is failed (exit -1).`, `background_terminal`, and no failure_kind.
+      expect(q.text).not.toContain('exit -1');
+      expect(q.text).toContain('Terminal execution failed before completion');
+      expect(q.text).toContain('ENOENT');
+      const d = diag(q.text);
+      expect(d).toMatchObject({ session_id: id, session_status: 'failed', failure_kind: 'execution_error', outcome_kind: 'execution_error', outcome_severity: 'error', error_class: 'ExecutionError' });
+      expect(d).not.toHaveProperty('exit_code');
+      expect(q).toMatchObject({ isError: true, failureKind: 'execution_error', outcomeKind: 'execution_error', exitCode: null });
+      // The list's structured entry carries no exit code either.
+      const list = await t.execute(args({ session_action: 'list' }), ctx());
+      expect((diag(list.text)['sessions'] as { session_id: string; exit_code: unknown }[]).find((e) => e.session_id === id)).toMatchObject({ status: 'failed', exit_code: null });
+    } finally { await m.dispose(); }
+  }, 20_000);
+});
+
 describe('terminal — availability (REQ-TOOLS-104)', () => {
   it('is decided by presence on PATH alone', () => {
     expect(findShell({ PATH: '' }, 'win32')).toBeNull();

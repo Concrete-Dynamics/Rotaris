@@ -170,14 +170,18 @@ export class TerminalStreams {
     if (s.pending.length > 0) this.schedule(s, this.floorWait(s));
   }
 
-  /** The command ended: the pending delta, the closing screen frame, then the meta with the exit code. */
-  end(streamId: string, outcome: { readonly exitCode: number; readonly finalText: string }): void {
+  /**
+   * The command ended: the pending delta, the closing screen frame, then the meta with the exit code. A null code is a
+   * command that has none — a background process that could not be started (REQ-TOOLS-179, OQ-142) — and the meta then
+   * carries no `exitCode`, which a surface draws as `exited` rather than the −1 of a kill.
+   */
+  end(streamId: string, outcome: { readonly exitCode: number | null; readonly finalText: string }): void {
     const s = this.find(streamId);
     if (!s || !s.meta.running) return;
     this.flushNow(s);
     s.finalText = outcome.finalText;
     this.emit(s, { kind: 'screen', payload: outcome.finalText, closing: true });
-    s.meta = { ...s.meta, running: false, exitCode: outcome.exitCode, acceptsInput: false, canKill: false, truncated: s.emulator.truncated };
+    s.meta = { ...s.meta, running: false, ...(outcome.exitCode === null ? {} : { exitCode: outcome.exitCode }), acceptsInput: false, canKill: false, truncated: s.emulator.truncated };
     this.emitMeta(s);
     // The retained-ended cap is trimmed as a stream ends, oldest ended first; this stream is the newest ended, so it stays.
     const streams = this.bySession.get(s.spec.sessionId);

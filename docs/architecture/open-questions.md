@@ -6328,6 +6328,42 @@ thing is left as it was: a resolution under way at the close that finds nothing 
 to end on its own with its outcome recorded as REQ-WORKSPACE-084 would have it; and, for a user-started run, whether
 closing its window is a cancellation the user asked for.
 
+**OQ-142 — Which status and exit code does a background session read when its process could not be started?**
+*(REQ-TOOLS-109, REQ-TOOLS-179, REQ-TOOLS-100, REQ-TOOLS-103, REQ-TOOLS-112. Raised 2026-09-30 by the repair of
+[`a-background-session-whose-spawn-fails-reads-failed-with-exit-minus-one.md`](../defects/fixed/a-background-session-whose-spawn-fails-reads-failed-with-exit-minus-one.md)
+under [R-067](../product/requests.md#r-067). Open.)*
+
+Node reports some spawn failures synchronously and others — ENOENT and EACCES among them — only after `spawn` has
+returned, through the child's `error` event and never its `exit`. For the first kind the product already answers the
+start itself as an `execution_error` with no exit code (`The background command could not be started: …`). For the
+second, `start` has already returned `Background session started`, so the session exists, and the failure first
+shows at the poll. REQ-TOOLS-109's status vocabulary is closed — `running`, `completed` (exit 0), `failed` (nonzero),
+`killed`, `timeout` — and names no status for a command that never ran. REQ-TOOLS-179 gives −1 to `killed` alone on a
+background session, and keeps "0/nonzero" for "the command's real outcome", which a command that never ran does not
+have. REQ-TOOLS-103 makes any failure "before the command completes" an `execution_error` that quotes the error.
+Before this entry such a session read `failed (exit -1)`, `background_terminal`, with no `failure_kind`.
+
+**What the build proceeds under** (`BackgroundSession`'s `error` handler in
+`packages/agent-tools/src/terminal/background.ts`, `sessionAction`'s `finish` in `terminal/index.ts`):
+- **The status is `failed`.** It is the only terminal status of REQ-TOOLS-109 that is not an end the product
+  imposed, and REQ-TOOLS-112 already reads it at `error`.
+- **The exit code is null.** The command has none, as the synchronous refusal has none. The diagnostic block drops
+  the key (REQ-TOOLS-100), the list's structured entry carries `exit_code: null` and the text table `-`, and the
+  session's live stream ends with no exit code, which the terminal surface draws as `exited`.
+- **Every poll or termination of it is an `execution_error`**, error severity, `error_class` `ExecutionError`, with a
+  detail that states the session's status and then that terminal execution failed before completion, quoting the
+  error (REQ-TOOLS-103). REQ-TOOLS-112's first test decides the outcome, so it is not `background_terminal`.
+- **An `error` the child raises once it has a pid is not its end.** It is warned about, and the session keeps waiting
+  for its `exit`, which still comes.
+
+The case "REQ-TOOLS-100/103/179: a spawn that fails after start returns …" in `terminal/terminal.test.ts` pins this
+reading, and the case "REQ-TOOLS-179 (OQ-142): …" in `terminal/streams.test.ts` pins the stream's end.
+
+**What a ruling decides.** Whether REQ-TOOLS-109's `failed` covers a command that never ran with no exit code, or
+whether it needs a code of its own (126 is sandbox-unavailable's, and 127 is the shell's convention for a command it
+could not find), or a status the vocabulary does not have; and whether such a spawn should instead be answered at
+the start, by waiting for Node's `spawn` or `error` before `start` returns.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

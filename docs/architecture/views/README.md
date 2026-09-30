@@ -45,6 +45,24 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**A child the stop's grace gave up on is counted at the rest (REQ-MONITOR-102, REQ-SESSION-092, PD-ORCH-005 clause 6,
+R-067).** `IterationChildren.outlast` now keeps which children it gave up on (`givenUpOn`), and `rest` counts each one's
+calls from its record once its open calls are answered (`countGivenUpOn`, through the run's `countToolCalls`). A continue
+that declines it therefore loses none of its calls. So does a rest that the explicit cancel reaches while it waits: it
+pauses nothing, but first answers such a child's open calls as cut off, naming no rest (OQ-96), and counts it before the
+child ends `cancelled` (found by the repair's verifier). This repairs
+`a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`. A child given up on by the
+explicit cancel's own `outlast`, which no rest follows, or already terminal when given up on, is still not counted
+(`a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md`, open). The **runtime view**'s §4 rest
+paragraph and its `children` row say so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A settle tells the scheduler whatever raised before it (REQ-ORCH-048, REQ-ORCH-052, REQ-TOOLS-156, REQ-HOOKS-079,
+R-067).** Both settles of a child — the end of `IterationChildren.execute` and `settleRaised` — now end through
+`afterTerminal`, which writes the teardown, runs the `child_completed` hook and then calls `scheduler.settled` in a
+`finally`. A raise out of the hook port is a warning. This repairs
+`a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md`. The **runtime view**'s §4 paragraph on the
+settle's hook says so. No package, edge, process, message kind, channel, command or store column changed.
+
 **The post-run improvement capture never rejects (REQ-ORCH-137, REQ-LIBRARY-032, R-067).** `onRunResult`'s detached
 closure moved into `captureAfterRun` (`run-host/improvement-capture.ts`): a skip-list stop reason yields no job before main
 is asked for the history, the store is re-read after that ask, and a store closed meanwhile or a throwing capture yields

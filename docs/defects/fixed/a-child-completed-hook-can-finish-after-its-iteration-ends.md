@@ -97,7 +97,7 @@ own still settling. No case pinned that route in this repair. The fifth round's 
 
 A hook that raises still leaves a parent waiting in the resume loop or in `wait_for_tasks` unreleased. The mark now ends,
 so a parent that found the child ended on its own goes on, but `scheduler.settled` is still not called. That is recorded
-in [`a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md`](../a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md).
+in [`a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md`](a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md). Repaired 2026-09-30: both settles now tell the scheduler in a `finally` (`afterTerminal`).
 
 ## Found by the verifier's fifth round — 2026-09-29, and repaired
 

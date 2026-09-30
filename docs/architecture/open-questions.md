@@ -6405,8 +6405,10 @@ detail and the description in `terminal/index.ts`):
   in the background.
 - **`exec` with redirections alone** (`exec 3>file`, `exec >log`) keeps the process, and is an ordinary command.
 - **The POSIX description says not to replace the shell** and what a call that does meets on the host it runs on: on
-  Linux that the call fails and the shell is restarted, elsewhere that the call reads as still running and every later
-  call runs in that program.
+  Linux that the call normally fails and the shell is restarted, elsewhere that the call reads as still running and
+  every later call runs in that program. *("Normally" added 2026-09-30 by acceptance round 1's second verifier: on
+  Linux too the watch is off in the cases listed under "What the build proceeds under", where the call reads as still
+  running.)*
 
 **What it does not reach.** `/proc` is Linux's, so on macOS the watch is off: such a call still soft-pauses there, and
 the description's sentence, which states that consequence there, is all that applies (no macOS artifact is built,

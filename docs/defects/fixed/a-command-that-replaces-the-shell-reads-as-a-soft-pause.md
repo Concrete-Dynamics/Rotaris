@@ -78,3 +78,12 @@ re-taken after the round trip. Pinned by the two cases "… (OQ-143, acceptance 
 over a real PTY whose fresh shell takes a second to start: red before (5,097 ms and 6,330 ms, the command having run
 or waited out its timeout), green after (each under 1.5 s, the command never run). The description's consequence is
 now stated per host, since only Linux has the watch.
+
+**Fix round 2 (acceptance round 1's second verifier).** The cancel case's fresh shell now takes three seconds to
+start, not one: with one, the check made after the handshake also ended the call inside the 1.5 s bound, so the case
+passed with the signal taken off the handshake (measured: 3,027 ms and red with it off, green with it on). The Linux
+sentence of the description says such a call *normally* fails, since the watch is off where the handshake went
+unanswered or a soft-paused command holds the shell. The live-run `terminal` scenario credits the restart only when
+the bash-ism after `exec bash` came from the same agent (each agent has its own foreground session, REQ-TOOLS-187); in
+the pack `2026-09-30T16-57-00-416Z` they came from two agents and the check had passed without observing a restart,
+which is now a NOTE. `AGENTS.md`'s `terminal` row names the shape and its checks.

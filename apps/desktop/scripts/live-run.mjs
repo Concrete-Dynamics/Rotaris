@@ -1828,8 +1828,12 @@ if (wanted.includes('terminal')) {
       const said = `outcome ${d?.outcome_kind ?? 'none'}, exit ${d?.exit_code ?? 'none'}, output ${JSON.stringify(reading.printed.slice(0, 120))}`;
       // Acceptance A9: after a replacement the product restarted, the next command meets `/bin/sh` again. Where that is
       // dash, a bash-ism expanded after it means the session stayed in bash — the verifier's live run of 2026-09-29.
-      const afterRestart = replacedReading?.kind === 'restarted' && replaced.ordinal < unexpandable.ordinal && !/bash$/.test(realpathSync('/bin/sh'));
-      if (afterRestart) check(reading.kind !== 'expanded', 'the command after the shell was replaced ran in /bin/sh, not in the program that replaced it', said);
+      // Only the SAME agent's next command asks it: each agent has its own foreground session (REQ-TOOLS-187), so a
+      // bash-ism another agent ran met a shell nothing had replaced, and the pack of 2026-09-30T16-57 passed this check
+      // with no restart observed (acceptance round 1's second verifier). Another agent's command is a NOTE.
+      const followed = replacedReading?.kind === 'restarted' && replaced.ordinal < unexpandable.ordinal && !/bash$/.test(realpathSync('/bin/sh'));
+      if (followed && replaced.agent_name === unexpandable.agent_name) check(reading.kind !== 'expanded', 'the command after the shell was replaced ran in /bin/sh, not in the program that replaced it', said);
+      else if (followed) noted('the restart was not observed by a later command', `\`exec bash\` ran in ${replaced.agent_name} and the bash-ism in ${unexpandable.agent_name}, whose foreground session is its own (REQ-TOOLS-187)`);
       if (reading.kind === 'expanded') noted('the shell expanded the bash-ism', `the guard is unasked this run: ${said}`);
       else if (reading.kind === 'other') noted('the bash-ism met neither a refusal nor an expansion', `the guard is unasked this run: ${said}`);
       else {

@@ -336,16 +336,19 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
   // OQ-143's first-call handshake is one no-op round trip on a fresh shell before the command is written: an await before
   // the call's own abort listener and kill handler exist. Both cases give the fresh shell a startup that takes a second
   // (`ENV`, which an interactive POSIX shell reads), so the cancel and the kill land inside the handshake on any host.
-  const slowStart = async (tag: string) => {
+  // `startupS` is the fresh shell's startup. The cancel case takes three seconds, longer than its bound, so that only the
+  // handshake's own abort meets the bound: with one second, the check made after the handshake ended the call inside it
+  // too, and the case passed with the signal taken off the handshake (acceptance round 1's second verifier).
+  const slowStart = async (tag: string, startupS = 1) => {
     const dir = mkdtempSync(join(tmpdir(), `rotaris-${tag}-`));
     const rc = join(dir, 'rc');
-    writeFileSync(rc, 'sleep 1\n');
+    writeFileSync(rc, `sleep ${startupS}\n`);
     const env = { ...Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), ENV: rc };
     const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 20_000 }, env, warn: () => undefined });
     return { m, t: terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 20_000 }), marker: join(dir, 'ran'), dir };
   };
   it.runIf(process.platform === 'linux' && shell?.kind === 'posix')('REQ-TOOLS-097/099 (OQ-143, acceptance round 1): a run\'s cancel that lands while a fresh shell answers the first call\'s handshake ends the call at once, and the command never runs', async () => {
-    const { m, t, marker, dir } = await slowStart('a9-abort');
+    const { m, t, marker, dir } = await slowStart('a9-abort', 3);
     try {
       const stop = new AbortController();
       const began = clocks.monotonic.now() as number;
@@ -353,7 +356,8 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       setTimeout(() => stop.abort(), 300);
       const r = await call;
       const took = (clocks.monotonic.now() as number) - began;
-      // Before the repair: 5 s and `success`, exit 0 — the cancel was lost and the command ran to its end.
+      // Before the repair: 5 s and `success`, exit 0 — the cancel was lost and the command ran to its end. With the
+      // signal off the handshake alone, the call waits out the three-second startup before it is cancelled.
       expect(took).toBeLessThan(1_500);
       expect(diag(r.text)).toMatchObject({ exit_code: 124, kill_status: 'session_reset', failure_kind: 'timeout' });
       expect(r.text).toContain('the call was cancelled');
@@ -847,7 +851,7 @@ describe('terminal — availability (REQ-TOOLS-104)', () => {
     // OQ-143 (acceptance A9): the POSIX description says the shell is not to be replaced, and what a call that does meets.
     expect(posix).toContain('Do not replace the shell with `exec <program>`');
     // The consequence is the one the host meets: the watch reads /proc, so only Linux ends the program and restarts the shell.
-    expect(terminalDescription({ kind: 'posix', file: '/bin/sh' }, 'linux')).toContain('such a call fails, and the program is ended and the shell restarted');
+    expect(terminalDescription({ kind: 'posix', file: '/bin/sh' }, 'linux')).toContain('such a call normally fails, and the program is ended and the shell restarted');
     const mac = terminalDescription({ kind: 'posix', file: '/bin/sh' }, 'darwin');
     expect(mac).toContain('Do not replace the shell with `exec <program>`: such a call reads as still running, and every later call runs in that program.');
     expect(mac).not.toContain('the shell restarted');

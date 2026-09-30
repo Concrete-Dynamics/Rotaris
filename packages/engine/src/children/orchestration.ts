@@ -593,7 +593,15 @@ export class IterationChildren implements DelegationOps {
     if (cause === 'pause') await Promise.allSettled([...this.executing]);
     else await this.outlast(grace);
     // Clause 3: an explicit cancel that arrived meanwhile is final — nothing more is paused; the caller settles the rest.
-    if ((this.deps.restCause?.() ?? null) === null) return 0;
+    // A child the grace gave up on meanwhile is still counted from its record first (REQ-MONITOR-102), its open calls
+    // answered as cut off, naming no rest (OQ-96, "A call cut by no rest"); the caller then ends it `cancelled` (found by
+    // the verifier of the repair of a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md).
+    if ((this.deps.restCause?.() ?? null) === null) {
+      const givenUp = this.ledger.all().filter((c) => { const s = this.ledger.get(c.task_id)?.state; return this.givenUpOn.has(c.task_id) && s !== undefined && !isTerminalChildState(s); });
+      for (const c of givenUp) answerOpenCalls(this.deps.dal, this.deps.writer, this.deps.sessionId, { taskId: c.task_id, name: c.canonical_name }, c.iteration, null);
+      for (const c of givenUp) this.countGivenUpOn(c.task_id);
+      return 0;
+    }
     for (const c of this.ledger.all()) {
       const current = this.ledger.get(c.task_id);
       if (!current || isTerminalChildState(current.state) || current.state === 'paused') continue;

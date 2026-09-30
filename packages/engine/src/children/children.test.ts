@@ -2579,6 +2579,31 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(dal.getSession(sid)!.tool_calls).toBe(3);
     });
 
+    it('REQ-MONITOR-102 / PD-ORCH-005 clause 3 (the repair of a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md, found by its verifier): a child the stop\'s grace gave up on while the explicit cancel arrived is counted from its record before it ends cancelled, its open call answered as cut off by no rest', async () => {
+      const probe: PortToolResult = { text: 'probed', isError: false, status: 'ok', durationMs: 1, label: 'probe', args: {} };
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'stuck', task: 'TASK: stuck' } }]) : answer('delegated');
+        // One call that returns, then one that hangs through the stop and the cancel.
+        return turn === 1 ? toolCalls([{ callId: 'p1', name: 'probe', args: {} }]) : toolCalls([{ callId: `h${turn}`, name: 'hang', args: {} }]);
+      }, { tool: (name) => (name === 'hang' ? new Promise<PortToolResult>(() => undefined) : name === 'probe' ? Promise.resolve(probe) : undefined) });
+      const hangRow = (sid: SessionId) => dal.residentRows(sid).find((r) => r.kind === 'tool' && r.tool_name === 'hang' && r.name === 'stuck');
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => hangRow(sid) !== undefined);
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      await new Promise((r) => setTimeout(r, 20));
+      // The explicit cancel arrives while the rest waits within the grace: final, so the rest pauses nothing (clause 3).
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: RUN_AGENT_ID } })).toEqual({ ok: true });
+      clock.advance(30_000);
+      await sessions.running(sid);
+      // p1 and the cut h2 are counted with the child's own count, and the total holds them with the root's d1.
+      expect(byName(sid, 'stuck')).toMatchObject({ state: 'cancelled', tool_calls: 2 });
+      expect(callsRun(conversationOf(dal.agentConversation(sid, byName(sid, 'stuck').task_id)))).toBe(2);
+      expect(dal.getSession(sid)!.tool_calls).toBe(3);
+      // Its open call is answered, and its row settled, as cut off — naming no rest (OQ-96, "A call cut by no rest").
+      expect(hangRow(sid)).toMatchObject({ tool_status: 'failed' });
+      expect(hangRow(sid)!.output).toMatch(/^This call was cut off before it completed, and it was not re-run\./);
+    });
+
     it('REQ-MONITOR-102 (the repair of a-roots-calls-before-a-crash-never-reach-the-session-total.md): a child\'s settle persists the total with its own count, so a crash right after it — the child terminal, never counted by the crash record — loses none of its calls', async () => {
       const probe: PortToolResult = { text: 'probed', isError: false, status: 'ok', durationMs: 1, label: 'probe', args: {} };
       const { sessions, counts } = sessionsWith((persona, turn) => {

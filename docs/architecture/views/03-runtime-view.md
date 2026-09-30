@@ -261,9 +261,13 @@ that step that completed keeps what it returned, read back from its settled row.
 counts the calls its record shows beyond its `children.tool_calls` into the session's total, with that count, in one
 transaction (`countGivenUpOn` → `SessionWriter.countToolCalls`, REQ-MONITOR-102), as the root given up on is counted — so
 a continue that declines it loses none of them and one that resumes it credits none twice (the repair of
-`a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`, 2026-09-30). A child the
-explicit cancel's `outlast` gives up on is not counted: it ends `cancelled` with no rest to count it
-(`a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md`, open). A rest that finds nothing unfinished closes the iteration as before. The cause is
+`a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`, 2026-09-30). So is one the
+grace gave up on while the explicit cancel arrived during the rest: the rest pauses nothing then, but first answers that
+child's open calls as cut off, naming no rest (OQ-96), and counts it, before `Run.turn` ends it `cancelled` (found by the
+repair's verifier). Two children given up on are still not counted
+(`a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md`, open): one the explicit cancel's own `outlast` gives
+up on — the cancel that brings the iteration to no rest, so it ends `cancelled` with no rest to count it — and one
+already terminal when the grace gave up on it, which the user had cancelled on its own. A rest that finds nothing unfinished closes the iteration as before. The cause is
 read again once the rest is done: the explicit cancel that arrived meanwhile ends every agent the rest paused
 `cancelled` and closes the iteration; one that arrives later, during teardown, closes the iteration this run holds —
 the one it left open, or the one a continue resumes or declines, which it holds from its start, so a cancel during the

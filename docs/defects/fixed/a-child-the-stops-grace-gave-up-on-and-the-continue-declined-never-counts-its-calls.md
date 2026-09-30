@@ -51,8 +51,20 @@ for the whole 30 s grace and then declines the continue.
 A session rested by a build before this repair and declined by a build after it keeps that child's calls uncounted; a
 continue that resumes it still credits them from its record.
 
-Noticed while repairing: the explicit cancel's `outlast` gives up on a child the same way and reaches no rest, so that
-child's calls are never counted either —
+**Found by the repair's verifier, and repaired the same day:** the count first ran only where the rest pauses the child.
+An explicit cancel (PD-ORCH-005 clause 3) that arrives while the rest waits within the grace makes `rest` pause nothing
+and return — after `outlast` had already given up on the child — and `Run.turn` then ends it `cancelled`: the verifier
+drove it (the decline case with `cancelAgent` on the run id sent after the stop) to `cancelled`, `tool_calls` 0, total 1,
+2 calls in its record. `rest` now, on that return, answers each such child's open calls as cut off, naming no rest
+(OQ-96, "A call cut by no rest"), and counts it through `countGivenUpOn` before returning; `Run.turn`'s `finalize` then
+ends it `cancelled` with its count. Pinned by the case "REQ-MONITOR-102 / PD-ORCH-005 clause 3 (… found by its verifier)
+…" beside the decline case (`cancelled`, `tool_calls` 2, total 3, its `hang` row `failed` with the cut-off statement),
+red before at the child's count (0). The outcome above first read as if every child the stop's grace gave up on were
+counted at the rest; that held only for the rest that pauses it.
+
+Noticed while repairing: the explicit cancel's own `outlast` — the cancel that brings the iteration to no rest — gives up
+on a child the same way and no rest follows, so that child's calls are never counted either; nor are those of a child
+the user had cancelled on its own before a later stop's grace gave up on it (terminal, so no rest path counts it) —
 [`a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md`](../a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md),
 recorded open. Repaired 2026-09-30 under R-067.
 

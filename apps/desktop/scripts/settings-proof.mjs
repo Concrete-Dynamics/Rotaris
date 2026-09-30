@@ -24,6 +24,11 @@
  *                     raises REQ-CONFIG-286's guard, and Save puts the new value on the row already drawn.
  *   6. falsified    — a file written with Part Z's key names governs nothing: the controls show the requirement's
  *                     defaults instead (REQ-CONFIG-172).
+ *   7. run-start    — the Runtime category's run-start mode hint (REQ-ORCH-152, REQ-CONFIG-320, PD-ORCH-003), in a
+ *                     workspace of its own set to `plan`: with no session followed it says what `plan` does and never
+ *                     that the gate is not built; then a prompt is held at the gate, the plan approved, and the approved
+ *                     session reopened, where the same hint states that the session is released and names the control
+ *                     that re-arms it (`docs/defects/fixed/the-run-start-setting-says-the-plan-gate-is-not-built.md`).
  *
  * The legal links and the licence bundle are exercised through the capture seam's scripted opener
  * (`ROTARIS_CAPTURE_OPEN_EXTERNAL`), which reports success or the platform refusal without launching a browser.
@@ -41,7 +46,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, wr
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cleanEnvironment, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import Database from 'better-sqlite3';
+import { cleanEnvironment, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { ABOUT_ASSETS } from './lib/about-assets.mjs';
 import { produce, put, restore, stage } from './lib/staged-resources.mjs';
 import { REDIRECTING } from '../../../tools/build-id/build-id.mjs';
@@ -78,7 +84,7 @@ const PROBES = [
   '[data-testid="tool-result-lines"]', '[data-testid="tool-input-lines"]',
   '[data-testid="show-tool-results"]', '[data-testid="show-tool-inputs"]',
   '[data-testid="auto-collapse-tools"]', '[data-testid="group-tools"]',
-  '.settings__body',
+  '.settings__body', '[data-testid="run-start-hint"]',
 ];
 
 function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
@@ -377,6 +383,78 @@ if (fResult !== '10' || fInput !== '2') throw new Error(`the falsified keys stil
 // That the two also WARN as unknown keys (REQ-CONFIG-233) is asserted where the warnings are observable, in
 // `packages/config/src/display-section.test.ts`; the load's warnings do not reach this process's log.
 results.falsifiedKeys = { result: fResult, input: fInput, govern: false };
+
+// ── 7. The run-start mode hint, unfollowed and on a released session (REQ-ORCH-152, PD-ORCH-003) ─────────────
+// A workspace and a profile of its own, so the earlier launches' session and file do not decide what is followed. The
+// mode is `plan`, and code intelligence is off because its discovery costs seconds of every run start (the plan gate
+// proof's fixture, for the same reason).
+const runStart = join(output, 'run-start');
+const rsWorkspace = join(runStart, 'workspace');
+const rsLocal = join(runStart, 'local');
+const rsPreferences = join(runStart, 'preferences');
+mkdirSync(join(rsWorkspace, '.rotaris'), { recursive: true });
+mkdirSync(rsLocal, { recursive: true });
+writeFileSync(join(rsWorkspace, 'README.md'), '# run-start hint workspace\n');
+writeFileSync(join(rsWorkspace, '.rotaris', 'agents.yaml'), [
+  '# scratch configuration written by the proof script',
+  'models:', '  scripted: { provider: scripted, model_id: scripted }',
+  'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
+  'runtime:', '  permission_mode: autonomous', '  run_start_mode: plan', '  max_iterations: 3',
+  'mcp_servers:', '  code_intelligence: { enabled: false }', '',
+].join('\n'));
+const hintOf = (probes) => first(probes, '[data-testid="run-start-hint"]');
+/** The latest session of the run-start workspace, read after the process that wrote it has exited. */
+function runStartSession() {
+  const db = new Database(oneDatabase(rsLocal), { readonly: true });
+  try { return db.prepare('SELECT execution_status, plan_cycle, plan_released FROM sessions ORDER BY created_at DESC LIMIT 1').get() ?? null; } finally { db.close(); }
+}
+
+// 7a. No session followed: what `plan` does, and nothing about a release.
+const unfollowed = launch('run-start-unfollowed', rsWorkspace, rsLocal, rsPreferences, { ...openCategory('Runtime'), ROTARIS_CAPTURE_AFTER_MS: '2600' });
+const plainHint = hintOf(unfollowed.probes);
+if (!plainHint) throw new Error('the Runtime category drew no run-start mode hint');
+if (/not built/i.test(plainHint.text)) throw new Error(`the hint still says the plan gate is not built: "${plainHint.text}"`);
+if (!/plan gate/.test(plainHint.text) || !/next run/.test(plainHint.text)) throw new Error(`the hint does not say what plan does: "${plainHint.text}"`);
+if (plainHint.data['data-released'] !== 'false' || /released/.test(plainHint.text)) throw new Error(`with no session followed the hint spoke of a release: "${plainHint.text}"`);
+
+// 7b. A prompt held at the gate. The wait is a DEADLINE for the gate's plan, not an appointment (plan-gate-proof's rule).
+launch('run-start-held', rsWorkspace, rsLocal, rsPreferences, {
+  ROTARIS_CAPTURE_PROMPT: 'create planned.txt with the word done in it',
+  ROTARIS_CAPTURE_WAIT: 'js:document.querySelector(\'[data-testid="plan-gate-plan"]\') !== null',
+  ROTARIS_CAPTURE_WAIT_MS: '60000',
+  ROTARIS_CAPTURE_AFTER_MS: '1500',
+}, 120_000);
+const held = runStartSession();
+if (held?.execution_status !== 'awaiting_plan_decision') throw new Error(`the run-start workspace's prompt was not held at the gate: ${JSON.stringify(held)}`);
+
+// 7c. Approve: the session now holds a release (PD-ORCH-003), which is the state the hint must name.
+launch('run-start-approved', rsWorkspace, rsLocal, rsPreferences, {
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ROTARIS_CAPTURE_CLICKS: '[data-testid="plan-approve"]@6000',
+  ROTARIS_CAPTURE_AFTER_MS: '30000',
+}, 180_000);
+const approvedSession = runStartSession();
+if (approvedSession?.plan_released !== 1) throw new Error(`approval did not release the session, so the released hint cannot be measured: ${JSON.stringify(approvedSession)}`);
+
+// 7d. The approved session followed, Settings open on Runtime: the hint states the release and the re-arming control.
+const released = launch('run-start-released', rsWorkspace, rsLocal, rsPreferences, {
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ...openCategory('Runtime', 3000),
+  ROTARIS_CAPTURE_AFTER_MS: '5000',
+});
+const releasedHint = hintOf(released.probes);
+if (!releasedHint) throw new Error('the Runtime category drew no run-start mode hint over the released session');
+if (releasedHint.data['data-released'] !== 'true') throw new Error(`the followed session holds a release and the hint did not say so: ${JSON.stringify(releasedHint)}`);
+if (/not built/i.test(releasedHint.text)) throw new Error(`the hint still says the plan gate is not built: "${releasedHint.text}"`);
+if (!/This session is released/.test(releasedHint.text)) throw new Error(`the hint does not state that the session is released: "${releasedHint.text}"`);
+if (!/Plan first/.test(releasedHint.text) || !/run-start control/.test(releasedHint.text)) throw new Error(`the hint does not name the control that re-arms the session: "${releasedHint.text}"`);
+// The selector still reads `plan`: an approval never writes the setting (PD-ORCH-003).
+if (!/run_start_mode: plan/.test(readFileSync(join(rsWorkspace, '.rotaris', 'agents.yaml'), 'utf8'))) throw new Error('the approval wrote the run-start mode');
+results.runStartHint = {
+  unfollowed: { released: plainHint.data['data-released'], text: plainHint.text },
+  session: { held: held.execution_status, released: approvedSession.plan_released },
+  released: { released: releasedHint.data['data-released'], text: releasedHint.text },
+};
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 console.log(JSON.stringify(results, null, 2));

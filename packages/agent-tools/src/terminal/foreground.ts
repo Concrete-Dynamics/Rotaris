@@ -135,12 +135,16 @@ interface PausedCall {
   readonly hold: HeldBytes;
   /** The cleaned text an earlier poll already handed over; a poll returns what follows it. */
   delivered: string;
-  onEnd: ((code: number) => void) | null;
+  /**
+   * Bytes taken from the PTY but not yet given to `hold`: a tail that could still be the beginning of the next call's
+   * printed start marker, split across two chunks (`pausedShare`). Decided by the next chunk (A10).
+   */
+  undecided: string;
   /** The exit status its own end frame carried; null while it runs, and for a call that ended with no frame (`until`). */
   code: number | null;
   /**
-   * Set when the call was closed by the NEXT call's end frame because its own never printed — an interrupt (`C-c`) makes
-   * an interactive `sh` abandon the rest of the wrapper's line (A10): the next call's start marker, where what the
+   * Set when the call was closed by the NEXT call's printed start marker because its own end frame never printed — an
+   * interrupt (`C-c`) makes an interactive `sh` abandon the rest of the wrapper's line (A10): that marker, where what the
    * paused call collected stops.
    */
   until: string | null;
@@ -210,6 +214,73 @@ export class CommandRegion {
     this.held = this.held.slice(this.held.length - keep);
     return out;
   }
+}
+
+/**
+ * A10: the share of one PTY chunk that belongs to a soft-paused call, while it is still open. The shell runs its lines in
+ * order, so the paused call's bytes end at the first of two things: its OWN end frame, when the line reaches it, or the
+ * NEXT call's PRINTED start marker, which the shell writes only once the paused line is done — with or without its frame,
+ * since an interrupt (`C-c`) makes an interactive `sh` abandon the rest of that line. Nothing after either is the paused
+ * call's, and none of it is given to its screen: the next call's output, however long, cannot scroll the boundary off the
+ * screen the paused call's poll is read from. The printed start marker is told from the shell's echo of the next call's
+ * wrapper as `CommandRegion` tells it — the echo quotes it — and a marker at the very end of a chunk, which the next chunk
+ * decides, is held back as `undecided` with nothing after it given away. The own frame needs no hold: the capture cuts it
+ * on the screen, and with no next call only the prompt follows it.
+ */
+export function pausedShare(undecided: string, chunk: string, ownEnd: string, nextStart: string | null): { readonly take: string; readonly undecided: string; readonly stop: 'own' | 'next' | null } {
+  const text = undecided + chunk;
+  const own = new RegExp(`${ownEnd}:-?\\d+`).exec(text);
+  const ownAt = own ? own.index + own[0].length : -1;
+  let nextAt = -1;
+  let holdFrom = text.length;
+  if (nextStart !== null) {
+    for (let from = 0; ;) {
+      const at = text.indexOf(nextStart, from);
+      if (at < 0) break;
+      const after = at + nextStart.length;
+      if (after >= text.length) { holdFrom = at; break; }
+      if (text[after] === "'") { from = after; continue; }
+      nextAt = after;
+      break;
+    }
+    if (nextAt < 0 && holdFrom === text.length) {
+      // A tail that could still begin the marker, split across two chunks.
+      let keep = Math.min(text.length, nextStart.length - 1);
+      while (keep > 0 && !nextStart.startsWith(text.slice(text.length - keep))) keep -= 1;
+      holdFrom = text.length - keep;
+    }
+  }
+  if (ownAt >= 0 && (nextAt < 0 || ownAt <= nextAt)) return { take: text.slice(0, ownAt), undecided: '', stop: 'own' };
+  if (nextAt >= 0) return { take: text.slice(0, nextAt), undecided: '', stop: 'next' };
+  return { take: text.slice(0, holdFrom), undecided: text.slice(holdFrom), stop: null };
+}
+
+/**
+ * The POSIX wrapper as the shell's echo shows it, from its first statement to its last (`wrapCommand`): whatever command
+ * it carries between them, and whatever row breaks the screen put in it. Each separator may have lost its space, which
+ * `translateToString(true)` trims from the end of a row that wrapped on it.
+ */
+const ECHOED_POSIX_WRAPPER = /printf ?'%s\\n' ?'__rot_[0-9a-f]{24}_s'; ?command ?eval ?(?:(?!printf ?'%s\\n' ?'__rot_)[\s\S])*?; ?printf ?'__rot_[0-9a-f]{24}_e:%s\\n' ?"\$\?"/g;
+
+/**
+ * A10: every row the echo of a POSIX wrapper occupies, dropped whole. The line discipline echoes what the product writes
+ * as it arrives, onto whatever screen is collecting — the next call's wrapper lands on a soft-paused call's screen — and a
+ * wrapper wider than the screen wraps. Dropping only the row that begins it (`printf '%s`) left its continuation rows,
+ * the command's text and `printf '__rot_…_e:%s\n' "$?"`, in what the agent read. The rows are matched joined, with no
+ * separator, so a break anywhere in the wrapper is no obstacle; the markers are per-call nonces, so no command spells one.
+ */
+function withoutEchoedWrappers(rows: readonly string[]): string[] {
+  const joined = rows.join('');
+  const drop = new Set<number>();
+  const rowAt = (offset: number): number => {
+    let row = 0;
+    for (let seen = 0; row < rows.length - 1 && seen + rows[row]!.length <= offset; row += 1) seen += rows[row]!.length;
+    return row;
+  };
+  for (const m of joined.matchAll(ECHOED_POSIX_WRAPPER)) {
+    for (let r = rowAt(m.index); r <= rowAt(m.index + m[0].length - 1); r += 1) drop.add(r);
+  }
+  return drop.size === 0 ? [...rows] : rows.filter((_, i) => !drop.has(i));
 }
 
 /** Windows: terminate the whole tree; POSIX: signal the group. Never throws. */
@@ -547,7 +618,18 @@ export class ForegroundSession {
     const shown = this.region?.push(chunk) ?? '';
     if (shown !== '') for (const t of this.taps) { try { t(shown); } catch (cause) { this.deps.warn(`terminal session ${this.id}: an output tap raised: ${String(cause)}`); } }
     for (const l of this.listeners) l(chunk);
-    if (!this.active && !this.pausedCommand) return;
+    const paused = this.pausedCommand;
+    const active = this.active;
+    if (!active && !paused) return;
+    // A soft-paused call and the call queued behind it share the stream, and the shell runs their lines in order. What the
+    // paused call collects is its share of each chunk (`pausedShare`), which ends at its own end frame or at the next call's
+    // printed start marker, whichever the shell reaches (A10).
+    let share: ReturnType<typeof pausedShare> | null = null;
+    if (paused) {
+      share = pausedShare(paused.undecided, chunk, paused.end, active?.start ?? null);
+      if (share.take !== '') { paused.hold.push(share.take); paused.lastOutputAt = this.deps.monotonic.now(); }
+      paused.undecided = share.undecided;
+    }
     this.pendingText += chunk;
     // The echoed wrapper carries the marker text too (`'__rot_x_e:' + $(...`), so the match is the marker
     // FOLLOWED BY DIGITS on the VT-stripped stream — only the shell's own Write-Output produces that.
@@ -556,14 +638,12 @@ export class ForegroundSession {
       const m = new RegExp(`${end}:(-?\\d+)`).exec(text);
       return m ? Number(m[1]) : null;
     };
-    // A soft-paused call and the call queued behind it share the stream, and the shell runs their lines in order, so the
-    // paused call's frame, when it prints, comes first. The active call's frame means the shell has finished the paused
-    // line whether or not that line reached its own frame: a paused command interrupted with `C-c` (REQ-TOOLS-098's
-    // advice) makes an interactive `sh` abandon the rest of the line, frame and all. So the paused call closes on its own
-    // frame, with its own status, and otherwise on the active call's frame, with NO status; what it collected is read up
-    // to the next call's printed start marker (`until`), so nothing the later calls or the snapshot write is ever read as
-    // the paused command's (A10). Its listener goes with it: left, it kept filling the closed call's hold until the poll,
-    // bounded by `HeldBytes` alone, which could mark the poll `truncated` for bytes that were never the command's.
+    // The paused call closes on its own frame, with its own status. Otherwise it closes where the next call's start marker
+    // prints — the shell reaches that line only once the paused one is done, and a paused command interrupted with `C-c`
+    // (REQ-TOOLS-098's advice) makes an interactive `sh` abandon the rest of its line, frame and all — with NO status; its
+    // capture is cut there too (`until`), so nothing the later calls or the snapshot write is ever read as the paused
+    // command's. The next call's end frame closes it the same way, should its start marker not have been seen on the raw
+    // stream.
     //
     // FALSIFIED, kept beside its replacement (A10's verification, 2026-09-30): "the active call's end marker, else the
     // paused call's; a match closes both". The paused call took the ACTIVE call's exit status — a paused `false` behind a
@@ -574,16 +654,21 @@ export class ForegroundSession {
     // call ran and so read "still running" — untrue, the old form closed it, with the wrong status. And a paused call
     // interrupted with `C-c` prints no frame, so under that reading it read "still running" on every poll after its
     // process was gone, and its listener collected every later call's output and snapshot.
-    const paused = this.pausedCommand;
-    const active = this.active;
+    // FALSIFIED a third time, kept beside it (A10's second verification, 2026-09-30, corrected before its merge): "it
+    // closes on the active call's END frame, and what it collected is cut at the next call's printed start marker". Its
+    // listener fed the paused screen until that end frame, so a next call longer than the screen keeps
+    // (`FOREGROUND_SCREEN_LINES`) scrolled the start marker off, nothing was cut, and the poll read that call's output, its
+    // end frame and a false truncation. The collection stops at the marker now, not the cut alone.
     const pausedCode = paused ? frame(paused.end) : null;
     const activeCode = active ? frame(active.end) : null;
-    if (paused && (pausedCode !== null || activeCode !== null)) {
+    if (paused && (pausedCode !== null || share?.stop === 'next' || activeCode !== null)) {
+      // Closed without a decision on the raw stream: whatever it still held back was its own.
+      if (paused.undecided !== '') paused.hold.push(paused.undecided);
+      paused.undecided = '';
       paused.code = pausedCode;
       if (pausedCode === null && active) paused.until = active.start;
       this.pausedDone = paused;
       this.pausedCommand = null;
-      paused.onEnd?.(pausedCode ?? -1);
     }
     if (active && activeCode !== null) {
       this.active = null;
@@ -606,13 +691,14 @@ export class ForegroundSession {
     // printed it. Rare, load-dependent and real: measured under a concurrently running suite on Linux,
     // 2026-09-16. A row that ENDS with the marker is the marker's row whatever stands in front of it, and the
     // marker is a per-call nonce, so no command can spell one to cut its own capture short (consequence 1).
-    const lines = screenText.split('\n').filter((l) => !l.includes('Write-Output (') && !l.includes("printf '%s"));
+    const lines = withoutEchoedWrappers(screenText.split('\n')).filter((l) => !l.includes('Write-Output (') && !l.includes("printf '%s"));
     const startAt = lines.findIndex((l) => l.trimEnd().endsWith(start));
     let kept = startAt >= 0 ? lines.slice(startAt + 1) : lines;
-    // A paused call closed with no frame of its own (A10) stops at the next call's PRINTED start marker, found on the
-    // same terms as its own: what follows is the next call's, and after that the product's snapshot.
+    // A paused call closed with no frame of its own (A10) stops at the first row that carries the next call's start
+    // marker in any form — printed, or in an echo of its wrapper that escaped the removal above: what follows is the
+    // next call's, and after that the product's snapshot.
     if (until !== null) {
-      const next = kept.findIndex((l) => l.trimEnd().endsWith(until));
+      const next = kept.findIndex((l) => l.includes(until));
       if (next >= 0) kept = kept.slice(0, next);
     }
     let body = kept.join('\n');
@@ -688,7 +774,9 @@ export class ForegroundSession {
       void Promise.resolve().then(() => undefined);
       this.clearers.set(nonce, clear);
     });
-    this.pendingText = '';
+    // The scan's buffer starts afresh with the call — unless a paused call is still open, whose end frame may be split
+    // across the chunk already taken and the next one: cleared here, it would lose its status and read as OQ-144's −1.
+    if (!this.pausedCommand) this.pendingText = '';
     this.region = new CommandRegion(start, end);
     this.submit(p, wrapCommand(this.deps.backend, command, start, end));
     const outcome = await done;
@@ -723,16 +811,14 @@ export class ForegroundSession {
       // The call's screen is kept and keeps filling, so the poll reads the same emulated screen further along.
       this.pausedDone?.screen.dispose();
       this.pausedDone = null;
-      // A pause nobody ever polled is replaced here: release its listener and its screen rather than leave both.
-      this.pausedCommand?.onEnd?.(-1);
+      // A pause nobody ever polled is replaced here: release its screen rather than leave it.
       this.pausedCommand?.screen.dispose();
-      const paused: PausedCall = { start, end, screen, hold, delivered: lines.join('\n').replace(/\s+$/, ''), onEnd: null, code: null, until: null, lastOutputAt, observedAt: monotonic.now() };
+      // It is fed by `onData` from here, its share of each chunk only (`pausedShare`), until its own frame or the next
+      // call's start marker closes it (A10).
+      const paused: PausedCall = { start, end, screen, hold, delivered: lines.join('\n').replace(/\s+$/, ''), undecided: '', code: null, until: null, lastOutputAt, observedAt: monotonic.now() };
       this.pausedCommand = paused;
       this.active = null;
       this.state = 'idle';
-      const pausedListener = (chunk: string) => { paused.hold.push(chunk); paused.lastOutputAt = monotonic.now(); };
-      this.listeners.push(pausedListener);
-      paused.onEnd = () => { this.listeners = this.listeners.filter((l) => l !== pausedListener); };
       return finish({ exitCode: -1, timedOut: false, softPaused: true, killStatus: null, error: null });
     }
     if (outcome.kind === 'kill') {

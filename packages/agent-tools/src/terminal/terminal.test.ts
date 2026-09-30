@@ -6,7 +6,7 @@ import { FakeClock, type Clocks } from '@rotaris/kernel';
 import { foregroundStreamId } from '@rotaris/contracts';
 import { nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
-import { CommandRegion, ForegroundSession, parseSnapshot, snapshotCommand, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
+import { CommandRegion, ForegroundSession, parseSnapshot, pausedShare, snapshotCommand, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
 import { xtermEmulatorFactory } from './emulator.js';
 import { endOfExit } from './background.js';
 import { execFileSync } from 'node:child_process';
@@ -169,6 +169,61 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     // A command that prints the marker text of ANOTHER call is output like any other.
     const region = new CommandRegion(S, E);
     expect(region.push(`${S}\r\n__rot_deadbeefdeadbeefdeadbeef_e:0\r\n`)).toBe('__rot_deadbeefdeadbeefdeadbeef_e:0\r\n');
+  });
+  it('REQ-TOOLS-098/127 (A10): a soft-paused call collects up to its own end frame or the next call\'s printed start marker, and nothing after either, however the bytes arrive', () => {
+    const P = '__rot_aaaaaaaaaaaaaaaaaaaaaaaa_e';
+    const N = '__rot_bbbbbbbbbbbbbbbbbbbbbbbb_s';
+    const collect = (chunks: readonly string[], nextStart: string | null) => {
+      let undecided = '';
+      let taken = '';
+      let stop: 'own' | 'next' | null = null;
+      for (const c of chunks) {
+        const s = pausedShare(undecided, c, P, nextStart);
+        taken += s.take;
+        undecided = s.undecided;
+        if (s.stop !== null) { stop = s.stop; break; }
+      }
+      return { taken, stop };
+    };
+    const splitsOf = (pty: string): string[][] => {
+      const all: string[][] = [[pty], [...pty]];
+      for (let i = 1; i < pty.length; i += 1) all.push([pty.slice(0, i), pty.slice(i)]);
+      return all;
+    };
+    // Interrupted: `^C`, the prompt, the echo of the next call's wrapper (which quotes its marker), then that marker
+    // printed and 20,000 lines the paused call must never be given.
+    const interrupted = `^C\r\n# printf '%s\\n' '${N}'; command eval 'seq 1 20000'; printf '__rot_bbbbbbbbbbbbbbbbbbbbbbbb_e:%s\\n' "$?"\r\n${N}\r\n1\r\n2\r\n`;
+    for (const chunks of splitsOf(interrupted)) {
+      expect(collect(chunks, N)).toEqual({ taken: interrupted.slice(0, interrupted.indexOf(`${N}\r\n1`) + N.length), stop: 'next' });
+    }
+    // Ended on its own behind the next call: its frame comes first and is collected whole — the capture cuts it, and
+    // `onData` reads its status off the scan — and nothing of the next call's output ever is.
+    const ended = `late\r\n${P}:1\r\n# ${N}\r\nnext\r\n`;
+    for (const chunks of splitsOf(ended)) {
+      const { taken, stop } = collect(chunks, N);
+      expect(taken.startsWith(`late\r\n${P}:1`)).toBe(true);
+      expect(taken).not.toContain('next');
+      expect(stop).not.toBeNull();
+    }
+    expect(collect([ended], N)).toEqual({ taken: `late\r\n${P}:1`, stop: 'own' });
+    // With no next call there is no marker to wait for: every byte is given at once, a trailing `_` included.
+    expect(pausedShare('', 'progress__', P, null)).toEqual({ take: 'progress__', undecided: '', stop: null });
+    // A command that prints ANOTHER call's marker text is output like any other.
+    expect(pausedShare('', '__rot_deadbeefdeadbeefdeadbeef_s\r\n', P, N)).toEqual({ take: '__rot_deadbeefdeadbeefdeadbeef_s\r\n', undecided: '', stop: null });
+  });
+  it('REQ-TOOLS-127 (A10): the echo of a POSIX wrapper wider than the screen is dropped whole from the capture, wherever its rows break', () => {
+    const S = '__rot_0123456789abcdef01234567_s';
+    const E = '__rot_0123456789abcdef01234567_e';
+    const N = '__rot_bbbbbbbbbbbbbbbbbbbbbbbb';
+    const wide = 'Q'.repeat(300);
+    const echo = `printf '%s\\n' '${N}_s'; command eval 'printf '\\''%s\\n'\\'' '\\''${wide}'\\'''; printf '${N}_e:%s\\n' "$?"`;
+    // Every width the screen might break it at, with the trailing space of a row trimmed as the emulator trims it.
+    for (const cols of [40, 80, 239, 240, 241]) {
+      const rows: string[] = [];
+      for (let i = 0; i < echo.length; i += cols) rows.push(echo.slice(i, i + cols).trimEnd());
+      const screen = [`${S}`, 'own-line', ...rows, 'done-later', `${E}:0`, '# '].join('\n');
+      expect(ForegroundSession.clean(screen, S, E)).toBe('own-line\ndone-later');
+    }
   });
   it('REQ-TOOLS-098 (live-run L2): a measured span is stated in tenths of a second, truncated, so it never states more than was measured', () => {
     expect(seconds(0.6)).toBe('under 0.1 seconds');
@@ -491,6 +546,57 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect((await t.execute(args({ command: '' }), ctx())).text).toContain('No paused command to poll.');
     } finally { await m.dispose(); }
   }, 60_000);
+
+  // A10's second verification: the first repair cut the C-c'd call's capture at the next call's printed start marker, but
+  // kept feeding the paused screen until the next call's END frame. A next call longer than the screen keeps
+  // (`FOREGROUND_SCREEN_LINES`) scrolled that marker off, nothing was cut, and the poll read the next call's output, its
+  // end frame and a false truncation. What the paused call collects now stops where the next call's start marker prints.
+  it.skipIf(PS)('REQ-TOOLS-098/127 (A10): after C-c, a next call longer than the paused screen keeps adds nothing of its own to the paused call\'s poll', async () => {
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
+    try {
+      await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
+      expect(diag((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: 'C-c', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+      const long = await t.execute(args({ command: 'seq 1 20000', timeout: 30 }), ctx());
+      expect(diag(long.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+      expect((output(long.text) ?? '').trimEnd().endsWith('\n20000')).toBe(true);
+      const poll = await t.execute(args({ command: '' }), ctx());
+      expect(diag(poll.text)).toMatchObject({ exit_code: -1, outcome_kind: 'execution_error' });
+      for (const leaked of ['__rot_', '20000', '7503', 'done-later']) expect(poll.text).not.toContain(leaked);
+      expect(diag(poll.text)['output_truncated']).not.toBe(true);
+      expect((output(poll.text) ?? '').split('\n').filter((l) => /^\d+$/.test(l.trim()))).toEqual([]);
+    } finally { await m.dispose(); }
+  }, 90_000);
+
+  // A10's second verification: the line discipline echoes the next call's wrapper onto the paused call's screen, and a
+  // wrapper wider than the screen (240 columns) wraps. Only the echo's FIRST row was dropped; its continuation rows — the
+  // command's text and `printf '__rot_…_e:%s\n' "$?"` — reached the paused call's poll, on both roads: the paused
+  // command ending on its own behind the next call (present on origin/main too), and the paused command interrupted.
+  it.skipIf(PS)('REQ-TOOLS-127 (A10): the echo of a next call wider than the screen reaches neither road\'s poll of the paused call', async () => {
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
+    const wide = 'Q'.repeat(300);
+    try {
+      await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
+      // Road one: the paused command ends on its own, behind the wide call.
+      expect(diag((await t.execute(args({ command: `${SH.sleep(3)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      // The call's own output wraps at the screen's width like any other line the screen keeps.
+      const next = await t.execute(args({ command: SH.echo(wide), timeout: 15 }), ctx());
+      expect((output(next.text) ?? '').replace(/\n/g, '')).toBe(wide);
+      const ended = await t.execute(args({ command: '' }), ctx());
+      expect(diag(ended.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+      expect(output(ended.text)).toBe('done-later');
+      for (const leaked of ['__rot_', 'QQQ', '"$?"']) expect(ended.text).not.toContain(leaked);
+      // Road two: the paused command is interrupted, and the wide call closes it.
+      expect(diag((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: 'C-c', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+      expect((output((await t.execute(args({ command: SH.echo(wide), timeout: 15 }), ctx())).text) ?? '').replace(/\n/g, '')).toBe(wide);
+      const interrupted = await t.execute(args({ command: '' }), ctx());
+      expect(diag(interrupted.text)).toMatchObject({ exit_code: -1, outcome_kind: 'execution_error' });
+      for (const leaked of ['__rot_', 'QQQ', '"$?"', 'done-later']) expect(interrupted.text).not.toContain(leaked);
+    } finally { await m.dispose(); }
+  }, 90_000);
 
   /**
    * ADR-0020's second first execution, 2026-09-12: four defects a real 22-minute run found. Each proof

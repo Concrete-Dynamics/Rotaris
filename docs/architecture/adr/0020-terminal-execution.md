@@ -355,12 +355,25 @@ frame — an interrupt (`C-c`, REQ-TOOLS-098's advice) makes an interactive `sh`
 poll read everything after: the later calls' marker frames and 582 of the PD-TOOLS-001 snapshot's `__rot_b64__` lines,
 which encode the shell's whole environment. The first repair's replacement, "the paused call closes
 on its own frame only", fixed the status and broke the interrupt: that call then read "still running" on every poll.
-Now the paused call closes on its own frame with its own status, or else on the next call's frame with none, reported
-as −1 with the reason ([OQ-144](../open-questions.md), raised with that reading built), and what it collected ends at
-the next call's printed start marker; its listener goes with it. Pinned by four "(A10)" cases in `terminal.test.ts`:
-the first repair's two, and two red on the old `onData` — the paused call's own status behind the next call,
-and the interrupted paused call closed by the next call with nothing of the later calls in its poll, which is red on
-the first repair too. A poll made after the `C-c` but before any next call still reads "still running"; that is
+~~Now the paused call closes on its own frame with its own status, or else on the next call's frame with none, reported
+as −1 with the reason, and what it collected ends at the next call's printed start marker; its listener goes with it.~~
+**Falsified in turn by the second verification** (2026-09-30): that listener fed the paused screen until the next
+call's END frame, and the cut at the start marker was made on that screen, so a next call longer than the screen keeps
+(`seq 1 20000`, beyond `FOREGROUND_SCREEN_LINES`) scrolled the marker off and the poll read that call's output, its
+end frame and a false `output_truncated`. And the echo of the next call's wrapper, which the line discipline writes
+onto the paused screen, lost only its first row when it wrapped: a wrapper wider than 240 columns left the command's
+text and `printf '__rot_…_e:%s\n' "$?"` in the poll on both roads — the second, a paused command ending on its own
+behind the next call, on `origin/main` too. **Now** the paused call is fed by `onData` its share of each chunk
+(`pausedShare`), which ends at its own end frame or at the next call's PRINTED start marker — which the shell writes
+only once the paused line is done — and it closes there: on its own frame with its own status, or at the marker with
+none, reported as −1 with the reason ([OQ-144](../open-questions.md), raised with that reading built). Nothing after
+either boundary reaches its screen. Every row an echoed POSIX wrapper occupies is dropped from any capture
+(`withoutEchoedWrappers`), and the paused call's `until` cut takes the first row carrying the next call's start marker
+in any form. Pinned by eight "(A10)" cases in `terminal.test.ts`: the first repair's two; two red on the old
+`onData` — the paused call's own status behind the next call, and the interrupted paused call closed by the next call
+with nothing of the later calls in its poll, which is red on the first repair too; and four for the second
+verification — `C-c` then `seq 1 20000`, a 300-character next call on both roads, and two pure cases over
+`pausedShare` and the echo's removal. A poll made after the `C-c` but before any next call still reads "still running"; that is
 recorded, not repaired
 ([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../../defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).*
 

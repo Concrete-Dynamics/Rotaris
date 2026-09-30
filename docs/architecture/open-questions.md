@@ -6394,7 +6394,9 @@ under [R-067](../product/requests.md#r-067). Open.)*
 
 An interactive `sh` that takes the interrupt abandons the rest of the wrapper's line, so the paused call's end frame,
 which carries `$?`, never prints. The shell reaches the next call's line only once the paused one is done, so that
-call's end frame is where the paused call is known to have ended. Its real status is not in the stream. The shell's
+call's printed start marker is where the paused call is known to have ended (~~that call's end frame~~, the first
+repair's reading, falsified by A10's second verification: the paused call went on collecting until then, and a long
+next call scrolled the cut off its screen). Its real status is not in the stream. The shell's
 `$?` at that moment would say it (130 under `sh` for an interrupt), but the next wrapper's first statement replaces
 it before anything prints. No requirement names a status for a foreground command that ended and reported none: −1
 is the soft pause's in the foreground and the kill's in the background, and 0 or another number claims an outcome
@@ -6403,8 +6405,10 @@ nobody measured. Before A10's repair the paused call borrowed the next call's st
 **What the build proceeds under:** the poll that hands such a call over reports it the way a kill from the terminal
 window is reported: exit −1, not a soft pause, with the reason as its error ("the paused command ended without an exit
 status of its own: the shell abandoned the rest of its line, as an interrupt (C-c) makes it do, before the next command
-ran"), so its `failure_kind` is `execution_error`. Its output is what it wrote up to the next call's start marker.
-`terminal.test.ts`'s case "REQ-TOOLS-098/127/179 (A10): a soft-paused command interrupted with C-c …" pins it.
+ran"), so its `failure_kind` is `execution_error`. Its output is what it wrote up to the next call's start marker:
+collection stops there, and the echo of that call's wrapper is dropped whole. `terminal.test.ts`'s cases
+"REQ-TOOLS-098/127/179 (A10): a soft-paused command interrupted with C-c …", "REQ-TOOLS-098/127 (A10): after C-c, a
+next call longer than …" and "REQ-TOOLS-127 (A10): the echo of a next call wider than the screen …" pin it.
 
 **What a ruling decides.** Which exit status and outcome that poll carries: −1 with the reason, as built; a status
 the product recovers from the shell (which would need the wrapper to carry the previous `$?`, on both backends); or a

@@ -45,15 +45,33 @@ branch: the case below, run against `/bin/sh` (dash) through a real PTY on the u
   call interrupted with `C-c` (REQ-TOOLS-098's advice), whose line an interactive `sh` abandons before its frame, was
   closed with the next call's 0 while its listener stayed: its poll read 8 marker frames and 582 `__rot_b64__` lines of
   the PD-TOOLS-001 snapshot, which encode the shell's environment. The first repair's form — close on the paused frame
-  only — read that interrupted call "still running" on every poll. Now the paused call closes on its own frame with
-  its own status, or else on the next call's frame with none: its poll reports −1 with the reason, not a soft pause
-  ([OQ-144](../../architecture/open-questions.md)), its output stops at the next call's printed start marker, and its
-  listener goes with it. Both falsified readings are kept beside the replacement in `onData`. What a reset restores is
+  only — read that interrupted call "still running" on every poll. ~~Now the paused call closes on its own frame with
+  its own status, or else on the next call's frame with none: its poll reports −1 with the reason, not a soft pause,
+  its output stops at the next call's printed start marker, and its listener goes with it.~~ **That account was
+  falsified in turn by the second verification (2026-09-30)**: the listener fed the paused screen until the next
+  call's END frame, and the cut at the start marker ran over that screen, so a next call longer than the screen keeps
+  (`seq 1 20000`, beyond `FOREGROUND_SCREEN_LINES`) scrolled the marker off, nothing was cut, and the poll read 72,527
+  characters of that call's output, its end frame, the prompt and a false `output_truncated`. Now the paused call is no
+  listener at all: `onData` gives it its share of each chunk (`pausedShare`), which ends at its own end frame, or at the
+  next call's PRINTED start marker, which the shell writes only once the paused line is done. It closes there — on its
+  own frame with its own status, or at that marker with none: its poll reports −1 with the reason, not a soft pause
+  ([OQ-144](../../architecture/open-questions.md)) — and nothing after either boundary reaches its screen, however long
+  the next call runs. The next call's end frame still closes it, with no status, should the marker not be seen on the
+  raw stream. All three falsified readings are kept beside the replacement in `onData`. What a reset restores is
   unchanged: no snapshot is taken for a paused call's completion ([OQ-134](../../architecture/open-questions.md)). A
   poll made after the `C-c` but before any next call still reads −1; that is recorded, not repaired
   ([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).
+- **The echo of the next call's wrapper is dropped whole.** Found by the second verification (2026-09-30): the line
+  discipline echoes the next call's wrapper onto the paused call's screen as it is written, and a wrapper wider than
+  the screen (240 columns) wraps. `cleanLines` dropped only the row that begins the echo (`printf '%s`), so its
+  continuation rows — the command's text and `printf '__rot_…_e:%s\n' "$?"` — reached the paused call's poll on both
+  roads: interrupted, and ended on its own behind the next call, where the poll read them above `done-later` with exit 0.
+  The second road was present on `origin/main` too (measured by the verifier with its `foreground.ts` swapped in). Every
+  row a POSIX wrapper's echo occupies is now matched on the rows joined without separators, whatever the breaks, and
+  dropped whole (`withoutEchoedWrappers`); the paused call's `until` cut takes the first row that carries the next
+  call's start marker in any form, printed or echoed.
 
-Pinned by four cases in `packages/agent-tools/src/terminal/terminal.test.ts`:
+Pinned by eight cases in `packages/agent-tools/src/terminal/terminal.test.ts`:
 - "REQ-TOOLS-096/097/127 (A10): …" (a real shell): the next call reads only its own output, its live tap carries only
   that, and the poll after reads `done-later` with exit 0. Red on the unrepaired code through the `^U` half. ~~Red on the
   poll's exit alone with only the frame matching reverted~~ — falsified: that "revert" was a form that never shipped,
@@ -66,6 +84,16 @@ Pinned by four cases in `packages/agent-tools/src/terminal/terminal.test.ts`:
   a poll that reads −1 and `execution_error` with the reason, and nothing of the later calls, their frames or the
   snapshot; a second poll finds nothing to poll. Red on the old `onData` (exit 0, frames and snapshot lines) and on the
   first repair ("still running").
+- "REQ-TOOLS-098/127 (A10): after C-c, a next call longer than …" (a real shell): `C-c`, then `seq 1 20000`, then a
+  poll with no `__rot_`, no number line of that call and no `output_truncated`. Red on the first repair (the frame and
+  the truncation), and red again with only the close at the start marker removed.
+- "REQ-TOOLS-127 (A10): the echo of a next call wider than the screen …" (a real shell): a 300-character `printf` as
+  the next call, on both roads; neither poll carries `QQQ`, `"$?"` or `__rot_`. Red on the first repair (the first road
+  read the echo's rows above `done-later`), and red again with only `withoutEchoedWrappers` removed.
+- "REQ-TOOLS-098/127 (A10): a soft-paused call collects up to …" (pure): `pausedShare` over every two-way split of the
+  stream, the echo quoting the next marker told from the printed one.
+- "REQ-TOOLS-127 (A10): the echo of a POSIX wrapper wider than the screen …" (pure): the echo broken at 40, 80, 239, 240
+  and 241 columns, each row's trailing space trimmed as the emulator trims it.
 
 ADR-0020 is reported back in place, with a row in [`first-executions.md`](../../architecture/first-executions.md).
 
@@ -84,6 +112,7 @@ ADR-0020 is reported back in place, with a row in [`first-executions.md`](../../
   - `sendInput` writes the keystrokes;
   - `execute` writes the wrapped line after whatever the shell's input holds;
   - `cleanLines` keeps the whole screen when no row ends with the start marker, and cuts only the call's own end frame;
-  - `onData` matches only the active call's end marker while a paused call's is also in the stream.
+  - `onData` matches only the active call's end marker while a paused call's is also in the stream;
+  - `cleanLines` drops only the first row of an echoed wrapper (found by the second verification).
 - `packages/agent-tools/src/terminal/terminal.test.ts`: "OQ-38 ruled 2026-09-11: …" leaves the keystrokes, and
   "REQ-TOOLS-097/099: the hard timeout kills the tree, …" is the next call.

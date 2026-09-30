@@ -139,7 +139,7 @@ describe('engine/children/report — every construction site carries them', () =
       'two attempts produced no usable report',
     );
     expect(r.summary).toContain('Child timed out after 1200s');
-    expect(r.summary).toContain('96 tool call(s)');
+    expect(r.summary).toContain('96 tool calls;');
     expect(r.summary).toContain('docs/a.md');
     expect(r.summary).toContain('two attempts produced no usable report');
     expect(r.key_findings).toHaveLength(1);

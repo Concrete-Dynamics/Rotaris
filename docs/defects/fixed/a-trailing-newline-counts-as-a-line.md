@@ -42,5 +42,5 @@ three-line file, which had pinned the defect, now reads 3. Shown live by `pnpm l
 its new check "every write_file create reported the lines its content holds" passed on `probe-ok\n` with "Created
 friction-probe.txt: 1 line(s) created." The pack is `.live-run/runs/2026-09-30T03-31-53-798Z` of the
 `fix-file-tools-plurals` worktree (git-ignored). The literal "(s)" in that message is L11's
-([`a-literal-plural-marker-is-rendered-in-sign-in-notices.md`](../a-literal-plural-marker-is-rendered-in-sign-in-notices.md)).
+([`a-literal-plural-marker-is-rendered-in-sign-in-notices.md`](a-literal-plural-marker-is-rendered-in-sign-in-notices.md)).
 Repaired 2026-09-29 under R-067.

@@ -113,7 +113,7 @@ describe('REQ-TRACE-182: regeneration before collection', () => {
     seed();
     const a = await regenerateBeforeCollection(root, { clocks });
     expect(a.outcome).toBe('regenerated');
-    expect(a.notice).toContain('src/requirement_ids.ts is regenerated (2 requirement(s))');
+    expect(a.notice).toContain('src/requirement_ids.ts is regenerated (2 requirements)');
     const b = await regenerateBeforeCollection(root, { clocks });
     expect(b).toMatchObject({ outcome: 'already up to date', parseErrors: [] });
     const artifact = readFileSync(join(root, 'src/requirement_ids.ts'), 'utf8');

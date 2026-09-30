@@ -1,4 +1,5 @@
 import { contextPercent, DEFAULT_CONTEXT_CAPACITY, isBusy, RUN_AGENT_ID, type AgentRecord, type EntryRoot, type SessionArtifactLink, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { countNoun } from '@rotaris/kernel';
 import { treeRows } from './AgentTree.js';
 
 /**
@@ -286,10 +287,8 @@ export function ringFigures(used: number, limit: number, thresholdPercent: numbe
   return { percent, threshold, band };
 }
 
-/** REQ-SHELL-044: a count with a noun that agrees with it. */
-export function countNoun(n: number, singular: string, plural = `${singular}s`): string {
-  return `${n} ${n === 1 ? singular : plural}`;
-}
+/** REQ-SHELL-044: a count with a noun that agrees with it — the kernel's, so every package words a count one way. */
+export { countNoun };
 
 /** REQ-MONITOR-050: the agents of one persona, in the tree's order — the run-level agent first when it is that persona. */
 export function instancesOf(persona: string, agents: readonly AgentRecord[], runLevel: AgentRecord | null): AgentRecord[] {

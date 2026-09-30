@@ -1,4 +1,4 @@
-import { millis, type Clocks, type Millis, type Timers } from '@rotaris/kernel';
+import { type Clocks, countNoun, millis, type Millis, type Timers } from '@rotaris/kernel';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
 import { transcriptText } from '../children/report.js';
 import type { SessionWriter } from '../session-writer.js';
@@ -59,7 +59,7 @@ const SYSTEM = 'You condense an agent conversation so the agent can carry on wit
 export function clampSummary(text: string): string {
   const lines = text.split('\n');
   if (lines.length <= SUMMARY_LINE_CAP) return text.trim();
-  return `${lines.slice(0, SUMMARY_LINE_CAP).join('\n').trim()}\n[the summary was cut at ${SUMMARY_LINE_CAP} lines; ${lines.length - SUMMARY_LINE_CAP} further line(s) omitted]`;
+  return `${lines.slice(0, SUMMARY_LINE_CAP).join('\n').trim()}\n[the summary was cut at ${SUMMARY_LINE_CAP} lines; ${countNoun(lines.length - SUMMARY_LINE_CAP, 'further line')} omitted]`;
 }
 
 /**

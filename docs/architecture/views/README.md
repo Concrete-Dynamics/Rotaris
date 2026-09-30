@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A count's noun agrees with it everywhere, from one kernel helper (REQ-SHELL-044, R-067).** `countNoun` moved from
+`ui/agents.ts` (which re-exports it) to `kernel/count-noun.ts`, since `providers`, `engine`, `agent-tools`, `contracts`,
+`platform` and `workspace` cannot import `ui`; the sign-in messages, the checkpoint dialogs and notices, the run's
+timeline and notices, the Library, Settings and the tool results the tool row draws now use it, as do the local
+`plural` helpers it replaced. `tools/check-plural-markers.mjs`, a new step of `pnpm lint`, fails on a literal `(s)`
+in a string the product can draw; log lines and four requirement-fixed tool results pass (OQ-138). This repairs
+`a-literal-plural-marker-is-rendered-in-sign-in-notices.md`. The **component view**'s kernel box says so. No package,
+edge, process, message kind, channel, command or store column changed.
+
 **The driver addresses persona, approval and terminal windows (R-067).** `driver.ts` resolves a role selector —
 `persona:<persona>`, `approval`, `terminal` — over `DriverDeps.auxiliary`, which main fills from each main window's
 persona-window registry, open approval dialog and terminal window; `windows` lists them, `useWindow` and each op's own

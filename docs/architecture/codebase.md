@@ -107,6 +107,12 @@ plain process with no React and the restore run against a fake run host with a c
   one fails, and a paid-off one fails too until the baseline is lowered (`--write-baseline`), so an allowance
   freed in one file cannot be re-spent in another. A textarea, a file input, a canvas, an SVG and the terminal
   grid keep their own markup and consume the shared classes and tokens.
+- **A count's noun agrees with it, and a literal "(s)" is never drawn** — `REQ-SHELL-044`. `countNoun` lives in
+  `kernel/count-noun.ts` so that every package can word a count one way (`ui/agents.ts` re-exports it), and
+  `tools/check-plural-markers.mjs` (in `pnpm lint`, beside `check-ui-language.mjs`) fails on a `(s)`, `(es)` or `(ies)`
+  marker in any string literal, template or JSX text of the product's source. A log line passes, and so do the four
+  tool results a requirement spells with the marker, named with their reason in its `ALLOWED` list (OQ-138). An
+  entry that excuses nothing fails too (since 2026-09-29, live-run L11, R-067).
 - **A whole-session update keeps the transcript rows** — `REQ-MONITOR-216` omits the transcript from it, so
   it cannot say which rows survived; the increment after an attach or a reconcile upserts by index. The
   first run loop's status saves emptied a transcript still being written before this was so (ADR-0043

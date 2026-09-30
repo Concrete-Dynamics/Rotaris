@@ -1,3 +1,4 @@
+import { countNoun } from '@rotaris/kernel';
 import { z } from 'zod';
 import { errorObservation, INTERRUPTED_FAILURE_KIND, observation, type ToolExecutor } from './types.js';
 
@@ -55,8 +56,8 @@ export function delegateTool(port: DelegationPort, parentId: string): ToolExecut
       // from the code with its reason kept in this comment.
       const warnings: string[] = [];
       if (r.attachments) {
-        if (r.attachments.attached > 0) warnings.push(`${r.attachments.attached} artifact(s) were attached to its context.`);
-        if (r.attachments.unresolved.length > 0) warnings.push(`${r.attachments.unresolved.length} attachment(s) could not be resolved: ${r.attachments.unresolved.join(', ')}.`);
+        if (r.attachments.attached > 0) warnings.push(`${countNoun(r.attachments.attached, 'artifact')} ${r.attachments.attached === 1 ? 'was' : 'were'} attached to its context.`);
+        if (r.attachments.unresolved.length > 0) warnings.push(`${countNoun(r.attachments.unresolved.length, 'attachment')} could not be resolved: ${r.attachments.unresolved.join(', ')}.`);
       }
       let text = renderDelegateObservation(r.canonicalName, r.status, [r.message, ...warnings].join(' '), r.taskId);
       if (!a.run_in_background) {

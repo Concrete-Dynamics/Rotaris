@@ -1,3 +1,4 @@
+import { countNoun } from '@rotaris/kernel';
 import type { AnnotationSite, EvidenceState, Finding, RequirementEvidence, RequirementRecord, StoreParse, SweepResult, VerificationReport } from '@rotaris/contracts';
 import { DECLARATIONS_MODULE, ENUM_NAME, REGENERATE_ACTION, isArtifactUpToDate, renderArtifact } from './artifact.js';
 import { PRUNE_ACTION, parseDebtBaseline, parseOrphanModuleBaseline, parseOrphanTestBaseline, suppressed, type DebtFlag } from './baselines.js';
@@ -288,7 +289,7 @@ export function verify(input: VerifyInput): VerifyOutput {
   }
   if (undecided.size > 0) {
     requiresParse.push({ check: 'orphan-test', path: layout.testRoots.join(', ') });
-    findings.push(finding('warning', 'requires-parse', `${layout.testRoots.join(', ')}: ${undecided.size} test file(s) under the built-in TypeScript convention were not checked for orphan tests; collecting test functions needs a syntax tree (REQ-TRACE-109/110) and ${parserReason}`, { path: layout.testRoots[0] ?? '' }));
+    findings.push(finding('warning', 'requires-parse', `${layout.testRoots.join(', ')}: ${countNoun(undecided.size, 'test file')} under the built-in TypeScript convention ${undecided.size === 1 ? 'was' : 'were'} not checked for orphan tests; collecting test functions needs a syntax tree (REQ-TRACE-109/110) and ${parserReason}`, { path: layout.testRoots[0] ?? '' }));
   }
   // Evidence (the seam's `RequirementEvidence`): presence is what a static scan can assert (175), never execution.
   // Part AJ2 — the third obligation's state, `verification` (REQ-TRACE-258, REQ-TRACE-270), reading R16: this pass is

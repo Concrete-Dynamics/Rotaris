@@ -1,6 +1,12 @@
 import { useEffect, useId, useState } from 'react';
 import type { CheckpointListPayload, CheckpointPreviewPayload } from '@rotaris/contracts';
+import { countNoun } from '@rotaris/kernel';
 import { Button as DesignButton, Checkbox as DesignCheckbox, TextArea as DesignTextArea } from './design-system/index.js';
+
+/** REQ-GIT-098's overwrite consent, its noun agreeing with the count (REQ-SHELL-044 over the `change(s)` it quotes). */
+export function overwriteConsentLabel(dirty: number): string {
+  return `Overwrite ${countNoun(dirty, 'uncommitted change')}`;
+}
 
 /**
  * ADR-0039's desktop flow, the dialogs (REQ-GIT-096..100): the window-modal indeterminate progress dialog with no
@@ -87,7 +93,7 @@ export function RestoreConfirmDialog({ preview, onConfirm, onCancel }: RestoreCo
             <p className="checkpoint-dialog__warning-text">{preview.blockedReason}</p>
             <label className="checkpoint-dialog__check" htmlFor={checkId}>
               <DesignCheckbox id={checkId} className="check" data-testid="checkpoint-overwrite" checked={consented} onChange={(event) => setConsented(event.currentTarget.checked)} />
-              <span>Overwrite {preview.dirty.length} uncommitted change(s)</span>
+              <span>{overwriteConsentLabel(preview.dirty.length)}</span>
             </label>
           </div>
         )}

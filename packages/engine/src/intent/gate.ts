@@ -30,7 +30,7 @@ export function resolveIntentMapping(read: IntentMappingRead): ResolvedIntentMap
   if (read.kind === 'absent') return { mapping: BUILT_IN_INTENT_MAPPING, source: 'built-in', warning: '' };
   if (read.kind === 'invalid') return { mapping: BUILT_IN_INTENT_MAPPING, source: 'built-in', warning: `the intent-to-tools mapping was not applied: ${read.reason} (REQ-ORCH-017)` };
   const unknown = Object.keys(read.mapping).filter((k) => !isIntentCategory(k));
-  if (unknown.length > 0) return { mapping: BUILT_IN_INTENT_MAPPING, source: 'built-in', warning: `the intent-to-tools mapping was not applied: unknown intent key(s) ${unknown.map((k) => `'${k}'`).join(', ')}; expected one of ${INTENT_CATEGORIES.join(', ')} (REQ-ORCH-017)` };
+  if (unknown.length > 0) return { mapping: BUILT_IN_INTENT_MAPPING, source: 'built-in', warning: `the intent-to-tools mapping was not applied: unknown intent ${unknown.length === 1 ? 'key' : 'keys'} ${unknown.map((k) => `'${k}'`).join(', ')}; expected one of ${INTENT_CATEGORIES.join(', ')} (REQ-ORCH-017)` };
   const mapping = { ...BUILT_IN_INTENT_MAPPING } as Record<IntentCategory, IntentGrant>;
   for (const [k, v] of Object.entries(read.mapping)) mapping[k as IntentCategory] = v;
   return { mapping, source: 'file', warning: '' };

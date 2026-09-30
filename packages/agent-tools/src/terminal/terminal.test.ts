@@ -100,7 +100,7 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
   });
   it('REQ-TOOLS-113: the marker order, the error count (Found 0 errors never warns), the banner, the pipeline check', () => {
     expect(outputWarnings('pytest', 'AssertionError: x\nFAILED test_a', 0)).toEqual(["Output contains the failure marker 'AssertionError', in: AssertionError: x"]);
-    expect(outputWarnings('tsc', 'found 3 errors', 0)).toEqual(['Output reports 3 error(s).']);
+    expect(outputWarnings('tsc', 'found 3 errors', 0)).toEqual(['Output reports 3 errors.']);
     expect(outputWarnings('tsc', 'Found 0 errors', 0)).toEqual([]);
     // A banner carrying 'FAILED ' in capitals fires the marker check too — two warnings, marker first.
     expect(outputWarnings('pytest', '==== 1 FAILED ====', 0)).toEqual(["Output contains the failure marker 'FAILED', in: ==== 1 FAILED ====", 'A test-runner failure banner appears in the output.']);

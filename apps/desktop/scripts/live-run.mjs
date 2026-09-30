@@ -1035,7 +1035,10 @@ const signIn = await launch('sign-in', {
   ROTARIS_CAPTURE_PROVIDER_EMPTY_OK: '1',
   ROTARIS_CAPTURE_WAIT: `file:${tokensFile}`, ROTARIS_CAPTURE_WAIT_MS: String(SIGN_IN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
 }, SIGN_IN_WAIT_MS + 90_000);
-const added = /providers: (Added .+?; discovered (\d+) model\(s\)\.)/.exec(signIn);
+// REQ-SHELL-044 (live-run L11): the count's noun agrees with it, and the literal "(s)" is never the product's.
+const added = /providers: (Added .+?; discovered (\d+) models?\.)/.exec(signIn);
+const literal = /providers: Added .+?; discovered \d+ model\(s\)\./.exec(signIn);
+check(literal === null, 'the sign-in notice words its model count without a literal "(s)" (REQ-SHELL-044)', literal?.[0] ?? added?.[1] ?? 'no outcome logged');
 check(existsSync(tokensFile), 'the credential file was written', tokensFile);
 if (!check(added !== null, 'the endpoint was added and its catalogue discovered', added?.[1] ?? (/provider dialog "Continue anyway" pressed/.test(signIn) ? 'the endpoint discovered no models and the zero-model recovery was taken' : 'the outcome was not logged'))) finish(1);
 const snapshot = existsSync(snapshotFile) ? readFileSync(snapshotFile, 'utf8') : '';

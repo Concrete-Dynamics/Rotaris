@@ -1,4 +1,4 @@
-import { asSessionId, err, formatAmount, millis, ok, toIsoUtc, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
+import { asSessionId, type Clocks, countNoun, err, formatAmount, type MachineId, millis, type Millis, ok, type Result, type SessionId, toIsoUtc } from '@rotaris/kernel';
 import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, COST_QUALIFIERS, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRefusal, type ControlRequest, type ControlResult, type CostQualifier, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal } from '@rotaris/store';
@@ -1456,12 +1456,12 @@ export class Sessions {
       // REQ-CHAT-080 / REQ-MONITOR-094: each failing agent with its reason, in the copyable detail block (REQ-NOTIFY-037/038).
       this.deps.report?.({
         severity: 'error', title: 'Context compression incomplete',
-        message: `${report.compressed} of ${total} active agent context(s) compressed; ${report.failed.length} failed.`,
+        message: `${report.compressed} of ${countNoun(total, 'active agent context')} compressed; ${report.failed.length} failed.`,
         detail: report.failed.map((f) => `${f.agent}: ${f.reason}`).join('\n'),
         sessionId,
       });
     } else {
-      this.deps.acknowledge?.('ok', `Compressed context for ${report.compressed} active agent(s).`, report.unchanged > 0 ? `${report.unchanged} agent context(s) had nothing between the original request and the preserved turns and were left as they were.` : undefined);
+      this.deps.acknowledge?.('ok', `Compressed context for ${countNoun(report.compressed, 'active agent')}.`, report.unchanged > 0 ? `${countNoun(report.unchanged, 'agent context')} had nothing between the original request and the preserved turns and ${report.unchanged === 1 ? 'was' : 'were'} left as ${report.unchanged === 1 ? 'it was' : 'they were'}.` : undefined);
     }
     s.log?.info(`manual compression: ${report.compressed} compressed, ${report.unchanged} unchanged, ${report.failed.length} failed${report.failed.length > 0 ? ` (${report.failed.map((f) => `${f.agent}: ${f.reason}`).join('; ')})` : ''}`);
     return { ok: true, compression: { compressed: report.compressed, unchanged: report.unchanged, failed: [...report.failed] } };

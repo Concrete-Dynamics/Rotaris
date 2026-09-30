@@ -141,7 +141,7 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
     await r.execute({ path: 'src/a.ts', offset: 1, limit: 2000, grep_context: 3 }, ctx());
     const e1 = await w.execute({ operation: 'edit', path: 'src/a.ts', old_string: 'const a = 1;', new_string: 'const a = 10;', replace_all: false }, ctx());
     expect(e1.isError).toBe(false);
-    expect(e1.text).toMatch(/^Edited src\/a\.ts: 1 line\(s\) changed at line 1\. \(sha256 [0-9a-f]{64}\)$/);
+    expect(e1.text).toMatch(/^Edited src\/a\.ts: 1 line changed at line 1\. \(sha256 [0-9a-f]{64}\)$/);
     expect(e1.diff).toBe('src/a.ts +1 -1\n[1]- const a = 1;\n[1]+ const a = 10;');
     expect(readFileSync(join(root, 'src/a.ts'), 'utf8')).toContain('const a = 10;');
     // level 2: trailing whitespace; level 3: indentation shift; level 4: fuzzy
@@ -158,7 +158,7 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
     const dup = await w.execute({ operation: 'edit', path: 'dup.txt', old_string: 'a', new_string: 'c', replace_all: false }, ctx());
     expect(dup.text).toMatch(/^Found 2 occurrences of old_str at lines 1, 3\./);
     const all = await w.execute({ operation: 'edit', path: 'dup.txt', old_string: 'a', new_string: 'c', replace_all: true }, ctx());
-    expect(all.text).toContain('2 occurrence(s) replaced');
+    expect(all.text).toContain('2 occurrences replaced');
     expect(readFileSync(join(root, 'dup.txt'), 'utf8')).toBe('c\nb\nc\n');
     const undo = await w.execute({ operation: 'undo', path: 'dup.txt', replace_all: false }, ctx());
     expect(undo.isError).toBe(false);
@@ -169,7 +169,7 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
   it('create, insert, overwrite; an escape is refused; the diff row is capped at 50 changed lines', async () => {
     const w = writeFileTool(state, fence);
     const c = await w.execute({ operation: 'create', path: 'new/n.txt', content: 'one\ntwo', replace_all: false }, ctx());
-    expect(c.text).toMatch(/^Created new\/n\.txt: 2 line\(s\) created\./);
+    expect(c.text).toMatch(/^Created new\/n\.txt: 2 lines created\./);
     expect(c.diff).toBe('new/n.txt [Created] +2 -0\n[1]+ one\n[2]+ two');
     expect(await w.execute({ operation: 'insert', path: 'new/n.txt', content: 'zero', insert_line: 0, replace_all: false }, ctx())).toMatchObject({ isError: false });
     expect(readFileSync(join(root, 'new/n.txt'), 'utf8')).toBe('zero\none\ntwo');
@@ -432,7 +432,7 @@ describe('todo (REQ-TOOLS-144..147)', () => {
     const r = await t.execute({ operation: 'add_phase', phases: [{ name: 'Discovery', tasks: [] }, { name: 'Build', tasks: [] }] }, ctx());
     expect(r.isError).toBe(true);
     expect(r.text).toContain('add_phase requires a name.');
-    expect(r.text).toContain('2 phase(s) sent here were not added');
+    expect(r.text).toContain('2 phases sent here were not added');
     expect(r.text).toContain('call replace with the whole `phases` array');
     expect(list.phases).toEqual([]);
 

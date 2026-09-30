@@ -1,3 +1,4 @@
+import { countNoun } from '@rotaris/kernel';
 import type { BoardAction, BoardCard, BoardProjection, ColumnToken, DeliveryColumn, DeliveryQueue, EpicCard, HealthToken, ParseError, QueueEntry, RelationToken, ReqId, RequirementEvidence, RequirementRecord, StoreParse, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
 import { compareReqIds } from '@rotaris/contracts';
 import type { DeliveryBlockerRow, DeliveryReadRow, DeliveryRunRow } from '@rotaris/store';
@@ -255,7 +256,7 @@ function parseJson<T>(text: string, fallback: T): T {
 export function describeFailure(f: TraceabilityFailure): string {
   switch (f.kind) {
     case 'configuration': return `The layout configuration at ${f.path} could not be read: ${f.cause}`;
-    case 'parse': return `${f.errors.length} document(s) could not be parsed.`;
+    case 'parse': return `${countNoun(f.errors.length, 'document')} could not be parsed.`;
     case 'busy': return `The engine is busy with ${f.operation}.`;
     case 'cancelled': return 'The pass was cancelled.';
     case 'failed': return `${f.what} failed: ${f.cause}`;

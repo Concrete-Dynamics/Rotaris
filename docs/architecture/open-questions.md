@@ -6197,6 +6197,32 @@ setting says, and that choosing Plan first on the composer's run-start control p
 session holds a release should also re-arm that session, and if so whether it should re-arm only the followed session
 or every released session of the workspace.
 
+**OQ-138 — Do the tool results whose requirements spell a plural marker keep it, when the tool row draws them?**
+*(REQ-SHELL-044, "the literal parenthesised '(s)' form is never rendered anywhere in the product"; REQ-TOOLS-110's
+`Sent <n> byte(s) to session <id>.`; REQ-TOOLS-134's `N match(es) for '<pattern>':`; REQ-LIBRARY-100's
+`<N> artifact(s):`; REQ-LIBRARY-089's refusal that "begins `Invalid tag(s): `"; REQ-CHAT-168, which makes its own
+document's markers illustrative for human-readable messages and leaves "a string that is part of a machine-readable
+contract" unaffected; REQ-CHAT-166, which governs whether the tool row shows a tool's result. Raised 2026-09-29 by the
+repair of live-run finding L11 under [R-067](../product/requests.md#r-067),
+[`a-literal-plural-marker-is-rendered-in-sign-in-notices.md`](../defects/fixed/a-literal-plural-marker-is-rendered-in-sign-in-notices.md).
+Open.)*
+
+A tool's result is text for the model, and the four requirements above fix it word for word. The transcript's tool row
+also draws that result, as the first line of its preview and in full under OUTPUT (`ui/transcript/Row.tsx`), so
+REQ-SHELL-044's "anywhere in the product" reaches it there. The other product-wide statements of the rule (REQ-CHAT-168
+for the conversation, REQ-HOOKS-054 and REQ-HOOKS-106 for hooks) each read their own domain's markers as illustrative.
+None says the same of the tools or the Library.
+
+**What the build proceeds under:** the four texts keep their markers exactly as their requirements spell them. The
+repair's brief treated text returned to a model as outside the rule, and these four are the only such texts a
+requirement fixes. Every other tool result the build words itself (line and occurrence counts, the todo and delegation
+messages, the terminal's list and output warnings) agrees with its count. `tools/check-plural-markers.mjs` names the
+four in its `ALLOWED` list, and fails `pnpm lint` on any other literal marker in a string the product can draw.
+
+**What a ruling decides.** Whether those requirements' markers are illustrative, as REQ-CHAT-168 says of its own, so
+that the four texts agree with their counts like the rest. Or whether they are contract strings a caller may match, so
+that REQ-SHELL-044's "anywhere" excepts a tool's result, or the tool row draws them differently.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

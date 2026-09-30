@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { z } from 'zod';
-import { similarity } from '@rotaris/kernel';
+import { countNoun, similarity } from '@rotaris/kernel';
 import { renderDiff } from './diff.js';
 import { lineCount, splitLines } from './lines.js';
 import { checkFence, relPosix, realPathOf, type FenceConfig } from './fence.js';
@@ -392,14 +392,14 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
             return errorObservation(`File already exists: ${rel}. Use 'overwrite' or 'edit'.`);
           }
           const content = a.content ?? '';
-          return commit(content, `Created ${rel}: ${lineCount(content)} line(s) created.`);
+          return commit(content, `Created ${rel}: ${countNoun(lineCount(content), 'line')} created.`);
         }
         case 'overwrite': {
           if (!exists) return errorObservation(`File does not exist: ${rel}. Use 'create'.`);
           const gate = mustHaveRead();
           if (gate) return gate;
           const content = a.content ?? '';
-          return commit(content, `Overwrote ${rel}: ${lineCount(content)} line(s) replaced ${lineCount(before ?? '')}.`);
+          return commit(content, `Overwrote ${rel}: ${countNoun(lineCount(content), 'line')} replaced ${lineCount(before ?? '')}.`);
         }
         case 'insert': {
           if (!exists) return errorObservation(`File does not exist: ${rel}. Use 'create'.`);
@@ -411,12 +411,12 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
           // in a newline when the file did, or when the insert lands at the end and its own content does.
           const text = before ?? '';
           const lines = splitLines(text);
-          if (a.insert_line > lines.length) return errorObservation(`insert_line ${a.insert_line} is beyond the end of ${rel} (${lines.length} lines).`);
+          if (a.insert_line > lines.length) return errorObservation(`insert_line ${a.insert_line} is beyond the end of ${rel} (${countNoun(lines.length, 'line')}).`);
           const content = a.content ?? '';
           const ins = splitLines(content);
           const terminated = text.endsWith('\n') || (a.insert_line === lines.length && content.endsWith('\n'));
           lines.splice(a.insert_line, 0, ...ins);
-          return commit(`${lines.join('\n')}${terminated && lines.length > 0 ? '\n' : ''}`, `Inserted ${ins.length} line(s) into ${rel} at line ${a.insert_line}.`);
+          return commit(`${lines.join('\n')}${terminated && lines.length > 0 ? '\n' : ''}`, `Inserted ${countNoun(ins.length, 'line')} into ${rel} at line ${a.insert_line}.`);
         }
         case 'edit': {
           if (!exists) return errorObservation(`File does not exist: ${rel}. Use 'create'.`);
@@ -427,24 +427,24 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
           const lines = (before ?? '').split('\n');
           if (a.replace_all) {
             const count = (before ?? '').split(a.old_string).length - 1;
-            if (count === 0) return errorObservation(`old_string was not found in ${rel} (${lineCount(before ?? '')} lines). Read the file again or use 'overwrite'.`);
-            return commit((before ?? '').split(a.old_string).join(a.new_string), `Edited ${rel}: ${count} occurrence(s) replaced.`);
+            if (count === 0) return errorObservation(`old_string was not found in ${rel} (${countNoun(lineCount(before ?? ''), 'line')}). Read the file again or use 'overwrite'.`);
+            return commit((before ?? '').split(a.old_string).join(a.new_string), `Edited ${rel}: ${countNoun(count, 'occurrence')} replaced.`);
           }
           const m = matchEdit(lines, a.old_string);
-          if (!m) return errorObservation(`old_string was not found in ${rel} at any of the four match levels (exact, trailing-whitespace, indentation shift, fuzzy ≥ 0.85); the file has ${lineCount(before ?? '')} lines. Read the file again or use 'overwrite'.`);
+          if (!m) return errorObservation(`old_string was not found in ${rel} at any of the four match levels (exact, trailing-whitespace, indentation shift, fuzzy ≥ 0.85); the file has ${countNoun(lineCount(before ?? ''), 'line')}. Read the file again or use 'overwrite'.`);
           if (m.starts.length > 1) return errorObservation(`Found ${m.starts.length} occurrences of old_str at lines ${m.starts.map((s) => s + 1).join(', ')}. Add surrounding context to make the match unique, or set replace_all.`);
           const start = m.starts[0] as number;
           const k = Math.max(1, lineCount(a.old_string));
           const after = applyMatch(before ?? '', lines, m, a.old_string, a.new_string);
           const note = m.level > 1 ? ` Match level: ${m.level}${m.level === 4 ? ` (similarity: ${m.similarity!.toFixed(2)}). Verify the result.` : '.'}` : '';
-          return commit(after, `Edited ${rel}: ${k} line(s) changed at line ${start + 1}.${note}`);
+          return commit(after, `Edited ${rel}: ${countNoun(k, 'line')} changed at line ${start + 1}.${note}`);
         }
         case 'undo': {
           const previous = state.popUndo(resolved);
           if (previous === undefined) return errorObservation(`No edit history for ${rel}.`);
           const after = previous ?? '';
           atomicWrite(resolved, after);
-          return observation(`Restored ${rel} to its previous content (${lineCount(after)} line(s)).`, { diff: renderDiff(rel, before, after) });
+          return observation(`Restored ${rel} to its previous content (${countNoun(lineCount(after), 'line')}).`, { diff: renderDiff(rel, before, after) });
         }
         default:
           return errorObservation(`Unsupported operation: ${String(a.operation)}`);
@@ -522,7 +522,7 @@ export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'ha
         const count = before.split(a.old_string).length - 1;
         if (count === 0) return errorObservation(`old_string was not found in ${rel}. Read it again with haet_read.`);
         after = before.split(a.old_string).join(a.new_string);
-        message = `Edited ${rel}: ${count} occurrence(s) replaced.`;
+        message = `Edited ${rel}: ${countNoun(count, 'occurrence')} replaced.`;
       } else {
         const m = matchEdit(lines, a.old_string);
         if (!m || m.level !== 1) return errorObservation(`old_string was not found exactly in ${rel}. Read it again with haet_read.`);
@@ -530,7 +530,7 @@ export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'ha
         const start = m.starts[0] as number;
         const k = Math.max(1, lineCount(a.old_string));
         after = applyMatch(before, lines, m, a.old_string, a.new_string);
-        message = `Edited ${rel}: ${k} line(s) changed at line ${start + 1}.`;
+        message = `Edited ${rel}: ${countNoun(k, 'line')} changed at line ${start + 1}.`;
       }
       state.pushUndo(resolved, before);
       atomicWrite(resolved, after);

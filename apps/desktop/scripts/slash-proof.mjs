@@ -11,7 +11,7 @@
  *                  on screen with the rest behind a scroll, keyboard focus still in the composer (REQ-CHAT-024/025);
  *   `/mod`         the token drawn PARTIAL — the blended accent, not bold; `/model` RESOLVED — the accent, bold;
  *                  `/zzz` UNKNOWN — the fail colour, bold; the argument in a fourth colour; every one clearing 4.5:1
- *                  on the input's own ground and no two the same (REQ-CHAT-027);
+ *                  on the ground the field is painted on (the dock's) and no two the same (REQ-CHAT-027);
  *   Tab            completes `/model` to `/model ` with ONE trailing space and the caret after it, no submit (026);
  *   Enter          on exactly `/model` submits; the popup was hidden and the composer cleared before the command ran,
  *                  the command failed "Usage: /model <name>", the exact text is back with the caret at its end, and a
@@ -38,8 +38,8 @@
  *
  *   palettes       `/theme` switches to each of REQ-SHELL-128's three built-in palettes in turn and REQ-CHAT-027's
  *                  four roles are measured on each — against the ground that palette actually paints (`GROUND`: the first
- *                  opaque background from the input up), compared with the document root's `--rt-bg` at the same instant
- *                  rather than written down here;
+ *                  opaque background from the input up, the dock's), compared with the document root's `--rt-surface` at
+ *                  the same instant rather than written down here;
  *   theme-restart  the same preference root opened again: the theme `/theme` wrote is the theme the new window paints;
  *   wired          `/logout` against the real provider registry and credential store (a key written through
  *                  `providers.save`, signed out by the command, the store read back on both sides and the file gone),
@@ -314,7 +314,7 @@ const worktreeRow = rows.find((r) => r.attrs['data-command'] === 'worktree');
 expect(worktreeRow !== undefined && (worktreeRow.attrs['data-available'] === '1' || worktreeRow.attrs['title'] === 'No git service is available for this workspace.'), `the /worktree row: ${JSON.stringify(worktreeRow?.attrs)}`);
 results.popup = { rows: popup.rows, unavailable: popup.unavailable, rowHeightPx: popup.rowHeight, listClientPx: popup.listClient, listScrollPx: popup.listScroll, width: popup.popup.width, inputWidth: popup.input.width, gapPx: popup.input.top - popup.popup.bottom, names: popup.names };
 
-// ── `/mod` partial, `/model` resolved, `/zzz` unknown — colour AND weight, 4.5:1 on the input's ground, all distinct (REQ-CHAT-027) ──
+// ── `/mod` partial, `/model` resolved, `/zzz` unknown — colour AND weight, 4.5:1 on the ground painted under the field, all distinct (REQ-CHAT-027) ──
 const partial = evalAt(run, T.partial, readToken);
 const resolved = evalAt(run, T.resolved, readToken);
 const unknown = evalAt(run, T.unknown, readToken);
@@ -450,7 +450,9 @@ results.run = { compress: compress === null ? null : compress.message, afterStop
  *
  *   palettes       REQ-CHAT-027 measured on ALL THREE built-in palettes (REQ-SHELL-128), in the built product, on the
  *                  ground each palette actually paints — the composer's background compared with the document root's
- *                  own `--rt-bg` at the same instant, so no literal colour is written here and no palette is asserted
+ *                  own `--rt-surface` at the same instant (the dock's ground, `COMPOSER_GROUND` in `highlight.ts`, since
+ *                  2026-09-29; it read `--rt-bg` before, a ground the docked composer no longer paints), so no literal
+ *                  colour is written here and no palette is asserted
  *                  from data this script holds. The switch between them is `/theme <name>` itself, so REQ-CHAT-159's
  *                  command is what performs each change.
  *   theme-restart  `/theme` against the REAL settings: the desktop preference store's `appearance/theme` after the
@@ -544,10 +546,14 @@ for (const [name, at] of PALETTE_PLAN) {
   expect(partialRole.weight === '400' && resolvedRole.weight === '500' && unknownRole.weight === '500',
     `REQ-CHAT-027's weights on ${name}: partial ${partialRole.weight} (not bold), resolved ${resolvedRole.weight}, unknown ${unknownRole.weight}`);
   expect(resolvedRole.theme === name && partialRole.theme === name && unknownRole.theme === name, `every read must belong to ${name}: ${JSON.stringify([partialRole.theme, resolvedRole.theme, unknownRole.theme])}`);
-  // The ground is the palette's own token as the document root resolves it — never a colour this script knows.
+  // The ground is the palette's own token as the document root resolves it — never a colour this script knows. It is
+  // `--rt-surface`, the dock's (`.composer__dock` in shell.css; the field inside it is transparent): the product derives
+  // the four against `COMPOSER_GROUND` (`highlight.ts`). Until 2026-09-29 this read `--rt-bg`, the product's premise
+  // then, which the docked composer no longer paints — the check failed on all three palettes, the same fact as the
+  // partial shade's 4.06, 4.25 and 4.39:1 (docs/defects/fixed/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md).
   const surface = resolvedRole.surface;
   expect(typeof surface === 'string' && resolvedRole.surfaceAlpha === 1, `the composer's painted ground on ${name} must be an opaque colour to measure against: ${JSON.stringify({ surface, from: resolvedRole.surfaceFrom, alpha: resolvedRole.surfaceAlpha })}`);
-  expect(sameColour(surface, resolvedRole.background), `the composer's painted ground on ${name} should be that palette's --rt-bg: ${surface} (painted by ${resolvedRole.surfaceFrom}; --rt-surface is ${resolvedRole.surfaceToken}) vs ${resolvedRole.background}`);
+  expect(sameColour(surface, resolvedRole.surfaceToken), `the composer's painted ground on ${name} should be that palette's --rt-surface (the dock's, COMPOSER_GROUND): ${surface} (painted by ${resolvedRole.surfaceFrom}; --rt-bg is ${resolvedRole.background}) vs ${resolvedRole.surfaceToken}`);
   expect(resolvedRole.argumentText === ' x', `the argument span should hold the typed argument on ${name}: ${JSON.stringify(resolvedRole.argumentText)}`);
   const painted = { partial: partialRole.color, resolved: resolvedRole.color, unknown: unknownRole.color, argument: resolvedRole.argument };
   const ratios = {};
@@ -557,7 +563,7 @@ for (const [name, at] of PALETTE_PLAN) {
     expect(ratios[role] >= 4.5, `REQ-CHAT-027: ${role} paints at ${ratios[role].toFixed(2)}:1 on ${name}, below 4.5:1`);
   }
   expect(new Set(Object.values(painted)).size === 4, `the four role colours must differ on ${name}: ${Object.values(painted).join(' | ')}`);
-  paletteResults[name] = { surface, surfaceFrom: resolvedRole.surfaceFrom, background: resolvedRole.background, painted, ratios: Object.fromEntries(Object.entries(ratios).map(([role, r]) => [role, Number(r.toFixed(3))])) };
+  paletteResults[name] = { surface, surfaceFrom: resolvedRole.surfaceFrom, surfaceToken: resolvedRole.surfaceToken, background: resolvedRole.background, painted, ratios: Object.fromEntries(Object.entries(ratios).map(([role, r]) => [role, Number(r.toFixed(3))])) };
 }
 // Three palettes, not one palette measured three times.
 const grounds = new Set(Object.values(paletteResults).map((p) => p.surface));

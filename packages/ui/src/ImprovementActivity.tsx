@@ -43,12 +43,21 @@ export function ImprovementActivity({ active, pass, placement }: ImprovementActi
   const descriptionId = useId();
   if (!active) return null;
   const description = (placement === 'title-bar' ? TITLE_DESCRIPTIONS : HEADER_DESCRIPTIONS)[pass];
+  /*
+   * Live-run finding L10 (2026-09-29): the label is its OWN element. As a bare text node in the Tag's inline-flex box it
+   * was an anonymous flex item that `text-overflow` never reaches, so at 1440 px the run header cut it mid-word
+   * ("Reviewing run for improvem") with no ellipsis. `shell.css` now wraps it between words in the run header and
+   * elides it with an ellipsis in the fixed-height title bar. The Tag's classes are spelled out because a className
+   * REPLACES the design Tag's foundation (`componentClass`), which had left the indicator an unstyled span; `tag-run`
+   * is the tone the run header draws a live run with (`RUN_STATE_TAGS`). No `kind` is passed for the same reason: the
+   * className replaces the class it would have named.
+   */
   return (
-    <Tag kind="running" className={`improvement-activity improvement-activity--${placement}`} role="status"
+    <Tag className={`tag tag-run improvement-activity improvement-activity--${placement}`} role="status"
       aria-label="Improvement analysis status" aria-describedby={descriptionId} data-pass={pass}
       data-testid={`improvement-activity-${placement}`}>
       <StatusDot kind="running" pulse ref={(element) => { if (element) markMotionStart(element); }} />
-      {IMPROVEMENT_ACTIVITY_LABELS[pass]}
+      <span className="improvement-activity__label">{IMPROVEMENT_ACTIVITY_LABELS[pass]}</span>
       <span className="visually-hidden" id={descriptionId}>{description}</span>
     </Tag>
   );

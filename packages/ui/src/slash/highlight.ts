@@ -35,7 +35,7 @@ export interface SlashRoleColours {
   readonly partial: string;
   readonly unknown: string;
   readonly argument: string;
-  /** The surface the four were measured against — the composer input's own ground. */
+  /** The surface the four were measured against — the ground the composer field is painted on (`COMPOSER_GROUND`). */
   readonly surface: string;
 }
 
@@ -99,18 +99,28 @@ export function ensureContrast(colour: string, surface: string, dark: boolean, f
   return settled.l === parseOklch(corrected).l ? corrected : formatOklch(settled.l, settled.c, settled.h);
 }
 
+/**
+ * REQ-CHAT-027's "the surface it is painted on", for the composer: the field is transparent inside `.composer__dock`
+ * (PD-CHAT-001 revision 2's docked strip, `shell.css`), so the ground under the token is the dock's `--rt-surface`.
+ * The mockup's bare `.input` paints on `--rt-bg`, and until 2026-09-29 the colours were corrected against that — a ground
+ * the docked composer no longer paints, on which the partial shade fell to 4.06:1 on `rotaris-dim`
+ * (`docs/defects/fixed/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`).
+ * `slash.test.ts` reads the dock's background out of `shell.css`, so the two cannot drift apart silently again.
+ */
+export const COMPOSER_GROUND = '--rt-surface' as const satisfies `--rt-${string}`;
+
 const rendered = (colour: string): string => srgbToHex(oklchToSrgb(parseOklch(colour)));
 
 /**
  * REQ-CHAT-027's four roles from exactly the theme roles it names: resolved from the readable accent shade
  * (`--rt-accent-300`, `docs/design/README.md` §1.2), partial from that shade blended toward the surface, unknown from the
  * `fail` state colour (`--rt-fail`), argument from the secondary text colour (`--rt-text-secondary`). The surface is the
- * composer input's own ground — the design's `.input` paints on `--rt-bg`. Each is then lightened (a dark theme) or
+ * ground the composer field is painted on, `COMPOSER_GROUND` (below). Each is then lightened (a dark theme) or
  * darkened (a light one) until it clears 4.5:1, and no two may render to the same colour; where the correction has made
  * two coincide, the partial shade is stepped further from the accent until they differ, which keeps it at or above the
  * floor because every step moves it further from the surface.
  */
-export function slashRoleColours(theme: Theme, surfaceKey: `--rt-${string}` = '--rt-bg'): SlashRoleColours {
+export function slashRoleColours(theme: Theme, surfaceKey: `--rt-${string}` = COMPOSER_GROUND): SlashRoleColours {
   const surface = resolvedToken(theme, surfaceKey);
   const accent = resolvedToken(theme, '--rt-accent-300');
   const fail = resolvedToken(theme, '--rt-fail');

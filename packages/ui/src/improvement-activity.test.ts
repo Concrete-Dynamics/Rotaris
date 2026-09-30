@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -34,6 +35,44 @@ describe('REQ-LIBRARY-125/126 — the two activity indicators (PD-LIBRARY-002 la
 
   it('the pulse is marked so the reduced-motion rule can collapse it (REQ-SHELL-135)', () => {
     expect(markup({ active: true, pass: 'post_run', placement: 'run-header' })).toContain('is-pulsing');
+  });
+});
+
+/** The rule bodies `shell.css` gives exactly this selector, joined. */
+const shellCss = readFileSync(new URL('./shell.css', import.meta.url), 'utf8');
+const rule = (selector: string): string =>
+  [...shellCss.matchAll(new RegExp(`(?:^|\\})\\s*${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]+)\\}`, 'gm'))].map((m) => m[1] ?? '').join(' ');
+
+describe('REQ-LIBRARY-125 with REQ-SHELL-149 — the label is carried in words, never clipped mid-word', () => {
+  it('draws the label as its own element, so an overflow is the label\'s and not a bare text node\'s in a flex box', () => {
+    // Live-run finding L10: "Reviewing run for improvem" — `text-overflow` on an inline-flex box never reaches an
+    // anonymous text item, so the words were cut at the box's edge with no ellipsis.
+    for (const placement of ['title-bar', 'run-header'] as const) {
+      for (const pass of ['post_run', 'retrospective'] as const) {
+        const html = markup({ active: true, pass, placement });
+        expect(html, `${placement} ${pass}`).toContain(`<span class="improvement-activity__label">${IMPROVEMENT_ACTIVITY_LABELS[pass]}</span>`);
+      }
+    }
+  });
+
+  it('wears the design Tag the run header draws a live run with, as the stylesheet says it does', () => {
+    // A className given to the design Tag REPLACES its foundation (`componentClass`), so `kind` alone left the
+    // indicator a bare span in the body type with an unpainted dot; the run header's live tone is `tag-run`.
+    const html = markup({ active: true, pass: 'post_run', placement: 'run-header' });
+    expect(html).toMatch(/class="tag tag-run improvement-activity improvement-activity--run-header"/);
+    expect(rule('.improvement-activity .status-dot')).toContain('background: currentColor');
+  });
+
+  it('lets the run header wrap the label between words and never below its longest word; the title bar elides with an ellipsis', () => {
+    expect(rule('.improvement-activity')).not.toContain('overflow: hidden');
+    const header = rule('.improvement-activity--run-header .improvement-activity__label');
+    expect(header).toContain('white-space: normal');
+    expect(header).toContain('overflow-wrap: normal');
+    expect(rule('.improvement-activity--run-header')).toContain('min-width: min-content');
+    const title = rule('.improvement-activity--title-bar .improvement-activity__label');
+    expect(title).toContain('text-overflow: ellipsis');
+    expect(title).toContain('overflow: hidden');
+    expect(title).toContain('white-space: nowrap');
   });
 });
 

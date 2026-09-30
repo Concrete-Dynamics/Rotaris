@@ -109,7 +109,7 @@ describe('REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch', () => {
     expect(w.stalled).toEqual([]);
   });
 
-  it('REQ-MONITOR-119 (OQ-152): between the child\'s turns there is no step to be silent: no stall is reported, the callback reads not stalled, and the next turn counts from its start', () => {
+  it('REQ-MONITOR-119 (OQ-154): between the child\'s turns there is no step to be silent: no stall is reported, the callback reads not stalled, and the next turn counts from its start', () => {
     const w = watched(12_000);
     w.watch.start();
     w.watch.modelEvent('finish');

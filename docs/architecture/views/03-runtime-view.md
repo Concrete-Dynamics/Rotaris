@@ -761,7 +761,7 @@ as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds
   REQ-NOTIFY-112's recovery reads (`quietFor`);
 - the end of each of those turns (`betweenTurns`, when the turn's promise settles): until the run starts the next, the
   child is waiting on its own children or ending, and an evaluation counts no silence — no stall, no wait on tools, the
-  callback *not stalled* — so a wait on its own children is not reported as its stall (OQ-152; the repair of
+  callback *not stalled* — so a wait on its own children is not reported as its stall (OQ-154; the repair of
   [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md)).
   Each child it waits on is watched by its own watch;
 - the start of an execution resumed into waiting (PD-ORCH-005 clause 4, `execute`, as the watch is armed): the child

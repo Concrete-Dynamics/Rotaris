@@ -5748,7 +5748,7 @@ None of them says what ends a silent child's step so that there is an outcome to
   run starts is now the fourth event (`children.test.ts`, "a child that waited on its own child past the window …"). The
   watch's own warnings and issues during such a wait are a separate question
   ([`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md)),
-  since 2026-09-30 OQ-152's: the watch counts no silence between the child's turns.
+  since 2026-09-30 OQ-154's: the watch counts no silence between the child's turns.
 - **The outcomes that earn nothing, as a failed step carries them:**
   - `cancelled`: the child's own abort or the run's;
   - `blocked`: such a child never runs;
@@ -5847,7 +5847,7 @@ None of them says what ends a silent child's step so that there is an outcome to
   [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md).~~
   *Corrected in place, 2026-09-30, by the repair of acceptance finding A7:* the watch counts no silence between the
   child's turns, so a wait on its own children is neither a stall nor a wait on calls; the reading, and what a ruling
-  decides, is OQ-152's.
+  decides, is OQ-154's.
 
 **OQ-128 — What becomes of a steering prompt still pending when the run comes to rest, or ends?** *(REQ-MONITOR-133, "the
 prompt is pending until injected"; REQ-MONITOR-134, "all pending steering prompts for an agent are delivered into its
@@ -6716,12 +6716,13 @@ clause 22) between the first payload and a later run's retry is rendered as it r
 which a retry within the first run would then also have to change), and, if again, whether a dependency's report is read
 as it stood at the first payload or as it stands at the retry.
 
-**OQ-152 — Is a child waiting on its own children silent, for the stall watchdog?** *(REQ-ORCH-089, "when active tool
+**OQ-154 — Is a child waiting on its own children silent, for the stall watchdog?** *(REQ-ORCH-089, "when active tool
 calls exist, the condition is reported at informational level as waiting on N active tool calls instead of as a stall";
 REQ-MONITOR-117 to REQ-MONITOR-120, "each agent is evaluated for a stall"; REQ-NOTIFY-112; OQ-127. Raised 2026-09-30 by
 the repair of acceptance finding A7,
 [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md),
-under [R-067](../product/requests.md#r-067). Open.)*
+under [R-067](../product/requests.md#r-067). Open; numbered OQ-152 when it was raised, renumbered OQ-154 at
+the merge once origin/main's OQ-152 and OQ-153 had landed.)*
 
 A child that delegated, and then waits for its children's reports before the run resumes it (REQ-ORCH-055 to
 REQ-ORCH-059), or that the run resumes into that wait from its record (PD-ORCH-005 clause 4), has no model step and no

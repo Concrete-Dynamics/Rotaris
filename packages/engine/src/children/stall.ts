@@ -13,7 +13,7 @@ import type { ChatMessage, ModelError } from '@rotaris/model';
  * - when activity resumes, it reports the recovery;
  * - between the child's turns — its turn has ended and the run asks nothing of it until it starts the next, which is a
  *   wait on its own children or the end of its execution — there is no model step to be silent, so it reports neither
- *   (OQ-152, the repair of `a-child-waiting-on-its-own-children-is-reported-stalled.md`). Each of those children has its
+ *   (OQ-154, the repair of `a-child-waiting-on-its-own-children-is-reported-stalled.md`). Each of those children has its
  *   own watch, which reports its own silence.
  * The callback fires on every evaluation with the stalled state, so a host can draw a badge.
  *
@@ -75,7 +75,7 @@ export class StallWatch {
   private stalledNow = false;
   private lastWarnAt: Millis | null = null;
   private lastWaitingAt: Millis | null = null;
-  /** OQ-152: the child's turn has ended and the run has not started its next. */
+  /** OQ-154: the child's turn has ended and the run has not started its next. */
   private between = false;
 
   constructor(private readonly clocks: Clocks, readonly thresholdMs: Millis, private readonly sinks: StallSinks) {
@@ -100,7 +100,7 @@ export class StallWatch {
    * The run gave the child something to answer — its payload, its record at a resume, its children's reports, a re-prompt
    * or the corrective message: the silence starts again, so a wait on its own children before it is not counted in the
    * silence REQ-NOTIFY-112's recovery reads (`quietFor`, OQ-127), and the watch's evaluation, which read no silence during
-   * the wait (`betweenTurns`, OQ-152), counts from here.
+   * the wait (`betweenTurns`, OQ-154), counts from here.
    */
   activity(): void {
     this.between = false;
@@ -118,7 +118,7 @@ export class StallWatch {
   }
 
   /**
-   * OQ-152: the child's turn has ended. Until the run starts its next (`activity`), the child is waiting on its own
+   * OQ-154: the child's turn has ended. Until the run starts its next (`activity`), the child is waiting on its own
    * children, or its execution is ending: the run asks it for no output, so no silence is counted against it.
    */
   betweenTurns(): void {

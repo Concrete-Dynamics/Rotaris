@@ -52,7 +52,7 @@ removed: each event whole, the slice whole up to the compressing model's own thr
 `the-compressor-reads-only-the-head-of-what-it-compresses.md` (acceptance A12). The **runtime view**'s compression
 paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
 
-**A child waiting on its own children is not reported stalled (REQ-ORCH-089, REQ-MONITOR-119, REQ-NOTIFY-112, OQ-152,
+**A child waiting on its own children is not reported stalled (REQ-ORCH-089, REQ-MONITOR-119, REQ-NOTIFY-112, OQ-154,
 R-067).** `StallWatch.betweenTurns` (`children/stall.ts`), called by `execute`'s `turn` closure as each turn settles,
 holds the watch's evaluation off the silence until the run starts the child's next turn, and `execute` calls it as the
 watch is armed for an execution resumed into waiting (PD-ORCH-005 clause 4; added 2026-09-30, the first reading having

@@ -979,7 +979,7 @@ export class IterationChildren implements DelegationOps {
       // cannot see, and the cast that would otherwise be needed in the `finally` says less than this does.
       const backstop: { handle: TimerHandle | null } = { handle: null };
       stallWatch.start();
-      // OQ-152 with PD-ORCH-005 clause 4: a child resumed into waiting takes no step until a child of its own reports — it is
+      // OQ-154 with PD-ORCH-005 clause 4: a child resumed into waiting takes no step until a child of its own reports — it is
       // between its turns from the start, and no silence is counted against it while it waits (found by the verifier's review).
       if (start?.kind === 'resumed' && start.waiting) stallWatch.betweenTurns();
       const timer = deps.clocks.timers.after(childTimeoutMs, () => {
@@ -1021,7 +1021,7 @@ export class IterationChildren implements DelegationOps {
         detached: () => this.detached,
         // REQ-ORCH-093: the resume limb — a child's turn after its first is a parent being resumed with reports.
         parentResume: !wasFirst,
-        // OQ-152: once the turn ends the child waits on its own children, or ends; neither is a silence of its own.
+        // OQ-154: once the turn ends the child waits on its own children, or ends; neither is a silence of its own.
       }, task, history, controller.signal).finally(() => stallWatch.betweenTurns()); };
       // A resumed child's first attempt carries on from its record; REQ-ORCH-088's retry starts again from its payload.
       const fromRecord = start !== null;

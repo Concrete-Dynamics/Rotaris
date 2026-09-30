@@ -1473,7 +1473,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(byName('mid')!.state).toBe('failed');
     });
 
-    it('REQ-ORCH-089 / REQ-MONITOR-119 (OQ-152): a child waiting on its own child between its turns is not reported stalled; the child that is silent is, by its own watch', async () => {
+    it('REQ-ORCH-089 / REQ-MONITOR-119 (OQ-154): a child waiting on its own child between its turns is not reported stalled; the child that is silent is, by its own watch', async () => {
       let releaseLeaf!: () => void;
       const leafHeld = new Promise<void>((r) => { releaseLeaf = r; });
       let midAsked = 0;
@@ -1509,7 +1509,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(stallsOf('mid')).toEqual([]);
     });
 
-    it('REQ-ORCH-089 / REQ-MONITOR-119 (OQ-152) with PD-ORCH-005 clause 4: a child resumed into waiting on its own child is not reported stalled; the child that is silent is, by its own watch', async () => {
+    it('REQ-ORCH-089 / REQ-MONITOR-119 (OQ-154) with PD-ORCH-005 clause 4: a child resumed into waiting on its own child is not reported stalled; the child that is silent is, by its own watch', async () => {
       const leafGates: (() => void)[] = [];
       let midAsked = 0;
       let leafAsked = 0;

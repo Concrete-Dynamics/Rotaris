@@ -11,7 +11,7 @@ on from the steps the root took in the earlier iterations.
 No proof scripts this. A proof that does must allow for the root taking its first steps again until it is settled, or
 script the later iteration's first step as a tool call so the root replies before the pause.
 
-Noticed 2026-09-29 under R-067, by the repair named above.
+Noticed 2026-09-30 under R-067, by the repair named above.
 
 ## Specs
 

@@ -29,7 +29,7 @@ which this does not touch.
 
 ## Outcome
 
-Repaired 2026-09-29 under R-067 (acceptance finding A52).
+Repaired 2026-09-30 under R-067 (acceptance finding A52).
 
 Confirmed on this branch first: four new cases in `scripted-client.test.ts` play a run in one client and resume it in a
 new one, and on the unrepaired client each placed the agent too early — a root resumed in iteration 2 after three steps

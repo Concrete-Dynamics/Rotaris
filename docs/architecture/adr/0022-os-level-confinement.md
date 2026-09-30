@@ -263,3 +263,11 @@ decides anything" slightly less true: one renderer can now refuse what the other
 the mechanism, not a policy, so it belongs with the mechanism. `pnpm sandbox-proof` is green on Linux with `bwrap`,
 with a third confined launch for the absent case (IC-8, "Linux again — 2026-09-29"). What this costs a Linux user is
 raised as OQ-140 in `../open-questions.md`.
+
+**Reported back 2026-09-29 (R-067): the two surfaces that carry `REQ-SANDBOX-130`'s disclosure now read one
+predicate.** The settings card drew it for the `unavailable` backend alone. The launch dialog drew it whenever
+confinement was not available, which includes a Linux host without `bwrap`, where installing the launcher changes the
+answer the disclosure says nothing changes. Both now call `owesNoConfinementDisclosure` in `@rotaris/contracts`,
+beside the disclosure's text. `pnpm sandbox-proof` reads the dialog in the built app (scenario 2b). The build before
+this repair failed that check on Linux without `bwrap`; the build after it passes with and without `bwrap`
+([the note](../../defects/fixed/the-launch-dialog-draws-the-no-mechanism-disclosure-where-a-mechanism-exists.md)).

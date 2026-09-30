@@ -90,7 +90,7 @@ describe('PD-TOOLS-006 revision 3 (OQ-112) — a write scope is for a persona th
     expect(writesFiles(BUILT_IN_PERSONAS.verifier)).toBe(false);
   });
 
-  it('REQ-TOOLS-006 (4) (OQ-141): the tool_restrictions entry naming the persona, in its own map or its parentPersona\'s, is applied like the other controls', () => {
+  it('REQ-TOOLS-006 (4) (OQ-145): the tool_restrictions entry naming the persona, in its own map or its parentPersona\'s, is applied like the other controls', () => {
     // Its own map: an entry naming another role leaves it whole; the entry naming it is an allowed-tool list.
     expect(writesFiles(p('writer', ['read_file', 'write_file'], { toolRestrictions: { tester: ['read_file'] } }))).toBe(true);
     expect(writesFiles(p('writer', ['read_file', 'write_file'], { toolRestrictions: { writer: ['read_file'] } }))).toBe(false);

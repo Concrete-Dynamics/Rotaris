@@ -116,6 +116,7 @@ function harness(options: {
     reportFailure: (windowId, title) => notices.push({ windowId, title }),
     log: (message) => actions.push(`log:${message}`),
     unshownApprovals: (approvals) => { actions.push(`unshown:${approvals.join(',')}`); },
+    workspaceClosed: (workspace) => { actions.push(`workspace-closed:${workspace}`); },
     ...(options.postShowActivation === undefined ? {} : { postShowActivation: (window) => { actions.push(`activate:${window.workspace}`); options.postShowActivation!(window.wcId); } }),
   };
 
@@ -208,7 +209,7 @@ describe('MainWindows', () => {
     replace.folders.push('C:/b');
     await replace.mainWindows.choose(outgoing.wcId, { newWindow: false });
     expect(replace.actions.filter((action) => !action.startsWith('log:') && !action.startsWith('dispose:'))).toEqual([
-      'build:C:/b:open-request', 'load:2', 'open:C:/b', 'show:C:/b', 'close:C:/a', 'persist:C:/b', 'focus:C:/b',
+      'build:C:/b:open-request', 'load:2', 'open:C:/b', 'show:C:/b', 'close:C:/a', 'workspace-closed:C:/a', 'persist:C:/b', 'focus:C:/b',
     ]);
   });
 
@@ -316,6 +317,47 @@ describe('MainWindows', () => {
     h.windows.get(second.wcId)!.destroyed = true;
     h.windows.get(second.wcId)!.closedListeners[0]!();
     expect(h.actions.filter((action) => action.startsWith('unshown:'))).toHaveLength(1);
+  });
+
+  /**
+   * REQ-WORKSPACE-013: the outgoing window of a switch hands its workspace back, so main can cancel that workspace's
+   * initialization run; nothing did before (`docs/defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`).
+   * A workspace still held by another window is not handed back, and neither is the sentinel.
+   */
+  it('reports a workspace no window holds any more once its last window closes, on a switch and on a vetoed replacement (REQ-WORKSPACE-013, REQ-WORKSPACE-102)', async () => {
+    const replace = harness();
+    const outgoing = await replace.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    await replace.mainWindows.open(outgoing.wcId, 'C:/a');
+    replace.folders.push('C:/b');
+    await replace.mainWindows.choose(outgoing.wcId, { newWindow: false });
+    const relevant = (actions: readonly string[]): string[] => actions.filter((action) => action.startsWith('workspace-closed:') || action.startsWith('close:') || action.startsWith('open:'));
+    expect(relevant(replace.actions)).toEqual(['open:C:/a', 'open:C:/b', 'close:C:/a', 'workspace-closed:C:/a']);
+
+    // A vetoed close discards the replacement, whose workspace was opened for it and is now no window's.
+    const vetoed = harness();
+    const kept = await vetoed.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    await vetoed.mainWindows.open(kept.wcId, 'C:/a');
+    vetoed.windows.get(kept.wcId)!.closeAllowed = false;
+    vetoed.folders.push('C:/b');
+    await vetoed.mainWindows.choose(kept.wcId, { newWindow: false });
+    expect(vetoed.actions.filter((action) => action.startsWith('workspace-closed:'))).toEqual(['workspace-closed:C:/b']);
+
+    // Two windows: closing one hands back its own workspace only.
+    const two = harness();
+    const first = await two.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    const second = await two.mainWindows.build({ workspace: 'C:/b', origin: 'open-request' });
+    two.windows.get(second.wcId)!.destroyed = true;
+    two.windows.get(second.wcId)!.closedListeners[0]!();
+    expect(two.actions.filter((action) => action.startsWith('workspace-closed:'))).toEqual(['workspace-closed:C:/b']);
+    two.windows.get(first.wcId)!.destroyed = true;
+    two.windows.get(first.wcId)!.closedListeners[0]!();
+    expect(two.actions.filter((action) => action.startsWith('workspace-closed:'))).toEqual(['workspace-closed:C:/b', 'workspace-closed:C:/a']);
+
+    const none = harness();
+    const sentinel = await none.mainWindows.build({ workspace: '(no workspace)', origin: 'launch' });
+    none.windows.get(sentinel.wcId)!.destroyed = true;
+    none.windows.get(sentinel.wcId)!.closedListeners[0]!();
+    expect(none.actions.filter((action) => action.startsWith('workspace-closed:'))).toEqual([]);
   });
 
   it('destroys and cleans up a window if loading fails after registration', async () => {

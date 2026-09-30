@@ -156,7 +156,7 @@ export interface RunDeps {
    * Part B: the tool surface for an agent with a delegation identity (the root and every child). Absent: no delegation.
    * `canonicalName` is the instance name its publishes record as `created_by` (REQ-LIBRARY-093) — the root's, whose
    * `agentName` is its persona; absent for a child, whose `agentName` is its canonical name. `parentPersona` is the persona of
-   * the agent that delegated a child (REQ-TOOLS-006 (4), OQ-141); absent for the root.
+   * the agent that delegated a child (REQ-TOOLS-006 (4), OQ-145); absent for the root.
    */
   readonly toolsFor?: ((persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string) => ToolPort | null) | undefined;
   readonly dal?: StoreDal | undefined;

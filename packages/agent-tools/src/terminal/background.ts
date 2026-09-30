@@ -150,6 +150,11 @@ export class BackgroundSession {
   readonly startedAt: string;
   status: BackgroundStatus = 'running';
   exitCode: number | null = null;
+  /**
+   * REQ-TOOLS-103 (OQ-143): why the process could not be started, when Node reported that after `start` returned; null
+   * for a session whose process ran. Such a session is `failed` with no exit code, and its poll is an `execution_error`.
+   */
+  spawnError: string | null = null;
   /** REQ-SANDBOX-085: this spawn was confined, so its failure may be the launcher's rather than the command's. */
   confined = false;
   /**
@@ -184,7 +189,16 @@ export class BackgroundSession {
         if (this.status === 'running') { const end = endOfExit(code, signal, this.delivered); this.exitCode = end.exitCode; this.status = end.status; }
         resolve();
       });
-      child.on('error', (e) => { this.append(`\n[spawn error] ${String(e)}`); if (this.status === 'running') { this.status = 'failed'; this.exitCode = -1; } resolve(); });
+      // REQ-TOOLS-100/103/179 (OQ-143): Node reports a spawn that failed after `start` returned — ENOENT, EACCES — through
+      // `error` and never `exit`, and the child then has no pid. The command never ran, so it has no exit code: the session
+      // is `failed` with none, and the poll answers `execution_error`. It read `failed (exit -1)` before, a −1 that
+      // REQ-TOOLS-179 gives `killed` alone. An `error` once the process runs is not its end; its `exit` still comes.
+      child.on('error', (e) => {
+        if (child.pid !== undefined) { this.deps.warn(`background session ${this.id}: ${String(e)}`); return; }
+        this.append(`\n[spawn error] ${String(e)}`);
+        if (this.status === 'running') { this.timer?.cancel(); this.status = 'failed'; this.exitCode = null; this.spawnError = String(e); }
+        resolve();
+      });
     });
     this.timer = deps.timers.after(timeoutMs as Millis, () => { void this.end('timeout'); });
   }

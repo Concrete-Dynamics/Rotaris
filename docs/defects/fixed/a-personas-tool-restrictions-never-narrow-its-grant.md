@@ -34,7 +34,7 @@ Not reproduced in a built app.
 ## Outcome
 
 Repaired 2026-09-29 under R-067 (acceptance finding A4), under the reading raised as
-[OQ-141](../../architecture/open-questions.md) — the requirements do not settle whose grant an entry narrows:
+[OQ-145](../../architecture/open-questions.md) — the requirements do not settle whose grant an entry narrows:
 - **The map reaches the grant.** `personaResolverFor` now carries the loader's `tool_restrictions` onto the engine
   `Persona` (`toolRestrictions`). The tool port reads, with `toolRestrictionsFor`, the lists its own persona's map and
   the delegating persona's map give the agent's persona name. The engine hands every child's port that persona as

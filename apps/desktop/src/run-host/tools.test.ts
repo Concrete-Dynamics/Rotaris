@@ -482,7 +482,7 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
 /**
  * Defect `a-personas-tool-restrictions-never-narrow-its-grant` (acceptance finding A4, R-067): the loader parsed a
  * persona's `tool_restrictions`, the registry had a stage for it, and nothing connected the two, so a configured
- * restriction removed nothing. Built under OQ-141's reading: the map's keys are role names (REQ-CONFIG-062), and an
+ * restriction removed nothing. Built under OQ-145's reading: the map's keys are role names (REQ-CONFIG-062), and an
  * agent's grant is narrowed by the allowed-tool list its OWN persona's map gives its name and by the one the map of the
  * persona that DELEGATED it gives that name; a tool survives only a list that names it (REQ-CONFIG-103).
  */
@@ -576,7 +576,7 @@ ${restrictions}`;
     expect(infos.filter((l) => l.includes('by tool_restrictions'))).toEqual([]);
   });
 
-  it('OQ-141: the map of the persona that delegated an agent narrows that agent by the entry naming it — an alias of a tool in the list is its canonical name', async () => {
+  it('OQ-145: the map of the persona that delegated an agent narrows that agent by the entry naming it — an alias of a tool in the list is its canonical name', async () => {
     const personas = `  orchestrator:
     name: orchestrator
     model: selected
@@ -593,7 +593,7 @@ ${coder('')}`;
     expect(other.resolvedTools?.()).toEqual(['read_file', 'grep', 'write_file', 'haet_edit']);
   });
 
-  it('OQ-141: both lists bind at once — a tool survives only a list that names it — and neither can add a tool the persona did not declare', async () => {
+  it('OQ-145: both lists bind at once — a tool survives only a list that names it — and neither can add a tool the persona did not declare', async () => {
     const personas = `  orchestrator:
     name: orchestrator
     model: selected
@@ -605,7 +605,7 @@ ${coder('    tool_restrictions:\n      coding-agent: [read_file, grep, terminal]
     expect(child.resolvedTools?.()).toEqual(['read_file']);
   });
 
-  it('OQ-141 / REQ-MCP-062: an MCP tool the list does not name is withheld from a restricted agent\'s listing and its prompt section, as a withholding rule withholds a tool outside the registry (ADR-0016)', async () => {
+  it('OQ-145 / REQ-MCP-062: an MCP tool the list does not name is withheld from a restricted agent\'s listing and its prompt section, as a withholding rule withholds a tool outside the registry (ADR-0016)', async () => {
     const serverTool = simpleExecutor('lookup', 'a server tool', anySchema, async () => ({ text: 'ok', isError: false }));
     const restricted = port(coder('    tool_restrictions:\n      coding-agent: [read_file]\n'), 'coding-agent', {}, [serverTool]);
     await restricted.ready?.();

@@ -95,7 +95,7 @@ export interface NarrowingControls {
   readonly readOnly?: boolean;
   /**
    * REQ-TOOLS-006 (4) with REQ-CONFIG-103: the allowed-tool lists of the `tool_restrictions` maps that bind this agent
-   * (the engine's `toolRestrictionsFor`, OQ-141); a tool survives only the lists that name it. Null or empty narrows
+   * (the engine's `toolRestrictionsFor`, OQ-145); a tool survives only the lists that name it. Null or empty narrows
    * nothing. It was a map from a tool to `false`, a shape no configuration could produce (acceptance finding A4).
    */
   readonly toolRestrictions?: readonly (readonly string[])[] | null;

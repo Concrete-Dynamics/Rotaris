@@ -111,7 +111,7 @@ export interface ToolPortContext {
   readonly parentId?: string | undefined;
   readonly depth?: number | undefined;
   /**
-   * REQ-TOOLS-006 (4) under OQ-141: the persona of the agent that delegated this one, whose `tool_restrictions` entry
+   * REQ-TOOLS-006 (4) under OQ-145: the persona of the agent that delegated this one, whose `tool_restrictions` entry
    * naming this agent's persona narrows its grant. Absent for the entry agent, which nobody delegated.
    */
   readonly parentPersona?: string | undefined;

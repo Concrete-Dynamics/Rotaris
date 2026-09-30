@@ -58,7 +58,7 @@ describe('registry (ADR-0016, REQ-TOOLS-001/004/005/006/007)', () => {
     expect(chained.removals).toEqual([{ tool: 'terminal', control: 'run_allow_list' }]);
   });
 
-  it('REQ-TOOLS-006 (4) / REQ-CONFIG-103 (OQ-141): the tool_restrictions stage keeps what every allowed-tool list names, an alias as its tool, delegate with its two', () => {
+  it('REQ-TOOLS-006 (4) / REQ-CONFIG-103 (OQ-145): the tool_restrictions stage keeps what every allowed-tool list names, an alias as its tool, delegate with its two', () => {
     const declared = ['read_file', 'haet', 'write_file', 'delegate', 'grep'];
     const one = narrow(declared, { toolRestrictions: [['read_file', 'haet_edit', 'delegate']] }, false);
     expect(one.tools).toEqual(['read_file', 'haet', 'delegate', 'background_output', 'wait_for_tasks']);

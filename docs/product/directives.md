@@ -2199,7 +2199,7 @@ revision 3 as [R-067](requests.md#r-067).*
 > grant today ([`a-personas-tool-restrictions-never-narrow-its-grant`](../defects/fixed/a-personas-tool-restrictions-never-narrow-its-grant.md)).
 > The check therefore reads the two controls a child's grant does meet, `coordinator_only` and `read_only`. The
 > clause's text is not wrong; the build lacks a control it names. *Closed 2026-09-29 under R-067 (acceptance finding
-> A4):* the map now narrows the grant as [OQ-141](../architecture/open-questions.md) builds it — the entry the persona's
+> A4):* the map now narrows the grant as [OQ-145](../architecture/open-questions.md) builds it — the entry the persona's
 > own map and the delegating persona's map give its name — and the check reads the same lists. A persona the caller's
 > map restricts to reading cannot take a scope, and the reason names only the writers the caller's map lets write
 > (`children.test.ts`, "the parent agent's tool_restrictions bind the refusal"). The sentence above is kept as the reason

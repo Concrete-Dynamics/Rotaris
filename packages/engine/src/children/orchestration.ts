@@ -267,7 +267,7 @@ export class IterationChildren implements DelegationOps {
      * is the ledger's refusal.
      */
     const named = this.deps.personas ? persona : resolveRole(req.persona)?.persona;
-    // REQ-TOOLS-006 (4), OQ-141: the parent agent's `tool_restrictions` bind the child's grant, so they bind this check too.
+    // REQ-TOOLS-006 (4), OQ-145: the parent agent's `tool_restrictions` bind the child's grant, so they bind this check too.
     const parentName = this.parentPersonaOf(parentId);
     const parentPersona = parentName === undefined ? undefined : this.deps.personas ? personaOf(this.deps, parentName) : resolveRole(parentName)?.persona;
     if (scope.patterns.length > 0 && named !== undefined && !writesFiles(named, parentPersona)) {
@@ -408,7 +408,7 @@ export class IterationChildren implements DelegationOps {
    * not an iteration (REQ-ORCH-153).
    */
   /**
-   * REQ-TOOLS-006 (4), OQ-141: the persona of the agent a delegation comes from — the root's for the root, a child's own
+   * REQ-TOOLS-006 (4), OQ-145: the persona of the agent a delegation comes from — the root's for the root, a child's own
    * for its children. Its `tool_restrictions` entry naming the delegated persona narrows the child's grant.
    */
   private parentPersonaOf(parentId: string): string | undefined {
@@ -860,7 +860,7 @@ export class IterationChildren implements DelegationOps {
     const resilience = deps.resilience?.forChild(persona, { model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking }, childTimeoutMs) ?? null;
     // Part AH: this child's own capacity and its own plan — the ledger row is where a child's task plan lives.
     const compression = deps.compressionFor?.({ model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking }, () => todoLinesFromStored(this.ledger.get(row.task_id)?.todo ?? null));
-    // REQ-TOOLS-006 (4), OQ-141: the delegating agent's persona, whose `tool_restrictions` may name this child's.
+    // REQ-TOOLS-006 (4), OQ-145: the delegating agent's persona, whose `tool_restrictions` may name this child's.
     const tools = deps.toolsFor(row.persona, row.canonical_name, this, row.task_id, row.depth, undefined, this.parentPersonaOf(row.parent_id));
     const dispatched = new Map<string, string>();
     // REQ-ORCH-047 / REQ-TOOLS-154: the prior-agent-context block, exactly once, ahead of everything.

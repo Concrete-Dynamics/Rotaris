@@ -6,7 +6,7 @@ persona's MCP grant evidence (`mcpEvidence`). Neither reads what REQ-TOOLS-006's
 `coordinator_only`, `read_only` or `tool_restrictions` removed from the agent is still recorded as granted, and a
 tool-server tool withheld by `read_only`, the `restricted` preset or an allowed-tool list is still recorded under its
 server. The record, and the inspector that reads it, over-report whenever a control removed something. The
-`tool_restrictions` repair (OQ-141, 2026-09-29) widened how often that happens; it was already true for the other controls.
+`tool_restrictions` repair (OQ-145, 2026-09-29) widened how often that happens; it was already true for the other controls.
 
 Noticed 2026-09-30 by the verifier of the `tool_restrictions` repair, recorded by its repairer. Not reproduced in a
 built app.

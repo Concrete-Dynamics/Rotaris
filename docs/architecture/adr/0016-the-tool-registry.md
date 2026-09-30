@@ -201,7 +201,7 @@ fold as behaving. It had never run over a configured value. Its input was a map 
 loader never produced, and the run host never passed it. **Found: the stage was unreachable, and its shape was not
 REQ-CONFIG-103's.** The first execution's "four-stage narrowing fold … behaved" held for three stages. The fourth passed
 every tool through because it was never given anything, and no reading of the registry could see that. The stage now
-takes the allowed-tool lists that bind the agent (OQ-141's reading: the entry its own persona's map and its delegating
+takes the allowed-tool lists that bind the agent (OQ-145's reading: the entry its own persona's map and its delegating
 persona's map give its persona's name). It keeps a tool only when every list names it, through `restrictionsAllow` in
 `@rotaris/contracts`, which the engine's write-scope refusal also reads. It still only removes, after the three earlier
 stages. ~~The MCP loop in `run-host/tools.ts` withholds a server's tool the lists do not name, the same fail-closed

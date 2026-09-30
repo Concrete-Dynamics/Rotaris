@@ -19,7 +19,7 @@ export const TOOL_ALIASES: Readonly<Record<string, PublicToolName>> = Object.fre
 
 /**
  * REQ-TOOLS-006's fourth control, the per-persona `tool_restrictions` map (REQ-CONFIG-103: a name mapped to an
- * allowed-tool list), read as OQ-141 builds it: `tool` survives only when EVERY list that binds the agent names it.
+ * allowed-tool list), read as OQ-145 builds it: `tool` survives only when EVERY list that binds the agent names it.
  * A name and its alias are one tool (REQ-TOOLS-001), and a list naming `delegate` names the two tools declaring
  * `delegate` surfaces with it (REQ-TOOLS-005). No list binding the agent leaves every tool standing. The engine's
  * write-scope refusal and the run host's narrowing both read this one predicate, so the two cannot disagree.

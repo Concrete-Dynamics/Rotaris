@@ -746,7 +746,7 @@ patterns in the `glob` tool's dialect (the one compiler, `kernel/glob.ts`). `Ite
 them before admission (an empty, absolute or root-escaping pattern is a `rejected` delegation with no record; so,
 since revision 3, is a scope for a known persona, or an alias of one, that cannot write files — `writesFiles`:
 `write_file`, `haet_edit` or `haet` surviving `coordinator_only`, `read_only` and the `tool_restrictions` lists the
-persona's own map and the delegating persona's map give its name (OQ-141) — whose reason names the catalogue's
+persona's own map and the delegating persona's map give its name (OQ-145) — whose reason names the catalogue's
 writers that caller's map lets write, `fileWriters`) and,
 once the ledger has accepted the child, records its **claim** in `WriteClaims` — in memory, in acceptance order —
 together with the child's **disclosure**: its own scope and the live scopes of the others as they
@@ -1130,7 +1130,9 @@ of §5 and none a channel: each is a request answered once.
   coordinator makes every marker write through a queue, one per workspace root (`InitializationCoordinator.marker`),
   one write at a time in the order asked, and builds each patch — a skip's, each of a run's recordings through
   `ExecuteDeps.commit`, the silent stamp — inside its turn from the file as the previous write left it; a skip
-  decides which ids it leaves out in that turn too (ADR-0064, "Fourth round" and "Fifth round", 2026-09-29).
+  decides which ids it leaves out in that turn too (ADR-0064, "Fourth round" and "Fifth round", 2026-09-29). A run of
+  a workspace no window holds any more has its recordings refused inside their turn, so a close that lands while one
+  waits still stops it (REQ-WORKSPACE-013, OQ-141; ADR-0064, "Sixth round").
   *Superseded 2026-09-29:* "the execution re-reads the section immediately before each recording: a skip answered
   while a background task ran was otherwise erased by that task's own outcome, which is the second defect ADR-0064's
   first execution found." The erasure was real; the re-read (`ExecuteDeps.reread`, now removed) did not end it,

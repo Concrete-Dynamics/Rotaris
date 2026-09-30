@@ -149,7 +149,7 @@ Invariants:
   Each removal is logged with the persona and the control (REQ-TOOLS-006) by `createToolPort`: a narrowing
   control's (`run_allow_list`, `coordinator_only`, `read_only`, `tool_restrictions`) at `info` through
   `ToolPortContext.info`, a prerequisite's (REQ-TOOLS-004's reason codes, `executor_absent` among them) at `warning`.
-  `tool_restrictions` binds by the allowed-tool lists `toolRestrictionsFor` reads (OQ-141): the entry naming the persona
+  `tool_restrictions` binds by the allowed-tool lists `toolRestrictionsFor` reads (OQ-145): the entry naming the persona
   in its own map and in the map of `ToolPortContext.parentPersona`, the persona that delegated the agent. A public tool
   and an MCP tool alike survive only when every list names it (`restrictionsAllow`); an MCP tool is taken off the
   surface before the executors and the prompt section are drawn from it, so what is printed is what is callable (REQ-MCP-062).

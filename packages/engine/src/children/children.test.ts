@@ -606,10 +606,10 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
 
     /*
      * Acceptance finding A4 (R-067): "after REQ-TOOLS-006's controls" read the first three alone while the fourth narrowed
-     * no grant. Under OQ-141 the delegating persona's `tool_restrictions` entry naming the child's persona binds the child's
+     * no grant. Under OQ-145 the delegating persona's `tool_restrictions` entry naming the child's persona binds the child's
      * grant, so it binds this refusal, and the writers the reason names are the ones this caller's map lets write.
      */
-    it("PD-TOOLS-006 revision 3 with REQ-TOOLS-006 (4) (OQ-141): the parent agent's tool_restrictions bind the refusal — a writer it restricts to reading cannot take a scope, and is not named", async () => {
+    it("PD-TOOLS-006 revision 3 with REQ-TOOLS-006 (4) (OQ-145): the parent agent's tool_restrictions bind the refusal — a writer it restricts to reading cannot take a scope, and is not named", async () => {
       const personas: PersonaResolver = {
         resolve: (name) => {
           const base = BUILT_IN_PERSONAS[name as RoleName];
@@ -632,7 +632,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(resumed).toContain('Personas that can write files: docs-writer, refactorer.');
     });
 
-    it('REQ-TOOLS-006 (4) (OQ-141): a child\'s tool port is told the persona that delegated it; the root\'s is told none', async () => {
+    it('REQ-TOOLS-006 (4) (OQ-145): a child\'s tool port is told the persona that delegated it; the root\'s is told none', async () => {
       const { sessions, contexts } = sessionsWith((persona, turn) => {
         if (persona === 'orchestrator') {
           return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'api', task: 'TASK: api', run_in_background: false } }], 'Delegating.') : answer('Done.');

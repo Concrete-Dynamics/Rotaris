@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { type BrowserWindow, screen } from 'electron';
 import { millis } from '@rotaris/kernel';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION, type NoticeAction, type NoticeSeverity } from '@rotaris/contracts';
-import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, centreWhen, chordEvent, clickAt, doubleClickAt, onStep, parseSelectors, parseSteps, pause, releaseProbe, selectWait, settleAt, targetProbe } from './host.js';
+import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, centreWhen, chordEvent, clickAt, doubleClickAt, onStep, parseSelectors, parseSteps, pause, pressCategory, releaseProbe, selectWait, settleAt, targetProbe } from './host.js';
 
 /**
  * THE SCRIPTABLE SEAMS — clicks, typed text, chords, renderer `eval`, notices, prompts, drags, OS input,
@@ -65,7 +65,8 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
     });
   }
 
-  // ROTARIS_CAPTURE_VIEW=<n>: open view n and, for Settings, click the Project category.
+  // ROTARIS_CAPTURE_VIEW=<n>: open view n and, for Settings, select the category ROTARIS_CAPTURE_SETTINGS names
+  // (Project by default). The first press still lands 200 ms after the chord; it is then verified (`pressCategory`).
   const view = Number(process.env['ROTARIS_CAPTURE_VIEW'] ?? 0);
   if (view > 0) {
     clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_VIEW_MS'] ?? 600)), async () => {
@@ -74,8 +75,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       wc.sendInputEvent({ type: 'keyUp', keyCode: String(view), modifiers: ['control'] });
       if (view === 7) {
         await pause(host, 200);
-        const rect = await wc.executeJavaScript(`(() => { const b = [...document.querySelectorAll('.nav-list__item')].find((x) => x.textContent === ${JSON.stringify(process.env['ROTARIS_CAPTURE_SETTINGS'] ?? 'Project')}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
-        if (rect) clickAt(win, rect);
+        await pressCategory(host, process.env['ROTARIS_CAPTURE_SETTINGS'] ?? 'Project', 5_000);
       }
     });
   }

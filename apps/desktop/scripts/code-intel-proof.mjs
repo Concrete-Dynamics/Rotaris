@@ -313,12 +313,12 @@ if (want(4)) {
 // Every setup launch raises one notice at the open's 800 ms slot ("No model provider is authenticated yet": the profile
 // has no provider, REQ-WORKSPACE-152), and that persistent banner, drawn above the view, moves Settings down by its own
 // height. A press whose point was read before it drew lands on whatever sat above its target. The shared seam's
-// `ROTARIS_CAPTURE_VIEW=7` reads its category's point once and presses there once, at ~800 ms, the same instant, so it was
+// `ROTARIS_CAPTURE_VIEW=7` read its category's point once and pressed there once, at ~800 ms, the same instant, so it was
 // deflected onto a category above more than once: in `setup-again` on 2026-09-29, and then in `setup-cancel`, where
 // Start had already been pressed and the card, Cancel with it, left the screen before Cancel could be pressed (the fix
-// round's verifier, three reds in seven runs; the seam's own note stays open, `docs/defects/
-// the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`). So these launches do not use that
-// seam. They open Settings with the Ctrl+7 chord, which has no point to miss, and every press waits until the notice
+// round's verifier, three reds in seven runs; the seam's own note, `docs/defects/fixed/
+// the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`, repaired 2026-09-29: the seam now presses
+// again until the category is selected). These launches still do not use that seam. They open Settings with the Ctrl+7 chord, which has no point to miss, and every press waits until the notice
 // has been drawn (`body:has([data-testid="notice"])`), so no point is read before the one shift of the launch. The
 // category press is made only if MCP Servers is not the selected category. Start is pressed as soon as it is drawn
 // enabled, which is once the setup status has arrived. `settledPresses` refuses a launch whose Start was never

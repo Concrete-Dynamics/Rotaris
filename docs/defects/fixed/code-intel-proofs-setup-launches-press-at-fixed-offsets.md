@@ -30,7 +30,7 @@ them.
 
 - `apps/desktop/scripts/code-intel-proof.mjs`: `SETUP_ENV`'s `ROTARIS_CAPTURE_CLICKS` and `setup-cancel`'s override.
 - `apps/desktop/src/main/capture/seams.ts`: the `ROTARIS_CAPTURE_VIEW=7` category press, which nine other proofs share
-  (`docs/defects/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`).
+  (`docs/defects/fixed/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`, repaired 2026-09-29 under R-067).
 - `packages/ui/src/settings/McpSettings.tsx`: `SetupCard`, where the start control is disabled until the status arrives.
 
 ## Repaired 2026-09-28 under R-062
@@ -42,7 +42,7 @@ them.
 at 3 s and at 6 s, if it is still not the selected category. The selector is
 `.nav-list__item:not(.is-selected)>>MCP Servers`, so a press that finds it selected matches nothing and presses
 nothing. The seam's own press, at about 800 ms, stays as it is; it is shared, and its note stays open
-(`docs/defects/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`). Start is pressed as soon as
+(`docs/defects/fixed/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`; repaired 2026-09-29 under R-067). Start is pressed as soon as
 `button[data-action="setup-start"]:not([disabled])` is drawn, which is once the setup status has arrived, with a 30 s
 deadline. `setup-cancel` presses Cancel as soon as it is drawn, with the same deadline. That is when the run host has
 reported `create` running, and the step's child is spawned in the same turn as that report. No assertion changed.

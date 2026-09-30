@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chordEvent, matchProbe, parseSelectors, parseSteps, selectWait, targetProbe } from './host.js';
+import { categoryProbe, chordEvent, matchProbe, parseSelectors, parseSteps, selectWait, targetProbe } from './host.js';
 
 /**
  * The capture script's grammar, which every `*-proof` script writes and which — until this module
@@ -87,5 +87,13 @@ describe('the capture script grammar (verification seams)', () => {
     expect(selectWait(fixed!)).toEqual({ selector: 'select', arg: null, at: 1800, until: false });
     // The value itself is not lost — the seam reads it from the original step.
     expect(waiting!.arg).toBe('deny');
+  });
+
+  it('reads a Settings category as its point AND whether it is the selected one, quoting the label it was given', () => {
+    const probe = categoryProbe(`it's`);
+    expect(probe).toContain(JSON.stringify(`it's`));
+    expect(probe).toContain(`.nav-list__item`);
+    // The verification half: without it a deflected press reads exactly like a landed one.
+    expect(probe).toContain(`classList.contains('is-selected')`);
   });
 });

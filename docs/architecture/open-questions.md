@@ -6818,9 +6818,14 @@ designed, each carrying the words "no model event or token", which describe a st
 **What the build proceeds under.** The watch measures the silence of the child's model steps. Once a turn ends and
 until the run starts its next — which is exactly the wait on its own children, or the end of its execution — the run
 asks the child for no output, so no silence is counted against it: an evaluation there reports no stall and no wait,
-and calls the callback with *not stalled*; a stall under way when the turn ended is reported recovered, the turn's end
+and calls the callback with *not stalled*; ~~a stall under way when the turn ended is reported recovered, the turn's end
 being read as REQ-MONITOR-120's "activity resumes" — the step the silence was counted against has answered, whether
-with its final event or by settling. The next turn
+with its final event or by settling.~~ *Corrected in place 2026-09-30, at the merge with origin/main (found by the
+verifier's review):* a turn that settles because it was cancelled, paused, timed out or failed is not activity resuming,
+and OQ-153 already reads REQ-MONITOR-120's recovery as "only when the agent was active". A stall under way when the turn
+ended is over at the first evaluation between turns, and its figure cleared; it is logged recovered only when the agent
+was active after the evaluation that last found it stalled (`StallWatch.endStall`; `stall.test.ts`, "REQ-MONITOR-120
+(OQ-154 with OQ-153): a stall under way when the turn ends is over …"). The next turn
 the run starts counts from its start, as OQ-127 already reads for REQ-NOTIFY-112's recovery. Each child it waits on has
 its own watch, which reports that child's own silence (`StallWatch.betweenTurns`; `stall.test.ts` and `children.test.ts`,
 "a child waiting on its own child between its turns is not reported stalled"). A child the run resumes into waiting

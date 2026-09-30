@@ -127,16 +127,29 @@ describe('REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch', () => {
     expect(w.stalled.map((r) => [r.silentS, r.entry])).toEqual([[12, true]]);
   });
 
-  it('a stall under way when the turn ends is reported recovered at the next evaluation', () => {
-    const w = watched(12_000);
-    w.watch.start();
-    w.clock.advance(12_000);
-    expect(w.stalled).toHaveLength(1);
-    w.watch.betweenTurns();
-    w.clock.advance(2_000);
-    expect(w.recovered()).toBe(1);
-    expect(w.watch.stalled).toBe(false);
-    expect(w.stalled).toHaveLength(1);
+  it('REQ-MONITOR-120 (OQ-154 with OQ-153): a stall under way when the turn ends is over at the next evaluation between turns; it is logged recovered only when the agent was active after it', () => {
+    // The turn ended with no activity after the stall — cancelled, paused, timed out: the stall is over, not recovered.
+    const quiet = watched(12_000);
+    quiet.watch.start();
+    quiet.clock.advance(12_000);
+    expect(quiet.stalled).toHaveLength(1);
+    quiet.watch.betweenTurns();
+    quiet.clock.advance(2_000);
+    expect([quiet.recovered(), quiet.watch.stalled, quiet.evaluated[quiet.evaluated.length - 1]]).toEqual([0, false, false]);
+    expect(quiet.stalled).toHaveLength(1);
+    quiet.watch.stop();
+    expect(quiet.recovered()).toBe(0);
+    // The step answered after the stall and the turn then ended: that is activity resuming, logged recovered once.
+    const answered = watched(12_000);
+    answered.watch.start();
+    answered.clock.advance(12_000);
+    expect(answered.stalled).toHaveLength(1);
+    answered.watch.modelEvent('text');
+    answered.watch.betweenTurns();
+    answered.clock.advance(2_000);
+    expect([answered.recovered(), answered.watch.stalled]).toEqual([1, false]);
+    answered.watch.stop();
+    expect(answered.recovered()).toBe(1);
   });
 
   it('the warning says what REQ-ORCH-089 and REQ-MONITOR-119 say', () => {

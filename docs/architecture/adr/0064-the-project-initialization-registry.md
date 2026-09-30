@@ -348,6 +348,14 @@ retryably (REQ-WORKSPACE-093). **Measured** by `workspace-proof`'s scenario 8b, 
 asked to terminate: on the build with only the sixth round, the replacement's start was refused and its check failed;
 with this round the replacement logged that it waited, its setup started 2 ms after the outgoing one was cancelled, its
 outcome was recorded, and all 39 checks passed (as root under Xvfb on Linux, Node 24, `--skip-build` after one
-`pnpm build`). **Not shown:** a setup the MCP settings category starts beside a background run, which is not one of the
+`pnpm build`). **Found by the round's verification, and repaired in it:** the one-at-a-time order lets the next run's
+setup start as soon as the setup before it has ended, while the run that owned that setup is still recording its outcome
+(a marker write can take up to its 30 s timeout). The follow's abort listener outlived the follow, and the run host's
+cancel is not a workspace's but its one setup's, so a `close` — or a Cancel — landing on the earlier run in that interval
+cancelled the **next** workspace's setup, against REQ-WORKSPACE-013's "independently of the outgoing one" and
+REQ-WORKSPACE-084/109. Reachable by PD-SHELL-001's two windows, or by a switch whose outgoing close lands after the
+replacement's 800 ms resolution. The follow now removes its abort listener when its setup finishes, so a run's abort
+reaches the run host only while that run's own setup is live; two cases in `initialization.test.ts` ("leaves the next
+workspace's setup running when …", on a close and on a Cancel) fail without it. **Not shown:** a setup the MCP settings category starts beside a background run, which is not one of the
 coordinator's and is still refused (`../../defects/a-refused-setup-start-is-reported-as-not-a-local-launch.md`); the
 Windows orders.

@@ -217,11 +217,16 @@ export class InitializationCoordinator {
         if (status.state !== 'finished') return;
         // Only this follow's own sink is cleared: another may have been installed since (see `setupTurn`).
         if (this.setupListener === drain) this.setupListener = null;
+        // Nor may this run's abort reach the run host once its setup has ended. The run host's cancel is not a workspace's
+        // but its one setup's, and `setupTurn` lets the next run's setup start while this run is still recording its
+        // outcome — so a close or a Cancel landing in that interval cancelled the next workspace's setup
+        // (ADR-0064's seventh round).
+        signal.removeEventListener('abort', onAbort);
         resolve(this.resultOf(status));
       };
-      this.setupListener = drain;
       // REQ-WORKSPACE-092: the run host ends what the setup launched. A cancel that cannot be delivered is said, not dropped.
       const onAbort = (): void => { this.deps.setup.cancel().catch((cause: unknown) => this.deps.log(`initialization: the setup's cancellation could not be delivered (${String(cause)})`, 'warn')); };
+      this.setupListener = drain;
       signal.addEventListener('abort', onAbort, { once: true });
       drain(first);
     });

@@ -43,13 +43,21 @@ returns at once (REQ-WORKSPACE-013); the task waits inside the run, and logs tha
 waits starts nothing and fails as REQ-WORKSPACE-093 says, retryably, with the summary "Code intelligence setup did not
 complete for this project. …" and the error "Code intelligence could not complete this project's setup: the setup was
 cancelled before it started." (`CANCELLED_BEFORE_SETUP_ERROR`); the turn passes on only once the setup before it has
-ended as well.
+ended as well. (3) Found by the verification of this repair: the one-at-a-time order lets the next run's setup start
+while the run before it is still recording its outcome, and that run's abort listener outlived its follow. The run
+host's cancel is its one setup's, not a workspace's, so a close (PD-SHELL-001's second window, or a switch whose
+outgoing close lands after the replacement's resolution) or a Cancel of the earlier run in that interval cancelled the
+next workspace's setup. `followSetup` now removes its abort listener once its setup has finished, so a run's abort
+reaches the run host only while its own setup is live.
 
 Pinned by three cases under "one setup at a time across a workspace switch" in `initialization.test.ts`, which fail on
 the coordinator before this repair; mutating the repair back one part at a time — the unconditional clear in `finally`,
-no wait for the turn, a turn released before the setup ahead of it ended — fails at least one of them each time. Shown
+no wait for the turn, a turn released before the setup ahead of it ended — fails at least one of them each time; and
+by two cases, "leaves the next workspace's setup running when a workspace whose setup has ended is closed while its run
+still records" and "… when the user cancels a run whose setup has ended while it still records", which fail (one
+cancellation sent to the run host, where none is owed) without part (3). Shown
 in the built app by `workspace-proof`'s scenario 8b, whose stand-in runtime now takes 2 s to end once asked to
 terminate, so the outgoing setup is still ending when the replacement resolves: on the build with only the switch-time
 cancellation, the replacement's start was refused and reported as "not a local launch" and its check failed; with this
-repair the replacement's task logged that it waited, its setup started 2 ms after the outgoing one ended, and its outcome
+repair the replacement's task logged that it waited, its setup started 2 ms after the outgoing one was cancelled, and its outcome
 was recorded; all 39 checks passed (as root under Xvfb, Node 24, `--skip-build` after one `pnpm build`).

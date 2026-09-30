@@ -681,6 +681,64 @@ describe('one setup at a time across a workspace switch', () => {
     expect(h.published.at(-1)?.view.running).toBe(false);
   });
 
+  it('leaves the next workspace\'s setup running when a workspace whose setup has ended is closed while its run still records (REQ-WORKSPACE-013, REQ-WORKSPACE-109, REQ-WORKSPACE-084)', async () => {
+    // The first workspace's setup has finished and its run is recording (held here); the second workspace's setup has
+    // started behind it. Closing the first workspace then cancels its run, whose own setup is over: the run host's one
+    // setup is the second workspace's, and it must not be asked to cancel.
+    let starts = 0;
+    let cancels = 0;
+    const writeHold: StatusHold = { current: null };
+    const h = harness({ writeHold, onStart: () => { starts += 1; }, onCancel: () => { cancels += 1; } });
+    await h.coordinator.resolve(true);
+    await settle();
+    let release: () => void = () => undefined;
+    writeHold.current = new Promise<void>((r) => { release = r; });
+    h.push(completedSetup());
+    await settle();
+    writeHold.current = null;
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents);
+    await h.coordinator.resolve(true);
+    await settle();
+    expect(starts).toBe(2);
+    h.coordinator.close(h.root);
+    release();
+    await settle();
+    expect(cancels).toBe(0);
+    // The second workspace's setup is still its own, and reaches its recorded outcome with no banner.
+    h.push(completedSetup());
+    await settle();
+    expect(readInitializationState(other.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    expect(h.banners).toEqual([]);
+  });
+
+  it('leaves the next workspace\'s setup running when the user cancels a run whose setup has ended while it still records (REQ-WORKSPACE-109, REQ-WORKSPACE-084)', async () => {
+    let cancels = 0;
+    const writeHold: StatusHold = { current: null };
+    const h = harness({ writeHold, onCancel: () => { cancels += 1; } });
+    await h.coordinator.resolve(true);
+    await settle();
+    let release: () => void = () => undefined;
+    writeHold.current = new Promise<void>((r) => { release = r; });
+    h.push(completedSetup());
+    await settle();
+    writeHold.current = null;
+    // A second window's workspace starts its setup; the first window's Cancel is then pressed (the surfaces ask about
+    // the workspace most recently opened, so the first is made current again to press it).
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents);
+    await h.coordinator.resolve(true);
+    await settle();
+    h.coordinator.open(h.root, h.agents);
+    await h.coordinator.cancel();
+    release();
+    await settle();
+    expect(cancels).toBe(0);
+    h.push(completedSetup());
+    await settle();
+    expect(readInitializationState(other.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+  });
+
   it('ends a run cancelled while its setup waits for another as a retryable failure, starting nothing, and keeps the order for the next (REQ-WORKSPACE-109, REQ-WORKSPACE-093)', async () => {
     let starts = 0;
     const h = harness({ onStart: () => { starts += 1; } });

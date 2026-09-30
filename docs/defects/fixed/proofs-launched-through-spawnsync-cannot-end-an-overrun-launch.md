@@ -103,11 +103,11 @@ the same host; no other Electron was running at the first launch, and the load a
 - With the bounds as written, these proofs exited 0: `part-h-proof`, `part-j-proof`, `overview-proof`, `config-proof`,
   `traceability-proof`, `terminal-proof` (116 of 116) and `updater-proof`, whose new check passed with exit 0 in
   10.6 s. `sessions-proof` exited 1 at its schema check, after every launch before it had returned. That red is
-  [`sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md`](../sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md),
+  [`sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md`](sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md),
   recorded before this change.
 
 **Not measured:** the other twenty-six moved scripts were syntax-checked (`node --check`) and scanned, not run. The
 package proof and the packaged terminal launch need a Windows build (IC-3). The SIGKILL step against the real
 application was never needed; it is pinned against a child that ignores SIGTERM in `bounded-launch.test.ts`. While
 moving the packaged launch, a separate defect in its checks was noticed and recorded:
-[`the-packaged-terminal-streaming-checks-throw-on-a-launch-that-found-no-store.md`](../the-packaged-terminal-streaming-checks-throw-on-a-launch-that-found-no-store.md).
+[`the-packaged-terminal-streaming-checks-throw-on-a-launch-that-found-no-store.md`](the-packaged-terminal-streaming-checks-throw-on-a-launch-that-found-no-store.md).

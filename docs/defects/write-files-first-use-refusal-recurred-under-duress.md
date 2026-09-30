@@ -41,7 +41,7 @@ That was not enough. `pnpm live-run --confirm --only=frictions` (pack `.live-run
 frictions had passed it too, so frictions does not tell the two apart. `--only=duress` (pack
 `.live-run/runs/2026-09-30T03-33-01-241Z`) is where the defect was seen. That run was swept by a concurrent live run
 before it could print a check
-([`a-live-run-sweeps-a-concurrent-live-runs-sandbox.md`](a-live-run-sweeps-a-concurrent-live-runs-sandbox.md)). Its
+([`a-live-run-sweeps-a-concurrent-live-runs-sandbox.md`](fixed/a-live-run-sweeps-a-concurrent-live-runs-sandbox.md)). Its
 `model-traffic.jsonl` held every call, though. 179 requests carried the new description. There were five `write_file`
 calls from four children, and three first uses succeeded (`docs/api.md`, `docs/overview.md`, `docs/decisions.md`).
 Child `b`'s first call, for `test/extra.test.js`, again sent only `path` and `content`. It was refused, and `b` resent

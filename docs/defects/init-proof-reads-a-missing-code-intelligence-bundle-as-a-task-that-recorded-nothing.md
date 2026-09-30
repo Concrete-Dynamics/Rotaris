@@ -10,8 +10,8 @@ task recorded nothing", which names neither the bundle nor the failure. It build
 
 Measured 2026-09-30 on a fresh worktree (`fix-accept1-4`), as root under Xvfb, Node 24, `--skip-build`. Two runs went red
 in scenario 1 that way. After `pnpm code-intel:bundle` (about 10 s from its cache), the next run passed all five
-scenarios. `chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md` is a neighbour: a proof
-that meets the same failed setup and misreads it.
+scenarios. [`chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`](fixed/chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md)
+is a neighbour: a proof that meets the same failed setup and misreads it (repaired since, in `fixed/`).
 
 ## Specs
 

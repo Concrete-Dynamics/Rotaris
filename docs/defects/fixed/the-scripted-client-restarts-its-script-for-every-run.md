@@ -43,5 +43,5 @@ Pinned by:
 The neighbours whose launches continue or reopen a session, run against the same build as root under Xvfb:
 `checkpoint-proof`, `mission-proof`, `part-h-proof`, `questions-proof`, `resilience-proof` (no failure listed),
 `transcript-proof` and `plan-gate-proof` pass. `chat-controls-proof` stops at its first launch, on the open
-[`chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`](../chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md).
+[`chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`](chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md).
 It stops at the same assertion on the old client too, before any continue.

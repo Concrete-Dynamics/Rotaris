@@ -132,7 +132,8 @@ export class McpHost {
   /** ONE sink: the scope rules, then the log and — for a user-bound warning — REQ-MCP-044's two channels. */
   deliver(d: Diagnostic, ctx: McpSessionContext | null = null): boolean {
     if (!this.sink.admit(d, ctx?.sessionId ?? '')) return false;
-    this.deps.log(`mcp: ${d.message}`, d.severity === 'info' ? 'info' : 'warn');
+    // A `debug` diagnostic is written at `debug` (REQ-MCP-059, PD-MONITOR-002; A41); it had been folded into `warn`.
+    this.deps.log(`mcp: ${d.message}`, d.severity === 'debug' ? 'debug' : d.severity === 'info' ? 'info' : 'warn');
     if (d.channels === 'user' && d.severity === 'warning') {
       this.deps.acknowledge({ kind: 'warn', title: d.message });
       ctx?.writer?.recordIssue({ kind: 'mcp_config', severity: 'warning', actor: 'orchestrator', message: d.message, metadata: { ...(d.server === undefined ? {} : { server: d.server }), ...(d.persona === undefined ? {} : { persona: d.persona }) } });

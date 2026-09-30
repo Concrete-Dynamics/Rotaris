@@ -58,4 +58,4 @@ Live, `pnpm live-run --confirm --only=edit` on this branch passed twice, against
   `surface for coding-agent` line.
 
 Noticed on the way, not changed here: REQ-MCP-059 calls the grant count a debug line, and it is written at `info`.
-Recorded as [`the-mcp-grant-count-is-logged-at-info-not-debug.md`](../the-mcp-grant-count-is-logged-at-info-not-debug.md).
+Recorded as [`the-mcp-grant-count-is-logged-at-info-not-debug.md`](the-mcp-grant-count-is-logged-at-info-not-debug.md).

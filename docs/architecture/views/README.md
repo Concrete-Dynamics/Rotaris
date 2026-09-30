@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**The update shape answers `extend` (REQ-CHAT-053, R-067).** `updateShape` in `ui/transcript/pool.ts` reads the
+content of one row besides the keys — the last row before the update — so an extension of that row with rows appended
+after it is `extend` rather than `append`; the first form's `extend` branch could not be reached. The pane still records
+the shape on the element and branches on nothing. This repairs `the-update-shape-never-answers-extend.md`. The **runtime
+view**'s step-5 row says so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A row not yet measured is not positioned short of what it draws, and a row on screen is measured (PD-CHAT-003, R-067).**
 `estimateHeight` in `ui/transcript/pool.ts` builds the estimate from the parts of the row's box the stylesheet draws —
 the row or block gap (`readHeight` hands it `places[at].blockStart`), the border, a user row's padding, a Markdown body's

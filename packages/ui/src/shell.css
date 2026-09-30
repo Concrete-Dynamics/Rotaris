@@ -816,6 +816,10 @@
 .agent-row__persona { font-weight: var(--rt-weight-medium, 500); }
 .agent-row__task { color: var(--rt-text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agent-row__meta { font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); white-space: nowrap; }
+/* REQ-ORCH-089's stalled badge (the repair of a-stalled-child-is-never-shown-stalled): the design system's `tag-wait`, as the
+   mockup's agents panel qualifies a waiting row ("waiting · approval") — the run is still waiting on the agent — sized to
+   the meta line it closes; it animates nothing, as REQ-CHAT-164's stalled indicator does not. */
+.agent-row__stalled { font-size: var(--rt-text-2xs); }
 @media (prefers-reduced-motion: reduce) { .agent-row__dot--running { animation: none; } }
 
 /* Part AD — REQ-CHAT-085..091: the editable task-plan strip in the workspace sidebar. */

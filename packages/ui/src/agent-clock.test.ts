@@ -17,12 +17,12 @@ import { PersonaWindow } from './PersonaWindow.js';
 const agent = (over: Partial<AgentRecord>): AgentRecord => ({
   id: 'bg_00000001', name: 'helper', givenName: 'Helper', persona: 'coding-agent', state: 'waiting_on_dependencies', presentationState: 'waiting', parentId: 'root:1', dependencies: [], activity: 'do the thing', model: 'scripted/alpha',
   depth: 1, background: true, category: '', spawnedAt: '2026-09-05T10:00:00.000Z', completedAt: null, toolCalls: 2, delegationTask: 'do the thing', reasoning: 'medium', contextUsed: 1000, contextLimit: DEFAULT_CONTEXT_CAPACITY,
-  grantedTools: ['read_file'], calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: false, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, ...over,
+  grantedTools: ['read_file'], calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: false, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null, ...over,
 });
 const session = (agents: AgentRecord[]): SessionRecord => ({
   id: 's1', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-09-05T10:00:10.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents, pendingApprovals: [], pendingQuestions: [],
   tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: null, runType: 'task_run', improvementArtifactIds: [], runStartedAt: '2026-09-05T10:00:00.000Z', iterationsCompleted: 0, summary: null, permissionMode: 'ask', sandboxed: false, backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
-  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 0, agents: 0, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [],
+  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 0, agents: 0, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryStalledSeconds: null,
 });
 const NOW = '2026-09-05T10:01:03.000Z';
 const LATER = '2026-09-05T10:01:04.000Z';
@@ -88,5 +88,29 @@ describe('REQ-MONITOR-111 (resolution item 25): a waiting or queued agent holdin
     expect(contextLine(persona(paused, NOW))).toBe('2 tool calls · -');
     // `live` is untouched: the waiting row is not drawn live, so it does not pulse (REQ-MONITOR-045/046).
     expect(tree(waiting, NOW)).not.toContain('is-live');
+  });
+});
+
+describe('REQ-ORCH-089 / REQ-MONITOR-119/120, the repair of a-stalled-child-is-never-shown-stalled: a stalled agent is drawn stalled on every agent surface, with the watch\'s figure', () => {
+  const running = agent({ state: 'running', presentationState: 'running', live: true });
+  const stalled = (s: number) => agent({ state: 'running', presentationState: 'running', live: true, stalledSeconds: s });
+  const badge = (html: string) => text(html).match(/data-testid="agent-stalled">([^<]*)</)?.[1] ?? null;
+
+  it('the tree, the Mission table and the persona window draw the badge with the figure the record carries, and it advances with the record, not the clock', () => {
+    expect(badge(tree(stalled(95), NOW))).toBe('stalled\u00a095s');
+    expect(text(tree(stalled(95), NOW))).toMatch(/class="agent-row__meta mono">running · 1m 3s <span class="[^"]*\btag-wait\b[^"]*"[^>]*data-testid="agent-stalled">stalled\u00a095s<\/span><\/span>/);
+    expect(badge(tree(stalled(95), LATER))).toBe('stalled\u00a095s');
+    expect(badge(tree(stalled(100), LATER))).toBe('stalled\u00a0100s');
+    expect(badge(table(stalled(90), NOW))).toBe('stalled\u00a090s');
+    expect(badge(persona(stalled(90), NOW))).toBe('stalled\u00a090s');
+  });
+
+  it('the inspector\'s meta line ends with it, for a child and for the run-level agent alike', () => {
+    expect(inspectorMeta(inspector(stalled(90), NOW))).toBe('running · 1m 3s · 2 tool calls · stalled\u00a090s');
+  });
+
+  it('a recovered agent (null) draws nothing on any surface', () => {
+    for (const html of [tree(running, NOW), table(running, NOW), persona(running, NOW), inspector(running, NOW)]) expect(badge(html)).toBeNull();
+    expect(inspectorMeta(inspector(running, NOW))).toBe('running · 1m 3s · 2 tool calls');
   });
 });

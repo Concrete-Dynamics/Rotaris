@@ -1669,7 +1669,16 @@ if (wanted.includes('faults')) {
      */
     const HOLD_MS = Number(process.env['LIVE_RUN_STALL_HOLD_MS'] ?? 300_000);
     proxy.setFaults([{ kind: 'stall', at: 2, afterChunks: 2, holdMs: HOLD_MS }]);
+    /*
+     * A third photograph between the entry agent's stall threshold (90 s of silence) and the product's idle bound (120 s),
+     * so the pack shows what a surface drew while the root was stalled — the inspector follows it, and its meta line ends
+     * with the watch's figure (REQ-ORCH-089, OQ-153). The other two are `launch`'s own fifth and three fifths.
+     */
+    const stallDir = scenarioDir('faults-stall');
+    const stallShots = [['early', Math.round(RUN_WAIT_MS * 0.2)], ['stalled', 115_000], ['mid', Math.round(RUN_WAIT_MS * 0.6)]]
+      .map(([tag, at]) => `${join(stallDir, `faults-stall.${tag}.png`)}@${at}`).join(';;');
     const stalled = await launch('faults-stall', {
+      ROTARIS_CAPTURE_PNG_AT: stallShots,
       ROTARIS_CAPTURE_PROMPT: PROMPT,
       ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
     }, RUN_WAIT_MS + 120_000);
@@ -1698,6 +1707,14 @@ if (wanted.includes('faults')) {
       // The eighty-second defect's signature: nobody pressed stop, so nothing may say the user cancelled.
       check(stallRead.session.stop_reason !== 'user_cancelled', 'a stalled stream is not reported as a user cancellation', `stop_reason ${stallRead.session.stop_reason} (${stallRead.session.execution_status})`);
       if (noticed.length > 0) check(noticed.every((issue) => issue.kind !== 'fatal_llm_error'), 'the stalled stream was classified transient, not fatal', noticed.map((issue) => issue.kind).join(', '));
+      /*
+       * REQ-MONITOR-117/119 (the repair of `a-stalled-child-is-never-shown-stalled.md`): the stalled call is the entry
+       * agent's, and "each agent is evaluated for a stall". Its watch's threshold (90 s by default) falls inside the product's
+       * idle bound (120 s), so before the call is given up on the watch must have written REQ-MONITOR-119's `stall` issue for
+       * the root, in its own words. Until 2026-09-30 the root had no watch, and nothing was written until the bound fired.
+       */
+      const rootStall = issues.filter((issue) => issue.kind === 'stall' && /^agent appears stalled: no model event or token for \d+ seconds/.test(String(issue.message ?? '')));
+      check(rootStall.length > 0, 'the entry agent\'s stall watch reported the stalled stream before the idle bound (REQ-MONITOR-117/119)', rootStall.length > 0 ? `${rootStall.length} \`stall\` issue(s) for ${rootStall[0].actor ?? '?'}; first: ${String(rootStall[0].message).slice(0, 120)}` : `no \`stall\` issue among ${issues.length}`);
       noted('what the stalled run settled as', `${stallRead.session.execution_status} / ${stallRead.session.stop_reason} after ${stallRead.session.iterations_completed} iteration(s)`);
       preserveRun('faults-stall', stallRead.session.session_id);
       results.scenarios['faults-stall'] = { fired: stallFired, holdMs: HOLD_MS, status: stallRead.session.execution_status, stopReason: stallRead.session.stop_reason, issues: issues.map((issue) => ({ kind: issue.kind, severity: issue.severity, message: issue.message })) };

@@ -211,6 +211,47 @@ if (read.standIn === true) throw new Error('the withdrawn stand-in sentence is s
 results.settingsSurface = { disclosure: expected === 'outside' ? 'present with sandbox_mode at its off default' : 'absent: this platform has a mechanism', controls: read.controls };
 
 /*
+ * 2b. REQ-SANDBOX-130 on its second surface, the per-session launch dialog, with the same fact as the settings surface
+ *     and on the same condition: drawn only where no mechanism exists at all. Where a mechanism exists but is not
+ *     usable (launcher missing, trial failed) the dialog carries that mechanism's own reason and remediation instead
+ *     (REQ-SANDBOX-119), and where it is available, neither. The dialog drew the disclosure whenever confinement was
+ *     not available until 2026-09-29 (`docs/defects/fixed/
+ *     the-launch-dialog-draws-the-no-mechanism-disclosure-where-a-mechanism-exists.md`). The select's disabled state
+ *     is read too: it says the verdict had arrived when the dialog was read, so an absent text is not a verdict not yet
+ *     taken.
+ */
+const READ_DIALOG = `({
+  disclosure: document.querySelector('[data-testid="start-session-disclosure"]')?.textContent ?? '',
+  reason: document.querySelector('[data-testid="start-session-sandbox-reason"]')?.textContent ?? '',
+  disabled: document.querySelector('[data-testid="start-session-sandbox"]')?.disabled ?? null
+})`.replace(/\n\s*/g, ' ');
+const log2b = await launch('dialog', s1, {
+  ROTARIS_CAPTURE_CLICKS: '.btn>>New session@~6000',
+  ROTARIS_CAPTURE_EVAL_AT: `${READ_DIALOG}>>[data-testid="start-session-dialog"]@~9000`,
+  ROTARIS_CAPTURE_AFTER_MS: '10000',
+});
+const dialogLine = log2b.split('\n').find((line) => line.includes('capture: eval-at') && line.includes('disclosure')) ?? '';
+if (dialogLine === '') throw new Error(`the launch dialog was not read (did it open?):\n${log2b}`);
+const dialogRead = JSON.parse(dialogLine.slice(dialogLine.indexOf('→') + 1).trim());
+if (expected === 'outside') {
+  if (!String(dialogRead.disclosure).includes('This host cannot confine anything')) throw new Error("the launch dialog does not carry REQ-SANDBOX-130's disclosure");
+  if (dialogRead.disclosure !== read.disclosure) throw new Error('the two surfaces carry different disclosures (REQ-SANDBOX-130: the same fact on both)');
+} else if (dialogRead.disclosure !== '') {
+  throw new Error(`the launch dialog drew REQ-SANDBOX-130's no-mechanism disclosure on ${process.platform}, which has one (the settings surface drew none):\n${dialogRead.disclosure}`);
+}
+if (expected === 'available') {
+  if (dialogRead.disabled !== false) throw new Error(`the launch dialog's sandbox control is not enabled on a host whose confinement is available (disabled: ${dialogRead.disabled})`);
+  if (dialogRead.reason !== '') throw new Error(`the launch dialog carried an unavailability reason on a host whose confinement is available:\n${dialogRead.reason}`);
+} else {
+  if (dialogRead.disabled !== true) throw new Error(`the launch dialog's sandbox control is not disabled on a host that cannot confine (disabled: ${dialogRead.disabled})`);
+  // REQ-SANDBOX-119 and REQ-SANDBOX-071: the same reason and remediation scenario 1 read, visible without hovering.
+  for (const literal of literalsFor(expected)) {
+    if (!String(dialogRead.reason).includes(literal)) throw new Error(`the launch dialog's reason did not carry the ${expected} verdict's '${literal}' (REQ-SANDBOX-119):\n${dialogRead.reason}`);
+  }
+}
+results.launchDialog = { disclosure: dialogRead.disclosure === '' ? 'absent' : 'present', reason: dialogRead.reason, controlDisabled: dialogRead.disabled };
+
+/*
  * 3. REQ-SANDBOX-095, -097, -126: a workspace whose configuration demands confinement this host cannot
  *    deliver does NOT start. No session, no session lock, no snapshot; the refusal carries the reason
  *    and the remediation; nothing ran unconfined. On a host that CAN deliver it the same workspace

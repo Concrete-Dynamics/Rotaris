@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { confinementMessage, hostPatternProblem, NO_CONFINEMENT_DISCLOSURE, SANDBOX_MODE_NAMES, writableRootProblem, type ConfinementVerdict } from '@rotaris/contracts';
+import { confinementMessage, hostPatternProblem, NO_CONFINEMENT_DISCLOSURE, owesNoConfinementDisclosure, SANDBOX_MODE_NAMES, writableRootProblem, type ConfinementVerdict } from '@rotaris/contracts';
 import type { PendingChange, PendingSettings } from './config-state.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Select as DesignSelect } from '../design-system/index.js';
 import { Confirm } from './ConfigSettings.js';
@@ -119,7 +119,7 @@ export function SecurityPolicy({ runtime, onChange, confinement, onRecheck, dirt
         * confinement, and a user who never asks is precisely the user who does not know to. It is
         * text and leans on neither colour nor a disabled control (REQ-SHELL-149).
         */}
-      {confinement !== null && confinement.backend === 'unavailable' && (
+      {owesNoConfinementDisclosure(confinement) && (
         <p className="text-secondary settings__disclosure" data-testid="confinement-disclosure">{NO_CONFINEMENT_DISCLOSURE}</p>
       )}
       <div className="settings__action">

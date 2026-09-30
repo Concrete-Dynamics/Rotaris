@@ -6686,7 +6686,7 @@ dedicated value. A poll made after the `C-c` but before any next call still read
 the stream says the line is done; that is recorded as a defect, not this question
 ([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).
 
-**OQ-151 — Does a child that ends where no run's lifecycle hooks are live fire `child_completed`, and when?**
+**OQ-152 — Does a child that ends where no run's lifecycle hooks are live fire `child_completed`, and when?**
 *(REQ-HOOKS-003, "`child_completed` once a delegated child agent has finished, whatever its final state"; REQ-HOOKS-076,
 whose order is `session_start`, `child_completed`, …, `session_end` "matching where each occurs"; REQ-HOOKS-080, which runs
 lifecycle hooks in line with the run loop; `PD-ORCH-005` clauses 3 and 16. Raised 2026-09-30 by the repair of acceptance

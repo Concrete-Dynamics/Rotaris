@@ -1036,7 +1036,7 @@ export class Run {
    * `only` names the one iteration the caller may close. False when none is open, or the open one is not that one.
    * `completed`: each agent it cancels fires `child_completed` (REQ-HOOKS-003), in line, before the iteration closes — the
    * decline's close, which runs after this run's `session_start`. The explicit cancel's close after the run's
-   * `session_end` fires none (OQ-151).
+   * `session_end` fires none (OQ-152).
    */
   private async closeOpenIteration(summary: (open: IterationRow) => string, agentReport: (c: ChildRow) => string, only?: number | null, completed = false): Promise<boolean> {
     const dal = this.deps.dal;

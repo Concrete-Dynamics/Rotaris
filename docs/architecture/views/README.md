@@ -62,6 +62,12 @@ its seam stays up until `will-quit`; `capture/probe.ts` ends a capture whose wai
 view**'s application's-end paragraph, say so. No package, edge, process, message kind, channel, command or store column
 changed.
 
+**Every proof launch is bounded (R-067).** `package.mjs` launches the packaged application through
+`scripts/lib/bounded-launch.mjs`'s `spawnBounded`, as every launch a proof script starts itself now does (but for the two
+`scripts/lib/launch-sites.test.ts` names with their reasons), so the **component view**'s paragraph
+on the modules `package.mjs` shares names that one too. No edge moves: a script reaching a script module under
+`apps/desktop/scripts/`, outside the boundary rule. This repairs `proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`.
+
 **The run-start mode hint says what `plan` does and states a session's release (REQ-ORCH-152, REQ-CONFIG-320,
 PD-ORCH-003, R-067).** The Settings Runtime category's hint no longer says the plan gate is not built: `runStartModeHint`
 (`ui/settings/ConfigSettings.tsx`) says what `plan` does and, when the followed session's `SessionRecord.planReleased` is

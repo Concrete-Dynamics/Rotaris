@@ -24,7 +24,8 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
@@ -80,17 +81,15 @@ function saveConfiguration(runtime) {
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), lines.join('\n'));
 }
 
-/** The launch is ASYNCHRONOUS: this process serves the HTTP routes while Electron runs, so a synchronous wait would starve them (the proof's own first finding). */
+/**
+ * The launch is ASYNCHRONOUS: this process serves the HTTP routes while Electron runs, so a synchronous wait would starve
+ * them (the proof's own first finding). It is `spawnBounded`'s since 2026-09-30: its own bound was a bare `child.kill()`
+ * at 150 s — SIGTERM, no SIGKILL, no overrun flag — and the application answers SIGTERM with `quit: exiting with status
+ * 0`, so an overrun passed `launch`'s status check as a clean exit and failed later, misattributed, at the store
+ * (`docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`).
+ */
 function spawnElectron(env) {
-  return new Promise((resolveLaunch) => {
-    const child = spawn(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], { cwd: app, windowsHide: true, env, stdio: ['ignore', 'pipe', 'pipe'] });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.setEncoding('utf8'); child.stdout.on('data', (d) => { stdout += d; });
-    child.stderr.setEncoding('utf8'); child.stderr.on('data', (d) => { stderr += d; });
-    const killer = setTimeout(() => { child.kill(); }, 150_000);
-    child.on('close', (status, signal) => { clearTimeout(killer); resolveLaunch({ status, signal, stdout, stderr }); });
-  });
+  return spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], { timeoutMs: 150_000, cwd: app, env });
 }
 
 async function launch(name, url, runtime) {
@@ -107,6 +106,7 @@ async function launch(name, url, runtime) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(overrunMessage(name, result, log));
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}`);
   const db = new Database(oneDatabase(local), { readonly: true });
   const session = db.prepare('SELECT session_id, execution_status, stop_reason FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();

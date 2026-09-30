@@ -34,6 +34,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -65,10 +66,10 @@ const PROBES = [
   '.app-shell',
 ];
 
-function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
+async function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_VIEW: '2', ROTARIS_CAPTURE_VIEW_MS: '1500', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -77,6 +78,7 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000)
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}\n${log.split('\n').slice(-40).join('\n')}`);
   const probes = {};
   for (const line of log.split('\n')) {
@@ -153,7 +155,7 @@ const draftKeys = (document) => Object.keys(document).filter((k) => DRAFT_KEY.te
 const results = {};
 
 // ── 1. The draft written, the divider dragged, the window closed by the user (REQ-CHAT-014/015, REQ-SHELL-159) ──
-const draftRun = launch('draft', workspaceA, local, preferences, {
+const draftRun = await launch('draft', workspaceA, local, preferences, {
   ROTARIS_CAPTURE_EVAL_AT: `${setComposer(DRAFT)}@2500;;${readComposer}@3200`,
   // REQ-CHAT-010: the divider is a real control — clicked to focus it, then three ArrowUp presses of 10 px each.
   ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-divider"]@3600',
@@ -185,7 +187,7 @@ expect(match(draftRun, '[data-testid="run-state"]', 4300)?.text === 'Ready', 'th
 results.draft = { typedBack: DRAFT.length, storedUnderKey: keyA, characterForCharacter: true, dividerStored: draggedTo.sizes, runStateBeforeAnyRun: 'Ready', durationBeforeAnyRun: '' };
 
 // ── 2. The relaunch: the draft and the divider come back; the chips are enabled and state no reason ──
-const back = launch('relaunch', workspaceA, local, preferences, {
+const back = await launch('relaunch', workspaceA, local, preferences, {
   ROTARIS_CAPTURE_EVAL_AT: `${readComposer}@3200`,
   ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="composer-divider"]@3400;;[data-testid="chip-model"] [data-ui-component="SearchableSelect"]@3400;;[data-testid="chip-reasoning"] [aria-haspopup="menu"]@3400;;[data-testid="chip-persona"] [data-ui-component="SearchableSelect"]@3400;;[data-testid="chip-mode-label"]@3400;;[data-testid="composer-send"]@3400;;[data-testid="composer-strip"]@3400;;[data-testid="composer-dock"]@3400',
   ROTARIS_CAPTURE_AFTER_MS: '3800',
@@ -217,7 +219,7 @@ expect(dock !== null, 'the composer dock is not on screen');
 results.relaunch = { draftRestored: true, dividerRestored: 180, chipsEnabled: true, modeLabel, primaryAction: primary?.text, sendName: primary?.attrs['aria-label'], stripOnScreen: true, dockOnScreen: true };
 
 // ── 3. Another workspace, same preference root: the draft does not follow (REQ-CHAT-015) ──
-const other = launch('other-workspace', workspaceB, local, preferences, {
+const other = await launch('other-workspace', workspaceB, local, preferences, {
   ROTARIS_CAPTURE_EVAL_AT: `${readComposer}@3200`,
   ROTARIS_CAPTURE_AFTER_MS: '3600',
 });
@@ -231,7 +233,7 @@ results.otherWorkspace = { composer: '', otherDraftIntact: true, keys: draftKeys
 
 // ── 4. A run: the labels, the timing, the disabled chips and their reasons, the queue, and the cancelling refusal ──
 const RUN_WAIT_MS = 16_000;
-const run = launch('run', workspaceA, local, preferences, {
+const run = await launch('run', workspaceA, local, preferences, {
   ROTARIS_SCRIPT: `wait:${RUN_WAIT_MS},answer`,
   ROTARIS_CAPTURE_PROMPT: 'Exercise the composer.',
   ROTARIS_CAPTURE_PROMPT_MS: '2500',
@@ -314,7 +316,7 @@ results.run = {
 };
 
 // ── 5. REQ-CHAT-016: the history walk over a typed draft ──
-const history = launch('history', workspaceA, local, preferences, {
+const history = await launch('history', workspaceA, local, preferences, {
   // Part X's seam pushes through the REAL `prompts.push` command, so the store and its ordering are exercised.
   ROTARIS_CAPTURE_PROMPTS: 'history>>oldest entry@2200;;history>>middle entry@2400;;history>>newest entry@2600',
   ROTARIS_CAPTURE_EVAL_AT: [
@@ -338,7 +340,7 @@ results.history = { walk: walked, entriesPushed: 3 };
 // ── 6. REQ-CHAT-009 / REQ-CHAT-155: the autonomous confirmation, declined by a reflex Return ──
 // PD-CHAT-001: the presets live in the mode chip's popover now — open it, then choose autonomous from the menu.
 const configBefore = readFileSync(join(workspaceA, '.rotaris', 'agents.yaml'), 'utf8');
-const autonomous = launch('autonomous', workspaceA, local, preferences, {
+const autonomous = await launch('autonomous', workspaceA, local, preferences, {
   ROTARIS_CAPTURE_CLICKS: '[data-testid="chip-mode"] [aria-haspopup="menu"]@3000;;.chip-menu__panel [role="menuitemradio"]:nth-child(3)@3200',
   ROTARIS_CAPTURE_INSPECT_AT: '.dialog-actions .btn-secondary@3600;;.dialog@3600;;.dialog@4600;;[data-testid="chip-mode-label"]@4600',
   // The reflex confirm: an empty type step is a bare Return (down, char, up) into whatever holds focus — which is

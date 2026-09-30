@@ -28,7 +28,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { cleanEnvironment, configDirFor, electron, hostSwitches, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, dataDirFor, electron, hostSwitches, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { lineRpcClient } from './lib/line-rpc-client.mjs';
 
 const require = createRequire(import.meta.url);
@@ -52,17 +53,18 @@ const keepOutput = process.argv.includes('--keep');
 // The runtime's per-user home (the language servers it provisions live there) is kept across proof runs: everything else is wiped.
 const root = join(output, 'profile');
 const local = join(root, 'local');
-const runtimeHome = join(local, 'rotaris', 'data', 'code-intelligence');
+// Where the product keeps it on THIS platform: `join(resolveUserDirs().data, 'code-intelligence')` (`src/main/sentinel.ts`).
+const runtimeHome = join(dataDirFor(local), 'code-intelligence');
 const keep = join(repo, '.proof', '.code-intel-proof-home.tmp');
 let previous = {};
 if (keepOutput && existsSync(join(output, 'results.json'))) { try { previous = JSON.parse(readFileSync(join(output, 'results.json'), 'utf8')); } catch { previous = {}; } }
 if (!keepOutput) {
   if (existsSync(runtimeHome)) { rmSync(keep, { recursive: true, force: true }); renameSync(runtimeHome, keep); }
   rmSync(output, { recursive: true, force: true });
-  mkdirSync(join(local, 'rotaris', 'data'), { recursive: true });
+  mkdirSync(dataDirFor(local), { recursive: true });
   if (existsSync(keep)) renameSync(keep, runtimeHome);
 }
-mkdirSync(join(local, 'rotaris', 'data'), { recursive: true });
+mkdirSync(dataDirFor(local), { recursive: true });
 
 // The bundle, then the build.
 const marker = join(app, 'resources', 'code-intelligence', 'bundle.json');
@@ -139,14 +141,13 @@ function sessionFrom(r) {
 function toolRows(db, sessionId, tool) { return db.prepare('SELECT ordinal, status, is_error, entry FROM tool_calls WHERE session_id = ? AND tool_name = ? ORDER BY ordinal').all(sessionId, tool).map((r) => ({ ...r, entry: JSON.parse(r.entry) })); }
 function eventOrdinals(db, sessionId, kind) { return db.prepare('SELECT ordinal, payload FROM events WHERE session_id = ? AND kind = ? ORDER BY ordinal').all(sessionId, kind); }
 
-function launch(name, extra, { ws = workspace, global = GLOBAL, timeout = 150_000 } = {}) {
+async function launch(name, extra, { ws = workspace, global = GLOBAL, timeout = 150_000 } = {}) {
   writeFileSync(join(configDir, 'agents.yaml'), global);
   writeFileSync(join(ws, '.rotaris', 'agents.yaml'), WORKSPACE);
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [mainEntry, ...hostSwitches, ws], {
-    cwd: app, encoding: 'utf8', timeout, windowsHide: true, maxBuffer: 64 * 1024 * 1024,
-    env: {
+  const result = await spawnBounded(electron, [mainEntry, ...hostSwitches, ws], {
+    cwd: app, timeoutMs: timeout, windowsHide: true, env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', ROTARIS_CAPTURE_PNG: png,
       ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -159,6 +160,7 @@ function launch(name, extra, { ws = workspace, global = GLOBAL, timeout = 150_00
   const elapsedMs = Date.now() - started;
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   // The marker above is what keeps the setup this proof drives the only one: say so if the product started another.
   if (/initialization: running code-intelligence-setup/.test(log)) throw new Error(`${name}: the workspace's initialization started code-intelligence-setup in the background beside this launch's own; see ${name}.log`);
@@ -223,7 +225,8 @@ async function branch({ exe, before, tail, ws, env, call = null, callTimeoutMs =
   return result;
 }
 async function exitStatus({ exe, before, env }) {
-  const r = spawnSync(exe, [...before, TOKEN, ...hostSwitches, '--', 'no-such-subcommand'], { env, encoding: 'utf8', windowsHide: true, timeout: 60_000 });
+  const r = await spawnBounded(exe, [...before, TOKEN, ...hostSwitches, '--', 'no-such-subcommand'], { env, windowsHide: true, timeoutMs: 60_000 });
+  if (r.overran) throw new Error(overrunMessage('the unknown-subcommand launch', r, `${r.stdout}\n${r.stderr}`));
   return { code: r.status, stdout: r.stdout ?? '', stderrTail: (r.stderr ?? '').trim().split(/\r?\n/).at(-1) ?? '' };
 }
 const SERVER_TAIL = (ws) => ['start-mcp-server', '--transport', 'stdio', '--context', 'ide', '--project', ws];
@@ -257,7 +260,7 @@ if (want(1)) {
 
 // ---- 2. discovery through the token, the grant, the block, the probe; 3. the binding -------------------------------
 if (want(2) || want(3)) {
-  const r = launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'list the project memories', ROTARIS_SCRIPT: 'mcp:code_intelligence.list_memories,answer', ROTARIS_CAPTURE_AFTER_MS: '25000' }, { ws: noCode, timeout: 180_000 });
+  const r = await launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'list the project memories', ROTARIS_SCRIPT: 'mcp:code_intelligence.list_memories,answer', ROTARIS_CAPTURE_AFTER_MS: '25000' }, { ws: noCode, timeout: 180_000 });
   const surface = lines(r.log, /mcp: surface for orchestrator/);
   if (surface.length === 0) throw new Error(`discovery: no surface line:\n${r.log.slice(-3000)}`);
   const first = surface[0];
@@ -291,7 +294,7 @@ if (want(2) || want(3)) {
 
 // ---- 4. a real call against a TypeScript file -----------------------------------------------------------------------
 if (want(4)) {
-  const r = launch('call', { ROTARIS_CAPTURE_PROMPT: 'overview of src/index.ts', ROTARIS_SCRIPT: 'mcp:code_intelligence.get_symbols_overview,answer', ROTARIS_SCRIPT_MCP_ARGS: JSON.stringify({ get_symbols_overview: { relative_path: 'src/index.ts' } }), ROTARIS_CAPTURE_AFTER_MS: '240000' }, { timeout: 330_000 });
+  const r = await launch('call', { ROTARIS_CAPTURE_PROMPT: 'overview of src/index.ts', ROTARIS_SCRIPT: 'mcp:code_intelligence.get_symbols_overview,answer', ROTARIS_SCRIPT_MCP_ARGS: JSON.stringify({ get_symbols_overview: { relative_path: 'src/index.ts' } }), ROTARIS_CAPTURE_AFTER_MS: '240000' }, { timeout: 330_000 });
   const { db, session: s } = sessionFrom(r);
   const calls = toolRows(db, s.session_id, 'get_symbols_overview');
   const starts = eventOrdinals(db, s.session_id, 'tool.start');
@@ -346,7 +349,7 @@ if (want(5)) {
   // The runtime auto-creates its project marker when a server is started with `--project` (launches 1–4 did), so the
   // marker is removed first: this launch must run the creation step for real, not skip it.
   rmSync(join(workspace, '.serena'), { recursive: true, force: true });
-  const r = launch('setup', SETUP_ENV(90_000), { timeout: 200_000 });
+  const r = await launch('setup', SETUP_ENV(90_000), { timeout: 200_000 });
   settledPresses('setup', r.log);
   const steps = setupSteps(r.log);
   if (steps.map((s) => s.status).join(',') !== 'succeeded,succeeded,succeeded') throw new Error(`setup: ${JSON.stringify(steps)}\n${setupLog(r.log).join('\n')}`);
@@ -372,7 +375,7 @@ if (want(5)) {
   console.log(`[code-intel-proof] 5 setup: ${steps.map((s) => s.status).join(' ')} — ${message} (${JSON.stringify(times)})`);
 }
 if (want(5)) {
-  const r = launch('setup-again', SETUP_ENV(60_000), { timeout: 150_000 });
+  const r = await launch('setup-again', SETUP_ENV(60_000), { timeout: 150_000 });
   settledPresses('setup-again', r.log);
   const steps = setupSteps(r.log);
   // Say what was found rather than indexing into nothing. A launch that emits no setup line at all — the 150 s
@@ -387,7 +390,7 @@ if (want(5)) {
 }
 if (want(5)) {
   rmSync(join(noCode, '.serena'), { recursive: true, force: true });
-  const r = launch('setup-nocode', SETUP_ENV(40_000), { ws: noCode, timeout: 120_000 });
+  const r = await launch('setup-nocode', SETUP_ENV(40_000), { ws: noCode, timeout: 120_000 });
   settledPresses('setup-nocode', r.log);
   const steps = setupSteps(r.log);
   if (steps.map((s) => s.status).join(',') !== 'succeeded,skipped-no-code,skipped-no-code') throw new Error(`setup-nocode: ${JSON.stringify(steps)}\n${setupLog(r.log).join('\n')}`);
@@ -397,7 +400,7 @@ if (want(5)) {
   console.log(`[code-intel-proof] 5 setup no-code: ${steps.map((s) => s.status).join(' ')}`);
 }
 if (want(5)) {
-  const r = launch('setup-broken', SETUP_ENV(12_000), { global: GLOBAL_BROKEN, timeout: 90_000 });
+  const r = await launch('setup-broken', SETUP_ENV(12_000), { global: GLOBAL_BROKEN, timeout: 90_000 });
   settledPresses('setup-broken', r.log);
   const message = setupMessage(r.log);
   const refused = setupLog(r.log).find((l) => /refused/.test(l)) ?? '';
@@ -412,7 +415,7 @@ if (want(5)) {
   // Cancel is pressed as soon as it is drawn, which is when the run host has reported `create` running: the step's child
   // is spawned in the same turn as that report (`packages/mcp/src/setup.ts`), so the press lands on a running step.
   rmSync(join(noCode, '.serena'), { recursive: true, force: true });
-  const r = launch('setup-cancel', SETUP_ENV(30_000, { ROTARIS_CAPTURE_CLICKS: `${NAV_TO_MCP};;${PRESS_START};;${PRESS_CANCEL}` }), { ws: noCode, timeout: 120_000 });
+  const r = await launch('setup-cancel', SETUP_ENV(30_000, { ROTARIS_CAPTURE_CLICKS: `${NAV_TO_MCP};;${PRESS_START};;${PRESS_CANCEL}` }), { ws: noCode, timeout: 120_000 });
   settledPresses('setup-cancel', r.log);
   const steps = setupSteps(r.log);
   const message = setupMessage(r.log);

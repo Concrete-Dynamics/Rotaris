@@ -25,6 +25,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -56,10 +57,10 @@ const PROBES = [
   '[data-testid="question-submit"]', '[data-testid="question-failure"]', '.app-shell',
 ].join(';;');
 
-function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000) {
+async function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -68,6 +69,7 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000)
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   const probes = {};
@@ -160,7 +162,7 @@ const TRAILER_SWEEP = Array.from({ length: 28 }, (_, i) => `${TRAILER}@${1_500 +
 // ── 1. answer ───────────────────────────────────────────────────────────────────────────────────────────────
 // PD-CHAT-002: The run asks, the trailer appears, the docked all-in-one form auto-opens inside the transcript;
 // all steps are rendered simultaneously; options and freeform are answered; Submit delivers in one payload.
-const answer = launch('answer', workspace, local, preferences, {
+const answer = await launch('answer', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'ask,answer', ROTARIS_SCRIPT_QUESTIONS: QUESTIONS,
   ROTARIS_CAPTURE_PROMPT: 'Ask me something.',
   ROTARIS_CAPTURE_PROBE_AT: `${TRAILER_SWEEP};;${TRAILER}@~30000;;[data-testid="question-stepper"]@~32000;;[data-testid="question-pills"] li@~32000;;[data-testid="question-submit"]@~32000;;[data-testid="question-options"] button@37000;;[data-testid="question-freeform"]@39000;;[data-testid="question-submit"]@44000`,
@@ -248,7 +250,7 @@ results.answer = {
 // PD-CHAT-002 / REQ-CHAT-101: Escape cancels the questions and releases the waiting call immediately.
 rmSync(local, { recursive: true, force: true });
 mkdirSync(local, { recursive: true });
-const close = launch('close', workspace, local, preferences, {
+const close = await launch('close', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'ask,answer', ROTARIS_SCRIPT_QUESTIONS: QUESTIONS,
   ROTARIS_CAPTURE_PROMPT: 'Ask me something I will not answer.',
   // The form's presence is waited for; its ABSENCE after Escape is read from the END probes, because a
@@ -283,7 +285,7 @@ results.close = { cancelControls: cancels.length, releaseMs, budgetSeconds: 300,
 // programmatically and emits NO second decision.
 rmSync(local, { recursive: true, force: true });
 mkdirSync(local, { recursive: true });
-const elsewhere = launch('elsewhere', workspace, local, preferences, {
+const elsewhere = await launch('elsewhere', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'ask,answer', ROTARIS_SCRIPT_QUESTIONS: QUESTIONS,
   ROTARIS_CAPTURE_PROMPT: 'Ask me something answered elsewhere.',
   ROTARIS_CAPTURE_PROBE_AT: '[data-testid="question-stepper"]@~25000',
@@ -308,7 +310,7 @@ results.elsewhere = { delivered: true, formClosed: true, secondDecisions: 0, too
 // success is reported. The prompt is still pending throughout — what fails is the delivery, not the wait.
 rmSync(local, { recursive: true, force: true });
 mkdirSync(local, { recursive: true });
-const stale = launch('stale', workspace, local, preferences, {
+const stale = await launch('stale', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'ask,answer', ROTARIS_SCRIPT_QUESTIONS: QUESTIONS,
   ROTARIS_CAPTURE_PROMPT: 'Ask me something undeliverable.',
   ROTARIS_CAPTURE_QUESTION_STALE: '1',
@@ -335,7 +337,7 @@ results.stale = { controls: staleControls.length, refused: true, formStayedOpen:
 // REQ-CHAT-092 / REQ-TOOLS-157: rejected BEFORE anything is shown — no trailer at any point, every violation named.
 rmSync(local, { recursive: true, force: true });
 mkdirSync(local, { recursive: true });
-const invalid = launch('invalid', workspace, local, preferences, {
+const invalid = await launch('invalid', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'ask:bad,answer', ROTARIS_SCRIPT_QUESTIONS: QUESTIONS,
   ROTARIS_CAPTURE_PROMPT: 'Ask me something malformed.',
   ROTARIS_CAPTURE_PROBE_AT: Array.from({ length: 10 }, (_, i) => `${TRAILER}@${2_000 + i * 700}`).join(';;'),

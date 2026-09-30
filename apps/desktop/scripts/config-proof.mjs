@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { unpressedClicks } from './lib/capture-clicks.mjs';
 
 /**
@@ -84,10 +85,10 @@ function scenario(name, files = { global: GLOBAL, workspace: WORKSPACE }) {
   return { root, workspace, local, configDir, workspaceFile: join(workspace, '.rotaris', 'agents.yaml'), globalFile: join(configDir, 'agents.yaml') };
 }
 
-function launch(name, s, extra) {
+async function launch(name, s, extra) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
-    cwd: app, encoding: 'utf8', timeout: 120_000, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
+    cwd: app, timeoutMs: 120_000, windowsHide: true,
     env: {
       ...cleanEnvironment(),
       ...proofIsolationEnv({ local: s.local, preferences: join(s.root, 'preferences') }),
@@ -99,6 +100,7 @@ function launch(name, s, extra) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   return log;
@@ -123,7 +125,7 @@ const results = {};
 
 // 1. Settings → Runtime: the outside-workspace toggle with its confirmation, then Save; bytes outside the written key unchanged.
 const s1 = scenario('runtime-save');
-const log1 = launch('runtime-save', s1, {
+const log1 = await launch('runtime-save', s1, {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
   ROTARIS_CAPTURE_CLICKS: `${RUNTIME_CATEGORY};;.toggle[aria-labelledby="outside-label"]@~7000;;.dialog-actions .btn-warning>>Yes@~8000;;.save-bar .btn-primary>>Save@~9000`,
   ROTARIS_CAPTURE_AFTER_MS: '10500',
@@ -142,7 +144,7 @@ const s2 = scenario('models-save');
 // The slot is a `SearchableSelect` (a button and a listbox), its reasoning companion a native `<select>`.
 // The selectors are therefore written WITHOUT a tag qualifier: `select[aria-label=…]` matched nothing once
 // the slot control changed, and the step logged `no such control` while the launch carried on.
-const models2Log = launch('models-save', s2, {
+const models2Log = await launch('models-save', s2, {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
   ROTARIS_CAPTURE_SELECT: '[aria-label="Model for large_model"]>>other@1800;;[aria-label="Reasoning strength for large_model"]>>high@2400',
   ROTARIS_CAPTURE_CLICKS: '.save-bar .btn-primary>>Save@3000',
@@ -162,7 +164,7 @@ results.modelsSave = { workspaceFile: ws2 };
 // 3. Discard: a toggle changed, then Discard; nothing written (REQ-CONFIG-279, REQ-CONFIG-281, REQ-CONFIG-282).
 // Seeded as a workspace already initialized, so no other writer of this file is due during the launch (see INITIALIZED).
 const s3 = scenario('discard', { global: GLOBAL, workspace: WORKSPACE + INITIALIZED });
-const log3 = launch('discard', s3, {
+const log3 = await launch('discard', s3, {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
   ROTARIS_CAPTURE_CLICKS: `${RUNTIME_CATEGORY};;.toggle[aria-labelledby="keep-going-label"]@~7000;;.save-bar .btn-secondary>>Discard@~8000`,
   ROTARIS_CAPTURE_PROBE: '.save-bar__status',
@@ -177,7 +179,7 @@ results.discard = 'the file is byte-identical; the save status reads "All change
 
 // 4. The composer's permission-mode control writes its one key through the per-field path, with no run active (REQ-CONFIG-288).
 const s4 = scenario('composer-mode');
-const log4 = launch('composer-mode', s4, { ROTARIS_CAPTURE_VIEW: '2', ROTARIS_CAPTURE_MODE: 'autonomous', ROTARIS_CAPTURE_MODE_MS: '1500', ROTARIS_CAPTURE_AFTER_MS: '3200' });
+const log4 = await launch('composer-mode', s4, { ROTARIS_CAPTURE_VIEW: '2', ROTARIS_CAPTURE_MODE: 'autonomous', ROTARIS_CAPTURE_MODE_MS: '1500', ROTARIS_CAPTURE_AFTER_MS: '3200' });
 const ws4 = readFileSync(s4.workspaceFile, 'utf8');
 if (!ws4.includes('  permission_mode: autonomous\n')) throw new Error(`the composer's control did not write its key:\n${ws4}`);
 if (!ws4.includes('  # the workspace states two keys and inherits the rest\n') || !ws4.includes('  max_depth: 2\n')) throw new Error('the per-field write disturbed another key');
@@ -186,7 +188,7 @@ results.composerMode = { workspaceFile: ws4 };
 
 // 5. A fatal file refuses the run naming file, scope and path; correcting that key alone loads and the run completes.
 const s5 = scenario('fatal', { global: GLOBAL, workspace: WORKSPACE.replace('  max_depth: 2\n', '  max_depth: many\n') });
-const log5 = launch('fatal-refused', s5, { ROTARIS_CAPTURE_PROMPT: 'run on a broken file', ROTARIS_CAPTURE_AFTER_MS: '4000' });
+const log5 = await launch('fatal-refused', s5, { ROTARIS_CAPTURE_PROMPT: 'run on a broken file', ROTARIS_CAPTURE_AFTER_MS: '4000' });
 const refused = log5.split('\n').find((line) => /refused before it started/i.test(line) || /could not be loaded/i.test(line)) ?? '';
 if (!refused.includes(s5.workspaceFile) || !refused.includes('workspace scope') || !refused.includes('runtime.max_depth')) throw new Error(`the refusal did not name file, scope and path:\n${log5}`);
 if (/session .* started/.test(log5)) throw new Error('a run started on a fatal configuration');
@@ -194,7 +196,7 @@ writeFileSync(s5.workspaceFile, WORKSPACE);
 // 12 s, not 6: since Part T the shipped code_intelligence entry is enabled by default and its discovery costs every run
 // start about 4.5 s (ADR-0035's note, finding 6). This proof's YAML seeds are compared byte for byte, so the entry stays
 // on here and the window carries the cost instead.
-const log5b = launch('fatal-corrected', s5, { ROTARIS_CAPTURE_PROMPT: 'run on the corrected file', ROTARIS_CAPTURE_AFTER_MS: '12000' });
+const log5b = await launch('fatal-corrected', s5, { ROTARIS_CAPTURE_PROMPT: 'run on the corrected file', ROTARIS_CAPTURE_AFTER_MS: '12000' });
 if (!/ended completed/.test(log5b)) throw new Error(`the corrected file did not run to completion:\n${log5b}`);
 results.fatal = { refusal: refused.trim(), correctedRun: 'completed' };
 

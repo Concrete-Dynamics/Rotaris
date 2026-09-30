@@ -711,6 +711,12 @@ settles as executions. So the hook finishes before the parent is given the repor
 found the child ended. The repair's first form waited only on the settles running when each wait began, so a second
 child that ended during the wait was taken while its hook ran (found by the verifier's fifth round). Both are recorded
 in [`a-child-completed-hook-can-finish-after-its-iteration-ends.md`](../../defects/fixed/a-child-completed-hook-can-finish-after-its-iteration-ends.md).
+Since 2026-09-30 both settles end through one tail, `IterationChildren.afterTerminal`, which tells the scheduler in a
+`finally`: a raise out of the teardown or the hook port no longer leaves a parent waiting on a child that has ended
+(REQ-ORCH-048, REQ-TOOLS-156). A raise out of the hook port reduces to a warning and the settle goes on (REQ-HOOKS-079);
+one out of the teardown is re-raised after the scheduler is told, and `settleRaised`, finding the child terminal, only
+warns. Recorded in
+[`a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md`](../../defects/fixed/a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md).
 
 **The stall watch and the corrective message (REQ-ORCH-089, REQ-MONITOR-117..120, REQ-NOTIFY-111/112;
 `children/stall.ts`; OQ-127).** Each attempt of a child's execution runs a `StallWatch` on the clock port. Its

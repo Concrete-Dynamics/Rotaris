@@ -62,7 +62,7 @@ assert the three entries, and both fail with the two lines removed from `settleR
   the reading built is REQ-ORCH-052's settle.
 - *A raise after the child's own terminal transition.* `settleRaised` leaves a terminal child as it is and does not call
   the scheduler's terminal callbacks, so a parent waiting on it is not released. Recorded in
-  [`a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md`](../a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md).
+  [`a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md`](a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md). Repaired 2026-09-30: both settles now tell the scheduler in a `finally` (`afterTerminal`).
 
 **Corrected by the verifier's third round, 2026-09-29.** The resume path's settle was started without being tracked,
 where the fresh path's is tracked through `runChild`. A pause or stop that came while its `child_completed` hook was

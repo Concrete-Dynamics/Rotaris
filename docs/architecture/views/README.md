@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**A settle tells the scheduler whatever raised before it (REQ-ORCH-048, REQ-ORCH-052, REQ-TOOLS-156, REQ-HOOKS-079,
+R-067).** Both settles of a child — the end of `IterationChildren.execute` and `settleRaised` — now end through
+`afterTerminal`, which writes the teardown, runs the `child_completed` hook and then calls `scheduler.settled` in a
+`finally`. A raise out of the hook port is a warning. This repairs
+`a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md`. The **runtime view**'s §4 paragraph on the
+settle's hook says so. No package, edge, process, message kind, channel, command or store column changed.
+
 **The post-run improvement capture never rejects (REQ-ORCH-137, REQ-LIBRARY-032, R-067).** `onRunResult`'s detached
 closure moved into `captureAfterRun` (`run-host/improvement-capture.ts`): a skip-list stop reason yields no job before main
 is asked for the history, the store is re-read after that ask, and a store closed meanwhile or a throwing capture yields

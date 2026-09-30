@@ -3998,6 +3998,98 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     });
   });
 
+  describe('REQ-ORCH-048 / REQ-TOOLS-156 / REQ-HOOKS-079, the repair of a-raise-after-a-childs-terminal-transition-never-releases-its-parent: a `child_completed` hook that raises still releases the parent', () => {
+    const settle = async (until: () => boolean, rounds = 400) => { for (let i = 0; i < rounds && !until(); i += 1) await new Promise((r) => setTimeout(r, 5)); };
+    const byName = (sid: SessionId, name: string): ChildRow | undefined => children(sid).find((c) => c.canonical_name === name);
+    const textOf = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('')).join('\n');
+    /** A hook port whose `child_completed` raises — the port's contract does not say it never does — counting each firing. */
+    function raisingHooks() {
+      const fired: string[] = [];
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event, fields) => { if (event === 'child_completed') { fired.push(String(fields['child_name'])); throw new Error('the hook port exploded'); } return []; },
+        advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      return { hooks, fired };
+    }
+
+    it('the settle in `execute`: a foreground delegation\'s wait (REQ-TOOLS-156) resolves with the report, once, and the run ends', async () => {
+      const { hooks, fired } = raisingHooks();
+      const rootAsked: string[] = [];
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') { rootAsked.push(textOf(req)); return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'quick', task: 'TASK: quick', run_in_background: false } }]) : answer('handled'); }
+        if (persona === 'summariser') return answer('{"summary":"quick is done"}');
+        return answer('quick: done');
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => rootAsked.length >= 2);
+      // Without the repair the wait never resolves: the child is `succeeded`, and its parent is never told.
+      expect(byName(sid, 'quick')?.state).toBe('succeeded');
+      expect(rootAsked).toHaveLength(2);
+      expect(rootAsked[1]).toContain('quick: done');
+      const result = await sessions.running(sid)!;
+      expect(result.status).toBe('completed');
+      expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
+      // The hook fired once; its raise reduced to a warning naming it (REQ-HOOKS-079), and the report reached the root once.
+      expect(fired).toEqual(['quick']);
+      expect(warnings.filter((w) => w.includes('child_completed') && w.includes('the hook port exploded'))).toHaveLength(1);
+      expect(rootAsked.filter((t) => t.includes('quick: done'))).toHaveLength(1);
+      // REQ-ORCH-098: its teardown is whole.
+      const row = byName(sid, 'quick')!;
+      expect(dal.timelineOf(sid).filter((t) => JSON.parse(t.metadata).task_id === row.task_id && ['child_end', 'child_result', 'child_conversation_closed'].includes(t.name)).map((t) => t.name)).toEqual(['child_end', 'child_result', 'child_conversation_closed']);
+    });
+
+    it('the settle in `execute`: a parent waiting in its resume loop for a background child is resumed with the report', async () => {
+      const { hooks, fired } = raisingHooks();
+      let releaseChild!: () => void;
+      const childStep = new Promise<void>((r) => { releaseChild = r; });
+      const rootAsked: string[] = [];
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') { rootAsked.push(textOf(req)); return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: slow' } }]) : answer(turn === 2 ? 'waiting for slow' : 'handled'); }
+        if (persona === 'summariser') return answer('{"summary":"slow is done"}');
+        return { parts: [{ hold: childStep }, ...answer('slow: done').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => rootAsked.length === 2 && byName(sid, 'slow')?.state === 'running');
+      await new Promise((r) => setTimeout(r, 20));
+      releaseChild();
+      await settle(() => rootAsked.length >= 3);
+      expect(byName(sid, 'slow')?.state).toBe('succeeded');
+      expect(rootAsked).toHaveLength(3);
+      expect(rootAsked[2]).toContain('slow: done');
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(fired).toEqual(['slow']);
+      expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
+    });
+
+    it('the settle in `settleRaised`: a child whose execution raised outside its turn still releases its parent\'s foreground wait', async () => {
+      const { hooks, fired } = raisingHooks();
+      let releaseFirst!: () => void;
+      const firstStep = new Promise<void>((r) => { releaseFirst = r; });
+      const rootAsked: string[] = [];
+      // One model slot (REQ-ORCH-050): `broken` is held behind `first`, so it starts — and raises — only once its parent is
+      // already waiting on it, rather than inside the delegation, before the wait begins.
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') { rootAsked.push(textOf(req)); return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'first', task: 'TASK: first' } }, { callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'broken', task: 'TASK: broken', run_in_background: false } }]) : answer('handled'); }
+        if (persona === 'summariser') return answer('{"summary":"first is done"}');
+        return { parts: [{ hold: firstStep }, ...answer('first: done').parts] };
+      }, { raisingPort: 'broken', hooks, cap: 1 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'broken')?.state === 'waiting_on_model_slot');
+      releaseFirst();
+      await settle(() => rootAsked.length >= 2);
+      expect(byName(sid, 'broken')?.state).toBe('failed');
+      expect(rootAsked[1]).toContain('no tool port for broken');
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // Then resumed once more, with `first`'s report — whose own hook raised too.
+      expect(rootAsked).toHaveLength(3);
+      expect(rootAsked[2]).toContain('first: done');
+      expect(fired.sort()).toEqual(['broken', 'first']);
+      expect(warnings.filter((w) => w.includes('child_completed') && w.includes('the hook port exploded'))).toHaveLength(2);
+      expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
+    });
+  });
+
   describe('PD-ORCH-005 clause 15: a forced stop is a stop, and a quit rests by quit', () => {
     const restsBy = async (sessions: Sessions, sid: SessionId, interruption: 'stop' | 'quit') => {
       const result = await sessions.running(sid)!;

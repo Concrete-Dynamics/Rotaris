@@ -11,7 +11,7 @@ import type { AttachmentOutcome, BackgroundOutput, DelegateOutcome, DelegateRequ
 import { fullContextBlock, siblingIndexBlock, type AttachedResolution } from '../artifacts/context.js';
 import type { ArtifactStore } from '../artifacts/store.js';
 import { ChildLedger, storeChildReport, userCancellation, type Budget } from './ledger.js';
-import { childPayload, completionNotification, inheritedContextBlock, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
+import { childPayload, completionNotification, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
 import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, type CutOff } from './cut-off.js';
 import { BUILT_IN_PERSONAS, resolveRole, type Persona, type PersonaResolver, type RoleName } from './personas.js';
 import { fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
@@ -182,14 +182,6 @@ export class IterationChildren implements DelegationOps {
   private readonly startedAt = new Map<string, Millis>();
   private readonly toolCalls = new Map<string, number>();
   private readonly resumeWaiters = new Map<string, () => void>();
-  /** REQ-LIBRARY-098: the artifacts each launch attached explicitly, by reference, for as long as the run lives. */
-  private readonly attached = new Map<string, readonly string[]>();
-  /**
-   * REQ-TOOLS-152: the inherited-context block of each child that named a completed sibling, rendered at the call
-   * from the reports as they stood then, for as long as the run lives — the same terms as `attached`. The ids
-   * themselves are on the row (`children.inherited_context`); what is remembered here is which of them counted.
-   */
-  private readonly inherited = new Map<string, string>();
   /** PD-TOOLS-006: the live write scopes' claims, in acceptance order, and each child's disclosure as fixed at its acceptance. */
   private readonly claims = new WriteClaims();
   private readonly disclosures = new Map<string, ScopeDisclosure>();
@@ -285,16 +277,15 @@ export class IterationChildren implements DelegationOps {
       ...(continuationOf !== '' ? { continuationOf } : {}),
       ...(scope.patterns.length > 0 ? { writeScope: scope.patterns } : {}),
       ...(req.suppressAutoContext === true ? { suppressAutoContext: true } : {}),
+      // REQ-LIBRARY-098 / REQ-TOOLS-152: the attachments and the inherited-context block are stored with the record, since
+      // PD-ORCH-005 lets a child outlive the run that accepted it and every assembly of its payload reads them from there
+      // (the repair of `a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`).
+      ...((req.attachArtifacts ?? []).length > 0 ? { attachArtifacts: req.attachArtifacts } : {}),
     });
     if (!r.ok) return { status: 'rejected', canonicalName: req.taskName, message: r.error.reason };
-    const { row, held, aliasResolved, inherited } = r.value;
-    // REQ-LIBRARY-098: the attachment list belongs to THIS launch, not to the record — a child does not outlive
-    // the run that spawned it, so it is remembered here for the moment the child's payload is assembled.
-    const attachments = this.rememberAttachments(row.task_id, req.attachArtifacts ?? []);
-    // REQ-TOOLS-152 / REQ-TOOLS-154 (5): the completed siblings' reports the ledger admitted, rendered now — a terminal
-    // child's report does not change — and read when the payload is assembled, before the pass below can start the child.
-    const inheritedBlock = inheritedContextBlock(inherited);
-    if (inheritedBlock !== '') this.inherited.set(row.task_id, inheritedBlock);
+    const { row, held, aliasResolved } = r.value;
+    // REQ-LIBRARY-098: the references are resolved now, so the caller is told at once what could not be.
+    const attachments = this.resolveAttachments(req.attachArtifacts ?? []);
     // PD-TOOLS-006: the claim starts at acceptance, and the disclosure is fixed now — before the pass below, which
     // may start the child and assemble its payload before this call returns.
     this.acceptScope(row, scope.patterns);
@@ -390,7 +381,7 @@ export class IterationChildren implements DelegationOps {
       prior = priorAgentContext(depRows);
       if (prior) this.ledger.markContextInjected(row.task_id);
     }
-    return childPayload(this.deps.workspaceRoot, row.task, prior, this.artifactContext(row), writeScopeBlock(this.disclosures.get(row.task_id)), this.inherited.get(row.task_id) ?? '');
+    return childPayload(this.deps.workspaceRoot, row.task, prior, this.artifactContext(row), writeScopeBlock(this.disclosures.get(row.task_id)), row.inherited_context_block);
   }
 
   /** REQ-TOOLS-155: whether `row` is a direct child of the agent `parentId` — the root's children whichever name the root goes by. */
@@ -458,14 +449,14 @@ export class IterationChildren implements DelegationOps {
 
   /**
    * REQ-LIBRARY-098: the references are resolved AT DELEGATION so the caller is told at once what could not
-   * be resolved; the block itself is assembled when the child's payload is built, from the store as it stands
-   * then. Where no artifact store exists every reference is reported unresolved rather than silently dropped.
+   * be resolved; the block itself is assembled when the child's payload is built, from the references stored with
+   * its record and the store as it stands then. Where no artifact store exists every reference is reported
+   * unresolved rather than silently dropped.
    */
-  private rememberAttachments(taskId: string, references: readonly string[]): AttachmentOutcome | undefined {
+  private resolveAttachments(references: readonly string[]): AttachmentOutcome | undefined {
     if (references.length === 0) return undefined;
     const store = this.deps.artifacts;
     if (!store) return { attached: 0, unresolved: [...references] };
-    this.attached.set(taskId, references);
     const unresolved = references.filter((ref) => store.lookup(ref) === null);
     return { attached: references.length - unresolved.length, unresolved };
   }
@@ -864,17 +855,25 @@ export class IterationChildren implements DelegationOps {
     const tools = deps.toolsFor(row.persona, row.canonical_name, this, row.task_id, row.depth, undefined, this.parentPersonaOf(row.parent_id));
     const dispatched = new Map<string, string>();
     // REQ-ORCH-047 / REQ-TOOLS-154: the prior-agent-context block, exactly once, ahead of everything.
+    const depRows = (): ChildRow[] => (JSON.parse(row.depends_on) as string[]).map((d) => this.ledger.get(d)).filter((d): d is ChildRow => d !== undefined);
     let prior = '';
     if (row.context_injected === 0) {
-      const depRows = (JSON.parse(row.depends_on) as string[]).map((d) => this.ledger.get(d)).filter((d): d is ChildRow => d !== undefined);
-      prior = priorAgentContext(depRows);
+      prior = priorAgentContext(depRows());
       if (prior) this.ledger.markContextInjected(row.task_id);
     }
     // REQ-LIBRARY-097/098: the automatic sibling index and the explicitly attached artifacts, assembled from the
     // store as it stands at launch — a newly created agent is given them, so they are built when its payload is, and a
     // resumed agent, whose payload is already in its record, is given them only if REQ-ORCH-088's retry restarts it.
+    // The attachments and the inherited-context block are read from the record, so a retry in a later run carries them
+    // as the first payload did (the repair of `a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`).
     let artifactBlocks: readonly string[] | null = null;
-    const payload = (): string => childPayload(deps.workspaceRoot, row.task, prior, artifactBlocks ??= this.artifactContext(row), writeScopeBlock(this.disclosures.get(row.task_id)), this.inherited.get(row.task_id) ?? '');
+    const payload = (): string => {
+      // A resumed child was given its prior-agent context in the conversation its first payload started; REQ-ORCH-088's
+      // retry starts that conversation again, so its payload carries the block again, as a retry within the first run
+      // does — once in the conversation the retry starts, and never re-prefixed on a state hop.
+      if (resume !== null && row.context_injected === 1 && prior === '') prior = priorAgentContext(depRows());
+      return childPayload(deps.workspaceRoot, row.task, prior, artifactBlocks ??= this.artifactContext(row), writeScopeBlock(this.disclosures.get(row.task_id)), row.inherited_context_block);
+    };
     // PD-ORCH-005 clause 4: a resumed child's first attempt starts from its record; a retry starts from its payload.
     let start: TurnStart | null = resume ? resumedStart(resume.history) : null;
     // The column is written at a rest or a settle, and a crash writes neither, so the record's own calls count too (found
@@ -1171,7 +1170,7 @@ export class IterationChildren implements DelegationOps {
     const suppressed = row.suppress_auto_context === 1 || personaOf(this.deps, row.persona)?.skipAutoSiblingContext === true;
     const index = suppressed ? { text: '', included: 0, elided: 0 } : siblingIndexBlock(store.hydrate().records);
     if (index.text !== '') blocks.push(index.text);
-    const references = this.attached.get(row.task_id) ?? [];
+    const references = JSON.parse(row.attach_artifacts) as string[];
     let full: ReturnType<typeof fullContextBlock> | null = null;
     if (references.length > 0) {
       const resolved: AttachedResolution[] = references.map((reference) => {

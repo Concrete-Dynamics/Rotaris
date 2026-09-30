@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**A child's attachments and inherited-context block are stored with its record (REQ-TOOLS-154, REQ-LIBRARY-098,
+REQ-TOOLS-152, PD-ORCH-005, R-067).** Store **v28** appends `children.attach_artifacts` and
+`children.inherited_context_block`, written by `ChildLedger.spawn`; `IterationChildren`'s two in-memory maps are gone, and
+`execute`'s and `startingPayload`'s payloads read the row, so a child resumed in a later run carries both into its
+REQ-ORCH-088 retry, with REQ-ORCH-047's prior-agent-context block rendered again. This repairs
+`a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md` (acceptance A25). The **runtime view**'s
+inherited-context paragraph and §7 `children` row, and the **state-ownership view**'s row, say so. No package, edge,
+process, message kind, channel or command changed.
+
 **The post-run improvement capture never rejects (REQ-ORCH-137, REQ-LIBRARY-032, R-067).** `onRunResult`'s detached
 closure moved into `captureAfterRun` (`run-host/improvement-capture.ts`): a skip-list stop reason yields no job before main
 is asked for the history, the store is re-read after that ask, and a store closed meanwhile or a throwing capture yields

@@ -54,7 +54,7 @@ attachments survive it), `apps/desktop/src/run-host/configuration.test.ts` ("ski
 persona") and `packages/store/src/store.test.ts` (v24 → v25). Each fails on the code before the repair.
 
 Noticed while building it: a resumed child's retry loses its attachments and its inherited context, which the run kept in
-memory — [`a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`](../a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md).
+memory — [`a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`](a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md).
 
 The note stays open for `session_id` (PD-ORCH-005 clause 22, PD-TOOLS-006 revision 3), which is another bundle's.
 

@@ -2648,8 +2648,10 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 >   one, recorded below revision 4's note.
 > - Only Linux under Xvfb was driven.
 > - The scripted model client restarts its script for every run
->   ([`the-scripted-client-restarts-its-script-for-every-run.md`](../defects/the-scripted-client-restarts-its-script-for-every-run.md)),
+>   ([`the-scripted-client-restarts-its-script-for-every-run.md`](../defects/fixed/the-scripted-client-restarts-its-script-for-every-run.md)),
 >   so a driven agent's steps after a continue are the script's first steps again. Its record is what is resumed.
+>   *(2026-09-29, R-067: repaired. A resumed agent now takes the step after the ones its own record holds, in the same
+>   process or after a relaunch; `part-j-proof`'s steer-at-rest scenario pins it.)*
 > - The driver's own quit is an immediate exit that skips the shutdown
 >   ([`the-drivers-quit-skips-the-applications-shutdown.md`](../defects/the-drivers-quit-skips-the-applications-shutdown.md));
 >   the quit above was a window close.

@@ -23,6 +23,10 @@ export interface ScriptedCallRecord {
  * answers (the Overview proof needs a run longer than one token-sample period); anything else, or the end of
  * the list, answers with a short streamed reply, one delta per 120 ms so the growth tick is visible.
  *
+ * Each agent keeps its own place in its list: the orchestrator, and each child by its TASK line. A resumed agent
+ * (PD-ORCH-005's continue, in this process or after a relaunch) carries on with the step after the ones its own record
+ * holds (`resumedAt`), so a proof scripts "the resumed agent takes its next step" in one list.
+ *
  * Nothing here decides anything about a run: the loop, the permission gate and the store see exactly what they
  * would see from a model that chose the same steps, which is what keeps a proof's assertion about the product
  * rather than about the double.
@@ -37,12 +41,37 @@ export interface ScriptedCallRecord {
  * It sits in the scripted client and nowhere else, so it can only ever see a call no provider was going to answer:
  * there is no path by which it records traffic bound for a real endpoint.
  */
+/** A step that answers with no assistant message, so an agent's record never shows it: a failure, a hang, a wait prefix. */
+const LEAVES_NO_MESSAGE = /^(fail(:.*)?|hang|wait:\d+)$/;
+
+/**
+ * PD-ORCH-005 (the repair of the-scripted-client-restarts-its-script-for-every-run.md): the index in `script` of the step
+ * an agent takes next when its request already carries `taken` steps of its own record. A continue — in the same process
+ * or after a relaunch — builds a new client, and the resumed agent's first request carries its record, so the double
+ * reads where the agent stood from the record rather than from a counter the old client took with it.
+ *
+ * One assistant message stands for each step that answered (`turn.ts` pushes exactly one per step); a step that answers
+ * with none is counted as consumed wherever it falls before the last step the record shows. A fresh agent carries no
+ * assistant message, so it starts from the first step exactly as before. Two readings follow from counting the record:
+ * a root resumed in a later iteration of its run counts only that iteration's steps, and a record the compressing pass
+ * rewrote counts only the steps it still holds.
+ */
+function resumedAt(script: readonly string[], taken: number): number {
+  let index = 0;
+  for (let shown = 0; shown < taken && index < script.length; index += 1) {
+    if (!LEAVES_NO_MESSAGE.test(script[index]!)) shown += 1;
+  }
+  return index;
+}
+
 export function scriptedClient(c: Clocks, log: (message: string) => void, record?: (call: ScriptedCallRecord) => void): ModelClient {
   const parse = (v: string | undefined) => (v ?? '').split(',').map((x) => x.trim()).filter((x) => x.length > 0);
   // ROTARIS_SCRIPT drives the orchestrator; ROTARIS_CHILD_SCRIPT every child (a `delegate:<persona>:<name>` step delegates).
   const loopScript = /^loop:([^:]+):(\d+)$/.exec(process.env['ROTARIS_SCRIPT'] ?? '');
   const scripts: Record<string, string[]> = { orchestrator: loopScript ? Array.from({ length: Number(loopScript[2]) }, () => loopScript[1]!) : parse(process.env['ROTARIS_SCRIPT']), child: parse(process.env['ROTARIS_CHILD_SCRIPT']) };
   const calls: Record<string, number> = { orchestrator: 0, child: 0, summariser: 0, compressor: 0, 'loop-classifier': 0 };
+  // PD-ORCH-005: the keys whose counter has been placed by the record their first call in this client carried.
+  const seeded = new Set<string>();
   let call = 0;
   const TOOL_STEPS: Record<string, { name: string; args: Record<string, unknown> }> = {
     glob: { name: 'glob', args: { pattern: '**/*.md' } },
@@ -67,6 +96,10 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       const firstUser = req.messages.find((m) => m.role === 'user')?.content.find((p) => p.kind === 'text');
       const taskName = who === 'child' && firstUser && firstUser.kind === 'text' ? /TASK: ([^\n]+)/.exec(firstUser.text)?.[1] ?? '' : '';
       const counterKey = who === 'child' ? `child:${taskName}` : who;
+      if (!seeded.has(counterKey)) {
+        seeded.add(counterKey);
+        calls[counterKey] = resumedAt(scripts[who] ?? [], req.messages.filter((m) => m.role === 'assistant').length);
+      }
       calls[counterKey] = (calls[counterKey] ?? 0) + 1;
       calls[who] = calls[counterKey]!;
       // Verification only: the model each call went to, so a proof can read a fallback or an override from the log (Part Q).

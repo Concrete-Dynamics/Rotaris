@@ -3211,6 +3211,29 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       });
     });
 
+    it('REQ-ORCH-109 with clause 3 (found by the verification of the repair of a-reports-edited-files-counts-refused-writes): a write that landed after the pause\'s tool deadline cut it off is still in the resumed child\'s report', async () => {
+      const g = gate();
+      const wrote: PortToolResult = { text: 'Overwrote src/app.ts', isError: false, status: 'ok', durationMs: 1, label: 'write_file', args: {} };
+      const write = (): ScriptedCall => toolCalls([{ callId: 'w1', name: 'write_file', args: { operation: 'overwrite', path: 'src/app.ts', content: 'x' } }], 'Writing.');
+      // The tool holds its `ok` the way a post-tool hook (a formatter) would, past the pause's 30 s tool deadline.
+      const { sessions } = scriptedChild([write, () => answer('Wrote src/app.ts.')], { tool: (name) => (name === 'write_file' ? g.hold.then(() => wrote) : undefined) });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool' && r.tool_name === 'write_file'));
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(31_000);
+      g.open();
+      await sessions.running(sid)!;
+      const work = byName(sid, 'work');
+      expect(work).toMatchObject({ state: 'paused', interruption: 'pause' });
+      // The record: the call is answered as cut off, with what it had produced.
+      expect(conversationOf(dal.agentConversation(sid, work.task_id)).at(-1)).toEqual({ role: 'tool', content: [{ kind: 'tool-result', callId: 'w1', name: 'write_file', isError: true, result: interruptedResult('pause', true, 'Overwrote src/app.ts') }] });
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await sessions.running(sid)!;
+      expect(byName(sid, 'work')).toMatchObject({ state: 'succeeded', report_stored: 1 });
+      expect((JSON.parse(byName(sid, 'work').report!) as { edited_files: string[] }).edited_files).toEqual(['src/app.ts']);
+    });
+
     it('REQ-TOOLS-156 at a rest: a parent waiting in wait_for_tasks is released at once, and its wait is recorded as interrupted', async () => {
       let release!: () => void;
       const hold = new Promise<void>((r) => { release = r; });

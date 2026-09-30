@@ -55,9 +55,11 @@ paragraph after the one on a settle's hook. No package, edge, process, message k
 changed.
 
 **A report's edited files are the writes that landed (REQ-ORCH-108, REQ-ORCH-109, PD-TOOLS-006, OQ-111, R-067).**
-`editedFilesFrom` now skips a write call the record answers with an error — a sibling's claim, the permission gate or a
-pre-tool hook refusing it, a `haet_edit` whose find text matched nothing — and the summariser's own list cannot bring such
-a path back. The report's `edited_files`, the fallback's "Files touched" and the facts the pass is told never to deny all
+`editedFilesFrom` now skips a write call the record answers as refused — a sibling's claim, the permission gate or a
+pre-tool hook refusing it, a `haet_edit` whose find text matched nothing — or as cut before it started, and the
+summariser's own list cannot bring such a path back. A write cut off while under way (the pause's tool deadline, the
+stop's abort, a crash) is still listed, since it may have landed: `run/interruption.ts`'s `ranBeforeItWasCut` reads the
+statement the turn records for it. The report's `edited_files`, the fallback's "Files touched" and the facts the pass is told never to deny all
 read it. This repairs `a-reports-edited-files-counts-refused-writes.md`. The **runtime view**'s §4 report sentence says
 so. No package, edge, process, message kind, channel, command or store column changed.
 

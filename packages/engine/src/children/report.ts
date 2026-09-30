@@ -2,6 +2,7 @@ import { countNoun, millis, type Millis, type Timers } from '@rotaris/kernel';
 import { normaliseReportStatus, type ReportStatus } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
 import type { CutOff } from './cut-off.js';
+import { ranBeforeItWasCut } from '../run/interruption.js';
 
 /**
  * REQ-ORCH-108..112: every terminal child produces a machine-readable report before its parent resumes.
@@ -239,25 +240,36 @@ export function commandsFrom(messages: readonly ChatMessage[]): readonly { comma
 
 /**
  * REQ-ORCH-108/109: the files the child edited — the path of every write-tool call the record does not answer
- * with an error, under either argument name the file tools accept (`path`, `file_path`), in call order and
- * never repeated. The summariser's own list is UNIONED after them rather than replacing or replaced, so a
- * genuine mention it made (a document written through a route with no tool call of its own) is not lost, while
- * an invented one can no longer be the only thing the field holds — and it cannot name a path whose every write
- * the record answered with an error.
+ * as refused, under either argument name the file tools accept (`path`, `file_path`), in call order and never
+ * repeated. The summariser's own list is UNIONED after them rather than replacing or replaced, so a genuine
+ * mention it made (a document written through a route with no tool call of its own) is not lost, while an
+ * invented one can no longer be the only thing the field holds — and it cannot name a path whose every write
+ * the record answered as refused.
  *
  * The reason a write's result is read, kept beside the rule it replaced: the path of every write CALL used to
  * be listed whatever answered it. A write a sibling's claim refused (PD-TOOLS-006), one the permission gate or a
  * pre-tool hook refused, a `haet_edit` whose find text matched nothing — each changed nothing, and each reached
  * `edited_files`, the fallback's "Files touched" and, since OQ-111, the facts the pass is told never to deny
  * (`a-reports-edited-files-counts-refused-writes`, docs/defects/fixed/). Every such refusal is answered with
- * `isError: true` (the gate's `finish`, the file tools' `errorObservation`), as is a call a rest or a cancel cut
- * off, which the child itself was told "was cut off before it completed". The bound, stated: a call no result
- * answers — which a conversation the turn built never holds (`run/turn.ts` answers every call of a step) — keeps
- * the call's own reading and is listed.
+ * `isError: true` (the gate's `finish`, the file tools' `errorObservation`).
+ *
+ * A call cut off is answered with `isError: true` too, and it is NOT one reading. A call a rest cut before it
+ * started, or whose approval was withdrawn, never ran and changed nothing: it is not listed. A call that was
+ * under way when the pause's tool deadline, the stop's abort or a crash cut it off (`ranBeforeItWasCut`, the
+ * `ran` head of `interruptedResult`) may well have written — the turn cuts a dispatch that returned `ok` after
+ * the deadline — so it IS listed, with what it had produced kept in the record beside it. *Falsified by the
+ * repair's verification and kept beside its correction:* this paragraph first said a call "a rest or a cancel
+ * cut off" was not an edit, which dropped a write that had landed.
+ *
+ * The bounds, stated. A call no result answers — which a conversation the turn built never holds (`run/turn.ts`
+ * answers every call of a step) — keeps the call's own reading and is listed. A call cut off while under way
+ * whose executor had in fact refused it is listed, since the record cannot tell the two apart, and REQ-ORCH-109
+ * forbids concealing a file rather than overstating one. A write executor that raised AFTER its file was
+ * written (a failure rendering the diff, say) is answered as an ordinary error and is not listed.
  */
 export function editedFilesFrom(messages: readonly ChatMessage[], reported: readonly string[] = []): readonly string[] {
   const erred = new Set<string>();
-  for (const m of messages) if (m.role === 'tool') for (const p of m.content) if (p.kind === 'tool-result' && p.isError) erred.add(p.callId);
+  for (const m of messages) if (m.role === 'tool') for (const p of m.content) if (p.kind === 'tool-result' && p.isError && !ranBeforeItWasCut(p.result)) erred.add(p.callId);
   const out: string[] = [];
   const refused = new Set<string>();
   const add = (v: string): void => { if (v !== '' && !out.includes(v)) out.push(v); };

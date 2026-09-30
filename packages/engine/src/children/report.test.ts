@@ -4,6 +4,7 @@ import type { ChatMessage } from '@rotaris/model';
 import { commandsFrom, deterministicTesterReport, editedFilesFrom, fallbackReport, produceReport, reportFacts, reportTranscript, TRANSCRIPT_CAP, transcriptText, type ReportInput, type SummariserDeps } from './report.js';
 import { commandsForArtifact } from './ledger.js';
 import { childPayload } from './notify.js';
+import { interruptedResult, ranBeforeItWasCut } from '../run/interruption.js';
 
 /**
  * REQ-ORCH-108..112 and the specification's "Child report artifact (behavioral schema)": the report names
@@ -164,6 +165,38 @@ describe('engine/children/report — a write the record answers with an error is
     const r = await produceReport(input({ messages, toolCallCount: 4 }), s, new AbortController().signal);
     expect(asked[0]).toContain('Facts:\nEdited files: docs/a.md\n');
     expect(r!.edited_files).toEqual(['docs/a.md']);
+  });
+});
+
+describe('engine/children/report — a write that was under way when a rest, a stop or a crash cut it off is still an edit (REQ-ORCH-109, OQ-111, PD-ORCH-005 clause 3)', () => {
+  // Found by the verification of the repair above: the turn answers a call cut off after its executor started with an
+  // error even when the write had landed (the pause's tool deadline, the stop's abort), and a crash's continue answers a
+  // row still `running` the same way. The record keeps what it produced; the report may not deny it.
+  const cutOff = (callId: string, name: string, text: string): ChatMessage => ({ role: 'tool', content: [{ kind: 'tool-result', callId, name, result: text, isError: true }] });
+  const messages = [
+    call('w1', 'write_file', { operation: 'overwrite', path: 'src/app.ts', content: 'x' }), cutOff('w1', 'write_file', interruptedResult('pause', true, 'Overwrote src/app.ts')),
+    call('w2', 'haet_edit', { path: 'src/b.ts', content_hash: 'a'.repeat(64), old_string: 'x', new_string: 'y' }), cutOff('w2', 'haet_edit', interruptedResult(null, true, '')),
+    call('w3', 'haet', { file_path: 'src/c.ts', content_hash: 'b'.repeat(64), old_string: 'x', new_string: 'y' }), cutOff('w3', 'haet', interruptedResult('crash', true, 'applied')),
+    call('w4', 'write_file', { operation: 'create', path: 'src/never.ts', content: 'x' }), cutOff('w4', 'write_file', interruptedResult('pause', false, '')),
+    call('w5', 'haet_edit', { path: 'src/withdrawn.ts', content_hash: 'c'.repeat(64), old_string: 'x', new_string: 'y' }), cutOff('w5', 'haet_edit', interruptedResult('stop', false, 'The approval was withdrawn.')),
+    say('assistant', 'done'),
+  ];
+
+  it('a call cut off after it started is listed, whatever cut it and whatever it had produced; one that never started is not', () => {
+    expect(editedFilesFrom(messages)).toEqual(['src/app.ts', 'src/b.ts', 'src/c.ts']);
+    expect(reportFacts(messages)).toBe('Edited files: src/app.ts, src/b.ts, src/c.ts\nCommands run: (none)');
+    expect(fallbackReport(input({ messages, toolCallCount: 5, lastText: '' }), 'no summariser is configured').summary).toContain('Files touched: src/app.ts, src/b.ts, src/c.ts.');
+  });
+
+  it("the summariser's own list may name a path a cut-off call wrote, and still not one only a call that never started named", () => {
+    expect(editedFilesFrom(messages, ['src/app.ts', 'src/never.ts'])).toEqual(['src/app.ts', 'src/b.ts', 'src/c.ts']);
+  });
+
+  it('only the statement heads the turn writes count: a refusal that merely quotes one is still a refusal', () => {
+    const quoted = [call('w6', 'write_file', { operation: 'create', path: 'src/q.ts', content: 'x' }), cutOff('w6', 'write_file', `Refused.\n${interruptedResult('pause', true, '')}`)];
+    expect(editedFilesFrom(quoted)).toEqual([]);
+    expect(ranBeforeItWasCut(interruptedResult('quit', true, 'line one\nline two'))).toBe(true);
+    expect(ranBeforeItWasCut(interruptedResult('quit', false, ''))).toBe(false);
   });
 });
 

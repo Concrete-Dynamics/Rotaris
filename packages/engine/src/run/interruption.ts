@@ -28,6 +28,22 @@ export function interruptedResult(cause: Interruption | null, ran: boolean, outp
 /** The statements a call that never started is answered with — by a rest, a crash, or a cut that names no rest. */
 const NOT_RUN = new Set([null, ...INTERRUPTIONS].map((cause) => interruptedResult(cause, false, '')));
 
+/** The statements a call that was under way is answered with — by a rest, a crash, or a cut that names no rest — before any output. */
+const RAN_AND_CUT = new Set([null, ...INTERRUPTIONS].map((cause) => interruptedResult(cause, true, '')));
+
+/**
+ * Whether a call's recorded result is the statement for a call that was UNDER WAY when it was cut off (`ran`), whatever
+ * output follows it. Such a call is answered with an error, yet its executor had started and may have finished: the turn
+ * cuts a call whose dispatch returned after the pause's tool deadline or the stop's abort even when it succeeded, and a
+ * crash's continue answers a row still `running` the same way. A reader that asks what a call CHANGED — the child report's
+ * edited files — cannot read that error as "it changed nothing". Only the statement's own first line counts, so a result
+ * that merely quotes it further down is not taken for it.
+ */
+export function ranBeforeItWasCut(result: string): boolean {
+  const nl = result.indexOf('\n');
+  return RAN_AND_CUT.has(nl < 0 ? result : result.slice(0, nl));
+}
+
 /**
  * The tool calls a conversation records as run: every call it holds, less those answered as never started. REQ-ORCH-095
  * counts what an agent did, and a call the rest or a crash cut before it started did nothing.

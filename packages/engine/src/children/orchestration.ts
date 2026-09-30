@@ -72,6 +72,10 @@ export interface ChildrenDeps {
   readonly maxStepsPerTurn: number;
   readonly budget: Budget;
   readonly modelCap: (modelKey: string) => number | null;
+  /** REQ-CONFIG-094: the slots the process's other runs hold on a key (`ModelSlots.heldElsewhere`); absent means none. */
+  readonly slotsHeldElsewhere?: ((modelKey: string) => number) | undefined;
+  /** REQ-MONITOR-020: a child of this iteration reached a terminal state, so a slot may have freed for another run. */
+  readonly onSlotFreed?: (() => void) | undefined;
   /** The tool surface for an agent — the root or a child — with its own delegation identity. */
   readonly toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string) => ToolPort | null;
   readonly summariser: SummariserDeps | null;
@@ -212,13 +216,19 @@ export class IterationChildren implements DelegationOps {
    */
   private detached = false;
   /**
+   * REQ-MONITOR-102: the children whose executions were still running when the stop's grace gave up on them (`outlast`).
+   * Each returns without its count, so a rest counts it from its record (the repair of
+   * `a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`).
+   */
+  private readonly givenUpOn = new Set<string>();
+  /**
    * PD-ORCH-004 revision 3: this iteration's children that had ended before this run took the iteration up — a resumed
    * iteration's, left by an earlier run. Their offers are the root's to take up, as "a later run" of the session's.
    */
   private readonly endedInEarlierRun: ReadonlySet<string>;
 
   constructor(private readonly deps: ChildrenDeps, readonly iteration: number) {
-    this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, warn: deps.warn , personas: deps.personas, ...(deps.artifacts ? { artifacts: deps.artifacts } : {}), ...(deps.rootRecord ? { rootRecord: deps.rootRecord } : {}) });
+    this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, ...(deps.slotsHeldElsewhere ? { slotsHeldElsewhere: deps.slotsHeldElsewhere } : {}), warn: deps.warn , personas: deps.personas, ...(deps.artifacts ? { artifacts: deps.artifacts } : {}), ...(deps.rootRecord ? { rootRecord: deps.rootRecord } : {}) });
     this.endedInEarlierRun = new Set(this.ledger.all().filter((c) => isTerminalChildState(c.state)).map((c) => c.task_id));
     this.scheduler = new Scheduler({ ledger: this.ledger, runChild: (row) => this.track(this.executeSettling(row)), warn: deps.warn, hasConversation: (taskId) => (deps.record?.load(taskId).length ?? 0) > 0 });
     this.scheduler.onTerminal((row) => { const w = this.resumeWaiters.get(row.parent_id); if (w) { this.resumeWaiters.delete(row.parent_id); w(); } });
@@ -226,6 +236,9 @@ export class IterationChildren implements DelegationOps {
     // query, so a child settled by a path that fires no listener (a stale sweep) holds nothing either; this only
     // keeps the map from growing with the run.
     this.scheduler.onTerminal((row) => { this.claims.release(row.task_id); this.disclosures.delete(row.task_id); });
+    // REQ-CONFIG-094 / REQ-MONITOR-020: a child ending here may free a slot another session's held child is waiting for.
+    const onSlotFreed = deps.onSlotFreed;
+    if (onSlotFreed) this.scheduler.onTerminal(() => { onSlotFreed(); });
   }
 
   children(): readonly ChildRow[] {
@@ -581,7 +594,15 @@ export class IterationChildren implements DelegationOps {
     if (cause === 'pause') await Promise.allSettled([...this.executing]);
     else await this.outlast(grace);
     // Clause 3: an explicit cancel that arrived meanwhile is final — nothing more is paused; the caller settles the rest.
-    if ((this.deps.restCause?.() ?? null) === null) return 0;
+    // A child the grace gave up on meanwhile is still counted from its record first (REQ-MONITOR-102), its open calls
+    // answered as cut off, naming no rest (OQ-96, "A call cut by no rest"); the caller then ends it `cancelled` (found by
+    // the verifier of the repair of a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md).
+    if ((this.deps.restCause?.() ?? null) === null) {
+      const givenUp = this.ledger.all().filter((c) => { const s = this.ledger.get(c.task_id)?.state; return this.givenUpOn.has(c.task_id) && s !== undefined && !isTerminalChildState(s); });
+      for (const c of givenUp) answerOpenCalls(this.deps.dal, this.deps.writer, this.deps.sessionId, { taskId: c.task_id, name: c.canonical_name }, c.iteration, null);
+      for (const c of givenUp) this.countGivenUpOn(c.task_id);
+      return 0;
+    }
     for (const c of this.ledger.all()) {
       const current = this.ledger.get(c.task_id);
       if (!current || isTerminalChildState(current.state) || current.state === 'paused') continue;
@@ -595,7 +616,25 @@ export class IterationChildren implements DelegationOps {
     // third review).
     const paused = this.ledger.all().filter((c) => this.ledger.get(c.task_id)?.state === 'paused');
     for (const c of paused) answerOpenCalls(this.deps.dal, this.deps.writer, this.deps.sessionId, { taskId: c.task_id, name: c.canonical_name }, c.iteration, cause);
+    for (const c of paused) if (this.givenUpOn.has(c.task_id)) this.countGivenUpOn(c.task_id);
     return paused.length;
+  }
+
+  /**
+   * REQ-MONITOR-102 (the repair of `a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`):
+   * a child the stop's grace gave up on returns no count — `execute` writes nothing once detached — so the calls its record
+   * shows beyond its count join the session's total now, with its own count, once its open calls are answered (so a call
+   * it asked for and never started is not one), as a root given up on is counted (`Run.turn`). A continue that resumes it
+   * then credits nothing twice (`priorCalls` is its record's, less its count), and one that declines it (PD-ORCH-005
+   * clause 6) has nothing left uncounted.
+   */
+  private countGivenUpOn(taskId: string): void {
+    const row = this.ledger.get(taskId);
+    if (!row) return;
+    let recorded: number;
+    try { recorded = callsRun(this.deps.record?.load(taskId) ?? []); }
+    catch (cause) { this.deps.warn(`the calls of child ${taskId}, given up on at the stop's grace, could not be read from its record: ${String(cause)}`); return; }
+    if (recorded > row.tool_calls) this.deps.countToolCalls?.(recorded - row.tool_calls, { taskId, calls: recorded });
   }
 
   /**
@@ -770,6 +809,8 @@ export class IterationChildren implements DelegationOps {
    * `child_end`, `child_result` and `child_conversation_closed` (REQ-ORCH-098) and `child_completed` (REQ-HOOKS-003). A child already terminal (a cancel), or `paused`, is
    * left as it is, and so is everything after the rest detached this iteration (REQ-SESSION-094). A raise inside the
    * turn while the run comes to rest never reaches here: `execute` catches it and leaves the child `paused` (OQ-96).
+   * A terminal child found here was told to the scheduler by whatever made it terminal — the user's cancel, or a settle,
+   * whose `afterTerminal` tells it even when its teardown or its hook raised — so it is not told twice.
    */
   private async settleRaised(row: ChildRow, cause: unknown, where: string): Promise<void> {
     const { deps } = this;
@@ -782,16 +823,41 @@ export class IterationChildren implements DelegationOps {
     this.ledger.storeReport(row.task_id, { agent_name: row.canonical_name, role: row.persona, status: 'failed', summary: message, key_findings: [], last_response: '', final_response: '', errors: [{ type: 'child_exception', message: reason }] });
     const t = this.ledger.transition(row.task_id, 'failed');
     if (!t.ok) { deps.warn(t.reason); return; }
-    // REQ-ORCH-098: the same teardown the settle in `execute` writes, "whether or not its execution raised".
-    deps.writer.appendTimeline('child_end', 'rotaris', `Child ${row.canonical_name} (${row.task_id}) ended failed.`, { task_id: row.task_id, state: 'failed', at: toIsoUtc(deps.clocks.wall.instant()) });
-    deps.writer.appendTimeline('child_result', 'rotaris', `Child ${row.canonical_name} reported failed: ${message.slice(0, 120)}`, { task_id: row.task_id, status: 'failed' });
-    deps.writer.appendTimeline('child_conversation_closed', 'rotaris', `Child ${row.canonical_name}'s conversation closed.`, { task_id: row.task_id });
-    // REQ-HOOKS-080: the hook runs in line — the parent takes this child as ended once the scheduler is told (`settles`).
+    await this.afterTerminal(row, t.row, () => {
+      // REQ-ORCH-098: the same teardown the settle in `execute` writes, "whether or not its execution raised".
+      deps.writer.appendTimeline('child_end', 'rotaris', `Child ${row.canonical_name} (${row.task_id}) ended failed.`, { task_id: row.task_id, state: 'failed', at: toIsoUtc(deps.clocks.wall.instant()) });
+      deps.writer.appendTimeline('child_result', 'rotaris', `Child ${row.canonical_name} reported failed: ${message.slice(0, 120)}`, { task_id: row.task_id, status: 'failed' });
+      deps.writer.appendTimeline('child_conversation_closed', 'rotaris', `Child ${row.canonical_name}'s conversation closed.`, { task_id: row.task_id });
+    }, { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: 'failed', status: 'failed', summary: message });
+  }
+
+  /**
+   * The end of a settle, once the child has made its terminal move: REQ-ORCH-098's `teardown`, then the `child_completed`
+   * hook in line (REQ-HOOKS-080 — the parent takes the child as ended once the scheduler is told, `settles`), then the
+   * scheduler told, which fires the terminal callbacks (REQ-ORCH-048) and releases every wait on the child (REQ-TOOLS-156).
+   * The scheduler is told whatever raised before it (the repair of
+   * `a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md`): a child that has ended never leaves its
+   * parent waiting on it. A raise out of the hook port reduces to a warning and the settle goes on (REQ-HOOKS-079: the
+   * occurrence completes, the child's terminal status is unaffected, and no error reaches an agent); one out of the
+   * teardown is re-raised after the scheduler is told, to the caller's `settleRaised`, which finds the child terminal.
+   */
+  private async afterTerminal(row: ChildRow, moved: ChildRow | null, teardown: () => void, completed: Readonly<Record<string, unknown>>): Promise<void> {
+    const { deps } = this;
     const endSettle = this.beginSettle(row.task_id);
     try {
-      if (deps.hooks) await deps.hooks.fireLifecycle('child_completed', { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: 'failed', status: 'failed', summary: message });
-      this.scheduler.settled(this.ledger.get(row.task_id) ?? t.row);
-    } finally { endSettle(); }
+      teardown();
+      if (deps.hooks) {
+        try { await deps.hooks.fireLifecycle('child_completed', completed); }
+        catch (cause) { deps.warn(`the child_completed hooks raised for child ${row.canonical_name} (${row.task_id}): ${String(cause instanceof Error ? cause.message : cause)}`); }
+      }
+    } finally {
+      // The terminal row as it stands; the one the move returned when the store cannot be read, so a raising store does
+      // not replace what raised before it and leave the scheduler untold.
+      let settled: ChildRow | null;
+      try { settled = this.ledger.get(row.task_id) ?? moved; } catch { settled = moved; }
+      try { if (settled) this.scheduler.settled(settled); }
+      finally { endSettle(); }
+    }
   }
 
   /**
@@ -1143,19 +1209,14 @@ export class IterationChildren implements DelegationOps {
     const terminal = cancelled ? 'cancelled' : status === 'failed' ? 'failed' : reportStatusToState(report.status);
     const t = cancelled ? this.ledger.transition(row.task_id, 'cancelled', 'cancellation') : this.ledger.transition(row.task_id, terminal);
     if (!t.ok) deps.warn(t.reason);
-    // REQ-ORCH-098: teardown, whatever the terminal state.
-    const at = toIsoUtc(deps.clocks.wall.instant());
-    deps.writer.appendTimeline('child_end', 'rotaris', `Child ${row.canonical_name} (${row.task_id}) ended ${terminal}.`, { task_id: row.task_id, state: terminal, at });
-    deps.writer.appendTimeline('child_result', 'rotaris', `Child ${row.canonical_name} reported ${report.status}: ${report.summary.slice(0, 120)}`, { task_id: row.task_id, status: report.status });
-    deps.writer.appendTimeline('child_conversation_closed', 'rotaris', `Child ${row.canonical_name}'s conversation closed.`, { task_id: row.task_id });
-    // REQ-HOOKS-075: child_completed with the child's terminal state and its report status side by side. REQ-HOOKS-080: it
-    // runs in line — the parent takes this child as ended once the scheduler is told (`settles`).
-    const endSettle = this.beginSettle(row.task_id);
-    try {
-      if (deps.hooks) await deps.hooks.fireLifecycle('child_completed', { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: terminal, status: report.status, summary: report.summary });
-      const settledRow = this.ledger.get(row.task_id);
-      if (settledRow) this.scheduler.settled(settledRow);
-    } finally { endSettle(); }
+    // REQ-HOOKS-075: child_completed carries the child's terminal state and its report status side by side.
+    await this.afterTerminal(row, t.ok ? t.row : null, () => {
+      // REQ-ORCH-098: teardown, whatever the terminal state.
+      const at = toIsoUtc(deps.clocks.wall.instant());
+      deps.writer.appendTimeline('child_end', 'rotaris', `Child ${row.canonical_name} (${row.task_id}) ended ${terminal}.`, { task_id: row.task_id, state: terminal, at });
+      deps.writer.appendTimeline('child_result', 'rotaris', `Child ${row.canonical_name} reported ${report.status}: ${report.summary.slice(0, 120)}`, { task_id: row.task_id, status: report.status });
+      deps.writer.appendTimeline('child_conversation_closed', 'rotaris', `Child ${row.canonical_name}'s conversation closed.`, { task_id: row.task_id });
+    }, { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: terminal, status: report.status, summary: report.summary });
   }
 
   /**
@@ -1214,15 +1275,21 @@ export class IterationChildren implements DelegationOps {
    */
   async outlast(grace: Millis): Promise<boolean> {
     if (this.executing.size === 0) return false;
-    if (grace <= 0) this.detached = true;
+    if (grace <= 0) this.detach();
     else {
       let timer: TimerHandle | undefined;
       const executions = Promise.allSettled([...this.executing]).then(() => false);
       const cut = await Promise.race([executions, new Promise<boolean>((r) => { timer = this.deps.clocks.timers.after(grace, () => r(true)); })]);
       timer?.cancel();
-      if (cut) this.detached = true;
+      if (cut) this.detach();
     }
     return this.detached;
+  }
+
+  /** REQ-SESSION-094: every execution still in flight is given up on, and which children they are is kept (`givenUpOn`). */
+  private detach(): void {
+    this.detached = true;
+    for (const taskId of this.executionOf.keys()) this.givenUpOn.add(taskId);
   }
 
   /** REQ-ORCH-052: every exit path leaves every record terminal. */

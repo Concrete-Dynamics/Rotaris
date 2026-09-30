@@ -46,7 +46,7 @@ since a sibling ignored at the call as unfinished may have completed since, and 
 `resolveAttachments`, which only resolves the references for the caller's warning, at the call as before. A resumed
 execution's retry renders the prior-agent-context block again from its dependencies' rows — still given once in the
 conversation the retry's payload starts, and never re-prefixed on a state hop; that reading of REQ-ORCH-047's "exactly
-once" is raised as OQ-148 in `docs/architecture/open-questions.md`. A row written before v28 carries neither,
+once" is raised as OQ-151 in `docs/architecture/open-questions.md`. A row written before v28 carries neither,
 and its retry in a later run carries none, as before.
 
 **Pinned by** `packages/engine/src/run/ladder.test.ts`, "REQ-TOOLS-154 with PD-ORCH-005 (the repair of

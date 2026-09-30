@@ -6686,12 +6686,13 @@ dedicated value. A poll made after the `C-c` but before any next call still read
 the stream says the line is done; that is recorded as a defect, not this question
 ([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).
 
-**OQ-148 — Does a retry that restarts a child's conversation carry REQ-ORCH-047's prior-agent-context block again?**
+**OQ-151 — Does a retry that restarts a child's conversation carry REQ-ORCH-047's prior-agent-context block again?**
 *(REQ-ORCH-047, "prepend exactly once (never re-prefixed on later state hops …)"; REQ-TOOLS-154, which places the block
 ahead of item (1) of the payload; REQ-ORCH-088's fallback retry; PD-ORCH-005 clause 4. Raised 2026-09-30 by the repair of
 acceptance finding A25,
 [`a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`](../defects/fixed/a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md),
-under [R-067](../product/requests.md#r-067).)*
+under [R-067](../product/requests.md#r-067). Open; numbered OQ-148 when it was raised, renumbered OQ-151 at merge
+once origin/main's OQ-148 to OQ-150 had landed.)*
 
 REQ-ORCH-088's retry starts the child's conversation again from its payload, so whatever the first attempt was given is
 gone from what the retry's model reads. Within the run that started the child, the retry has always reused the block the
@@ -7428,3 +7429,96 @@ Electron binary that tree carries: run against `node_modules` in the checkout it
 asar unpacking, and run under the host Node it passes on exactly the artifact that fails. **A proof
 written the easy way is worse than none, because it reads as verified.** Somebody must establish that it
 is constructible on all three release runners before it is relied on as the only defence.
+
+**OQ-148 — In what order are children held on one `models:` key released when they belong to different sessions?**
+*(REQ-ORCH-050, "Held children MUST be released in the order they were held, one returning to `queued` each time a child
+bound to the same model key reaches a terminal state"; REQ-MONITOR-020, "the freed slot must promote exactly one waiting
+agent"; REQ-CONFIG-094, which counts "children belonging to any other session running in the same process" against the
+cap; ADR-0012 and ADR-0013. Raised 2026-09-30 under [R-067](../product/requests.md#r-067) by the repair of
+[`the-per-model-cap-counts-only-one-iterations-children.md`](../defects/fixed/the-per-model-cap-counts-only-one-iterations-children.md),
+acceptance finding A13. Open; numbered OQ-146 when it was raised, renumbered OQ-148 on its branch once OQ-146 and OQ-147
+were taken on `main`.)*
+
+REQ-ORCH-050 and REQ-MONITOR-020 were written against one ledger, where "the order they were held" is one queue. Once the
+count is the process's (REQ-CONFIG-094), a slot freed in one session can be the slot a child held in another session is
+waiting for, and the requirements do not say whether "the order they were held" is one order across the process or each
+session's own. Two readings were weighed:
+- **One order across the process.** Every held child on a key waits in one queue whatever its session, and a freed slot
+  goes to the oldest. This needs a process-wide queue beside the per-session `model_slot_queue` rows, and a session's own
+  scheduler could no longer promote its own held child while an older one waits in another session.
+- **Each session's own order.** A session's held children are released in the order that session held them, from its own
+  persisted queue, as before; which session takes a freed slot is whichever run's scheduler passes first.
+
+**What the build proceeds under:** the second. The count is process-wide (`ModelSlots` in
+`packages/engine/src/children/model-slots.ts`, joined by each session `Sessions` runs, while a run of it is under way or it
+rests holding a place — OQ-149); the queue stays per session. When a child ends, its own run's scheduler passes after the
+others are woken (`ModelSlots.freed` runs in the terminal listener, the freeing run's pass follows the child's execution),
+so a slot freed in one session is offered first to the other sessions, in the order they joined, and then to the freeing
+session. That order is where the mechanism puts the wake, not a choice made on its merits: a child held earlier in the
+freeing session can be overtaken by one held later elsewhere, and a ruling for the freeing session first moves the others'
+wake after the freeing run's own pass. A session never waits on a slot while the process-wide count is below the cap.
+
+**What a ruling decides.** Whether release order is process-wide, and if so whether a session's own held child may be
+passed over for an older one elsewhere; or, if per session, whether the freeing session or the others take a freed slot
+first.
+
+**OQ-149 — Does a paused child keep its slot on a `models:` entry while its session rests, against other sessions?**
+*(PD-ORCH-005 clause 4, "A resumed agent's `child_timeout` starts afresh, and each agent keeps the place in every child
+limit it already held"; REQ-CONFIG-094, which counts "every child agent currently running against that `models:` entry …
+children belonging to any other session running in the same process"; REQ-ORCH-050; REQ-MONITOR-020, "only running and
+summarizing agents count"; PD-ORCH-005 clauses 6 and 16. Raised 2026-09-30 under [R-067](../product/requests.md#r-067)
+by the verification of the repair of
+[`the-per-model-cap-counts-only-one-iterations-children.md`](../defects/fixed/the-per-model-cap-counts-only-one-iterations-children.md),
+acceptance finding A13. Open.)*
+
+Within one session the question never arose: a resting session runs nothing else, so its paused children lost nothing by
+not being counted. Once the count is the process's (OQ-148), a child paused out of `running` is not "currently running",
+so by REQ-CONFIG-094 and REQ-MONITOR-020 alone its slot is free for another session — and clause 4 then resumes it into
+`running` whatever the count, putting two children on a key capped at 1. Two readings were weighed:
+- **The paused child keeps its place.** A child `paused` out of `running` or `summarizing` holds its slot while its
+  session rests, and resumes into it. The cap is never exceeded; a paused session holds its places until it is continued,
+  declined (clause 6) or its agents are cancelled (clause 16), so another session's child can wait behind a session no
+  one is using.
+- **A resumed child goes back through the cap.** The paused child's slot frees at the rest, and on resume a child whose
+  slot is taken waits `waiting_on_model_slot` like any other. No session waits on a resting one, but the resumed agent
+  loses the place clause 4 says it keeps.
+
+**What the build proceeds under:** the first, as clause 4 reads. `holdsModelSlot` (`packages/engine/src/children/ledger.ts`)
+counts a child `starting`, `running` or `summarizing`, or `paused` with that `resume_state`; a child paused while it
+waited, or before its start was claimed, held none. `Sessions` keeps a session in `ModelSlots` from the first run of it in
+this process until no run of it is under way and none of its children holds a place, reading its count from its store;
+a decline, a cancel at rest, eviction and deletion let it go. Two edges follow and are left as they are: a session paused
+by an **earlier process** holds nothing until a run of it starts in this one (the count is process state), so on continue
+its resumed children may join a key another session already fills; and a paused session left unattended keeps another
+session's child held for as long as it rests.
+
+**What a ruling decides.** Whether a paused child keeps its slot against other sessions, or resumes through the cap;
+if it keeps it, whether a session paused by an earlier process holds its places from launch, and whether a resting
+session's places lapse after some time.
+
+**OQ-150 — Is one `models:` key in two workspaces one entry for the per-model cap?**
+*(REQ-CONFIG-094, "counted by the entry's key, across the whole process … Two different `models:` keys never share a count
+even where they name the same provider model, since the cap is a property of the configured entry"; REQ-CONFIG-005 and
+REQ-CONFIG-031, under which a workspace's configuration may define its own `models:` entries; ADR-0013. Raised 2026-09-30
+under [R-067](../product/requests.md#r-067) by the verification of the repair of
+[`the-per-model-cap-counts-only-one-iterations-children.md`](../defects/fixed/the-per-model-cap-counts-only-one-iterations-children.md),
+acceptance finding A13. Open.)*
+
+The run host serves sessions of several workspaces in one `Sessions`, each run configured from its own workspace's
+loaded configuration. Two workspaces can define different entries under one key — `fast` a local endpoint with
+`max_parallel: 1` in one, a hosted model in the other — or inherit one entry from the profile. The requirement counts by
+the key "across the whole process" and calls the cap "a property of the configured entry", and does not say which governs
+when the two part. Two readings were weighed:
+- **The key alone.** Every child on a key counts against it, whichever workspace defines the key; each session judges
+  the whole count against its own configuration's cap. No entry's cap is ever exceeded, but one workspace's children can
+  hold another's unrelated entry at its cap.
+- **The key and the entry it resolves to.** Children share a count only when their keys resolve to the same entry. A
+  profile entry shared by two workspaces is still one count; two different entries under one key never share. This needs
+  an identity for a resolved entry that both configurations agree on.
+
+**What the build proceeds under:** the first. `ModelSlots.heldElsewhere` sums by the key string across every joined
+session, and `ChildLedger.slotFree` compares that sum with the asking session's own cap (`modelCapFor` from its workspace's
+configuration). It is the reading that can only err towards waiting.
+
+**What a ruling decides.** Whether the count is by key or by resolved entry, and if by entry, what makes two workspaces'
+entries one.

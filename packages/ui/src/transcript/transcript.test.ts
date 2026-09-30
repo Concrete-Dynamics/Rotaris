@@ -9,7 +9,7 @@ import {
 import type { DisplayRow } from './types.js';
 import {
   beginMeasuring, buildOffsets, captureAnchor, commitTable, createMeasureLedger, estimateHeight, forgetMeasured, indexAt, markMeasured,
-  newUpdatesLabel, remeasuredSince, restoreAnchor, reuseOffsets, updateShape, visibleRange,
+  newUpdatesLabel, observeAgain, readHeight, remeasuredSince, restoreAnchor, reuseOffsets, updateShape, visibleRange,
 } from './pool.js';
 import { countLabel, indexAll, indexSuffix, matchRow, step } from './search.js';
 import { SCROLL_ORIGIN_EPSILON, isOwnScroll } from './scroll.js';
@@ -147,11 +147,18 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
   });
 
   it('PD-CHAT-003: a one-line row estimates content height, not the old padding-box 46 px', () => {
-    // A one-line row is one ~17 px text line over the 30 px unit — NOT the old 34 px padding-box term.
-    const oneLine = estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'one line' }) });
+    // A one-line plain row is one text line over the 30 px unit — NOT the old 34 px padding-box term.
+    const oneLine = estimateHeight({ shape: 'row', key: 'k', row: row(0, { kind: 'system', body: 'one line' }) });
     expect(oneLine).toBe(ROW_MIN_HEIGHT);
+    // An agent message's one line is a Markdown paragraph, which keeps its 8 px bottom margin inside the row (REQ-CHAT-056):
+    // the unit and that margin, still well under the old padding box. (This read 30 until 2026-09-30, when the built
+    // app drew such a row 33.4 px — docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md.)
+    const message = estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'one line' }) });
+    expect(message).toBe(ROW_MIN_HEIGHT + 8);
+    expect(message).toBeLessThan(46);
     // Multi-line rows still grow per line.
-    expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'a\nb\nc' }) })).toBeGreaterThan(oneLine);
+    expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { kind: 'system', body: 'a\nb\nc' }) })).toBeGreaterThan(oneLine);
+    expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'a\n\nb\n\nc' }) })).toBeGreaterThan(message);
   });
 
   it('a collapsed thinking row estimates its one-line summary, never its hidden body (REQ-CHAT-062/167)', () => {
@@ -166,6 +173,59 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
     // Other shapes are unaffected by the flag.
     expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'a\nb\nc' }) }, false))
       .toBe(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'a\nb\nc' }) }, true));
+  });
+
+  // ---- the estimate is never short of what a new row draws before its first measurement -----------------------
+  // docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md: a new
+  // row at the tail is positioned by its estimate until the measurement pass reaches it, so an estimate SHORT of what
+  // the row draws puts it through the row beneath it for those frames. The figures are the built app's, read from a
+  // planted transcript of every row kind below at a 740 px viewport on 2026-09-30 (slot heights, which include the row
+  // gap above each row): the first repair covered only the block gap, and `transcript-proof` went on catching a
+  // one-line agent message INSIDE a block drawn 33.4 px into the 30 px it was given.
+
+  it('PD-CHAT-003: the first row of a block estimates the 12 px it is drawn below, over what one row inside a block is', () => {
+    const shapes: DisplayRow[] = [
+      { shape: 'row', key: 'k', row: row(0, { body: 'one line' }) },
+      { shape: 'row', key: 't', row: row(0, { kind: 'thinking', body: 'deliberating' }) },
+      asGroup(projectDisplay(options([tool(0, 'read'), tool(1, 'read')]))[0]),
+    ];
+    for (const d of shapes) {
+      // `.row--block-start`'s `--rt-space-3` against `.row`'s 4 px: the only difference between the two boxes.
+      expect(estimateHeight(d, false, 900, true) - estimateHeight(d, false, 900, false), d.key).toBe(8);
+    }
+    // A caller that says nothing about the block keeps the estimate it had (a row inside a block).
+    expect(estimateHeight(shapes[0]!, false, 900)).toBe(estimateHeight(shapes[0]!, false, 900, false));
+  });
+
+  it('PD-CHAT-003 / REQ-CHAT-056: no row kind is estimated short of what the built app drew, inside a block or starting one', () => {
+    const WIDTH = 740;
+    const PROSE = 'The transcript keeps each row at the height it drew, and until a row has been measured the pane positions it by an estimate of that height, which is why the estimate has to be read against what the built application actually draws on this host and on every other one it ships to, including the wrapped paragraphs an agent writes when it explains what it changed and why the change was needed at all.';
+    const at = (over: Partial<TranscriptRow>): DisplayRow => ({ shape: 'row', key: 'k', row: row(0, over) });
+    const drawn: [string, DisplayRow, boolean, number][] = [
+      // The case transcript-proof caught after the first repair: a one-line agent message INSIDE a block, whose
+      // Markdown paragraph keeps its 8 px bottom margin in the row. Estimated 30 before this repair.
+      ['one-line agent message inside a block', at({ body: 'The scripted answer, after deliberating.' }), false, 33.4],
+      ['one-line agent message starting a block', at({ body: 'agent one line' }), true, 41.4],
+      // `.row--user`'s 8 px padding above and below: 11.4 px short before this repair, at both positions.
+      ['one-line user message inside a block', at({ kind: 'user', body: 'second user line' }), false, 41.4],
+      ['one-line user message starting a block', at({ kind: 'user', body: 'Say something about the notes.' }), true, 49.4],
+      ['one-line system notice inside a block', at({ kind: 'system', body: 's2' }), false, 23.8],
+      ['one-line system notice starting a block', at({ kind: 'system', body: 'The run completed.' }), true, 31.8],
+      ['collapsed reasoning row starting a block', at({ kind: 'thinking', body: 'deliberating' }), true, 33.4],
+      ['three Markdown paragraphs', at({ body: 'para one\n\npara two\n\npara three' }), false, 88.3],
+      ['a two-item Markdown list starting a block', at({ body: '- item one\n- item two' }), true, 68.9],
+      ['a Markdown heading and a paragraph', at({ body: '# Heading\n\nbody' }), false, 71.3],
+      ['a six-line user message starting a block', at({ kind: 'user', body: 'u1\nu2\nu3\nu4\nu5\nu6' }), true, 146.6],
+      ['a paragraph that wraps to seven lines', at({ body: PROSE }), false, 150.1],
+      ['a user message that wraps to seven lines', at({ kind: 'user', body: PROSE }), true, 166.1],
+      ['a paragraph of 800 characters that wraps to fourteen lines', at({ body: 'word '.repeat(160) }), false, 286.1],
+      ['a five-line diff starting a block', at({ kind: 'diff', name: 'edit', body: '--- a/x\n+++ b/x\n@@\n-a\n+b' }), true, 103.1],
+      ['a sixteen-segment activity line starting a block (six drawn lines)',
+        asGroup(projectDisplay(options(Array.from({ length: 16 }, (_, i) => tool(i, `inspect-${i}`))))[0]), true, 130.6],
+    ];
+    for (const [name, d, blockStart, height] of drawn) {
+      expect(estimateHeight(d, false, WIDTH, blockStart), name).toBeGreaterThanOrEqual(height);
+    }
   });
 
   // ---- the estimate models WRAPPING (docs/defects/live-rows-are-never-measured.md) ------------------------
@@ -197,8 +257,9 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
     const paragraph = 'x'.repeat(1_200);
     const drawn = estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: paragraph }) }, false, 900);
     expect(drawn).toBeGreaterThan(ROW_MIN_HEIGHT * 3);
-    // With no width known nothing can be predicted, so the old width-blind count is what is left.
-    expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: paragraph }) }, false)).toBe(ROW_MIN_HEIGHT);
+    // With no width known nothing can be predicted, so the old width-blind count — one line — is what is left.
+    expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: paragraph }) }, false))
+      .toBe(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'one line' }) }, false));
   });
 
   it('a long agent name costs the row a second line, because the role gutter wraps (REQ-CHAT-057)', () => {
@@ -314,6 +375,51 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
     reads = 0;
     reuseOffsets(table, { display, width: 900, expanded, stamp: ledger.stamp }, remeasured, heightOf);
     expect(reads).toBe(1_202);
+  });
+
+  it('ADR-0045 / PD-CHAT-003: a slot rebound under a new measurement key is observed again, and one still under its key is not', () => {
+    const observed = new Map<number, string>();
+    // First bound: observed. The same key on the next commit: nothing to do — the observer already delivers its changes.
+    expect(observeAgain(observed, 0, 'row:1|a|740|c||')).toBe(true);
+    expect(observeAgain(observed, 0, 'row:1|a|740|c||')).toBe(false);
+    // A scroll rebinds the slot to another row: observed again, so its size is delivered even if it equals the last row's.
+    expect(observeAgain(observed, 0, 'row:2|b|740|c||')).toBe(true);
+    // An unbound slot has nothing to measure, and is recorded so the row bound to it next is observed.
+    expect(observeAgain(observed, 0, '')).toBe(false);
+    expect(observeAgain(observed, 0, 'row:2|b|740|c||')).toBe(true);
+    // Slots are independent.
+    expect(observeAgain(observed, 1, 'row:2|b|740|c||')).toBe(true);
+  });
+
+  it('the pane\'s height reader takes the measurement, then the identity\'s last height, then the estimate at the row\'s own block start (PD-CHAT-003)', () => {
+    const d = displayed(0, 'one line');
+    const none = { peek: (): number | undefined => undefined };
+    const inside = [{ blockStart: false }];
+    const starts = [{ blockStart: true }];
+    // Nothing measured: the estimate, read with the block start of the row's OWN position.
+    expect(readHeight(d, 0, 800, new Set(), starts, none, none)).toBe(estimateHeight(d, false, 800, true));
+    expect(readHeight(d, 0, 800, new Set(), inside, none, none)).toBe(estimateHeight(d, false, 800, false));
+    expect(readHeight(d, 0, 800, new Set(), starts, none, none) - readHeight(d, 0, 800, new Set(), inside, none, none)).toBe(8);
+    // A position the places do not reach is read as a row inside a block, never as an error.
+    expect(readHeight(d, 3, 800, new Set(), starts, none, none)).toBe(estimateHeight(d, false, 800, false));
+    // What the identity drew last wins over any estimate, and the row's own measurement over both.
+    const last = { peek: (identity: string): number | undefined => (identity === d.key ? 77 : undefined) };
+    expect(readHeight(d, 0, 800, new Set(), starts, none, last)).toBe(77);
+    const key = measureKey(d, 800, false, null);
+    const measured = { peek: (k: string): number | undefined => (k === key ? 55 : undefined) };
+    expect(readHeight(d, 0, 800, new Set(), starts, measured, last)).toBe(55);
+  });
+
+  it('the offset table hands a row\'s height reader its position, where the pane finds the row\'s block (PD-CHAT-003)', () => {
+    const display = Array.from({ length: 5 }, (_, i) => displayed(i));
+    const seen: number[] = [];
+    const table = reuseOffsets(null, { display, width: 800, expanded: new Set(), stamp: 0 }, null, (_d, at) => { seen.push(at); return at === 0 ? 38 : 30; });
+    expect(seen).toEqual([0, 1, 2, 3, 4]);
+    expect(table.offsets).toEqual([0, 38, 68, 98, 128, 158]);
+    // An appended row is read at its own position, and the rows above it are not read again.
+    seen.length = 0;
+    reuseOffsets(table, { display: [...display, displayed(5)], width: 800, expanded: table.expanded, stamp: 0 }, null, (_d, at) => { seen.push(at); return 30; });
+    expect(seen).toEqual([5]);
   });
 
   it('the ledger answers an identity re-measured after a stamp, and forgets what a committed table has read', () => {

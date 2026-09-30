@@ -769,7 +769,7 @@ Left open, and not this note's: the comparison's reading under a burst and again
 with this round's evidence — the part-empty first launch still charges a full viewport's rebinding, about 1.6 ms an
 increment, to the loaded side), and the proof on Windows, which this Linux container cannot run. Noticed on the way and
 recorded, not repaired:
-[`a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`](../a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md),
+[`a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`](a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md) (repaired 2026-09-29),
 [`the-update-shape-never-answers-extend.md`](../the-update-shape-never-answers-extend.md), and — running the proofs whose
 surfaces this round touched — [`terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md`](terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md) (a duplicate of a note `main` had already repaired; settled at the merge)
 and [`chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`](../chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md);

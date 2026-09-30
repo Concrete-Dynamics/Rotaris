@@ -1178,7 +1178,13 @@ with `H_max` a declared product constant of 4,320 px — allocated at window con
 from, **emptied rather than unmounted**, and rendered whether or not the transcript holds any rows. The slot index is
 the framework key, never the row identity. Heights are **measured** by a `ResizeObserver` into a bounded cache and fed
 to a prefix-sum offset table — rebuilt from the first height that changed, not from the top (REQ-CHAT-055) — which is
-what makes the anchor of REQ-CHAT-071 exact: the identity and viewport offset
+what makes the anchor of REQ-CHAT-071 exact. A row not yet measured is positioned by `estimateHeight`, built from
+the parts of its box the stylesheet draws — the 4 px row gap or 12 px block gap (the pane reads the row's block start
+from `places` at its position, `readHeight`), the border, a user row's padding, a Markdown body's block margins, one
+19.5 px line per drawn line — so that for every row kind measured it is not short of what the row draws, because a row
+appended at the tail while the pane follows is inside the viewport for the frames before its first measurement. A slot
+a scroll rebinds is observed again (`observeAgain`), since an observer reports only a size that changed. The anchor is
+the identity and viewport offset
 of the top visible row, restored by finding that row again, never by re-applying a stored pixel offset. A retained
 rendering is reused only while identity, content, laid-out width and expansion state are all unchanged; a live row is
 redrawn on every repaint. Expansion state lives in the pane, keyed by stable identity, because a slot rebind would

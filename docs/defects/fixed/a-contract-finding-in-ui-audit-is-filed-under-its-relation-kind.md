@@ -24,3 +24,21 @@ name.
 - `apps/desktop/scripts/ui-audit.mjs` — `note`, and the CONTRACTS call site that passes `evaluateContracts`' row as `detail`.
 - `apps/desktop/scripts/lib/layout-relations.mjs` — `evaluateContracts`, whose rows carry the relation's `kind`.
 - `apps/desktop/scripts/ui-review.mjs` — `byKind` in `manifest.json`, which inherits the mislabel.
+
+## Outcome
+
+Repaired 2026-09-29 under R-067, in the shape the note proposed. `ui-audit.mjs`'s `note` now builds each finding
+through `auditFinding` in `apps/desktop/scripts/lib/audit-finding.mjs`: the measured detail is spread first, the
+sweep's `kind`, the view and the size are set after it, and a detail's own `kind` is carried as `relation`. The summary
+line and `ui-review.mjs`'s `manifest.json` count through the same module's `countByKind`, and the manifest gains
+`deterministic.contractsByRelation`, the contract failures counted per relation that failed.
+
+Pinned by `apps/desktop/scripts/lib/audit-finding.test.ts` (4 cases, all 4 failing on the old `{ kind, view, size,
+...detail }` shape): the R-062 counterfactual's `schema` row filed as `CONTRACT` with `relation: "schema"`; a failing
+`containment` relation filed apart from the whole-document `CONTAINMENT` sweep; a detail never renaming the view or the
+size; the counts by sweep and by relation. Measured in the built app with a counterfactual contract (the window
+controls' containment pointed at `shell-status`, reverted before the commit) under
+`pnpm ui-review --iteration=1 --skip-build --views=1,7 --sizes=1400x900`: with the old `note` the pack summed
+`2 finding(s) {"containment":2}` and the manifest `byKind: {"containment":2}`; with the repair
+`2 finding(s) {"CONTRACT":2}`, `byKind: {"CONTRACT":2}`, `contractsByRelation: {"containment":2}`, and each
+`report.json` row reads `"kind":"CONTRACT","relation":"containment"`.

@@ -663,3 +663,33 @@ that a frame carrying it was presented. And one reading the round surfaced is on
 — whether REQ-CHAT-055's comparison is read on the update as it arrived or on one that arrived alone, and what "an empty
 transcript" holds once the run has appended to it — **OQ-89**, with the reading the proof takes: both cuts, one frame
 of slack at the cadence it measured.
+
+**A new row before its first measurement, 2026-09-29 and 2026-09-30 (R-067) — repaired in the second round.** The pool
+positions a row that has not been measured by `estimateHeight`, and `pool.ts` justified a coarse estimate by "a wrong
+estimate below the viewport is never seen". Falsified at the tail, kept beside its replacement in `pool.ts`: a row
+appended while the pane follows is inside the viewport for the frames before the `ResizeObserver` delivers its height,
+and the state that delivery sets renders a frame later. `transcript-proof`'s geometry stage reads those frames directly:
+the boxes on each of the twelve animation frames after the pool first binds a key, before that frame's layout and
+observer delivery. **First round, falsified and kept:** it read the 3.4 px it found (`row:28` / `row:29`) as the 12 px
+block gap, added the block gap to the estimate, and recorded 0 px in three runs of three. The verifier's runs of that build
+read 3.4 px again in two of four, on the same pair: `row:28` is an agent message INSIDE a block, and the clean runs were
+the timing of a watch that saw the overlap in some runs only. **Second round:** a planted transcript of every row kind,
+measured in the built app, showed the estimate short on four terms besides the block gap — a Markdown body's 8 px block
+margins (a one-line agent message inside a block drew 33.4 px into 30), a user row's 8 px padding above and below (11.4 px
+short), a drawn line of 19.44 px counted as 18, and the row's own 46 px inline box left in the wrapping width — and an
+activity line wrapping whole segments. `estimateBox` now builds the estimate from those parts and errs long; for every
+row kind measured it is at or above what the row drew (`transcript.test.ts` holds the figures). Making it err long
+exposed a second cause the geometry had hidden: the measurement pass re-observed its slots only when the displayed rows
+changed, so a slot a SCROLL rebound to a row of the height its previous row drew delivered nothing, and the row sat at its
+estimate on screen until the next displayed change — two rows drawn 3.4 px through their neighbours 800 ms after a
+scroll, on the first round's build, three runs of three. The pane now observes a slot again whenever it is bound under a
+key it was not observed under (`observeAgain`). The pool, its capacity and the anchor rule are as they were; the proof's
+paging check now holds the anchor row itself to 4 px, because a row measured below the reader moves the transcript's
+height and not the reader, and fails on any bound row positioned by its estimate once the pool has settled
+(`docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`). Noticed
+on the way and recorded, not repaired: the capacity rule's 30 px unit is larger than a row PD-CHAT-003 draws inside a
+block — a one-line system notice drew 23.8 px (`docs/defects/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`);
+and a row that GROWS is positioned by the height its identity drew last until it is measured again, which drew the
+planted activity line 21.8 px through the row beneath it for a frame in one run of six when it turned live again
+(`docs/defects/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md`) — the proof's new-row
+watch records such a pair of rows already drawn and holds only the pairs with a new row to 1 px.

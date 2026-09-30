@@ -1956,7 +1956,7 @@ its own box. First run of the whole sweep with the controls' contract in it: 14 
 Settings category, not a view, so no pack reaches it and the owed critique of the About caption is still owed
 (`../defects/fixed/the-window-controls-contract-is-an-object-and-kills-every-ui-audit.md`). One more defect in the same
 script was found by the counterfactual and recorded, not repaired: a `CONTRACT` finding's own `kind` is overwritten by
-the relation's (`../defects/a-contract-finding-in-ui-audit-is-filed-under-its-relation-kind.md`).
+the relation's (`../defects/fixed/a-contract-finding-in-ui-audit-is-filed-under-its-relation-kind.md`) — repaired 2026-09-29 (R-067): the finding keeps `CONTRACT` and names the failed relation under `relation`.
 
 ### The third cycle's critique, recovered from the reader rather than from the disk
 

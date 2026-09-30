@@ -7,8 +7,8 @@ import { createMeasurementCache, createRenderCache, identityOf, measureKey, reus
 import { CAP_DEFAULTS, isLive, rowKey, type DisplayCaps } from './project.js';
 import { createProjector } from './projector.js';
 import {
-  beginMeasuring, buildOffsets, captureAnchor, commitTable, createMeasureLedger, estimateHeight, markMeasured, newUpdatesLabel, remeasuredSince,
-  restoreAnchor, reuseOffsets, updateShape, visibleRange, type Anchor,
+  beginMeasuring, buildOffsets, captureAnchor, commitTable, createMeasureLedger, markMeasured, newUpdatesLabel, remeasuredSince,
+  observeAgain, readHeight, restoreAnchor, reuseOffsets, updateShape, visibleRange, type Anchor,
 } from './pool.js';
 import { isOwnScroll } from './scroll.js';
 import { countLabel, indexAll, step as stepMatch, type Match } from './search.js';
@@ -152,6 +152,9 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     }
   }, [rows, onReadAttachment, attachmentBodies]);
   const [slotNodes] = useState(() => new Map<number, HTMLDivElement>());
+  /** The measurement key each slot was last observed under (`observeAgain`), and the measurement pass's observer. */
+  const [observedKeys] = useState(() => new Map<number, string>());
+  const observerRef = useRef<ResizeObserver | null>(null);
 
   /**
    * REQ-CHAT-059 / REQ-CHAT-167: what the READER set by hand, keyed by stable identity. It is deliberately not
@@ -295,14 +298,14 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     ledger.committed,
     { display, width: viewport.width, expanded, stamp: ledger.stamp },
     ledger.marked.size === 0 ? null : (identity, since) => remeasuredSince(ledger, identity, since),
-    (d) => {
-      const open = expanded.has(d.key);
-      const key = measureKey(d, viewport.width, open, null);
-      return measurements.peek(key) ?? lastByIdentity.peek(d.key) ?? estimateHeight(d, open, viewport.width);
-    },
+    // The row's block start rides to the estimate because the first row of a block is drawn 12 px below the row
+    // above rather than 4 px (PD-CHAT-003): a new row at the tail is positioned by its estimate until its first
+    // measurement, and an estimate short of what it draws puts it through the row beneath it for those frames
+    // (docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
+    (d, at) => readHeight(d, at, viewport.width, expanded, places, measurements, lastByIdentity),
   ),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `measuredVersion` is the observer's "the cache changed" signal
-  [display, expanded, viewport.width, measurements, lastByIdentity, ledger, measuredVersion]);
+  [display, places, expanded, viewport.width, measurements, lastByIdentity, ledger, measuredVersion]);
   // The table the next one is built against is the one React committed; the ledger's marks it has read are forgotten.
   useLayoutEffect(() => { commitTable(ledger, table); }, [table, ledger]);
 
@@ -380,10 +383,31 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
       }
       if (changed) setMeasuredVersion((v) => v + 1);
     });
-    for (const node of slotNodes.values()) observer.observe(node);
-    return () => observer.disconnect();
-    // Re-observing on every displayed change is what keeps a rebound slot measured under its NEW key.
-  }, [measurements, lastByIdentity, ledger, slotNodes, display, capacity]);
+    observedKeys.clear();
+    for (const [slot, node] of slotNodes) { observer.observe(node); observedKeys.set(slot, node.dataset['measure'] ?? ''); }
+    observerRef.current = observer;
+    return () => { observer.disconnect(); if (observerRef.current === observer) observerRef.current = null; };
+    // Re-observing on every displayed change keeps a slot rebound BY THAT CHANGE measured under its new key.
+    // **Falsified 2026-09-30, kept beside its replacement: "re-observing on every displayed change is what keeps a
+    // rebound slot measured under its NEW key".** A scroll rebinds slots without changing what is displayed, and an
+    // observer delivers a size only when it CHANGES: a slot rebound to a row that draws the height the row it held drew
+    // delivered nothing, and the new row stayed at its estimate on screen until the next displayed change. The layout
+    // effect below observes such a slot again, which delivers its size whatever it was.
+  }, [measurements, lastByIdentity, ledger, slotNodes, observedKeys, display, capacity]);
+
+  // ADR-0045 (heights are measured): every commit, a slot bound under a measurement key it was not observed under is
+  // observed again, so the row it now holds is measured rather than left at its estimate
+  // (docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
+  // It walks the pool's slots, not the transcript's rows, so its cost is bounded by the viewport (REQ-CHAT-055).
+  useLayoutEffect(() => {
+    const observer = observerRef.current;
+    if (observer === null) return;
+    for (const [slot, node] of slotNodes) {
+      if (!observeAgain(observedKeys, slot, node.dataset['measure'] ?? '')) continue;
+      observer.unobserve(node);
+      observer.observe(node);
+    }
+  });
 
   /** REQ-CHAT-053 / REQ-CHAT-071 / REQ-CHAT-072: what an update does to the reader's position. */
   useLayoutEffect(() => {

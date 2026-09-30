@@ -23,8 +23,8 @@ describe('a persona\'s MCP lines on its first spawn (REQ-MCP-059, REQ-MCP-065, R
     } as unknown as LoadedConfiguration;
     return { mcp, cfg, lines };
   }
-  const surfaceLines = (lines: readonly { message: string }[]) => lines.filter((l) => l.message.startsWith('mcp: surface for tester'));
-  const grantLines = (lines: readonly { message: string }[]) => lines.filter((l) => l.message.includes('2 of 3 tools granted on server \'ci\''));
+  const surfaceLines = <T extends { message: string }>(lines: readonly T[]) => lines.filter((l) => l.message.startsWith('mcp: surface for tester'));
+  const grantLines = <T extends { message: string }>(lines: readonly T[]) => lines.filter((l) => l.message.includes('2 of 3 tools granted on server \'ci\''));
 
   it('D7: the spawn evidence and the tool port resolving the same surface write its surface line and its grant count once', () => {
     const { mcp, cfg, lines } = host();
@@ -39,6 +39,16 @@ describe('a persona\'s MCP lines on its first spawn (REQ-MCP-059, REQ-MCP-065, R
     mcp.evidenceFor(cfg, '/ws', 'tester');
     expect(surfaceLines(lines)).toHaveLength(1);
     expect(grantLines(lines)).toHaveLength(1);
+  });
+
+  // Acceptance finding A41: REQ-MCP-059 calls the grant count a debug log, and it was written at `info`, which
+  // PD-MONITOR-002's default threshold keeps in every packaged build. At `debug` it is dropped unless
+  // ROTARIS_APP_LOG_LEVEL=debug is set; the persona's surface line stays at `info`.
+  it('REQ-MCP-059, PD-MONITOR-002 (A41): the grant count reaches the application log at debug, the surface line at info', () => {
+    const { mcp, cfg, lines } = host();
+    mcp.evidenceFor(cfg, '/ws', 'tester');
+    expect(grantLines(lines).map((l) => l.level)).toEqual(['debug']);
+    expect(surfaceLines(lines).map((l) => l.level)).toEqual(['info']);
   });
 
   it('D7: a surface the reserved names changed — a collision offered under its prefix — is a different surface, and its line is written', () => {

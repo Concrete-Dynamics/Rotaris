@@ -306,3 +306,14 @@ override's wording, its absence after a relaunch, the five fates, the granted se
 the mask and the scope all read as the first execution recorded them. The steps finished in about 10 s (launch 6) and
 3 to 5 s (launch 7), against the 14 s and 19 s the offsets had reserved. **Could not show:** the loaded-host red itself
 on demand, and anything on Windows (IC-3).
+
+**The sink's severities gain `debug` — 2026-09-29, R-067 (acceptance finding A41).** "Every diagnostic is a value
+carrying its severity" held, and the severities stopped at `info`: `DiagnosticSeverity` was `info | warning | error`, and
+`McpHost.deliver` wrote `info` at `info` and everything else at `warn`. REQ-MCP-059 calls its grant count "a debug log",
+so it could only be written at `info`, which PD-MONITOR-002's default threshold keeps in every packaged build — on every
+persona's first spawn whose `mcp_tools` narrows a server. `DiagnosticSeverity` now carries `debug` (`debug(…)` in
+`packages/config/src/mcp/diagnostics.ts`, a log-only diagnostic), the grant count is built with it in
+`resolvePersonaMcp`, and the sink writes it at `debug`, so the default threshold drops it and `ROTARIS_APP_LOG_LEVEL=debug`
+restores it. No other diagnostic changed level. Pinned by "REQ-MCP-059 (A41): …" in `config/src/mcp/mcp.test.ts` and
+"REQ-MCP-059, PD-MONITOR-002 (A41): …" in `run-host/mcp.test.ts`, both red on the unrepaired code
+([note](../../defects/fixed/the-mcp-grant-count-is-logged-at-info-not-debug.md)).

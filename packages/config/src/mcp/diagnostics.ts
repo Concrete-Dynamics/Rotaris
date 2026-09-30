@@ -6,8 +6,12 @@
  *   `process` — once per process (REQ-MCP-041's detailed log line, REQ-MCP-058's inert grant, REQ-MCP-048's identity);
  *   `session` — once per server per session (REQ-MCP-069).
  * A diagnostic with no key is delivered every time it is produced.
+ *
+ * `debug` is for a line the requirements call a debug log (REQ-MCP-059's grant count): the sink writes it to the
+ * application log at `debug`, which PD-MONITOR-002's default `info` threshold drops. Before acceptance finding A41 the
+ * severities stopped at `info`, so that line was kept in every packaged build.
  */
-export type DiagnosticSeverity = 'info' | 'warning' | 'error';
+export type DiagnosticSeverity = 'debug' | 'info' | 'warning' | 'error';
 export type DiagnosticScope = 'load' | 'process' | 'session';
 
 export interface Diagnostic {
@@ -29,6 +33,8 @@ export interface Staged<T> {
 
 export const warn = (message: string, scope: DiagnosticScope, key: string, extra: Partial<Pick<Diagnostic, 'server' | 'persona' | 'channels'>> = {}): Diagnostic => ({ severity: 'warning', message, scope, key, channels: extra.channels ?? 'user', ...(extra.server === undefined ? {} : { server: extra.server }), ...(extra.persona === undefined ? {} : { persona: extra.persona }) });
 export const info = (message: string, scope: DiagnosticScope, key: string, extra: Partial<Pick<Diagnostic, 'server' | 'persona'>> = {}): Diagnostic => ({ severity: 'info', message, scope, key, channels: 'log', ...(extra.server === undefined ? {} : { server: extra.server }), ...(extra.persona === undefined ? {} : { persona: extra.persona }) });
+/** A log-only line the requirements call a debug log; the sink writes it at `debug` (PD-MONITOR-002). */
+export const debug = (message: string, scope: DiagnosticScope, key: string, extra: Partial<Pick<Diagnostic, 'server' | 'persona'>> = {}): Diagnostic => ({ severity: 'debug', message, scope, key, channels: 'log', ...(extra.server === undefined ? {} : { server: extra.server }), ...(extra.persona === undefined ? {} : { persona: extra.persona }) });
 export const fatal = (message: string, key: string, extra: Partial<Pick<Diagnostic, 'server' | 'persona'>> = {}): Diagnostic => ({ severity: 'error', message, scope: 'load', key, channels: 'user', ...(extra.server === undefined ? {} : { server: extra.server }), ...(extra.persona === undefined ? {} : { persona: extra.persona }) });
 
 /**

@@ -14,9 +14,41 @@ import { type CaptureHost, parseSelectors, pause } from './host.js';
  * `seams.ts` unless the packaged probe itself needs it.
  */
 
+/** One keyboard event as `webContents.sendInputEvent` takes it. */
+export interface TypedEvent {
+  readonly type: 'keyDown' | 'char' | 'keyUp';
+  readonly keyCode: string;
+  readonly modifiers?: readonly ('shift' | 'control')[];
+}
+
+/**
+ * The events that type `prompt` into the composer as a person types it, then submit it.
+ *
+ * Each character is one `char` event — the renderer needs the `char`, and a chord alone inserts nothing. A line break
+ * is not a character the composer takes that way: a `char` of `\n` inserts nothing, so every line of a multi-line
+ * prompt used to arrive joined to the next ("in order,each waiting", the duress live run of 2026-09-29, live-run
+ * finding H-e). It is typed as the composer receives a typed one instead — Shift+Enter, `keyDown`, `char` and `keyUp`
+ * each carrying `shift` — which REQ-CHAT-001 makes a newline and never a submit, so the prompt cannot go early either.
+ * A `\r` is dropped, so a CRLF prompt breaks its lines once. The one unmodified Enter at the end submits (REQ-CHAT-001).
+ */
+export function promptEvents(prompt: string): TypedEvent[] {
+  const events: TypedEvent[] = [];
+  const enter = (modifiers?: readonly ('shift' | 'control')[]) => {
+    for (const type of ['keyDown', 'char', 'keyUp'] as const) events.push(modifiers === undefined ? { type, keyCode: 'Return' } : { type, keyCode: 'Return', modifiers });
+  };
+  for (const ch of prompt) {
+    if (ch === '\r') continue;
+    if (ch === '\n') enter(['shift']);
+    else events.push({ type: 'char', keyCode: ch });
+  }
+  enter();
+  return events;
+}
+
 /**
  * The typed prompt. Real input events, not a script: Ctrl+2 opens Workspace (REQ-SHELL-049), Ctrl+L
- * focuses the composer (REQ-CHAT-002), the text is typed, Enter submits (REQ-CHAT-001).
+ * focuses the composer (REQ-CHAT-002), the text is typed with its line breaks as Shift+Enter, Enter submits
+ * (REQ-CHAT-001) — `promptEvents`.
  *
  * `ROTARIS_CAPTURE_PROMPT_MS` says when — the MCP proof toggles a Settings control first, and a launch
  * that resumes a stored session first needs the transcript on screen before the composer means anything.
@@ -29,10 +61,7 @@ export function installPromptSeam(host: CaptureHost, prompt: string, resuming: b
     host.clocks.timers.after(millis(200), () => {
       wc.sendInputEvent({ type: 'keyDown', keyCode: 'L', modifiers: ['control'] });
       wc.sendInputEvent({ type: 'keyUp', keyCode: 'L', modifiers: ['control'] });
-      for (const ch of prompt) wc.sendInputEvent({ type: 'char', keyCode: ch });
-      wc.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
-      wc.sendInputEvent({ type: 'char', keyCode: 'Return' });
-      wc.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+      for (const event of promptEvents(prompt)) wc.sendInputEvent(event.modifiers === undefined ? { type: event.type, keyCode: event.keyCode } : { type: event.type, keyCode: event.keyCode, modifiers: [...event.modifiers] });
     });
   });
 }

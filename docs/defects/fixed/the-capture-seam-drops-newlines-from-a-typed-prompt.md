@@ -20,3 +20,16 @@ Live-run finding: H-e (live runs of 2026-09-29)
 
 - `apps/desktop/src/main/capture/probe.ts:32` — `for (const ch of prompt) wc.sendInputEvent({ type: 'char', keyCode: ch })`.
 - `apps/desktop/scripts/live-run.mjs:1819-1841` — the duress prompt, joined with `'\n'`.
+
+## Outcome
+
+Repaired 2026-09-29 under R-067. `promptEvents` in `apps/desktop/src/main/capture/probe.ts` types a line break the way
+the composer receives a typed one: REQ-CHAT-001's Shift+Enter, sent as `keyDown`, `char` and `keyUp`, each carrying
+`shift`. That inserts a newline and never submits. A `\r` is dropped, and the one unmodified Enter at the end
+submits. Pinned by `apps/desktop/src/main/capture/probe.test.ts` ("the capture seam types a multi-line prompt as a person
+types it"). The tests check that no event carries a bare `\n`, that no unmodified Enter precedes the last line, that a
+CRLF prompt equals an LF one, and that `installPromptSeam` sends exactly these events after Ctrl+2 and Ctrl+L.
+
+The built app shows it with the scripted model: a five-line prompt holding a blank line, leading spaces and an em
+dash, typed through `ROTARIS_CAPTURE_PROMPT`. It arrived as transcript row 0 character for character, and the launch
+recorded one session, so nothing was submitted early.

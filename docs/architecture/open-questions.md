@@ -6751,13 +6751,14 @@ paused while waiting and continued had a `stall` issue at every evaluation of th
 informational level as "waiting on N active children", which would need words no requirement has and, while REQ-ORCH-139's
 vocabulary has none, a session-log line in the manner OQ-127 records.
 
-**OQ-153 — How much of the history it replaces does the compressing model read?** *(REQ-MONITOR-082, "only the action
+**OQ-155 — How much of the history it replaces does the compressing model read?** *(REQ-MONITOR-082, "only the action
 history recorded after the original request is compressed, and the summary it produces must state the work performed,
 the findings reached, and the questions left open"; REQ-MONITOR-084; REQ-MONITOR-080, whose compressing model is "able
 to hold the context being compressed"; REQ-MONITOR-078; REQ-ORCH-110's 12,000 and 2,000 characters; ADR-0060 decision 4.
 Raised 2026-09-30 by the repair of acceptance finding A12,
 [`the-compressor-reads-only-the-head-of-what-it-compresses.md`](../defects/fixed/the-compressor-reads-only-the-head-of-what-it-compresses.md),
-under [R-067](../product/requests.md#r-067). Open.)*
+under [R-067](../product/requests.md#r-067). Open; numbered OQ-153 when it was raised, renumbered OQ-155 at
+the merge once origin/main's OQ-152 and OQ-153 had landed.)*
 
 The compressing pass replaced the history between the original request and the preserved turns with a summary written
 from `transcriptText`, the report pass's reader: each event cut to 2,000 characters and the whole to 12,000 from its
@@ -6778,8 +6779,8 @@ the reading keeps its **start** (a previous compression's summary where there wa
 to half the bound, and its **most recent part**, the part the preserved turns carry on from, with OQ-111's marker between
 them saying how many characters were left out. Where the most recent part is shorter than the other half it is given
 whole, with no marker, and the start has what it leaves of the bound (`compressorTranscript`,
-`packages/engine/src/run/compression.ts`; `compression.test.ts`, "REQ-MONITOR-082 (OQ-153, acceptance A12) …" and
-"REQ-MONITOR-082 / REQ-MONITOR-080 (OQ-153) …"). A threshold that resolves to no tokens gives the history whole.
+`packages/engine/src/run/compression.ts`; `compression.test.ts`, "REQ-MONITOR-082 (OQ-155, acceptance A12) …" and
+"REQ-MONITOR-082 / REQ-MONITOR-080 (OQ-155) …"). A threshold that resolves to no tokens gives the history whole.
 *Found by the branch's verification and kept beside its repair:* the reading first held the start to half the bound in
 every case, so a first event longer than half before a short most recent part wrote a second marker with a negative
 count where nothing was left out, and left the rest of the bound unused.

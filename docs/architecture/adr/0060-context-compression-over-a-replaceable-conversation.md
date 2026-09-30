@@ -90,7 +90,7 @@ the next step sees the new one. Chosen.
    *Modelling the pass on `produceReport` went further than this decision said: it read the report's own
    `transcriptText`, REQ-ORCH-110's 12,000 characters from the head at 2,000 per event, so the summary could not
    state what the model was never shown (acceptance finding A12, 2026-09-30). That reason is kept here; the pass
-   now reads the slice through a reader of its own, whole up to the compressing model's own threshold (OQ-153, the
+   now reads the slice through a reader of its own, whole up to the compressing model's own threshold (OQ-155, the
    section "The compressor's reading, repaired" below).*
 
 5. **Two call sites, one mechanism.**
@@ -456,7 +456,7 @@ slice that is some 636,000 at the default trigger, and each event to 2,000. Ever
 from the summary. The pass now reads `compressorTranscript` (`run/compression.ts`): each event whole, the slice whole up
 to the compressing model's own effective threshold at `chars_per_token` (`CompressorDeps.inputTokens`, which
 `Run.compressionFor` resolves through the same `triggerFor` the trigger reads), and past it the start and the most recent
-part with the omission marked. The bound is OQ-153's reading; `transcriptText` is removed. The decision stands otherwise:
+part with the omission marked. The bound is OQ-155's reading; `transcriptText` is removed. The decision stands otherwise:
 the three survivors are still never sent.
 
 **What was measured.** `compression.test.ts`: the default trigger's shape (150 reads of 4,000 characters, over 600,000 in

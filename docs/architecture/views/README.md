@@ -45,7 +45,7 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
-**The compressing model reads the history it replaces (REQ-MONITOR-082, REQ-MONITOR-084, REQ-ORCH-110, OQ-153, R-067).**
+**The compressing model reads the history it replaces (REQ-MONITOR-082, REQ-MONITOR-084, REQ-ORCH-110, OQ-155, R-067).**
 `compress` reads `compressorTranscript` (`run/compression.ts`) instead of the report pass's `transcriptText`, which is
 removed: each event whole, the slice whole up to the compressing model's own threshold at `chars_per_token`
 (`CompressorDeps.inputTokens`, set by `Run.compressionFor`), its start and most recent part past it. This repairs
@@ -403,7 +403,7 @@ paragraph names it; no package, edge, message or store table changes.
 the blocks the payload puts ahead of it marked omitted) and the most recent part, within 12,000 characters, with
 `… [N characters omitted] …` between them. It also gives `reportFacts`, the
 edited files and each command with its exit code, derived from the whole transcript. The head-only `transcriptText`
-remains the compressor's alone (removed 2026-09-30 with the compressor's own reader, OQ-153). The **runtime view**'s children paragraph names it; no package, edge, message or store
+remains the compressor's alone (removed 2026-09-30 with the compressor's own reader, OQ-155). The **runtime view**'s children paragraph names it; no package, edge, message or store
 table changes.
 
 **A continue in the process that ran the session takes the lock back (ADR-0005, REQ-SESSION-047/048/083, 2026-09-29,

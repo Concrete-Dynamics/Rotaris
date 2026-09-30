@@ -82,7 +82,7 @@ describe('engine/run/compression — the reconstruction and the turn alignment (
     expect(conv.snapshot()[0]).toEqual(text('user', 'THE-ORIGINAL-REQUEST'));
   });
 
-  describe('REQ-MONITOR-082 (OQ-153, acceptance A12): the compressing model reads the whole history it replaces', () => {
+  describe('REQ-MONITOR-082 (OQ-155, acceptance A12): the compressing model reads the whole history it replaces', () => {
     /** A read whose result is `size` characters, its fact at the END — past REQ-ORCH-110's 2,000 per event. */
     const read = (i: number, size: number): ChatMessage[] => [
       { role: 'assistant', content: [{ kind: 'tool-call', callId: `r${i}`, name: 'read_file', args: `{"path":"src/f${i}.js"}` }] },
@@ -478,7 +478,7 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
     expect(timeline(sid).filter((t) => t.name === 'context_compressed')).toHaveLength(1);
   });
 
-  it('REQ-MONITOR-082 (OQ-153, acceptance A12): the compressing pass reads the history up to its model\'s own threshold at chars_per_token, each event whole, and not 12,000 characters of its head', async () => {
+  it('REQ-MONITOR-082 (OQ-155, acceptance A12): the compressing pass reads the history up to its model\'s own threshold at chars_per_token, each event whole, and not 12,000 characters of its head', async () => {
     // Three results of 6,000 characters, each with its fact at the END; the fourth step reports 5,000 prompt tokens
     // against a trigger of 4,000, so the fifth compresses first. The compressing model is the agent's own, whose
     // threshold is those 4,000 tokens: 16,000 characters at 4 each, for a history of some 18,100.
@@ -505,7 +505,7 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
     expect(dal.getSession(sid)!.execution_status).toBe('completed');
   });
 
-  it('REQ-MONITOR-082 / REQ-MONITOR-080 (OQ-153): with compressor.model configured, the compressing pass reads the history up to THAT model\'s threshold, not the agent\'s', async () => {
+  it('REQ-MONITOR-082 / REQ-MONITOR-080 (OQ-155): with compressor.model configured, the compressing pass reads the history up to THAT model\'s threshold, not the agent\'s', async () => {
     // The same history of some 18,100 characters, the same agent trigger of 4,000 tokens; the configured compressor's
     // own threshold is 2,000 tokens, so it is given 8,000 characters — the agent's 16,000 would pass it.
     const { sessions, counts, asked, askedOf } = sessionsWith((persona, turn) => {

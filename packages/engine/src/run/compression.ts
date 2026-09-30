@@ -28,7 +28,7 @@ export interface CompressorDeps {
   readonly credentialFor: (model: ModelRef) => () => Promise<string>;
   readonly timeoutMs?: Millis;
   /**
-   * OQ-153: the most of the history the pass is given, in tokens — the compressing model's own effective threshold
+   * OQ-155: the most of the history the pass is given, in tokens — the compressing model's own effective threshold
    * (REQ-MONITOR-078, its `ResolvedTrigger.tokens`), read at `chars_per_token`. Absent, the history is given whole.
    */
   readonly inputTokens?: number | undefined;
@@ -77,7 +77,7 @@ function omitted(n: number): string {
 }
 
 /**
- * `REQ-MONITOR-082` as OQ-153 reads it: the history the compressing model condenses, as text, each event whole. It is
+ * `REQ-MONITOR-082` as OQ-155 reads it: the history the compressing model condenses, as text, each event whole. It is
  * the whole of what the summary stands in for; only where it passes `capChars` — the compressing model's own threshold,
  * which a history at the agent's own trigger is under whenever the compressing model is the agent's own — it keeps its
  * START (a previous compression's summary, when there was one, else the agent's first act) and its MOST RECENT part,

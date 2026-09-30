@@ -401,16 +401,17 @@ reopened that note, and it is repaired in the proof, not in the palette:
   lowest ratios at any scale were 3.07:1 on `rotaris-dim`, 4.08:1 on `nocturne` and 4.92:1 on `high-contrast`, all at
   125 %; the first two are on texts whose floor is 3:1. The skips were the strip's 1.2 px slivers and texts cut
   vertically by the pane that scrolls them (Settings rows, a tools list). No admitted text had no part on screen.
-- **The full matrix after origin/main `6f80d5f` merged into the branch: 15 of 15 PASS in one run.** The lowest ratios
-  were 3.68:1 on `rotaris-dim` and 4.62:1 on `nocturne`, both at 100 %, and 4.92:1 on `high-contrast` at 125 %. The
-  skips were the ones the coverage boundary above names: the strip's trailing item, 7.8 or 5.8 CSS px on screen at
-  150 % and above, and the Settings rows cut vertically at 125 % and 175 %.
+- **The full matrix after origin/main merged into the branch: 15 of 15 PASS, twice** (after `6f80d5f`, and again after
+  `8574828`). The lowest ratios were 3.68:1 on `rotaris-dim` and 4.62:1 on `nocturne`, both at 100 %, and 4.92:1 (then
+  5.57:1) on `high-contrast`. The skips were the ones the coverage boundary above names: the strip's trailing item, 7.8
+  or 5.8 CSS px on screen at 150 % and above, and the Settings rows cut vertically at 125 % and 175 %. The second run
+  also skipped "Session checkpoints" (10 px, 9.1 of a 16.2 px line box) in one `rotaris-dim` capture at 150 %, a
+  vertical cut of the same kind.
 - **The text counterfactual stays red**, at 1.52:1.
 - **`discovered` is not comparable between runs.** It is the number of admitted texts summed over a cell's captures, and
   it varies between runs of the same build. `rotaris-dim` at 100 % counted 1384 in one run and 1263 in another, as the
-  verification of `8f79daf` reported them, and 1264 in the merged-branch run; `nocturne` at 100 % counted 1384 in that
-  same run. Nothing in this execution explains the variation. So two matrices are compared by verdict, minimum and the
-  skips named, not by count.
+  verification of `8f79daf` reported them, and 1264 and then 1376 in the two merged-branch runs. Nothing in this
+  execution explains the variation. So two matrices are compared by verdict, minimum and the skips named, not by count.
 
 The palette is unchanged, and OQ-56's disabled-text question is untouched. The repaired note is
 `../../defects/fixed/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`. Not shown: Windows or macOS

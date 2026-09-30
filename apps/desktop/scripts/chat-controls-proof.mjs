@@ -36,6 +36,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -105,10 +106,10 @@ function scenario(name) {
   return { root, workspace, local, preferences };
 }
 
-function launch(name, s, extra, timeoutMs = 150_000) {
+async function launch(name, s, extra, timeoutMs = 150_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local: s.local, preferences: s.preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -117,6 +118,7 @@ function launch(name, s, extra, timeoutMs = 150_000) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}\n${log.split('\n').slice(-40).join('\n')}`);
   const inspects = {};
   for (const line of log.split('\n')) {
@@ -180,7 +182,7 @@ const readCompressObserved = `window.__rotarisCompress ?? null`;
 const T1 = { arm: 13900, press: 14000, pressing: 14300, done: 15500 };
 {
   const s = scenario('compress-two');
-  const r = launch('compress-two', s, {
+  const r = await launch('compress-two', s, {
     ...TWO,
     ROTARIS_CAPTURE_CLICKS: `[data-testid="run-compress"]@${T1.press}`,
     ROTARIS_CAPTURE_EVAL_AT: [`${readCompress}@${T1.press - 200}`, `${armCompressObserver}@${T1.arm}`, `${readCompressObserved}@${T1.pressing}`, `${readCompress}@${T1.done}`, `${readNotice}@${T1.done + 50}`].join(';;'),
@@ -219,7 +221,7 @@ const T1 = { arm: 13900, press: 14000, pressing: 14300, done: 15500 };
 // ═══ 2. compress-partial — the child's pass fails; the root's succeeds; the notice lists the child ═══════════════════
 {
   const s = scenario('compress-partial');
-  const r = launch('compress-partial', s, {
+  const r = await launch('compress-partial', s, {
     ...TWO, ROTARIS_COMPRESSOR_SCRIPT: 'fail-if:CHILD-SLICE-MARKER',
     ROTARIS_CAPTURE_CLICKS: `[data-testid="run-compress"]@${T1.press}`,
     ROTARIS_CAPTURE_EVAL_AT: [`${readNotice}@${T1.done}`, `${readCompress}@${T1.done + 20}`].join(';;'),
@@ -258,7 +260,7 @@ const T3 = {
 };
 const controls = scenario('controls');
 {
-  const r = launch('controls', controls, {
+  const r = await launch('controls', controls, {
     ROTARIS_SCRIPT: 'glob,wait:6000,answer', ROTARIS_CAPTURE_VIEW: '2', ROTARIS_CAPTURE_VIEW_MS: '1000',
     ROTARIS_CAPTURE_CHORDS: `Ctrl+K@${T3.palette}`,
     ROTARIS_CAPTURE_TYPE_AT: `compress@${T3.paletteType}`,
@@ -361,7 +363,7 @@ const controls = scenario('controls');
 
 // ═══ 4. restart — the same store, the session resumed: the snapshot is empty ═════════════════════════════════════════
 {
-  const r = launch('restart', controls, {
+  const r = await launch('restart', controls, {
     ROTARIS_CAPTURE_VIEW: '2', ROTARIS_CAPTURE_VIEW_MS: '1000', ROTARIS_CAPTURE_RESUME: 'latest',
     ROTARIS_CAPTURE_EVAL_AT: `${readRows}@5200;;${readRunState}@5250`,
     ROTARIS_CAPTURE_AFTER_MS: '6000',

@@ -35,6 +35,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -94,13 +95,13 @@ function oneDatabase() {
 /** REQ-SESSION-002: the session's files sit beside the store, under `sessions/<id>`. */
 const filesDir = (sessionId) => join(dirname(oneDatabase()), 'sessions', sessionId);
 
-function launch(name, extra, { files = {}, timeout = 180_000 } = {}) {
+async function launch(name, extra, { files = {}, timeout = 180_000 } = {}) {
   writeFileSync(join(configDir, 'agents.yaml'), files.global ?? globalYaml());
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), files.workspace ?? WORKSPACE_SINGLE);
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs: timeout, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', ROTARIS_CAPTURE_PNG: png,
@@ -111,6 +112,7 @@ function launch(name, extra, { files = {}, timeout = 180_000 } = {}) {
   const elapsedMs = Date.now() - started;
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   return { log, elapsedMs, png };
 }
@@ -144,7 +146,7 @@ const results = {};
 
 // ---- 1. A scripted run publishes; the row appears on the next refresh; the sidecar parses elsewhere ----------
 {
-  const r = launch('publish', {
+  const r = await launch('publish', {
     // The Library is shown FIRST (empty), the run then publishes, the view is left and returned to: the row
     // appears on the next refresh, with no restart and no manual reload (REQ-LIBRARY-136).
     ROTARIS_CAPTURE_VIEWS: '6@1200;;2@2000;;6@14000',
@@ -225,7 +227,7 @@ const results = {};
 
 // ---- 2. Child reports materialise once, each with its artifact_published entry ---------------------------------
 {
-  const r = launch('children', {
+  const r = await launch('children', {
     ROTARIS_CAPTURE_PROMPT: 'delegate twice', ROTARIS_CAPTURE_PROMPT_MS: '1200',
     // The orchestrator publishes FIRST, so the children are created with a session that already holds an
     // artifact: REQ-LIBRARY-097's `PRIOR SIBLING ARTIFACT INDEX` reaches them and its diagnostic is recorded.
@@ -299,7 +301,7 @@ const results = {};
 
 // ---- 3. An invalid tag refuses the publish whole ---------------------------------------------------------------
 {
-  const r = launch('bad-tag', {
+  const r = await launch('bad-tag', {
     ROTARIS_CAPTURE_PROMPT: 'publish with a bad tag', ROTARIS_CAPTURE_PROMPT_MS: '1200',
     ROTARIS_SCRIPT: 'artifact:artifact_write:bad,answer',
     ROTARIS_SCRIPT_ARTIFACT_ARGS: JSON.stringify({ bad: { slug: 'refused', title: 'Refused', body: 'nothing should survive this', tags: ['research', 'Nonsense'] } }),
@@ -325,7 +327,7 @@ const results = {};
 // ---- 4. The inspector: open, edit, save, ` · edited`, and ONE dialog on re-opening -----------------------------
 let edited = null;
 {
-  const r = launch('inspector', {
+  const r = await launch('inspector', {
     ROTARIS_CAPTURE_PROMPT: 'publish the plan', ROTARIS_CAPTURE_PROMPT_MS: '1200',
     ROTARIS_SCRIPT: 'artifact:artifact_write,answer',
     // The modeless inspector is 720x560 at the bottom-right (REQ-LIBRARY-131); the window is widened so the
@@ -387,7 +389,7 @@ let edited = null;
   // The store outlives the process; the file does not survive being removed from outside it (REQ-LIBRARY-158's
   // serialisation covers the store, and the bodies deliberately sit outside it).
   rmSync(join(edited.directory, edited.bodyFile), { force: true });
-  const r = launch('missing-body', {
+  const r = await launch('missing-body', {
     ROTARIS_CAPTURE_RESUME: edited.sessionId,
     ROTARIS_CAPTURE_RESIZE: '1360x980@300',
     ROTARIS_CAPTURE_VIEWS: '6@4000',
@@ -432,7 +434,7 @@ let edited = null;
   // After the wait, the orchestrator reads the report back through the TOOL path with the section filter —
   // the interface the port's private allow-list silently widened to the whole document (the defect this
   // launch exists to hold shut).
-  const r = launch('commands', {
+  const r = await launch('commands', {
     ROTARIS_CAPTURE_PROMPT: 'delegate one child that runs commands', ROTARIS_CAPTURE_PROMPT_MS: '1200',
     ROTARIS_SCRIPT: 'delegate:coding-agent:commands,wait:15000,artifact:artifact_read:commands,answer',
     ROTARIS_CHILD_SCRIPT: 'terminal:ok,terminal:fail,terminal:denied,answer',

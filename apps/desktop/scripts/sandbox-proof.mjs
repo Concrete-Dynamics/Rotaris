@@ -2,6 +2,7 @@ import { accessSync, constants, existsSync, mkdirSync, readdirSync, readFileSync
 import { delimiter, join, relative, resolve, sep } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 /**
  * ADR-0022's first execution in the built app (Part AR), and IC-8's measurement where the host can give one.
@@ -121,10 +122,10 @@ function scenario(name, workspaceYaml) {
   return { root, workspace, local, configDir, workspaceFile: join(workspace, '.rotaris', 'agents.yaml') };
 }
 
-function launch(name, s, extra) {
+async function launch(name, s, extra) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
-    cwd: app, encoding: 'utf8', timeout: 180_000, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
+    cwd: app, timeoutMs: 180_000, windowsHide: true,
     env: {
       ...cleanEnvironment(),
       ...proofIsolationEnv({ local: s.local, preferences: join(s.root, 'preferences') }),
@@ -136,6 +137,7 @@ function launch(name, s, extra) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   return log;
@@ -149,7 +151,7 @@ const results = {};
  *    the reason names the one mechanism the platform chose and the remediation is that mechanism's own.
  */
 const s1 = scenario('verdict', WORKSPACE_OFF);
-const log1 = launch('verdict', s1, { ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Runtime', ROTARIS_CAPTURE_AFTER_MS: '4000' });
+const log1 = await launch('verdict', s1, { ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Runtime', ROTARIS_CAPTURE_AFTER_MS: '4000' });
 const verdictLine = log1.split('\n').find((line) => line.includes('confinement:')) ?? '';
 const hostReading = { platform: process.platform, mechanism: mechanism?.name ?? null, launcher: launcherPath, trial, expected };
 if (expected === 'available') {
@@ -179,7 +181,7 @@ const READ_SECURITY = `({
   standIn: document.body.textContent.includes('read from the file and not edited here'),
   mode: document.querySelector('[data-testid="sandbox-mode"]')?.value ?? ''
 })`.replace(/\n\s*/g, ' ');
-const log2 = launch('settings', s1, {
+const log2 = await launch('settings', s1, {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
   // Read as soon as the card exists rather than at a clock: this state is left behind by something the
   // product did when it was ready, and pinning that read to a timer reports whatever the timer found.
@@ -210,7 +212,7 @@ results.settingsSurface = { disclosure: expected === 'outside' ? 'present with s
  *    starts, and is not refused (REQ-SANDBOX-093) — what that run can and cannot do is scenario 6.
  */
 const s3 = scenario('refused', WORKSPACE_CONFINED);
-const log3 = launch('refused', s3, { ROTARIS_CAPTURE_PROMPT: 'this run must not start', ROTARIS_CAPTURE_AFTER_MS: '12000' });
+const log3 = await launch('refused', s3, { ROTARIS_CAPTURE_PROMPT: 'this run must not start', ROTARIS_CAPTURE_AFTER_MS: '12000' });
 const refusal = log3.split('\n').find((line) => /refused before it started/i.test(line)) ?? '';
 if (expected === 'available') {
   if (refusal !== '') throw new Error(`the run was refused on a host whose confinement is available:\n${refusal}`);
@@ -233,7 +235,7 @@ if (expected === 'available') {
  *    unconfined with an empty backend name (REQ-SANDBOX-093, -108, -110).
  */
 const s4 = scenario('downgrade', WORKSPACE_AUTONOMOUS);
-const log4 = launch('downgrade', s4, { ROTARIS_CAPTURE_PROMPT: 'an unattended autonomous run', ROTARIS_CAPTURE_AFTER_MS: '14000' });
+const log4 = await launch('downgrade', s4, { ROTARIS_CAPTURE_PROMPT: 'an unattended autonomous run', ROTARIS_CAPTURE_AFTER_MS: '14000' });
 if (!/session .* started/.test(log4)) throw new Error(`the run did not start with sandbox_mode off:\n${log4}`);
 results.downgrade = { started: true, note: 'the kept mode is asserted by the engine tests; this run proves the gate does not refuse mode off (REQ-SANDBOX-092)' };
 
@@ -242,7 +244,7 @@ results.downgrade = { started: true, note: 'the kept mode is asserted by the eng
  *    effective configuration, and a further save-and-load changes nothing again.
  */
 const s5 = scenario('round-trip', WORKSPACE_OFF);
-launch('round-trip', s5, {
+await launch('round-trip', s5, {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
   // Every step waits for what it acts on rather than for a clock: on a first launch the Runtime category can
   // be drawn after the view's own click has looked for it, and a fixed 1800 ms then chose into Models and
@@ -274,8 +276,10 @@ async function effects(name, allowNetwork, preGit) {
   mkdirSync(outside, { recursive: true });
   const secret = `readable outside the roots ${Date.now()}`;
   writeFileSync(join(outside, 'readable.txt'), `${secret}\n`);
-  // The listener is the host's, in a process of its own: `launch` blocks this one for the whole run, so a
-  // listener here could not answer while the confined command waited on it. It counts what it accepted into
+  // The listener is the host's, in a process of its own. It was put there because `launch` blocked this one for the
+  // whole run under `spawnSync` (until 2026-09-29), so a listener here could not have answered while the confined
+  // command waited on it; the launch is `spawnBounded`'s now and does not block, and the listener stayed where it
+  // was. It counts what it accepted into
   // a file the proof reads afterwards. A confined process in its own network namespace cannot reach the
   // host's loopback at all; one granted the network reaches it like any other process on the host.
   const acceptedFile = join(outside, 'accepted.log');
@@ -306,7 +310,7 @@ async function effects(name, allowNetwork, preGit) {
     network: { command: `${q(process.execPath)} ${q(join(outside, 'connect.mjs'))} ${port} > ${q(join(ws, 'network.txt'))} 2>&1; echo "exit=$?" >> ${q(join(ws, 'network.txt'))}` },
     cwd: { command: `pwd > ${q(join(ws, 'cwd.txt'))}` },
   };
-  const log = launch(name, s, {
+  const log = await launch(name, s, {
     ROTARIS_CAPTURE_PROMPT: 'run the confinement checks', ROTARIS_CAPTURE_PROMPT_MS: '1200',
     ROTARIS_SCRIPT: `${Object.keys(commands).map((k) => `terminal:${k}`).join(',')},answer`,
     ROTARIS_SCRIPT_TERMINAL_ARGS: JSON.stringify(commands),

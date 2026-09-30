@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 /**
  * Part R's first execution in the built app — the agent surfaces: the Mission view (REQ-MONITOR-274..276), the per-agent
@@ -73,11 +74,11 @@ function setPreference(s, key, value) {
   const current = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
   writeFileSync(file, `${JSON.stringify({ ...current, [key]: value }, null, 2)}\n`);
 }
-function launch(name, s, extra, opts = {}) {
+async function launch(name, s, extra, opts = {}) {
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
-    cwd: app, encoding: 'utf8', timeout: opts.timeout ?? 150_000, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
+    cwd: app, timeoutMs: opts.timeout ?? 150_000, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local: s.local, preferences: s.preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true', ...extra,
@@ -85,6 +86,7 @@ function launch(name, s, extra, opts = {}) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   const errors = log.split('\n').filter((l) => /renderer console:/.test(l));
@@ -109,7 +111,7 @@ const THREE = 'delegate:coding-agent:alpha,delegate:coding-agent:beta,delegate:c
 // 1. Mission painted during a run with three live children.
 const s1 = scenario('painted');
 {
-  const r = launch('painted', s1, {
+  const r = await launch('painted', s1, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:14000,read,answer', ROTARIS_CAPTURE_PROMPT: 'delegate to three agents',
     ROTARIS_CAPTURE_VIEWS: '3@3500',
     ROTARIS_CAPTURE_PROBE_AT: '[data-testid="mission-subtitle"]@6000;;[data-testid="mission-run-row"]@6000;;.agent-table__row@6000;;[data-testid="agent-elapsed"]@6000;;[data-testid="agent-elapsed"]@7500;;.agent-table__state-text@6000;;.mission__run-row + .agent-tree .agent-row@6000',
@@ -153,7 +155,7 @@ const s1b = scenario('waiting');
 {
   const yaml = join(s1b.workspace, '.rotaris', 'agents.yaml');
   writeFileSync(yaml, readFileSync(yaml, 'utf8').replace('model_id: scripted }', 'model_id: scripted, max_parallel: 1 }'));
-  const r = launch('waiting', s1b, {
+  const r = await launch('waiting', s1b, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:14000,read,answer', ROTARIS_CAPTURE_PROMPT: 'delegate to three agents behind one slot',
     ROTARIS_CAPTURE_VIEWS: '3@3500',
     ROTARIS_CAPTURE_PROBE_AT: '.agent-table__state-text@6000;;[data-testid="agent-elapsed"]@6000;;[data-testid="agent-elapsed"]@7500;;.mission__run-row + .agent-tree .agent-row__meta@6000;;.mission__run-row + .agent-tree .agent-row__meta@7500',
@@ -179,7 +181,7 @@ const s1b = scenario('waiting');
 // 2. Parity across the three trees, then the 23-agent refresh with Mission visible.
 const s2 = scenario('parity');
 {
-  const r = launch('parity', s2, {
+  const r = await launch('parity', s2, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:14000,read,answer', ROTARIS_CAPTURE_PROMPT: 'three trees',
     // Probed once the two quick children have settled and the first is still waiting, so the states are steady across the three views (a state change between probes is not a parity fault).
     ROTARIS_CAPTURE_VIEWS: '3@7000;;1@8000;;2@9000',
@@ -201,7 +203,7 @@ const s2 = scenario('parity');
     insert.run({ session_id: row.session_id, task_id: id, canonical_name: `seeded-${i}`, given_name: `Seeded ${i}`, persona: i % 2 === 0 ? 'coding-agent' : 'codebase-analyst', state: 'succeeded', parent_id: parents[i % parents.length].task_id, depth: 2, task: `seeded agent ${i}`, spawned_at: '2026-09-05T10:00:00.000Z', completed_at: '2026-09-05T10:01:00.000Z' });
   }
   dbw.close();
-  const r2 = launch('parity-20', s2, {
+  const r2 = await launch('parity-20', s2, {
     // Opening a stored session lands on the Workspace; Mission is opened after it, and one whole read is asked for while Mission is visible.
     ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_VIEWS: '3@2600', ROTARIS_CAPTURE_RECONCILE_AT: '3200',
     ROTARIS_CAPTURE_PROBE_AT: '[data-testid="mission"]@4000;;.agent-table__row@4000',
@@ -219,7 +221,7 @@ const s2 = scenario('parity');
 // 3. Pause refused for a child, honoured for the run.
 const s3 = scenario('pause');
 {
-  const r = launch('pause', s3, {
+  const r = await launch('pause', s3, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:9000,answer', ROTARIS_CAPTURE_PROMPT: 'pause me',
     ROTARIS_CAPTURE_VIEWS: '3@3500',
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row@5000;;[data-testid="mission-pause"]@5400;;[data-testid="mission-run-row"]@6200;;[data-testid="mission-pause"]@6600',
@@ -258,7 +260,7 @@ const s3 = scenario('pause');
 // A configured persona that may delegate (only the built-in orchestrator declares `delegate`, and the scripted client would read a second orchestrator as the root).
 const s4 = scenario('cancel', ['personas:', '  lead:', '    name: lead', '    model: scripted', "    purpose: 'Delegates the work, then waits for it.'", "    system_prompt: 'You are a lead. Delegate the work, then wait for it.'", '    tools: [delegate, read_file, todo]']);
 {
-  const r = launch('cancel', s4, {
+  const r = await launch('cancel', s4, {
     // The children share one step list: alpha delegates `sub`, and the next two calls — alpha's and sub's, in whichever order — each wait 16 s.
     ROTARIS_SCRIPT: 'delegate:lead:alpha,answer', ROTARIS_CHILD_SCRIPT: 'delegate:coding-agent:sub,wait:16000,answer,wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'cancel a child',
     ROTARIS_CAPTURE_VIEWS: '3@3500',
@@ -291,7 +293,7 @@ const s4 = scenario('cancel', ['personas:', '  lead:', '    name: lead', '    mo
 // 5. Open an agent under both preferences; the window's lifecycle; a new session destroys it.
 const s5 = scenario('open');
 {
-  const r = launch('open-off', s5, {
+  const r = await launch('open-off', s5, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:10000,answer', ROTARIS_CAPTURE_PROMPT: 'open an agent',
     ROTARIS_CAPTURE_VIEWS: '3@3500', ROTARIS_CAPTURE_CLICKS: '.agent-table__row@5000;;[data-testid="mission-open"]@5500',
     ROTARIS_CAPTURE_PROBE_AT: '.app-shell@6200;;[data-testid="inspector-tag"]@6200;;[data-testid="inspector-name"]@6200;;.inspector@6200',
@@ -307,7 +309,7 @@ const s5 = scenario('open');
   results.openOff = { view: 'workspace', tag, name, windows: 0 };
 
   setPreference(s5, 'interface/agentPopOut', true);
-  const r2 = launch('open-on', s5, {
+  const r2 = await launch('open-on', s5, {
     ROTARIS_SCRIPT: THREE, ROTARIS_CHILD_SCRIPT: 'wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'pop out an agent',
     ROTARIS_CAPTURE_VIEWS: '3@3500',
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row@5000;;.agent-table__row:nth-child(2) .btn>>Pop out@7500;;.agent-table__row:nth-child(2) .btn>>Pop out@10500',
@@ -340,7 +342,7 @@ const s5 = scenario('open');
   results.openOn = { windowAt6_5s: w65[0], shownAt8_5s: name85, hiddenAt9_8s: w98[0], shownAt11_5s: w115[0], stateAt11_5s: state115, contextLine: line115, firstPaintMs: paints, png: join(output, 'persona.png') };
 
   // 5c. A new session destroys every persona window (REQ-SHELL-078): the stored session reopened, a window popped out, then New session → Start session → a prompt.
-  const r3 = launch('open-new-session', s5, {
+  const r3 = await launch('open-new-session', s5, {
     ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_VIEWS: '3@2500;;1@5000',
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row .btn>>Pop out@3500;;.btn>>New session@5600;;[data-testid="start-session-accept"]@6400',
     ROTARIS_CAPTURE_TYPE: 'second session>>composer@7600',
@@ -357,7 +359,7 @@ const s5 = scenario('open');
 // 6. The inspector: following, pinned, chips stable across a state change, Steer through the persona window.
 const s6 = scenario('inspector');
 {
-  const r = launch('inspector', s6, {
+  const r = await launch('inspector', s6, {
     ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'wait:5000,read,wait:6000,answer', ROTARIS_CAPTURE_PROMPT: 'inspect an agent',
     ROTARIS_CAPTURE_CLICKS: '.agent-row@4000;;.inspector__actions .btn>>Steer@9200',
     ROTARIS_CAPTURE_PROBE_AT: '[data-testid="inspector-tag"]@3000;;[data-testid="inspector-name"]@3000;;[data-testid="inspector-chips"] .chip@3000;;[data-testid="inspector-tag"]@4500;;[data-testid="inspector-name"]@4500;;[data-testid="inspector-chips"] .chip@4500;;[data-testid="inspector-chips"] .chip@8500;;[data-testid="inspector-meta"]@8500;;[data-testid="inspector-controls-note"]@8500;;.ctx-ring@8500',
@@ -398,7 +400,7 @@ const s6 = scenario('inspector');
 // 7. The strategy selector and the depth control write their keys; Settings shows the same values; the pop-out toggle writes its preference.
 const s7 = scenario('settings');
 {
-  const r = launch('settings', s7, {
+  const r = await launch('settings', s7, {
     ROTARIS_CAPTURE_VIEWS: '3@1200;;7@4200',
     ROTARIS_CAPTURE_SELECT: '[data-testid="mission-strategy"]>>swarm@2200;;[data-testid="mission-depth"]>>2@3000',
     ROTARIS_CAPTURE_CLICKS: '.nav-list__item>>Interface@4800;;[data-testid="agent-pop-out-toggle"]@5200;;.nav-list__item>>Runtime@5700',
@@ -421,7 +423,7 @@ const s7 = scenario('settings');
   dbw.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, spawned_at, tool_calls)
     VALUES (?, 'bg_0000dead', 'zombie', 'Zombie', 'coding-agent', 'running', 'root:1', 1, 1, 'scripted', 'quick', 1, 'a child the run left running', '[]', '[]', '["read_file"]', '{}', '2026-09-05T10:00:00.000Z', 0)`).run(row.session_id);
   dbw.close();
-  const r = launch('reconcile', s1, {
+  const r = await launch('reconcile', s1, {
     ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_VIEWS: '3@2500',
     ROTARIS_CAPTURE_CLICKS: '[data-agent-id="bg_0000dead"]@3500;;[data-testid="mission-open"]@4000;;.inspector__actions .btn>>Pop out@5000',
     ROTARIS_CAPTURE_PROBE_AT: '[data-agent-id="bg_0000dead"]@3800;;.agent-table__row@3800;;[data-testid="inspector-name"]@4600;;[data-testid="inspector-meta"]@4600;;.agent-row[data-task-id="bg_0000dead"]@4600',

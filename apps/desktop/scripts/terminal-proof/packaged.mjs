@@ -32,6 +32,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { hostSwitches, proofIsolationEnv, workspacesRootFor } from '../lib/harness.mjs';
+import { overrunMessage, spawnBounded } from '../lib/bounded-launch.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -48,7 +49,7 @@ function observationOf(entry) {
 }
 
 /** One launch of the packaged executable with the key set one way, read from the renderer and from its own store. */
-function launch({ exe, scratchRoot, name, enabled, afterMs }) {
+async function launch({ exe, scratchRoot, name, enabled, afterMs }) {
   const scratch = join(scratchRoot, name);
   rmSync(scratch, { recursive: true, force: true });
   const ws = join(scratch, 'workspace');
@@ -90,7 +91,7 @@ function launch({ exe, scratchRoot, name, enabled, afterMs }) {
   env.ROTARIS_CAPTURE_AFTER_MS = String(afterMs);
   env.ROTARIS_CAPTURE_EVAL_AT = `${probe}@${afterMs - 2000}`;
 
-  const r = spawnSync(exe, [...hostSwitches, ws], { env, encoding: 'utf8', timeout: 180_000, windowsHide: true });
+  const r = await spawnBounded(exe, [...hostSwitches, ws], { env, timeoutMs: 180_000, windowsHide: true });
   const log = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
   writeFileSync(join(scratch, 'app.log'), log);
 
@@ -107,6 +108,8 @@ function launch({ exe, scratchRoot, name, enabled, afterMs }) {
   const workspaces = workspacesRootFor(localAppData);
   if (existsSync(workspaces)) for (const d of readdirSync(workspaces)) { const f = join(workspaces, d, 'workspace.db'); if (existsSync(f)) stores.push(f); }
   const out = { enabled, exit: r.status ?? null, signal: r.signal ?? null, painted: existsSync(png), stores: stores.length, log: join(scratch, 'app.log') };
+  // An overrun is this launch's failure, reported with its last words; the other launch's evidence is kept.
+  if (r.overran) return { ...out, error: overrunMessage(name, r, log), probe: null, terminal: null };
   if (stores.length !== 1) return { ...out, error: `expected one workspace store under this launch's own LOCALAPPDATA, found ${stores.length}` };
   // A read that throws is reported, never thrown: one bad query must not lose the other launch's evidence.
   let sessions = [];
@@ -131,10 +134,10 @@ function launch({ exe, scratchRoot, name, enabled, afterMs }) {
 }
 
 /**
- * @returns `{ available, refusal?, enabled, disabled, checks }` — `checks` is the assertion set the proof folds into
+ * @returns a promise of `{ available, refusal?, enabled, disabled, checks }` — `checks` is the assertion set the proof folds into
  * its own results, each one a boolean with a name that says what it claims.
  */
-export function packagedTerminalStreaming({ repo, afterMs = 16_000 }) {
+export async function packagedTerminalStreaming({ repo, afterMs = 16_000 }) {
   const release = join(repo, 'apps', 'desktop', 'release');
   const exe = join(release, 'win-unpacked', 'Rotaris.exe');
   if (!existsSync(exe)) {
@@ -144,8 +147,8 @@ export function packagedTerminalStreaming({ repo, afterMs = 16_000 }) {
     };
   }
   const scratchRoot = join(release, 'terminal-stream-proof');
-  const on = launch({ exe, scratchRoot, name: 'streaming-on', enabled: true, afterMs });
-  const off = launch({ exe, scratchRoot, name: 'streaming-off', enabled: false, afterMs });
+  const on = await launch({ exe, scratchRoot, name: 'streaming-on', enabled: true, afterMs });
+  const off = await launch({ exe, scratchRoot, name: 'streaming-off', enabled: false, afterMs });
   const checks = {
     // Both launches got as far as a painted window and a settled terminal call, or nothing below means anything.
     bothPainted: on.painted === true && off.painted === true,
@@ -167,7 +170,7 @@ if (process.argv[1] && process.argv[1].endsWith('packaged.mjs')) {
   // Four segments, not three: this file sits at `apps/desktop/scripts/terminal-proof/`, so three `..` land on
   // `<repo>/apps` and the refusal above then names a path that cannot exist (`<repo>/apps/apps/desktop/…`).
   const repo = join(import.meta.dirname, '..', '..', '..', '..');
-  const r = packagedTerminalStreaming({ repo });
+  const r = await packagedTerminalStreaming({ repo });
   console.log(JSON.stringify(r, null, 2));
   process.exit(r.available && Object.values(r.checks).every(Boolean) ? 0 : 1);
 }

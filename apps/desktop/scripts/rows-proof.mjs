@@ -31,6 +31,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -92,10 +93,10 @@ const PROBES = [
   '[data-testid="acknowledgement"]', '[data-testid="acknowledgement-title"]',
 ].join(';;');
 
-function launch(name, extra, timeoutMs = 150_000) {
+async function launch(name, extra, timeoutMs = 150_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ profileRoot: root, local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES,
@@ -105,6 +106,7 @@ function launch(name, extra, timeoutMs = 150_000) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}\n${log.slice(-3000)}`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   const probes = {};
@@ -158,7 +160,7 @@ writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
 const results = {};
 
 // ── 1. The whole surface, with the open recorded rather than performed. ───────────────────────────────────
-const r = launch('rows', {
+const r = await launch('rows', {
   ROTARIS_CAPTURE_OPEN_EXTERNAL: 'record',
   // The three activations REQ-CHAT-076 routes: a BARE url in a plain row, an AUTHORED link in a Markdown row,
   // and an image reference naming a location on this machine, which must be refused by its scheme.
@@ -592,7 +594,7 @@ results.trailerAndScope = { approval: text(r.probes, `${W} [data-testid="row-app
 results.png = r.png;
 
 // ── 2. The refusal, reported rather than passed silently. ─────────────────────────────────────────────────
-const refuse = launch('refuse', {
+const refuse = await launch('refuse', {
   ROTARIS_CAPTURE_OPEN_EXTERNAL: 'fail',
   ROTARIS_CAPTURE_CLICKS: `${W} .md__link[data-href="https://rows-proof.invalid/spec"]@1800`,
   ROTARIS_CAPTURE_AFTER_MS: '3200',

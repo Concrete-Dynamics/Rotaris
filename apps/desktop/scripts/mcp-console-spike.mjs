@@ -17,7 +17,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
@@ -54,13 +55,13 @@ writeFileSync(join(output, 'console.pids'), '');
 const env = { ...process.env };
 for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
 const launchedAt = new Date();
-const child = spawn(exe, [...hostSwitches, workspace], {
-  cwd: dirname(exe), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+// `spawnBounded`'s since 2026-09-30: the launch had no bound at all, so a packaged application that never quit held the
+// spike open (`docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`). The sampler below
+// runs while it is awaited.
+const launched = spawnBounded(exe, [...hostSwitches, workspace], {
+  timeoutMs: 180_000, cwd: dirname(exe), windowsHide: true,
   env: { ...env, ...proofIsolationEnv({ local, preferences: join(root, 'preferences') }), ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', ROTARIS_CAPTURE_PNG: join(output, 'window.png'), ROTARIS_CAPTURE_PROMPT: 'echo through cmd', ROTARIS_SCRIPT: 'mcp:console.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '12000', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' },
 });
-let log = '';
-child.stdout.setEncoding('utf8'); child.stdout.on('data', (d) => { log += d; });
-child.stderr.setEncoding('utf8'); child.stderr.on('data', (d) => { log += d; });
 
 const ps = `$since = [DateTime]::Parse('${launchedAt.toISOString()}').ToLocalTime(); Get-Process -Name cmd,node,conhost -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -gt $since } | Select-Object Id,ProcessName,MainWindowHandle,MainWindowTitle | ConvertTo-Json -Compress`;
 const samples = [];
@@ -76,10 +77,13 @@ const sampler = setInterval(() => {
   samples.push({ atMs: Date.now() - launchedAt.getTime(), processes: procs.map((p) => ({ id: p.Id, name: p.ProcessName, handle: String(p.MainWindowHandle), title: p.MainWindowTitle ?? '', taskTitle: titleOf.get(p.Id) ?? '' })) });
 }, 200);
 
-const exit = await new Promise((r) => child.on('close', (status, signal) => r({ status, signal })));
+const result = await launched;
+const exit = { status: result.status, signal: result.signal };
+const log = `${result.stdout}${result.stderr}`;
 clearInterval(sampler);
 writeFileSync(join(output, 'launch.log'), log);
 writeFileSync(join(output, 'samples.json'), JSON.stringify(samples, null, 2));
+if (result.overran) throw new Error(overrunMessage('the packaged launch', result, log));
 
 const windowed = samples.flatMap((s) => s.processes.filter((p) => p.handle !== '0' && p.handle !== '')).map((p) => `${p.name}#${p.id} handle ${p.handle} "${p.title}"`);
 // Every CREATE_NO_WINDOW child (the sampler's own powershell/tasklist included) gets a headless conhost.exe; it counts like any other process: handle 0, no title.

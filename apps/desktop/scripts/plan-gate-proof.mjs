@@ -3,6 +3,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import Database from 'better-sqlite3';
 import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { parseEvals, readEval } from './lib/capture-evals.mjs';
 
 /**
@@ -81,10 +82,10 @@ mkdirSync(configDir, { recursive: true });
 writeFileSync(join(workspace, 'README.md'), '# plan gate proof\n');
 writeFileSync(join(configDir, 'agents.yaml'), GLOBAL);
 
-function launch(name, extra, timeoutMs = 120_000) {
+async function launch(name, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(),
       ...proofIsolationEnv({ local, preferences: join(root, 'preferences') }),
@@ -96,6 +97,7 @@ function launch(name, extra, timeoutMs = 120_000) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   // A relaunch refused because the previous instance's run host still held the session is the product defect
@@ -152,7 +154,7 @@ const results = {};
 const PLANNED_FILE = join(workspace, 'planned.txt');
 
 // 1. The run starts in `plan` mode and holds. Nothing the plan names has been written.
-const log1 = launch('held', {
+const log1 = await launch('held', {
   ROTARIS_CAPTURE_PROMPT: 'create planned.txt with the word done in it',
   ROTARIS_CAPTURE_WAIT: 'js:document.querySelector(\'[data-testid="plan-gate-plan"]\') !== null',
   ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
@@ -183,7 +185,7 @@ const EDIT = 'Revised by the user: write planned.txt containing the word done.';
 // The edit goes through the product's own path: set the value the way React's tracker accepts and let the
 // blur write it through. React delegates `onBlur` from `focusout`, so a non-bubbling `blur` reaches nothing.
 const EDIT_PLAN = `(() => { const el = document.querySelector('[data-testid="plan-gate-plan"]'); if (!el) return 'absent'; const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; setter.call(el, ${JSON.stringify(EDIT)}); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); return 'edited'; })()`;
-const log2 = launch('reopened-and-edited', {
+const log2 = await launch('reopened-and-edited', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   // Both readings wait for the reopened gate; the capture waits for the edit to stand in the field, then leaves the
   // write-through its own few seconds before the process ends.
@@ -209,7 +211,7 @@ results.survivedRestart = { status: edited.session.execution_status, cycle: edit
  * gate OPENS in and once after the collapse control has been clicked like a user clicks it.
  */
 const STATE_PROBE = "(() => { const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) }; }; const gate = document.querySelector('[data-testid=\"plan-gate\"]'); const plan = document.querySelector('[data-testid=\"plan-gate-preview\"]') || document.querySelector('[data-testid=\"plan-gate-plan\"]'); const tr = document.querySelector('.transcript'); const answers = document.querySelector('[data-ui=\"plan-gate-actions\"]'); const ws = document.querySelector('.workspace'); return { collapsed: ws ? (ws.getAttribute('data-plan-gate-collapsed') || '') : 'no-workspace', workspace: r(ws), rows: ws ? getComputedStyle(ws).gridTemplateRows : null, children: gate ? [...gate.children].map((c) => ({ c: c.className.split(' ')[0], h: Math.round(c.getBoundingClientRect().height), grow: getComputedStyle(c).flexGrow })) : null, gate: r(gate), plan: r(plan), answers: r(answers), transcript: r(tr), threeAnswers: ['plan-approve', 'plan-revise', 'plan-cancel'].every((t) => document.querySelector('[data-testid=\"' + t + '\"]') !== null), viewport: Math.round(window.innerHeight) }; })()";
-const log2b = launch('two-states', {
+const log2b = await launch('two-states', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_AFTER_MS: '14000',
   ROTARIS_CAPTURE_EVAL_AT: `${STATE_PROBE}@7000;;${STATE_PROBE}@10000`,
@@ -250,7 +252,7 @@ results.twoStates = {
 };
 
 // 3. Revise: a further cycle, carrying the changes stated, and still nothing written.
-const log3 = launch('revised', {
+const log3 = await launch('revised', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_AFTER_MS: '16000',
   ROTARIS_CAPTURE_EVAL_AT: `(() => { const el = document.querySelector('[data-testid="plan-gate-changes"], #plan-gate-changes'); if (el) { const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set; setter.call(el, 'use fewer steps'); el.dispatchEvent(new Event('input', { bubbles: true })); } return el ? 'stated' : 'absent'; })()@6000`,
@@ -267,7 +269,7 @@ if (!revised.timeline.includes('plan_gate_resolved')) throw new Error('no plan_g
 results.revised = { cycles: revised.cycles.length, firstDecision: revised.cycles[0].decision, changes: revised.cycles[1].changes, released: revised.session.plan_released, plannedFileExists: false };
 
 // 4. Approve: execution released, the release recorded, and the work actually done.
-const log4 = launch('approved', {
+const log4 = await launch('approved', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_AFTER_MS: '30000',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="plan-approve"]@6000',
@@ -290,7 +292,7 @@ results.approved = {
  * still `plan`, the intent of the follow-up is outside REQ-ORCH-021's answer group, and the gate must stay shut
  * anyway because this session already holds an approval. The prompt is typed through the real input path.
  */
-const log5 = launch('follow-up-not-held', {
+const log5 = await launch('follow-up-not-held', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_PROMPT: 'also add a second line saying again to planned.txt',
   ROTARIS_CAPTURE_PROMPT_MS: '10000',
@@ -317,7 +319,7 @@ results.followUpNotHeld = {
 // the opening click schedules, so a single expression that clicks and then queries is racing its own effect.
 const OPEN_CHIP = `(() => { const chip = document.querySelector('[data-testid="chip-run-start-mode"]'); if (!chip) return 'no-chip'; const trigger = chip.querySelector('[data-ui-component="PopoverMenu"]'); if (!trigger) return 'no-trigger'; trigger.click(); return 'opened'; })()`;
 const CHOOSE_PLAN = `(() => { const panel = document.querySelector('[data-testid="chip-menu-panel"]'); if (!panel) return 'no-panel'; const item = [...panel.querySelectorAll('[role="menuitemradio"]')].find((b) => /plan first/i.test(b.textContent || '')); if (!item) return 'no-plan-option'; const chosen = (item.textContent || '').trim(); item.click(); return 'chose:' + chosen; })()`;
-const log6 = launch('re-armed', {
+const log6 = await launch('re-armed', {
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_EVAL_AT: `${OPEN_CHIP}@10000;;${CHOOSE_PLAN}@11000`,
   ROTARIS_CAPTURE_PROMPT: 'now do the other thing entirely',

@@ -81,7 +81,7 @@ const results = {
 let packaged = { run: false, note: 'pass --packaged (after `ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1 pnpm package`, with `ROTARIS_PACKAGE_WITHOUT_NOTICES=1` while `pnpm notices` refuses) to measure the packaged application' };
 if (process.argv.includes('--packaged')) {
   const { packagedTerminalStreaming } = await import('./terminal-proof/packaged.mjs');
-  packaged = { run: true, ...packagedTerminalStreaming({ repo }) };
+  packaged = { run: true, ...(await packagedTerminalStreaming({ repo })) };
   if (packaged.available) for (const [name, value] of Object.entries(packaged.checks)) results[`packaged.${name}`] = value === true;
   else results['packaged.buildPresent'] = false;
 }

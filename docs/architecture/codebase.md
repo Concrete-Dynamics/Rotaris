@@ -692,7 +692,10 @@ stored credential; (3b, Part L) three more real runs, one prompt per intent fami
 slot and never fall back, the answering rung recorded; (5) sign-out from the card — the file gone, the snapshot kept, a prompt refused. `--resume` keeps
 the profile and skips the paste; `--skip-build` skips the build. Evidence lands under `.proof/slice-proof/`. `--from=<scenario>` replays the
 earlier scenarios from their evidence. On 2026-09-05 every scenario passed on the owner's re-run with an OpenRouter
-key (`.proof/slice-proof/results.json`), after two runs that each found a defect.
+key (`.proof/slice-proof/results.json`), after two runs that each found a defect. Since 2026-09-29 (R-067) it reads the
+credential file where the product writes it on the running platform (`tokensDirFor`): the Windows spelling it used
+everywhere left the first launch's wait, the strays check and the sign-out check with nothing to read off Windows
+([note](../defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md)).
 
 **What `pnpm live-run` does.** It is the only check here that answers to a real model rather than a scripted one,
 and the only one that spends money, so it never runs on its own: `pnpm check` does not reach it and without
@@ -1131,7 +1134,10 @@ propagated); discovery of the real runtime through the token with the tier's nam
 block; the workspace binding on the launch line; a real `get_symbols_overview` call; the three-step project setup —
 completed, skipped on the marker, `skipped-no-code`, a launch-less entry refused, a cancel mid-step; the manifest's
 drift refused; the packaged binary with outbound traffic blocked, which names the fetch it needs (IC-7). Evidence under
-`.proof/code-intel-proof/`. Its branch client is `scripts/lib/line-rpc-client.mjs` (2026-09-28, R-062): every pending
+`.proof/code-intel-proof/`. The runtime's home, which it keeps across runs, is the product's own on the running platform
+(`join(dataDirFor(local), 'code-intelligence')`, as `main/sentinel.ts` joins it) since 2026-09-29 (R-067; the Windows
+spelling kept a directory the product never used off Windows,
+[note](../defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md)). Its branch client is `scripts/lib/line-rpc-client.mjs` (2026-09-28, R-062): every pending
 request rejects when the child exits, errors or is killed by the guard, with the exit status and standard error's tail,
 so a branch that dies fails the launch in seconds instead of hanging it (`line-rpc-client.test.ts`, 12 cases). It launches the token first and the sandbox switch after it, the
 product's order, which `lib/launch-sites.test.ts` holds for every token launch; its workspace file records
@@ -1235,6 +1241,29 @@ is green for the same reason after it, which is why the move was made mechanical
 `part-j-proof` rather than by reading. About 430 lines of duplication went. **`launch` was deliberately NOT
 extracted**: twenty-six scripts define one and twenty are genuinely different, so a common form would be a rewrite
 of the evidence rather than a move of it, and the driver below removes the pressure that produced the variants.
+
+**Every launch a proof starts itself is bounded (2026-09-29, R-067).** Each script still keeps its own `launch`; what
+changed is the one call inside it. `spawnSync(electron|exe, …, { timeout })` stood at thirty-five sites in thirty-four
+scripts (`terminal-proof/packaged.mjs` among them). ~~Its timeout could not end a launch: Node signals the child and
+closes its ends of the pipes at the same moment, then waits for an exit without a bound.~~ That was true until the
+application's EPIPE loop was repaired (2026-09-29); re-measured on 2026-09-30, the timeout does end the launch (SIGTERM,
+and the quit path runs), but `spawnSync` then reports the overrun as `status` 0 with only `error.code` `ETIMEDOUT` to
+show it, having closed the pipes before the quit path wrote, and every `launch` checked only `status`, so an overrun
+passed as a clean exit with no log tail. Every one of them is now
+`lib/bounded-launch.mjs`'s `spawnBounded` (SIGTERM with the pipes open and read, a grace, SIGKILL to the launch's process
+group), and an overrun is a failure named by `overrunMessage` with the launch's last thirty log lines — thrown by a
+`launch`, recorded as a failed check by `updater-proof`, `terminal-proof` and the packaged terminal launch, which report
+rather than throw. Each `launch` became `async` and each call site awaits it (`transcript-proof`'s `appendRun`,
+`package.mjs`'s app step as `stepAsync`, and `terminal-proof/packaged.mjs`'s `packagedTerminalStreaming` with it).
+`lib/launch-sites.test.ts` fails a `spawnSync` launch of Electron anywhere under `scripts/` (its rule 4), and a launch
+with `ELECTRON_RUN_AS_NODE`, which starts no application, stays exempt
+([note](../defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md)). Three launches that were
+never `spawnSync`'s had bounds of their own that passed an overrun the same way or not at all, and are `spawnBounded`'s
+since 2026-09-30: `fetch-proof`'s (a bare `child.kill()` at 150 s, whose SIGTERM the application answers with exit
+status 0), `workspace-proof`'s hand-over launch (SIGTERM alone at 30 s, no log) and `mcp-console-spike`'s (no bound).
+Since then the same test also fails a bare `spawn` of Electron outside three it names with their reasons: the driver's,
+`code-intel-proof`'s branch (a stdio server guarded by its RPC client) and `live-run`'s `runElectron` (SIGKILL at its
+bound, reported as a signal). And it checks each `spawnBounded` site, not each file, for its `.overran`.
 
 **The driver.** `apps/desktop/src/main/driver.ts`, reached only when `ROTARIS_DRIVER` names an endpoint file at
 launch, opens a loopback listener and answers newline-delimited JSON: `waitFor`, `click` (by selector, optionally

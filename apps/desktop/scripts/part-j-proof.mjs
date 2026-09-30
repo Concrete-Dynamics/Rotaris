@@ -4,6 +4,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 /**
  * The control channel's first execution in the built app (Part J step 3): a queued message consumed at the
@@ -50,10 +51,10 @@ function scenario(name, agentsYaml) {
   ].join('\n'));
   return { root, workspace, local };
 }
-function launch(name, s, extra, opts = {}) {
+async function launch(name, s, extra, opts = {}) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
-    cwd: app, encoding: 'utf8', timeout: 120_000, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
+    cwd: app, timeoutMs: 120_000, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local: s.local, preferences: join(s.root, 'preferences') }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true', ...extra,
@@ -61,6 +62,7 @@ function launch(name, s, extra, opts = {}) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (opts.expectPng !== false && !existsSync(png)) throw new Error(`${name} produced no screenshot`);
   return log;
@@ -68,9 +70,10 @@ function launch(name, s, extra, opts = {}) {
 function open(s) { return new Database(oneDatabase(s.local), { readonly: true }); }
 /*
  * ADR-0005 (the repair of a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md, R-067): what the store
- * says WHILE the app runs. The launch blocks this thread (`spawnSync`), so a worker thread samples the store every 50 ms
- * and records each change of (status, lock holder, run starts, summary); the proof reads the record after the exit. A reading the
- * store is busy for is skipped, not guessed.
+ * says WHILE the app runs. A worker thread samples the store every 50 ms and records each change of (status, lock
+ * holder, run starts, summary); the proof reads the record after the exit. A reading the store is busy for is skipped,
+ * not guessed. It was a worker because the launch blocked this thread (`spawnSync`); the launch is `spawnBounded`'s
+ * since 2026-09-29, and the worker stays, so its sampling does not depend on this thread's event loop.
  */
 function sampleStore(local) {
   const stop = new Int32Array(new SharedArrayBuffer(4));
@@ -118,7 +121,7 @@ const s1 = scenario('queue', []);
 // The capture at 9 s sat on a knife-edge the Parts R and S merge found (2026-09-05): the launch reaches `session.start`
 // ~1.2 s in, the run needs ~8 s from there (the iteration boundary alone is ~4.2 s), and three runs landed 100 ms either
 // side. The assertion is consumption, not a budget; the capture now waits 13 s.
-launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PROMPT: 'first task', ROTARIS_CAPTURE_TYPE: 'and then this>>composer@2200', ROTARIS_CAPTURE_AFTER_MS: '13000' });
+await launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PROMPT: 'first task', ROTARIS_CAPTURE_TYPE: 'and then this>>composer@2200', ROTARIS_CAPTURE_AFTER_MS: '13000' });
 {
   const db = open(s1);
   const session = db.prepare('SELECT session_id, execution_status, iterations_completed, todo FROM sessions').get();
@@ -146,7 +149,7 @@ launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PROMPT: 
 
 // 2. A steer reaches the entry role at its next step.
 const s2 = scenario('steer', []);
-launch('steer', s2, { ROTARIS_SCRIPT: 'read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'steer me', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Steer the run"]@1900;;.dialog-actions .btn-primary>>Steer@2600', ROTARIS_CAPTURE_TYPE: 'go left>>no-enter@2300', ROTARIS_CAPTURE_AFTER_MS: '9000' });
+await launch('steer', s2, { ROTARIS_SCRIPT: 'read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'steer me', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Steer the run"]@1900;;.dialog-actions .btn-primary>>Steer@2600', ROTARIS_CAPTURE_TYPE: 'go left>>no-enter@2300', ROTARIS_CAPTURE_AFTER_MS: '9000' });
 {
   const db = open(s2);
   const sid = db.prepare('SELECT session_id FROM sessions').get().session_id;
@@ -161,7 +164,7 @@ launch('steer', s2, { ROTARIS_SCRIPT: 'read,read,read,read', ROTARIS_CAPTURE_PRO
 // label `Continue` with `Continue run` as its accessible name (PD-ORCH-005 phase 5), so the lookup is that name.
 const s3 = scenario('pause', []);
 const pauseSamples = sampleStore(s3.local);
-launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'pause me', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Pause the run"]@~8000;;.composer__strip .btn-primary[aria-label="Continue run"]@~24000', ROTARIS_CAPTURE_AFTER_MS: '26000' });
+await launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'pause me', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Pause the run"]@~8000;;.composer__strip .btn-primary[aria-label="Continue run"]@~24000', ROTARIS_CAPTURE_AFTER_MS: '26000' });
 {
   const db = open(s3);
   const session = db.prepare('SELECT session_id, execution_status, stop_reason FROM sessions').get();
@@ -193,7 +196,7 @@ launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTUR
 // as the last message of its first request, whose answer follows it in the record. That answer is the script's third
 // read: the resumed root carries on with its next step rather than its first.
 const s3b = scenario('steer-rest', []);
-launch('steer-rest', s3b, { ROTARIS_SCRIPT: 'read,wait:7000,read,read', ROTARIS_CAPTURE_PROMPT: 'steer then pause', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Steer the run"]@1900;;.dialog-actions .btn-primary>>Steer@2600;;[data-testid="composer-strip"] [aria-label="Pause the run"]@~3400;;.composer__strip .btn-primary[aria-label="Continue run"]@~24000', ROTARIS_CAPTURE_TYPE: 'go left>>no-enter@2300', ROTARIS_CAPTURE_AFTER_MS: '27000' });
+await launch('steer-rest', s3b, { ROTARIS_SCRIPT: 'read,wait:7000,read,read', ROTARIS_CAPTURE_PROMPT: 'steer then pause', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Steer the run"]@1900;;.dialog-actions .btn-primary>>Steer@2600;;[data-testid="composer-strip"] [aria-label="Pause the run"]@~3400;;.composer__strip .btn-primary[aria-label="Continue run"]@~24000', ROTARIS_CAPTURE_TYPE: 'go left>>no-enter@2300', ROTARIS_CAPTURE_AFTER_MS: '27000' });
 {
   const db = open(s3b);
   const session = db.prepare('SELECT session_id, execution_status FROM sessions').get();
@@ -222,7 +225,7 @@ launch('steer-rest', s3b, { ROTARIS_SCRIPT: 'read,wait:7000,read,read', ROTARIS_
 
 // 4. The message limit: paused durably with the dialog, "double" continues; a second launch finds the session paused and "cancel" resolves it.
 const s4 = scenario('limit', ['  message_limit: 1']);
-launch('limit-double', s4, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_PROMPT: 'limited', ROTARIS_CAPTURE_TYPE: 'one more>>composer@1500', ROTARIS_CAPTURE_PAUSE_ANSWER: 'double', ROTARIS_CAPTURE_AFTER_MS: '12000' });
+await launch('limit-double', s4, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_PROMPT: 'limited', ROTARIS_CAPTURE_TYPE: 'one more>>composer@1500', ROTARIS_CAPTURE_PAUSE_ANSWER: 'double', ROTARIS_CAPTURE_AFTER_MS: '12000' });
 {
   const db = open(s4);
   const session = db.prepare('SELECT session_id, execution_status, message_limit, paused_at_count, iterations_completed FROM sessions').get();
@@ -235,7 +238,7 @@ launch('limit-double', s4, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_PROMPT: '
   results.limitDouble = { session, pauses, resolved };
 }
 const s5 = scenario('limit-relaunch', ['  message_limit: 1']);
-launch('limit-paused', s5, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_PROMPT: 'limited', ROTARIS_CAPTURE_TYPE: 'one more>>composer@1500', ROTARIS_CAPTURE_AFTER_MS: '8000' });
+await launch('limit-paused', s5, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_PROMPT: 'limited', ROTARIS_CAPTURE_TYPE: 'one more>>composer@1500', ROTARIS_CAPTURE_AFTER_MS: '8000' });
 {
   const db = open(s5);
   const session = db.prepare('SELECT execution_status, paused_at_count, message_limit FROM sessions').get();
@@ -246,7 +249,7 @@ launch('limit-paused', s5, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_PROMPT: '
   // the relaunch below resumes through REQ-SESSION-047's one reap, which is the evidence that matters.
   results.limitPausedLocks = locks;
 }
-launch('limit-cancel', s5, { ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_PAUSE_ANSWER: 'cancel', ROTARIS_CAPTURE_AFTER_MS: '7000' });
+await launch('limit-cancel', s5, { ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_PAUSE_ANSWER: 'cancel', ROTARIS_CAPTURE_AFTER_MS: '7000' });
 {
   const db = open(s5);
   const session = db.prepare('SELECT execution_status, paused_at_count, stop_reason FROM sessions').get();
@@ -259,7 +262,7 @@ launch('limit-cancel', s5, { ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_P
 
 // 5. A user-initiated quit during a run: the run stops for shutdown, its terminal result is written, the lock is released.
 const s6 = scenario('quit', []);
-launch('quit', s6, { ROTARIS_SCRIPT: 'read,read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'quit me', ROTARIS_CAPTURE_QUIT_MS: '2200', ROTARIS_CAPTURE_AFTER_MS: '40000' }, { expectPng: false });
+await launch('quit', s6, { ROTARIS_SCRIPT: 'read,read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'quit me', ROTARIS_CAPTURE_QUIT_MS: '2200', ROTARIS_CAPTURE_AFTER_MS: '40000' }, { expectPng: false });
 {
   const db = open(s6);
   const session = db.prepare('SELECT execution_status, stop_reason FROM sessions').get();

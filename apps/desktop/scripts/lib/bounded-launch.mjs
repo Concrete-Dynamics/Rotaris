@@ -9,12 +9,17 @@
  * each took.
  *
  * `spawnBounded` is the same ending for a launch a proof starts itself, where `spawnSync(…, { timeout })` used to
- * stand. That call cannot bound a launch: at its timeout Node sends the signal AND closes its ends of the child's
+ * stand — in every proof since 2026-09-29, which `launch-sites.test.ts` (rule 4) keeps
+ * (`docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`). Until 2026-09-29 that call could not bound a launch: at its timeout Node sends the signal AND closes its ends of the child's
  * standard output and error, so the application's first quit-path line (`quit: requested (before-quit)`) fails with
  * EPIPE, and the main process's uncaught-exception handler logs that failure to the same closed stream — a loop at full
  * CPU that never reaches the quit, and a `spawnSync` that never returns
- * (`docs/defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`, repaired 2026-09-29). Here the pipes stay open and
- * read until the process has exited, so SIGTERM reaches the quit path the way a person's `kill` does.
+ * (`docs/defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`, repaired 2026-09-29). Since
+ * that repair the application does quit on it, and `spawnSync` returns at its timeout — but with `status` 0, only
+ * `error.code` `ETIMEDOUT` to show the overrun, and none of the quit path's lines (measured 2026-09-30), so a `launch`
+ * that checks the status passes an overrun as a clean exit. Here the pipes stay open and read until the process has
+ * exited, so SIGTERM reaches the quit path the way a person's `kill` does, its lines reach the log, and the overrun is
+ * reported (`overran`, `overrunMessage`).
  *
  * Nothing here is product code. It runs only from the proofs; `bounded-launch.test.ts` pins it against real children.
  */

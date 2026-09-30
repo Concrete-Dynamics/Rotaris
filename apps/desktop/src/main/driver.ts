@@ -4,6 +4,7 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { millis, type MonotonicClock, type Timers } from '@rotaris/kernel';
 import type { BrowserWindow } from 'electron';
 import type { CommandOutcome } from '@rotaris/contracts';
+import { inputEvent, submitEvents, textEvents } from './capture/probe.js';
 
 /**
  * THE DRIVER — a request/reply seam for the proofs and for a person (or an agent) debugging the built app.
@@ -336,17 +337,11 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
       case 'type': {
         const wc = windowOrThrow(target).webContents;
         // `keyDown` + `char` + `keyUp` per character: a chord alone moves no caret and inserts nothing, and the
-        // renderer needs the `char` event — the same lesson the type-at seam carries.
-        for (const ch of request.text ?? '') {
-          wc.sendInputEvent({ type: 'keyDown', keyCode: ch });
-          wc.sendInputEvent({ type: 'char', keyCode: ch });
-          wc.sendInputEvent({ type: 'keyUp', keyCode: ch });
-        }
-        if (request.enter === true) {
-          wc.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
-          wc.sendInputEvent({ type: 'char', keyCode: 'Return' });
-          wc.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
-        }
+        // renderer needs the `char` event — the same lesson the type-at seam carries. A line break is Shift+Enter, never
+        // a character (`textEvents`; REQ-CHAT-001's newline, so a multi-line text neither loses its breaks nor submits
+        // early — `docs/defects/fixed/the-driver-and-the-type-seams-type-a-newline-as-a-character.md`).
+        const text = request.text ?? '';
+        for (const event of request.enter === true ? submitEvents(text, 'key') : textEvents(text, 'key')) wc.sendInputEvent(inputEvent(event));
         return { typed: (request.text ?? '').length, enter: request.enter === true };
       }
       case 'chord': {

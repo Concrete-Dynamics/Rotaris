@@ -372,7 +372,9 @@ for what they press. Start is pressed once it is drawn enabled, Cancel once it i
 again at 3 s and 6 s if it is not selected
 (`../../defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`). The shared seam's press stays as
 it is, and its note stays open, since nine other proofs use it
-(`../../defects/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`). With the correction
+(`../../defects/fixed/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`). *(Reported back 2026-09-30 under R-067: the seam's press is now verified — read
+again and pressed again until the category carries `is-selected`, or logged as never selected at 5 s — and the note is
+repaired.)* With the correction
 forced (the seam pointed at Instructions), section 5 passed. The whole proof then passed three runs in a row (522 s,
 521 s, 524 s), with another agent's proofs sharing the host in two of them. In one launch the banner deflected the
 seam's press again, and the correction put Settings back. *(Corrected by the next section: that correction did not hold, and the

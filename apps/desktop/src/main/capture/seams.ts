@@ -3,7 +3,8 @@ import { writeFileSync } from 'node:fs';
 import { type BrowserWindow, screen } from 'electron';
 import { millis } from '@rotaris/kernel';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION, type NoticeAction, type NoticeSeverity } from '@rotaris/contracts';
-import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, centreWhen, chordEvent, clickAt, doubleClickAt, onStep, parseSelectors, parseSteps, pause, releaseProbe, selectWait, settleAt, targetProbe } from './host.js';
+import { inputEvent, submitEvents, textEvents } from './probe.js';
+import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, centreWhen, chordEvent, clickAt, doubleClickAt, onStep, parseSelectors, parseSteps, pause, pressCategory, releaseProbe, selectWait, settleAt, targetProbe } from './host.js';
 
 /**
  * THE SCRIPTABLE SEAMS — clicks, typed text, chords, renderer `eval`, notices, prompts, drags, OS input,
@@ -65,7 +66,8 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
     });
   }
 
-  // ROTARIS_CAPTURE_VIEW=<n>: open view n and, for Settings, click the Project category.
+  // ROTARIS_CAPTURE_VIEW=<n>: open view n and, for Settings, select the category ROTARIS_CAPTURE_SETTINGS names
+  // (Project by default). The first press still lands 200 ms after the chord; it is then verified (`pressCategory`).
   const view = Number(process.env['ROTARIS_CAPTURE_VIEW'] ?? 0);
   if (view > 0) {
     clocks.timers.after(millis(Number(process.env['ROTARIS_CAPTURE_VIEW_MS'] ?? 600)), async () => {
@@ -74,8 +76,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       wc.sendInputEvent({ type: 'keyUp', keyCode: String(view), modifiers: ['control'] });
       if (view === 7) {
         await pause(host, 200);
-        const rect = await wc.executeJavaScript(`(() => { const b = [...document.querySelectorAll('.nav-list__item')].find((x) => x.textContent === ${JSON.stringify(process.env['ROTARIS_CAPTURE_SETTINGS'] ?? 'Project')}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
-        if (rect) clickAt(win, rect);
+        await pressCategory(host, process.env['ROTARIS_CAPTURE_SETTINGS'] ?? 'Project', 5_000);
       }
     });
   }
@@ -158,13 +159,13 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   }
 
   // ROTARIS_CAPTURE_TYPE="text@ms;;…": real key events into whatever control holds focus, then Enter (the composer's submit, REQ-CHAT-001).
+  // A line break in the text is Shift+Enter, the composer's newline, never a character (`textEvents`).
   for (const step of steps(process.env['ROTARIS_CAPTURE_TYPE'])) {
     clocks.timers.after(millis(step.at), () => {
       const wc = win.webContents;
       // `>>composer` first focuses the composer with Ctrl+L (REQ-CHAT-002); `>>no-enter` leaves the text in the focused control.
       if (step.arg === 'composer') { wc.sendInputEvent({ type: 'keyDown', keyCode: 'L', modifiers: ['control'] }); wc.sendInputEvent({ type: 'keyUp', keyCode: 'L', modifiers: ['control'] }); }
-      for (const ch of step.selector) wc.sendInputEvent({ type: 'char', keyCode: ch });
-      if (step.arg !== 'no-enter') { wc.sendInputEvent({ type: 'keyDown', keyCode: 'Return' }); wc.sendInputEvent({ type: 'char', keyCode: 'Return' }); wc.sendInputEvent({ type: 'keyUp', keyCode: 'Return' }); }
+      for (const event of step.arg === 'no-enter' ? textEvents(step.selector, 'char') : submitEvents(step.selector, 'char')) wc.sendInputEvent(inputEvent(event));
       log(`capture: typed "${step.selector}"`);
     });
   }
@@ -205,13 +206,10 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
 
   // ROTARIS_CAPTURE_TYPE_AT="text@ms;;…": real characters into whatever holds focus (a chord alone moves no caret and
   // inserts nothing — the renderer needs the `char` event), so the proof fills the palette's filter field as a user does.
+  // A line break is Shift+Enter, never a character (`textEvents`).
   for (const step of steps(process.env['ROTARIS_CAPTURE_TYPE_AT'])) {
     clocks.timers.after(millis(step.at), () => {
-      for (const ch of step.selector) {
-        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: ch });
-        win.webContents.sendInputEvent({ type: 'char', keyCode: ch });
-        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: ch });
-      }
+      for (const event of textEvents(step.selector, 'key')) win.webContents.sendInputEvent(inputEvent(event));
       log(`capture: type-at ${step.at} ${JSON.stringify(step.selector)}`);
     });
   }

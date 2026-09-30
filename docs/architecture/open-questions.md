@@ -6733,7 +6733,9 @@ designed, each carrying the words "no model event or token", which describe a st
 **What the build proceeds under.** The watch measures the silence of the child's model steps. Once a turn ends and
 until the run starts its next — which is exactly the wait on its own children, or the end of its execution — the run
 asks the child for no output, so no silence is counted against it: an evaluation there reports no stall and no wait,
-and calls the callback with *not stalled*; a stall under way when the turn ended is reported recovered. The next turn
+and calls the callback with *not stalled*; a stall under way when the turn ended is reported recovered, the turn's end
+being read as REQ-MONITOR-120's "activity resumes" — the step the silence was counted against has answered, whether
+with its final event or by settling. The next turn
 the run starts counts from its start, as OQ-127 already reads for REQ-NOTIFY-112's recovery. Each child it waits on has
 its own watch, which reports that child's own silence (`StallWatch.betweenTurns`; `stall.test.ts` and `children.test.ts`,
 "a child waiting on its own child between its turns is not reported stalled").

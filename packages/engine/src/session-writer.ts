@@ -159,7 +159,8 @@ export interface ToolCallOpen {
 }
 export interface ToolCallSettle {
   readonly status: 'ok' | 'failed' | 'blocked';
-  readonly elapsed_ms: number;
+  /** Null only for a call a crash cut, settled by the crash record: no process observed its end, so its duration is not known. */
+  readonly elapsed_ms: number | null;
   readonly is_error: boolean;
   readonly result: string;
   readonly error?: string | null;

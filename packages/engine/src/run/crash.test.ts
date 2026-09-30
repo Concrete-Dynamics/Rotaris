@@ -130,6 +130,40 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     ]);
   });
 
+  it('REQ-SESSION-129 with ADR-0024 (the repair of a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md): the ring row of every call a dead run left running settles `failed` with the crash\'s statement, once; a settled one keeps what it returned', () => {
+    const sid = 'S-ring' as SessionId;
+    const writer = created(sid);
+    dal.insertIteration({ session_id: sid, iteration: 1, root_task_id: ROOT, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
+    writer.recordAgentMessage(ROOT, 1, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'a', name: 'write', args: '{}' }, { kind: 'tool-call', callId: 'b', name: 'grep', args: '{}' }] });
+    // Each call's two records, as the run host's gate and the turn write them: the ring row and the transcript row.
+    const call = (callId: string, agent: string, tool: string) => ({ call_id: callId, agent_name: agent, tool_name: tool, args: { pattern: callId } });
+    const a = writer.openToolCall(call('a', 'orchestrator', 'write'));
+    if (!a.ok) throw new Error('open');
+    writer.settleToolCall(a.value, call('a', 'orchestrator', 'write'), { status: 'ok', elapsed_ms: 3, is_error: false, result: 'wrote the file' });
+    writer.appendRow('tool', 'write', true, { name: 'orchestrator', toolName: 'write', toolStatus: 'ok', callKey: 'a', output: 'wrote the file' });
+    expect(writer.openToolCall(call('b', 'orchestrator', 'grep')).ok).toBe(true);
+    writer.appendRow('tool', 'grep', false, { name: 'orchestrator', toolName: 'grep', toolStatus: 'running', callKey: 'b', output: 'a.ts:1' });
+    // An agent the crash record pauses none of — another root's orphan, left to the stale-child settle — is dead as well.
+    expect(writer.openToolCall(call('b', 'c9', 'glob')).ok).toBe(true);
+    const finishes = () => dal.eventsOfKind(sid, 'tool.finish').length;
+    expect(finishes()).toBe(1);
+    recordCrash(dal, writer, sid, new Set(), () => undefined);
+    const ring = () => dal.toolCallsOf(sid).map((r) => { const e = JSON.parse(r.entry) as { result?: string; elapsed_ms: number | null }; return [r.agent_name, r.call_id, r.status, r.is_error, e.result, r.elapsed_ms]; });
+    const statement = interruptedResult('crash', true, '');
+    expect(ring()).toEqual([
+      ['orchestrator', 'a', 'ok', 0, 'wrote the file', 3],
+      // The end of a call a crash cut was observed by no process: its duration is not known.
+      ['orchestrator', 'b', 'failed', 1, statement, null],
+      ['c9', 'b', 'failed', 1, statement, null],
+    ]);
+    // Each settle is REQ-EVENTS-057's `tool.finish`, as every settled call's is; the transcript row settled as before.
+    expect(finishes()).toBe(3);
+    expect(dal.residentRows(sid).find((r) => r.call_key === 'b' && r.name === 'orchestrator')).toMatchObject({ tool_status: 'failed' });
+    // A second recording finds nothing running.
+    recordCrash(dal, writer, sid, new Set(), () => undefined);
+    expect(finishes()).toBe(3);
+  });
+
   it('clause 6 with clauses 8 and 19: the Continue action counts what a crash left unfinished, the root included, before the crash is recorded, and the same after', () => {
     const sid = 'S-count' as SessionId;
     const writer = created(sid);

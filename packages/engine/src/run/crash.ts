@@ -86,6 +86,8 @@ export interface CrashRecord {
  *   interrupted before it completed and was not re-run, its row left `running` settling with the same (clauses 3 and 4);
  * - a plan cycle's root the session still records as under way (REQ-ORCH-153; a plan cycle has no iteration row) has its
  *   open calls answered the same way and the calls its record holds join the session total (`recordPlanRootCrash`);
+ * - every call's row in the `tool_calls` ring still `running` settles `failed` with the crash's statement, as its
+ *   transcript row does (`settleDeadToolCalls`, REQ-SESSION-129 with ADR-0024);
  * - every approval still listed as pending is withdrawn by the crash, never denied (clause 9);
  * - every background terminal session still recorded as running, and not held by this process, is recorded as ended by
  *   the crash (clause 10: a crash ends them).
@@ -128,6 +130,7 @@ export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: Ses
     writer.appendTimeline('iteration_paused', 'rotaris', `Iteration ${open.iteration} was left open by ${interruptionPhrase('crash')}; its unfinished agents are paused and resume when the session is continued.`, { iteration: open.iteration, interruption: 'crash', paused_agents: paused });
   }
   recordPlanRootCrash(dal, writer, sessionId, warn);
+  settleDeadToolCalls(dal, writer, sessionId, warn);
   const withdrawn = withdrawStoredApprovals(dal, writer, sessionId);
   let terminals = 0;
   for (const t of dal.agentTerminalsOf(sessionId)) {
@@ -220,6 +223,29 @@ function recordPlanRootCrash(dal: StoreDal, writer: SessionWriter, sessionId: Se
   answerOpenCalls(dal, writer, sessionId, { taskId, name: row?.plan_root_persona ?? '' }, 0, 'crash');
   const r = writer.countToolCalls({ planRoot: { taskId, add: callsRun(conversationOf(dal.agentConversation(sessionId, taskId))) } });
   if (!r.ok) warn(`the calls of the plan cycle's root ${taskId} a crash left uncounted in ${sessionId} were not counted: ${r.error.code}`);
+}
+
+/**
+ * REQ-SESSION-129 with ADR-0024 (the repair of `a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md`): a call
+ * has two records, its transcript row and its row in the `tool_calls` ring. An orderly end settles every ring row still open
+ * when the run's tool ports close (the run host's gate sink); a crash closes none of them. Every ring row still `running`
+ * when a crash is recorded is a dead run's — a repair runs only when no process holds the session, and a continue's run is
+ * not built yet, while a run of this process closed its ports when it ended — so each settles `failed` with the statement
+ * that the crash interrupted it and it was not re-run, as its transcript row does (`answerOpenCalls`), with REQ-EVENTS-057's
+ * `tool.finish`. The ring row recorded no output, so the statement carries none; no process observed the call's end, so its
+ * duration is not known (null). Every agent's, the crash record's paused agents' and the stale-child settle's alike: a
+ * `running` row reads as a call still under way (REQ-MONITOR-105), which no call of a dead host is. A row the ring's cap
+ * already released is gone, and a second recording finds none running.
+ */
+function settleDeadToolCalls(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, warn: (m: string) => void): void {
+  const statement = interruptedResult('crash', true, '');
+  for (const row of dal.toolCallsOf(sessionId)) {
+    if (row.status !== 'running') continue;
+    let args: Record<string, unknown> = {};
+    try { const e = JSON.parse(row.entry) as { args?: unknown }; if (e.args !== null && typeof e.args === 'object' && !Array.isArray(e.args)) args = e.args as Record<string, unknown>; } catch { args = {}; }
+    const r = writer.settleToolCall(row.ordinal, { call_id: row.call_id, agent_name: row.agent_name, tool_name: row.tool_name, args }, { status: 'failed', elapsed_ms: null, is_error: true, result: statement, error: statement });
+    if (!r.ok) warn(`the tool call ${row.call_id} (${row.tool_name}) a crash left running in ${sessionId} was not settled: ${r.error.code}`);
+  }
 }
 
 /** Clause 9 after a crash: every approval the dead run left listed as pending leaves the list, recorded as withdrawn. */

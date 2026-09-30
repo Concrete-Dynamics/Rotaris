@@ -95,5 +95,5 @@ crash — and its store read as D4's did: `sessions.tool_calls` **178** against 
 throwaway harness not committed) recorded the crash and brought the total to **247**, equal to the rows, with
 `root_tool_calls` **36** and `d2`'s `tool_calls` **33**, `d2` paused. The built app itself never repaired the store: the
 live run ends at the crash and does not reopen the session. The same repair left the cut call's ring row `running`, a
-defect of its own: [`a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md`](../a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md).
+defect of its own: [`a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md`](a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md) (repaired 2026-09-30: the crash record settles every ring row still `running`).
 

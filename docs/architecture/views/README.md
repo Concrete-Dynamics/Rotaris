@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**A crash settles its cut call's ring row (REQ-SESSION-129, REQ-MONITOR-105, ADR-0024, R-067).** An orderly end settles
+every open `tool_calls` row when the run's ports close; a crash closes none, so after the crash record settled a call's
+transcript row its ring row stayed `running` for good. `recordCrash` now settles every ring row still `running`
+(`settleDeadToolCalls`) through `SessionWriter.settleToolCall`, `failed` with the crash's statement and a NULL duration
+(`ToolCallSettle.elapsed_ms` admits null for this case). This repairs
+`a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md` (acceptance A30), and corrects ADR-0024's first-execution
+claim that such a row "needs no repair" in place. The **runtime view**'s §2 crash paragraph and its §7 rings row say so. No
+package, edge, process, message kind, channel, command or column changed.
+
 **A plan cycle's root calls before a crash reach the session total (REQ-MONITOR-102, REQ-ORCH-153, R-067).** A plan cycle
 has no `iterations` row, so the crash record never reached its root. `sessions.plan_root_task_id` / `plan_root_persona`
 (store **v29**) name the plan cycle's root while its turn runs and none of its calls is counted: `Run.turn` records it when

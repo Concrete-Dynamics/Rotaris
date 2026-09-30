@@ -45,6 +45,21 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**The run-start mode hint says what `plan` does and states a session's release (REQ-ORCH-152, REQ-CONFIG-320,
+PD-ORCH-003, R-067).** The Settings Runtime category's hint no longer says the plan gate is not built: `runStartModeHint`
+(`ui/settings/ConfigSettings.tsx`) says what `plan` does and, when the followed session's `SessionRecord.planReleased` is
+true, that the session is released and that Plan first on the composer's chip re-arms it; the selector itself re-arms
+nothing (OQ-137). This repairs `the-run-start-setting-says-the-plan-gate-is-not-built.md`. The **runtime view**'s
+plan-gate paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**The Windows global configuration directory is REQ-CONFIG-001's `%LOCALAPPDATA%\rotaris\rotaris\` (R-067).**
+`resolveUserDirs`'s `win32` case answered `rotaris\config` until now; the data directory stays the sibling `rotaris\data`
+(D-04), and no earlier directory is adopted (REQ-STARTUP-145). The proof harness's `configDirFor` moved with it. This
+repairs `the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md`. The **process view**'s
+diagram and files-on-disk table and the **state-ownership view**'s configuration rows spell the new directory, and the
+process view says that on Windows it is also the directory the preference store's `Rotaris\Rotaris` root names. No
+package, edge, process, message kind, channel, command or store column changed.
+
 **A by-design tool removal is logged at `info`, and a persona's MCP lines once per spawn (REQ-TOOLS-006, PD-MONITOR-002,
 R-067, live-run findings L14 and D7).** `ToolPortContext` gains `info` — the application log at `info` and the session
 log at `INFO` — which `Sessions` fills on a start and a continuation; `createToolPort` logs a REQ-TOOLS-006 narrowing

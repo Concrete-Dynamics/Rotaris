@@ -901,7 +901,9 @@ fresh prompt no longer clears it, so every later run of an approved session laun
 that used to re-open the gate runs straight through. It is cleared by exactly one thing, `session.planRearm
 {sessionId}` — a third session command, refused while a run is active and a successful no-op on a session that
 already holds no release — which the composer's run-start chip sends when the user chooses `plan` on a released
-session. A new session holds no release and is held exactly as REQ-ORCH-152 and REQ-ORCH-153 require.
+session. The Settings Runtime category's run-start selector sends none: it defers to Save, and its hint
+(`runStartModeHint`, fed `SessionRecord.planReleased` of the followed session) states the release and names the chip that
+re-arms it (OQ-137). A new session holds no release and is held exactly as REQ-ORCH-152 and REQ-ORCH-153 require.
 
 A **paused** session has no live run: `session.continue {action}` is a session command — at the message limit
 it resolves the pause (continue → `idle`; double → the limit ×2; cancel → `paused`, stop reason

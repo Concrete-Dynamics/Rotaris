@@ -613,10 +613,12 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
     const card = latest.current.cards.find((c) => c.id === id);
     const from: ColumnToken = card?.column ?? 'review';
     const target = DECISION_TARGET[action];
-    const r = await perform(id, action, from, target ?? from, payload, target);
-    if (r.ok) loadReview(id);
-    return r;
-  }, [paneTarget, perform, loadReview, DECISION_TARGET]);
+    // REQ-TRACE-426: the pane keeps the payload the decision was made against, says it is out of date, and offers the
+    // reload as its one action — the host does not re-read on its own. It did until 2026-09-29 (live-run finding L12),
+    // and the re-read answered REQ-TRACE-424's refusal for a card the accept had just moved to `done`, drawn above a
+    // notice calling that refusal out of date.
+    return perform(id, action, from, target ?? from, payload, target);
+  }, [paneTarget, perform, DECISION_TARGET]);
 
   /** REQ-TRACE-453/454: an answer carries only the chosen option; `resume` is the path that returns the card to where it was held from. */
   const answerBlocker = useCallback(async (option: string): Promise<PerformResult> => {

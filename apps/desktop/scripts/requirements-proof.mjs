@@ -48,7 +48,9 @@
  *               consequence confirmed, the elevation's disclosure ABANDONED (and nothing written for it, which the
  *               SQL afterwards proves by counting one release and not two), then accepted; a real session started by
  *               main's coordinator against the scripted dialect; the review pane opened from the requirement's own
- *               detail and its accept decision taken; the card resting in `done`; then the requirement's source
+ *               detail and its accept decision taken — the pane then keeps the review it was reading, says it is out
+ *               of date and offers the reload alone, drawing no refusal (REQ-TRACE-426, live-run finding L12), and
+ *               the reload reads REQ-TRACE-424's refusal for a card in `done`; the card resting in `done`; then the requirement's source
  *               document edited ON DISK by this script and a SECOND launch of the same profile showing the card in
  *               `needs-update` (REQ-TRACE-407/499). The delivery store is then read with SQL for the two facts no
  *               surface can show: that every state-changing action left a record, and that the run record carries a
@@ -578,6 +580,12 @@ const BOARD_AT = `(() => { const el = document.querySelector('[data-req-card="RE
 const DISCLOSURE_AT = `(() => { const d = document.querySelector('[data-testid="req-pane-disclosure"]'); return d === null ? null : { lines: [...d.querySelectorAll('li')].map((l) => l.textContent.trim()), buttons: [...d.querySelectorAll('button')].map((b) => b.textContent.trim()) }; })()`;
 /** REQ-TRACE-364: the board's own operation for bringing a named card into view, used before a read that must find it. */
 const REVEAL_101 = `(() => { const b = window.__rotarisBoard; return b && typeof b.reveal === 'function' ? b.reveal('REQ-101') : 'no observable'; })()`;
+/**
+ * REQ-TRACE-426 with REQ-TRACE-424 (live-run finding L12): what the review pane shows once a decision is taken — the
+ * notice, the actions it offers, the refusal line if one is drawn, the state tag of the payload on screen, and whether
+ * the decisions are still offered.
+ */
+const REVIEW_AT = `(() => { const p = document.querySelector('[data-testid="req-pane-review"]'); if (p === null) return null; const d = p.querySelector('[data-testid="req-pane-review-decided"]'); const r = p.querySelector('[data-testid="req-pane-review-refusal"]'); const tag = p.querySelector('.req-pane__state'); const said = d === null ? null : d.querySelector('span'); return { decided: said === null ? null : said.textContent.trim(), actions: d === null ? [] : [...d.querySelectorAll('button')].map((b) => b.textContent.trim()), refusal: r === null ? null : r.textContent.trim(), column: tag === null ? null : tag.textContent.trim(), decisions: p.querySelector('[data-testid="req-pane-review-decisions"]') !== null }; })()`;
 const HISTORY_AT = `(() => { const p = document.querySelector('[data-testid="req-history-state"]'); const d = document.querySelector('[data-testid="req-detail"]'); return { state: p === null ? null : p.getAttribute('data-state'), entries: p === null ? [] : [...p.querySelectorAll('li')].map((l) => l.textContent.trim()), detailHealth: d === null ? null : (d.querySelector('[data-section="requirement"] dd .mono') || {}).textContent, runs: d === null ? [] : [...d.querySelectorAll('.req-detail__run')].map((r) => r.textContent.trim()) }; })()`;
 
 const e2e = profile('end-to-end');
@@ -599,14 +607,16 @@ const release = launch('end-to-end', e2e.workspace, e2e.local, e2e.preferences, 
     '[data-testid="req-detail-review"]@32000',
     '[data-testid="req-pane-review-decisions"] .btn-primary@34000',
     '[data-testid="req-pane-review-confirm"] .btn-primary@35600',
+    // REQ-TRACE-426: the notice's one action, taken after the resting reads below.
+    '[data-testid="req-pane-review-decided"] .btn>>Reload the review@38800',
   ].join(';;'),
   // The focused card opens its own detail with Enter (REQ-TRACE-484); the harness sends single clicks only.
   ROTARIS_CAPTURE_KEYS: 'Return@31000',
   // The resting column is read through the board's OWN reveal operation (REQ-TRACE-364) first: `done` is the sixth of
   // seven columns and lies outside the columns area's viewport at 1264 px, so it is a sized placeholder holding no
   // card widget (defect AK2-3, by design). Reading the DOM without revealing first reads `null` and proves nothing.
-  ROTARIS_CAPTURE_EVAL_AT: [`${DISCLOSURE_AT}@6400`, `${BOARD_AT}@7600`, `${BOARD_AT}@13000`, `${BOARD_AT}@18000`, `${BOARD_AT}@23000`, `${BOARD_AT}@29000`, `${REVEAL_101}@37000`, `${BOARD_AT}@38000`, `${HISTORY_AT}@38400`].join(';;'),
-  ROTARIS_CAPTURE_AFTER_MS: '39000',
+  ROTARIS_CAPTURE_EVAL_AT: [`${DISCLOSURE_AT}@6400`, `${BOARD_AT}@7600`, `${BOARD_AT}@13000`, `${BOARD_AT}@18000`, `${BOARD_AT}@23000`, `${BOARD_AT}@29000`, `${REVIEW_AT}@36800`, `${REVEAL_101}@37000`, `${BOARD_AT}@38000`, `${HISTORY_AT}@38400`, `${REVIEW_AT}@39800`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '40400',
 }, 300_000);
 
 const disclosure = release.evals['6400'];
@@ -629,6 +639,20 @@ for (const t of [abandoned, ...timeline]) for (const c of t.columns ?? []) if (!
 expect(release.evals['37000'] === true, `REQ-TRACE-364: revealing REQ-101 before the resting read answered ${JSON.stringify(release.evals['37000'])}`);
 const settled = release.evals['38000'];
 expect(settled && settled.column === 'done', `REQ-TRACE-499: after the review's accept REQ-101 sits in ${settled?.column}, not done`);
+// REQ-TRACE-426 (live-run finding L12): after the accept the pane keeps the payload the decision was made against, says
+// it is out of date, and offers exactly one action — the reload. It draws no refusal: nobody opened a review on a card
+// that is not awaiting one. Until 2026-09-29 the host re-read the review as soon as the decision was recorded, so the
+// pane stood under REQ-TRACE-424's refusal ("… it is in done.") above a notice calling that refusal out of date.
+const decidedPane = release.evals['36800'];
+expect(decidedPane !== null && decidedPane !== undefined, `REQ-TRACE-426: the review pane was not open after the accept (${JSON.stringify(decidedPane)})`);
+expect(decidedPane.decided === 'Accept recorded for REQ-101. The review you were reading is out of date.', `REQ-TRACE-426: after the accept the pane's notice reads ${JSON.stringify(decidedPane.decided)}`);
+expect(JSON.stringify(decidedPane.actions) === JSON.stringify(['Reload the review']), `REQ-TRACE-426: the notice after the accept offers ${JSON.stringify(decidedPane.actions)}, not exactly the reload`);
+expect(decidedPane.refusal === null, `REQ-TRACE-424/426 (L12): the pane shows a refusal right after the user's own accept: ${JSON.stringify(decidedPane.refusal)}`);
+expect(decidedPane.column === 'review' && decidedPane.decisions === false, `REQ-TRACE-426: the pane shows the payload in ${JSON.stringify(decidedPane.column)} with decisions ${decidedPane.decisions ? 'still offered' : 'withdrawn'}, not the out-of-date review with the decisions withdrawn`);
+// The reload is the one action, and what it reads is the requirement where the decision put it: REQ-TRACE-424's refusal.
+const reloadedPane = release.evals['39800'];
+expect(reloadedPane !== null && reloadedPane !== undefined && reloadedPane.decided === null, `REQ-TRACE-426: the reload left the notice standing (${JSON.stringify(reloadedPane)})`);
+expect(reloadedPane.refusal === 'REQ-101 is not awaiting a review decision: it is in done.', `REQ-TRACE-424: the reloaded review reads ${JSON.stringify(reloadedPane.refusal)}`);
 const history = release.evals['38400'];
 expect(history && history.state === 'available' && history.entries.length >= 2, `REQ-TRACE-497: the delivery history of REQ-101 reads ${JSON.stringify(history)} after a release and an accept`);
 expect(history.entries.some((e) => /release/i.test(e)) && history.entries.some((e) => /accept/i.test(e)), `REQ-TRACE-405: the history does not carry both actions (${JSON.stringify(history.entries)})`);
@@ -705,6 +729,7 @@ stage2['end-to-end'] = {
   observedBy: Object.fromEntries(['13000', '18000', '23000', '29000'].map((k) => [k, release.evals[k]?.column ?? null])),
   timings: productTimings,
   timeline: columnsSeen, settled: settled.column, history: history.entries.length,
+  review: { afterAccept: decidedPane, afterReload: reloadedPane },
   store: { tables: rows.tables, counts: rows.counts, releases: releases.length, runs: runRows.length, session: String(runRows[0].session_id).slice(0, 8), permissions: runRows[0].permissions },
   afterEdit: { column: after.column, health: after.health },
 };

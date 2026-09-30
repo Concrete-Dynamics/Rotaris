@@ -141,6 +141,9 @@ describe('proof isolation lands inside the scratch profile on every platform', (
       expect(machineIdFileFor(LOCAL, platform)).toBe(dataLayout(dirs, platform).machineId);
     }
     // The spelling `sessions-proof` used everywhere is the Windows answer only; on Linux the data directory ends in `rotaris`.
+    // The Windows configuration directory is REQ-CONFIG-001's spelling, `rotaris\rotaris`, and the copy says so too:
+    // until 2026-09-29 both answered `rotaris\config`, so the parity above held over a name the requirement never spells.
+    expect(configDirFor(LOCAL, 'win32')).toBe(`${LOCAL}\\rotaris\\rotaris`);
     expect(machineIdFileFor(LOCAL, 'win32')).toBe(`${LOCAL}\\rotaris\\data\\machine-id`);
     expect(machineIdFileFor(LOCAL, 'linux')).toBe(`${LOCAL.split(win32.sep).join(posix.sep)}/rotaris/data/rotaris/machine-id`);
     // And the answers really do differ, so the test above is not agreeing with itself.

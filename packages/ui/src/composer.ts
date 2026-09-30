@@ -1,4 +1,4 @@
-import { presentationStatus, PROJECT_SETUP_SEND_REASON, STATUS_LABELS, type PresentationStatus } from '@rotaris/contracts';
+import { presentationStatus, PROJECT_SETUP_SEND_REASON, resolvePreset, STATUS_LABELS, type PresentationStatus } from '@rotaris/contracts';
 
 /**
  * Part AB — the composer's and the run header's rules, as values rather than as markup, so each is checkable
@@ -74,6 +74,17 @@ export function statusStripRunItem(executionStatus: string | null, needsRecovery
   if (executionStatus === null) return 'no session';
   if (runStateOf(executionStatus, needsRecovery) === 'recovery') return RUN_STATE_LABELS.recovery;
   return `run ${STATUS_LABELS[presentationStatus(executionStatus)]}`;
+}
+
+/**
+ * REQ-TOOLS-184's `mode: <preset>`, shown permanently: the focused session's own mode, and with no session focused the
+ * configured one — the preset the next run starts from (REQ-CONFIG-288's reading, which the composer's mode chip
+ * already follows). Before a configuration has been read there is none, and a missing key resolves to REQ-TOOLS-046's
+ * shipped default. Until 2026-09-29 the strip fell back to the literal `ask` whatever was configured (live-run finding
+ * L7), understating an `autonomous` workspace on the one indicator that is there for safety.
+ */
+export function statusStripModeItem(sessionMode: string | null, configuredMode: string | null): string {
+  return `mode: ${sessionMode ?? resolvePreset(configuredMode).preset}`;
 }
 
 /** What the Pause control's pending mark is scoped to: the session shown and whether its run is busy (REQ-NOTIFY-050). */

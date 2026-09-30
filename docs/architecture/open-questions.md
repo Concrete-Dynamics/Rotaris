@@ -6172,6 +6172,31 @@ in `terminal.test.ts` pins that reading.
 window again, whichever comes first — before it answers. Waiting would make a poll loop cost time rather than turns;
 it would also make a poll a second soft pause, which REQ-TOOLS-097 does not name.
 
+**OQ-137 — Does choosing `plan` in the Settings Runtime category re-arm a released session?** *(`PD-ORCH-003`, whose
+re-arm is "the user choosing `plan` on the run-start control while the session holds a release, which re-arms that
+session in the same gesture that writes the setting", and whose surface clause asks every surface offering the mode for
+a released session to state the release; REQ-ORCH-152, which offers the mode "both where a run is started in the
+desktop interface and in the settings interface"; REQ-CONFIG-320, whose selector "defers to Save like the rest of
+destination 1". Raised 2026-09-29 by the repair of
+[`the-run-start-setting-says-the-plan-gate-is-not-built.md`](../defects/fixed/the-run-start-setting-says-the-plan-gate-is-not-built.md)
+under [R-067](../product/requests.md#r-067). Open.)*
+
+The directive names "the run-start control" in the singular. The product has two surfaces offering the mode: the
+composer's run-start chip, which writes the setting at once and sends `session.planRearm` when `plan` is chosen on a
+released session (ADR-0062, the runtime view), and the Settings Runtime category's selector, which only changes the
+pending value until Save and sends nothing to a session. In Settings the gesture and the write are two acts, the
+selector usually already reads `plan` on a released session (an approval never writes the mode), and the category is
+about the workspace's configuration rather than the followed session.
+
+**What the build proceeds under:** the Settings selector re-arms nothing. Its hint states what `plan` does, and, when
+the followed session holds a release, that the session is released, that its runs start without the gate whatever the
+setting says, and that choosing Plan first on the composer's run-start control plans its next run again. The cases in
+`packages/ui/src/settings/run-start-hint.test.ts` and `settings-proof` launch 7 pin that reading.
+
+**What a ruling decides.** Whether a Save that writes `plan` (or a Save that leaves `plan` in place) while the followed
+session holds a release should also re-arm that session, and if so whether it should re-arm only the followed session
+or every released session of the workspace.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

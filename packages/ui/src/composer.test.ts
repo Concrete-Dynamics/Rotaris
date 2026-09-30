@@ -6,7 +6,7 @@ import {
   COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, COMPOSER_PLACEHOLDERS, COMPOSER_WIDGET_MIN_HEIGHT, DEFAULT_REASONING, DRAFT_PUBLISH_MS,
   DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel, MODELS_LOADING_LABEL, pausePendingAfter,
   PROJECT_SETUP_REFUSAL, reasoningChipLabel, runControlReason, runHeaderControlReason, RUN_STATE_LABELS, runStateOf, runTimingLabel,
-  runTimingSeconds, sendRefusal, statusStripRunItem, TRANSCRIPT_MIN_HEIGHT, type HistoryWalk,
+  runTimingSeconds, sendRefusal, statusStripModeItem, statusStripRunItem, TRANSCRIPT_MIN_HEIGHT, type HistoryWalk,
 } from './composer.js';
 import { STRIP_NARROW_BELOW, STRIP_TIGHT_BELOW, stripDensity, stripIconTitle } from './WorkspaceView.js';
 
@@ -34,6 +34,20 @@ describe('composer — REQ-CHAT-008: the run-state label vocabulary', () => {
     expect(runStateOf('waiting', false)).toBe('running');
     expect(runStateOf('interrupted', false)).toBe('idle');
     expect(runStateOf(null, false)).toBe('idle');
+  });
+});
+
+describe('REQ-TOOLS-184: the status strip shows the preset in force, with or without a focused session (live-run finding L7)', () => {
+  it('names the focused session\'s own mode, else the configured preset, else REQ-TOOLS-046\'s shipped default', () => {
+    // The live run of 2026-09-29: no session focused, `runtime.permission_mode: autonomous` configured, and the strip
+    // read `mode: ask`.
+    expect(statusStripModeItem(null, 'autonomous')).toBe('mode: autonomous');
+    expect(statusStripModeItem(null, 'restricted')).toBe('mode: restricted');
+    // A focused session names the preset it runs under, whatever is configured for the next run.
+    expect(statusStripModeItem('ask', 'autonomous')).toBe('mode: ask');
+    expect(statusStripModeItem('autonomous', 'restricted')).toBe('mode: autonomous');
+    // No configuration read yet (or none to read): a missing key resolves to the shipped default, `ask`.
+    expect(statusStripModeItem(null, null)).toBe('mode: ask');
   });
 });
 

@@ -191,8 +191,10 @@ items (Workspace view-2 contrast, focus) — which is stated in Part AM's handof
 argument in a fourth, each taken from a named role of the active theme — the readable accent shade, that shade blended
 toward the surface behind it, the `fail` state colour, the secondary text colour — and each then lightened or darkened
 until it clears 4.5:1 on the surface it is painted on, with no two rendering the same. `packages/ui/src/slash/highlight.ts`
-derives the four from the theme's own tokens (`--rt-accent-300`, `--rt-fail`, `--rt-text-secondary`, against `--rt-bg`,
-which is what the design's `.input` paints on), blends in OKLCH (lightness and chroma toward the surface, the accent's
+derives the four from the theme's own tokens (`--rt-accent-300`, `--rt-fail`, `--rt-text-secondary`, ~~against `--rt-bg`,
+which is what the design's `.input` paints on~~ against `--rt-bg`, which is what the design's `.input` paints on — **falsified
+by the composer dock of 2026-09-18**, whose field is transparent on `--rt-surface`; since 2026-09-29 the four are derived
+against the dock's ground, `COMPOSER_GROUND` — see the fifth execution), blends in OKLCH (lightness and chroma toward the surface, the accent's
 hue kept), corrects with this record's lightness-only correction — `raiseLightness` on a dark theme and its mirror on
 a light one — and steps the partial shade away from any coincidence. A unit test measures all three built-in themes;
 the proof measured the painted colours in the built application on the default theme: resolved `oklch(83% 0.1 292)`
@@ -295,9 +297,38 @@ everywhere (9.2 to 16.0:1). The colours are still derived against `--rt-bg` — 
 `oklch(0.60404 0.05 292)` and unknown `oklch(0.64 0.2 25)` are the second execution's values, at 4.50:1 and 4.79:1 on
 `oklch(0.21 0 0)` — so the corrector is right and the surface it is given is not the one painted. The palette check "the painted ground is the
 palette's `--rt-bg`" fails on all three for the same reason. Recorded, not repaired
-(`../../defects/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`). Everything else
+(`../../defects/fixed/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`; repaired 2026-09-29, the fifth execution below). Everything else
 the proof asserts after it passed in a diagnostic run with its checks made non-fatal (not committed): the chip's
 catalogue and REQ-CHAT-032's messages, `/stop` idle and during a run, the stash and both Pops, `/model scripted-2`,
 Escape, `/theme` both ways, `/logout`, `/sessions`, `/new`, `/worktree`, the `/ ` escape, `/compress`, the stored theme
 and the restart painting the same ground, `/logout` against the real registry and credential store, and REQ-CHAT-028's
 two live rebuilds. Not shown: any of it on Windows or macOS (IC-3).
+
+## Fifth execution — 2026-09-29 (R-067), the four derived on the ground the dock paints
+
+*The proof is `pnpm slash-proof --skip-build`, as root under Xvfb on Linux, Node 24, after one `pnpm build` in the
+branch's worktree, with other agents' Electron proofs running on the host.*
+
+**The repair the fourth execution recorded.** The product moved, not the dock: the docked strip is PD-CHAT-001
+revision 2's and the owner's choice, so `highlight.ts` names the ground the composer paints under its transparent field
+once — `COMPOSER_GROUND = '--rt-surface'` — and `slashRoleColours` derives on it by default. The partial shade is still
+the accent blended toward the surface behind it; that surface is now the one behind it. `slash.test.ts` reads the dock's
+background token out of `shell.css` and measures the four against it on every built-in theme, so the stylesheet and the
+derivation cannot part again without a red (on the old default the test failed at `rotaris-dim partial on --rt-surface
+4.06:1`). The proof's palette check now reads "the painted ground is the palette's `--rt-surface`".
+
+**Measured.** Green end to end — the catalogue launch, the palette launch, the restart and the wired launch. On the dock
+(`composer__dock`, the first opaque ground from the input up): `rotaris-dim` on `oklch(0.25 0 0)` — partial
+`oklch(0.62939 0.05 292)` 4.50:1, unknown `oklch(0.64999 0.2 25)` 4.50:1 (both lightened further than the fourth
+execution's `--rt-bg` values), resolved 9.20:1, argument 8.56:1; `nocturne` on `oklch(0.18 0 0)` — partial 4.50:1,
+unknown 9.94:1, resolved 10.82:1, argument 11.14:1; `high-contrast` on `oklch(0.12 0 0)` — partial 4.50:1, unknown
+13.91:1, resolved 15.07:1, argument 16.02:1. Four distinct colours on each palette, the weights unchanged. Repaired note:
+`../../defects/fixed/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`. Not
+shown: any of it on Windows or macOS (IC-3).
+
+**`theme-proof` beside it.** The slash colours are painted only while a slash command is typed, and `theme-proof` types
+none. Its full matrix on the branch failed only on `rotaris-dim` at 150 % and 175 %, both times on status-strip text and
+never on a slash role. Rebuilt with `highlight.ts` reverted, the 150 % case still failed. The same case passed on
+origin/main built in a checkout whose path is five characters longer, which shifts the elided strip item across the
+device-pixel grid. Recorded as a proof defect
+(`../../defects/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`), and not absorbed here.

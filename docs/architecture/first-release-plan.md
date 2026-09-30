@@ -57,13 +57,14 @@ record already decides, and every ruling it needs is named as the owner's rather
   set (`action` for the built-ins and mirrors, `skill` for `/skill` and `/skills`), and every proof takes the global
   configuration directory from `configDirFor`; `skills-proof` passed 10 checks over 9 launches as root on Linux
   ([fixed](../defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md),
-  [fixed](../defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)). `slash-proof` is not
-  green for it. It moves from one red to another: it ~~now stops at the model chip's eval~~
+  [fixed](../defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)). ~~`slash-proof` is not
+  green for it.~~ **`slash-proof` is green again 2026-09-29 (R-067).** It moved from one red to another: it ~~now stops at the model chip's eval~~
   stopped at the model chip's eval ([fixed](../defects/fixed/slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md),
-  repaired 2026-09-28 in the proof with the chip's close and the ground it measures on), and now stops at a **product**
+  repaired 2026-09-28 in the proof with the chip's close and the ground it measures on), and ~~now stops~~ then stopped at a **product**
   red: REQ-CHAT-027's partial shade at 4.06:1 on the ground the composer dock paints, every other check passing in a
-  diagnostic run ([note](../defects/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md);
-  ADR-0050's fourth execution). On Linux as
+  diagnostic run ([fixed](../defects/fixed/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md);
+  ADR-0050's fourth execution) — repaired in the product by deriving the four on the dock's `--rt-surface`
+  (`COMPOSER_GROUND`), every role at 4.50:1 or more on all three palettes (ADR-0050's fifth execution). On Linux as
   root, ~~`resilience-proof`,~~ `notice-proof` and `init-proof` are red for their recorded notes
   ([override select](../defects/fixed/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md), and
   [code intelligence as root](../defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md) for the last

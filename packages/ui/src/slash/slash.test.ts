@@ -1,12 +1,25 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { contrastRatio, oklchToSrgb, parseOklch, srgbToHex, THEMES, type ControlOp } from '@rotaris/contracts';
 import { err, ok, type Result } from '@rotaris/kernel';
 import { COMMANDS, slashDescription, slashName } from '../commands/registry.js';
 import { BUILT_IN_NAMES, buildCatalogue, mirrorPalette, NO_GIT_SERVICE, NO_MODELS, NO_RUN_ACTIVE, STASH_EMPTY, TRANSCRIPT_EMPTY, unknownValueMessage, usageMessage, type CatalogueOptions } from './catalogue.js';
-import { blendToward, ensureContrast, slashRoleColours, slashRoleContrast, slashTokenSplit, slashTokenState } from './highlight.js';
+import { blendToward, COMPOSER_GROUND, ensureContrast, slashRoleColours, slashRoleContrast, slashTokenSplit, slashTokenState } from './highlight.js';
 import { COMMAND_NOT_RUN_TITLE, defaultUnavailableReason, parseSlash, slashNameToken, slashOutcomeMessage, slashPopupShouldOpen } from './parse.js';
 import { createSlashRegistry } from './registry.js';
 import type { SlashCommand, SlashContext, SlashOutcome } from './types.js';
+
+/** The rule bodies `shell.css` gives a selector, joined — the stylesheet is the record of which ground the composer paints. */
+const shellCss = readFileSync(new URL('../shell.css', import.meta.url), 'utf8');
+function rule(selector: string): string {
+  return [...shellCss.matchAll(new RegExp(`(?:^|\\})\\s*${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]+)\\}`, 'gm'))].map((m) => m[1] ?? '').join(' ');
+}
+/** The token `.composer__dock` paints its background with — the ground behind the composer's transparent field. */
+function composerGround(): `--rt-${string}` {
+  const token = /background:\s*var\((--rt-[a-z0-9-]+)\)/.exec(rule('.composer__dock'))?.[1];
+  if (!token) throw new Error('shell.css: .composer__dock paints no token background');
+  return token as `--rt-${string}`;
+}
 
 const command = (name: string, description = `${name} description`, extra: Partial<SlashCommand> = {}): SlashCommand => ({
   name, description, kind: 'action', availability: () => ({ ok: true }), run: async () => ({ kind: 'executed' }), ...extra,
@@ -114,8 +127,24 @@ describe('slash — REQ-CHAT-027: highlighting', () => {
       // The partial shade keeps the accent's hue and is the accent blended toward the surface, so it is nearer the surface in chroma than the resolved shade.
       expect(parseOklch(colours.partial).h).toBe(parseOklch(colours.resolved).h);
       expect(parseOklch(colours.partial).c).toBeLessThan(parseOklch(colours.resolved).c);
-      // The surface is the composer input's ground — the design's `.input` paints on `--rt-bg`.
-      expect(colours.surface).toBe(theme.tokens.color['--rt-bg']);
+      // The surface is the ground the composer field is painted on — the dock's (`composerGround`, below).
+      expect(colours.surface).toBe(theme.tokens.color[composerGround()]);
+    }
+  });
+  it('derives the four against the ground the composer actually paints: the dock behind its transparent field', () => {
+    // The field is transparent inside `.composer__dock` (PD-CHAT-001 revision 2's docked strip), so "the surface it is
+    // painted on" is the dock's own background. Before the repair the colours were corrected against `--rt-bg`, which
+    // the composer no longer paints, and the partial shade read 4.06:1 on `rotaris-dim`'s dock.
+    const ground = composerGround();
+    expect(rule('.composer__dock .composer__input')).toContain('background: transparent');
+    expect(ground).toBe(COMPOSER_GROUND);
+    for (const theme of THEMES) {
+      const colours = slashRoleColours(theme);
+      const painted = theme.tokens.color[ground]!;
+      for (const role of ['resolved', 'partial', 'unknown', 'argument'] as const) {
+        const ratio = contrastRatio(colours[role], painted);
+        expect(ratio, `${theme.name} ${role} on ${ground} ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5 - 1e-6);
+      }
     }
   });
   it('blends in OKLCH toward the surface and corrects lightness in the theme’s direction until the floor is met', () => {

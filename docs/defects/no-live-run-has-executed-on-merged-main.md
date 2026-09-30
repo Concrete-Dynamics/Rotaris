@@ -14,12 +14,16 @@ Later that day, agent sessions on this host ran five live runs against `katalyst
 `7ae8072`, and each ran only a few scenarios. All five printed `live-run PASSED`:
 
 - 11:51:04 `--only=ask,edit` and 11:51:25 `--only=ask`, overlapping, on `fix-accept1-1` before it merged. Their packs
-  are `2026-09-30T11-51-04-588Z` and `2026-09-30T11-51-25-612Z`. The row in `docs/architecture/first-executions.md` and
+  were `2026-09-30T11-51-04-588Z` and `2026-09-30T11-51-25-612Z`. The row in `docs/architecture/first-executions.md` and
   `docs/defects/fixed/a-live-run-sweeps-a-concurrent-live-runs-sandbox.md` record them. The worktree that held the packs
   has since been removed.
-- 12:42, 13:49 and 13:58, sign-in and `ask` only, on `fix-accept1-4`. The packs are `2026-09-30T12-42-18-802Z`,
-  `2026-09-30T13-49-19-435Z` and `2026-09-30T13-58-57-863Z`, under `/home/user/Rotaris-crw-wt-acc1-4/.live-run/runs/`.
+- 12:42, 13:49 and 13:58, sign-in and `ask` only, on `fix-accept1-4` before it merged (`8574828`). The packs were
+  `2026-09-30T12-42-18-802Z`, `2026-09-30T13-49-19-435Z` and `2026-09-30T13-58-57-863Z`, under
+  `/home/user/Rotaris-crw-wt-acc1-4/.live-run/runs/`. That worktree has also been removed since.
   `docs/defects/fixed/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md` records the first.
+
+Read at 14:53 the same day, the host's only packs on disk are again the two at `fa377e6`. Packs live in the worktree
+that took them, so this inventory goes stale whenever a worktree comes or goes; the times above are what dates it.
 
 None of the five is the merged head. Each ran on a branch that carried its own repair and not the others'. Together they
 ran only sign-in, `ask` and `edit`. `resume`, `requirements`, `shell`, `frictions`, `faults`, `terminal` and `duress`

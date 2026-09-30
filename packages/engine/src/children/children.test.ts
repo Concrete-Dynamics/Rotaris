@@ -4389,6 +4389,83 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(byName(sid, 'work').state).toBe('succeeded');
       expect(ends).toEqual(['cancelled', 'succeeded']);
     });
+
+    /**
+     * Two children, `y` and `x`. The user cancels `y`, whose hook is held, then `x`, whose hook is queued behind it; the
+     * root follows `x` up (clause 22) before `y`'s hook ends. `again` says how the follow-up goes.
+     */
+    function queuedBehindAHeldHook(again: 'answers' | 'holds') {
+      const gateOf = () => { let open!: () => void; const hold = new Promise<void>((r) => { open = r; }); return { hold, open: () => open() }; };
+      const fired: { name: string; state: string; summary: string }[] = [];
+      const yGate = gateOf();
+      const rootGate = gateOf();
+      const againGate = gateOf();
+      let releaseChild!: () => void;
+      const childHold = new Promise<void>((r) => { releaseChild = r; });
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event, fields) => {
+          if (event !== 'child_completed') return [];
+          const name = String(fields['child_name']);
+          fired.push({ name, state: String(fields['state']), summary: String(fields['summary']) });
+          if (name === 'y') await yGate.hold;
+          return [];
+        },
+        advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      let sid = '' as SessionId;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'y', task: 'TASK: y' } }, { callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'x', task: 'TASK: x' } }]);
+          if (turn === 2) return { parts: [{ hold: rootGate.hold }, ...toolCalls([{ callId: 'd3', name: 'delegate', args: { persona: 'coding-agent', task_name: 'x', task: 'TASK: again', session_id: byName(sid, 'x').task_id } }]).parts] };
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"the follow-up\'s summary"}');
+        if (textOf(req).includes('TASK: again')) return again === 'answers' ? answer('Done again.') : { parts: [{ hold: againGate.hold }, ...answer('late again').parts] };
+        return { parts: [{ hold: childHold }, ...answer('late').parts] };
+      }, { hooks });
+      sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      const cancelBoth = async () => {
+        await settle(() => byName(sid, 'y')?.state === 'running' && byName(sid, 'x')?.state === 'running');
+        expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'y').task_id } })).toEqual({ ok: true });
+        await settle(() => fired.length === 1);
+        expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'x').task_id } })).toEqual({ ok: true });
+        releaseChild();
+        rootGate.open();
+      };
+      return { sessions, sid, fired, cancelBoth, releaseY: yGate.open, releaseAgain: againGate.open };
+    }
+
+    it('REQ-HOOKS-075 / REQ-HOOKS-076 with clause 22 (found by the verification of this repair): a hook queued behind another carries the fields of the end that queued it, not those of a later end of the same child', async () => {
+      const { sessions, sid, fired, cancelBoth, releaseY } = queuedBehindAHeldHook('answers');
+      await cancelBoth();
+      // The follow-up ends `succeeded` and its own settle's hook runs while `x`'s cancel's hook still waits behind `y`'s.
+      await settle(() => fired.some((f) => f.name === 'x'));
+      expect(byName(sid, 'x').state).toBe('succeeded');
+      expect(fired.map((f) => `${f.name}:${f.state}`)).toEqual(['y:cancelled', 'x:succeeded']);
+      releaseY();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // Each end once, each with its own state and summary: the cancel's is not replaced by the follow-up's record.
+      const xs = fired.filter((f) => f.name === 'x').sort((a, b) => a.state.localeCompare(b.state));
+      expect(xs).toEqual([{ name: 'x', state: 'cancelled', summary: 'The user cancelled this child.' }, { name: 'x', state: 'succeeded', summary: 'the follow-up\'s summary' }]);
+      expect(fired.filter((f) => f.name === 'y')).toEqual([{ name: 'y', state: 'cancelled', summary: 'The user cancelled this child.' }]);
+    });
+
+    it('REQ-HOOKS-003 with clause 22 (found by the verification of this repair): a followed-up child cancelled again while its first cancel\'s hook is still queued fires it for the second cancel too', async () => {
+      const { sessions, sid, fired, cancelBoth, releaseY, releaseAgain } = queuedBehindAHeldHook('holds');
+      await cancelBoth();
+      // The follow-up is running while `x`'s first cancel's hook still waits behind `y`'s; the user cancels it again.
+      await settle(() => byName(sid, 'x')?.state === 'running');
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'x').task_id } })).toEqual({ ok: true });
+      releaseAgain();
+      releaseY();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(byName(sid, 'x').state).toBe('cancelled');
+      expect(fired.filter((f) => f.name === 'x')).toEqual([
+        { name: 'x', state: 'cancelled', summary: 'The user cancelled this child.' },
+        { name: 'x', state: 'cancelled', summary: 'The user cancelled this child.' },
+      ]);
+    });
   });
 
   describe('PD-ORCH-005 clause 15: a forced stop is a stop, and a quit rests by quit', () => {

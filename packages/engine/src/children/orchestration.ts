@@ -203,6 +203,14 @@ export class IterationChildren implements DelegationOps {
    */
   private readonly settles = new Map<string, Promise<void>>();
   /**
+   * REQ-HOOKS-003 / REQ-HOOKS-076: the child whose own settle is telling the scheduler it settled (`afterTerminal`), which
+   * fires its `child_completed` itself. Every other terminal move the scheduler is told of fires it from outside
+   * (`completedOutside`). A `settles` entry could not say this: an outside hook still queued holds one too, so a
+   * followed-up child ended again from outside meanwhile fired nothing (found by the second verification of
+   * `a-child-settled-outside-its-execution-fires-no-child-completed-hook`'s repair).
+   */
+  private readonly tellingOwnSettle = new Set<string>();
+  /**
    * REQ-HOOKS-003 / REQ-ORCH-048 / REQ-ORCH-052 / REQ-ORCH-133 (the repair of
    * `a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`): the `child_completed` hooks of the children
    * settled by a path other than their own settle — the cascade, the finalize sweep, the user's cancel of one child — one
@@ -242,8 +250,10 @@ export class IterationChildren implements DelegationOps {
     // keeps the map from growing with the run.
     this.scheduler.onTerminal((row) => { this.claims.release(row.task_id); this.disclosures.delete(row.task_id); });
     // REQ-HOOKS-003: a child settled by any path but its own settle fires `child_completed` too. A settle's own terminal
-    // move is told from inside `afterTerminal`, whose `settles` entry says it fires the hook itself.
-    this.scheduler.onTerminal((row) => { if (!this.settles.has(row.task_id)) this.completedOutside(row.task_id); });
+    // move is told from inside `afterTerminal`, which fires the hook itself (`tellingOwnSettle`). REQ-HOOKS-075: the
+    // fields are taken here, as the scheduler is told — every path stores the report before it tells — and not when the
+    // hook starts, which can be after a follow-up has moved the record on (PD-ORCH-005 clause 22).
+    this.scheduler.onTerminal((row) => { if (!this.tellingOwnSettle.has(row.task_id)) this.completedOutside(this.ledger.get(row.task_id) ?? row); });
   }
 
   children(): readonly ChildRow[] {
@@ -557,7 +567,9 @@ export class IterationChildren implements DelegationOps {
    * It removes the entry only while the entry is its own: a child followed up while an earlier end's hook still runs
    * (PD-ORCH-005 clause 22) begins a second settle over the first, and the first ending must not take the second's entry
    * with it — the terminal listener would then find none and fire `child_completed` a third time (REQ-HOOKS-076, found by
-   * the verification of `a-child-settled-outside-its-execution-fires-no-child-completed-hook`'s repair).
+   * the verification of `a-child-settled-outside-its-execution-fires-no-child-completed-hook`'s repair). The listener now
+   * reads `tellingOwnSettle`, not this map (the second verification); the entry still says the child is settling, so a
+   * parent waiting on it (`settlesOf`) does not take it as ended while the second end's hook runs (REQ-HOOKS-080).
    */
   private beginSettle(taskId: string): () => void {
     let end!: () => void;
@@ -854,22 +866,28 @@ export class IterationChildren implements DelegationOps {
    * none of which runs the child's own settle. It runs in line as a settle's does (REQ-HOOKS-080): the child is settling
    * until its hook is done (`beginSettle`), so its parent takes it as ended only then, and a rest waits for it as for an
    * execution (`track`). These hooks run one after another, in the order the children settled; `completionsSettled` is
-   * the wait for all of them, which the run takes after the finalize sweep and before the iteration's own hooks. The
-   * fields are the child's record once it is terminal, its report's status and summary among them (REQ-HOOKS-075).
+   * the wait for all of them, which the run takes after the finalize sweep and before the iteration's own hooks.
+   *
+   * REQ-HOOKS-075: the fields are the child's record as it stood when the scheduler was told it settled — its terminal
+   * state and its report's status and summary — taken then and carried to the hook. The first reading, falsified by the
+   * second verification of this repair, was "the fields are the child's record once it is terminal", read when the hook
+   * started: a hook queued behind another that was still running read a record a follow-up (PD-ORCH-005 clause 22) had
+   * since moved on, so a cancelled end was sent as the follow-up's `succeeded`, twice, or as a state that is not terminal.
+   * The bound, stated: each end fires once with its own fields, but a hook queued here is delivered after a later end's own
+   * settle has fired its hook if that later end comes first, since a follow-up does not wait for this queue.
    *
    * The bound, stated: at a stop or a quit such a hook is awaited as an execution only within what is left of the stop's
    * 30 s grace (`rest`, `outlast`, REQ-SESSION-092); one still running then is given up on with the executions, as a
    * settle's own hook inside a child's execution is, and may finish after `session_end` — bounded by its own per-hook
    * timeout (REQ-HOOKS-033). A pause waits for it, and every other exit waits for all of them (`completionsSettled`).
    */
-  private completedOutside(taskId: string): void {
+  private completedOutside(row: ChildRow): void {
     const hooks = this.deps.hooks;
     if (!hooks) return;
-    const endSettle = this.beginSettle(taskId);
+    const fields = childCompletedFields(row);
+    const endSettle = this.beginSettle(row.task_id);
     const fire = async (): Promise<void> => {
-      const row = this.ledger.get(taskId);
-      if (!row) return;
-      try { await hooks.fireLifecycle('child_completed', childCompletedFields(row)); }
+      try { await hooks.fireLifecycle('child_completed', fields); }
       catch (cause) { this.deps.warn(`the child_completed hooks raised for child ${row.canonical_name} (${row.task_id}): ${String(cause instanceof Error ? cause.message : cause)}`); }
     };
     const next = this.completions.then(fire).finally(endSettle);
@@ -910,8 +928,12 @@ export class IterationChildren implements DelegationOps {
       // not replace what raised before it and leave the scheduler untold.
       let settled: ChildRow | null;
       try { settled = this.ledger.get(row.task_id) ?? moved; } catch { settled = moved; }
-      try { if (settled) this.scheduler.settled(settled); }
-      finally { endSettle(); }
+      try {
+        if (settled) {
+          this.tellingOwnSettle.add(row.task_id);
+          try { this.scheduler.settled(settled); } finally { this.tellingOwnSettle.delete(row.task_id); }
+        }
+      } finally { endSettle(); }
     }
   }
 

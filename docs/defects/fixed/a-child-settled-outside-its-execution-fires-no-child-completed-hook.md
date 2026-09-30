@@ -57,7 +57,10 @@ What changed:
   through `completedOutside`. The hooks run one after another, in the order the children settled, each child held as
   settling until its hook is done. So its parent takes it as ended only then (REQ-HOOKS-080), a rest waits for it as for
   an execution, and the run waits for all of them after the finalize sweep, before `iteration_end`
-  (`completionsSettled`). The fields are the terminal record's and its report's (`childCompletedFields`, REQ-HOOKS-075).
+  (`completionsSettled`). The fields are the terminal record's and its report's (`childCompletedFields`, REQ-HOOKS-075),
+  taken as the scheduler is told the child settled and carried to its hook. *(Corrected 2026-09-30, the second
+  verification: this line first read "the fields are the terminal record's", and the code read the record when the hook
+  started — see below.)*
 - The stale settle (`settleStaleChildren`) hands each settled child's fields to its run (`RunDeps.settledBeforeStart`),
   which fires them once its `session_start` has, before anything else runs.
 - The decline (`Run.closeLeftOpenIteration`) fires one for each paused agent it cancels, after the continuing run's
@@ -66,7 +69,9 @@ What changed:
 Not fired, per OQ-152's reading as built: the cancel of a paused child at rest (clause 16, no run and no hook port), the
 explicit cancel's close after its run's `session_end`, and the record of an accepted cancel whose host died
 (`recordAcceptedCancel`). The last was not in this note's list; it was found by the repair's own sweep of every terminal
-move.
+move. A fourth was added by the second verification: the stale settle of a run that ends before its `session_start` (a
+stop requested during its pre-flight, or a raise before that point) hands its children's fields to a run that never fires
+them, and no later run does.
 
 Found by the repair's verification, and closed with it: a settle's end removed its child's `settles` entry whatever
 settle had put it there. A child the user cancelled and its parent then followed up (clause 22) while the cancel's hook
@@ -74,6 +79,23 @@ still ran began a second settle over the first, and the first hook ending took t
 terminal listener found none and fired `child_completed` a third time (REQ-HOOKS-076, "exactly once"). `beginSettle`'s
 end now removes the entry only while it is its own. Pinned by the case "a child followed up while its cancel's hook still
 runs fires it once for each end" in the same describe, red before that change (three hooks for two ends).
+
+Found by the repair's second verification, and closed with it: a hook `completedOutside` queued behind one still running
+read the child's record when it started, not when the child settled. A child the user cancelled while an earlier child's
+hook still ran, and its parent then followed up (clause 22) and saw succeed, had its cancel's hook read the follow-up's
+record: the cancelled end was sent as `succeeded`, with the follow-up's summary, beside the follow-up's own — the
+cancelled occurrence lost and the succeeded one fired twice (REQ-HOOKS-075, REQ-HOOKS-076); had the earlier hook ended
+while the follow-up ran, the state sent was not a terminal one. The falsified claim was "the fields are the child's record
+once it is terminal". The terminal listener now takes the fields as the scheduler is told — every path stores the report
+before it tells — and `completedOutside` carries them to the hook. The same round found the listener's guard wrong in the
+same shape: it took a `settles` entry to mean the child's own settle fires the hook, but a queued outside hook holds one
+too, so the follow-up cancelled again from outside before the first hook ended fired nothing (REQ-HOOKS-003). The guard is
+now `tellingOwnSettle`, set only while `afterTerminal` tells the scheduler. Pinned by the cases "a hook queued behind
+another carries the fields of the end that queued it" and "a followed-up child cancelled again while its first cancel's
+hook is still queued fires it for the second cancel too" in the same describe, each red before the change
+(`['succeeded','succeeded']` for `x`'s ends; one hook for two cancels). The bound, stated: each end fires once with its own
+fields, but a hook queued behind another is delivered after a later end's own hook when that later end comes first,
+because a follow-up does not wait for the queue.
 
 The bound, stated: at a stop or a quit these hooks are awaited as executions only within what is left of the stop's 30 s
 grace (REQ-SESSION-092); one still running then is given up on with the executions, as a settle's own hook inside a

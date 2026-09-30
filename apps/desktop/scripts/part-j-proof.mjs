@@ -8,7 +8,8 @@ import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolat
 /**
  * The control channel's first execution in the built app (Part J step 3): a queued message consumed at the
  * iteration boundary; a steer reaching the entry role; a graceful pause and the composer's Continue; a steer still
- * pending at a pause, delivered into the root's record and read by the resumed root; the
+ * pending at a pause, delivered into the root's record and read by the resumed root, which carries on with its next
+ * scripted step; the
  * message-limit pause with its dialog answered "double", then the relaunch finding a session paused at the
  * limit and its dialog answered "cancel"; a user-initiated quit during a run. Every assertion reads the store.
  */
@@ -189,7 +190,8 @@ launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTUR
 // (`wait:` prefixes the step after it), so the steer submitted meanwhile and the pause that follows it both land inside
 // that step: the pause lets the read finish and stops the root before the step that would have injected the steer. The
 // rest delivers it into the root's record, marked injected once by the pause, and the Continue's resumed root reads it
-// as the last message of its first request, whose answer follows it in the record.
+// as the last message of its first request, whose answer follows it in the record. That answer is the script's third
+// read: the resumed root carries on with its next step rather than its first.
 const s3b = scenario('steer-rest', []);
 launch('steer-rest', s3b, { ROTARIS_SCRIPT: 'read,wait:7000,read,read', ROTARIS_CAPTURE_PROMPT: 'steer then pause', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Steer the run"]@1900;;.dialog-actions .btn-primary>>Steer@2600;;[data-testid="composer-strip"] [aria-label="Pause the run"]@~3400;;.composer__strip .btn-primary[aria-label="Continue run"]@~24000', ROTARIS_CAPTURE_TYPE: 'go left>>no-enter@2300', ROTARIS_CAPTURE_AFTER_MS: '27000' });
 {
@@ -203,13 +205,19 @@ launch('steer-rest', s3b, { ROTARIS_SCRIPT: 'read,wait:7000,read,read', ROTARIS_
   db.close();
   const text = (m) => (m?.content ?? []).filter((c) => c.kind === 'text').map((c) => c.text).join('');
   const at = record.findIndex((m) => m.role === 'user' && text(m) === '[Steering prompt] go left');
+  // PD-ORCH-005 (the repair of the-scripted-client-restarts-its-script-for-every-run.md): the resumed root carries on with
+  // the step after the ones its record holds — the third read — so its record holds the script's three reads exactly.
+  // Before the repair the continue's new client took the script from its first step again, and the record held the two
+  // reads before the rest and all three again after it.
+  const reads = record.filter((m) => m.role === 'assistant').flatMap((m) => m.content).filter((c) => c.kind === 'tool-call' && c.name === 'read_file').length;
   if (!list.includes('run_pause_requested') || list.filter((n) => n === 'run_start').length < 2) throw new Error(`the pause and the continuation are not both recorded: ${list.join(',')}`);
   if (at < 0) throw new Error(`the steer never reached the root's record: ${JSON.stringify(record.map((m) => [m.role, text(m).slice(0, 60)]))}`);
   if (record[at - 1]?.role !== 'tool' || record[at + 1]?.role !== 'assistant') throw new Error(`the steer is not where the rest delivers it, after the read's result and before the resumed step: ${JSON.stringify(record.map((m) => m.role))}`);
+  if (reads !== 3) throw new Error(`the resumed root did not carry on from its record: it holds ${reads} reads where the script names 3`);
   const injected = steering.filter((e) => e.name === 'steering_injected');
   if (steering.filter((e) => e.name === 'steering_submitted').length !== 1 || injected.length !== 1 || injected[0].interruption !== 'pause') throw new Error(`the steer was not submitted once and injected once, by the pause: ${JSON.stringify(steering)}`);
   if (session.execution_status !== 'completed' || iterations[0]?.state !== 'closed') throw new Error(`the continued run did not complete its resumed iteration: ${JSON.stringify({ session, iterations })}`);
-  results.steerRest = { steering, roles: record.map((m) => m.role), iterations };
+  results.steerRest = { steering, reads, roles: record.map((m) => m.role), iterations };
 }
 
 // 4. The message limit: paused durably with the dialog, "double" continues; a second launch finds the session paused and "cancel" resolves it.

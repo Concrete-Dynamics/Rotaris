@@ -30,7 +30,7 @@ wrong.
 | Area | Script | What it measures |
 |---|---|---|
 | **The run** | `part-h-proof` | the loop supervisor and `continue` (ADR-0059) |
-| | `part-j-proof` | the control channel: a queued message at the iteration boundary, a steer, a graceful pause (its rest's summary, and the session lock the Continue holds for its run, sampled while the app runs), a steer still pending at a pause reaching the resumed root, the message-limit pause |
+| | `part-j-proof` | the control channel: a queued message at the iteration boundary, a steer, a graceful pause (its rest's summary, and the session lock the Continue holds for its run, sampled while the app runs), a steer still pending at a pause reaching the resumed root, which carries on with its next scripted step rather than its first (the scripted client reads where a resumed agent stood from its record), the message-limit pause |
 | | `plan-gate-proof` | the plan gate held, edited, answered (ADR-0062) |
 | | `resilience-proof` | the model ladder, the waits, the fallbacks, against scripted faults; the `override` launch is driven (the chooser the wait header draws), every launch is bounded (`lib/bounded-launch.mjs`: an overrun is ended by SIGTERM, a grace, then SIGKILL and reported with its log tail), and every scenario runs to its end with failures listed in `results.json` |
 | | `compression-proof` | context compression and its timeline entries (ADR-0060) |

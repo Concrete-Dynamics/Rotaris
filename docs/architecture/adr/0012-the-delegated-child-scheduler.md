@@ -468,12 +468,15 @@ rendered.
 complete later and the ids alone would not say which counted). `ChildLedger.spawn` writes both; `IterationChildren`'s
 `attached` and `inherited` maps are removed, and `execute`'s `payload()` and `startingPayload` read the row. A resumed
 execution's retry renders the prior-agent context again from its dependencies' rows: the block is still given once in the
-conversation the payload starts, and never re-prefixed on a state hop. The same case, run against the unrepaired code,
+conversation the payload starts, and never re-prefixed on a state hop (the reading is **OQ-148**). The same case, run
+against the unrepaired code,
 fails on all three blocks; repaired, the retry's payload equals the first payload exactly. `store.test.ts` pins the
 migration and the round trip.
 
 **What was not measured.** No live run: the live-run scenarios never pause a child that attached an artifact and then
-time it out on a fallback, and the case above is the whole of the evidence. A row written before v28 carries neither, and
+time it out on a fallback, and the case above is the whole of the evidence. The `resume` scenario, run against `katalyst`
+from this build, passed as regression evidence only: the built app migrated to v28 and resumed two paused children, which
+attached and inherited nothing and were not retried. A row written before v28 carries neither, and
 its retry in a later run carries none, as before. A dependency followed up (`PD-ORCH-005` clause 22) between the first
 payload and a later run's retry is rendered as it now reads. The row is in
 [`../first-executions.md`](../first-executions.md).

@@ -45,7 +45,8 @@ since a sibling ignored at the call as unfinished may have completed since, and 
 (a follow-up of a child that never started) and `artifactContext` read the row. `rememberAttachments` became
 `resolveAttachments`, which only resolves the references for the caller's warning, at the call as before. A resumed
 execution's retry renders the prior-agent-context block again from its dependencies' rows — still given once in the
-conversation the retry's payload starts, and never re-prefixed on a state hop. A row written before v28 carries neither,
+conversation the retry's payload starts, and never re-prefixed on a state hop; that reading of REQ-ORCH-047's "exactly
+once" is raised as OQ-148 in `docs/architecture/open-questions.md`. A row written before v28 carries neither,
 and its retry in a later run carries none, as before.
 
 **Pinned by** `packages/engine/src/run/ladder.test.ts`, "REQ-TOOLS-154 with PD-ORCH-005 (the repair of
@@ -54,4 +55,8 @@ blocks absent; repaired, the retry's payload equals the first payload exactly, i
 `packages/store/src/store.test.ts`, "REQ-LIBRARY-098 / REQ-TOOLS-152 (R-067): a v27 store migrates to v28; …". The first
 execution is reported in `docs/architecture/adr/0012-the-delegated-child-scheduler.md` and its row is in
 `docs/architecture/first-executions.md`. No live run shows it: no live-run scenario pauses a child that attached an artifact
-and then times it out on a fallback.
+and then times it out on a fallback. As regression evidence only, `pnpm live-run --confirm --skip-build --only=resume`
+against `katalyst`, built from this branch, passed every check (pack `.live-run/runs/2026-09-30T20-17-34-255Z` of the
+branch's worktree, git-ignored): the built app migrated its store to v28, two children were paused and resumed from their
+records, and their rows carry `attach_artifacts` `'[]'` and an empty `inherited_context_block`, since the model attached
+and inherited nothing and no retry ran.

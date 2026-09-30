@@ -6686,6 +6686,31 @@ dedicated value. A poll made after the `C-c` but before any next call still read
 the stream says the line is done; that is recorded as a defect, not this question
 ([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).
 
+**OQ-148 — Does a retry that restarts a child's conversation carry REQ-ORCH-047's prior-agent-context block again?**
+*(REQ-ORCH-047, "prepend exactly once (never re-prefixed on later state hops …)"; REQ-TOOLS-154, which places the block
+ahead of item (1) of the payload; REQ-ORCH-088's fallback retry; PD-ORCH-005 clause 4. Raised 2026-09-30 by the repair of
+acceptance finding A25,
+[`a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`](../defects/fixed/a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md),
+under [R-067](../product/requests.md#r-067).)*
+
+REQ-ORCH-088's retry starts the child's conversation again from its payload, so whatever the first attempt was given is
+gone from what the retry's model reads. Within the run that started the child, the retry has always reused the block the
+first attempt rendered, so a dependent child's retry reads its dependencies' findings again. A child PD-ORCH-005 resumed in
+a later run found `children.context_injected` set by the first run and rendered none, so its retry read none. "Exactly once"
+could mean once per child task, which the retry breaks in both runs, or once per conversation the payload starts, which
+the resumed retry broke the other way.
+
+**What the build proceeds under:** once per conversation a payload starts. A resumed execution's retry renders the block
+again from its dependencies' rows, as a retry within the first run reuses it; no state hop re-prefixes it, and a resumed
+child's first attempt, which carries on from its record, is not given it again. A dependency followed up (PD-ORCH-005
+clause 22) between the first payload and a later run's retry is rendered as it reads at the retry. The case
+"REQ-TOOLS-154 with PD-ORCH-005 (the repair of a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context):
+…" in `packages/engine/src/run/ladder.test.ts` pins it.
+
+**What a ruling decides.** Whether a retry is given the block again (as built, in both runs) or never (in neither run,
+which a retry within the first run would then also have to change), and, if again, whether a dependency's report is read
+as it stood at the first payload or as it stands at the retry.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

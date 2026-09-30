@@ -6786,11 +6786,18 @@ count where nothing was left out, and left the rest of the bound unused.
 **A consequence the build accepts, and the ruling may weigh.** The compressing request can now approach the compressing
 model's threshold (some 159,000 tokens at the defaults) where it was about 3,000, under the same 120-second compression
 timeout (REQ-MONITOR-080). A slow endpoint will reach that timeout more often, and where it does REQ-ORCH-093 surfaces
-the original rejection unchanged.
+the original rejection unchanged. And on REQ-ORCH-093's rejection path (REQ-MONITOR-077) the compressing request can be
+nearly as large as the context the provider has just rejected: the bound is 60 % of the resolved capacity at 4 characters
+a token — some 159,000 tokens where the model's own input limit is unknown and the 265,000 default applies — and the
+compressible slice is sent whole under it. Where the real window is smaller than the capacity resolved, or the real
+characters per token fewer than 4, the compressing request can itself be rejected; REQ-ORCH-093 then surfaces the original
+rejection and the call fails, where the 12,000-character request it replaced would have been accepted (found by the
+branch's verification, 2026-09-30).
 
 **What a ruling decides.** Whether the compressing model's input has a bound at all, and if so which figure: its own
-threshold (as built), its capacity, or a figure of the compressor's section; and, past the bound, whether the start and
-the most recent part are kept (as built), or the history is condensed in more than one pass so nothing is left unread.
+threshold (as built), its capacity, or a figure of the compressor's section; whether the rejection pass is bounded below
+the size that was rejected; and, past the bound, whether the start and the most recent part are kept (as built), or the
+history is condensed in more than one pass so nothing is left unread.
 
 ## Design-reference dependencies
 

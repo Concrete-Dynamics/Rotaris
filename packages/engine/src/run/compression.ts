@@ -83,7 +83,9 @@ function omitted(n: number): string {
  * START (a previous compression's summary, when there was one, else the agent's first act) and its MOST RECENT part,
  * the part the preserved turns carry on from, with the omission marked between them and saying how much was left out.
  * The start is held to half the cap, so the most recent part always has the other half; where the most recent part is
- * shorter than that half it is given whole and the start has the rest of the cap.
+ * shorter than that half it is given whole and the start has the rest of the cap. A cap shorter than two omission
+ * markers (some 60 characters) is not met: the markers alone pass it. Only a pathological threshold — a few tokens —
+ * resolves to such a cap, so no floor is set; what the cap bounds is the history's text, not the markers about it.
  *
  * The reason it did not, kept beside its replacement: it read `transcriptText`, the report pass's reader, which cuts each
  * event to REQ-ORCH-110's 2,000 characters and the whole to its 12,000 from the head. At the default trigger (60 % of

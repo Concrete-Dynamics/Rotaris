@@ -4716,6 +4716,120 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(ends).toEqual(['cancelled', 'succeeded']);
     });
 
+    it('REQ-HOOKS-080 (the third verification of this repair): a parent takes a child the user cancelled as ended only once its `child_completed` hook is done — its next model step waits for the hook', async () => {
+      const { order, hooks, release } = recordingHooks('work');
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          order.push(`root(${turn})`);
+          return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work', background: true } }]) : answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return { parts: [{ hold }, ...answer('late').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      // The root's turn has ended and it waits on its child in the resume loop.
+      await settle(() => byName(sid, 'work')?.state === 'running' && order.includes('root(2)'));
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'work').task_id } })).toEqual({ ok: true });
+      releaseChild();
+      await settle(() => order.includes('child_completed(work)'));
+      await settle(() => order.includes('root(3)'), 40);
+      // The cancel woke the parent, but the child is settling until its hook is done: no model step yet.
+      expect(order).not.toContain('root(3)');
+      release();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(order.indexOf('root(3)')).toBeGreaterThan(order.indexOf('child_completed(work):end'));
+    });
+
+    it('REQ-HOOKS-003 (the third verification of this repair): a store that cannot be read as the scheduler is told still fires the hook, from the moved row', async () => {
+      const { completed, hooks } = recordingHooks();
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return { parts: [{ hold }, ...answer('late').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'work')?.state === 'running');
+      const workId = byName(sid, 'work').task_id;
+      // The cancel's timeline entry arms one failed read of the child's record: the next, the terminal listener's.
+      let armed = false;
+      const insert = dal.insertTimeline.bind(dal);
+      const inserted = vi.spyOn(dal, 'insertTimeline').mockImplementation((...args: Parameters<typeof dal.insertTimeline>) => { if (args[3] === 'child_user_cancelled') armed = true; return insert(...args); });
+      const getChild = dal.getChild.bind(dal);
+      let raised = 0;
+      const read = vi.spyOn(dal, 'getChild').mockImplementation((s: SessionId, taskId: string) => {
+        if (armed && taskId === workId) { armed = false; raised += 1; throw new Error('SQLITE_IOERR: disk I/O error'); }
+        return getChild(s, taskId);
+      });
+      try {
+        expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: workId } })).toEqual({ ok: true });
+      } finally { inserted.mockRestore(); read.mockRestore(); }
+      expect(raised).toBe(1);
+      releaseChild();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(byName(sid, 'work').state).toBe('cancelled');
+      expect(completed.map((f) => [f['child_name'], f['state']])).toEqual([['work', 'cancelled']]);
+    });
+
+    it('REQ-HOOKS-080 with clause 22 (the third verification of this repair): a child followed up while its cancel\'s hook runs is still settling when that hook ends and the follow-up\'s own hook runs — its parent waits for the second', async () => {
+      const gateOf = () => { let open!: () => void; const hold = new Promise<void>((r) => { open = r; }); return { hold, open: () => open() }; };
+      const order: string[] = [];
+      const gates = [gateOf(), gateOf()];
+      let n = 0;
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event, fields) => {
+          if (event !== 'child_completed') return [];
+          const i = n; n += 1;
+          order.push(`hook${i}(${String(fields['state'])})`);
+          await gates[i]?.hold;
+          order.push(`hook${i}:end`);
+          return [];
+        },
+        advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      let sid = '' as SessionId;
+      const followGate = gateOf();
+      const endTurnGate = gateOf();
+      let releaseChild!: () => void;
+      const childHold = new Promise<void>((r) => { releaseChild = r; });
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          order.push(`root(${turn})`);
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]);
+          // Held until the cancel's hook is running, then follows the cancelled child up.
+          if (turn === 2) return { parts: [{ hold: followGate.hold }, ...toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: again', session_id: byName(sid, 'work').task_id } }]).parts] };
+          // Held until the follow-up has ended and the cancel's hook has ended too: the turn then ends and the root finds
+          // its child ended on its own, while the follow-up's own hook still runs.
+          if (turn === 3) return { parts: [{ hold: endTurnGate.hold }, ...answer('root turn 3').parts] };
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return textOf(req).includes('TASK: again') ? answer('Done again.') : { parts: [{ hold: childHold }, ...answer('late').parts] };
+      }, { hooks });
+      sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'work')?.state === 'running');
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'work').task_id } })).toEqual({ ok: true });
+      releaseChild();
+      await settle(() => order.includes('hook0(cancelled)'));
+      followGate.open();
+      // The follow-up ends `succeeded` and its own settle's hook starts while the cancel's hook still runs.
+      await settle(() => order.includes('hook1(succeeded)'));
+      gates[0]!.open();
+      await settle(() => order.includes('hook0:end'));
+      endTurnGate.open();
+      await settle(() => order.includes('root(4)'), 40);
+      // The first hook's end did not end the second's settle: the root has not been resumed with its child's report.
+      expect(order).not.toContain('root(4)');
+      gates[1]!.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(byName(sid, 'work').state).toBe('succeeded');
+      expect(order.indexOf('root(4)')).toBeGreaterThan(order.indexOf('hook1:end'));
+    });
+
     /**
      * Two children, `y` and `x`. The user cancels `y`, whose hook is held, then `x`, whose hook is queued behind it; the
      * root follows `x` up (clause 22) before `y`'s hook ends. `again` says how the follow-up goes.

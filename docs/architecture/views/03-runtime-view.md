@@ -762,8 +762,12 @@ finalize sweep (`completionsSettled`), before `iteration_end`. The stale settle'
 the continuing run's `session_start`. A child ended where no run's hooks are live — cancelled at rest (clause 16), by the
 explicit cancel's close after `session_end`, or by the record of an accepted cancel — fires none, nor does a stale-settled
 child whose run ends before its `session_start` (OQ-154). A settle
-ends only its own `settles` entry (`beginSettle`), so a child followed up while an earlier end's hook still runs (clause
-22) fires the hook once for each end. At a stop or a quit these hooks are awaited as executions within what is left of
+ends only its own `settles` entry (`beginSettle`), ~~so a child followed up while an earlier end's hook still runs (clause
+22) fires the hook once for each end~~ so a child followed up while an earlier end's hook still runs (clause 22) is still
+settling, to a parent's `settlesOf`, until the later end's hook is done — the parent in the resume loop or in
+`wait_for_tasks` takes it as ended only then (REQ-HOOKS-080). *(Corrected 2026-09-30, the third verification: firing
+once per end now comes from `tellingOwnSettle`, not from this guard.)* An outside hook holds its child as settling the
+same way, so a parent the cancel, the cascade or the sweep wakes waits for that hook before its next model step. At a stop or a quit these hooks are awaited as executions within what is left of
 the 30 s grace and then given up on with them, as a settle's own hook is (REQ-SESSION-092), bounded by the per-hook
 timeout. The note is
 [`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](../../defects/fixed/a-child-settled-outside-its-execution-fires-no-child-completed-hook.md).

@@ -264,7 +264,13 @@ export class IterationChildren implements DelegationOps {
     // move is told from inside `afterTerminal`, which fires the hook itself (`tellingOwnSettle`). REQ-HOOKS-075: the
     // fields are taken here, as the scheduler is told — every path stores the report before it tells — and not when the
     // hook starts, which can be after a follow-up has moved the record on (PD-ORCH-005 clause 22).
-    this.scheduler.onTerminal((row) => { if (!this.tellingOwnSettle.has(row.task_id)) this.completedOutside(this.ledger.get(row.task_id) ?? row); });
+    // A store that cannot be read falls back to the moved row, as `afterTerminal` does, so the hook still fires.
+    this.scheduler.onTerminal((row) => {
+      if (this.tellingOwnSettle.has(row.task_id)) return;
+      let settled: ChildRow;
+      try { settled = this.ledger.get(row.task_id) ?? row; } catch { settled = row; }
+      this.completedOutside(settled);
+    });
     // REQ-CONFIG-094 / REQ-MONITOR-020: a child ending here may free a slot another session's held child is waiting for.
     const onSlotFreed = deps.onSlotFreed;
     if (onSlotFreed) this.scheduler.onTerminal(() => { onSlotFreed(); });
@@ -578,8 +584,11 @@ export class IterationChildren implements DelegationOps {
    * (PD-ORCH-005 clause 22) begins a second settle over the first, and the first ending must not take the second's entry
    * with it — the terminal listener would then find none and fire `child_completed` a third time (REQ-HOOKS-076, found by
    * the verification of `a-child-settled-outside-its-execution-fires-no-child-completed-hook`'s repair). The listener now
-   * reads `tellingOwnSettle`, not this map (the second verification); the entry still says the child is settling, so a
-   * parent waiting on it (`settlesOf`) does not take it as ended while the second end's hook runs (REQ-HOOKS-080).
+   * reads `tellingOwnSettle`, not this map (the second verification), so the guard no longer keeps that third hook out.
+   * What it keeps now (the third verification): the second end's entry still says the child is settling once the first
+   * end's hook is done, so a parent that finds the child ended on its own (`settlesOf`, in the resume loop or in
+   * `wait_for_tasks`) does not take it as ended while the second end's hook runs (REQ-HOOKS-080) — the case "a child
+   * followed up while its cancel's hook runs is still settling …" in `children.test.ts`.
    */
   private beginSettle(taskId: string): () => void {
     let end!: () => void;
@@ -911,8 +920,9 @@ export class IterationChildren implements DelegationOps {
    * and REQ-ORCH-052 (terminal-state callbacks fire for a cascaded or swept record "exactly as for directly completed
    * ones"): the hook of a child the cascade blocked, the finalize sweep cancelled or the user's cancel of one child ended —
    * none of which runs the child's own settle. It runs in line as a settle's does (REQ-HOOKS-080): the child is settling
-   * until its hook is done (`beginSettle`), so its parent takes it as ended only then, and a rest waits for it as for an
-   * execution (`track`). These hooks run one after another, in the order the children settled; `completionsSettled` is
+   * until its hook is done (`beginSettle`), so its parent — woken by the same terminal move — takes it as ended only
+   * then (the case "a parent takes a child the user cancelled as ended only once its `child_completed` hook is done …"),
+   * and a rest waits for it as for an execution (`track`). These hooks run one after another, in the order the children settled; `completionsSettled` is
    * the wait for all of them, which the run takes after the finalize sweep and before the iteration's own hooks.
    *
    * REQ-HOOKS-075: the fields are the child's record as it stood when the scheduler was told it settled — its terminal

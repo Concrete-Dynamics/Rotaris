@@ -50,7 +50,9 @@ REQ-ORCH-053, REQ-ORCH-133, PD-ORCH-005 clause 6, R-067).** The cascade, the fin
 child now fire it through `IterationChildren.completedOutside`, in line, and the run waits for them after the sweep
 (`completionsSettled`); the stale settle's and the decline's fire after the run's `session_start`
 (`RunDeps.settledBeforeStart`, `Run.childCompleted`). An outside hook's fields are taken as the scheduler is told, not
-when a queued hook starts (the second verification). Three paths outside a run's hooks fire none, raised as OQ-154. This
+when a queued hook starts (the second verification). `beginSettle`'s own-entry guard keeps a followed-up child settling
+to a parent's `settlesOf` until the later end's hook is done, corrected in §4 from "fires the hook once for each end" (the
+third verification). Three paths outside a run's hooks fire none, raised as OQ-154. This
 repairs `a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`. The **runtime view**'s §4 gains the
 paragraph after the one on a settle's hook. No package, edge, process, message kind, channel, command or store column
 changed.

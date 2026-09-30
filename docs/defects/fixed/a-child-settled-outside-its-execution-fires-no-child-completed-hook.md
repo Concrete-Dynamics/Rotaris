@@ -77,8 +77,27 @@ Found by the repair's verification, and closed with it: a settle's end removed i
 settle had put it there. A child the user cancelled and its parent then followed up (clause 22) while the cancel's hook
 still ran began a second settle over the first, and the first hook ending took the second's entry with it, so the
 terminal listener found none and fired `child_completed` a third time (REQ-HOOKS-076, "exactly once"). `beginSettle`'s
-end now removes the entry only while it is its own. Pinned by the case "a child followed up while its cancel's hook still
-runs fires it once for each end" in the same describe, red before that change (three hooks for two ends).
+end now removes the entry only while it is its own. ~~Pinned by the case "a child followed up while its cancel's hook still
+runs fires it once for each end" in the same describe, red before that change (three hooks for two ends).~~ *(Corrected
+2026-09-30, the third verification: that case was red before this change, but since the second verification the terminal
+listener reads `tellingOwnSettle`, not `settles`, so the third hook can no longer come through `beginSettle` and the case
+stays green with the guard removed. It now pins only that each end fires once.)* What `beginSettle`'s guard protects now is
+`settlesOf`: the second end's entry still says the child is settling after the first end's hook is done, so a parent that
+finds the child ended on its own — in the resume loop or in `wait_for_tasks` — waits for the second end's hook
+(REQ-HOOKS-080). Pinned by the case "a child followed up while its cancel's hook runs is still settling when that hook
+ends and the follow-up's own hook runs — its parent waits for the second", red with the guard removed (the root's next
+model step came before the follow-up's hook ended).
+
+The third verification also found the parent's wait on an outside hook pinned by no case: with `completedOutside` holding
+no `settles` entry, every case stayed green. `completedOutside` holds its child as settling (`beginSettle`) until its hook
+is done, so a parent the cancel, the cascade or the sweep wakes takes the child as ended only then, as a settle's own hook
+holds it (REQ-HOOKS-080). Pinned by the case "a parent takes a child the user cancelled as ended only once its
+`child_completed` hook is done — its next model step waits for the hook", red with that entry removed.
+The same round's optional finding: the terminal listener read the child's record with nothing to catch a store that
+raises, so the scheduler only warned and no hook fired. It now falls back to the row the terminal move returned, as
+`afterTerminal` does — the hook fires with the terminal state, and the report's status and summary it cannot read are
+empty. Pinned by the case "a store that cannot be read as the scheduler is told still fires the hook, from the moved
+row", which recorded no hook before.
 
 Found by the repair's second verification, and closed with it: a hook `completedOutside` queued behind one still running
 read the child's record when it started, not when the child settled. A child the user cancelled while an earlier child's

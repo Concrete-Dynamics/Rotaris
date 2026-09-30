@@ -130,6 +130,37 @@ function plantSessions(root, workspaceRoot, count) {
   } finally { db.close(); }
 }
 
+/**
+ * The run-header indicator's visible label, word by word (L10): each word's Range boxes against the indicator's own
+ * box, whether the box scrolls (overflow), whether it runs under the next control in the header, and how many lines the
+ * label takes. The accessible description (`.visually-hidden`) is not drawn and is left out.
+ */
+const RUN_HEADER_LABEL_GEOMETRY = `(() => {
+  const tag = document.querySelector('[data-testid="improvement-activity-run-header"]');
+  if (!tag) return null;
+  const header = tag.closest('.run-header');
+  const box = tag.getBoundingClientRect();
+  const walker = document.createTreeWalker(tag, NodeFilter.SHOW_TEXT, { acceptNode: (n) => n.parentElement && n.parentElement.closest('.visually-hidden') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+  const words = []; const tops = new Set(); let label = '';
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    label += node.data;
+    for (const match of node.data.matchAll(/\\S+/g)) {
+      const range = document.createRange(); range.setStart(node, match.index); range.setEnd(node, match.index + match[0].length);
+      const rects = [...range.getClientRects()];
+      const inside = rects.length > 0 && rects.every((r) => r.left >= box.left - 0.5 && r.right <= box.right + 0.5 && r.top >= box.top - 0.5 && r.bottom <= box.bottom + 0.5);
+      rects.forEach((r) => tops.add(Math.round(r.top)));
+      words.push({ word: match[0], inside });
+    }
+  }
+  const next = tag.nextElementSibling;
+  const nextBox = next ? next.getBoundingClientRect() : null;
+  const overlapsNext = nextBox !== null && nextBox.width > 0 && box.right > nextBox.left + 0.5 && box.bottom > nextBox.top && box.top < nextBox.bottom;
+  const hb = header ? header.getBoundingClientRect() : null;
+  return { label: label.trim(), words, lines: tops.size, box: { width: box.width, height: box.height },
+    overflows: tag.scrollWidth > tag.clientWidth + 1 || tag.scrollHeight > tag.clientHeight + 1, overlapsNext,
+    insideHeader: hb !== null && box.left >= hb.left - 0.5 && box.right <= hb.right + 0.5 };
+})()`;
+
 /** Every element matching the selector, with its text and its data/aria attributes. */
 const probe = (d, selector) => d.probe(selector);
 const one = async (d, selector) => (await d.probe(selector))[0] ?? null;
@@ -217,9 +248,10 @@ check('the seeded record holds the sessions the pass will read', planted.length 
 // The pass launch reuses the seeded profile, so it opens the store the sessions were planted into.
 const passRoot = join(output, 'seed', 'app');
 
-// ── 2. The pass itself, held open for six seconds so the indicators can be READ while it runs.
+// ── 2. The pass itself, held open for ten seconds so the indicators can be READ — and measured at two window
+//    sizes (L10, below) — while it runs. Six seconds held the reads alone; two resizes and two shots are added.
 await (async () => {
-  const started = await startApp({ root: passRoot, workspace: passWorkspace, extra: { ROTARIS_IMPROVEMENT_SCRIPT: 'wait:6000' }, timeoutMs: 90_000 });
+  const started = await startApp({ root: passRoot, workspace: passWorkspace, extra: { ROTARIS_IMPROVEMENT_SCRIPT: 'wait:10000' }, timeoutMs: 90_000 });
   const d = started.driver;
   try {
     await d.waitFor('.app-shell', { timeoutMs: 60_000 });
@@ -260,6 +292,24 @@ await (async () => {
       header !== null && header.data['data-pass'] === 'retrospective' && /Reviewing workspace history for improvements/.test(header.text),
       header === null ? 'no run-header indicator while a pass was active' : `"${header.text}" pass=${header.data['data-pass']}`);
     await d.screenshot(join(output, 'activity-run-header.png'));
+
+    // ── Live-run finding L10: the run header's label was cut mid-word at 1440 px ("Reviewing run for improvem")
+    //    with no ellipsis. REQ-LIBRARY-125 with REQ-SHELL-149: the label is carried in words. Every word of the
+    //    visible label is measured with a Range and must lie whole inside the indicator's box, the box must not
+    //    overflow, and it must not run under the control after it — at the live run's 1440 px and at the
+    //    1000×680 minimum (REQ-SHELL-022), where it may wrap between words but never cut one.
+    const initial = await d.eval('[innerWidth, innerHeight]');
+    for (const [width, height] of [[1440, 900], [1000, 680]]) {
+      await d.resize(width, height);
+      await sleep(300);
+      const g = await d.eval(RUN_HEADER_LABEL_GEOMETRY);
+      const clippedWords = g === null ? [] : g.words.filter((w) => !w.inside).map((w) => w.word);
+      check(`at ${width}×${height} the run-header indicator carries its label in whole words, none cut at its edge (REQ-LIBRARY-125, REQ-SHELL-149; L10)`,
+        g !== null && g.words.length > 0 && clippedWords.length === 0 && !g.overflows && !g.overlapsNext && g.insideHeader,
+        g === null ? 'no run-header indicator while the pass ran' : `"${g.label}" in ${Math.round(g.box.width)}×${Math.round(g.box.height)} px, ${g.lines} line(s); cut: ${clippedWords.length === 0 ? 'none' : clippedWords.join(', ')}; overflows ${g.overflows}; overlaps the next control ${g.overlapsNext}; inside the header ${g.insideHeader}`);
+      await d.screenshot(join(output, `activity-run-header-${width}.png`));
+    }
+    if (Array.isArray(initial) && initial[0] > 0 && initial[1] > 0) await d.resize(initial[0], initial[1]);
 
     // ── The outcome: the completion notice, then the proposals on the Library's tab.
     const completion = await noticeMatching(d, /retrospective proposals? ready/, 90_000);

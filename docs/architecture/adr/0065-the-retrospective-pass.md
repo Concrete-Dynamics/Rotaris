@@ -214,3 +214,20 @@ and the Overview card all carried a retrospective artifact without knowing it ex
 clause was measured in both directions in the built product: the analyst's answer cited one session the capture
 had read and one it had not, and the stored artifact carries `["planted-03", null]` — the invented citation was
 stripped rather than persisted.
+
+## Live-run finding L10 — 2026-09-29 (R-067), the indicators' label measured, not only read
+
+The first execution read both indicators' presence, text and roles. It never read their geometry, and that is where
+the first live run found a defect. At 1440 px the run header cut "Reviewing run for improvem" mid-word with no
+ellipsis. Decision 8's pattern was built as a Tag with a status dot, but two things kept it from drawing that way.
+A `className` given to the design `Tag` replaces the `tag tag-<kind>` foundation, so the indicator was a plain span in
+the body type with an unpainted dot. And its label was a bare text node in an inline-flex box, which `text-overflow`
+never reaches. Repaired in `ImprovementActivity.tsx` and `shell.css`: the label is its own element and the Tag spells
+`tag tag-run`. The run header wraps the label between words, never below its longest word, and the title bar elides
+it with an ellipsis. `pnpm retrospective-proof` now measures every word of the run-header label with a Range at
+1440 × 900 and at 1000 × 680. Before the repair it failed at both sizes ("cut: improvements…"). After it, 31 of 31
+checks pass. The live `ask` scenario shows the post-run label whole on two lines at 1440 px. Notes: the repaired
+`../../defects/fixed/the-improvement-label-is-clipped-without-an-ellipsis.md`, and, recorded without a repair,
+`../../defects/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md`. Not shown: Windows or
+macOS (IC-3).
+

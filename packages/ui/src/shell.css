@@ -50,8 +50,20 @@
  * already uses for a run's state, so they inherit its colour, radius and type; only the things a Tag cannot
  * know are set here — that the title-bar one does not drag the window with it, and that neither grows into
  * the row beside it at the minimum window size (REQ-SHELL-022).
+ *
+ * Live-run finding L10 (2026-09-29): the label is carried in words (REQ-SHELL-149), never cut mid-word. The
+ * ellipsis used to sit on the inline-flex box, where it never reaches the bare text node the label was, so the run
+ * header cut "Reviewing run for improvem" at 1440 px. The label is now its own element: in the run header it wraps
+ * between words and the indicator never shrinks below its longest word (`min-content`); the title bar is one fixed
+ * row, so there it elides on the label itself, where the ellipsis draws. The dot takes the tag's ink, as the run
+ * state's does.
  */
-.improvement-activity { -webkit-app-region: no-drag; flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: var(--rt-space-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.improvement-activity { -webkit-app-region: no-drag; flex: 0 1 auto; min-width: 0; }
+.improvement-activity .status-dot { background: currentColor; }
+.improvement-activity__label { min-width: 0; }
+.improvement-activity--run-header { min-width: min-content; }
+.improvement-activity--run-header .improvement-activity__label { white-space: normal; overflow-wrap: normal; }
+.improvement-activity--title-bar .improvement-activity__label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /*
  * Stage B — the workspace chip (REQ-SHELL-033/035, REQ-WORKSPACE-016/017), drawn from the mockup's
  * own title bar (`docs/design/mockup/rotaris-ui-mockup.dc.html`, the `<!-- title bar -->` block):

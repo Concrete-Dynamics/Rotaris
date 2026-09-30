@@ -161,6 +161,26 @@ const RUN_HEADER_LABEL_GEOMETRY = `(() => {
     insideHeader: hb !== null && box.left >= hb.left - 0.5 && box.right <= hb.right + 0.5 };
 })()`;
 
+/**
+ * The title-bar indicator's label (L10, the verifier's fix round 1): the title bar is one fixed row, so there the label
+ * is either whole or elided on the label element itself, where `text-overflow: ellipsis` draws. It must not scroll the
+ * indicator, and must not run under the control after it.
+ */
+const TITLE_BAR_LABEL_GEOMETRY = `(() => {
+  const tag = document.querySelector('[data-testid="improvement-activity-title-bar"]');
+  if (!tag) return null;
+  const label = tag.querySelector('.improvement-activity__label');
+  if (!label) return { label: null };
+  const box = tag.getBoundingClientRect();
+  const style = getComputedStyle(label);
+  const elided = label.scrollWidth > label.clientWidth + 1;
+  const next = tag.nextElementSibling;
+  const nextBox = next ? next.getBoundingClientRect() : null;
+  const overlapsNext = nextBox !== null && nextBox.width > 0 && box.right > nextBox.left + 0.5 && box.bottom > nextBox.top && box.top < nextBox.bottom;
+  return { label: (label.textContent || '').trim(), width: box.width, elided, ellipsis: style.textOverflow === 'ellipsis' && style.overflow === 'hidden',
+    overflows: tag.scrollWidth > tag.clientWidth + 1, overlapsNext };
+})()`;
+
 /** Every element matching the selector, with its text and its data/aria attributes. */
 const probe = (d, selector) => d.probe(selector);
 const one = async (d, selector) => (await d.probe(selector))[0] ?? null;
@@ -308,6 +328,10 @@ await (async () => {
         g !== null && g.words.length > 0 && clippedWords.length === 0 && !g.overflows && !g.overlapsNext && g.insideHeader,
         g === null ? 'no run-header indicator while the pass ran' : `"${g.label}" in ${Math.round(g.box.width)}×${Math.round(g.box.height)} px, ${g.lines} line(s); cut: ${clippedWords.length === 0 ? 'none' : clippedWords.join(', ')}; overflows ${g.overflows}; overlaps the next control ${g.overlapsNext}; inside the header ${g.insideHeader}`);
       await d.screenshot(join(output, `activity-run-header-${width}.png`));
+      const t = await d.eval(TITLE_BAR_LABEL_GEOMETRY);
+      check(`at ${width}×${height} the title-bar indicator's label is whole or elided with its ellipsis drawn, never cut bare (REQ-LIBRARY-125, REQ-SHELL-149; L10)`,
+        t !== null && t.label !== null && t.label.length > 0 && (!t.elided || t.ellipsis) && !t.overflows && !t.overlapsNext,
+        t === null ? 'no title-bar indicator while the pass ran' : t.label === null ? 'the title-bar indicator has no label element' : `"${t.label}" in ${Math.round(t.width)} px; ${t.elided ? (t.ellipsis ? 'elided with an ellipsis' : 'cut without an ellipsis') : 'whole'}; overflows ${t.overflows}; overlaps the next control ${t.overlapsNext}`);
     }
     if (Array.isArray(initial) && initial[0] > 0 && initial[1] > 0) await d.resize(initial[0], initial[1]);
 

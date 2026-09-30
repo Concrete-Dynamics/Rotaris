@@ -231,3 +231,9 @@ checks pass. The live `ask` scenario shows the post-run label whole on two lines
 `../../defects/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md`. Not shown: Windows or
 macOS (IC-3).
 
+*(Added 2026-09-30, the verifier's fix round 1.)* The title-bar label is now measured at the same two sizes too
+(`TITLE_BAR_LABEL_GEOMETRY`). It must be whole, or elided on the label element with `text-overflow: ellipsis` in force,
+and it must not overflow the indicator or run under the next control. origin/main has no label element, so there the
+check would fail at both sizes. It was not run there; that rests on `git grep`. On the repaired build the retrospective label is whole in 282 px at both
+sizes, and the proof passes 33 of 33. The call site no longer passes `kind="running"`, which the spelled className
+replaced.

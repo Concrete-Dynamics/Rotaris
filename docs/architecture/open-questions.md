@@ -6622,6 +6622,70 @@ the same lists, including the delegating persona's. The writers its reason names
 **What a ruling decides.** Which of the three readings binds, or another one. Whether a grandparent's map binds too.
 Whether an allowed-tool list may name a tool-server tool or reach tool-server tools at all.
 
+**OQ-146 — Are keystrokes left without a line end cleared before the product submits the next command line?**
+*(REQ-TOOLS-096, under which keystroke input "may be a special key" or text and is written as is; REQ-TOOLS-097 and
+REQ-TOOLS-098, under which a soft-paused command keeps running and the next call is typed behind it; REQ-TOOLS-127,
+under which the live stream and the observation carry what the command wrote. Raised 2026-09-29 by the repair of
+acceptance finding A10,
+[`keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md`](../defects/fixed/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md),
+under [R-067](../product/requests.md#r-067). Open; numbered OQ-143 on its branch, renumbered OQ-146 at the merge,
+OQ-143 to OQ-145 having been taken on `main`.)*
+
+An agent's `is_input` text or a control surface's send-keys with no Enter after it waits in the shell's input as a
+partial line when nothing reads it, as under a soft-paused `sleep`. A person at a terminal would see it on the next
+prompt and could erase it. The agent cannot see it, and the product's next wrapped line was appended to it: the
+start marker's `printf` became `xyprintf`, and the observation and the live stream lost their framing. No requirement
+says what becomes of such a partial line. The product could leave it (the prefix, and the leak the note records), submit
+it as a line of its own (running text the agent never ended as a command), or clear it.
+
+**What the build proceeds under:** on the POSIX backend, when the last keystrokes the session wrote did not end with
+a line end, the next line the product submits — a command, or its own snapshot or restore — is preceded by the line
+discipline's kill character, `^U` (node-pty sets `VKILL` to it; an interactive shell's line editor binds it to the
+same). The partial line is erased, never run. Keystrokes that end their own line clear nothing, and the PowerShell
+backend is unchanged: its wrapper's first statement is the exit-status reset, so a prefix costs that statement and,
+by the wrapper's construction, not the start marker — reasoned, not measured, since no Windows host ran it. The cases "REQ-TOOLS-096 (A10): …" and "REQ-TOOLS-096/097/127 (A10): …" in `terminal.test.ts` pin that reading.
+
+**What a ruling decides.** Whether a partial line no one ended is erased, submitted, or left, and whether the
+observation of the call that clears it should say so. A command still running and reading its own input line by line
+receives the product's next line under every reading, which is REQ-TOOLS-187's queue and not this question. The ruling
+should also cover the interactive program: when the soft-paused command is a REPL or an editor that reads its input
+itself, in raw mode, the `^U` reaches it as a keystroke of its own — a readline prompt kills the line the agent was
+typing, and an editor such as `vi` scrolls. Without the `^U` that program would receive the wrapper's text appended
+to the agent's keystrokes instead, so neither reading hands it anything it asked for (added 2026-09-30 by A10's
+verification).
+
+**OQ-147 — What exit status does a soft-paused command report when it ended without printing its own?**
+*(REQ-TOOLS-098, whose advice is to interrupt a paused command with `C-c` and `is_input=true`; REQ-TOOLS-179, which
+names −1 for a soft pause in the foreground and for a kill in the background, and otherwise the command's real outcome.
+Raised 2026-09-30 by the verification of acceptance finding A10,
+[`keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md`](../defects/fixed/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md),
+under [R-067](../product/requests.md#r-067). Open; numbered OQ-144 on its branch, renumbered OQ-147 at the merge,
+OQ-143 to OQ-145 having been taken on `main`.)*
+
+An interactive `sh` that takes the interrupt abandons the rest of the wrapper's line, so the paused call's end frame,
+which carries `$?`, never prints. The shell reaches the next call's line only once the paused one is done, so that
+call's printed start marker is where the paused call is known to have ended (~~that call's end frame~~, the first
+repair's reading, falsified by A10's second verification: the paused call went on collecting until then, and a long
+next call scrolled the cut off its screen). Its real status is not in the stream. The shell's
+`$?` at that moment would say it (130 under `sh` for an interrupt), but the next wrapper's first statement replaces
+it before anything prints. No requirement names a status for a foreground command that ended and reported none: −1
+is the soft pause's in the foreground and the kill's in the background, and 0 or another number claims an outcome
+nobody measured. Before A10's repair the paused call borrowed the next call's status, 0 for `echo AAA`.
+
+**What the build proceeds under:** the poll that hands such a call over reports it the way a kill from the terminal
+window is reported: exit −1, not a soft pause, with the reason as its error ("the paused command ended without an exit
+status of its own: the shell abandoned the rest of its line, as an interrupt (C-c) makes it do, before the next command
+ran"), so its `failure_kind` is `execution_error`. Its output is what it wrote up to the next call's start marker:
+collection stops there, and the echo of that call's wrapper is dropped whole. `terminal.test.ts`'s cases
+"REQ-TOOLS-098/127/179 (A10): a soft-paused command interrupted with C-c …", "REQ-TOOLS-098/127 (A10): after C-c, a
+next call longer than …" and "REQ-TOOLS-127 (A10): the echo of a next call wider than the screen …" pin it.
+
+**What a ruling decides.** Which exit status and outcome that poll carries: −1 with the reason, as built; a status
+the product recovers from the shell (which would need the wrapper to carry the previous `$?`, on both backends); or a
+dedicated value. A poll made after the `C-c` but before any next call still reads "still running", because nothing in
+the stream says the line is done; that is recorded as a defect, not this question
+([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

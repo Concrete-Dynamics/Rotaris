@@ -334,6 +334,49 @@ measured on the monotonic clock: the time since the previous observation of the 
 last wrote anything, and that a poll does not wait. How long a poll should wait is not stated anywhere:
 [OQ-136](../open-questions.md), raised with this reading built.*
 
+*Reported back 2026-09-29 (R-067), from acceptance finding A10
+([`keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output`](../../defects/fixed/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md)):
+the wrapper assumed it was the whole of the line the shell reads, and **keystrokes can stand in front of it**. An
+agent's `is_input` or a control surface's send-keys with no Enter waits in the shell's input as a partial line under a
+command that does not read it, and the next wrapped line was appended: `xyprintf: not found`, no start marker, the
+whole screen kept — the paused call's late output and its own end frame with it — and, since L9, an empty live stream.
+On the POSIX backend a line the product submits after keystrokes left without a line end is now preceded by the line
+discipline's kill character, `^U`, which erases the partial line; the PowerShell wrapper's first statement already
+takes a prefix without losing the start marker (reasoned, not measured). What becomes of such a line is stated
+nowhere: [OQ-146](../open-questions.md) (OQ-143 on its branch), raised with this reading built. **A second reading is falsified and kept
+beside its replacement in `onData`:** "the active call's end marker, else the paused call's; a match closes both".
+~~While a call was active, the paused call's frame ahead of it was never matched, so a paused command that ended
+behind the next call never read as finished and the poll after it said "still running" with exit −1. Both frames are
+matched now, the paused one's first.~~ **That account, written by the first repair, is itself falsified** (A10's
+verification, 2026-09-30): the old form did close the paused call when the active call's frame arrived. What it got
+wrong was the status and the collection. The paused call took the **active** call's exit status, so a paused
+`sleep 3; …; false` behind an `echo` read 0; and its listener stayed attached, so when the paused line never printed a
+frame — an interrupt (`C-c`, REQ-TOOLS-098's advice) makes an interactive `sh` abandon the rest of the line — its
+poll read everything after: the later calls' marker frames and 582 of the PD-TOOLS-001 snapshot's `__rot_b64__` lines,
+which encode the shell's whole environment. The first repair's replacement, "the paused call closes
+on its own frame only", fixed the status and broke the interrupt: that call then read "still running" on every poll.
+~~Now the paused call closes on its own frame with its own status, or else on the next call's frame with none, reported
+as −1 with the reason, and what it collected ends at the next call's printed start marker; its listener goes with it.~~
+**Falsified in turn by the second verification** (2026-09-30): that listener fed the paused screen until the next
+call's END frame, and the cut at the start marker was made on that screen, so a next call longer than the screen keeps
+(`seq 1 20000`, beyond `FOREGROUND_SCREEN_LINES`) scrolled the marker off and the poll read that call's output, its
+end frame and a false `output_truncated`. And the echo of the next call's wrapper, which the line discipline writes
+onto the paused screen, lost only its first row when it wrapped: a wrapper wider than 240 columns left the command's
+text and `printf '__rot_…_e:%s\n' "$?"` in the poll on both roads — the second, a paused command ending on its own
+behind the next call, on `origin/main` too. **Now** the paused call is fed by `onData` its share of each chunk
+(`pausedShare`), which ends at its own end frame or at the next call's PRINTED start marker — which the shell writes
+only once the paused line is done — and it closes there: on its own frame with its own status, or at the marker with
+none, reported as −1 with the reason ([OQ-147](../open-questions.md), OQ-144 on its branch, raised with that reading built). Nothing after
+either boundary reaches its screen. Every row an echoed POSIX wrapper occupies is dropped from any capture
+(`withoutEchoedWrappers`), and the paused call's `until` cut takes the first row carrying the next call's start marker
+in any form. Pinned by eight "(A10)" cases in `terminal.test.ts`: the first repair's two; two red on the old
+`onData` — the paused call's own status behind the next call, and the interrupted paused call closed by the next call
+with nothing of the later calls in its poll, which is red on the first repair too; and four for the second
+verification — `C-c` then `seq 1 20000`, a 300-character next call on both roads, and two pure cases over
+`pausedShare` and the echo's removal. A poll made after the `C-c` but before any next call still reads "still running"; that is
+recorded, not repaired
+([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../../defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).*
+
 *Reported back 2026-09-30 (R-067), from the verifier's live run of the `fix-terminal-output` branch
 ([`a-command-that-replaces-the-shell-reads-as-a-soft-pause`](../../defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md),
 acceptance finding A9): **the marker protocol's premise — that the shell which printed the start frame is the one left

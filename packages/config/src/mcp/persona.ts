@@ -1,5 +1,5 @@
 import { compareCodePoints } from '@rotaris/kernel';
-import { info, warn, type Diagnostic, type Staged } from './diagnostics.js';
+import { debug, info, warn, type Diagnostic, type Staged } from './diagnostics.js';
 import type { McpOrigin, McpServerEntry } from './entry.js';
 
 /**
@@ -175,7 +175,8 @@ export function resolvePersonaMcp(input: PersonaMcpInput): Staged<PersonaMcpSurf
         const matches = disc.tools.some((t) => candidateSpellings(name, t.name).includes(g));
         if (!matches) diagnostics.push(info(`persona ${persona}: mcp_tools grants '${g}' on server '${name}', which matched no tool the server reports; the entry is inert (REQ-MCP-058)`, 'process', `mcp.inert-grant.${name}.${g}`, { persona, server: name }));
       }
-      if (filtered.value.length < disc.tools.length) diagnostics.push(info(`persona ${persona}: ${filtered.value.length} of ${disc.tools.length} tools granted on server '${name}' (REQ-MCP-059)`, 'process', '', { persona, server: name }));
+      // REQ-MCP-059: "a debug log states how many of the server's tools were granted" — at `debug`, not `info` (A41).
+      if (filtered.value.length < disc.tools.length) diagnostics.push(debug(`persona ${persona}: ${filtered.value.length} of ${disc.tools.length} tools granted on server '${name}' (REQ-MCP-059)`, 'process', '', { persona, server: name }));
     }
     active.push({ name, entry, origin: origin ?? 'default', discoveryFailed: false, tools });
   }

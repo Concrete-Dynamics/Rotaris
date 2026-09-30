@@ -2655,12 +2655,14 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       await new Promise((r) => setTimeout(r, 20));
       clock.advance(30_000);
       await sessions.running(sid);
-      // Given up on at the grace: rested with no count, so only the root's delegate is in the total.
-      expect(byName(sid, 'stuck')).toMatchObject({ state: 'paused', interruption: 'stop', tool_calls: 0 });
-      expect(dal.getSession(sid)!.tool_calls).toBe(1);
+      // Given up on at the grace: counted from its record at the rest — p1 and the cut h2 — with the root's delegate. (Until
+      // the repair of a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md it was rested
+      // with no count, and only the continue's credit below counted its calls.)
+      expect(byName(sid, 'stuck')).toMatchObject({ state: 'paused', interruption: 'stop', tool_calls: 2 });
+      expect(dal.getSession(sid)!.tool_calls).toBe(3);
       // The root returned before the grace ran out (while the rest waited for its child): counted once, with its outcome.
       expect(dal.iterationsOf(sid)[0]!.root_tool_calls).toBe(1);
-      // The continue credits the child's p1 and h2 from its record; the resumed child makes h3, which is running at the death.
+      // The continue credits nothing more from its record; the resumed child makes h3, which is running at the death.
       expect(sessions.prompt(sid, 'go on').ok).toBe(true);
       await settle(() => hangRows(sid).length === 2);
       // The run's token sampler saves its figures every 10 s, so the credit is in the stored total before the death.
@@ -2677,6 +2679,56 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(dal.iterationsOf(sid)[0]!.root_tool_calls).toBe(1);
       expect(byName(sid, 'stuck')).toMatchObject({ state: 'paused', interruption: 'crash', tool_calls: 3 });
       expect(callsRun(conversationOf(dal.agentConversation(sid, byName(sid, 'stuck').task_id)))).toBe(3);
+    });
+
+    it('REQ-MONITOR-102 / PD-ORCH-005 clause 6 (the repair of a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md): a child the stop\'s grace gave up on is counted from its record at the rest, so a continue that declines it loses none of its calls', async () => {
+      const probe: PortToolResult = { text: 'probed', isError: false, status: 'ok', durationMs: 1, label: 'probe', args: {} };
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'stuck', task: 'TASK: stuck' } }]) : answer('delegated');
+        // One call that returns, then one that hangs through the stop.
+        return turn === 1 ? toolCalls([{ callId: 'p1', name: 'probe', args: {} }]) : toolCalls([{ callId: `h${turn}`, name: 'hang', args: {} }]);
+      }, { tool: (name) => (name === 'hang' ? new Promise<PortToolResult>(() => undefined) : name === 'probe' ? Promise.resolve(probe) : undefined) });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool' && r.tool_name === 'hang' && r.name === 'stuck'));
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(30_000);
+      await sessions.running(sid);
+      // Given up on at the grace, and counted from its record once its open call is answered: p1 and the cut h2.
+      expect(byName(sid, 'stuck')).toMatchObject({ state: 'paused', interruption: 'stop', tool_calls: 2 });
+      expect(dal.getSession(sid)!.tool_calls).toBe(3);
+      // The user continues without it (clause 6): it ends cancelled, and every call it made stays counted, once.
+      expect(sessions.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
+      await sessions.running(sid);
+      expect(byName(sid, 'stuck')).toMatchObject({ state: 'cancelled', tool_calls: 2 });
+      expect(callsRun(conversationOf(dal.agentConversation(sid, byName(sid, 'stuck').task_id)))).toBe(2);
+      // d1, p1 and h2 — the root's later iteration made no call.
+      expect(dal.getSession(sid)!.tool_calls).toBe(3);
+    });
+
+    it('REQ-MONITOR-102 / PD-ORCH-005 clause 3 (the repair of a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md, found by its verifier): a child the stop\'s grace gave up on while the explicit cancel arrived is counted from its record before it ends cancelled, its open call answered as cut off by no rest', async () => {
+      const probe: PortToolResult = { text: 'probed', isError: false, status: 'ok', durationMs: 1, label: 'probe', args: {} };
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'stuck', task: 'TASK: stuck' } }]) : answer('delegated');
+        // One call that returns, then one that hangs through the stop and the cancel.
+        return turn === 1 ? toolCalls([{ callId: 'p1', name: 'probe', args: {} }]) : toolCalls([{ callId: `h${turn}`, name: 'hang', args: {} }]);
+      }, { tool: (name) => (name === 'hang' ? new Promise<PortToolResult>(() => undefined) : name === 'probe' ? Promise.resolve(probe) : undefined) });
+      const hangRow = (sid: SessionId) => dal.residentRows(sid).find((r) => r.kind === 'tool' && r.tool_name === 'hang' && r.name === 'stuck');
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => hangRow(sid) !== undefined);
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      await new Promise((r) => setTimeout(r, 20));
+      // The explicit cancel arrives while the rest waits within the grace: final, so the rest pauses nothing (clause 3).
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: RUN_AGENT_ID } })).toEqual({ ok: true });
+      clock.advance(30_000);
+      await sessions.running(sid);
+      // p1 and the cut h2 are counted with the child's own count, and the total holds them with the root's d1.
+      expect(byName(sid, 'stuck')).toMatchObject({ state: 'cancelled', tool_calls: 2 });
+      expect(callsRun(conversationOf(dal.agentConversation(sid, byName(sid, 'stuck').task_id)))).toBe(2);
+      expect(dal.getSession(sid)!.tool_calls).toBe(3);
+      // Its open call is answered, and its row settled, as cut off — naming no rest (OQ-96, "A call cut by no rest").
+      expect(hangRow(sid)).toMatchObject({ tool_status: 'failed' });
+      expect(hangRow(sid)!.output).toMatch(/^This call was cut off before it completed, and it was not re-run\./);
     });
 
     it('REQ-MONITOR-102 (the repair of a-roots-calls-before-a-crash-never-reach-the-session-total.md): a child\'s settle persists the total with its own count, so a crash right after it — the child terminal, never counted by the crash record — loses none of its calls', async () => {
@@ -4122,6 +4174,103 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(mid.state).toBe('failed');
       expect((JSON.parse(mid.report!) as { errors: { type: string }[] }).errors.map((e) => e.type)).toContain('timeout');
       expect(lifecycle(order)).toEqual(['session_start:start', 'session_start:end', 'child_completed(leaf):start', 'child_completed(leaf):end', 'child_completed(mid):start', 'child_completed(mid):end', 'iteration_end:start', 'iteration_end:end', 'session_end:start', 'session_end:end']);
+    });
+  });
+
+  describe('REQ-ORCH-048 / REQ-TOOLS-156 / REQ-HOOKS-079, the repair of a-raise-after-a-childs-terminal-transition-never-releases-its-parent: a `child_completed` hook that raises still releases the parent', () => {
+    const settle = async (until: () => boolean, rounds = 400) => { for (let i = 0; i < rounds && !until(); i += 1) await new Promise((r) => setTimeout(r, 5)); };
+    const byName = (sid: SessionId, name: string): ChildRow | undefined => children(sid).find((c) => c.canonical_name === name);
+    const textOf = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('')).join('\n');
+    /** A hook port whose `child_completed` raises — the port's contract does not say it never does — counting each firing. */
+    function raisingHooks() {
+      const fired: string[] = [];
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event, fields) => { if (event === 'child_completed') { fired.push(String(fields['child_name'])); throw new Error('the hook port exploded'); } return []; },
+        advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      return { hooks, fired };
+    }
+
+    it('the settle in `execute`: a foreground delegation\'s wait (REQ-TOOLS-156) resolves with the report, once, and the run ends', async () => {
+      const { hooks, fired } = raisingHooks();
+      const rootAsked: string[] = [];
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') { rootAsked.push(textOf(req)); return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'quick', task: 'TASK: quick', run_in_background: false } }]) : answer('handled'); }
+        if (persona === 'summariser') return answer('{"summary":"quick is done"}');
+        return answer('quick: done');
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => rootAsked.length >= 2);
+      // Without the repair the wait never resolves: the child is `succeeded`, and its parent is never told.
+      expect(byName(sid, 'quick')?.state).toBe('succeeded');
+      expect(rootAsked).toHaveLength(2);
+      expect(rootAsked[1]).toContain('quick: done');
+      const result = await sessions.running(sid)!;
+      expect(result.status).toBe('completed');
+      expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
+      // The hook fired once; its raise reduced to a warning naming it (REQ-HOOKS-079), and the report reached the root once.
+      expect(fired).toEqual(['quick']);
+      expect(warnings.filter((w) => w.includes('child_completed') && w.includes('the hook port exploded'))).toHaveLength(1);
+      expect(rootAsked.filter((t) => t.includes('quick: done'))).toHaveLength(1);
+      // REQ-ORCH-098: its teardown is whole.
+      const row = byName(sid, 'quick')!;
+      expect(dal.timelineOf(sid).filter((t) => JSON.parse(t.metadata).task_id === row.task_id && ['child_end', 'child_result', 'child_conversation_closed'].includes(t.name)).map((t) => t.name)).toEqual(['child_end', 'child_result', 'child_conversation_closed']);
+    });
+
+    it('the settle in `execute`: a parent waiting in its resume loop for a background child is resumed with the report', async () => {
+      const { hooks, fired } = raisingHooks();
+      let releaseChild!: () => void;
+      const childStep = new Promise<void>((r) => { releaseChild = r; });
+      const rootAsked: string[] = [];
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') { rootAsked.push(textOf(req)); return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: slow' } }]) : answer(turn === 2 ? 'waiting for slow' : 'handled'); }
+        if (persona === 'summariser') return answer('{"summary":"slow is done"}');
+        return { parts: [{ hold: childStep }, ...answer('slow: done').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => rootAsked.length === 2 && byName(sid, 'slow')?.state === 'running');
+      await new Promise((r) => setTimeout(r, 20));
+      releaseChild();
+      await settle(() => rootAsked.length >= 3);
+      expect(byName(sid, 'slow')?.state).toBe('succeeded');
+      expect(rootAsked).toHaveLength(3);
+      expect(rootAsked[2]).toContain('slow: done');
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // The report reached the root once: its last request, which carries its whole conversation, holds it once.
+      expect(rootAsked[2]!.split('slow: done')).toHaveLength(2);
+      expect(fired).toEqual(['slow']);
+      expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
+    });
+
+    it('the settle in `settleRaised`: a child whose execution raised outside its turn still releases its parent\'s foreground wait', async () => {
+      const { hooks, fired } = raisingHooks();
+      let releaseFirst!: () => void;
+      const firstStep = new Promise<void>((r) => { releaseFirst = r; });
+      const rootAsked: string[] = [];
+      // One model slot (REQ-ORCH-050): `broken` is held behind `first`, so it starts — and raises — only once its parent is
+      // already waiting on it, rather than inside the delegation, before the wait begins.
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') { rootAsked.push(textOf(req)); return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'first', task: 'TASK: first' } }, { callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'broken', task: 'TASK: broken', run_in_background: false } }]) : answer('handled'); }
+        if (persona === 'summariser') return answer('{"summary":"first is done"}');
+        return { parts: [{ hold: firstStep }, ...answer('first: done').parts] };
+      }, { raisingPort: 'broken', hooks, cap: 1 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'broken')?.state === 'waiting_on_model_slot');
+      releaseFirst();
+      await settle(() => rootAsked.length >= 2);
+      expect(byName(sid, 'broken')?.state).toBe('failed');
+      expect(rootAsked[1]).toContain('no tool port for broken');
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // Then resumed once more, with `first`'s report — whose own hook raised too.
+      expect(rootAsked).toHaveLength(3);
+      expect(rootAsked[2]).toContain('first: done');
+      // Each report reached the root once: its last request, which carries its whole conversation, holds each once.
+      expect(rootAsked[2]!.split('no tool port for broken')).toHaveLength(2);
+      expect(rootAsked[2]!.split('first: done')).toHaveLength(2);
+      expect(fired.sort()).toEqual(['broken', 'first']);
+      expect(warnings.filter((w) => w.includes('child_completed') && w.includes('the hook port exploded'))).toHaveLength(2);
+      expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
     });
   });
 

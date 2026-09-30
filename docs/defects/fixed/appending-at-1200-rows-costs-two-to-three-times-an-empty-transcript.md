@@ -772,7 +772,7 @@ recorded, not repaired:
 [`a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`](a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md) (repaired 2026-09-29),
 [`the-update-shape-never-answers-extend.md`](the-update-shape-never-answers-extend.md), and — running the proofs whose
 surfaces this round touched — [`terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md`](terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md) (a duplicate of a note `main` had already repaired; settled at the merge)
-and [`chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`](../chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md);
+and [`chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`](chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md);
 `rows-proof`, `questions-proof`, `layout-proof`, `compression-proof` and `plan-gate-proof` passed. The runs' logs,
 `append.json` files and traces were kept beside the work; `.proof/transcript-proof/` holds only the last. Reported back
 into ADR-0045 in place, with one row in `first-executions.md` and OQ-89's evidence.

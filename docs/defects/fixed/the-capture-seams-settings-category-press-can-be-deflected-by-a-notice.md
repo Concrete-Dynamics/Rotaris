@@ -53,4 +53,7 @@ read and the press, so the corrected path was not met in the built app; the unit
 
 The list above was one wrong: `mcp-proof` does not use this seam; it opens Settings through the driver (`waitFor`, then
 `click` on the category). `slice-proof` and `live-run` do use it, on `Models`, the category a fresh profile opens Settings on, so the seam
-now presses nothing there. Neither was re-run for this repair (`slice-proof` waits for a person to paste a key).
+now presses nothing there. `slice-proof` was not re-run, because it waits for a person to paste a key. `live-run
+--only=ask` was run on the branch's build on 2026-09-30 against the unmetered `katalyst` endpoint and passed. Its
+sign-in launch logged `Settings category "Models" selected after 0 presses` (pack
+`.live-run/runs/2026-09-30T12-42-18-802Z`).

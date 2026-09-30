@@ -83,11 +83,15 @@ export async function connect(endpointFile, { timeoutMs = 60_000 } = {}) {
     endpoint,
     send,
     ping: () => send('ping'),
-    /** A4: the main windows open, most recently focused first — what a two-window assertion reads. */
+    /**
+     * A4: the main windows open, most recently focused first — what a two-window assertion reads — and, under
+     * `auxiliary`, each one's persona windows, open approval dialog and terminal window by their role selectors.
+     */
     windows: () => send('windows'),
     /**
-     * A4: point every op after this one at a window, by index or by a suffix of its workspace path. Pass
-     * nothing to go back to the active window. A selector matching no window is refused, not ignored.
+     * A4: point every op after this one at a window, by index, by a suffix of its workspace path, or by a role —
+     * `persona:<persona>`, `approval`, `terminal`. Pass nothing to go back to the active window. A selector matching no
+     * window is refused, not ignored. Any op's options may carry `window` instead, for that op alone.
      */
     useWindow: (which) => send('useWindow', which === undefined ? {} : { window: String(which) }),
     waitFor: (selector, options = {}) => send('waitFor', { selector, ...options }),

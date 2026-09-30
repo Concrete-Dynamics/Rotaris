@@ -2725,7 +2725,9 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > - The four repairs of the last review round were checked in the built app by the round that made them; the independent
 >   re-drive did not run, because the subagents' usage limit was reached.
 > - Persona windows cannot be addressed by the driver, so their state was read from screen captures
->   ([`the-driver-cannot-address-persona-or-approval-windows.md`](../defects/the-driver-cannot-address-persona-or-approval-windows.md)).
+>   ([`the-driver-cannot-address-persona-or-approval-windows.md`](../defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md)).
+>   *(2026-09-29, R-067: repaired. The driver names a persona window, the approval dialog and the terminal window by
+>   role, and `driver-proof` probes a persona window's state and answers an approval in its dialog.)*
 > - Clause 14's orchestrator-instructions and tool-change variants were not driven.
 > - Clause 20 is not observable with the scripted client; its evidence is the tests.
 > - No live run was made with the build, and only Linux under Xvfb was driven; the live run of 2026-09-29 follows.

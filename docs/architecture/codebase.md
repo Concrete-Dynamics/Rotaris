@@ -1382,6 +1382,16 @@ register row is in `first-executions.md`
 ([`the-drivers-quit-skips-the-applications-shutdown.md`](../defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md),
 [`the-drivers-shot-can-return-a-stale-frame.md`](../defects/fixed/the-drivers-shot-can-return-a-stale-frame.md)).
 
+**The windows beside a main window (2026-09-29, R-067).** A4 gave the driver main windows and nothing else, so the
+revision 4 drive read persona windows' `paused` state from X11 captures and answered approvals through
+`session.control` rather than in their dialog. A selector may now name a role — `persona:<persona>`, `approval`,
+`terminal` — resolved over `DriverDeps.auxiliary`, which main fills from each main window's registries; `windows`
+lists them, and a selector naming no open window is refused with what is open. The per-request `window` A4's comment
+promised was read by no op until now; each op resolves `request.window ?? selected`. `pnpm app:drive` gains
+`useWindow` and `--window=`. `driver.test.ts` pins the resolution; `driver-proof`'s second launch answers both of its
+run's approvals with the dialog's own button and probes the child's persona window
+([`the-driver-cannot-address-persona-or-approval-windows.md`](../defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md)).
+
 **What is still owed.** No existing proof has been rewritten onto the driver — the protocol is proved by its own
 proof and not yet by a migrated one. And the strip covers **main only**: the renderer bundle still carries Part AA's
 `rows-proof` role, which is a fixture surface with no input injection, named here so its survival is a decision

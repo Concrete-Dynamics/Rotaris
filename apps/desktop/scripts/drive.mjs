@@ -18,10 +18,17 @@
  *   pnpm app:drive shot screen.png
  *   pnpm app:drive resize 1000 680
  *   pnpm app:drive command '{"kind":"theme.set","name":"nocturne"}'
- *   pnpm app:drive windows
+ *   pnpm app:drive windows                              (main windows, and the persona, approval and terminal windows)
+ *   pnpm app:drive useWindow persona:coding-agent       (every later command acts on that window; no argument: the active main window)
+ *   pnpm app:drive probe "#approval-title" --window=approval    (--window= on any command: that window, for that command alone)
  *   pnpm app:drive log [--tail=40]
  *   pnpm app:drive stop            (the application's quit: close guards, then the run host's shutdown)
  *   pnpm app:drive stop --crash    (the immediate exit: a live run is left as a crash leaves it)
+ *
+ * A window is named by its index in `windows` (0 is the most recently focused main window), by a suffix of a main
+ * window's workspace path, or by a role: `persona:<persona>` (that persona's window, REQ-SHELL-072), `approval` (the
+ * open approval dialog, REQ-TOOLS-063) or `terminal` (the terminal window). A role names the first such window,
+ * main window by main window in `windows`' order; a name that matches no open window is refused with what is open.
  *
  * Nothing here is product code, and nothing here is evidence: a proof asserts, this reports.
  */
@@ -45,6 +52,8 @@ const flag = (name, fallback) => {
 };
 
 const print = (value) => console.log(typeof value === 'string' ? value : JSON.stringify(value, null, 2));
+/** `--window=<name>`: the window one command acts on, for that command alone (the seam's per-request `window`). */
+const on = typeof flag('window', undefined) === 'string' ? { window: flag('window') } : {};
 
 async function client() {
   if (!existsSync(endpointFile)) throw new Error('no app is being driven — run `pnpm app:drive start` first');
@@ -146,41 +155,45 @@ switch (command) {
     break;
   }
   case 'waitFor':
-    await withClient((d) => d.waitFor(positional[0], { ...(flag('text', undefined) === undefined ? {} : { text: String(flag('text')) }), ...(flag('timeout', undefined) === undefined ? {} : { timeoutMs: Number(flag('timeout')) }) }));
+    await withClient((d) => d.waitFor(positional[0], { ...on, ...(flag('text', undefined) === undefined ? {} : { text: String(flag('text')) }), ...(flag('timeout', undefined) === undefined ? {} : { timeoutMs: Number(flag('timeout')) }) }));
     break;
   case 'click':
-    await withClient((d) => d.click(positional[0], { ...(flag('text', undefined) === undefined ? {} : { text: String(flag('text')) }), ...(flag('timeout', undefined) === undefined ? {} : { timeoutMs: Number(flag('timeout')) }) }));
+    await withClient((d) => d.click(positional[0], { ...on, ...(flag('text', undefined) === undefined ? {} : { text: String(flag('text')) }), ...(flag('timeout', undefined) === undefined ? {} : { timeoutMs: Number(flag('timeout')) }) }));
     break;
   case 'type':
-    await withClient((d) => d.type(positional[0] ?? '', { enter: flag('enter', false) === true }));
+    await withClient((d) => d.type(positional[0] ?? '', { ...on, enter: flag('enter', false) === true }));
     break;
   case 'chord':
-    await withClient((d) => d.chord(positional[0]));
+    await withClient((d) => d.send('chord', { ...on, chord: positional[0] }));
     break;
   case 'inspect':
-    await withClient((d) => d.inspect(positional[0]));
+    await withClient((d) => d.send('inspect', { ...on, selector: positional[0] }));
     break;
   case 'probe':
-    await withClient((d) => d.probe(positional[0]));
+    await withClient((d) => d.send('probe', { ...on, selector: positional[0] }));
     break;
   case 'eval':
-    await withClient((d) => d.eval(positional[0]));
+    await withClient((d) => d.send('eval', { ...on, expression: positional[0] }));
     break;
   case 'shot':
-    await withClient((d) => d.screenshot(join(process.cwd(), positional[0] ?? 'drive.png')));
+    await withClient((d) => d.send('screenshot', { ...on, path: resolve(process.cwd(), positional[0] ?? 'drive.png') }));
     break;
   case 'resize':
-    await withClient((d) => d.resize(Number(positional[0]), Number(positional[1])));
+    await withClient((d) => d.send('resize', { ...on, width: Number(positional[0]), height: Number(positional[1]) }));
     break;
   case 'maximize':
-    await withClient((d) => d.send('maximize'));
+    await withClient((d) => d.send('maximize', on));
     break;
   case 'command':
-    await withClient((d) => d.command(JSON.parse(positional[0] ?? '{}')));
+    await withClient((d) => d.send('command', { ...on, request: JSON.parse(positional[0] ?? '{}') }));
     break;
-  // The main windows, most recently focused first. `{ windows, selected }` — an envelope, not a bare list.
+  // The main windows, most recently focused first, and the auxiliary ones by role. `{ windows, auxiliary, selected }`.
   case 'windows':
     await withClient((d) => d.windows());
+    break;
+  // Every later command acts on the window named; with no name, on the active main window again. Held by the app.
+  case 'useWindow':
+    await withClient((d) => d.useWindow(positional[0]));
     break;
   case 'ping':
     await withClient((d) => d.ping());

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { BrowserWindow } from 'electron';
 import { FakeClock } from '@rotaris/kernel';
-import { PAINT_BOUND_MS, PAINTED_SCRIPT, startDriver, type Driver, type DriverDeps } from './driver.js';
+import { namesAuxiliary, PAINT_BOUND_MS, PAINTED_SCRIPT, startDriver, type AuxiliaryWindow, type Driver, type DriverDeps } from './driver.js';
 
 /**
  * The driver seam over a real loopback socket, with a stand-in window and the clock ports faked. Verification tooling:
@@ -18,10 +18,10 @@ interface FakeWindow {
   paint: (() => void) | null;
 }
 
-function fakeWindow(paints: 'at-once' | 'never'): { win: BrowserWindow; state: FakeWindow } {
+function fakeWindow(paints: 'at-once' | 'never', id = 7): { win: BrowserWindow; state: FakeWindow } {
   const state: FakeWindow = { calls: [], paint: null };
   const webContents = {
-    id: 7,
+    id,
     executeJavaScript: (script: string): Promise<unknown> => {
       state.calls.push(script === PAINTED_SCRIPT ? 'paint' : 'script');
       if (script !== PAINTED_SCRIPT) return Promise.resolve(null);
@@ -41,20 +41,24 @@ afterEach(() => {
   for (const o of open.splice(0)) { o.socket.destroy(); o.driver.close(); rmSync(o.dir, { recursive: true, force: true }); }
 });
 
-async function harness(paints: 'at-once' | 'never' = 'at-once') {
+async function harness(paints: 'at-once' | 'never' = 'at-once', auxiliary: () => readonly AuxiliaryWindow[] = () => []) {
   const dir = mkdtempSync(join(tmpdir(), 'rotaris-driver-'));
   const endpointFile = join(dir, 'endpoint.json');
   const clock = new FakeClock();
   const ended: string[] = [];
+  const deferred: number[] = [];
+  const commanded: number[] = [];
   const { win, state } = fakeWindow(paints);
   const deps: DriverDeps = {
-    window: () => win,
+    // The one main window, by index 0, by a suffix of its workspace path, or as the active window.
+    window: (which) => (which === undefined || which === '0' || '/w'.endsWith(which) ? win : null),
     windows: () => [{ index: 0, workspace: '/w', wcId: 7 }],
+    auxiliary,
     timers: clock,
     monotonic: clock,
     log: () => undefined,
-    command: () => Promise.resolve({ ok: true }),
-    deferProjectOffer: () => undefined,
+    command: (_request, target) => { commanded.push(target.webContents.id); return Promise.resolve({ ok: true }); },
+    deferProjectOffer: (target) => { deferred.push(target.webContents.id); },
     quit: () => { ended.push('quit'); },
     exit: () => { ended.push('exit'); },
   };
@@ -79,7 +83,7 @@ async function harness(paints: 'at-once' | 'never' = 'at-once') {
     const id = nextId++;
     return new Promise((resolve) => { waiting.set(id, resolve); socket.write(`${JSON.stringify({ id, token, op, ...args })}\n`); });
   };
-  return { send, clock, ended, state, endpointFile, dir };
+  return { send, clock, ended, state, endpointFile, dir, deferred, commanded };
 }
 
 /** Let the socket and the seam's promise chain run. */
@@ -131,5 +135,88 @@ describe("the driver's shot (docs/defects/fixed/the-drivers-shot-can-return-a-st
     h.clock.advance(1);
     expect(await pending).toMatchObject({ ok: true, value: { path, painted: false } });
     expect(h.state.calls).toEqual(['paint', 'capture']);
+  });
+});
+
+describe('the driver addresses persona, approval and terminal windows (docs/defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md)', () => {
+  function auxiliaryWindows() {
+    const persona = fakeWindow('at-once', 21);
+    const approval = fakeWindow('at-once', 22);
+    const terminal = fakeWindow('at-once', 23);
+    const listed: AuxiliaryWindow[] = [
+      { selector: 'persona:coding-agent', role: 'persona', owner: 0, wcId: 21, visible: true, win: persona.win },
+      { selector: 'approval', role: 'approval', owner: 0, wcId: 22, visible: true, win: approval.win },
+      { selector: 'terminal', role: 'terminal', owner: 0, wcId: 23, visible: false, win: terminal.win },
+    ];
+    return { listed, persona: persona.state, approval: approval.state, terminal: terminal.state };
+  }
+
+  it('reads a role selector as a role, and anything else as a main window', () => {
+    expect(['persona:coding-agent', 'approval', 'terminal'].map(namesAuxiliary)).toEqual([true, true, true]);
+    expect(['0', '/w', 'w', '/terminal', 'personas'].map(namesAuxiliary)).toEqual([false, false, false, false, false]);
+  });
+
+  it('lists the auxiliary windows beside the main ones, without the window objects (PD-ORCH-005 clause 13\'s persona window)', async () => {
+    const aux = auxiliaryWindows();
+    const h = await harness('at-once', () => aux.listed);
+    const reply = await h.send('windows');
+    expect(reply).toEqual({
+      id: expect.any(Number) as number, ok: true,
+      value: {
+        windows: [{ index: 0, workspace: '/w', wcId: 7 }],
+        auxiliary: [
+          { selector: 'persona:coding-agent', role: 'persona', owner: 0, wcId: 21, visible: true },
+          { selector: 'approval', role: 'approval', owner: 0, wcId: 22, visible: true },
+          { selector: 'terminal', role: 'terminal', owner: 0, wcId: 23, visible: false },
+        ],
+        selected: null,
+      },
+    });
+  });
+
+  it('points the ops after useWindow at a persona window, and back at the main window when told nothing', async () => {
+    const aux = auxiliaryWindows();
+    const h = await harness('at-once', () => aux.listed);
+    expect(await h.send('useWindow', { window: 'persona:coding-agent' })).toMatchObject({ ok: true, value: { selected: 'persona:coding-agent' } });
+    await h.send('probe', { selector: '[data-testid=persona-agent-state]' });
+    expect(aux.persona.calls).toEqual(['script']);
+    expect(h.state.calls).toEqual([]);
+    expect(await h.send('ping')).toMatchObject({ ok: true, value: { window: true } });
+    await h.send('useWindow');
+    await h.send('eval', { expression: '1' });
+    expect(h.state.calls).toEqual(['script']);
+  });
+
+  it("lets one request's own window name the approval dialog for that op alone (REQ-TOOLS-063's dialog)", async () => {
+    const aux = auxiliaryWindows();
+    const h = await harness('at-once', () => aux.listed);
+    const path = join(h.dir, 'dialog.png');
+    expect(await h.send('screenshot', { path, window: 'approval' })).toMatchObject({ ok: true, value: { path, painted: true } });
+    expect(aux.approval.calls).toEqual(['paint', 'capture']);
+    await h.send('command', { request: { kind: 'noop' }, window: 'approval' });
+    expect(h.commanded).toEqual([22]);
+    await h.send('eval', { expression: '1' });
+    expect(h.state.calls).toEqual(['script']);
+  });
+
+  it('refuses a role selector that names no open window, says what is open, and keeps the selection it had', async () => {
+    const aux = auxiliaryWindows();
+    const h = await harness('at-once', () => aux.listed);
+    const refused = await h.send('useWindow', { window: 'persona:nobody' });
+    expect(refused.ok).toBe(false);
+    expect(refused.error).toMatch(/^no window matches "persona:nobody"; open: /);
+    expect(refused.error).toContain('"selector":"persona:coding-agent"');
+    expect(await h.send('windows')).toMatchObject({ value: { selected: null } });
+    const none = await harness('at-once', () => []);
+    expect(await none.send('probe', { selector: 'x', window: 'approval' })).toMatchObject({ ok: false, error: expect.stringMatching(/^no window matches "approval"/) as string });
+  });
+
+  it("refuses REQ-SHELL-011's deferred offer for a window that is not a main window", async () => {
+    const aux = auxiliaryWindows();
+    const h = await harness('at-once', () => aux.listed);
+    expect(await h.send('deferProjectOffer', { window: 'terminal' })).toMatchObject({ ok: false, error: 'deferProjectOffer needs a main window; "terminal" is not one' });
+    expect(h.deferred).toEqual([]);
+    expect(await h.send('deferProjectOffer')).toMatchObject({ ok: true });
+    expect(h.deferred).toEqual([7]);
   });
 });

@@ -73,7 +73,7 @@ wrong.
 | | `traceability-proof` | the traceability engine, including spike 7's scale store (ADR-0040) |
 | **The record itself** | `directive-proof` | that a directive's precedence over a requirement is machine-checked, not asserted in prose |
 | **Whole product** | `slice-proof` | sign-in through the product and one run on a real model |
-| | `driver-proof` | the driver seam `pnpm app:drive` depends on — and that its `quit` brings a live run to rest and its shot straight after a navigation shows the new view |
+| | `driver-proof` | the driver seam `pnpm app:drive` depends on — and that its `quit` brings a live run to rest, its shot straight after a navigation shows the new view, and it answers an approval in its dialog and probes a persona window |
 | | `ui-audit` / `ui-review` | what the browser **built** at every size; the deterministic pack a report-only critic reads |
 | | `live-run` | the built product against a real endpoint and a real key — **money; never automatic** |
 
@@ -104,6 +104,9 @@ pnpm app:drive click ".nav-item" --text=Git
 pnpm app:drive inspect ".composer"          # boxes, attributes, text, what holds focus
 pnpm app:drive shot screen.png              # a PNG you can open, or read in a transcript
 pnpm app:drive log --tail=40                # what the app printed: info and above unless started as above (PD-MONITOR-002)
+pnpm app:drive windows                      # main windows, and each one's persona, approval and terminal windows
+pnpm app:drive useWindow persona:coding-agent   # later commands act on that window; no name: the active main window
+pnpm app:drive probe "#approval-title" --window=approval   # --window= on any command: that window, that command only
 pnpm app:drive stop                         # the application's quit: close guards, then the run host's shutdown
 pnpm app:drive stop --crash                 # the immediate exit: a live run is left as a crash leaves it
 ```
@@ -111,6 +114,10 @@ pnpm app:drive stop --crash                 # the immediate exit: a live run is 
 `stop` is a person's quit: a live run comes to rest with the stop reason `application_shutdown`, and `stop` waits for
 the process to end; a close guard that keeps the application (unsaved settings) leaves it driven so the dialog can be
 answered. `stop --crash` is the immediate exit, for a drive that means to leave a crash for the next launch to repair.
+
+A window is named by its index in `windows`, by a suffix of a main window's workspace path, or by a role:
+`persona:<persona>` (that persona's window), `approval` (the open approval dialog, answered with its own buttons) or
+`terminal` (the terminal window). A name that matches no open window is refused with the list of what is open.
 
 `command` is relayed to main's own `runCommand` — the same path the renderer's channel reaches — so driving a
 command drives the product, not a stand-in for it. The seam (`apps/desktop/src/main/driver.ts`) exists only

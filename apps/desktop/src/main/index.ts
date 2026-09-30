@@ -6,7 +6,7 @@ import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, Ma
 import { createNoticeStore } from './notices.js';
 import { createLibraryRevision } from './library.js';
 // The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
-import { startDriver } from './driver.js';
+import { startDriver, type AuxiliaryWindow } from './driver.js';
 // Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey`, which reads the window's workspace).
 import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
 import { requirementColumnFoldsKey, type PreferenceKey } from '@rotaris/platform';
@@ -1539,7 +1539,9 @@ async function main(): Promise<void> {
        * A4: the seam addresses a window instead of assuming there is one. `which` is an index into the
        * most-recently-focused ordering, or a suffix of a window's workspace path so a proof can say which
        * project it means; absent is the active window, which is what every proof written before two windows
-       * existed already meant. A selector that matches nothing returns null and the driver refuses.
+       * existed already meant. A selector that matches nothing returns null and the driver refuses. A role
+       * selector (`persona:<name>`, `approval`, `terminal`) never reaches here: the driver resolves it over
+       * `auxiliary` below.
        */
       window: (which) => {
         const ordered = orderedMainWindows();
@@ -1551,6 +1553,22 @@ async function main(): Promise<void> {
         return picked && !picked.win.isDestroyed() ? picked.win : null;
       },
       windows: () => orderedMainWindows().map((candidate, index) => ({ index, workspace: candidate.workspace, wcId: candidate.wcId })),
+      /**
+       * The auxiliary windows a drive can address by role (`driver.ts`, `AuxiliaryWindow`): each main window's persona
+       * windows, the approval dialog it holds open, and its terminal window, in the main windows' order.
+       */
+      auxiliary: () => orderedMainWindows().flatMap((candidate, owner): AuxiliaryWindow[] => {
+        const found: AuxiliaryWindow[] = [];
+        for (const listed of candidate.personaWindows.list()) {
+          const entry = candidate.personaWindows.entry(listed.persona);
+          if (entry) found.push({ selector: `persona:${listed.persona}`, role: 'persona', owner, wcId: entry.wcId, visible: listed.visible, win: entry.win });
+        }
+        const dialog = mainWindows.openDialog(candidate.wcId);
+        if (dialog && !dialog.win.isDestroyed()) found.push({ selector: 'approval', role: 'approval', owner, wcId: dialog.win.webContents.id, visible: dialog.win.isVisible(), win: dialog.win });
+        const terminal = candidate.terminalWindows.current();
+        if (terminal) found.push({ selector: 'terminal', role: 'terminal', owner, wcId: terminal.wcId, visible: terminal.win.isVisible(), win: terminal.win });
+        return found;
+      }),
       timers: clocks.timers,
       monotonic: clocks.monotonic,
       log,

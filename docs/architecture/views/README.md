@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**The driver addresses persona, approval and terminal windows (R-067).** `driver.ts` resolves a role selector —
+`persona:<persona>`, `approval`, `terminal` — over `DriverDeps.auxiliary`, which main fills from each main window's
+persona-window registry, open approval dialog and terminal window; `windows` lists them, `useWindow` and each op's own
+`window` reach them (the per-request override, claimed since A4, is now read), and an unmatched selector is still
+refused. This repairs `the-driver-cannot-address-persona-or-approval-windows.md`. The **process view**'s main row says
+so. No package, edge, process, message kind, channel, command or store column changed.
+
 **The driver's `quit` is the application's quit, a capture whose wait timed out ends the same way, and the driver's
 shot waits for a presented frame (R-067).** `driver.ts`'s `quit` sends `app.quit()` — the close guards, then
 `window-all-closed`'s `shutdown` — unless it names the immediate exit (`immediate`; `pnpm app:drive stop --crash`), and

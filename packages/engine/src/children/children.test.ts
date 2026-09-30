@@ -1607,6 +1607,21 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(figures(snapshots, (s) => s.entryStalledSeconds)).toEqual([null, 90, 95, null]);
     });
 
+    it('REQ-MONITOR-120 with OQ-153: a stalled root that is cancelled did not resume — its stall ends with its figure cleared and is not logged recovered', async () => {
+      const { snapshots, publisher } = recorder();
+      const { sessions } = sessionsWith((persona) => (persona === 'orchestrator' ? { parts: [{ hold: new Promise<void>(() => undefined) }, { part: { kind: 'text', delta: 'never' } }] } : answer('')), { publisher });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.timelineOf(sid).some((t) => t.name === 'run_start'));
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(90_000); clock.advance(100);
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'stall')).toHaveLength(1);
+      expect(snapshots.at(-1)!.entryStalledSeconds).toBe(90);
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: RUN_AGENT_ID } })).toEqual({ ok: true });
+      await sessions.running(sid)!;
+      expect(warnings.filter((m) => m.startsWith('agent stall recovered:'))).toEqual([]);
+      expect(snapshots.at(-1)!.entryStalledSeconds).toBeNull();
+    });
+
     it('REQ-MONITOR-117 with OQ-153: a root waiting on its own children between its turns is not silent — no `stall` issue while its child works', async () => {
       const gates: (() => void)[] = [];
       const { sessions } = sessionsWith((persona, turn) => {
@@ -2495,6 +2510,26 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(last.role).toBe('user');
       expect(said).not.toBe('the launch prompt');
       expect(said).toContain('work');
+    });
+
+    it('REQ-MONITOR-117 with OQ-153 and clause 4: a root resumed into waiting on its child is between turns — its stall watch counts no silence while the child works, and the run-level agent carries no stalled figure', async () => {
+      const g = gate();
+      const working = gate();
+      const delegate = toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]);
+      // After the resume the child streams and then works on: it is not silent, so a `stall` issue would be the root's.
+      const { sessions, seen } = scriptedChild([() => ({ parts: [{ hold: g.hold }, ...look().parts] }), () => ({ parts: [{ part: { kind: 'text', delta: 'Reading.' } }, { hold: working.hold }, { part: { kind: 'finish', reason: 'stop' } }] })], { root: (turn) => (turn === 1 ? delegate : answer(turn === 2 ? 'Delegated; waiting.' : 'Read the report.')) });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await pauseAt(sessions, sid, () => seen.childSteps === 1, g.open);
+      const before = dal.issuesOf(sid).filter((i) => i.kind === 'stall' && i.actor === 'orchestrator').length;
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await settle(() => seen.childSteps === 2);
+      await new Promise((r) => setTimeout(r, 20));
+      for (let t = 0; t < 40; t += 1) { clock.advance(5_000); if (t % 10 === 0) await new Promise((r) => setTimeout(r, 1)); }
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'stall' && i.actor === 'orchestrator')).toHaveLength(before);
+      expect(warnings.filter((m) => m.startsWith('agent appears stalled:'))).toEqual([]);
+      working.open();
+      await sessions.running(sid)!;
+      expect(byName(sid, 'work')).toMatchObject({ state: 'succeeded' });
     });
 
     it('clause 10: a resumed child is told of the background sessions it had started, and the notice joins its record', async () => {

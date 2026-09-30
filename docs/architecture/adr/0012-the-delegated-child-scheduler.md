@@ -625,13 +625,22 @@ it, both of which the activity tracker and the projection owner already had. Thr
   nothing may join a conversation between a call and its result. What the evaluation leg adds is the agent with no next step
   coming: one waiting on its children.
 - **A stall can end with the watch.** The live run's root answered on the retry and its turn ended before the next
-  evaluation, so its stall was never logged recovered. `StallWatch.stop` now reports a stall under way as recovered.
+  evaluation, so its stall was never logged recovered. ~~`StallWatch.stop` now reports a stall under way as recovered.~~
+  *(Corrected 2026-09-30 by acceptance round 1's verifier: reported so, a cancelled, stopped, paused or timed-out stalled
+  agent was logged "active again after a stall", which it was not.)* `StallWatch.stop` ends a stall under way and reports
+  it recovered only when the agent was active after the evaluation that last found it stalled — a model event that is not
+  an error, or something the run gave it; the same holds at an evaluation that finds the agent between its turns.
+- **A resumed root can begin between its turns.** A root resumed into waiting (PD-ORCH-005 clause 4) takes no step until a
+  child's report; its watch, armed as its execution began, counted that wait as silence until `Run.turn` marked it between
+  turns from the start (found by acceptance round 1's verifier).
 
 **What was measured.** Four end-to-end cases through `Sessions` in `children.test.ts`: a child's figure published at 90, 95
 and 100 s and cleared; the root's warning, `stall` issue, figure and recovery; a root waiting on a working child writes no
 `stall` issue; a steer to the waiting root lands at the next evaluation, before its child ends. Three fail on the
 unrepaired engine, and the fourth fails with `betweenTurns` removed from the root. `stall.test.ts` pins the refresh a
-delivered steer makes and the recovery at `stop`; `agent-clock.test.ts` and `agents.test.ts` the badge on each surface. The
+delivered steer makes and the recovery at `stop` — reported only after activity since the stall (the verifier's
+round added a cancelled stalled root with no recovery line and a root resumed into waiting with no `stall` issue to the
+end-to-end cases); `agent-clock.test.ts` and `agents.test.ts` the badge on each surface. The
 live run's `faults` scenario against `katalyst` (packs `2026-09-30T21-36-48-442Z` and `2026-09-30T21-42-06-872Z`) stalls
 the root's stream: the root's watch wrote its `stall` issues from 94 s, inside the product's 120 s idle bound, where before
 nothing was written until the bound fired. The second pack, built after the `stop` repair, logs the recovery 30 s later, and

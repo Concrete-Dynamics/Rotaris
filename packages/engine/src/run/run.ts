@@ -672,6 +672,13 @@ export class Run {
     return { used: this.deps.writer.activity.contextUsed(this.rootName), limit: advertised !== null && advertised > 0 ? advertised : DEFAULT_CONTEXT_CAPACITY };
   }
   /**
+   * REQ-MONITOR-117/119/120: the entry agent's stalled figure — the seconds of silence its stall watch's latest evaluation
+   * found while it finds the root stalled, else null — kept beside its tools in the writer's activity tracker.
+   */
+  get entryStalledSeconds(): number | null {
+    return this.deps.writer.activity.stalledSeconds(this.rootName);
+  }
+  /**
    * REQ-MONITOR-060/061 (live-run finding K1, R-067): the entry role's tools as the run-level agent presents them — the native
    * set its port's one resolution kept (policy narrowing applied), and its called and in-flight tools from the tracker the
    * writer feeds, keyed by the name the root dispatches under (`rootName`, as `entryContext` reads it). Not the run's
@@ -679,13 +686,6 @@ export class Run {
    * role's name its calls were never found (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
    * Like `entryContext`, the entry role has no `children` row.
    */
-  /**
-   * REQ-MONITOR-117/119/120: the entry agent's stalled figure — the seconds of silence its stall watch's latest evaluation
-   * found while it finds the root stalled, else null — kept beside its tools in the writer's activity tracker.
-   */
-  get entryStalledSeconds(): number | null {
-    return this.deps.writer.activity.stalledSeconds(this.rootName);
-  }
   get entryTools(): EntryToolsPayload {
     const name = this.rootName;
     const activity = this.deps.writer.activity;
@@ -1372,6 +1372,9 @@ export class Run {
     rootWatch.start();
     try {
       const start: TurnStart = resume ? this.resumedRootStart(rootTaskId) : { kind: 'fresh', task };
+      // OQ-153 with PD-ORCH-005 clause 4: a root resumed into waiting takes no step until a child's report — it is between
+      // its turns from the start, and no silence is counted against it while it waits (found by the verifier's review).
+      if (start.kind === 'resumed' && start.waiting) rootWatch.betweenTurns();
       const running = children ? children.runWithChildren(this.rootId, turnFn, start, this.abort.signal) : firstTurn(turnFn, start);
       /*
        * REQ-SESSION-092 / REQ-MONITOR-129: a stop bounds how long the root is awaited, as a rest bounds a child's execution

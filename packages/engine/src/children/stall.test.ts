@@ -186,8 +186,8 @@ describe('REQ-MONITOR-135: "each successful injection refreshes the agent\'s las
   });
 });
 
-describe('REQ-MONITOR-120 with OQ-153: a stall under way when the watch is disarmed is reported recovered', () => {
-  it('stop() after a stall reports the recovery once; stop() with no stall reports nothing', () => {
+describe('REQ-MONITOR-120 with OQ-153: a stall under way when the watch is disarmed is recovered only if the agent was active', () => {
+  it('stop() after a stall and then activity reports the recovery once; stop() with no stall reports nothing', () => {
     const clock = new FakeClock();
     let recovered = 0;
     const watch = new StallWatch(clock, millis(30_000), { stalled: () => undefined, waiting: () => undefined, recovered: () => { recovered += 1; }, evaluated: () => undefined });
@@ -197,9 +197,56 @@ describe('REQ-MONITOR-120 with OQ-153: a stall under way when the watch is disar
     watch.start();
     clock.advance(30_000);
     expect(watch.stalled).toBe(true);
+    // The retry streamed, and the turn ended before the next evaluation (the live run's case).
+    watch.modelEvent('text');
     watch.stop();
     expect([recovered, watch.stalled]).toEqual([1, false]);
     watch.stop();
     expect(recovered).toBe(1);
+  });
+
+  it('stop() after a stall with no activity since — a cancel, a stop, a pause, a hard timeout — ends the stall and reports no recovery', () => {
+    const clock = new FakeClock();
+    let recovered = 0;
+    const watch = new StallWatch(clock, millis(30_000), { stalled: () => undefined, waiting: () => undefined, recovered: () => { recovered += 1; }, evaluated: () => undefined });
+    watch.start();
+    clock.advance(30_000);
+    expect(watch.stalled).toBe(true);
+    watch.stop();
+    expect([recovered, watch.stalled]).toEqual([0, false]);
+    // The call's own abort or timeout reaches the watch as an error part: that is not the agent active again.
+    watch.start();
+    clock.advance(30_000);
+    expect(watch.stalled).toBe(true);
+    watch.modelEvent('error');
+    watch.stop();
+    expect([recovered, watch.stalled]).toEqual([0, false]);
+  });
+
+  it('activity before the stall was last found is not activity after it: only what arrives after the stalled evaluation counts', () => {
+    const clock = new FakeClock();
+    let recovered = 0;
+    const watch = new StallWatch(clock, millis(30_000), { stalled: () => undefined, waiting: () => undefined, recovered: () => { recovered += 1; }, evaluated: () => undefined });
+    watch.start();
+    watch.modelEvent('text');
+    clock.advance(35_000);
+    expect(watch.stalled).toBe(true);
+    watch.stop();
+    expect(recovered).toBe(0);
+  });
+
+  it('a turn that ended while stalled, its agent then between turns, is not reported recovered at the next evaluation', () => {
+    const clock = new FakeClock();
+    let recovered = 0;
+    const evaluated: boolean[] = [];
+    const watch = new StallWatch(clock, millis(30_000), { stalled: () => undefined, waiting: () => undefined, recovered: () => { recovered += 1; }, evaluated: (s) => { evaluated.push(s); } });
+    watch.start();
+    clock.advance(30_000);
+    expect(watch.stalled).toBe(true);
+    watch.modelEvent('error');
+    watch.betweenTurns();
+    clock.advance(5_000);
+    expect([recovered, watch.stalled, evaluated[evaluated.length - 1]]).toEqual([0, false, false]);
+    watch.stop();
   });
 });

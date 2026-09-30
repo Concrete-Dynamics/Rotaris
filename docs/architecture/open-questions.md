@@ -6765,16 +6765,25 @@ injected into a conversation whose model step or tool call is in flight.
   design system's `tag-wait`, as the mockup's agents panel qualifies a waiting row; the inspector's meta line ends with the
   same words. The activity text is left as REQ-MONITOR-047 fixes it.
 - **"Notified".** The recovery is logged as OQ-127 reads it, and notified by the republished record, whose badge is gone.
-  No notice and no timeline word is minted for it (REQ-ORCH-139; OQ-127 asks the owner for the words). A stall still
+  No notice and no timeline word is minted for it (REQ-ORCH-139; OQ-127 asks the owner for the words). ~~A stall still
   under way when the watch is disarmed — the agent's attempt or execution has ended — is over, and is logged recovered and
-  cleared then (`StallWatch.stop`). The live run found the case: its root answered on the retry and ended before the next
-  evaluation, and the first form left that stall with no recovery line.
+  cleared then (`StallWatch.stop`).~~ *(Corrected 2026-09-30 by acceptance round 1's verifier: that line was false for the
+  commonest way a stall ends without the agent resuming — a cancel or a stop of the stalled run — and for a pause, a
+  REQ-MONITOR-121 hard timeout and a failed turn; REQ-MONITOR-120's recovery is "when activity resumes".)* A stall still
+  under way when the watch is disarmed, or when the agent's turn has ended and it is between turns, is over and its figure
+  cleared; it is logged recovered only when the agent was active after the evaluation that last found it stalled — a model
+  event that is not an error, or something the run gave it (`StallWatch.endStall`). An error part, the call's own abort or
+  timeout among them, is not activity. The live run found the recovered case: its root answered on the retry and ended
+  before the next evaluation, and the first form left that stall with no recovery line.
 - **The root is watched**, over its whole execution, against its role's `stall_timeout`, else `runtime.child_stall_timeout`,
   else 90 s — the one stall timeout the configuration has. It writes a child's warning and `stall` issue in REQ-MONITOR-119's
   words for "the agent" (`agent appears stalled: …`), and the two session-log lines likewise. It gets no corrective message:
   REQ-NOTIFY-112's is a child task's. Between its turns, while it waits on its own children, no silence is counted against
   it (`StallWatch.betweenTurns`), since the run asks it for nothing then — the reading another branch of this round
-  records for a child waiting on its own children, and whose mechanism this build shares.
+  records for a child waiting on its own children, and whose mechanism this build shares. That covers the resumed root
+  too: a root resumed into waiting (PD-ORCH-005 clause 4) takes no step until a child's report, so it is between its turns
+  from the moment its watch is armed (found by acceptance round 1's verifier, whose case read 23 `stall` issues against
+  such a root while its child worked).
 - **The injection.** Within a turn, a steer already joins the conversation at the agent's next step, and nothing may join
   a conversation between a call and its result or under a step in flight, so an evaluation injects nothing there. What an
   evaluation adds is the agent that has no next step coming: one waiting between its turns on its own children. An

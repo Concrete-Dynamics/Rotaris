@@ -770,7 +770,10 @@ What it writes:
 - a silence of the threshold with no call in flight: a `stall` issue at every evaluation (REQ-MONITOR-119), and a
   warning at entry and then every `max(threshold, 30)` s (REQ-MONITOR-120);
 - the same silence with calls in flight: a `child waiting on tools: …` line (REQ-MONITOR-118);
-- activity resuming after a stall: a `child stall recovered: …` line (REQ-MONITOR-120).
+- activity resuming after a stall: a `child stall recovered: …` line (REQ-MONITOR-120) — only when the agent was active
+  after the evaluation that last found it stalled (a model event that is not an error, or something the run gave it). A
+  stall that ends otherwise — a cancel, a stop, a pause, a hard timeout, a failed turn, at the watch's `stop` or at an
+  evaluation between its turns — clears the figure with no line (`StallWatch.endStall`, OQ-153).
 
 Those lines, and the `child corrective message: …` line below, go to the session log through the run's `warn`, as
 OQ-76's do: REQ-ORCH-139's closed timeline vocabulary has no word for them and none is minted (OQ-127).
@@ -786,7 +789,7 @@ same evaluation serves REQ-MONITOR-135: an agent waiting between its turns on it
 starts for it injects the steer; every delivered steer restarts the watch's silence (`refreshing`). **The root is watched
 too**: `Run.turn` arms a `StallWatch` over the root's whole execution, against its role's `stall_timeout`, else
 `runtime.child_stall_timeout`, else 90 s, fed as a child's is, with no silence counted between its turns
-(`betweenTurns`). It writes the same warning, `stall` issue and log lines naming `agent`, and its figure is
+(`betweenTurns`) — a root resumed into waiting (PD-ORCH-005 clause 4) is between its turns from the start. It writes the same warning, `stall` issue and log lines naming `agent`, and its figure is
 `SessionRecord.entryStalledSeconds` (`Run.entryStalledSeconds`), which the run-level agent carries. It gets no corrective
 message. A child's turn can end `failed` after no output for the whole window,
 with no call in flight. Unless the outcome is one REQ-NOTIFY-112 excludes, that child is given one corrective message:

@@ -57,13 +57,21 @@ its child landed only when the child ended.
   counts no silence between its turns (`betweenTurns`).
 - *REQ-MONITOR-135's leg.* An evaluation that finds a steer pending for an agent waiting on its own children wakes it
   (`wakeForSteering`), and the step it takes injects the steer. Every delivered steer restarts the watch's silence.
-- *A stall that ends with its watch* is reported recovered (`StallWatch.stop`), found by the live run.
+- *A stall that ends with its watch* ~~is reported recovered (`StallWatch.stop`)~~ is reported recovered only when the agent
+  was active after the stall was last found (`StallWatch.stop`, `endStall`), found by the live run. *(Corrected 2026-09-30
+  by acceptance round 1's verifier: the first form logged a cancelled, stopped, paused or timed-out stalled agent as active
+  again; pinned by the `stall.test.ts` cases "REQ-MONITOR-120 with OQ-153 …" and the end-to-end case "a stalled root that
+  is cancelled did not resume".)*
+- *A root resumed into waiting* is between its turns from the start (`Run.turn`), found by the verifier's review; pinned by
+  the end-to-end case "a root resumed into waiting on its child is between turns".
 
 The readings are **OQ-153**, put to the owner.
 
 **Pinned by** `packages/engine/src/children/children.test.ts`, "REQ-ORCH-089 / REQ-MONITOR-117..122 / REQ-MONITOR-135, the
-repair of a-stalled-child-is-never-shown-stalled: …" (four cases; three fail on the unrepaired engine, the fourth with
-`betweenTurns` removed from the root), `stall.test.ts` (the refresh a steer makes, the recovery at `stop`), and
+repair of a-stalled-child-is-never-shown-stalled: …" (five cases; three fail on the unrepaired engine, the fourth with
+`betweenTurns` removed from the root, the fifth — a cancelled stalled root — on the first form of `stop`), the clause 4
+case of a root resumed into waiting, `stall.test.ts` (the refresh a steer makes, the recovery at `stop` and between turns
+only after activity), and
 `packages/ui/src/agent-clock.test.ts` and `agents.test.ts` (the badge on each surface, and none once recovered).
 
 **Shown in the built app** by the live run's `faults` scenario against `katalyst`, whose stalled stream is the root's. Its new

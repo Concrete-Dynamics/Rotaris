@@ -29,8 +29,8 @@ agent's first request carries it. No counter was hoisted into the run host and n
 
 The repair has two limits, both stated in the code. A root resumed in a later iteration of its run counts only that
 iteration's steps, where an unbroken run's counter counted every iteration's. A record the compressing pass rewrote
-counts only the steps it still holds. Both are open in
-[`the-scripted-client-counts-only-the-steps-a-resumed-record-still-shows.md`](../the-scripted-client-counts-only-the-steps-a-resumed-record-still-shows.md).
+counts only the steps it still holds. Both were open in, and are repaired by,
+[`the-scripted-client-counts-only-the-steps-a-resumed-record-still-shows.md`](the-scripted-client-counts-only-the-steps-a-resumed-record-still-shows.md).
 
 Pinned by:
 - `apps/desktop/src/run-host/scripted-client.test.ts`: a resumed child and a resumed root take their next step, a wait

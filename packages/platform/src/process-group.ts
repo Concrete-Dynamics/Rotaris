@@ -5,10 +5,11 @@ import { join } from 'node:path';
  * OQ-135 (REQ-TOOLS-110, REQ-TOOLS-128): what the Linux process table says about the members of one process group — the
  * facts a background session reads to tell whether a SIGINT it sent reached each of them.
  *
- * Linux only, from `/proc`: `stat` gives a process's name, its state and its group, and `status` gives its signal masks.
- * The name is the one `exec` gave it, so a process that replaces its image changes it. There is no such table on macOS or
- * Windows, and
- * neither needs one: macOS's `/bin/sh` is `bash`, which blocks signals across its fork, and on Windows every signal
+ * Linux only, from `/proc`: `stat` gives a process's name, its state, its parent and its group, `status` gives its signal
+ * masks, and `cmdline` its arguments. The name is the one `exec` gave it, so a process that replaces its image changes it
+ * — unless the new image has the same name, as a shell `exec`ing a shell does; the arguments are the new image's too, and
+ * a child that has not yet `exec`'d reads its parent's (a `vfork` child shares its parent's memory, a `fork` child copies
+ * it). There is no such table on macOS or Windows, and neither needs one: macOS's `/bin/sh` is `bash`, which blocks signals across its fork, and on Windows every signal
  * terminates the session's tree (OQ-10).
  */
 
@@ -17,11 +18,18 @@ export type SigintStanding = 'pending' | 'blocked' | 'ignored' | 'caught' | 'def
 
 export interface GroupMember {
   readonly pid: number;
+  /** `/proc/<pid>/stat`'s parent pid. */
+  readonly ppid: number;
   /** `/proc/<pid>/stat`'s command name: the file name its last `exec` ran, at most 15 characters. */
   readonly comm: string;
   /** `/proc/<pid>/stat`'s state letter: `Z` a zombie, `X` dead. */
   readonly state: string;
   readonly sigint: SigintStanding;
+  /**
+   * `/proc/<pid>/cmdline`, its NUL separators kept: the arguments of the image it runs. Null where it cannot be read, and
+   * empty for a process whose memory is gone (a zombie).
+   */
+  readonly cmdline: string | null;
 }
 
 export interface ProcessTable {
@@ -61,15 +69,16 @@ export function sigintStanding(status: string): SigintStanding {
 }
 
 /** `/proc/<pid>/stat`: the command name between the first `(` and the last `)` — it may itself hold both — then the fields. */
-export function parseStat(stat: string): { readonly comm: string; readonly state: string; readonly pgrp: number } | null {
+export function parseStat(stat: string): { readonly comm: string; readonly state: string; readonly ppid: number; readonly pgrp: number } | null {
   const open = stat.indexOf('(');
   const close = stat.lastIndexOf(')');
   if (open < 0 || close < open) return null;
-  // Fields 3 onward; `state` is field 3 and `pgrp` field 5 (proc(5)).
+  // Fields 3 onward; `state` is field 3, `ppid` field 4 and `pgrp` field 5 (proc(5)).
   const f = stat.slice(close + 2).split(' ');
+  const ppid = Number(f[1]);
   const pgrp = Number(f[2]);
-  if (f[0] === undefined || f[0] === '' || !Number.isInteger(pgrp)) return null;
-  return { comm: stat.slice(open + 1, close), state: f[0], pgrp };
+  if (f[0] === undefined || f[0] === '' || !Number.isInteger(ppid) || !Number.isInteger(pgrp)) return null;
+  return { comm: stat.slice(open + 1, close), state: f[0], ppid, pgrp };
 }
 
 /** The Linux process table under `procRoot`; null on any other platform. */
@@ -81,7 +90,7 @@ export function linuxProcessTable(procRoot = '/proc', platform: NodeJS.Platform 
     const parsed = stat === null ? null : parseStat(stat);
     if (!parsed || parsed.pgrp !== pgid) return null;
     const status = read(String(pid), 'status');
-    return status === null ? null : { pid, comm: parsed.comm, state: parsed.state, sigint: sigintStanding(status) };
+    return status === null ? null : { pid, ppid: parsed.ppid, comm: parsed.comm, state: parsed.state, sigint: sigintStanding(status), cmdline: read(String(pid), 'cmdline') };
   };
   const group = (pgid: number): GroupMember[] => {
     let entries: string[];

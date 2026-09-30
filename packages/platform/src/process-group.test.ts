@@ -28,26 +28,28 @@ describe('OQ-135: the process table a SIGINT is checked against', () => {
 
   it('parses stat\'s command name, holding spaces and parentheses, and the fields after it', () => {
     const fields = ['S', '1', '4242', '4242', '0', '-1', '4194560', ...Array.from({ length: 12 }, () => '0'), '987654'];
-    expect(parseStat(`4243 (a (b) c) ${fields.join(' ')} 0 0`)).toEqual({ comm: 'a (b) c', state: 'S', pgrp: 4242 });
+    expect(parseStat(`4243 (a (b) c) ${fields.join(' ')} 0 0`)).toEqual({ comm: 'a (b) c', state: 'S', ppid: 1, pgrp: 4242 });
     expect(parseStat('garbage')).toBeNull();
   });
 
   it('reads a group from a /proc tree: its members only, with their name, state and standing', () => {
     const root = mkdtempSync(join(tmpdir(), 'rotaris-proc-'));
     try {
-      const proc = (pid: number, comm: string, pgrp: number, st: string) => {
+      const proc = (pid: number, ppid: number, comm: string, pgrp: number, st: string, cmdline?: string) => {
         mkdirSync(join(root, String(pid)));
-        writeFileSync(join(root, String(pid), 'stat'), `${pid} (${comm}) S 1 ${pgrp} ${pgrp} 0 -1 0 ${Array.from({ length: 12 }, () => '0').join(' ')} 5000 0`);
+        writeFileSync(join(root, String(pid), 'stat'), `${pid} (${comm}) S ${ppid} ${pgrp} ${pgrp} 0 -1 0 ${Array.from({ length: 12 }, () => '0').join(' ')} 5000 0`);
         writeFileSync(join(root, String(pid), 'status'), st);
+        if (cmdline !== undefined) writeFileSync(join(root, String(pid), 'cmdline'), cmdline);
       };
-      proc(10, 'sh', 10, status({ SigCgt: '0000000000010002' }));
-      proc(11, 'sleep', 10, status({}));
-      proc(12, 'sh', 99, status({}));
+      proc(10, 1, 'sh', 10, status({ SigCgt: '0000000000010002' }), '/bin/sh\0-c\0sleep 30\0');
+      // No arguments to read: the member is still read, its arguments unknown.
+      proc(11, 10, 'sleep', 10, status({}));
+      proc(12, 1, 'sh', 99, status({}), 'sh\0');
       mkdirSync(join(root, 'self'));
       const table = linuxProcessTable(root, 'linux')!;
       expect([...table.group(10)].sort((a, b) => a.pid - b.pid)).toEqual([
-        { pid: 10, comm: 'sh', state: 'S', sigint: 'caught' },
-        { pid: 11, comm: 'sleep', state: 'S', sigint: 'default' },
+        { pid: 10, ppid: 1, comm: 'sh', state: 'S', sigint: 'caught', cmdline: '/bin/sh\0-c\0sleep 30\0' },
+        { pid: 11, ppid: 10, comm: 'sleep', state: 'S', sigint: 'default', cmdline: null },
       ]);
       expect(table.group(77)).toEqual([]);
     } finally { rmSync(root, { recursive: true, force: true }); }
@@ -98,8 +100,9 @@ describe('OQ-135: the process table a SIGINT is checked against', () => {
       const shell = members.find((m) => m.pid === pid)!;
       const command = members.find((m) => m.pid !== pid)!;
       expect(members).toHaveLength(2);
-      expect(shell).toMatchObject({ comm: 'sh', sigint: 'caught' });
-      expect(command).toMatchObject({ comm: 'sleep', sigint: 'default' });
+      expect(shell).toMatchObject({ comm: 'sh', sigint: 'caught', cmdline: '/bin/sh\0-c\0sleep 30\0' });
+      // Acceptance finding A8, round 3: the command's own parent and arguments, which an `exec` gives it.
+      expect(command).toMatchObject({ ppid: pid, comm: 'sleep', sigint: 'default', cmdline: 'sleep\x0030\0' });
       // The walk from the leader reads the same two.
       expect([...table.tree(pid)].sort((a, b) => a.pid - b.pid)).toEqual([...members].sort((a, b) => a.pid - b.pid));
     });

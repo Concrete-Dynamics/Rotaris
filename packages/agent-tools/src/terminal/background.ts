@@ -40,22 +40,25 @@ export function endOfExit(code: number | null, signal: NodeJS.Signals | null, de
  * OQ-135 (REQ-TOOLS-110, REQ-TOOLS-128), the reading built: a SIGINT to a session's group is preceded by one reading of
  * the group, and when the session is found still running after it, a member is sent SIGINT once more, alone, exactly
  * when that reading found it the SHELL — its name the shell's, so not yet replaced by the command — holding SIGINT off
- * (catching it, blocking it, or holding it pending), and it has since replaced its image (its name changed) and stands
- * at SIGINT's default.
+ * (catching it, blocking it, or holding it pending), and it has since replaced its image (its name or its arguments
+ * changed), whatever it now does with SIGINT; with it, each of its descendants the reading did not find, which the command
+ * started after the signal and which so never received it either.
  *
  * Why exactly those: `dash` catches SIGINT under `-c`, and blocks signals across its `vfork`; the command it is starting
  * runs the shell's image, handler included, until its `exec` (the reading of an aimed signal found both the shell and its
  * child standing `blocked`). A SIGINT landing there is taken by that handler and lost with the image; the command that
  * replaces it never receives one, and the shell holds its own copy until that command ends, which for a server is never.
- * A process the reading found already running the command is never sent a second SIGINT, whatever it did with the first
- * — one that catches it, and one whose handler restored the default as it ran (`process.once`, `SA_RESETHAND`), whose
- * standing afterwards is the same as the missed command's. A process started after the reading is not in it, so a
- * clean-up the command starts on its way out is not interrupted.
+ * What the command does with SIGINT says nothing about whether it received one: Node, Python and a shell install their
+ * own handler as they start, so a command that missed the signal stands `caught` as often as at the default. The name
+ * alone misses a shell `exec`ing a shell (`sh -c '…'`, `sh script.sh`), whose name stays `sh`; its arguments change.
+ * A process the reading found already running the command is never sent a second SIGINT, whatever it did with the
+ * first — one that catches it, and one whose handler restored the default as it ran (`process.once`, `SA_RESETHAND`).
+ * A process started after the reading by a member that did receive the signal is never sent one, so a clean-up the
+ * command starts on its way out is not interrupted.
  *
- * The residue, both in the window between the reading and the delivery, or after it: a command that `exec`s between the
- * two readings and installs a one-shot handler before the signal lands would be sent a second (the reading and the
- * delivery are one synchronous step, so this needs an `exec` and a handler inside it); and a command that the window
- * cost its SIGINT and that installs a handler of its own before the check reads it stands `caught`, and is not sent one.
+ * The residue: a member that `exec`s between the reading and the delivery (one synchronous step) received the signal as
+ * the command, and is sent a second if it is still alive at the check; and a script that traps SIGINT and then `exec`s
+ * (`trap … INT; …; exec server`) chose to absorb the signal, and its command is sent one all the same.
  */
 export const SIGINT_RECHECK_AFTER_MS: readonly number[] = [250, 1_500];
 
@@ -65,15 +68,41 @@ export function shellComm(file: string): string {
 }
 
 /**
- * OQ-135: the members of a still-running session's group that never received the SIGINT — found running the shell
- * (`shell`, its name) and holding SIGINT off by the reading taken before it was sent (`before`), and now (`now`) alive,
- * running another image and at SIGINT's default.
+ * OQ-135: the members of a still-running session's group that never received the SIGINT. `before` is the reading taken
+ * the instant before it was sent, `now` the one taken since, and `shell` the shell's name. A member `before` found running
+ * the shell, and not ignoring SIGINT, took the signal into the shell's handler if it took it at all (at the default it
+ * would be gone). Named, each with its descendants alive `now` that `before` did not hold, since those started after the
+ * signal:
+ *
+ * - such a member alive `now` and running another image — its name or its arguments changed — whatever it does with
+ *   SIGINT: the command replaced the shell after the signal, and never received it;
+ * - where such a member had started nothing in `before` and is still the shell `now`, each child it has started since:
+ *   the shell took the signal as it started, went on, and the command it started never received it.
+ *
+ * A member already sent it again (`alreadyResent`) is not named, nor are its descendants, which may be the clean-up it
+ * started on receiving it.
  */
 export function missedSigint(before: readonly GroupMember[], now: readonly GroupMember[], shell: string, alreadyResent: ReadonlySet<number>): number[] {
-  const inWindow = new Set(before.filter((m) => m.comm === shell && m.sigint !== 'default' && m.sigint !== 'ignored').map((m) => m.pid));
-  return now
-    .filter((m) => inWindow.has(m.pid) && m.comm !== shell && m.state !== 'Z' && m.state !== 'X' && m.sigint === 'default' && !alreadyResent.has(m.pid))
-    .map((m) => m.pid);
+  const wasShell = new Map(before.filter((m) => m.comm === shell && m.sigint !== 'ignored').map((m) => [m.pid, m]));
+  const seen = new Set(before.map((m) => m.pid));
+  const startedNothing = (pid: number): boolean => !before.some((m) => m.ppid === pid);
+  const alive = now.filter((m) => m.state !== 'Z' && m.state !== 'X');
+  // Arguments that cannot be read, or read empty (a process between images, or gone), say nothing either way.
+  const known = (c: string | null): c is string => c !== null && c !== '';
+  const replaced = (was: GroupMember, is: GroupMember): boolean => is.comm !== was.comm || (known(was.cmdline) && known(is.cmdline) && is.cmdline !== was.cmdline);
+  const out: number[] = [];
+  const add = (pid: number): void => {
+    if (out.includes(pid) || alreadyResent.has(pid)) return;
+    out.push(pid);
+    for (const c of alive) if (c.ppid === pid && !seen.has(c.pid)) add(c.pid);
+  };
+  for (const m of alive) {
+    const was = wasShell.get(m.pid);
+    if (was === undefined || alreadyResent.has(m.pid)) continue;
+    if (replaced(was, m)) add(m.pid);
+    else if (startedNothing(m.pid)) for (const c of alive) if (c.ppid === m.pid && !seen.has(c.pid)) add(c.pid);
+  }
+  return out;
 }
 
 export interface BackgroundDeps {
@@ -223,7 +252,13 @@ export class BackgroundSession {
    * falsified and kept: "a process at SIGINT's default that received it is gone", so every member alive at the default and
    * created within 1 s before the signal was sent it again. A command whose one-shot handler restored the default as it
    * ran stands the same way, and was sent a second SIGINT that cut its shutdown off (`process.once`, signalled the instant
-   * it was up). The reading taken before the delivery now says which members were still the shell.
+   * it was up). The reading taken before the delivery now says which members were still the shell. The second repair's
+   * reason, falsified and kept: "a command that missed the signal stands at SIGINT's default, under another name", so a
+   * member was sent it again only then. Node installs its own SIGINT handler as it starts, and so do Python and a shell,
+   * and a shell `exec`ing a shell keeps its name: measured through this manager under six CPU burners, 27 of 150
+   * `node -e "setInterval(…)"` sessions and 39 of 200 `sh -c 'sleep 30; echo x'` sessions signalled the instant they
+   * started were still running 3 s later. A member that was the shell is now sent it again whatever its standing, when
+   * its name or its arguments changed, and with it what it started since.
    */
   private checkSigint(pid: number, table: ProcessTable, before: readonly GroupMember[], kill: (pid: number, signal: NodeJS.Signals) => void): void {
     const shell = shellComm(this.deps.backend.file);
@@ -231,10 +266,13 @@ export class BackgroundSession {
     for (const after of SIGINT_RECHECK_AFTER_MS) {
       this.sigintChecks.push(this.deps.timers.after(after as Millis, () => {
         if (this.status !== 'running') return;
+        const found = new Set(before.map((m) => m.pid));
         for (const member of missedSigint(before, table.tree(pid), shell, resent)) {
           resent.add(member);
           try { kill(member, 'SIGINT'); } catch { continue; }
-          this.deps.warn(`background session ${this.id}: process ${member} was the shell starting its command as SIGINT was sent and never received it (the shell's vfork window, OQ-135); SIGINT sent to it once more`);
+          this.deps.warn(found.has(member)
+            ? `background session ${this.id}: process ${member} was the shell starting its command as SIGINT was sent and never received it (the shell's vfork window, OQ-135); SIGINT sent to it once more`
+            : `background session ${this.id}: process ${member} was started after SIGINT was sent, by a command that never received it (the shell's vfork window, OQ-135); SIGINT sent to it`);
         }
       }));
     }

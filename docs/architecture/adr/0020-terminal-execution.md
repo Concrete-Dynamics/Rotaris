@@ -456,9 +456,19 @@ replacement: "alive at the default, created within a second before the signal" i
 one-shot handler (`process.once('SIGINT')`) restored the default as it ran, so such a command signalled the instant it
 was up was sent a second SIGINT that cut its shutdown off.* The group is now read the instant before the signal
 (`ProcessTable.tree`, a walk of the shell's descendants, so the reading does not push the signal past the window), and
-again at 250 ms and 1.5 s while the session runs. A member is sent SIGINT once more, alone (`missedSigint`), only when
+again at 250 ms and 1.5 s while the session runs. ~~A member is sent SIGINT once more, alone (`missedSigint`), only when
 the first reading found it still the shell, holding SIGINT off (the aimed reading found `dash` and its `vfork`ed child
 both `blocked`), and the later one finds it running another image at SIGINT's default. A process the first reading
 found running the command is never sent a second. With that predicate 0 of 200 ran on under six burners (twice) and
-without them; with re-delivery disabled, 8 of 200 still ran on under the burners. OQ-135 records the reading and stays open
+without them; with re-delivery disabled, 8 of 200 still ran on under the burners.~~ *Falsified 2026-09-30 by the
+verifier's second round, kept beside its replacement: "at SIGINT's default" and "its name changed" miss what a dev server
+or a watcher is. Node catches SIGINT as it starts (as Python and a shell do), and a shell `exec`ing a shell keeps the
+name `sh`; 27 of 150 Node sessions and 39 of 200 `sh -c 'sleep 30; echo x'` sessions still ran on under six burners,
+with `sleep 30` alone passing.* A member the first reading found still the shell and not ignoring SIGINT is now sent it
+again, alone, when it runs another image, told by its name **or its arguments** (`/proc/<pid>/cmdline`), whatever it now
+does with SIGINT; where it had started nothing and is still the shell, what it started since is sent it; and with each,
+its descendants the first reading did not hold. A process the first reading found running the command is never sent a
+second, nor what it starts on receiving it. With that predicate 0 ran on of 150 Node, 200 `sh -c`, 200 `sh x.sh` and 200
+`sleep 30` sessions under six burners, against 15, 18, 28 and 5 with the check disabled. OQ-135 records the reading,
+its residue (an `exec` inside the reading's step; a script that traps SIGINT overridden), and stays open
 ([the note](../../defects/fixed/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md)).

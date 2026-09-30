@@ -39,7 +39,7 @@ export type ShellBackend = { readonly kind: 'powershell'; readonly file: string 
 
 export interface ForegroundResult {
   readonly output: string;
-  /** Null for a call that ended with no exit status of its own: a command that replaced the session's shell (OQ-143). */
+  /** Null for a call that ended with no exit status of its own: a command that replaced the session's shell (OQ-144). */
   readonly exitCode: number | null;
   readonly timedOut: boolean;
   readonly softPaused: boolean;
@@ -55,12 +55,12 @@ export interface ForegroundResult {
    * since the command last wrote anything. Absent on every other result.
    */
   readonly waited?: { readonly sinceObservedMs: number; readonly silentMs: number };
-  /** OQ-143: the command replaced the session's shell; the program was ended and the shell restarted. */
+  /** OQ-144: the command replaced the session's shell; the program was ended and the shell restarted. */
   readonly replaced?: true;
 }
 
 /**
- * OQ-143 (acceptance finding A9): what the process behind a pid is running — its executable and its argument vector —
+ * OQ-144 (acceptance finding A9): what the process behind a pid is running — its executable and its argument vector —
  * read from `/proc`, so an `exec` that keeps the pid and replaces the program is visible. Null where `/proc` does not
  * say: every host but Linux, or a process that has gone. The kernel marks an executable whose file was replaced on
  * disk since it started — a package upgrade of the shell — ` (deleted)`; that is the same program, so the mark is cut.
@@ -77,9 +77,9 @@ export function processIdentity(pid: number): string | null {
 /** How a raw round trip was ended before the shell answered it: its call's cancel, or a kill from the terminal window. */
 type RawCut = { readonly kind: 'abort' } | { readonly kind: 'kill'; readonly reset: boolean };
 
-/** OQ-143: how often a running foreground call looks for its shell having been replaced. */
+/** OQ-144: how often a running foreground call looks for its shell having been replaced. */
 export const REPLACED_WATCH_MS = 200;
-/** OQ-143: the error a call carries when its command replaced the session's shell. */
+/** OQ-144: the error a call carries when its command replaced the session's shell. */
 export const REPLACED_ERROR = 'the command replaced the session\'s shell';
 /** REQ-SHELL-092: the error a call carries when the user killed it from the terminal window. */
 const KILLED_ERROR = 'the command was killed from the terminal window';
@@ -484,7 +484,7 @@ export class ForegroundSession {
    */
   private lastState: ShellState | null = null;
   /**
-   * OQ-143: `processIdentity` of the session's shell, read when the shell last answered one of the product's own lines
+   * OQ-144: `processIdentity` of the session's shell, read when the shell last answered one of the product's own lines
    * (the first-call handshake, the snapshot, the restore), so it is the shell's and not a program an `exec` put in its
    * place. Null for a shell that has not answered yet, and wherever `/proc` does not say; the watch is off then.
    */
@@ -620,7 +620,7 @@ export class ForegroundSession {
     this.state = 'running';
     const reinit = this.reinitialized;
     this.reinitialized = false;
-    // OQ-143: a shell that has not answered yet has no identity to watch against — a fresh one, before its first
+    // OQ-144: a shell that has not answered yet has no identity to watch against — a fresh one, before its first
     // command. One no-op round trip on it gives one, read once the shell has printed the end frame and so is ours. A
     // shell busy with a soft-paused command cannot answer, and keeps what it had.
     // The round trip is an await BEFORE the call's own abort listener and kill handler exist, so both are honoured on it
@@ -668,7 +668,7 @@ export class ForegroundSession {
       let hard: TimerHandle | null = null;
       let soft: TimerHandle | null = null;
       let watch: TimerHandle | null = null;
-      // OQ-143 (acceptance A9): a command that replaces the shell — `exec bash` — keeps the pid and never returns to the
+      // OQ-144 (acceptance A9): a command that replaces the shell — `exec bash` — keeps the pid and never returns to the
       // rest of the wrapped line, so the end frame never comes, and the call used to wait out the no-output window and
       // report a soft pause for a command that had finished at once, leaving every later call in the new program. The
       // process behind the pid is compared with the shell's identity until the call ends; a different one ends the call.
@@ -758,7 +758,7 @@ export class ForegroundSession {
       return r;
     }
     if (outcome.kind === 'replaced') {
-      // OQ-143: the program the command put in the shell's place is ended with its tree, and the session restarts on the
+      // OQ-144: the program the command put in the shell's place is ended with its tree, and the session restarts on the
       // shell the tool description names, with PD-TOOLS-001's snapshot re-applied as after a hard-timeout reset. The
       // command has no exit status of its own — it never returned to the line that would have reported one — so the
       // call is REQ-TOOLS-103's failure before completion, not a soft pause and not REQ-TOOLS-099's timeout.
@@ -945,7 +945,7 @@ export class ForegroundSession {
         timer.cancel();
         signal?.removeEventListener('abort', onAbort);
         this.listeners = this.listeners.filter((l) => l !== listener);
-        // OQ-143: the shell printed this line's end frame, so the process behind the pid is the session's own shell.
+        // OQ-144: the shell printed this line's end frame, so the process behind the pid is the session's own shell.
         if (answered && this.pty === p) { const id = processIdentity(p.pid); if (id !== null) this.shellIdentity = id; }
         const screen = this.newScreen();
         void screen.write(buf.join('')).then(() => {

@@ -131,7 +131,7 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     expect(warnings).toEqual([]);
     expect(classifyOutcome({ exitCode: 0, output: text, command }, warnings)).toEqual({ outcomeKind: 'success', severity: 'info' });
   });
-  it.runIf(process.platform === 'linux')('OQ-143: a process\'s identity is its executable and its argument vector; a process that has gone has none', () => {
+  it.runIf(process.platform === 'linux')('OQ-144: a process\'s identity is its executable and its argument vector; a process that has gone has none', () => {
     const self = processIdentity(process.pid);
     expect(self).not.toBeNull();
     const [exe, argv] = self!.split('\0', 2) as [string, string];
@@ -140,7 +140,7 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     // A pid past the kernel's pid_max names no process.
     expect(processIdentity(2 ** 22 + 1)).toBeNull();
   });
-  it.runIf(process.platform !== 'linux')('OQ-143: off Linux there is no /proc, and no identity to watch', () => {
+  it.runIf(process.platform !== 'linux')('OQ-144: off Linux there is no /proc, and no identity to watch', () => {
     expect(processIdentity(process.pid)).toBeNull();
   });
   it('strips VT sequences and carriage returns', () => {
@@ -297,7 +297,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     expect(diag(comment.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
     expect(output(comment.text)).toBe('commented');
   }, 30_000);
-  it.runIf(process.platform === 'linux' && shell?.kind === 'posix')('REQ-TOOLS-097/098/103/104 (OQ-143, acceptance A9): a command that replaces the session\'s shell ends at once as an execution_error, never a soft pause, and the next call runs in the shell the description names', async () => {
+  it.runIf(process.platform === 'linux' && shell?.kind === 'posix')('REQ-TOOLS-097/098/103/104 (OQ-144, acceptance A9): a command that replaces the session\'s shell ends at once as an execution_error, never a soft pause, and the next call runs in the shell the description names', async () => {
     // A session of its own: this case restarts its shell. The window is long enough that a soft pause cannot be
     // mistaken for the replacement being noticed, and short enough that the old reading fails in seconds.
     const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 3_000 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
@@ -333,7 +333,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(output((await t.execute(args({ command: cmdline, timeout: 15 }), ctx())).text)).toBe(ours);
     } finally { await m.dispose(); }
   }, 40_000);
-  // OQ-143's first-call handshake is one no-op round trip on a fresh shell before the command is written: an await before
+  // OQ-144's first-call handshake is one no-op round trip on a fresh shell before the command is written: an await before
   // the call's own abort listener and kill handler exist. Both cases give the fresh shell a startup that takes a second
   // (`ENV`, which an interactive POSIX shell reads), so the cancel and the kill land inside the handshake on any host.
   // `startupS` is the fresh shell's startup. The cancel case takes three seconds, longer than its bound, so that only the
@@ -347,7 +347,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 20_000 }, env, warn: () => undefined });
     return { m, t: terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 20_000 }), marker: join(dir, 'ran'), dir };
   };
-  it.runIf(process.platform === 'linux' && shell?.kind === 'posix')('REQ-TOOLS-097/099 (OQ-143, acceptance round 1): a run\'s cancel that lands while a fresh shell answers the first call\'s handshake ends the call at once, and the command never runs', async () => {
+  it.runIf(process.platform === 'linux' && shell?.kind === 'posix')('REQ-TOOLS-097/099 (OQ-144, acceptance round 1): a run\'s cancel that lands while a fresh shell answers the first call\'s handshake ends the call at once, and the command never runs', async () => {
     const { m, t, marker, dir } = await slowStart('a9-abort', 3);
     try {
       const stop = new AbortController();
@@ -368,7 +368,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(output(next.text)).toBe('after');
     } finally { await m.dispose(); rmSync(dir, { recursive: true, force: true }); }
   }, 30_000);
-  it.runIf(process.platform === 'linux' && shell?.kind === 'posix')('REQ-SHELL-092 (OQ-143, acceptance round 1): a kill from the terminal window that lands during the first call\'s handshake ends the call as killed, and the command is never written to the dead shell', async () => {
+  it.runIf(process.platform === 'linux' && shell?.kind === 'posix')('REQ-SHELL-092 (OQ-144, acceptance round 1): a kill from the terminal window that lands during the first call\'s handshake ends the call as killed, and the command is never written to the dead shell', async () => {
     const { m, t, marker, dir } = await slowStart('a9-kill');
     try {
       const began = clocks.monotonic.now() as number;
@@ -848,7 +848,7 @@ describe('terminal — availability (REQ-TOOLS-104)', () => {
     expect(posix).toContain('The shell is `/bin/sh`, a POSIX shell that may not be bash');
     expect(posix).toContain('`${PIPESTATUS[…]}`');
     expect(posix).not.toContain('PowerShell');
-    // OQ-143 (acceptance A9): the POSIX description says the shell is not to be replaced, and what a call that does meets.
+    // OQ-144 (acceptance A9): the POSIX description says the shell is not to be replaced, and what a call that does meets.
     expect(posix).toContain('Do not replace the shell with `exec <program>`');
     // The consequence is the one the host meets: the watch reads /proc, so only Linux ends the program and restarts the shell.
     expect(terminalDescription({ kind: 'posix', file: '/bin/sh' }, 'linux')).toContain('such a call normally fails, and the program is ended and the shell restarted');

@@ -30,7 +30,7 @@ does not exist read `Session ts_… is failed (exit -1).`, `outcome_kind` `backg
 no `failure_kind`. Node emitted `error` (ENOENT) and never `exit`, and the child had no pid.
 
 **What the status and code of such a session are is not stated, so it is
-[OQ-142](../../architecture/open-questions.md), and the build proceeds under the reading recorded there.**
+[OQ-143](../../architecture/open-questions.md), and the build proceeds under the reading recorded there.**
 - `BackgroundSession`'s `error` handler (`background.ts`) now tells a spawn failure from any other error by the
   child's pid. With no pid, the command never ran: the session is `failed` with **no exit code** (null), its timer is
   cancelled, and the cause is kept on the session (`spawnError`). An `error` once the child has a pid is warned about
@@ -45,7 +45,7 @@ no `failure_kind`. Node emitted `error` (ENOENT) and never `exit`, and the child
 
 **Pinned by** `terminal.test.ts`, "REQ-TOOLS-100/103/179: a spawn that fails after start returns reads failed with no
 exit code and failure_kind execution_error, never the −1 of killed". It drives the real `child_process.spawn` against
-a missing shell file and failed before the change on `exit -1`. `streams.test.ts`, "REQ-TOOLS-179 (OQ-142): a
+a missing shell file and failed before the change on `exit -1`. `streams.test.ts`, "REQ-TOOLS-179 (OQ-143): a
 background stream whose process could not be started ends with no exit code", pins the stream's end.
 
 **No proof or live-run scenario shows it.** None found it: the note was recorded from reading the code, and no run

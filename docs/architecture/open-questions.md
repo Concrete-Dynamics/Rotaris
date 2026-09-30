@@ -6328,10 +6328,37 @@ thing is left as it was: a resolution under way at the close that finds nothing 
 to end on its own with its outcome recorded as REQ-WORKSPACE-084 would have it; and, for a user-started run, whether
 closing its window is a cancellation the user asked for.
 
-**OQ-142 — Which status and exit code does a background session read when its process could not be started?**
+**OQ-142 — Which stop reason decides the improvement skip list for a run whose recording failed: the one the run
+reports, or the one its record holds?** *(REQ-ORCH-137, whose skip list names "the stop reason"; REQ-LIBRARY-032, which
+compares "the run's recorded stop reason" and says a stop reason outside the list always yields a job; REQ-EVENTS-088,
+under which a failed recording step stops every further authoritative write for the run. Raised 2026-09-30 by the
+verifier of the repair of
+[`an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md`](../defects/fixed/an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md)
+under [R-067](../product/requests.md#r-067). Open.)*
+
+The two readings agree for every run whose record holds its own ending. They part only under REQ-EVENTS-088. The engine
+then reports the run as `agent_session_aborted`, with completion unconfirmed. The record cannot be written any further,
+so it keeps the stop reason it last held, which may be none or an earlier run's. REQ-ORCH-137's reading, of the result,
+skips the pass. REQ-LIBRARY-032's reading, of the record, yields a job whenever the held value is off the list, and the
+analysis would then be drawn from a record the run itself calls unconfirmed.
+
+**What the build proceeds under:** REQ-ORCH-137's reading. The run host's post-run capture (`captureAfterRun`,
+`apps/desktop/src/run-host/improvement-capture.ts`) checks the stop reason of the run's result before it asks main for
+history or reads the store, so a run that ended on a recording failure yields no job. That check exists so a run the quit
+ended never reaches a store the quit is closing. `captureImprovementJob` still applies REQ-LIBRARY-032's check against
+the record to every run that reaches it. Before this repair, the capture read the record alone, and in this case could
+yield a job. `improvement-capture.test.ts` pins the reading: a result of `agent_session_aborted` over a record that
+still holds `completed` yields no job and reads nothing.
+
+**What a ruling decides.** Whether REQ-LIBRARY-032's "recorded stop reason" means the stop reason the run reports as
+recorded, so that a failed recording leaves no stop reason to compare and REQ-ORCH-137's skip applies. Or whether the
+record governs even then, so that the capture must read the store before it may skip.
+
+**OQ-143 — Which status and exit code does a background session read when its process could not be started?**
 *(REQ-TOOLS-109, REQ-TOOLS-179, REQ-TOOLS-100, REQ-TOOLS-103, REQ-TOOLS-112. Raised 2026-09-30 by the repair of
 [`a-background-session-whose-spawn-fails-reads-failed-with-exit-minus-one.md`](../defects/fixed/a-background-session-whose-spawn-fails-reads-failed-with-exit-minus-one.md)
-under [R-067](../product/requests.md#r-067). Open.)*
+under [R-067](../product/requests.md#r-067). Open; numbered OQ-142 on its branch, renumbered OQ-143 at the merge, OQ-142
+having been taken on `main`.)*
 
 Node reports some spawn failures synchronously and others — ENOENT and EACCES among them — only after `spawn` has
 returned, through the child's `error` event and never its `exit`. For the first kind the product already answers the
@@ -6357,18 +6384,19 @@ Before this entry such a session read `failed (exit -1)`, `background_terminal`,
   for its `exit`, which still comes.
 
 The case "REQ-TOOLS-100/103/179: a spawn that fails after start returns …" in `terminal/terminal.test.ts` pins this
-reading, and the case "REQ-TOOLS-179 (OQ-142): …" in `terminal/streams.test.ts` pins the stream's end.
+reading, and the case "REQ-TOOLS-179 (OQ-143): …" in `terminal/streams.test.ts` pins the stream's end.
 
 **What a ruling decides.** Whether REQ-TOOLS-109's `failed` covers a command that never ran with no exit code, or
 whether it needs a code of its own (126 is sandbox-unavailable's, and 127 is the shell's convention for a command it
 could not find), or a status the vocabulary does not have; and whether such a spawn should instead be answered at
 the start, by waiting for Node's `spawn` or `error` before `start` returns.
 
-**OQ-143 — What does a foreground call answer when its command replaces the session's shell, and what becomes of the
+**OQ-144 — What does a foreground call answer when its command replaces the session's shell, and what becomes of the
 session?** *(REQ-TOOLS-097, REQ-TOOLS-098, REQ-TOOLS-103, REQ-TOOLS-104, REQ-TOOLS-179; `PD-TOOLS-001`. Raised
 2026-09-30 by the repair of
 [`a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`](../defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md)
-under [R-067](../product/requests.md#r-067), acceptance finding A9. Open.)*
+under [R-067](../product/requests.md#r-067), acceptance finding A9. Open; numbered OQ-143 on its branch, renumbered
+OQ-144 at the merge, OQ-142 having been taken on `main`.)*
 
 A foreground command that replaces the shell — `exec bash`, `exec sh`, any `exec <program>` — keeps the shell's pid
 and never returns to the rest of the wrapped line, so the end frame never prints. Before this entry the call waited out
@@ -6419,8 +6447,8 @@ and still soft-pauses. An `exec` inside a command that has already soft-paused i
 with the call at the pause — so the paused command's later polls read it as still running. The handshake's own wait
 (the fresh shell's startup and one round trip) is not counted toward the call's hard timeout.
 
-The case "REQ-TOOLS-097/098/103/104 (OQ-143, acceptance A9): …" in `terminal/terminal.test.ts` pins this reading, and
-the two cases "… (OQ-143, acceptance round 1): …" beside it pin the handshake's cancel and kill.
+The case "REQ-TOOLS-097/098/103/104 (OQ-144, acceptance A9): …" in `terminal/terminal.test.ts` pins this reading, and
+the two cases "… (OQ-144, acceptance round 1): …" beside it pin the handshake's cancel and kill.
 
 **What a ruling decides.** Whether a command that replaces the shell is refused before it runs (an `invalid_request`
 REQ-TOOLS-101 does not list), answered as built, or adopted — the session carrying on in the new program, with the

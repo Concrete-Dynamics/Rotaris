@@ -1,5 +1,5 @@
 import { millis, ok, type Clocks } from '@rotaris/kernel';
-import { type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
+import { type ChatMessage, type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 
 /**
  * One call as the scripted client received it: the model it was addressed to, the agent it answered as, and the
@@ -24,8 +24,11 @@ export interface ScriptedCallRecord {
  * the list, answers with a short streamed reply, one delta per 120 ms so the growth tick is visible.
  *
  * Each agent keeps its own place in its list: the orchestrator, and each child by its TASK line. A resumed agent
- * (PD-ORCH-005's continue, in this process or after a relaunch) carries on with the step after the ones its own record
- * holds (`resumedAt`), so a proof scripts "the resumed agent takes its next step" in one list.
+ * (PD-ORCH-005's continue, in this process or after a relaunch) carries on with the step after the ones it had taken
+ * (`resumedAt`, `takenFrom`), so a proof scripts "the resumed agent takes its next step" in one list. Each step marks its
+ * place in the message it answers with — its tool call's id, or ` (scripted step <n>)` at the end of a streamed answer —
+ * so a record that no longer holds every step (a later iteration's root, a compressed conversation) still says where the
+ * agent stood.
  *
  * Nothing here decides anything about a run: the loop, the permission gate and the store see exactly what they
  * would see from a model that chose the same steps, which is what keeps a proof's assertion about the product
@@ -52,9 +55,8 @@ const LEAVES_NO_MESSAGE = /^(fail(:.*)?|hang|wait:\d+)$/;
  *
  * One assistant message stands for each step that answered (`turn.ts` pushes exactly one per step); a step that answers
  * with none is counted as consumed wherever it falls before the last step the record shows. A fresh agent carries no
- * assistant message, so it starts from the first step exactly as before. Two readings follow from counting the record:
- * a root resumed in a later iteration of its run counts only that iteration's steps, and a record the compressing pass
- * rewrote counts only the steps it still holds.
+ * assistant message, so it starts from the first step exactly as before. How many such steps the agent has taken is read
+ * by `takenFrom`, from the ordinal each step leaves in the record, not from how many messages the record still holds.
  */
 function resumedAt(script: readonly string[], taken: number): number {
   let index = 0;
@@ -62,6 +64,63 @@ function resumedAt(script: readonly string[], taken: number): number {
     if (!LEAVES_NO_MESSAGE.test(script[index]!)) shown += 1;
   }
   return index;
+}
+
+/** `resumedAt`'s inverse: how many steps up to and including `index` answered with a message — the step's ordinal. */
+function ordinalAt(script: readonly string[], index: number): number {
+  let shown = 0;
+  for (let i = 0; i <= index && i < script.length; i += 1) if (!LEAVES_NO_MESSAGE.test(script[i]!)) shown += 1;
+  return shown + Math.max(0, index + 1 - script.length);
+}
+
+/*
+ * The repair of fixed/the-scripted-client-counts-only-the-steps-a-resumed-record-still-shows.md. Counting a resumed record's
+ * messages placed an agent too early wherever the record does not hold every step it took: a root resumed in a later
+ * iteration of its run holds only that iteration's steps, where an unbroken client's counter counted every iteration's,
+ * and a record the compressing pass rewrote holds only the steps it kept. So each step now leaves its ordinal — how many
+ * steps that answered with a message this agent had taken, this one included, across every iteration — in the message
+ * it answers with: in the tool call's id where it calls a tool (`call-<n>-s<ordinal>`, which no surface prints), and at
+ * the end of its text where it only answers. The scripted compressor restates every agent's ordinal in its summary,
+ * which the rebuilt conversation carries, so a record whose tagged steps were all condensed away still says where the
+ * agent stood. Nothing here reaches the product's own record other than as a model's words and call ids would.
+ */
+const ORDINAL_IN_CALL_ID = /-s(\d+)$/;
+const ORDINAL_IN_TEXT = /\(scripted step (\d+)\)/g;
+const RESTATED = /^Scripted steps taken: (\{.*\})$/m;
+const COMPRESSION_SUMMARY = '[Context compression]';
+
+/** The ordinal a scripted step left in this assistant message, or `null` for a message that carries none. */
+function ordinalOf(message: ChatMessage): number | null {
+  let found: number | null = null;
+  for (const part of message.content) {
+    if (part.kind === 'tool-call') { const m = ORDINAL_IN_CALL_ID.exec(part.callId); if (m) found = Number(m[1]); }
+    // The last mark in the text is the step's own: an answer can quote a tool's result, which could carry another's.
+    if (part.kind === 'text') for (const m of part.text.matchAll(ORDINAL_IN_TEXT)) found = Number(m[1]);
+  }
+  return found;
+}
+
+/**
+ * How many steps that answered with a message the agent `key` had taken when its request was built: the last ordinal
+ * its record carries — in an assistant message, or restated by a compression summary — plus one for each assistant
+ * message after it that carries none. A record no step marked (one an earlier build wrote) counts its messages, as
+ * before.
+ */
+function takenFrom(messages: readonly ChatMessage[], key: string): number {
+  let taken = 0;
+  for (const message of messages) {
+    if (message.role === 'assistant') { taken = ordinalOf(message) ?? taken + 1; continue; }
+    if (message.role !== 'user') continue;
+    const first = message.content[0];
+    if (first?.kind !== 'text' || !first.text.startsWith(COMPRESSION_SUMMARY)) continue;
+    const restated = RESTATED.exec(first.text)?.[1];
+    if (restated === undefined) continue;
+    try {
+      const value = (JSON.parse(restated) as Record<string, unknown>)[key];
+      if (typeof value === 'number') taken = value;
+    } catch { /* a summary this client did not write */ }
+  }
+  return taken;
 }
 
 export function scriptedClient(c: Clocks, log: (message: string) => void, record?: (call: ScriptedCallRecord) => void): ModelClient {
@@ -98,7 +157,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       const counterKey = who === 'child' ? `child:${taskName}` : who;
       if (!seeded.has(counterKey)) {
         seeded.add(counterKey);
-        calls[counterKey] = resumedAt(scripts[who] ?? [], req.messages.filter((m) => m.role === 'assistant').length);
+        calls[counterKey] = resumedAt(scripts[who] ?? [], takenFrom(req.messages, counterKey));
       }
       calls[counterKey] = (calls[counterKey] ?? 0) + 1;
       calls[who] = calls[counterKey]!;
@@ -139,7 +198,9 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         }
         // Part AH: the compressing pass's scripted answer. It states the three things REQ-MONITOR-082 asks for,
         // so the proof can assert the summary reached the rebuilt conversation rather than a placeholder.
-        yield ok<StreamPart>({ kind: 'text', delta: ['Work performed: the scripted agent read the repository and wrote NOTES.md.', 'Findings reached: the transcript renderer draws one row per event.', 'Questions left open: none.'].join(String.fromCharCode(10)) });
+        // The last line restates where every agent this client serves stood (`takenFrom` reads it back after a resume).
+        const standing = Object.fromEntries(Object.entries(calls).filter(([key, n]) => (key === 'orchestrator' || key.startsWith('child:')) && n > 0).map(([key, n]) => [key, ordinalAt(scripts[key === 'orchestrator' ? 'orchestrator' : 'child'] ?? [], n - 1)]));
+        yield ok<StreamPart>({ kind: 'text', delta: ['Work performed: the scripted agent read the repository and wrote NOTES.md.', 'Findings reached: the transcript renderer draws one row per event.', 'Questions left open: none.', `Scripted steps taken: ${JSON.stringify(standing)}`].join(String.fromCharCode(10)) });
         yield ok<StreamPart>({ kind: 'usage', usage: { input: 40, output: 24 } });
         yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
         return;
@@ -198,6 +259,10 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         scripts[who]?.splice((calls[who] ?? 1) - 1, 1);
         step = scripts[who]?.[(calls[who] ?? 1) - 1] ?? 'answer';
       }
+      // The step's ordinal among this agent's steps that answer with a message, left in the message it answers with.
+      const ordinal = ordinalAt(scripts[who] ?? [], (calls[who] ?? 1) - 1);
+      const callId = `call-${call}-s${ordinal}`;
+      const marked = (text: string) => `${text} (scripted step ${ordinal})`;
       if (step === 'fail') {
         yield { ok: false as const, error: { code: 'http' as const, headline: 'scripted failure (HTTP 400)', status: 400, transient: false } };
         return;
@@ -214,7 +279,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       const tokenStep = /^tokens:(\d+)$/.exec(step);
       if (tokenStep) {
         yield ok<StreamPart>({ kind: 'text', delta: 'Working, with a large reported prompt. ' });
-        if ((req.tools ?? []).some((t) => t.name === 'glob')) yield ok<StreamPart>({ kind: 'tool-call', callId: `call-${call}`, name: 'glob', argsDelta: JSON.stringify({ pattern: '**/*.md' }) });
+        if ((req.tools ?? []).some((t) => t.name === 'glob')) yield ok<StreamPart>({ kind: 'tool-call', callId, name: 'glob', argsDelta: JSON.stringify({ pattern: '**/*.md' }) });
         yield ok<StreamPart>({ kind: 'usage', usage: { input: Number(tokenStep[1]), output: 12 } });
         yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
         return;
@@ -236,7 +301,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       if (step === 'think') {
         yield ok<StreamPart>({ kind: 'reasoning', delta: 'Weighing the request. ' });
         yield ok<StreamPart>({ kind: 'reasoning', delta: 'Two options remain, and the second is cheaper.' });
-        yield ok<StreamPart>({ kind: 'text', delta: 'The scripted answer, after deliberating.' });
+        yield ok<StreamPart>({ kind: 'text', delta: marked('The scripted answer, after deliberating.') });
         yield ok<StreamPart>({ kind: 'usage', usage: { input: 18, output: 9 } });
         yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
         return;
@@ -251,7 +316,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       if (delegate && (req.tools ?? []).some((t) => t.name === 'delegate')) {
         const lastId = delegate[3] ? [...req.messages].reverse().flatMap((m) => [...m.content] as { kind: string; result?: string }[]).map((p) => (p.kind === 'tool-result' && p.result ? /task_id: (bg_[0-9a-f]{8})/.exec(p.result)?.[1] : undefined)).find((x) => x !== undefined) : undefined;
         yield ok<StreamPart>({ kind: 'text', delta: `Delegating to ${delegate[1]}. ` });
-        yield ok<StreamPart>({ kind: 'tool-call', callId: `call-${call}`, name: 'delegate', argsDelta: JSON.stringify({ persona: delegate[1], task_name: delegate[2], task: `TASK: ${delegate[2]}\nEXPECTED OUTCOME: done\nMUST DO: use your tools\nMUST NOT DO: nothing else\nCONTEXT: scripted`, ...(lastId ? { depends_on: [lastId] } : {}) }) });
+        yield ok<StreamPart>({ kind: 'tool-call', callId, name: 'delegate', argsDelta: JSON.stringify({ persona: delegate[1], task_name: delegate[2], task: `TASK: ${delegate[2]}\nEXPECTED OUTCOME: done\nMUST DO: use your tools\nMUST NOT DO: nothing else\nCONTEXT: scripted`, ...(lastId ? { depends_on: [lastId] } : {}) }) });
         yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
         yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
         return;
@@ -270,7 +335,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
             : toolName === 'artifact_read' ? { id_or_slug: 'scripted-plan' } : {};
           const args = key in scripted ? scripted[key] : fallback;
           yield ok<StreamPart>({ kind: 'text', delta: `Calling ${toolName}. ` });
-          yield ok<StreamPart>({ kind: 'tool-call', callId: `call-${call}`, name: toolName, argsDelta: JSON.stringify(args) });
+          yield ok<StreamPart>({ kind: 'tool-call', callId, name: toolName, argsDelta: JSON.stringify(args) });
           yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
           yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
           return;
@@ -290,7 +355,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
           const key = terminalStep[1]!;
           const args = key in scripted ? scripted[key] : { command: 'git status' };
           yield ok<StreamPart>({ kind: 'text', delta: `Running the terminal command for ${key}. ` });
-          yield ok<StreamPart>({ kind: 'tool-call', callId: `call-${call}`, name: 'terminal', argsDelta: JSON.stringify(args) });
+          yield ok<StreamPart>({ kind: 'tool-call', callId, name: 'terminal', argsDelta: JSON.stringify(args) });
           yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
           yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
           return;
@@ -313,7 +378,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
           };
           const args = key in scripted ? scripted[key] : fallback;
           yield ok<StreamPart>({ kind: 'text', delta: 'Asking the user. ' });
-          yield ok<StreamPart>({ kind: 'tool-call', callId: `call-${call}`, name: 'ask_questions', argsDelta: JSON.stringify(args) });
+          yield ok<StreamPart>({ kind: 'tool-call', callId, name: 'ask_questions', argsDelta: JSON.stringify(args) });
           yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
           yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
           return;
@@ -330,7 +395,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
           try { scripted = JSON.parse(process.env['ROTARIS_SCRIPT_MCP_ARGS'] ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
           const args = toolName in scripted ? scripted[toolName] : toolName === 'echo' ? { text: 'hello from the scripted agent' } : toolName === 'slow' ? { ms: 4_000 } : {};
           yield ok<StreamPart>({ kind: 'text', delta: `Calling ${toolName} on ${mcpStep[1]}. ` });
-          yield ok<StreamPart>({ kind: 'tool-call', callId: `call-${call}`, name: toolName, argsDelta: JSON.stringify(args) });
+          yield ok<StreamPart>({ kind: 'tool-call', callId, name: toolName, argsDelta: JSON.stringify(args) });
           yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
           yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
           return;
@@ -341,7 +406,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       const tool = step.startsWith('fetch:') ? { name: 'fetch', args: { url: step.slice('fetch:'.length) } } : TOOL_STEPS[step];
       if (tool && (req.tools ?? []).some((t) => t.name === tool.name)) {
         yield ok<StreamPart>({ kind: 'text', delta: `Calling ${tool.name}. ` });
-        yield ok<StreamPart>({ kind: 'tool-call', callId: `call-${call}`, name: tool.name, argsDelta: JSON.stringify(tool.args) });
+        yield ok<StreamPart>({ kind: 'tool-call', callId, name: tool.name, argsDelta: JSON.stringify(tool.args) });
         yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
         yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
         return;
@@ -351,6 +416,8 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       const first = req.messages.find((m) => m.role === 'user')?.content.find((p) => p.kind === 'text');
       const task = first && first.kind === 'text' ? first.text : '';
       const words = `I read your request — "${task.slice(0, 60)}" — and this is the scripted reply from the run loop.${seen}`.split(' ');
+      // The mark rides on the last word, so the reply streams in exactly as many deltas as before.
+      words[words.length - 1] = marked(words[words.length - 1]!);
       for (const w of words) {
         if (req.signal.aborted) { yield { ok: false as const, error: { code: 'aborted' as const, headline: 'aborted', transient: false } }; return; }
         await new Promise<void>((resolve) => c.timers.after(millis(120), resolve));

@@ -60,7 +60,7 @@ export function terminalShapes(platform = process.platform) {
     : [
       { id: 'here-string', match: /<<\s*'?EOF/, command: "cat <<'EOF'\nalpha-one\nbeta-two\nEOF" },
       { id: 'long-output', match: /LINE-/, command: `awk 'BEGIN{for(i=1;i<=${LONG_OUTPUT_LINES};i++)printf "LINE-%03d ${PAD}\\n", i}'` },
-      // Acceptance finding A9 (OQ-143), the verifier's live run of 2026-09-29 (pack `2026-09-29T22-08-13-005Z`, call #5): the
+      // Acceptance finding A9 (OQ-144), the verifier's live run of 2026-09-29 (pack `2026-09-29T22-08-13-005Z`, call #5): the
       // model ran `exec bash`, which keeps the shell's pid and never returns to the wrapper's end frame, so it read as a
       // soft pause after 30,027 ms, and every later call ran under bash. Ahead of `unexpandable` on purpose: that shape
       // then shows which shell the next command met. POSIX only: PowerShell has no `exec`.
@@ -142,7 +142,7 @@ export function unexpandableReading(result, elapsedMs) {
 }
 
 /**
- * What the `replaces-shell` shape (acceptance A9, OQ-143) met, read from one recorded observation.
+ * What the `replaces-shell` shape (acceptance A9, OQ-144) met, read from one recorded observation.
  *
  * - `restarted`: the call ended inside the no-output window as an `execution_error` with no exit code, and its detail
  *   says the command replaced the session's shell — the product noticed, ended the program and restarted the shell.

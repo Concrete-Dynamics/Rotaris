@@ -36,7 +36,7 @@ Recorded, not repaired.
 `/proc/$$/cmdline` read `sh` where the session's shell reads `/bin/sh -i`.
 
 **Whether a command may replace the shell, and what the call then answers, is not stated anywhere, so it is
-[OQ-143](../../architecture/open-questions.md), and the build proceeds under the reading recorded there.**
+[OQ-144](../../architecture/open-questions.md), and the build proceeds under the reading recorded there.**
 - `ForegroundSession` (`foreground.ts`) keeps the identity of its shell — the executable and argument vector of the
   process behind its pid, read from `/proc` (`processIdentity`) each time the shell answers one of the product's own
   lines. A fresh shell answers one no-op line before its first command, so that there is one to compare with. A shell
@@ -54,10 +54,10 @@ Recorded, not repaired.
 - Not reached: macOS, which has no `/proc` (the watch is off there, IC-3), an `exec` of exactly the shell's own
   executable and arguments, and an `exec` inside a command that has already soft-paused.
 
-**Pinned by** `terminal.test.ts`, "REQ-TOOLS-097/098/103/104 (OQ-143, acceptance A9): a command that replaces the
+**Pinned by** `terminal.test.ts`, "REQ-TOOLS-097/098/103/104 (OQ-144, acceptance A9): a command that replaces the
 session's shell ends at once as an execution_error …", red before the change (the soft pause above). It now ends in
 about 215 ms, the next call reads `/bin/sh -i` again, and an exported variable set before the `exec` survives. It also
-pins that `exec 3>/dev/null` stays an ordinary success. "OQ-143: a process's identity …" pins `processIdentity`, and the
+pins that `exec 3>/dev/null` stays an ordinary success. "OQ-144: a process's identity …" pins `processIdentity`, and the
 description case pins the new sentence.
 
 **Shown live.** The `terminal` scenario now replays the live run's own `exec bash` (shape `replaces-shell`, ahead of
@@ -74,7 +74,7 @@ handler existed: the cancel never fired (an `AbortSignal` already aborted does n
 later) and the command ran to its end, and after a kill the command was written to the PTY the kill had just ended.
 The round trip now carries the call's signal and reports a kill; a cancel or a kill on it ends the call before its
 command is written, as a cancelled call (124, `session_reset`) or a killed one (−1, `session_reset`), and the PTY is
-re-taken after the round trip. Pinned by the two cases "… (OQ-143, acceptance round 1): …" in `terminal.test.ts`,
+re-taken after the round trip. Pinned by the two cases "… (OQ-144, acceptance round 1): …" in `terminal.test.ts`,
 over a real PTY whose fresh shell takes a second to start: red before (5,097 ms and 6,330 ms, the command having run
 or waited out its timeout), green after (each under 1.5 s, the command never run). The description's consequence is
 now stated per host, since only Linux has the watch.

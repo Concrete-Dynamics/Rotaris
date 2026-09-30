@@ -172,7 +172,7 @@ export class TerminalStreams {
 
   /**
    * The command ended: the pending delta, the closing screen frame, then the meta with the exit code. A null code is a
-   * command that has none — a background process that could not be started (REQ-TOOLS-179, OQ-142) — and the meta then
+   * command that has none — a background process that could not be started (REQ-TOOLS-179, OQ-143) — and the meta then
    * carries no `exitCode`, which a surface draws as `exited` rather than the −1 of a kill.
    */
   end(streamId: string, outcome: { readonly exitCode: number | null; readonly finalText: string }): void {

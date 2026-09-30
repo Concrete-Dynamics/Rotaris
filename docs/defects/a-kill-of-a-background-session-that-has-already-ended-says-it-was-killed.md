@@ -4,7 +4,7 @@
 nothing was killed. `sessionAction`'s `kill` branch calls `BackgroundSession.end('killed')`, which returns at once for
 a session whose status is not `running`, and then renders the fixed text whatever the session's status is. The
 diagnostic block beside it reports the true `session_status` (`completed`, `failed`, `timeout`) and exit code, so the
-detail and the block disagree. A session whose process could not be started (OQ-142) reads `was killed.` too, ahead
+detail and the block disagree. A session whose process could not be started (OQ-143) reads `was killed.` too, ahead
 of its `execution_error` detail.
 
 Noticed 2026-09-30 while repairing

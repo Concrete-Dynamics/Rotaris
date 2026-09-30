@@ -5,7 +5,7 @@ prints the wrapper's end frame: the shell that would have printed it is gone. Th
 and returns a soft pause — exit −1, "The process may still be running" — about a process that has ended. The next
 call finds no shell, `ensure` spawns a fresh one, and the command runs there with the working directory and every
 variable the old shell held gone, while its observation reports `session_reinitialized` false and says nothing of the
-loss. It is the sibling of the shell replaced by `exec` (acceptance A9, OQ-143): the same lost end frame, reached by
+loss. It is the sibling of the shell replaced by `exec` (acceptance A9, OQ-144): the same lost end frame, reached by
 the shell ending rather than being replaced.
 
 Measured 2026-09-30 on the `fix-accept1-8` branch, through a real PTY against `/bin/sh` (dash) with a 3 s no-output

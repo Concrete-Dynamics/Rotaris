@@ -344,8 +344,8 @@ watches the process behind its pid while a call runs, against the identity its s
 the product's own lines (`/proc`'s executable and argument vector; a fresh shell answers one no-op line first). A
 different process ends the call within 200 ms as an `execution_error` with no exit code, and the session restarts on
 its shell with PD-TOOLS-001's snapshot re-applied. The POSIX description says not to replace the shell. Neither the
-answer nor the restart is stated anywhere: [OQ-143](../open-questions.md), raised with this reading built. Off on
-macOS, where `/proc` does not exist. Pinned by "REQ-TOOLS-097/098/103/104 (OQ-143, acceptance A9): …" in
+answer nor the restart is stated anywhere: [OQ-144](../open-questions.md), raised with this reading built. Off on
+macOS, where `/proc` does not exist. Pinned by "REQ-TOOLS-097/098/103/104 (OQ-144, acceptance A9): …" in
 `terminal.test.ts`, red on the unwatched session (a soft pause after the whole window, and `sh` in place of
 `/bin/sh -i` for the next call). The no-op line is awaited before the call writes its command, so it carries the
 call's cancel and reports a kill from the terminal window: the first form lost both (acceptance round 1's verifier),

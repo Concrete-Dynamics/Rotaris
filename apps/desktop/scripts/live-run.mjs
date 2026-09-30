@@ -1723,7 +1723,7 @@ if (wanted.includes('faults')) {
  * |---|---|
  * | `here-string`   | a multi-line command lost its newlines in the PTY, so a here-string never terminated |
  * | `long-output`   | the concatenation above, and the agent's capture VT-stripped where the window's was not |
- * | `replaces-shell` | acceptance finding A9 — `a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`: `exec bash` kept the pid and never returned to the end frame, so it read as a soft pause and every later call ran under bash (POSIX only; OQ-143) |
+ * | `replaces-shell` | acceptance finding A9 — `a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`: `exec bash` kept the pid and never returned to the end frame, so it read as a soft pause and every later call ran under bash (POSIX only; OQ-144) |
  * | `unexpandable`  | live-run finding L1 — `a-posix-command-that-fails-to-expand-loses-its-end-marker.md`: a bash-ism dash cannot expand abandoned the wrapper's end frame, so a finished command read as a soft pause (POSIX only) |
  * | `wedge`         | `hardMs` passed and read nowhere: a call supplying no `timeout` had the soft pause and no hard cap (REQ-TOOLS-097) |
  * | `poll`          | live-run finding L2 — `an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md`: an empty poll returned at once and said thirty seconds had passed |
@@ -1794,7 +1794,7 @@ if (wanted.includes('terminal')) {
     check(!reading.escaped, 'the agent read a VT-stripped capture', reading.escaped ? 'an escape sequence survived into the recorded result' : 'no escape sequence in the recorded result');
   }
 
-  // Acceptance A9 (OQ-143): a command that replaces the session's shell ends at once as an execution_error, and the session
+  // Acceptance A9 (OQ-144): a command that replaces the session's shell ends at once as an execution_error, and the session
   // is restarted on its own shell. POSIX only (`terminalShapes`); on Windows nothing is asked: not applicable, not a NOTE.
   const replaced = shapeOf('replaces-shell') === undefined ? undefined : attempted('replaces-shell')[0];
   const replacedReading = replaced === undefined ? null : replacedShellReading(replaced.result, replaced.elapsedMs ?? NaN);

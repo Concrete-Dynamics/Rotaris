@@ -216,7 +216,7 @@ describe('the bash-ism the unexpandable shape replays (live-run L1)', () => {
   });
 });
 
-describe('the shell replacement the replaces-shell shape replays (acceptance A9, OQ-143)', () => {
+describe('the shell replacement the replaces-shell shape replays (acceptance A9, OQ-144)', () => {
   /*
    * The verifier's live run of 2026-09-29 (pack `2026-09-29T22-08-13-005Z`, call #5) recorded `exec bash` as a soft pause
    * after 30,027 ms. The repaired product ends such a call at once as an `execution_error` with no exit code; a host with

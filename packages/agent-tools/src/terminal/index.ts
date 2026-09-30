@@ -278,10 +278,10 @@ export interface BackgroundAttribution {
  */
 const POWERSHELL_SHELL = 'On Windows the shell is PowerShell, not bash: `&&`, `;`, `2>&1` and `$env:VAR` work; a bash heredoc never returns, and bash arrays, `[[ … ]]` and `source` are unavailable.';
 /**
- * OQ-143: the consequence of `exec <program>` is stated as the host meets it. The watch that notices the replacement
+ * OQ-144: the consequence of `exec <program>` is stated as the host meets it. The watch that notices the replacement
  * reads `/proc` (`processIdentity`), so only on Linux does such a call fail and the shell come back; elsewhere the call
  * reads as still running and the program stays in the shell's place (acceptance round 1's verifier). "Normally", because
- * on Linux too the watch is off where the handshake went unanswered or a soft-paused command holds the shell (OQ-143).
+ * on Linux too the watch is off where the handshake went unanswered or a soft-paused command holds the shell (OQ-144).
  */
 const posixShell = (file: string, platform: NodeJS.Platform): string => `The shell is \`${file}\`, a POSIX shell that may not be bash: write POSIX syntax — bash arrays, \`\${PIPESTATUS[…]}\`, \`[[ … ]]\`, process substitution \`<(…)\` and \`source\` may be unavailable, and a command that uses them fails with a nonzero exit code. Do not replace the shell with \`exec <program>\`: ${platform === 'linux' ? 'such a call normally fails, and the program is ended and the shell restarted.' : 'such a call reads as still running, and every later call runs in that program.'}`;
 const TERMINAL_USE = 'One command per call; use `&&` or `;` for sequences. `background=true` runs a command in its own process and returns a session id for later `query` / `kill`. A command that prints nothing for 30 s returns early with exit −1 while it keeps running; poll with an empty command, interrupt with `C-c` and `is_input=true`; stdout and stderr share the captured terminal stream. failure_kind is one of `timeout`, `invalid_request`, `execution_error`, `sandbox_unavailable`; `sandbox_unavailable` means the command never executed because this host could not apply the OS-level confinement the session requires — the cause is the host\'s configuration, neither a retry nor a reformulated command helps, and the detail and output should be relayed to the user.';
@@ -390,7 +390,7 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
             ? `No new output in ${seconds(r.waited.sinceObservedMs)} since the previous observation, and none for ${seconds(r.waited.silentMs)} in the merged terminal stream; stdout and stderr are both captured. A poll returns at once rather than waiting for output. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`
             : `No output for ${(config.noOutputWindowMs ?? 30_000) / 1000} seconds in the merged terminal stream; stdout and stderr are both captured. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`;
       } else if (r.replaced) {
-        // OQ-143 (acceptance A9): REQ-TOOLS-103's failure before completion, and what became of the session, so the agent
+        // OQ-144 (acceptance A9): REQ-TOOLS-103's failure before completion, and what became of the session, so the agent
         // knows the shell the description names is the one its next call runs in (REQ-TOOLS-104).
         const restarted = r.killStatus === 'session_reset' ? `the terminal session was restarted with \`${manager.backend.file}\`, the shell this tool runs commands in.` : 'restarting the terminal session failed.';
         detail = `Terminal execution failed before completion: ${r.error} (as \`exec <program>\` does), so the command never returned and has no exit code. The program was ended and ${restarted}${r.killStatus === 'session_reset' ? restoreNote : ''} Run a program without \`exec\`, or with background=true if it keeps running.`;
@@ -465,7 +465,7 @@ function sessionAction(a: TerminalArgs, bg: BackgroundManager): Promise<Observat
   const finish = (text: string, output: string) => {
     // REQ-SANDBOX-085: a background spawn returns before a launcher failure is visible, so the test
     // is made here, on the whole captured stream, at the poll or the termination that first sees it.
-    // REQ-TOOLS-103 (OQ-142): a process Node could not start is an `execution_error` whose detail quotes the cause.
+    // REQ-TOOLS-103 (OQ-143): a process Node could not start is an `execution_error` whose detail quotes the cause.
     const failureKind = relabelIfLauncherFailed(s.confined, s.spawnError === null ? null : 'execution_error', s.exitCode, s.readAll());
     const detail = failureKind === 'sandbox_unavailable' ? LAUNCHER_FAILED_DETAIL
       : failureKind === 'execution_error' ? `${text} Terminal execution failed before completion: the background command could not be started: ${s.spawnError ?? ''}`

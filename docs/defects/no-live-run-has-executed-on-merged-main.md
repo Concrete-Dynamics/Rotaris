@@ -19,6 +19,7 @@ Later that day, agent sessions on this host ran five live runs against `katalyst
   has since been removed.
 - 12:42, 13:49 and 13:58, sign-in and `ask` only, on `fix-accept1-4`. The packs are `2026-09-30T12-42-18-802Z`,
   `2026-09-30T13-49-19-435Z` and `2026-09-30T13-58-57-863Z`, under `/home/user/Rotaris-crw-wt-acc1-4/.live-run/runs/`.
+  `docs/defects/fixed/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md` records the first.
 
 None of the five is the merged head. Each ran on a branch that carried its own repair and not the others'. Together they
 ran only sign-in, `ask` and `edit`. `resume`, `requirements`, `shell`, `frictions`, `faults`, `terminal` and `duress`

@@ -21,3 +21,16 @@ Live-run finding: L5 (live runs of 2026-09-29)
 
 - `packages/agent-tools/src/tools/files.ts:497-515` — `haet_edit`'s apply path, no identical-string check.
 - `packages/agent-tools/src/tools/files.ts:410` — `write_file`'s refusal.
+
+## Repaired — 2026-09-29 under R-067
+
+The faithful reading is `REQ-TOOLS-135`'s rule read as binding its twin, so no open question was raised: `REQ-TOOLS-189`
+fixes the same `old_string`/`new_string` surface, says nothing either way, and reports its other outcomes "as
+REQ-TOOLS-136 reports them". `haet_edit` (and `haet`) now refuses an identical pair with `write_file`'s own text —
+"old_string and new_string are identical; nothing to change." — before it pushes an undo entry or writes. It checks
+after the hash, as `write_file` checks after its read gate, so a stale hash is still reported first.
+
+Pinned by "an edit whose old and new strings are identical is refused and changes nothing, as write_file's edit is
+(REQ-TOOLS-135, REQ-TOOLS-189)" in `packages/agent-tools/src/tools/tools.test.ts`, which fails on the code before
+the repair (the no-op was applied). The test covers `replace_all` and the `haet` alias, and checks that nothing
+entered the undo history. Not inducible on demand in the live run. Repaired 2026-09-29 under R-067.

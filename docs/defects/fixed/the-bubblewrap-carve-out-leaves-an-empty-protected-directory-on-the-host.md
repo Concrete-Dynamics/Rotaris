@@ -35,3 +35,35 @@ Noticed 2026-09-28 under R-062 while taking IC-8's first Linux execution. Not re
 covered the harness only. A repair has to choose between a mount that creates no mountpoint (for example, a writable
 bind of the root's parent arranged so the name is shadowed without being created) and REQ-SANDBOX-077's fallback of
 refusing the command. That is a renderer decision, and it is measured by this same scenario.
+
+## Repaired — 2026-09-29
+
+Repaired 2026-09-29 under R-067, by REQ-SANDBOX-077's own fallback. A mount that creates no mountpoint does not
+exist: a name absent under a directory bound in from the host can be hidden only by a mount at that name, and the
+mount needs the name to exist first. So the Linux renderer no longer renders case (c). `bwrapTokens`
+(`packages/agent-tools/src/confinement/render-bwrap.ts`) now throws REQ-SANDBOX-083's `SandboxUnavailableError`
+whenever the specification holds an absent carve-out. The error names each absent path. The terminal enforcement
+point turns it into the `sandbox_unavailable` refusal (exit 126) for that one command, and the next command is
+rendered afresh (REQ-SANDBOX-078). The error class moved to `confinement/errors.ts` so the renderer can throw it
+without importing the barrel that imports the renderer. The falsified reason stays in the renderer's comment next to
+its replacement. The shared specification is unchanged, and so is Seatbelt: it denies the absent name by rule and
+creates nothing.
+
+Pinned by:
+
+- `confinement.test.ts`: "case (c) is refused, never rendered as a mount that bubblewrap would create on the host",
+  "case (c) under bubblewrap refuses the command through the wrap…", and the parity case, which now expects the
+  refusal.
+- `terminal.test.ts`: "REQ-SANDBOX-077, -078, -083: under bubblewrap a root missing a protected name refuses the
+  command, runs nothing and creates neither name", for a foreground command and a background one.
+
+All four fail on the code before the repair.
+
+`sandbox-proof` scenario 6 now measures the six effects with `.git` present in both network postures, and adds a
+third confined launch, `effects-absent-git`. That launch runs as root under Xvfb with bubblewrap 0.9.0. Both commands
+were refused with `sandbox_unavailable` and 126 (read from the store's `tool_calls`), nothing ran, and `.git` was
+still absent on the host afterwards. The whole proof exits 0.
+
+The consequence is severe enough that it is raised as
+[OQ-140](../../architecture/open-questions.md): on Linux, every confined command in a root that lacks `.git` or
+`.rotaris` is refused. Seatbelt runs those commands. IC-8 records the measurement in place.

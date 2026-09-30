@@ -250,5 +250,16 @@ point, in the built application. All six held. The absent-subpath case of `REQ-S
 the writable bind. The renderer's reason "leave nothing on the host" is falsified by that measurement and stays
 beside its replacement when one is written. The table, the host, and what the run could not show are in IC-8's
 section of `../implementation-conditions.md`. The defect is
-[`the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`](../../defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md).
+[`the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`](../../defects/fixed/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md).
 macOS remains unmeasured, and IC-8 is not discharged.
+
+**Reported back 2026-09-29 (R-067): consequence 3's reading is now what the Linux renderer does.** "Implement
+`REQ-SANDBOX-077` — refuse rather than create" was chosen on paper and never reached. The renderer rendered case (c)
+as a tmpfs, on the belief that the tmpfs left nothing on the host, and the measurement above falsified that belief. No
+mount hides an absent name without a mountpoint at that name. So the bubblewrap renderer now throws
+`SandboxUnavailableError` for any absent carve-out, and the terminal enforcement point refuses that one command under
+`REQ-SANDBOX-083`. The shared specification and the Seatbelt renderer are unchanged. That makes "neither renderer
+decides anything" slightly less true: one renderer can now refuse what the other renders. The refusal is a property of
+the mechanism, not a policy, so it belongs with the mechanism. `pnpm sandbox-proof` is green on Linux with `bwrap`,
+with a third confined launch for the absent case (IC-8, "Linux again — 2026-09-29"). What this costs a Linux user is
+raised as OQ-140 in `../open-questions.md`.

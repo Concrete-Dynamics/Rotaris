@@ -6245,6 +6245,48 @@ read `create` from a call with `path` and `content`, no `operation` and no exist
 did. It would change what the gate executes and what a session approval matches (PD-TOOLS-004), so the requirement has
 to allow it before the code can.
 
+**OQ-140 — Under bubblewrap, does a writable root that lacks `.git` or `.rotaris` refuse every confined command?**
+*(REQ-SANDBOX-077: its case (c) renders `--tmpfs <p> --remount-ro <p>`, and its closing paragraph refuses, under
+REQ-SANDBOX-083, a carve-out that cannot be established without a host-visible directory. Also REQ-SANDBOX-061's
+backend parity, REQ-SANDBOX-127's first effect, and REQ-TOOLS-123. Raised 2026-09-29 by the repair of
+[`the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`](../defects/fixed/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md)
+under [R-067](../product/requests.md#r-067). Open.)*
+
+IC-8's first Linux execution measured that the rendering case (c) names cannot meet the closing paragraph of its own
+requirement. bubblewrap creates a mountpoint before it mounts. Under a writable root bound in from the host, that
+mountpoint is created on the host. No mount arrangement avoids this: a name that does not exist can be hidden only by a
+mount at that name. Two alternatives were weighed and rejected:
+
+- An overlay needs a work directory on the host's filesystem.
+- Binding the root read-only and its children writable refuses every new file at the root's top level.
+
+On Linux, case (c) can therefore only be refused. The two requirements disagree about the Linux case: REQ-SANDBOX-077
+describes that case as running, with "the name reads as empty", while REQ-SANDBOX-061 requires the same write verdicts
+on both platforms.
+
+**What the build proceeds under:** the closing paragraph's fallback. ADR-0022's consequence 3 and OQ-7's closure had
+already chosen it as the fail-closed reading. The renderer throws `SandboxUnavailableError`, and the terminal refuses
+that one command with `sandbox_unavailable`, 126, and a cause naming each absent path. The session goes on
+(REQ-SANDBOX-078). Nothing is created on the host.
+
+**What that costs, stated so it is not discovered later.** On Linux, with an active mode that grants writable roots,
+every command is refused while any effective writable root lacks either name:
+
+- a workspace that is not a Git repository;
+- a session worktree (`<workspace>/.rotaris/worktrees/<id>`), unless the repository tracks `.rotaris`;
+- any configured additional root (REQ-SANDBOX-058), since an ordinary directory holds neither name.
+
+The specification computes a carve-out per writable root. REQ-SANDBOX-056 speaks of "workspace-relative subpaths".
+Under Seatbelt all of these commands run, and only the write under the absent name is denied.
+
+**What a ruling decides.** One of three things:
+
+1. Accept the Linux limit as the refusal now reads, and say it where the user meets it.
+2. Amend REQ-SANDBOX-077 so that bubblewrap may create the empty name. Its content is never writable, but it
+   stays on the host.
+3. Narrow the carve-outs to the workspace-relative names REQ-SANDBOX-056 states, so that a configured additional
+   root carries none.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

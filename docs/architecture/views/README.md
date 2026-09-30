@@ -45,13 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
-**A row not yet measured is never positioned short of what it draws (PD-CHAT-003, R-067).** `estimateHeight` in
-`ui/transcript/pool.ts` takes the row's block start and adds the 8 px the first row of a block is drawn below its
-neighbour over a row inside one; `reuseOffsets` hands its height reader the row's position, and `TranscriptPane.tsx`
-reads `places[at].blockStart` there. A one-line row that starts a block drew 33.4 px into the 30 px allotted to it and
-was drawn through the row beneath it until its first measurement. This repairs
-`a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`. The **runtime view**'s
-transcript paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+**A row not yet measured is not positioned short of what it draws, and a row on screen is measured (PD-CHAT-003, R-067).**
+`estimateHeight` in `ui/transcript/pool.ts` builds the estimate from the parts of the row's box the stylesheet draws —
+the row or block gap (`readHeight` hands it `places[at].blockStart`), the border, a user row's padding, a Markdown body's
+block margins, one 19.5 px line per drawn line, an activity line laid out segment by segment — and errs long; the first
+form of this repair counted the block gap alone, and a one-line agent message inside a block went on drawing 33.4 px into
+30. `TranscriptPane.tsx` observes a slot again whenever it is bound under a measurement key it was not observed under
+(`observeAgain`): a slot a scroll rebound to a row of its previous row's height used to keep the new row at its estimate.
+This repairs `a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`. The **runtime
+view**'s transcript paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
 
 **A failing layout contract is filed under `CONTRACT` in the evidence pack (R-067).** `ui-audit` builds each finding
 through `apps/desktop/scripts/lib/audit-finding.mjs`, which spreads the measured detail first and moves a contract row's

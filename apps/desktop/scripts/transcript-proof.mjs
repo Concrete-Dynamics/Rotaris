@@ -285,6 +285,9 @@ const invariance = await launch('invariance', {
 
 // ── 3. behaviour ────────────────────────────────────────────────────────────────────────────────────────────
 const SCROLL = `document.querySelector('[data-testid="transcript-scroll"]')`;
+// The bound slots by their top against the viewport, and those whose allotted height — the distance to the next slot —
+// is not the height they draw: a row positioned by its estimate rather than by its measurement. Statements, for splicing.
+const SLOTS_READ = `const v = s.getBoundingClientRect(); const slots = [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound).map((n) => { const r = n.getBoundingClientRect(); return { key: n.dataset.bound, top: Math.round((r.top - v.top) * 10) / 10, height: Math.round(r.height * 10) / 10 }; }).sort((a, b) => a.top - b.top); const unmeasured = slots.slice(0, -1).map((x, i) => ({ key: x.key, draws: x.height, allotted: Math.round((slots[i + 1].top - x.top) * 10) / 10 })).filter((x) => Math.abs(x.draws - x.allotted) > 0.5);`;
 const GROUPS = `[...document.querySelectorAll('[data-shape="group"]')]`;
 const behaviour = await launch('behaviour', {
   ROTARIS_CAPTURE_RESUME: 'S1200',
@@ -323,8 +326,11 @@ const behaviour = await launch('behaviour', {
     `(() => { const s = ${SCROLL}; s.scrollTop = 300; return { scrollTop: s.scrollTop }; })()@12600`,
     // 200 px is below the threshold: this is the scroll that asks for the older span. The reader's own movement is
     // 300 -> 200; everything else that changes the scroll position afterwards is the anchor holding them still.
-    `(() => { const s = ${SCROLL}; const pool = document.querySelector('.transcript__pool').getBoundingClientRect().height; s.scrollTop = 200; return { scrollTop: 200, pool }; })()@13400`,
-    `(() => { const s = ${SCROLL}; const rep = window.__rotarisReplica(); const pool = document.querySelector('.transcript__pool').getBoundingClientRect().height; return { rows: rep.rows, oldest: rep.oldestIndex, reachedOldest: rep.reachedOldest, paging: s.dataset.paging, scrollTop: s.scrollTop, pool, displayed: s.dataset.displayed }; })()@16000`,
+    // Before it, with the pool settled at 300 px, the row at the top of the viewport and its offset are read — the
+    // anchor REQ-CHAT-071 holds — and so is every bound slot whose allotted height is not what it draws: a scroll
+    // rebinds slots without changing what is displayed, and a row it rebinds is measured like any other.
+    `(() => { const s = ${SCROLL}; const pool = document.querySelector('.transcript__pool').getBoundingClientRect().height; ${SLOTS_READ} const top = slots.find((x) => x.top + x.height > 0); window.__proofAnchor = top ? top.key : null; s.scrollTop = 200; return { scrollTop: 200, pool, anchor: top ? { key: top.key, offset: top.top } : null, unmeasured }; })()@13400`,
+    `(() => { const s = ${SCROLL}; const rep = window.__rotarisReplica(); const pool = document.querySelector('.transcript__pool').getBoundingClientRect().height; ${SLOTS_READ} const held = slots.find((x) => x.key === window.__proofAnchor); return { rows: rep.rows, oldest: rep.oldestIndex, reachedOldest: rep.reachedOldest, paging: s.dataset.paging, scrollTop: s.scrollTop, pool, displayed: s.dataset.displayed, anchor: held ? { key: held.key, offset: held.top } : null, unmeasured }; })()@16000`,
     `window.__rotarisRow(150)@16400`,
     // ADR-0046 steps 0 to 2 reaching the product end to end: a REGRESSION CHECK on behaviour built on 2026-09-03
     // and reported into ADR-0043's note, not a first execution. A burst of gapped publications must produce
@@ -371,11 +377,26 @@ const behaviour = await launch('behaviour', {
    * difference between the two is how far the content shifted under them. Reading it this way is immune to the
    * one-render lag between a scroll and the pool's rebinding, which the first attempt at this measurement read as
    * a 360 px drift that was mostly the probe's own.
+   *
+   * **Falsified 2026-09-30, kept beside its replacement: "the transcript grew by exactly as much as the reader's scroll
+   * position moved".** A row BELOW the reader that is measured after the older span arrives changes the transcript's
+   * height without moving the reader — a row the pool binds in its bottom overscan for a frame is — so the difference
+   * also carried that row's estimate error: with the estimate made to err long (4.6 px on such a row,
+   * docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md) it read
+   * 4.2 to 4.6 px while the anchor row had moved 0.4 px. The two figures are still recorded; what is held to 4 px is
+   * the anchor itself: the row at the top of the viewport before the request, read on a settled pool before the scroll
+   * that asks for the span, is where the reader's own 100 px scroll put it once the span has been placed. Both reads
+   * are rects of a settled pool, so the one-render lag above does not reach them.
    */
   const grew = afterPaging.pool - atRequest.pool;
   const moved = afterPaging.scrollTop - atRequest.scrollTop;
-  expect(Math.abs(grew - moved) <= 4,
-    `the reader moved when older rows arrived above the viewport: the transcript grew ${grew} px and the reader moved ${moved} px (${JSON.stringify({ atRequest, afterPaging })})`);
+  expect(atRequest.anchor !== null && afterPaging.anchor !== null, `the row at the top of the viewport was not bound after the older rows arrived: ${JSON.stringify({ atRequest, afterPaging })}`);
+  const drift = afterPaging.anchor.offset - (atRequest.anchor.offset + (300 - 200));
+  expect(Math.abs(drift) <= 4,
+    `the reader moved when older rows arrived above the viewport: ${atRequest.anchor.key} was ${atRequest.anchor.offset} px from the viewport's top before the reader's 100 px scroll and ${afterPaging.anchor.offset} px after the span arrived (the transcript grew ${grew} px and the reader moved ${moved} px): ${JSON.stringify({ atRequest, afterPaging })}`);
+  // ADR-0045 (heights are measured) after a scroll and after a page: no bound row is positioned by its estimate once the pool has settled.
+  expect(atRequest.unmeasured.length === 0, `rows a scroll bound were still positioned by their estimate 800 ms later: ${JSON.stringify(atRequest.unmeasured)}`);
+  expect(afterPaging.unmeasured.length === 0, `rows were still positioned by their estimate after the older span settled: ${JSON.stringify(afterPaging.unmeasured)}`);
   const paged = evalAt(behaviour, 16400);
   const stored = withDb((db) => db.prepare('SELECT * FROM transcript_rows WHERE session_id = ? AND row_index = 150').get('S1200'));
   expect(paged && stored && paged.body === stored.body && paged.kind === stored.kind && paged.at === stored.at && paged.ts === stored.ts,
@@ -392,7 +413,7 @@ const behaviour = await launch('behaviour', {
     cap: { recordedLines: cap.recordedLines, beyondTheCapIsNotDisplayed: beyond.beyondTheCap, truncationMarked: cap.marker, expansionShowsUntruncated: untruncated },
     search: { count: search.count, following: search.following },
     paging: { before: beforePaging, after: afterPaging, pagedRowIdenticalToReleased: true },
-    anchor: { grewPx: grew, readerMovedPx: moved, driftPx: Math.abs(grew - moved), atRequest, afterPaging },
+    anchor: { row: atRequest.anchor.key, driftPx: Math.round(Math.abs(drift) * 10) / 10, grewPx: grew, readerMovedPx: moved, grewMinusMovedPx: Math.abs(grew - moved), atRequest, afterPaging },
     burst: { refused: dRefused, reset: dReset, dropped: after.counters.dropped - before.counters.dropped, before: before.rowOps, after: after.rowOps },
     png: behaviour.png,
   };
@@ -421,16 +442,22 @@ const behaviour = await launch('behaviour', {
   const LIVE_WATCH_FROM = 1;
   const LIVE_FIRST = `(async () => { const until = performance.now() + ${LIVE_SAMPLE_AT}; const frame = () => new Promise((resolve) => requestAnimationFrame(resolve)); while (performance.now() < until) { if (document.querySelector('.activity__now')) { await frame(); if (document.querySelector('.activity__now')) break; } await frame(); } return OVERLAP_READ; })()`;
   const SAMPLE_AT = Array.from({ length: 25 }, (_, i) => 3300 + i * 300);
-  // The THIRD reading watches the rows the scripted run appends from the frame they are first drawn, before any
-  // measurement of them can exist: from the frame the run's reasoning row is first bound, it reads the boxes on each
-  // of the next twelve frames. A requestAnimationFrame callback runs before that frame's layout and paint and before
-  // its ResizeObserver delivery, so what it reads is what the frame shows while the rows are positioned by
-  // `estimateHeight` alone. An appointment caught that window once in a run, 33 ms after the row appeared, and read
-  // 3.4 px (docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md);
-  // this reads it on every run.
+  // The THIRD reading watches the rows the scripted run appends from the frame each is first drawn, before any
+  // measurement of it can exist: every time a key the pool had not bound before is bound — the prompt's user row, the
+  // run's notices, its reasoning row, its answer — it reads the boxes on each of the next twelve frames, until 9 s have
+  // passed. A requestAnimationFrame callback runs before that frame's layout and paint and before its ResizeObserver
+  // delivery, so what it reads is what the frame shows while the new rows are positioned by `estimateHeight` alone. An
+  // appointment caught that window once in a run, 33 ms after the reasoning row appeared, and read 3.4 px; a first form
+  // of this watch, from the reasoning row alone, caught a one-line agent message inside a block doing the same in some
+  // runs and not others
+  // (docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
+  // Every overlapping pair on those frames is recorded; the ones with a NEW row on either side are what this reading
+  // holds to 1 px. A pair of two rows already drawn is another mechanism — a row that changes shape is positioned by the
+  // height its identity drew last until it is measured again — and is recorded as `otherOverlaps`, not held here
+  // (docs/defects/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md).
   const NEW_ROWS_WATCH_FROM = 2;
   const NEW_ROWS_FRAMES = 12;
-  const NEW_ROWS = `(async () => { const until = performance.now() + 9000; const frame = () => new Promise((resolve) => requestAnimationFrame(resolve)); const bound = () => [...document.querySelectorAll('.transcript__slot')].map((n) => n.dataset.bound).filter((k) => k); let before = null; let fresh = null; const frames = []; while (performance.now() < until && frames.length < ${NEW_ROWS_FRAMES}) { const keys = bound(); if (keys.length > 0) { if (before === null) before = new Set(keys); else if (fresh === null) fresh = keys.find((k) => k.startsWith('think:') && !before.has(k)) ?? null; if (fresh !== null) frames.push(OVERLAP_READ); } await frame(); } const worst = frames.reduce((a, b) => (b.worstOverlapPx > a.worstOverlapPx ? b : a), { worstOverlapPx: 0, pair: null }); return { fresh, frames: frames.length, perFrame: frames.map((f) => f.worstOverlapPx), worstOverlapPx: worst.worstOverlapPx, pair: worst.pair }; })()`;
+  const NEW_ROWS = `(async () => { const until = performance.now() + 9000; const frame = () => new Promise((resolve) => requestAnimationFrame(resolve)); const bound = () => [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound); let seen = null; const fresh = []; const frames = []; let n = 0; let watchTo = -1; while (performance.now() < until) { const slots = bound(); if (slots.length > 0) { const keys = slots.map((x) => x.dataset.bound); if (seen === null) seen = new Set(keys); else { const added = keys.filter((k) => !seen.has(k)); if (added.length > 0) { for (const k of added) { seen.add(k); fresh.push(k); } watchTo = n + ${NEW_ROWS_FRAMES}; } if (n <= watchTo) { const boxes = slots.map((x) => { const r = x.getBoundingClientRect(); return { key: x.dataset.bound, top: r.top, bottom: r.bottom }; }).sort((a, b) => a.top - b.top); const pairs = []; for (let i = 1; i < boxes.length; i += 1) { const o = Math.round((boxes[i - 1].bottom - boxes[i].top) * 10) / 10; if (o > 0) pairs.push({ frame: n, px: o, pair: [boxes[i - 1].key, boxes[i].key] }); } frames.push(pairs); } } } n += 1; await frame(); } const all = frames.flat(); const isNew = (p) => fresh.includes(p.pair[0]) || fresh.includes(p.pair[1]); const mine = all.filter(isNew); const worst = mine.reduce((a, b) => (b.px > a.px ? b : a), { px: 0, pair: null }); return { fresh, frames: frames.length, overlapping: mine, worstOverlapPx: worst.px, pair: worst.pair, otherOverlaps: all.filter((p) => !isNew(p)) }; })()`;
   const OVERLAP = `(() => { const boxes = [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound).map((n) => { const r = n.getBoundingClientRect(); return { key: n.dataset.bound, top: r.top, bottom: r.bottom, keyed: n.dataset.measure !== '' }; }).sort((a, b) => a.top - b.top); let worst = 0; let pair = null; for (let i = 1; i < boxes.length; i += 1) { const o = boxes[i - 1].bottom - boxes[i].top; if (o > worst) { worst = o; pair = [boxes[i - 1].key, boxes[i].key]; } } const seg = document.querySelector('[data-shape="group"] .activity__segments'); const segmentLines = seg ? new Set([...seg.querySelectorAll('.activity__segment')].map((e) => Math.round(e.getBoundingClientRect().top))).size : 0; const roles = [...document.querySelectorAll('.row__role')].map((e) => Math.round(e.getBoundingClientRect().height)); const g = document.querySelector('[data-shape="group"]'); return { bound: boxes.length, unkeyed: boxes.filter((b) => !b.keyed).length, worstOverlapPx: Math.round(worst * 10) / 10, pair, segmentLines, tallestRolePx: Math.max(0, ...roles), live: document.querySelectorAll('.activity__now').length, summaryTail: g ? g.innerText.replace(/\\s+/g, ' ').trim().slice(-90) : null }; })()`;
   const geometry = await launch('geometry', {
     // A PLANTED running tool cannot stay running: a resumed session settles its in-flight calls through stale
@@ -439,7 +466,7 @@ const behaviour = await launch('behaviour', {
     ROTARIS_CAPTURE_RESUME: 'SLIVE',
     ROTARIS_SCRIPT: 'think,read,answer',
     ROTARIS_CAPTURE_PROMPT: 'Say something about the notes.',
-    ROTARIS_CAPTURE_EVAL_AT: [`${LIVE_FIRST.replace('OVERLAP_READ', () => OVERLAP)}@${LIVE_WATCH_FROM}`, `${NEW_ROWS.replace('OVERLAP_READ', () => OVERLAP)}@${NEW_ROWS_WATCH_FROM}`, ...SAMPLE_AT.map((ms) => `${OVERLAP}@${ms}`)].join(';;'),
+    ROTARIS_CAPTURE_EVAL_AT: [`${LIVE_FIRST.replace('OVERLAP_READ', () => OVERLAP)}@${LIVE_WATCH_FROM}`, `${NEW_ROWS}@${NEW_ROWS_WATCH_FROM}`, ...SAMPLE_AT.map((ms) => `${OVERLAP}@${ms}`)].join(';;'),
     ROTARIS_CAPTURE_AFTER_MS: '11000',
   }, 240_000);
   const samples = [{ ms: 'on the first live line', ...(evalAt(geometry, LIVE_WATCH_FROM) ?? {}) }, ...SAMPLE_AT.map((ms) => ({ ms, ...(evalAt(geometry, ms) ?? {}) }))].filter((s) => typeof s.bound === 'number');
@@ -461,7 +488,7 @@ const behaviour = await launch('behaviour', {
   // The rows the run appends, on the frames before their first measurement: a new row is positioned by its estimate
   // there, and an estimate short of what the row draws puts it through the row beneath it for exactly those frames.
   const newRows = evalAt(geometry, NEW_ROWS_WATCH_FROM);
-  expect(newRows !== null && typeof newRows.fresh === 'string' && newRows.frames >= NEW_ROWS_FRAMES, `the new-row watch never saw the run's reasoning row drawn, so the frames before its measurement were never read: ${JSON.stringify(newRows)}`);
+  expect(newRows !== null && Array.isArray(newRows.fresh) && newRows.fresh.some((k) => k.startsWith('think:')) && newRows.frames >= NEW_ROWS_FRAMES, `the new-row watch never saw the run's rows drawn, so the frames before their measurement were never read: ${JSON.stringify(newRows)}`);
   expect(newRows.worstOverlapPx <= 1, `a newly appended row overlaps its neighbour by ${newRows.worstOverlapPx} px before its first measurement ${JSON.stringify(newRows.pair)}: ${JSON.stringify(newRows)}`);
   results.geometry = { samples, wrappedToLines: wrapped, liveSamples: liveSamples.length, worstOverlapPx: worst.worstOverlapPx, newRows, tallestRolePx: Math.max(...samples.map((s) => s.tallestRolePx)), png: geometry.png };
 }

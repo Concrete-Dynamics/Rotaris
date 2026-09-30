@@ -93,7 +93,7 @@ record already decides, and every ruling it needs is named as the owner's rather
   ([token order](../defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md),
   [setup collision](../defects/fixed/code-intel-proofs-setup-launches-collide-with-the-background-initialization.md),
   and, found in the fix round, [fixed-offset presses](../defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md)).
-  A fourth, the shared capture seam's Settings press, which a notice could deflect, was repaired 2026-09-29 under R-067
+  A fourth, the shared capture seam's Settings press, which a notice could deflect, was repaired 2026-09-30 under R-067
   ([fixed](../defects/fixed/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md)): the seam now presses
   again until the category is selected, and logs when it never is. *(This line read "One more stays open … the nine
   proofs that use the seam are exposed to it until it is repaired" until then.)* `code-intel-proof`

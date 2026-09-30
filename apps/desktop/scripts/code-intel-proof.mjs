@@ -317,7 +317,7 @@ if (want(4)) {
 // deflected onto a category above more than once: in `setup-again` on 2026-09-29, and then in `setup-cancel`, where
 // Start had already been pressed and the card, Cancel with it, left the screen before Cancel could be pressed (the fix
 // round's verifier, three reds in seven runs; the seam's own note, `docs/defects/fixed/
-// the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`, repaired 2026-09-29: the seam now presses
+// the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`, repaired 2026-09-30: the seam now presses
 // again until the category is selected). These launches still do not use that seam. They open Settings with the Ctrl+7 chord, which has no point to miss, and every press waits until the notice
 // has been drawn (`body:has([data-testid="notice"])`), so no point is read before the one shift of the launch. The
 // category press is made only if MCP Servers is not the selected category. Start is pressed as soon as it is drawn

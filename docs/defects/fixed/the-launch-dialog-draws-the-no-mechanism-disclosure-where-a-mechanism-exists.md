@@ -56,5 +56,5 @@ The one run that went red after the repair failed in scenario 5, not in this che
 another workflow loaded the host (load average 4.2). Its selects were chosen but its Save never matched. Re-run once
 alone, the proof was green. That is consistent with the then-open
 [`the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`](the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md),
-which names `sandbox-proof`, but the run did not establish that it was the cause. *(That note was repaired 2026-09-29
+which names `sandbox-proof`, but the run did not establish that it was the cause. *(That note was repaired 2026-09-30
 under R-067: the seam now presses again until the category is selected.)*

@@ -29,7 +29,7 @@ None: this is harness code. A red it causes is a false red against whatever the 
 
 ## Outcome
 
-Repaired 2026-09-29 under R-067. The `view === 7` branch now calls `pressCategory` (`capture/host.ts`) instead of
+Repaired 2026-09-30 under R-067. The `view === 7` branch now calls `pressCategory` (`capture/host.ts`) instead of
 pressing once. The first press still lands 200 ms after the chord, as before. After it, the item is read again with
 `categoryProbe`, which returns the point and whether the item carries `is-selected`. The seam presses again, 150 ms
 apart, until the item is selected. A category that is already selected is not pressed at all. The seam logs the

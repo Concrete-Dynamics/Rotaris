@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A session delete cascades to nineteen tables, and `sessions-proof` reads that from the schema (REQ-SESSION-166, PD-ORCH-005,
+R-067).** The **runtime view**'s §6a delete said "the fifteen dependent tables"; v20's `plan_cycles` and v23–v24's
+`iterations`, `agent_messages`, `agent_terminals` and `agent_fingerprints` make every table whose `session_id` references
+`sessions` nineteen, with `delivery_runs` the one kept as a fact. The proof's count pin gave way to the shape
+(`apps/desktop/scripts/lib/session-cascade.mjs`). This repairs [`sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md`](../../defects/fixed/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md).
+No package, edge, process, message kind, channel, command or store column changed.
+
 **The update shape answers `extend` (REQ-CHAT-053, R-067).** `updateShape` in `ui/transcript/pool.ts` reads the
 content of one row besides the keys — the last row before the update — so an extension of that row with rows appended
 after it is `extend` rather than `append`; the first form's `extend` branch could not be reached. The pane still records

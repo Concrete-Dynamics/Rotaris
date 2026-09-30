@@ -1014,9 +1014,13 @@ of §5 and none a channel: each is a request answered once.
   unknowable session with its sentence, finds the tree (the binding's worktree, else the workspace root), notes an
   unreadable state; (2) the refs, best-effort — `checkpoint.deleteNamespace` through main to the service, skipped with a
   warning when the tree is gone; (3) `completeDelete` — a loaded idle session evicted from the registry, then ONE durable
-  transaction `DELETE FROM sessions` cascading to the fifteen dependent tables, then `sessions/<sid>/` removed, errors
-  ignored; (4) the browser reads the list again; a followed session that was deleted is unfollowed and its persona
-  windows destroyed.
+  transaction `DELETE FROM sessions` cascading to every table whose `session_id` references `sessions` `ON DELETE
+  CASCADE` — nineteen since v24, `plan_cycles` (v20) and PD-ORCH-005's agent record (`iterations`, `agent_messages`,
+  `agent_terminals` in v23, `agent_fingerprints` in v24; its clause 12) among them; `delivery_runs` names the session as a
+  fact and keeps its row (REQ-TRACE-476) — then `sessions/<sid>/` removed, errors ignored. This line said "the fifteen
+  dependent tables" until 2026-09-29, a count the migrations since had outgrown; `sessions-proof` checks the shape from
+  the schema, never a count (`apps/desktop/scripts/lib/session-cascade.mjs`); (4) the browser reads the list again; a
+  followed session that was deleted is unfollowed and its persona windows destroyed.
 - **Export** (REQ-SESSION-199, REQ-SESSION-189): `readRecords` / `readTrajectory` run in a deferred READ transaction
   (`StoreDal.readTransaction`) so a ring's entries and its header figures come from one state; nothing is written to the
   record, no run pauses, a live session exports what it holds at that instant; the file is written afterwards, outside

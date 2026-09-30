@@ -814,7 +814,16 @@ defect's shape at the child level), a child that ran commands and reported none 
 **reports whether it was long at all**, including when it stopped at `--max-iterations` and was bounded by the
 harness rather than by the work. `--duress-fixture` replaces the workspace for the whole run and is refused
 alongside any other scenario, because one sandbox holds one store and every other prompt names `todo-app`'s
-files.
+files. *Corrected 2026-09-29 (live-run findings H-a to H-d, H-h; R-067), with the reading above kept as it was written:
+"a failed child with an empty `final_response`" was the wrong observable. REQ-ORCH-110 leaves that field empty for every
+child cut off mid-work, and the first execution flagged exactly such a child, `d`, whose `last_response`, `cut_off` and
+timeout error said what it did. A failed child is now silent only when none of the four speaks. *(Corrected
+2026-09-30, the verifier's fix round 1: of the three that can speak — `final_response`, `last_response`, `cut_off` — since an
+error entry alone is on every failed child's report, and counting it passed the eighty-second defect's own shape.)* Two other readings
+were also wrong. The commands question compared a call's canonical agent name with a child's given name, so it was
+never asked. The autopsy's null-summary boolean answered `false`, and passed, for a session that never stopped; it
+answers `unasked` now. The readings live in `scripts/lib/duress-checks.mjs`, pinned by `duress-checks.test.ts`, and the
+deadline check now says where the time went.*
 
 **`failed-word` stopped being a NOTE on 2026-09-27 (`PD-TOOLS-003`), and the paragraph above is kept as it was
 written.** The shape printed `FAILED` in capitals, and its warning was faithful to `REQ-TOOLS-113`'s marker. The
@@ -828,7 +837,9 @@ the one faithful behaviour still measured as a NOTE. **The guard has not run aga
 live run of `terminal` is its first.
 
 **The five decisions this scenario was held on were taken on 2026-09-22**, four by the owner and one delegated:
-the endpoint is the unmetered `katalyst`, the wall clock is **40 minutes**, it stays **opt-in**, its assertions
+the endpoint is the unmetered `katalyst`, the wall clock is **40 minutes** (*2026-09-29: the first execution overran it
+by 6 s with the endpoint generating for 99 % of the wait; the figure stands, and an overrun the endpoint held while
+the run progressed is now reported as the window's bound, a NOTE — `AGENTS.md`, "`LIVE_RUN_DURESS_MS`"*), it stays **opt-in**, its assertions
 stay coherence-shaped, and **`--max-iterations` rises from 15 to 500**. That last one is a bound being loosened
 and is recorded as such. Fifteen was a bound while every scenario here was a short task; the long run turned it
 into the thing being measured — a delegating run reaches 15 while it is still commissioning and then reports its

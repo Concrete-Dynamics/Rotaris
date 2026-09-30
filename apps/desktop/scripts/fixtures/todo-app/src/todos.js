@@ -1,6 +1,7 @@
 /**
  * The todo list, as pure functions over a plain array. Every function returns a new array; nothing here
- * touches the DOM, the clock or module state, so `node --test src/` runs it with no dependencies installed.
+ * touches the DOM, the clock or module state, so `node --test`, run from the repository's root, runs it with no
+ * dependencies installed.
  *
  * A todo is `{ id: number, title: string, done: boolean }`.
  */

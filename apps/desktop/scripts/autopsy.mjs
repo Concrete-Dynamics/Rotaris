@@ -30,7 +30,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { workspacesRootFor } from './lib/harness.mjs';
-import { zeroCostLine } from './lib/autopsy-coherence.mjs';
+import { nullSummaryLine, zeroCostLine } from './lib/autopsy-coherence.mjs';
 
 const require = createRequire(join(process.cwd(), 'apps', 'desktop', 'package.json'));
 const Database = require('better-sqlite3');
@@ -160,8 +160,6 @@ for (const t of toolCalls) {
   const command = args !== null && typeof args === 'object' && !Array.isArray(args) ? head(str(args.command).replace(/\s+/g, ' '), 120) : '';
   if (command !== '') commands.set(command, (commands.get(command) ?? 0) + 1);
 }
-const stopped = !['idle', 'running', 'background', 'waiting'].includes(row.execution_status);
-
 // Per-model-key attribution: the store records no provider or model on the
 // usage.update payload (tokens and cost alone), so tool calls attribute to
 // the model_key the children record carries. The entry agent's own calls
@@ -200,7 +198,8 @@ if (jumps.length === 0) console.log('  none');
 for (const j of jumps.slice(0, 10)) console.log(`  ${j.at}: in=${j.input} out=${j.output} jump=+${j.jump}`);
 console.log('');
 console.log('### coherence');
-console.log(`  null summary on stopped run: ${stopped && (row.summary_text ?? '') === ''}`);
+// `unasked` for a session that never stopped, never a `false` a check could pass on (live-run finding H-c).
+console.log(nullSummaryLine(row));
 // Asked only where a figure existed: `cost_qualifier` `unknown` makes 0 the correct total (live-run finding K2(b)).
 console.log(zeroCostLine(row));
 for (const [path, n] of [...reads.entries()].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 10)) console.log(cut(`  read ${n}×: ${path}`));

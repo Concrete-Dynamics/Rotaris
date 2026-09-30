@@ -55,8 +55,24 @@ export const CLOSED_WORKSPACE_RECORDS_NOTHING = 'the workspace was closed while 
 export interface SetupPort {
   /** Starts the run host's setup; the reply is the status as it stands. */
   readonly start: () => Promise<{ readonly ok: true; readonly status: McpSetupStatus } | { readonly ok: false; readonly reason: string }>;
+  /** Asks the run host to end its setup; rejects when the request is not delivered (no workspace to address, or refused). */
   readonly cancel: () => Promise<void>;
   readonly status: () => Promise<McpSetupStatus | null>;
+}
+
+/**
+ * REQ-WORKSPACE-092: main's `SetupPort.cancel`, over the run host's `mcp.setup` request. It rejects unless the run host
+ * took the cancellation — with no window holding a workspace there is nothing to address it through, and a refusal is an
+ * answer, not a delivery — so the coordinator says in the log that it was not delivered rather than dropping it.
+ */
+export async function deliverSetupCancel(
+  workspaceId: string | undefined,
+  send: (workspaceId: string) => Promise<{ readonly kind: string; readonly headline?: string }>,
+): Promise<void> {
+  if (workspaceId === undefined || workspaceId === '') throw new Error('no window holds a workspace to address the run host through');
+  const r = await send(workspaceId);
+  if (r.kind === 'mcp.setup') return;
+  throw new Error(r.kind === 'refused' ? `the run host refused it: ${r.headline ?? ''}` : `the run host answered ${r.kind}`);
 }
 
 export interface InitializationDeps {
@@ -224,7 +240,7 @@ export class InitializationCoordinator {
         signal.removeEventListener('abort', onAbort);
         resolve(this.resultOf(status));
       };
-      // REQ-WORKSPACE-092: the run host ends what the setup launched. A cancel that cannot be delivered is said, not dropped.
+      // REQ-WORKSPACE-092: the run host ends what the setup launched. A cancel whose request fails is said, not dropped.
       const onAbort = (): void => { this.deps.setup.cancel().catch((cause: unknown) => this.deps.log(`initialization: the setup's cancellation could not be delivered (${String(cause)})`, 'warn')); };
       this.setupListener = drain;
       signal.addEventListener('abort', onAbort, { once: true });
@@ -289,6 +305,11 @@ export class InitializationCoordinator {
    * window's resolution never waits on the cancellation. Before this was called, a switch left the outgoing run going,
    * recorded its outcome, and a return to the root found its automatic resolution already spent
    * (`docs/defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`).
+   *
+   * OQ-141: REQ-WORKSPACE-013 names only a switch's outgoing window and a background run. The same rule is applied to
+   * every run of a workspace no window holds any more — a plain close of one of several windows (PD-SHELL-001), a
+   * replacement closed after a veto, and a run the user started — which is the reading that question records, not a
+   * clause of the specification.
    */
   close(root: string): void {
     const e = this.workspaces.get(root);
@@ -300,7 +321,9 @@ export class InitializationCoordinator {
       }
     }
     this.workspaces.delete(root);
-    // The surfaces ask about the workspace most recently opened among those still open.
+    // The surfaces then ask about the entry inserted last among those still open. `open` of an entry that already exists
+    // does not reorder the map, so this is not strictly "most recently opened", and neither is the asking window's
+    // (`docs/defects/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
     if (this.active === root) this.active = [...this.workspaces.keys()].at(-1) ?? null;
   }
 

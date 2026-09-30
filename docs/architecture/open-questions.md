@@ -6287,6 +6287,47 @@ Under Seatbelt all of these commands run, and only the write under the absent na
 3. Narrow the carve-outs to the workspace-relative names REQ-SANDBOX-056 states, so that a configured additional
    root carries none.
 
+**OQ-141 — What becomes of a workspace's initialization run when its window closes other than as a switch's outgoing
+window?** *(REQ-WORKSPACE-013, which cancels "a background initialization run still under way in the outgoing window"
+of a switch on REQ-WORKSPACE-109's terms and records nothing for it; REQ-WORKSPACE-109, whose cancellation lets "a task
+already under way … reach its own conclusion", and which says of closing only "the application"; REQ-WORKSPACE-084,
+every attempted task given exactly one recorded outcome; PD-SHELL-001, under which "closing the added window changes
+nothing else". Raised 2026-09-29 by the verification of the repair of
+[`a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`](../defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md)
+under [R-067](../product/requests.md#r-067). Open.)*
+
+REQ-WORKSPACE-013 names one case: a switch's outgoing window, with a background run under way. The repair made main
+tell the initialization coordinator whenever no live main window holds a workspace any more (`MainWindows`'
+`workspaceClosed`, answered by `InitializationCoordinator.close`), and that moment also comes in three cases the
+requirement does not name:
+
+1. a plain close of one of several main windows (PD-SHELL-001), the workspace being open in no other;
+2. the replacement window a switch built and then closed because the old window vetoed its own close;
+3. a run the user started from the setup dialog (REQ-WORKSPACE-110), not a background run, under way in a window that
+   closes by either route above or by a switch.
+
+In each, the requirements are silent on whether the run is cancelled at all, and, if it is, whether the outcome of a
+task already under way that ends after the close is recorded (REQ-WORKSPACE-109 and REQ-WORKSPACE-084 alone would
+record it; REQ-WORKSPACE-013 records nothing, for its one case).
+
+**What the build proceeds under:** REQ-WORKSPACE-013's rule, applied to every run of a workspace no window holds any
+more. The run is cancelled on REQ-WORKSPACE-109's terms (no task that has not started begins, the run host ends what
+the task under way launched, REQ-WORKSPACE-092), nothing is recorded for it even when the task under way ends in
+success, nothing of it is published or bannered, and the tasks stay pending for the next open of that workspace, which
+is a new open with its own automatic resolution (REQ-WORKSPACE-102). The reasons: once no window holds the workspace,
+no surface can show the run's progress (REQ-WORKSPACE-109) or its failure banner (REQ-WORKSPACE-103), and the setup
+prompt and composer gate it answers belong to a window that is gone; a recording that lands after the close would be
+the one write to that workspace's marker with no window on it; and one rule for "no window holds it" keeps the switch,
+whose Windows orderings are not yet shown in the built app, from depending on which window closed first. A workspace
+still held by another window is not closed, so PD-SHELL-001's "changes nothing else" holds for every other window. One
+thing is left as it was: a resolution under way at the close that finds nothing applicable still writes its silent
+`last_run` stamp (REQ-WORKSPACE-083), which records no run. `InitializationCoordinator.close`'s doc comment and
+`initialization.test.ts`'s "closing a workspace" cases state and pin this reading.
+
+**What a ruling decides.** For each of the three cases, whether the run is cancelled when its window closes, or left
+to end on its own with its outcome recorded as REQ-WORKSPACE-084 would have it; and, for a user-started run, whether
+closing its window is a cancellation the user asked for.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

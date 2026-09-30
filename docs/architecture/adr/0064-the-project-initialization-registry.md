@@ -331,8 +331,15 @@ a local launch" — and a return to the first project started nothing. With the 
 process gone 201 ms after the switch answered, and the proof's 39 checks passed. **Found by the execution:** the
 replacement's refused start. The run host holds one setup at a time, and a replacement opened while the outgoing setup
 is still ending can be refused; the next round serialises the coordinator's setups
-(`../../defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`). **Not shown:** the Windows
-orders; a plain close of one of two windows with a run under way, which only the unit cases hold.
+(`../../defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`). **A reading, not a
+clause:** `workspaceClosed` fires whenever no live main window holds a workspace any more, which also covers a plain
+close of one of several windows (PD-SHELL-001), a replacement closed after a veto, and a run the user started;
+REQ-WORKSPACE-013 names none of the three, and the build applies its rule to all of them. That reading is raised as
+[OQ-141](../open-questions.md), not taken as settled. **Also corrected in verification:** main's setup port had
+dropped a cancellation it could not deliver — with no window holding a workspace it sent nothing, and a refusal from the
+run host was taken as delivered. The port now rejects in both cases (`deliverSetupCancel`), so the coordinator logs it.
+**Not shown:** the Windows orders; a plain close of one of two windows with a run under way, which only the unit cases
+hold.
 
 **Seventh round (2026-09-29, R-067): one setup at a time.** "Pushed, not polled" above holds, with a condition it left
 unstated: the run host holds **one** setup and pushes `mcp.setupStatus` with no workspace on it, and the coordinator held

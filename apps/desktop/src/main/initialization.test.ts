@@ -7,7 +7,7 @@ import type { InitializationStateView, McpSetupStatus, McpSetupStep } from '@rot
 import { readInitializationState, writeConfigFields, type PlainMap } from '@rotaris/config';
 import {
   CANCELLED_BEFORE_SETUP_ERROR, CODE_INTELLIGENCE_FAILED_SUMMARY, CODE_INTELLIGENCE_SUCCESS_CODE, CODE_INTELLIGENCE_SUCCESS_NON_CODE,
-  CODE_INTELLIGENCE_TASK_ID, InitializationCoordinator, NOT_A_LOCAL_LAUNCH_ERROR,
+  CODE_INTELLIGENCE_TASK_ID, deliverSetupCancel, InitializationCoordinator, NOT_A_LOCAL_LAUNCH_ERROR,
 } from './initialization.js';
 
 function workspace(): { root: string; agents: string } {
@@ -32,6 +32,7 @@ interface Harness {
   readonly published: InitializationStateView[];
   readonly banners: { headline: string; detail: string }[];
   readonly writes: PlainMap[];
+  readonly logs: { message: string; level: string }[];
   readonly root: string;
   readonly agents: string;
   push(s: McpSetupStatus): void;
@@ -45,6 +46,7 @@ function harness(options: { applicable?: boolean; startFails?: boolean; writeFai
   const published: InitializationStateView[] = [];
   const banners: { headline: string; detail: string }[] = [];
   const writes: PlainMap[] = [];
+  const logs: { message: string; level: string }[] = [];
   const clock = new FakeClock(0, Date.parse('2026-09-15T12:00:00Z'));
   // Each workspace's own service applies its marker writes one at a time, in the order they are sent; a write sent
   // while `writeHold` is set lands only once it is released, and every write sent after it to the same root lands after
@@ -52,7 +54,7 @@ function harness(options: { applicable?: boolean; startFails?: boolean; writeFai
   const applied = new Map<string, Promise<unknown>>();
   const coordinator = new InitializationCoordinator({
     clocks: clock,
-    log: () => undefined,
+    log: (message, level = 'info') => { logs.push({ message, level }); },
     writeMarker: (writeRoot, patch) => {
       const held = options.writeHold?.current ?? null;
       const landed = (applied.get(writeRoot) ?? Promise.resolve()).then(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
@@ -76,7 +78,7 @@ function harness(options: { applicable?: boolean; startFails?: boolean; writeFai
     modelReachable: () => options.modelReachable !== false,
   });
   coordinator.open(root, agents);
-  return { coordinator, published, banners, writes, root, agents, push: (s) => coordinator.onSetupStatus(s) };
+  return { coordinator, published, banners, writes, logs, root, agents, push: (s) => coordinator.onSetupStatus(s) };
 }
 
 /** REQ-WORKSPACE-088: the one registered task, its id and its label, and that it needs no consent. */
@@ -549,6 +551,27 @@ describe('closing a workspace', () => {
     // Nothing of the closed workspace reaches the windows, which are all another workspace's now.
     expect(h.published).toHaveLength(publishedAtClose);
     expect(h.banners).toEqual([]);
+  });
+
+  it('says in the log when the setup\'s cancellation could not be delivered (REQ-WORKSPACE-092, REQ-WORKSPACE-013)', async () => {
+    const h = harness({ onCancel: () => { throw new Error('no window holds a workspace to address the run host through'); } });
+    await h.coordinator.resolve(true);
+    await settle();
+    h.coordinator.close(h.root);
+    await settle();
+    expect(h.logs).toContainEqual({ level: 'warn', message: "initialization: the setup's cancellation could not be delivered (Error: no window holds a workspace to address the run host through)" });
+  });
+
+  it('treats a setup cancellation as delivered only when the run host took it (REQ-WORKSPACE-092)', async () => {
+    const sent: string[] = [];
+    await expect(deliverSetupCancel('ws-1', async (id) => { sent.push(id); return { kind: 'mcp.setup' }; })).resolves.toBeUndefined();
+    expect(sent).toEqual(['ws-1']);
+    // No window holds a workspace: nothing is sent, and the port says it could not deliver.
+    await expect(deliverSetupCancel(undefined, async (id) => { sent.push(id); return { kind: 'mcp.setup' }; })).rejects.toThrow('no window holds a workspace to address the run host through');
+    expect(sent).toEqual(['ws-1']);
+    // A refusal is an answer, not a delivery.
+    await expect(deliverSetupCancel('ws-2', async () => ({ kind: 'refused', headline: 'That workspace is not open in the run host' }))).rejects.toThrow('the run host refused it: That workspace is not open in the run host');
+    await expect(deliverSetupCancel('ws-3', async () => ({ kind: 'error' }))).rejects.toThrow('the run host answered error');
   });
 
   it('raises no banner for a closed workspace\'s background run that ends in failure (REQ-WORKSPACE-013, REQ-WORKSPACE-103)', async () => {

@@ -31,7 +31,7 @@ import { productVersion } from './version.js';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
 import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
-import { InitializationCoordinator } from './initialization.js'; // Part AS (ADR-0064)
+import { deliverSetupCancel, InitializationCoordinator } from './initialization.js'; // Part AS (ADR-0064)
 import { runCapture } from './capture/index.js'; // the scripted launch that ends in a photograph (verification only)
 import { checkpointsCommands } from './commands/checkpoints.js';
 import { configCommands } from './commands/config.js';
@@ -979,10 +979,8 @@ async function main(): Promise<void> {
         const r = await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'start' }, millis(15_000));
         return r.kind === 'mcp.setup' ? { ok: true, status: r.status } : { ok: false, reason: r.kind === 'refused' ? r.headline : `the run host answered ${r.kind}` };
       },
-      cancel: async () => {
-        const id = activeWindow()?.workspaceId;
-        if (id) await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'cancel' }, millis(15_000));
-      },
+      // Rejects unless the run host took it, so an undelivered cancellation reaches the log (REQ-WORKSPACE-092).
+      cancel: async () => await deliverSetupCancel(activeWindow()?.workspaceId, async (id) => await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'cancel' }, millis(15_000))),
       status: async () => {
         const id = activeWindow()?.workspaceId;
         if (!id) return null;

@@ -46,13 +46,23 @@ are refused inside their turn of the marker queue (`commit`), so nothing is reco
 task under way ends in success; nothing of the closed workspace is published on channel 12 or bannered; a resolution
 still reading when its workspace closed starts nothing; and the surfaces fall back to the workspace most recently opened
 among those still open. Because the entry is dropped, a return to the same root is a new open with its own automatic
-resolution (REQ-WORKSPACE-102). The setup port's cancel is no longer fire-and-forget: a cancellation that cannot be
-delivered is logged.
+resolution (REQ-WORKSPACE-102). The setup port's cancel is no longer fire-and-forget: a cancellation that is not
+delivered is logged. As first committed that held only for a rejected request — main's port sent nothing and said
+nothing when no window held a workspace, and took a refusal from the run host as delivered; the verification of this
+repair found it, and the port now rejects in both cases (`deliverSetupCancel` in `initialization.ts`), so the
+coordinator's log says the cancellation could not be delivered.
+
+The rule is applied wherever no window holds a workspace any more, which reaches three cases REQ-WORKSPACE-013 does not
+name: a plain close of one of several windows (PD-SHELL-001), a replacement closed after a veto, and a run the user
+started. That is the build's reading, raised as
+[OQ-141](../../architecture/open-questions.md), not a clause of the specification.
 
 Pinned by `main-windows.test.ts` ("reports a workspace no window holds any more once its last window closes, …"; it and
 the replacement-ordering case fail without the change) and by five cases under "closing a workspace" in
 `initialization.test.ts`, four of which fail on the old coordinator (the fifth, the reopen, passed there: the coordinator
-was right once called, and it is the call that was missing). Shown in the built app by `workspace-proof`'s new scenario
+was right once called, and it is the call that was missing). Two more cases there pin the delivery: "treats a setup
+cancellation as delivered only when the run host took it", which fails without `deliverSetupCancel`'s two rejections,
+and "says in the log when the setup's cancellation could not be delivered". Shown in the built app by `workspace-proof`'s new scenario
 8b, "a switch away from a workspace whose initialization run is under way", which points the two projects'
 `code_intelligence` entry at a stand-in runtime whose `project create` holds for 90 s. On the build without the change
 four of its five checks failed — no cancellation was asked, the step's process was still running 5 s after the switch,

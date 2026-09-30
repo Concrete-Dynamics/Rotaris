@@ -96,11 +96,12 @@ record already decides, and every ruling it needs is named as the owner's rather
   ([token order](../defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md),
   [setup collision](../defects/fixed/code-intel-proofs-setup-launches-collide-with-the-background-initialization.md),
   and, found in the fix round, [fixed-offset presses](../defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md)).
-  One more stays open: the shared capture seam's Settings press, which a notice can deflect
-  ([open](../defects/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md)). `code-intel-proof`
+  A fourth, the shared capture seam's Settings press, which a notice could deflect, was repaired 2026-09-30 under R-067
+  ([fixed](../defects/fixed/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md)): the seam now presses
+  again until the category is selected, and logs when it never is. *(This line read "One more stays open … the nine
+  proofs that use the seam are exposed to it until it is repaired" until then.)* `code-intel-proof`
   no longer uses that seam (its setup launches open Settings by chord and press only after the notice), after the fix
-  round's verifier found its first correction too late for `setup-cancel` (three reds in seven runs); the nine proofs
-  that use the seam are exposed to it until it is repaired. As measured after the last repairs, `init-proof` passes
+  round's verifier found its first correction too late for `setup-cancel` (three reds in seven runs). As measured after the last repairs, `init-proof` passes
   three runs in a row as root on Linux and `code-intel-proof` passes four section-5 runs and then three whole runs in a row.
 - The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005` (**built 2026-09-28**, R-062), `PD-ORCH-004` and `PD-MONITOR-002`.
 - The macOS and Linux artifacts, which are bound by IC-3 and IC-8 and now also by `PD-STARTUP-001`.

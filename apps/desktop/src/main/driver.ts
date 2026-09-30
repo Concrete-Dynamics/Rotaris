@@ -28,15 +28,41 @@ import type { CommandOutcome } from '@rotaris/contracts';
  * `ROTARIS_DRIVER` names a path at launch — the packaged app carries the code and never listens.
  */
 
+/**
+ * A window the driver can address that is not a main window
+ * (`docs/defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md`): a persona window (ADR-0048,
+ * REQ-SHELL-072), the approval dialog a main window holds open (REQ-TOOLS-063), or its terminal window (ADR-0047).
+ */
+export interface AuxiliaryWindow {
+  /** What `window` and `useWindow` name it by: `persona:<persona>`, `approval` or `terminal`. */
+  readonly selector: string;
+  readonly role: 'persona' | 'approval' | 'terminal';
+  /** The main window it belongs to, by its index in `windows`. */
+  readonly owner: number;
+  readonly wcId: number;
+  readonly visible: boolean;
+  readonly win: BrowserWindow;
+}
+
+/** Whether a selector names an auxiliary window's role rather than a main window. */
+export function namesAuxiliary(which: string): boolean {
+  return which === 'approval' || which === 'terminal' || which.startsWith('persona:');
+}
+
 export interface DriverDeps {
   /**
-   * The window the driver acts on; `null` when the selector names none, which every op reports rather than
+   * The main window the driver acts on; `null` when the selector names none, which every op reports rather than
    * throwing. `which` is an index into the most-recently-focused ordering or a suffix of a window's workspace
    * path; absent means the active window, which is what every proof written before two windows existed meant.
    */
   window: (which?: string) => BrowserWindow | null;
   /** Every main window open, in that same order — what a proof asserting on two windows reads. */
   windows: () => readonly { readonly index: number; readonly workspace: string; readonly wcId: number }[];
+  /**
+   * Every auxiliary window open, main window by main window in that same order. A role selector (`persona:<name>`,
+   * `approval`, `terminal`) resolves to the first one listed under it, so the active main window's comes first.
+   */
+  auxiliary: () => readonly AuxiliaryWindow[];
   timers: Timers;
   monotonic: MonotonicClock;
   log: (message: string) => void;
@@ -44,7 +70,17 @@ export interface DriverDeps {
   command: (request: unknown, win: BrowserWindow) => Promise<CommandOutcome>;
   /** Verification only: arm REQ-SHELL-011's deferred offer for the selected main window. */
   deferProjectOffer: (win: BrowserWindow, delayMs: number) => void;
+  /**
+   * The application's quit — `app.quit()`, the path a person's quit takes: every main window closed through its close
+   * guard, then `window-all-closed` asks the run host and each workspace service to `shutdown`, so a live run comes to
+   * rest as PD-ORCH-005 clause 3 says a quit leaves it. What `quit` sends unless it is asked for the immediate exit.
+   */
   quit: () => void;
+  /**
+   * The immediate exit (`exitCleanly`, the capture seam's): the run host is asked nothing and ended at once, so a live
+   * run is left as a crash leaves it. Kept for a drive that means to leave that state (`quit` with `immediate`).
+   */
+  exit: () => void;
 }
 
 export interface Driver {
@@ -60,8 +96,10 @@ interface Request {
   expression?: string;
   path?: string;
   chord?: string;
-  /** A4: which main window an op acts on, and what `useWindow` selects for the ops after it. */
+  /** A4: which window an op acts on, and what `useWindow` selects for the ops after it — a main or an auxiliary one. */
   window?: string;
+  /** `quit` only: the immediate exit rather than the application's quit. */
+  immediate?: boolean;
   enter?: boolean;
   width?: number;
   height?: number;
@@ -81,6 +119,24 @@ interface Found {
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const POLL_MS = 100;
+/** How long `screenshot` waits for the renderer to present a frame before it captures regardless, and says so. */
+export const PAINT_BOUND_MS = 1_000;
+
+/**
+ * How many frames `screenshot` lets the renderer begin before it captures. A frame the document has already changed for
+ * is not on screen when the NEXT frame begins: it is committed, then rastered, activated, drawn and submitted, and
+ * `capturePage()` copies what was last submitted. Measured 2026-09-29 on this Linux host (Xvfb, software compositing),
+ * a shot straight after the first navigation to the Workspace — the heaviest first paint the rail has — in fresh
+ * launches, with the document already showing the Workspace when the wait began: after one frame the shot still showed
+ * the Overview in 16 launches of 20, after two in 12 of 52, after three in none of 40 on a quiet machine but 1 of 20
+ * with three of the four cores busy, and after four in none of 55 (20 quiet, 20 with three cores busy, 15 at a load
+ * average near 20). Four is taken. It is a count of frames and not of milliseconds, so a loaded machine's slower frames
+ * lengthen it by themselves.
+ */
+export const PAINT_FRAMES = 4;
+
+/** Resolves once the renderer has begun `PAINT_FRAMES` frames after the call. Evaluated in the window before a capture. */
+export const PAINTED_SCRIPT = `new Promise((resolve) => { let left = ${PAINT_FRAMES}; const frame = () => { left -= 1; if (left === 0) resolve(true); else requestAnimationFrame(frame); }; requestAnimationFrame(frame); })`;
 
 /**
  * The one locator. A match is the first element matching `selector` — and, where `text` is given, whose trimmed
@@ -148,6 +204,9 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
    * with a connection error instead of "no app is being driven". The falsified assumption is kept here rather
    * than repaired quietly: an Electron exit path is not one path, and a cleanup that matters must be called by
    * the op that knows it is ending as well as hung on the event that usually fires.
+   *
+   * Since 2026-09-29 `quit` sends the application's quit unless asked for the immediate exit, and only the
+   * immediate exit calls this itself; the application's quit reaches `will-quit`, where main calls it.
    */
   const cleanup = (): void => {
     for (const socket of sockets) socket.destroy();
@@ -158,6 +217,11 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
   /**
    * A4: which window the ops act on. `useWindow` sets it, a per-request `window` overrides it for one op, and
    * absent means the active window — so every proof written when there was only one keeps its meaning.
+   *
+   * The per-request override was claimed here from A4 on and read by no op until 2026-09-29: every op resolved the
+   * `useWindow` selection alone, and a request's `window` was ignored. Each op now resolves `request.window ?? selected`
+   * (`target` in `handle`), which is what lets a drive answer an approval dialog in one request without moving the
+   * selection off the main window.
    */
   let selected: string | undefined;
 
@@ -171,26 +235,47 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
    * existed. Selecting a window is the same shape: silently falling back to the active window would let a
    * two-window assertion pass while measuring one window twice.
    */
-  const windowOrThrow = (which = selected): BrowserWindow => {
-    const win = deps.window(which);
-    if (!win || win.isDestroyed()) {
-      if (which === undefined) throw new Error('the main window is gone');
-      throw new Error(`no main window matches ${JSON.stringify(which)}; open: ${JSON.stringify(deps.windows())}`);
+  /** The auxiliary windows open, as `windows` reports them: everything but the window object itself. */
+  const auxiliaryListed = (): Omit<AuxiliaryWindow, 'win'>[] =>
+    deps.auxiliary().filter((a) => !a.win.isDestroyed()).map(({ selector, role, owner, wcId, visible }) => ({ selector, role, owner, wcId, visible }));
+
+  /**
+   * Since 2026-09-29 a selector may name an auxiliary window by its role — `persona:<name>`, `approval`, `terminal` —
+   * as well as a main window by index or workspace suffix. Before, only main windows could be reached, so a persona
+   * window's state was read from screen captures and an approval was answered through `session.control` rather than
+   * in its dialog. A role word is a role, never a workspace suffix: a main window whose path ends in one is named with
+   * its separator (`/terminal`), which is still a suffix of that path.
+   */
+  const resolve = (which: string | undefined): { win: BrowserWindow; main: boolean } | null => {
+    if (which !== undefined && namesAuxiliary(which)) {
+      const found = deps.auxiliary().find((a) => a.selector === which && !a.win.isDestroyed());
+      return found ? { win: found.win, main: false } : null;
     }
-    return win;
+    const win = deps.window(which);
+    return win && !win.isDestroyed() ? { win, main: true } : null;
   };
 
-  const evaluate = async (script: string): Promise<unknown> => windowOrThrow().webContents.executeJavaScript(script) as Promise<unknown>;
+  const resolvedOrThrow = (which = selected): { win: BrowserWindow; main: boolean } => {
+    const found = resolve(which);
+    if (!found) {
+      if (which === undefined) throw new Error('the main window is gone');
+      throw new Error(`no window matches ${JSON.stringify(which)}; open: ${JSON.stringify({ windows: deps.windows(), auxiliary: auxiliaryListed() })}`);
+    }
+    return found;
+  };
+  const windowOrThrow = (which = selected): BrowserWindow => resolvedOrThrow(which).win;
+
+  const evaluate = async (script: string, which: string | undefined): Promise<unknown> => windowOrThrow(which).webContents.executeJavaScript(script) as Promise<unknown>;
 
   /** Poll until the selector matches or the deadline passes. The ONE waiting primitive; every other wait is this one. */
-  const waitFor = (selector: string, text: string | undefined, timeoutMs: number): Promise<Found & { waitedMs: number }> =>
+  const waitFor = (selector: string, text: string | undefined, timeoutMs: number, which: string | undefined): Promise<Found & { waitedMs: number }> =>
     new Promise((resolve, reject) => {
       const started = deps.monotonic.now();
       let inFlight = false;
       const poll = deps.timers.every(millis(POLL_MS), () => {
         if (inFlight) return;
         inFlight = true;
-        void evaluate(locateScript(selector, text))
+        void evaluate(locateScript(selector, text), which)
           .then((found) => {
             inFlight = false;
             if (found !== null && found !== undefined) {
@@ -211,8 +296,8 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
       });
     });
 
-  const clickAt = (x: number, y: number): void => {
-    const wc = windowOrThrow().webContents;
+  const clickAt = (x: number, y: number, which: string | undefined): void => {
+    const wc = windowOrThrow(which).webContents;
     wc.sendInputEvent({ type: 'mouseMove', x, y });
     wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
     wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
@@ -220,12 +305,14 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
 
   const handle = async (request: Request): Promise<unknown> => {
     const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    /** A4: the window this op acts on — the request's own `window` for this op alone, else what `useWindow` selected. */
+    const target = request.window ?? selected;
     switch (request.op) {
       case 'ping':
-        return { pid: process.pid, window: deps.window(selected) !== null };
-      /** A4: the main windows open, so a proof can assert on two of them rather than on "the" window. */
+        return { pid: process.pid, window: resolve(target) !== null };
+      /** A4: the main windows open, so a proof can assert on two of them rather than on "the" window — and the auxiliary ones. */
       case 'windows':
-        return { windows: deps.windows(), selected: selected ?? null };
+        return { windows: deps.windows(), auxiliary: auxiliaryListed(), selected: selected ?? null };
       /** A4: point the ops after this one at a window. Refuses rather than silently keeping the old one. */
       case 'useWindow': {
         const which = request.window;
@@ -236,18 +323,18 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
       }
       case 'waitFor': {
         if (!request.selector) throw new Error('waitFor needs a selector');
-        return waitFor(request.selector, request.text, timeoutMs);
+        return waitFor(request.selector, request.text, timeoutMs, target);
       }
       case 'click': {
         if (!request.selector) throw new Error('click needs a selector');
-        const found = await waitFor(request.selector, request.text, timeoutMs);
+        const found = await waitFor(request.selector, request.text, timeoutMs, target);
         const x = Math.round(found.x + found.width / 2);
         const y = Math.round(found.y + found.height / 2);
-        clickAt(x, y);
+        clickAt(x, y, target);
         return { x, y, text: found.text, waitedMs: found.waitedMs };
       }
       case 'type': {
-        const wc = windowOrThrow().webContents;
+        const wc = windowOrThrow(target).webContents;
         // `keyDown` + `char` + `keyUp` per character: a chord alone moves no caret and inserts nothing, and the
         // renderer needs the `char` event — the same lesson the type-at seam carries.
         for (const ch of request.text ?? '') {
@@ -265,39 +352,57 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
       case 'chord': {
         if (!request.chord) throw new Error('chord needs a chord');
         const { keyCode, modifiers } = chordEvent(request.chord);
-        const wc = windowOrThrow().webContents;
+        const wc = windowOrThrow(target).webContents;
         wc.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
         wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
         return { chord: request.chord };
       }
       case 'inspect': {
         if (!request.selector) throw new Error('inspect needs a selector');
-        return evaluate(inspectScript(request.selector));
+        return evaluate(inspectScript(request.selector), target);
       }
       case 'probe': {
         if (!request.selector) throw new Error('probe needs a selector');
-        return evaluate(probeScript(request.selector));
+        return evaluate(probeScript(request.selector), target);
       }
       case 'eval': {
         if (!request.expression) throw new Error('eval needs an expression');
-        return evaluate(`(async () => { try { return await (${request.expression}); } catch (cause) { return { error: String(cause) }; } })()`);
+        return evaluate(`(async () => { try { return await (${request.expression}); } catch (cause) { return { error: String(cause) }; } })()`, target);
       }
       case 'screenshot': {
         if (!request.path) throw new Error('screenshot needs a path');
-        const image = await windowOrThrow().webContents.capturePage();
+        /**
+         * A fresh frame first (`docs/defects/fixed/the-drivers-shot-can-return-a-stale-frame.md`). `capturePage()` copies
+         * the frame last presented, and a shot taken right after a click, a navigation or a dialog's close returned the
+         * frame from BEFORE the change: byte-identical to the previous shot while `eval` in the same step read the new
+         * document (measured again 2026-09-29 on the build before this repair: the first navigation of thirty-nine,
+         * Overview to Workspace). So the renderer is waited on for `PAINT_FRAMES` frames first, then the capture is
+         * taken (`webContents.invalidate()` was not taken: Electron documents it for offscreen rendering only). A window
+         * that presents no frame (hidden, minimised) is captured after `PAINT_BOUND_MS` regardless, and the reply
+         * says the paint was not confirmed rather than claiming a fresh picture.
+         */
+        const wc = windowOrThrow(target).webContents;
+        const painted = await new Promise<boolean>((resolve) => {
+          const bound = deps.timers.after(millis(PAINT_BOUND_MS), () => resolve(false));
+          void (wc.executeJavaScript(PAINTED_SCRIPT) as Promise<unknown>).then(
+            () => { bound.cancel(); resolve(true); },
+            () => { bound.cancel(); resolve(false); },
+          );
+        });
+        const image = await wc.capturePage();
         writeFileSync(request.path, image.toPNG());
-        return { path: request.path };
+        return { path: request.path, painted };
       }
       case 'maximize': {
         // Not the same as `resize` to the work area: the host decides a maximized window's frame, and a layout
         // defect that only appears at the size a person actually uses is one this op exists to reach.
-        const win = windowOrThrow();
+        const win = windowOrThrow(target);
         win.maximize();
         const [width, height] = win.getContentSize();
         return { maximized: win.isMaximized(), width, height };
       }
       case 'resize': {
-        const win = windowOrThrow();
+        const win = windowOrThrow(target);
         if (!request.width || !request.height) throw new Error('resize needs a width and a height');
         /**
          * The eighty-fourth defect, in this op's own first form (2026-09-11): `setContentSize` is a NO-OP on a
@@ -318,17 +423,34 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
         return { width, height, wasMaximized };
       }
       case 'command':
-        return deps.command(request.request, windowOrThrow());
+        return deps.command(request.request, windowOrThrow(target));
       case 'deferProjectOffer': {
-        const win = windowOrThrow();
+        const { win, main } = resolvedOrThrow(target);
+        // REQ-SHELL-011's offer belongs to a main window; an auxiliary one has none to defer.
+        if (!main) throw new Error(`deferProjectOffer needs a main window; ${JSON.stringify(target)} is not one`);
         deps.deferProjectOffer(win, request.delayMs ?? 650);
         return { windowId: win.webContents.id, delayMs: request.delayMs ?? 650 };
       }
       case 'quit':
-        // The reply goes out first, then the seam takes itself down, then the process ends. In that order: a
-        // client that is told "quitting" and then finds the endpoint file still there has been told a falsehood.
-        deps.timers.after(millis(50), () => { cleanup(); deps.quit(); });
-        return { quitting: true };
+        /**
+         * The application's quit unless the immediate exit is asked for
+         * (`docs/defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md`). This op used to be the immediate
+         * exit alone, which skips `window-all-closed`, where main asks the run host to `shutdown`: a driven quit was a
+         * crash to a live run, and the session stayed `running` with no stop reason (measured 2026-09-29 on the build
+         * before this repair). Now it is `app.quit()`, which a person's quit is.
+         *
+         * The immediate exit: the reply goes out first, then the seam takes itself down, then the process ends. In that
+         * order: a client that is told "quitting" and then finds the endpoint file still there has been told a
+         * falsehood. The application's quit leaves the seam up until `will-quit` (main closes it there): the shutdown
+         * takes as long as it takes, and a close guard may keep the application — a window with unsaved settings asks
+         * its person — which a driver must still be able to see and answer. The reply says which one was sent.
+         */
+        if (request.immediate === true) {
+          deps.timers.after(millis(50), () => { cleanup(); deps.exit(); });
+          return { quitting: true, how: 'immediate' };
+        }
+        deps.timers.after(millis(50), () => { deps.quit(); });
+        return { quitting: true, how: 'quit' };
       default:
         throw new Error(`unknown op ${JSON.stringify(request.op ?? '')}`);
     }

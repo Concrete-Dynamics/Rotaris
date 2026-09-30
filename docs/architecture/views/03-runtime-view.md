@@ -974,8 +974,10 @@ to stop before any is waited on, then `Sessions.closeAll` releases every lock a 
 that request against the run host's exit (`shutdownAtQuit`); then the workspace services the same way; then
 **`endBeforeMain`** (`main/exit.ts`) waits at most `RUN_HOST_END_BOUND_MS` (2 000 ms) for the run host to exit by
 itself, ends it (`utilityProcess.kill()`) if it has not, and waits the bound again before `app.quit()`. An immediate
-exit (`exitCleanly`: the capture seam, the driver's `quit`) asks the run host nothing, ends it at once and waits the
-bound before `app.exit`. So main is gone only after the run host is: a lock left by a run host that was ended names a
+exit (`exitCleanly`: the capture seam once what it waited for has happened, the driver's `quit` when it names the
+immediate exit) asks the run host nothing, ends it at once and waits the bound before `app.exit`. The driver's default
+`quit` and a capture whose wait timed out take the orderly quit instead (2026-09-29), so a run they find live comes to
+rest with the stop reason `application_shutdown` rather than being left `running` for a repair. So main is gone only after the run host is: a lock left by a run host that was ended names a
 pid that is gone, the case REQ-SESSION-047 reaps on the next claim, and no launch meets a session "held by another run
 in this application" by a run host still exiting. The lock is never released early from inside a stopping run host and
 the liveness probe is unchanged (REQ-SESSION-049/050/056).

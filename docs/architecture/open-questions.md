@@ -6129,7 +6129,7 @@ REQ-TOOLS-128; OQ-10 as ruled in [R-044](../product/requests.md#r-044). Raised 2
 [R-067](../product/requests.md#r-067) by the verification of the repair of
 [`a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md`](../defects/fixed/a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md),
 for the exposure recorded open in
-[`a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md`](../defects/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md).
+[`a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md`](../defects/fixed/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md).
 Open; numbered OQ-134 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
 
 REQ-TOOLS-110 says `send_signal` *sends* the signal. The product sends it to every process of the session's group and
@@ -6146,12 +6146,33 @@ whether the product answers for that shell behaviour. Each repair changes someth
 - **Another shell.** REQ-TOOLS-104 sends POSIX hosts to a POSIX shell, and `findShell` names `/bin/sh`. Choosing `bash`
   where it exists would change what every background command runs under.
 
-**What the build proceeds under:** delivery once, as REQ-TOOLS-110 states, with the session reporting what its
+**What the build proceeds under:** ~~delivery once, as REQ-TOOLS-110 states, with the session reporting what its
 process does. A second `send_signal SIGINT` or interrupt stops a session the first one did not. The exposure is
-recorded open in the note above, not repaired.
+recorded open in the note above, not repaired.~~ *Replaced 2026-09-29 under R-067 (acceptance finding A8, which
+graded the exposure a product defect): the reading above left a dev server or a watcher running after "Sent SIGINT".
+Measured through the product's own manager, 45 of 200 sessions ran on under six CPU burners, and 12 of 200 on the
+shared host without them.*
+
+The build now proceeds under a narrow form of the first repair: re-deliver only to a process that shows it never
+received the signal. After a SIGINT to a session's group, on Linux, the session reads the process table at 250 ms and
+again at 1.5 s while it is still running. `BackgroundSession.checkSigint` and `missedSigint` do the reading, over
+`linuxProcessTable` in `@rotaris/platform`. A member is sent SIGINT once more, alone, only when all three hold:
+- it is alive and stands at SIGINT's default — not catching, ignoring, blocking or already holding it;
+- it was created within one second before the signal was sent;
+- it has not been sent SIGINT again already.
+
+A process at the default that had received SIGINT would be gone, so such a member never received it. The re-delivery is
+therefore its first SIGINT, not its second. A command that catches SIGINT — a server shutting down gracefully — is never
+sent a second, however long it takes. The start-time bound spares one that restored the default after its first; a
+command that started more than a second before the signal cannot have been in the window. A process started after the
+signal is spared too. Each re-delivery is written to the log as a warning. After the repair, the same measurement left
+0 of 200 running under load (58 re-deliveries) and 0 of 200 without burners (12). The second and third repairs were not
+taken, since each changes what every command runs under. Off Linux nothing is checked: macOS's `/bin/sh` is `bash`,
+which has no window, and on Windows every signal terminates the tree (OQ-10).
 
 **What a ruling decides.** Whether R-044's "stops" binds the product past delivery, and if so, which of the three
-repairs is acceptable, or whether the window is accepted as the shell's.
+repairs is acceptable, or whether the window is accepted as the shell's. Since 2026-09-29 the build takes the narrow
+re-delivery above, so a ruling against re-delivery removes it.
 
 **OQ-136 — How long does an empty poll wait for a soft-paused command?** *(REQ-TOOLS-096, whose empty `command`
 "polls for more output after a soft pause"; REQ-TOOLS-097, whose no-output window bounds the command's own call and

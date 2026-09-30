@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { ChildProcess } from 'node:child_process';
 import { constants as osConstants } from 'node:os';
 import type { Millis, MonotonicClock, TimerHandle, Timers, WallClock } from '@rotaris/kernel';
-import { spawnChild } from '@rotaris/platform';
+import { linuxProcessTable, PROC_TICKS_PER_SECOND, spawnChild, type GroupMember, type ProcessTable } from '@rotaris/platform';
 import { toIsoUtc } from '@rotaris/kernel';
 import type { ShellBackend } from './foreground.js';
 import { killTree } from './foreground.js';
@@ -36,6 +36,30 @@ export function endOfExit(code: number | null, signal: NodeJS.Signals | null, de
   return { status: 'failed', exitCode: n === undefined ? -1 : 128 + n };
 }
 
+/**
+ * OQ-135 (REQ-TOOLS-110, REQ-TOOLS-128), the reading built: when after a SIGINT to a session's group its checks find the
+ * session still running, each member that started less than `SIGINT_RECHECK_BORN_WITHIN_TICKS` before the signal and stands
+ * at SIGINT's default — not catching, ignoring, blocking or already holding it — is sent SIGINT once more, alone.
+ *
+ * Why exactly those: a process at SIGINT's default that received it is gone, so one still alive never received it. That is
+ * the command `dash` was starting when the signal landed, between its `vfork` and its `exec`, where the child runs the
+ * shell's handler and the signal is discarded. The shell holds its own copy until that command ends, which for a server is
+ * never. Such a command was created an instant before the signal, which is what the start-time bound asks. A process that
+ * catches SIGINT is never sent a second one, however long it takes to stop. The bound also spares one that restored the
+ * default after its first. A process started after the signal is spared, so a clean-up the command starts on its way out
+ * is not interrupted.
+ */
+export const SIGINT_RECHECK_AFTER_MS: readonly number[] = [250, 1_500];
+export const SIGINT_RECHECK_BORN_WITHIN_TICKS = PROC_TICKS_PER_SECOND;
+
+/** OQ-135: the members of a still-running session's group that never received the SIGINT sent at `sentAtTicks`. */
+export function missedSigint(members: readonly GroupMember[], sentAtTicks: number, alreadyResent: ReadonlySet<number>): number[] {
+  return members
+    .filter((m) => m.state !== 'Z' && m.state !== 'X' && m.sigint === 'default' && !alreadyResent.has(m.pid))
+    .filter((m) => m.startTicks <= sentAtTicks && m.startTicks >= sentAtTicks - SIGINT_RECHECK_BORN_WITHIN_TICKS)
+    .map((m) => m.pid);
+}
+
 export interface BackgroundDeps {
   readonly backend: ShellBackend;
   readonly cwd: string;
@@ -45,6 +69,10 @@ export interface BackgroundDeps {
   readonly timers: Timers;
   readonly maxSessions?: number;
   readonly warn: (m: string) => void;
+  /** OQ-135: the process table a SIGINT's delivery is checked against; absent means the host's (Linux only), null none. */
+  readonly processes?: ProcessTable | null;
+  /** The signal primitive, `process.kill` by default — a seam for a test to stand in for a discarded delivery. */
+  readonly kill?: (pid: number, signal: NodeJS.Signals) => void;
 }
 
 export class BackgroundSession {
@@ -69,6 +97,8 @@ export class BackgroundSession {
   private taps: ((chunk: string) => void)[] = [];
   /** OQ-133: the signals `signal` delivered to the session's group, so a death by one of them reads `killed`. */
   private readonly delivered = new Set<string>();
+  /** OQ-135: the checks a SIGINT arms, cancelled when the process exits. */
+  private sigintChecks: TimerHandle[] = [];
 
   constructor(readonly command: string, private readonly child: ChildProcess, id: string, startedAt: string, timeoutMs: number, private readonly deps: BackgroundDeps) {
     this.id = id;
@@ -79,6 +109,8 @@ export class BackgroundSession {
     this.exited = new Promise<void>((resolve) => {
       child.on('exit', (code, signal) => {
         this.timer?.cancel();
+        for (const t of this.sigintChecks) t.cancel();
+        this.sigintChecks = [];
         if (this.status === 'running') { const end = endOfExit(code, signal, this.delivered); this.exitCode = end.exitCode; this.status = end.status; }
         resolve();
       });
@@ -154,9 +186,38 @@ export class BackgroundSession {
       void this.end('killed');
       return true;
     }
-    try { process.kill(-pid, name); } catch { return false; }
+    const kill = this.deps.kill ?? ((p: number, s: NodeJS.Signals) => { process.kill(p, s); });
+    try { kill(-pid, name); } catch { return false; }
     this.delivered.add(name);
+    if (name === 'SIGINT') this.checkSigint(pid, kill);
     return true;
+  }
+
+  /**
+   * OQ-135: after a SIGINT, the checks that find a member of the group which never received it — `missedSigint` says
+   * which — and send it the signal once, alone. Only SIGINT has the window: `dash` catches it under `-c` and catches no
+   * other signal `send_signal` offers. Where there is no process table (every host but Linux) nothing is checked.
+   *
+   * The reason it was not, kept beside its replacement: delivery once to the group, as REQ-TOOLS-110 states, with the
+   * session left to report what its process did. Measured through this manager, `/bin/sh -c 'sleep 30'` signalled the
+   * instant it started, 45 of 200 sessions were still running 3 s later under six CPU burners.
+   */
+  private checkSigint(pid: number, kill: (pid: number, signal: NodeJS.Signals) => void): void {
+    const table = this.deps.processes === undefined ? linuxProcessTable() : this.deps.processes;
+    if (table === null) return;
+    const sentAt = table.nowTicks();
+    if (sentAt === null) return;
+    const resent = new Set<number>();
+    for (const after of SIGINT_RECHECK_AFTER_MS) {
+      this.sigintChecks.push(this.deps.timers.after(after as Millis, () => {
+        if (this.status !== 'running') return;
+        for (const member of missedSigint(table.group(pid), sentAt, resent)) {
+          resent.add(member);
+          try { kill(member, 'SIGINT'); } catch { continue; }
+          this.deps.warn(`background session ${this.id}: process ${member} started as SIGINT was sent and never received it (the shell's vfork window, OQ-135); SIGINT sent to it once more`);
+        }
+      }));
+    }
   }
 }
 

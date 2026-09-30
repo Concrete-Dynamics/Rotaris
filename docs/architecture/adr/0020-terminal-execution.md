@@ -438,3 +438,18 @@ stands; the carve-out is the commands whose exit 1 IS the convention — `git di
 plus `findstr` on Windows — matched on the command''s own leading tokens, with a real failure kind still
 outranking it. Recorded as ESC-41; the amendment round writes the carve-out into the requirement. The e2e
 proof spells the search portably (`findstr` on Windows, `grep` on POSIX) because the suite runs on both.
+
+## Fourth first execution — 2026-09-29, a SIGINT the shell discarded, sent again (OQ-135, R-067)
+
+The background session's signal delivery (REQ-TOOLS-110, REQ-TOOLS-128; OQ-10 as ruled in R-044) had been executed as
+delivery once to the session's group. Acceptance finding A8 graded its known exposure a product defect. Where
+`/bin/sh` is `dash`, a SIGINT landing between `dash`'s `vfork` and its command's `exec` is discarded by the command,
+and the session runs on until the command ends. Measured through `BackgroundManager` on the branch before the repair,
+45 of 200 `sleep 30` sessions signalled the instant they started were still running 3 s later under six CPU burners.
+**Found: delivery reached every process, as decided, and did not stop the session, which R-044 rules it must.** The
+repair keeps delivery to the group and adds a check on Linux, the one host whose `/bin/sh` has the window. At 250 ms and
+1.5 s, while the session runs, the process table (`linuxProcessTable`, `@rotaris/platform`) is read for members that
+never received the signal: alive at SIGINT's default, created within one second before it. Each is sent SIGINT once
+more, alone (`missedSigint`), and the re-delivery is logged. After it, 0 of 200 ran on, with and without the burners.
+A command that catches SIGINT is never sent a second. OQ-135 records the reading and stays open
+([the note](../../defects/fixed/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md)).

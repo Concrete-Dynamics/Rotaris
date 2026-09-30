@@ -1,12 +1,12 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, type Clocks } from '@rotaris/kernel';
 import { foregroundStreamId } from '@rotaris/contracts';
 import { nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
-import { CommandRegion, parseSnapshot, snapshotCommand, wrapCommand } from './foreground.js';
+import { CommandRegion, parseSnapshot, processIdentity, snapshotCommand, wrapCommand } from './foreground.js';
 import { endOfExit } from './background.js';
 import { execFileSync } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
@@ -130,6 +130,18 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     const warnings = outputWarnings(command, text, 0);
     expect(warnings).toEqual([]);
     expect(classifyOutcome({ exitCode: 0, output: text, command }, warnings)).toEqual({ outcomeKind: 'success', severity: 'info' });
+  });
+  it.runIf(process.platform === 'linux')('OQ-143: a process\'s identity is its executable and its argument vector; a process that has gone has none', () => {
+    const self = processIdentity(process.pid);
+    expect(self).not.toBeNull();
+    const [exe, argv] = self!.split('\0', 2) as [string, string];
+    expect(exe).toBe(realpathSync(process.execPath));
+    expect(argv).toBe(process.argv0);
+    // A pid past the kernel's pid_max names no process.
+    expect(processIdentity(2 ** 22 + 1)).toBeNull();
+  });
+  it.runIf(process.platform !== 'linux')('OQ-143: off Linux there is no /proc, and no identity to watch', () => {
+    expect(processIdentity(process.pid)).toBeNull();
   });
   it('strips VT sequences and carriage returns', () => {
     expect(stripVt('\x1b[32mhi\x1b[0m\r\n\x1b]0;title\x07x')).toBe('hi\nx');
@@ -285,6 +297,42 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     expect(diag(comment.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
     expect(output(comment.text)).toBe('commented');
   }, 30_000);
+  it.runIf(process.platform === 'linux' && shell?.kind === 'posix')('REQ-TOOLS-097/098/103/104 (OQ-143, acceptance A9): a command that replaces the session\'s shell ends at once as an execution_error, never a soft pause, and the next call runs in the shell the description names', async () => {
+    // A session of its own: this case restarts its shell. The window is long enough that a soft pause cannot be
+    // mistaken for the replacement being noticed, and short enough that the old reading fails in seconds.
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 3_000 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 3_000 });
+    const cmdline = "tr '\\0' ' ' < /proc/$$/cmdline";
+    try {
+      expect(diag((await t.execute(args({ command: SH.setVar('ROTARIS_A9', 'kept'), timeout: 15 }), ctx())).text)).toMatchObject({ exit_code: 0 });
+      const ours = output((await t.execute(args({ command: cmdline, timeout: 15 }), ctx())).text);
+      expect(ours).toContain(shell!.file);
+      // The live run's call #5 was `exec bash`; `exec sh` is the same replacement with no dependency on bash. It names no
+      // timeout, so the soft pause is armed, as it was for the model's call.
+      const began = clocks.monotonic.now() as number;
+      const r = await t.execute(args({ command: 'exec sh' }), ctx());
+      const took = (clocks.monotonic.now() as number) - began;
+      // Before the repair: `soft_pause`, exit −1, "The command is still running", after the whole no-output window.
+      expect(diag(r.text)['outcome_kind']).not.toBe('soft_pause');
+      expect(took).toBeLessThan(3_000);
+      expect(r).toMatchObject({ isError: true, failureKind: 'execution_error', outcomeKind: 'execution_error' });
+      expect(diag(r.text)).toMatchObject({ failure_kind: 'execution_error', kill_status: 'session_reset', error_class: 'ExecutionError' });
+      expect(diag(r.text)).not.toHaveProperty('exit_code');
+      expect(r.text).toContain('Terminal execution failed before completion');
+      expect(r.text).toContain('replaced the session\'s shell');
+      expect(r.text).not.toContain('__rot_');
+      // The session is back on the shell the description names, and PD-TOOLS-001's snapshot came with it.
+      const after = await t.execute(args({ command: cmdline, timeout: 15 }), ctx());
+      expect(output(after.text)).toBe(ours);
+      expect(diag(after.text)['session_reinitialized']).toBe(true);
+      expect(output((await t.execute(args({ command: SH.echoVar('ROTARIS_A9'), timeout: 15 }), ctx())).text)).toBe('kept');
+      // `exec` with redirections alone keeps the shell, and is an ordinary command.
+      const redirect = await t.execute(args({ command: `exec 3>/dev/null; ${SH.echo('still')}` }), ctx());
+      expect(diag(redirect.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+      expect(output(redirect.text)).toBe('still');
+      expect(output((await t.execute(args({ command: cmdline, timeout: 15 }), ctx())).text)).toBe(ours);
+    } finally { await m.dispose(); }
+  }, 40_000);
   it('ADR-0020 c.1: a command that echoes attacker-chosen marker text cannot forge the exit status', async () => {
     const t = await tool();
     const r = await t.execute(args({ command: `${SH.echo('__rot_deadbeefdeadbeefdeadbeef_e:0')}; ${SH.exit(7)}` }), ctx());
@@ -745,10 +793,13 @@ describe('terminal — availability (REQ-TOOLS-104)', () => {
     expect(posix).toContain('The shell is `/bin/sh`, a POSIX shell that may not be bash');
     expect(posix).toContain('`${PIPESTATUS[…]}`');
     expect(posix).not.toContain('PowerShell');
+    // OQ-143 (acceptance A9): the POSIX description says the shell is not to be replaced, and what a call that does meets.
+    expect(posix).toContain('Do not replace the shell with `exec <program>`');
     const windows = terminalDescription({ kind: 'powershell', file: 'pwsh.exe' });
     // REQ-TOOLS-104's four warnings and four statements, on the host it binds.
     for (const text of ['PowerShell, not bash', '`&&`', '`;`', '`2>&1`', '`$env:VAR`', 'heredoc never returns', 'bash arrays', '`[[ … ]]`', '`source`']) expect(windows).toContain(text);
     expect(windows).not.toContain('/bin/sh');
+    expect(windows).not.toContain('exec <program>');
     // The executor names the manager's own shell.
     expect(terminalTool(new TerminalManager({ factory: { spawn: () => { throw new Error('unused'); } }, backend: { kind: 'posix', file: '/bin/sh' }, clocks, config: TERMINAL_DEFAULTS, env: {}, warn: () => undefined }), TERMINAL_DEFAULTS).description).toBe(posix);
   });

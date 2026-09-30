@@ -11,7 +11,7 @@ the shell ending rather than being replaced.
 Measured 2026-09-30 on the `fix-accept1-8` branch, through a real PTY against `/bin/sh` (dash) with a 3 s no-output
 window: `exit 3` returned after 3,007 ms as `soft_pause`, exit −1, `(no output)`; the next call, `printf next`, ran in a
 fresh shell with `session_reinitialized` false. Noticed while repairing
-`a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`,
+[`a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`](fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md),
 whose watch sees a replaced process but not one that has gone. Not repaired.
 
 ## Specs

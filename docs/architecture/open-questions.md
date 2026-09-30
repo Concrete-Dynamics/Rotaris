@@ -6364,6 +6364,48 @@ whether it needs a code of its own (126 is sandbox-unavailable's, and 127 is the
 could not find), or a status the vocabulary does not have; and whether such a spawn should instead be answered at
 the start, by waiting for Node's `spawn` or `error` before `start` returns.
 
+**OQ-143 — What does a foreground call answer when its command replaces the session's shell, and what becomes of the
+session?** *(REQ-TOOLS-097, REQ-TOOLS-098, REQ-TOOLS-103, REQ-TOOLS-104, REQ-TOOLS-179; `PD-TOOLS-001`. Raised
+2026-09-30 by the repair of
+[`a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`](../defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md)
+under [R-067](../product/requests.md#r-067), acceptance finding A9. Open.)*
+
+A foreground command that replaces the shell — `exec bash`, `exec sh`, any `exec <program>` — keeps the shell's pid
+and never returns to the rest of the wrapped line, so the end frame never prints. Before this entry the call waited out
+the no-output window and returned a soft pause (REQ-TOOLS-098: exit −1, "The process may still be running") for a
+command that had finished at once, and every later call ran in the new program, not the shell the tool description
+names (REQ-TOOLS-104 on Windows, and the POSIX sentence live-run L1's repair added elsewhere). No requirement says
+whether a command may replace the session's shell, whether the tool refuses or warns about one, or what the call
+answers when one does. A PowerShell session has no `exec`, so the question is the POSIX backend's.
+
+**What the build proceeds under** (`ForegroundSession` in `packages/agent-tools/src/terminal/foreground.ts`, the
+detail and the description in `terminal/index.ts`):
+- **The session keeps the shell it started, and the call ends at once.** While a call runs, the product compares the
+  process behind the session's pid (its executable and argument vector, read from `/proc`) with the shell's own, read
+  when the shell last answered one of the product's lines. A different process ends the call within 200 ms. The
+  program is ended with its tree, and the session restarts on its shell with PD-TOOLS-001's snapshot re-applied, as a
+  hard-timeout reset does. A fresh shell answers one no-op line before its first command so that there is an identity
+  to compare with.
+- **The call is REQ-TOOLS-103's failure before completion.** `failure_kind` and `outcome_kind` are `execution_error`,
+  severity `error`, `error_class` `ExecutionError`, no exit code (the command never returned to a line that would
+  report one, so the diagnostic block drops the key and the live stream ends with none), and `kill_status`
+  `session_reset` or `reset_failed`. The detail says the command replaced the session's shell, that the session was
+  restarted with the shell this tool runs commands in, what was restored, and to run the program without `exec`, or
+  in the background.
+- **`exec` with redirections alone** (`exec 3>file`, `exec >log`) keeps the process, and is an ordinary command.
+- **The POSIX description says not to replace the shell** and what a call that does meets.
+
+**What it does not reach.** `/proc` is Linux's, so on macOS the watch is off: such a call still soft-pauses there, and
+only the description's sentence applies (no macOS artifact is built, IC-3). An `exec` of exactly the shell's own
+executable with exactly its arguments (`exec /bin/sh -i`) is indistinguishable from the shell and still soft-pauses.
+
+The case "REQ-TOOLS-097/098/103/104 (OQ-143, acceptance A9): …" in `terminal/terminal.test.ts` pins this reading.
+
+**What a ruling decides.** Whether a command that replaces the shell is refused before it runs (an `invalid_request`
+REQ-TOOLS-101 does not list), answered as built, or adopted — the session carrying on in the new program, with the
+description then no longer naming the shell the next command runs in; and whether the call's code is `execution_error`
+with no exit code, as built, or something REQ-TOOLS-179 names.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

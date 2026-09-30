@@ -334,6 +334,21 @@ measured on the monotonic clock: the time since the previous observation of the 
 last wrote anything, and that a poll does not wait. How long a poll should wait is not stated anywhere:
 [OQ-136](../open-questions.md), raised with this reading built.*
 
+*Reported back 2026-09-30 (R-067), from the verifier's live run of the `fix-terminal-output` branch
+([`a-command-that-replaces-the-shell-reads-as-a-soft-pause`](../../defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md),
+acceptance finding A9): **the marker protocol's premise — that the shell which printed the start frame is the one left
+to print the end frame — does not hold for a command that replaces the shell.** `exec bash` keeps the pid and never
+returns to the rest of the wrapped line; the call soft-paused after 30,027 ms and every later call ran under bash. It
+is L1's class by another road, and `command eval` is no guard against it, because `exec` succeeds. The session now
+watches the process behind its pid while a call runs, against the identity its shell had when it last answered one of
+the product's own lines (`/proc`'s executable and argument vector; a fresh shell answers one no-op line first). A
+different process ends the call within 200 ms as an `execution_error` with no exit code, and the session restarts on
+its shell with PD-TOOLS-001's snapshot re-applied. The POSIX description says not to replace the shell. Neither the
+answer nor the restart is stated anywhere: [OQ-143](../open-questions.md), raised with this reading built. Off on
+macOS, where `/proc` does not exist. Pinned by "REQ-TOOLS-097/098/103/104 (OQ-143, acceptance A9): …" in
+`terminal.test.ts`, red on the unwatched session (a soft pause after the whole window, and `sh` in place of
+`/bin/sh -i` for the next call).*
+
 **Found — defect C: the agent's capture was VT-STRIPPED where every other surface was EMULATED.** Deleting a
 control sequence is not applying it. Measured against the real shell at the session's own 240×50: ConPTY
 expresses a tab stop as `ESC[7C`, and `Write-Host ('a' + [char]9 + 'b')` reached the agent as **`ab`** where

@@ -62,8 +62,9 @@
  *                 the eighty-second defect's signature?). Neither injected refusal reaches the endpoint,
  *                 so the ladder half costs nothing but retries.
  *   8. terminal  — the TERMINAL under duress, one run, the named shapes replayed from the record: a
- *                 multi-line here-string, forty lines of long output, off Windows a bash-ism `/bin/sh` cannot
- *                 expand (live-run L1), a wedge with no `timeout` supplied,
+ *                 multi-line here-string, forty lines of long output, off Windows an `exec bash` that replaces the
+ *                 session's shell (acceptance A9) and a bash-ism `/bin/sh` cannot expand (live-run L1), a wedge
+ *                 with no `timeout` supplied,
  *                 an exit-0 output carrying docker's lower-case `failed to connect` line, a `git diff` with
  *                 differences exiting 1, and a read-only git pipeline through a pipe. Asserted from
  *                 `tool_calls`, never from the model's prose; a shape the model never attempted is a NOTE,
@@ -105,7 +106,7 @@
  *
  * The run is unattended and its window is hidden; `--gui` shows it, for watching rather than using.
  */
-import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
@@ -115,7 +116,7 @@ import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsola
 import { startRecordingProxy } from './lib/model-traffic.mjs';
 import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
-import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, replacedShellReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -1722,6 +1723,7 @@ if (wanted.includes('faults')) {
  * |---|---|
  * | `here-string`   | a multi-line command lost its newlines in the PTY, so a here-string never terminated |
  * | `long-output`   | the concatenation above, and the agent's capture VT-stripped where the window's was not |
+ * | `replaces-shell` | acceptance finding A9 — `a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`: `exec bash` kept the pid and never returned to the end frame, so it read as a soft pause and every later call ran under bash (POSIX only; OQ-143) |
  * | `unexpandable`  | live-run finding L1 — `a-posix-command-that-fails-to-expand-loses-its-end-marker.md`: a bash-ism dash cannot expand abandoned the wrapper's end frame, so a finished command read as a soft pause (POSIX only) |
  * | `wedge`         | `hardMs` passed and read nowhere: a call supplying no `timeout` had the soft pause and no hard cap (REQ-TOOLS-097) |
  * | `poll`          | live-run finding L2 — `an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md`: an empty poll returned at once and said thirty seconds had passed |
@@ -1792,6 +1794,25 @@ if (wanted.includes('terminal')) {
     check(!reading.escaped, 'the agent read a VT-stripped capture', reading.escaped ? 'an escape sequence survived into the recorded result' : 'no escape sequence in the recorded result');
   }
 
+  // Acceptance A9 (OQ-143): a command that replaces the session's shell ends at once as an execution_error, and the session
+  // is restarted on its own shell. POSIX only (`terminalShapes`); on Windows nothing is asked: not applicable, not a NOTE.
+  const replaced = shapeOf('replaces-shell') === undefined ? undefined : attempted('replaces-shell')[0];
+  const replacedReading = replaced === undefined ? null : replacedShellReading(replaced.result, replaced.elapsedMs ?? NaN);
+  if (shapeOf('replaces-shell') !== undefined) {
+    if (replaced === undefined) noted('the shell replacement was not attempted', 'no terminal call carried `exec bash`; the watch is unasked');
+    else {
+      const d = diagnosticOf(replaced.result);
+      const elapsed = replaced.elapsedMs ?? NaN;
+      const said = `outcome ${d?.outcome_kind ?? 'none'}, exit ${d?.exit_code ?? 'none'}, ${Number.isFinite(elapsed) ? Math.round(elapsed) : '?'} ms`;
+      if (replacedReading.kind === 'not-replaced') noted('`exec bash` replaced nothing', `the watch is unasked this run: ${said}`);
+      else {
+        check(replacedReading.kind !== 'paused', 'a command that replaced the shell did not read as a soft pause', said);
+        check(replacedReading.kind === 'restarted', 'it ended at once as an execution_error that says the shell was replaced', said);
+        if (replacedReading.kind === 'restarted') check(replacedReading.killStatus === 'session_reset', 'the session was restarted on its own shell', `kill_status ${replacedReading.killStatus ?? 'none'}`);
+      }
+    }
+  }
+
   // Live-run L1: the command ends at once with the shell's own error status, never a soft pause after the window. The
   // shape exists only off win32 (`terminalShapes`), so on Windows nothing is asked here: not applicable, not a NOTE.
   // The guard is credited only where a shell refused the expansion (`unexpandableReading`). Until the verifier's second
@@ -1805,6 +1826,10 @@ if (wanted.includes('terminal')) {
       const elapsed = unexpandable.elapsedMs ?? NaN;
       const reading = unexpandableReading(unexpandable.result, elapsed);
       const said = `outcome ${d?.outcome_kind ?? 'none'}, exit ${d?.exit_code ?? 'none'}, output ${JSON.stringify(reading.printed.slice(0, 120))}`;
+      // Acceptance A9: after a replacement the product restarted, the next command meets `/bin/sh` again. Where that is
+      // dash, a bash-ism expanded after it means the session stayed in bash — the verifier's live run of 2026-09-29.
+      const afterRestart = replacedReading?.kind === 'restarted' && replaced.ordinal < unexpandable.ordinal && !/bash$/.test(realpathSync('/bin/sh'));
+      if (afterRestart) check(reading.kind !== 'expanded', 'the command after the shell was replaced ran in /bin/sh, not in the program that replaced it', said);
       if (reading.kind === 'expanded') noted('the shell expanded the bash-ism', `the guard is unasked this run: ${said}`);
       else if (reading.kind === 'other') noted('the bash-ism met neither a refusal nor an expansion', `the guard is unasked this run: ${said}`);
       else {

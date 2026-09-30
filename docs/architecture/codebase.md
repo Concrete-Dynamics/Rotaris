@@ -791,9 +791,10 @@ injected refusal, the session log's dispatch-layer line or the ladder's own issu
 **Two scenarios enter the gap this page names below** — "short tasks against an unmetered endpoint, so no
 generation near the model timeout, no multi-line command, and no re-spawn", where all seven of one session's
 defects lived. `terminal` issues **the commands the record names verbatim** (six when it was written; since
-2026-09-29 seven on Windows and eight elsewhere): the multi-line here-string that lost
+2026-09-29 seven on Windows and eight elsewhere, and nine elsewhere since 2026-09-30): the multi-line here-string that lost
 its newlines in the PTY, forty long lines for the concatenation the sixty runs missed and the VT strip the
-agent's capture was left out of, off Windows a bash-ism `/bin/sh` cannot expand (`${PIPESTATUS[0]}`), which lost
+agent's capture was left out of, off Windows an `exec bash` that replaced the session's shell and read as a soft
+pause, with every later call left in bash (acceptance A9, OQ-143, 2026-09-30), then a bash-ism `/bin/sh` cannot expand (`${PIPESTATUS[0]}`), which lost
 its end marker live and read as a soft pause (live-run L1, 2026-09-29), a wedge supplying no `timeout` for the
 `hardMs` that was read nowhere, one empty poll of that wedge, whose answer once said thirty seconds had passed
 after under a millisecond (live-run L2, 2026-09-29), an exit-0

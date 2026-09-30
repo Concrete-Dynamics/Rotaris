@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
 // @ts-expect-error — the shapes are plain ESM beside the script that replays them.
-import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, replacedShellReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
 
 interface Shape { readonly id: string; readonly match: RegExp; readonly command: string; readonly prompt?: string }
 
@@ -31,11 +31,12 @@ describe('the terminal shapes the live run replays', () => {
       const shapes: Shape[] = terminalShapes(platform);
 
       it('carries every shape of its platform, each named once', () => {
-        // Live-run L1's `unexpandable` is POSIX only: PowerShell has no such expansion.
+        // Live-run L1's `unexpandable` is POSIX only: PowerShell has no such expansion. So is acceptance A9's
+        // `replaces-shell` (PowerShell has no `exec`), and it comes first so `unexpandable` shows which shell followed it.
         // Live-run L2's `poll` follows the wedge on both.
         expect(shapes.map((s) => s.id)).toEqual(platform === 'win32'
           ? ['here-string', 'long-output', 'wedge', 'poll', 'failed-word', 'diff-exit-1', 'pipe-to-shell']
-          : ['here-string', 'long-output', 'unexpandable', 'wedge', 'poll', 'failed-word', 'diff-exit-1', 'pipe-to-shell']);
+          : ['here-string', 'long-output', 'replaces-shell', 'unexpandable', 'wedge', 'poll', 'failed-word', 'diff-exit-1', 'pipe-to-shell']);
       });
 
       it('matches its own command — the round trip the scenario depends on', () => {
@@ -212,6 +213,27 @@ describe('the bash-ism the unexpandable shape replays (live-run L1)', () => {
     expect(unexpandableReading(refusedByDash, 30_000).kind).toBe('paused');
     // The diagnostic repeats the command, which carries `EXIT=`; the reading looks at what the shell printed alone.
     expect(unexpandableReading(`[terminal_output]\n(no output)\n${diagnostic({ exit_code: 0, outcome_kind: 'success' })}`, 5).kind).toBe('other');
+  });
+});
+
+describe('the shell replacement the replaces-shell shape replays (acceptance A9, OQ-143)', () => {
+  /*
+   * The verifier's live run of 2026-09-29 (pack `2026-09-29T22-08-13-005Z`, call #5) recorded `exec bash` as a soft pause
+   * after 30,027 ms. The repaired product ends such a call at once as an `execution_error` with no exit code; a host with
+   * no bash answers 127 and replaces nothing.
+   */
+  const diagnostic = (fields: Record<string, unknown>) => `[terminal_diagnostic] ${JSON.stringify({ backend: 'single-session', command: 'exec bash', timeout: false, timeout_seconds: 100, warnings: [], ...fields })}`;
+  const detail = "Terminal execution failed before completion: the command replaced the session's shell (as `exec <program>` does), so the command never returned and has no exit code.";
+  const restarted = `${detail}\n[terminal_output]\n#\n${diagnostic({ detail, error_class: 'ExecutionError', failure_kind: 'execution_error', kill_status: 'session_reset', outcome_kind: 'execution_error', outcome_severity: 'error' })}`;
+  const softPaused = `No output for 30 seconds …\n[terminal_output]\n(no output)\n${diagnostic({ detail: 'No output for 30 seconds in the merged terminal stream.', exit_code: -1, outcome_kind: 'soft_pause', outcome_severity: 'warning', session_reinitialized: true })}`;
+  const notFound = `The command exited with code 127.\n[terminal_output]\n/bin/sh: 1: exec: bash: not found\n${diagnostic({ detail: 'The command exited with code 127.', exit_code: 127, outcome_kind: 'shell_failure', outcome_severity: 'error' })}`;
+  it('credits the repair only for an at-once execution_error that says the shell was replaced; A9\'s soft pause is a failure', () => {
+    expect(replacedShellReading(restarted, 215)).toMatchObject({ kind: 'restarted', exit: null, killStatus: 'session_reset' });
+    expect(replacedShellReading(softPaused, 30_027)).toMatchObject({ kind: 'paused', exit: -1 });
+    // The right words after the whole window are A9's signature all the same.
+    expect(replacedShellReading(restarted, 30_000).kind).toBe('paused');
+    expect(replacedShellReading(notFound, 12)).toMatchObject({ kind: 'not-replaced', exit: 127 });
+    expect(replacedShellReading(`[terminal_output]\n(no output)\n${diagnostic({ failure_kind: 'execution_error', outcome_kind: 'execution_error' })}`, 5).kind).toBe('other');
   });
 });
 

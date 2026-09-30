@@ -673,7 +673,8 @@ on `succeeded` + report stored, promote one held child per freed model slot, cla
 turn loop under its persona's tools, model, credential and supervisor; its **report** comes from a bounded summarising pass on `default_summary_model` (REQ-CONFIG-065) or the entry model,
 which reads the task as given (the ledger row's, the payload's blocks ahead of it marked omitted) and the most recent
 part of the transcript within 12,000 characters, the omission marked between them, beside the report's deterministic
-facts — edited files, commands and exit codes (OQ-111; OQ-119 and OQ-120 ask its two bounds);
+facts — edited files (a write the record answers with an error is not one), commands and exit codes (OQ-111; OQ-119
+and OQ-120 ask its two bounds);
 the parent resumes with the report. Every exit from an iteration leaves every child record terminal — except a rest
 (PD-ORCH-005), which leaves every unfinished child `paused`.
 

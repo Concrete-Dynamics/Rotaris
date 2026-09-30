@@ -340,6 +340,15 @@ argument name the file tools accept, and UNIONS the summariser's own list after 
 made survives while an invented one can no longer be the only thing the field holds. No new plumbing: the
 call site already derived `toolsUsed` from the same messages.
 
+*Corrected 2026-09-29 under [R-067](../../product/requests.md#r-067), the claim above kept as it was built:* "the
+path of every … call" listed a write whatever answered it. A write a sibling's claim refused (`PD-TOOLS-006`), one
+the permission gate or a pre-tool hook refused, or a `haet_edit` whose find text matched nothing changed nothing,
+and still reached `edited_files`, the fallback's "Files touched" and, since OQ-111, the facts the pass is told never
+to deny. `editedFilesFrom` now skips a write call the record answers with an error (`isError`), and the summariser's
+own list cannot name a path whose every write was so answered
+([`a-reports-edited-files-counts-refused-writes`](../../defects/fixed/a-reports-edited-files-counts-refused-writes.md)).
+A call no result answers — which the turn never leaves — is still listed.
+
 **The bound, stated rather than hidden.** A context compression REPLACES the conversation
 (`REQ-MONITOR-084`), so a child compressed mid-task no longer carries its earliest tool calls in the
 transcript the report is built from, and the derived lists are of what survives there. The durable

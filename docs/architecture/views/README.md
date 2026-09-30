@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**A report's edited files are the writes that landed (REQ-ORCH-108, REQ-ORCH-109, PD-TOOLS-006, OQ-111, R-067).**
+`editedFilesFrom` now skips a write call the record answers with an error — a sibling's claim, the permission gate or a
+pre-tool hook refusing it, a `haet_edit` whose find text matched nothing — and the summariser's own list cannot bring such
+a path back. The report's `edited_files`, the fallback's "Files touched" and the facts the pass is told never to deny all
+read it. This repairs `a-reports-edited-files-counts-refused-writes.md`. The **runtime view**'s §4 report sentence says
+so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A child the stop's grace gave up on is counted at the rest (REQ-MONITOR-102, REQ-SESSION-092, PD-ORCH-005 clause 6,
 R-067).** `IterationChildren.outlast` now keeps which children it gave up on (`givenUpOn`), and `rest` counts each one's
 calls from its record once its open calls are answered (`countGivenUpOn`, through the run's `countToolCalls`). A continue

@@ -115,6 +115,58 @@ describe('engine/children/report — edited files derived from the transcript (R
   });
 });
 
+/**
+ * `a-reports-edited-files-counts-refused-writes`: the path of a write CALL was listed whatever answered it, so a write a
+ * sibling's claim refused (PD-TOOLS-006), the permission gate refused, or a `haet_edit` whose find text matched nothing
+ * reached `edited_files`, the fallback's "Files touched" and — since OQ-111 — the facts the pass "must never deny".
+ */
+describe('engine/children/report — a write the record answers with an error is not an edit (REQ-ORCH-108, REQ-ORCH-109, PD-TOOLS-006, OQ-111)', () => {
+  const refused = (callId: string, name: string, text: string): ChatMessage => ({ role: 'tool', content: [{ kind: 'tool-result', callId, name, result: text, isError: true }] });
+  const CLAIMED = 'docs/api.md is inside the write scope another child holds; write only inside your own scope.';
+  const messages = [
+    call('w1', 'write_file', { operation: 'create', path: 'docs/a.md', content: 'x' }), result('w1', 'write_file', 'Created docs/a.md'),
+    call('w2', 'write_file', { operation: 'overwrite', path: 'docs/api.md', content: 'y' }), refused('w2', 'write_file', CLAIMED),
+    call('w3', 'haet_edit', { path: 'docs/b.md', content_hash: 'a'.repeat(64), old_string: 'x', new_string: 'y' }), refused('w3', 'haet_edit', 'old_string was not found in docs/b.md. Read it again with haet_read.'),
+    call('w4', 'haet', { file_path: 'docs/c.md', content_hash: 'b'.repeat(64), old_string: 'x', new_string: 'y' }), refused('w4', 'haet', 'The permission gate refused this call.'),
+    say('assistant', 'wrote the documents'),
+  ];
+
+  it('lists only the writes that were answered without an error', () => {
+    expect(editedFilesFrom(messages)).toEqual(['docs/a.md']);
+  });
+
+  it('a path refused once and written later is listed once, at the write that landed', () => {
+    const retried = [...messages, call('w5', 'haet_edit', { path: 'docs/b.md', content_hash: 'c'.repeat(64), old_string: 'x', new_string: 'y' }), result('w5', 'haet_edit', 'applied')];
+    expect(editedFilesFrom(retried)).toEqual(['docs/a.md', 'docs/b.md']);
+  });
+
+  it("the summariser's own list cannot bring back a path whose every write was refused", () => {
+    expect(editedFilesFrom(messages, ['docs/api.md', 'docs/b.md', 'docs/notes.md'])).toEqual(['docs/a.md', 'docs/notes.md']);
+  });
+
+  it('the facts, the fallback\'s "Files touched" and every construction site agree', async () => {
+    expect(reportFacts(messages)).toBe('Edited files: docs/a.md\nCommands run: (none)');
+    const fallback = fallbackReport(input({ messages, toolCallCount: 4, lastText: '' }), 'no summariser is configured');
+    expect(fallback.edited_files).toEqual(['docs/a.md']);
+    expect(fallback.summary).toContain('Files touched: docs/a.md.');
+    expect(fallback.summary).not.toContain('docs/api.md');
+    // REQ-ORCH-111's tester path takes at most eight events: the four calls and their answers.
+    const tester = deterministicTesterReport(input({ role: 'tester', messages: messages.slice(0, 8), toolCallCount: 4, lastText: 'all green' }));
+    expect(tester!.edited_files).toEqual(['docs/a.md']);
+    const asked: string[] = [];
+    const backend = {
+      runTurn: async (req: { messages: { content: { text: string }[] }[] }) => {
+        asked.push(req.messages[0]!.content[0]!.text);
+        return { status: 'succeeded' as const, usage: { input: 1, output: 1 }, text: JSON.stringify({ summary: 'wrote docs/a.md; the other writes were refused', key_findings: [], next_actions: [], tags: ['implementation'], edited_files: ['docs/a.md', 'docs/api.md'] }) };
+      },
+    };
+    const s: SummariserDeps = { backend: backend as never, model: { providerId: 'a', modelId: 'a1', dialect: 'chat' }, thinking: 'unset', timers: new FakeClock().timers, credentialFor: () => async () => 'k' };
+    const r = await produceReport(input({ messages, toolCallCount: 4 }), s, new AbortController().signal);
+    expect(asked[0]).toContain('Facts:\nEdited files: docs/a.md\n');
+    expect(r!.edited_files).toEqual(['docs/a.md']);
+  });
+});
+
 describe('engine/children/report — every construction site carries them', () => {
   const messages = [
     call('w1', 'write_file', { operation: 'create', path: 'docs/a.md', content: 'x' }),

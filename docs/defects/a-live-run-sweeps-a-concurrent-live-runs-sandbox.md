@@ -40,3 +40,10 @@ Recurred a fourth time the same evening. The repairer's round-1 rerun of `--only
 `/home/user/Rotaris-crw-wt-termout` live run (`--only=terminal`) that started at 22:46:42, and died at `readSession` with
 `expected one workspace database … found 0` before any check was printed. The rerun that followed was held until no other
 worktree's `node …/live-run.mjs` process was running — a workaround at the caller, not a repair of the sweep.
+
+Recurred a fifth time on 2026-09-30. A `--only=duress` run on `fix-file-tools-plurals` started at 03:33:01, with sandbox
+`/tmp/rotaris-live-run/2026-09-30T03-33-01-241Z`. It was swept by the `/home/user/Rotaris-crw-wt-compgrnd` live run that
+started at 04:10:48. The duress app ran to its deadline quit at 04:13:19 on a deleted store. The script then died at
+`readSession` with `expected one workspace database … found 0`, and printed no check. The pack's `model-traffic.jsonl`
+kept all 201 calls. `ps` showed no other `live-run.mjs` process when this run started, so checking before starting is
+not enough: the run that starts second does the sweeping.

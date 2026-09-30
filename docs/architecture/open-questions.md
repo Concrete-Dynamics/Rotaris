@@ -6223,6 +6223,28 @@ four in its `ALLOWED` list, and fails `pnpm lint` on any other literal marker in
 that the four texts agree with their counts like the rest. Or whether they are contract strings a caller may match, so
 that REQ-SHELL-044's "anywhere" excepts a tool's result, or the tool row draws them differently.
 
+**OQ-139 — May a `write_file` call with no `operation` be read as the one operation its other arguments allow?**
+*(REQ-TOOLS-135, which names `operation` as `write_file`'s selector; REQ-TOOLS-032, which requires three repairs before
+schema validation and refuses a payload that is still invalid after them. Raised 2026-09-29 by the partial repair of live-run
+finding WF1 under [R-067](../product/requests.md#r-067),
+[`write-files-first-use-refusal-recurred-under-duress.md`](../defects/write-files-first-use-refusal-recurred-under-duress.md).
+Open.)*
+
+The refusal names the field and gives an example. Since this repair the tool's description does too, and the schema
+sent to the model has always marked `operation` required. Even so, the 2026-09-30 duress run had a child send `path` and
+`content` with no `operation`. That was 1 of 4 children's first `write_file`, against 2 of 4 before the description
+named the field. The child then sent its whole 224-line file a second time. Wording cannot guarantee a first use. Only
+reading the missing selector from the call could: `path` and `content` on a path that does not exist can only mean
+`create`.
+
+**What the build proceeds under:** no inference. The call is refused as REQ-TOOLS-032 says, with the field named and
+an example, and the description names the field, its values and each one's fields.
+
+**What a ruling decides.** Whether REQ-TOOLS-032's three repairs may gain a fourth for this case. That repair would
+read `create` from a call with `path` and `content`, no `operation` and no existing file, and say in the result that it
+did. It would change what the gate executes and what a session approval matches (PD-TOOLS-004), so the requirement has
+to allow it before the code can.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

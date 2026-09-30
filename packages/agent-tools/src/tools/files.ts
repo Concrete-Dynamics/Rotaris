@@ -338,8 +338,9 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
      * (WF1) had two children send `path` and `content` with no `operation`, be refused, and regenerate their
      * whole file: the schema they were sent names the field, but the sentence they acted on listed the
      * operations as verbs and never said they were the values of a required selector. REQ-TOOLS-135 names the
-     * selector `operation` and nothing fixes this wording (docs/defects/fixed/
-     * write-files-first-use-refusal-recurred-under-duress.md).
+     * selector `operation` and nothing fixes this wording (docs/defects/
+     * write-files-first-use-refusal-recurred-under-duress.md). The duress run after it still had 1 of 4 children omit
+     * the field; reading the selector from the call instead is a fourth REQ-TOOLS-032 repair, so it is OQ-139's.
      */
     description: 'Create, edit, overwrite, insert into, or undo the last write of a workspace file. Every call names its `operation` — one of create, edit, overwrite, insert, undo — with the fields that operation reads: create {path, content}; edit {path, old_string, new_string, replace_all?}; overwrite {path, content}; insert {path, content, insert_line} (0 = beginning); undo {path}. Example: {"operation": "create", "path": "notes.txt", "content": "hello\\n"}. Read a file before editing or overwriting it.',
     schema: writeSchema,

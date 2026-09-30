@@ -218,6 +218,40 @@ export async function centreWhen(host: CaptureHost, finder: string, timeoutMs: n
   }
 }
 
+/** The renderer expression a Settings category press reads: the named item's centre, and whether it is the selected one. */
+export function categoryProbe(label: string): string {
+  return `(() => { const b = [...document.querySelectorAll('.nav-list__item')].find((x) => x.textContent === ${JSON.stringify(label)}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, selected: b.classList.contains('is-selected') }; })()`;
+}
+
+/**
+ * Selects the Settings category named `label` by pressing it, and VERIFIES the press: the item is read again after each
+ * press and pressed again until it carries `is-selected`, or the deadline passes, which is logged rather than passed over.
+ *
+ * The seam used to read the point once and press there once. A notice banner drawn above the view between the read and
+ * the press moved the list down, and the press selected a category above the one named, with nothing in the log to say
+ * so (`code-intel-proof`'s `setup-again`, 2026-09-29: Settings opened on Instructions instead of MCP Servers;
+ * `docs/defects/fixed/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`). A category already
+ * selected is not pressed at all. Time is read from the clock ports, like every wait in this file.
+ */
+export async function pressCategory(host: CaptureHost, label: string, timeoutMs: number): Promise<boolean> {
+  const started = host.clocks.monotonic.now();
+  let presses = 0;
+  for (;;) {
+    const item = await (host.win.webContents.executeJavaScript(categoryProbe(label)) as Promise<{ x: number; y: number; selected: boolean } | null>).catch(() => null);
+    const spent = host.clocks.monotonic.now() - started;
+    if (item?.selected === true) {
+      host.log(`capture: Settings category "${label}" selected after ${presses} ${presses === 1 ? 'press' : 'presses'} with ${Math.round(timeoutMs - spent)} ms to spare`);
+      return true;
+    }
+    if (spent >= timeoutMs) {
+      host.log(item ? `capture: Settings category "${label}" never selected within ${timeoutMs} ms (${presses} ${presses === 1 ? 'press' : 'presses'})` : `capture: no Settings category "${label}" on screen within ${timeoutMs} ms`);
+      return false;
+    }
+    if (item) { clickAt(host.win, item); presses += 1; }
+    await pause(host, item ? 150 : 50);
+  }
+}
+
 /** Resolves when the step's selector (and its optional exact text) matches, or at the deadline. Never throws. */
 export async function settleAt(host: CaptureHost, step: CaptureStep): Promise<void> {
   if (!step.until) { await pause(host, step.at); return; }

@@ -132,6 +132,9 @@ A window is named by its index in `windows`, by a suffix of a main window's work
 `persona:<persona>` (that persona's window), `approval` (the open approval dialog, answered with its own buttons) or
 `terminal` (the terminal window). A name that matches no open window is refused with the list of what is open.
 
+`type` types a line break as Shift+Enter, the composer's newline (REQ-CHAT-001), so a multi-line text keeps its breaks and
+is submitted only by `--enter`; the capture seams' typed steps do the same.
+
 `command` is relayed to main's own `runCommand` — the same path the renderer's channel reaches — so driving a
 command drives the product, not a stand-in for it. The seam (`apps/desktop/src/main/driver.ts`) exists only
 when `ROTARIS_DRIVER` names an endpoint file at launch; it is verification only, and `pnpm driver-proof`

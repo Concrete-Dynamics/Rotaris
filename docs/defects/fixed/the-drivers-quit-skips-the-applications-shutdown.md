@@ -50,5 +50,19 @@ Pinned by `apps/desktop/src/main/driver.test.ts` (the default `quit` calls the a
 leaves the endpoint; `immediate` calls the exit after taking the seam down) and `capture/probe.test.ts` (a timed-out
 wait ends by `quit`, a satisfied one by `exit 0`). Both fail on the unrepaired code. `driver-proof`'s second launch
 starts a run that holds its model call and quits it through the driver. The session reads `paused` with `stop_reason`
-`application_shutdown`, and the log shows the close through the guards. The duress scenario was not re-run: it takes
-forty minutes against the endpoint, and its deadline quit is the timed-out wait `probe.test.ts` pins.
+`application_shutdown`, and the log shows the close through the guards.
+
+Measured live on 2026-09-29, against the unmetered `katalyst` endpoint:
+`LIVE_RUN_DURESS_MS=240000 pnpm live-run --confirm --skip-build --only=duress`. The run was given a four-minute wait so
+that the deadline quit would meet a live run. The pack is `.live-run/runs/2026-09-30T02-43-07-482Z/` in the driver
+worktree (git-ignored).
+
+- The wait timed out at 240 s. The log reads "capture: ending through the application's quit", then the close through
+  the guards, then "quit: exiting with status 0".
+- The session reads `paused` with `stop_reason` `application_shutdown`.
+- Its three live children read `paused` with interruption `quit` (PD-ORCH-005 clause 3).
+- `sessions.tool_calls` is 94 against 94 `tool_calls` rows.
+- The session's tokens (449,512 in, 28,851 out) equal the harness's own count of the traffic.
+
+The only failed check was "the long run reached its result inside the wait" (247 s of 240 s). That failure was
+intended: the short wait was chosen so that the deadline quit would come mid-run.

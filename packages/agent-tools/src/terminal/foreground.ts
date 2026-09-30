@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { readFileSync, readlinkSync } from 'node:fs';
 import type { MonotonicClock, Timers, TimerHandle, Millis } from '@rotaris/kernel';
 import { stripVt } from './classify.js';
 import type { EmulatorFactory, ScreenEmulator } from './emulator.js';
@@ -38,7 +39,8 @@ export type ShellBackend = { readonly kind: 'powershell'; readonly file: string 
 
 export interface ForegroundResult {
   readonly output: string;
-  readonly exitCode: number;
+  /** Null for a call that ended with no exit status of its own: a command that replaced the session's shell (OQ-144). */
+  readonly exitCode: number | null;
   readonly timedOut: boolean;
   readonly softPaused: boolean;
   readonly killStatus: 'session_reset' | 'reset_failed' | null;
@@ -53,7 +55,36 @@ export interface ForegroundResult {
    * since the command last wrote anything. Absent on every other result.
    */
   readonly waited?: { readonly sinceObservedMs: number; readonly silentMs: number };
+  /** OQ-144: the command replaced the session's shell; the program was ended and the shell restarted. */
+  readonly replaced?: true;
 }
+
+/**
+ * OQ-144 (acceptance finding A9): what the process behind a pid is running — its executable and its argument vector —
+ * read from `/proc`, so an `exec` that keeps the pid and replaces the program is visible. Null where `/proc` does not
+ * say: every host but Linux, or a process that has gone. The kernel marks an executable whose file was replaced on
+ * disk since it started — a package upgrade of the shell — ` (deleted)`; that is the same program, so the mark is cut.
+ */
+export function processIdentity(pid: number): string | null {
+  if (process.platform !== 'linux') return null;
+  try {
+    return `${readlinkSync(`/proc/${pid}/exe`).replace(/ \(deleted\)$/, '')}\0${readFileSync(`/proc/${pid}/cmdline`, 'latin1')}`;
+  } catch {
+    return null;
+  }
+}
+
+/** How a raw round trip was ended before the shell answered it: its call's cancel, or a kill from the terminal window. */
+type RawCut = { readonly kind: 'abort' } | { readonly kind: 'kill'; readonly reset: boolean };
+
+/** OQ-144: how often a running foreground call looks for its shell having been replaced. */
+export const REPLACED_WATCH_MS = 200;
+/** OQ-144: the error a call carries when its command replaced the session's shell. */
+export const REPLACED_ERROR = 'the command replaced the session\'s shell';
+/** REQ-SHELL-092: the error a call carries when the user killed it from the terminal window. */
+const KILLED_ERROR = 'the command was killed from the terminal window';
+/** The error a call carries when its run cancelled it (the tool context's signal). */
+const CANCELLED_ERROR = 'the call was cancelled';
 
 export const FOREGROUND_CAP = 100_000;
 export const NO_OUTPUT_WINDOW_MS = 30_000;
@@ -452,6 +483,12 @@ export class ForegroundSession {
    * shell; a snapshot that cannot be parsed keeps the previous capture rather than clearing it.
    */
   private lastState: ShellState | null = null;
+  /**
+   * OQ-144: `processIdentity` of the session's shell, read when the shell last answered one of the product's own lines
+   * (the first-call handshake, the snapshot, the restore), so it is the shell's and not a program an `exec` put in its
+   * place. Null for a shell that has not answered yet, and wherever `/proc` does not say; the watch is off then.
+   */
+  private shellIdentity: string | null = null;
 
   constructor(private readonly deps: SessionDeps, id?: string) {
     this.id = id ?? `ts_${randomBytes(4).toString('hex')}`;
@@ -515,6 +552,7 @@ export class ForegroundSession {
     p.onData((d) => this.onData(d));
     p.onExit(() => { if (this.pty === p) this.pty = null; });
     this.pty = p;
+    this.shellIdentity = null;
     return p;
   }
 
@@ -578,10 +616,34 @@ export class ForegroundSession {
 
   private async execute(command: string, opts: { timeoutMs: number | null; hardMs?: number; signal?: AbortSignal }): Promise<ForegroundResult> {
     const { timers, monotonic } = this.deps;
-    const p = this.ensure();
+    let p = this.ensure();
     this.state = 'running';
     const reinit = this.reinitialized;
     this.reinitialized = false;
+    // OQ-144: a shell that has not answered yet has no identity to watch against — a fresh one, before its first
+    // command. One no-op round trip on it gives one, read once the shell has printed the end frame and so is ours. A
+    // shell busy with a soft-paused command cannot answer, and keeps what it had.
+    // The round trip is an await BEFORE the call's own abort listener and kill handler exist, so both are honoured on it
+    // (acceptance round 1's verifier): a cancel that landed in it was lost — `addEventListener('abort')` on a signal
+    // already aborted never fires — and the call ran to its own end; a kill from the terminal window reset the shell
+    // under it, and the command was written to the PTY that had just been killed.
+    if (this.deps.backend.kind === 'posix' && this.shellIdentity === null && this.pausedCommand === null && !opts.signal?.aborted && processIdentity(p.pid) !== null) {
+      const trip = await this.runRaw(':', SNAPSHOT_TIMEOUT_MS, opts.signal).catch(() => null);
+      if (trip?.cut?.kind === 'kill') {
+        // `killActive` has ended the tree and restarted the session; the command was never written.
+        return { output: '', exitCode: -1, timedOut: false, softPaused: false, killStatus: trip.cut.reset ? 'session_reset' : 'reset_failed', error: KILLED_ERROR, sessionReinitialized: reinit, truncated: false, restore: { status: 'none' } };
+      }
+      p = this.ensure();
+    }
+    if (opts.signal?.aborted) {
+      // Cancelled before the command was written: the reading of a cancel below — the session restarts, PD-TOOLS-001's
+      // snapshot is re-applied — with nothing of the command's to report, because it never ran.
+      this.active = null;
+      this.state = 'resetting';
+      const reset = this.resetNow();
+      const restore: RestoreOutcome = reset ? await this.restoreState() : { status: 'failed' };
+      return { output: '', exitCode: 124, timedOut: true, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: CANCELLED_ERROR, sessionReinitialized: reinit, truncated: false, restore };
+    }
     const nonce = randomBytes(12).toString('hex');
     const start = `__rot_${nonce}_s`;
     const end = `__rot_${nonce}_e`;
@@ -601,10 +663,25 @@ export class ForegroundSession {
       hold.push(chunk);
     };
     this.listeners.push(listener);
-    const done = new Promise<{ kind: 'exit'; code: number } | { kind: 'timeout' } | { kind: 'pause' } | { kind: 'abort' } | { kind: 'kill'; reset: boolean }>((resolve) => {
+    const done = new Promise<{ kind: 'exit'; code: number } | { kind: 'timeout' } | { kind: 'pause' } | { kind: 'abort' } | { kind: 'kill'; reset: boolean } | { kind: 'replaced' }>((resolve) => {
       this.active = { start, end, onEnd: (code) => resolve({ kind: 'exit', code }), onKill: (reset) => resolve({ kind: 'kill', reset }) };
       let hard: TimerHandle | null = null;
       let soft: TimerHandle | null = null;
+      let watch: TimerHandle | null = null;
+      // OQ-144 (acceptance A9): a command that replaces the shell — `exec bash` — keeps the pid and never returns to the
+      // rest of the wrapped line, so the end frame never comes, and the call used to wait out the no-output window and
+      // report a soft pause for a command that had finished at once, leaving every later call in the new program. The
+      // process behind the pid is compared with the shell's identity until the call ends; a different one ends the call.
+      const expected = this.shellIdentity;
+      if (expected !== null) {
+        const look = () => {
+          if (this.active?.end !== end) return;
+          const now = processIdentity(p.pid);
+          if (now !== null && now !== expected) { resolve({ kind: 'replaced' }); return; }
+          watch = timers.after(REPLACED_WATCH_MS as Millis, look);
+        };
+        watch = timers.after(REPLACED_WATCH_MS as Millis, look);
+      }
       // REQ-TOOLS-097: the two bounds are armed TOGETHER and whichever is reached first governs the call. The
       // hard one is the call's own timeout, else `runtime.shell_command_timeout` (REQ-CONFIG-116) as `hardMs`.
       // Written as `if (timeout) {hard} else {soft}`, the default path — the one an agent takes when it names no
@@ -623,7 +700,7 @@ export class ForegroundSession {
         soft = timers.after(win, tick);
       }
       opts.signal?.addEventListener('abort', () => resolve({ kind: 'abort' }), { once: true });
-      const clear = () => { hard?.cancel(); soft?.cancel(); };
+      const clear = () => { hard?.cancel(); soft?.cancel(); watch?.cancel(); };
       void Promise.resolve().then(() => undefined);
       this.clearers.set(nonce, clear);
     });
@@ -676,7 +753,20 @@ export class ForegroundSession {
     }
     if (outcome.kind === 'kill') {
       // Part AL / REQ-SHELL-092: killed from the terminal window; the tree is gone and the session was restarted by `killActive`.
-      const r = finish({ exitCode: -1, timedOut: false, softPaused: false, killStatus: outcome.reset ? 'session_reset' : 'reset_failed', error: 'the command was killed from the terminal window' });
+      const r = finish({ exitCode: -1, timedOut: false, softPaused: false, killStatus: outcome.reset ? 'session_reset' : 'reset_failed', error: KILLED_ERROR });
+      screen.dispose();
+      return r;
+    }
+    if (outcome.kind === 'replaced') {
+      // OQ-144: the program the command put in the shell's place is ended with its tree, and the session restarts on the
+      // shell the tool description names, with PD-TOOLS-001's snapshot re-applied as after a hard-timeout reset. The
+      // command has no exit status of its own — it never returned to the line that would have reported one — so the
+      // call is REQ-TOOLS-103's failure before completion, not a soft pause and not REQ-TOOLS-099's timeout.
+      this.active = null;
+      this.state = 'resetting';
+      const reset = this.resetNow();
+      const restore: RestoreOutcome = reset ? await this.restoreState() : { status: 'failed' };
+      const r: ForegroundResult = { ...finish({ exitCode: null, timedOut: false, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: REPLACED_ERROR }), restore, replaced: true };
       screen.dispose();
       return r;
     }
@@ -688,7 +778,7 @@ export class ForegroundSession {
     this.state = 'resetting';
     const reset = this.resetNow();
     const restore: RestoreOutcome = reset ? await this.restoreState() : { status: 'failed' };
-    const r = { ...finish({ exitCode: 124, timedOut: true, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: outcome.kind === 'abort' ? 'the call was cancelled' : null }), restore };
+    const r = { ...finish({ exitCode: 124, timedOut: true, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: outcome.kind === 'abort' ? CANCELLED_ERROR : null }), restore };
     screen.dispose();
     return r;
   }
@@ -822,38 +912,52 @@ export class ForegroundSession {
    * it finds. A private poll racing that scan would consume the frame first and leave the scan's
    * handler waiting until the hard cap — the shape that wedged the first draft of this restore.
    */
-  private runRaw(line: string, timeoutMs: number): Promise<{ exitCode: number; output: string }> {
+  private runRaw(line: string, timeoutMs: number, signal?: AbortSignal): Promise<{ exitCode: number; output: string; cut?: RawCut }> {
     const p = this.ensure();
     const nonce = randomBytes(12).toString('hex');
     const start = `__rot_${nonce}_s`;
     const end = `__rot_${nonce}_e`;
     return new Promise((resolve, reject) => {
       let settled = false;
+      let cut: RawCut | undefined;
       const buf: string[] = [];
       const listener = (chunk: string) => { buf.push(chunk); };
       this.listeners.push(listener);
+      // The first-call handshake carries its call's signal: a cancel ends the round trip where it stands, and the call
+      // (which has not written its command yet) takes it from there.
+      const onAbort = () => {
+        if (settled) return;
+        if (this.active?.end === end) this.active = null;
+        cut = { kind: 'abort' };
+        finish(-1, false);
+      };
       const timer = this.deps.timers.after(timeoutMs as Millis, () => {
         if (settled) return;
         settled = true;
+        signal?.removeEventListener('abort', onAbort);
         this.listeners = this.listeners.filter((l) => l !== listener);
         this.active = null;
         reject(new Error('snapshot timed out'));
       });
-      const finish = (code: number) => {
+      const finish = (code: number, answered = true) => {
         if (settled) return;
         settled = true;
         timer.cancel();
+        signal?.removeEventListener('abort', onAbort);
         this.listeners = this.listeners.filter((l) => l !== listener);
+        // OQ-144: the shell printed this line's end frame, so the process behind the pid is the session's own shell.
+        if (answered && this.pty === p) { const id = processIdentity(p.pid); if (id !== null) this.shellIdentity = id; }
         const screen = this.newScreen();
         void screen.write(buf.join('')).then(() => {
           const text = ForegroundSession.clean(screen.text(), start, end);
           screen.dispose();
-          resolve({ exitCode: code, output: text });
+          resolve({ exitCode: code, output: text, ...(cut === undefined ? {} : { cut }) });
         });
       };
       this.pendingText = '';
-      this.active = { start, end, onEnd: finish, onKill: () => finish(-1) };
+      this.active = { start, end, onEnd: (code) => finish(code), onKill: (reset) => { cut = { kind: 'kill', reset }; finish(-1, false); } };
       p.write(`${wrapCommand(this.deps.backend, line, start, end)}\r`);
+      if (signal?.aborted) onAbort(); else signal?.addEventListener('abort', onAbort, { once: true });
     });
   }
 

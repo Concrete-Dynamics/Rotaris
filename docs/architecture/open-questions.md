@@ -6354,6 +6354,107 @@ still holds `completed` yields no job and reads nothing.
 recorded, so that a failed recording leaves no stop reason to compare and REQ-ORCH-137's skip applies. Or whether the
 record governs even then, so that the capture must read the store before it may skip.
 
+**OQ-143 — Which status and exit code does a background session read when its process could not be started?**
+*(REQ-TOOLS-109, REQ-TOOLS-179, REQ-TOOLS-100, REQ-TOOLS-103, REQ-TOOLS-112. Raised 2026-09-30 by the repair of
+[`a-background-session-whose-spawn-fails-reads-failed-with-exit-minus-one.md`](../defects/fixed/a-background-session-whose-spawn-fails-reads-failed-with-exit-minus-one.md)
+under [R-067](../product/requests.md#r-067). Open; numbered OQ-142 on its branch, renumbered OQ-143 at the merge, OQ-142
+having been taken on `main`.)*
+
+Node reports some spawn failures synchronously and others — ENOENT and EACCES among them — only after `spawn` has
+returned, through the child's `error` event and never its `exit`. For the first kind the product already answers the
+start itself as an `execution_error` with no exit code (`The background command could not be started: …`). For the
+second, `start` has already returned `Background session started`, so the session exists, and the failure first
+shows at the poll. REQ-TOOLS-109's status vocabulary is closed — `running`, `completed` (exit 0), `failed` (nonzero),
+`killed`, `timeout` — and names no status for a command that never ran. REQ-TOOLS-179 gives −1 to `killed` alone on a
+background session, and keeps "0/nonzero" for "the command's real outcome", which a command that never ran does not
+have. REQ-TOOLS-103 makes any failure "before the command completes" an `execution_error` that quotes the error.
+Before this entry such a session read `failed (exit -1)`, `background_terminal`, with no `failure_kind`.
+
+**What the build proceeds under** (`BackgroundSession`'s `error` handler in
+`packages/agent-tools/src/terminal/background.ts`, `sessionAction`'s `finish` in `terminal/index.ts`):
+- **The status is `failed`.** It is the only terminal status of REQ-TOOLS-109 that is not an end the product
+  imposed, and REQ-TOOLS-112 already reads it at `error`.
+- **The exit code is null.** The command has none, as the synchronous refusal has none. The diagnostic block drops
+  the key (REQ-TOOLS-100), the list's structured entry carries `exit_code: null` and the text table `-`, and the
+  session's live stream ends with no exit code, which the terminal surface draws as `exited`.
+- **Every poll or termination of it is an `execution_error`**, error severity, `error_class` `ExecutionError`, with a
+  detail that states the session's status and then that terminal execution failed before completion, quoting the
+  error (REQ-TOOLS-103). REQ-TOOLS-112's first test decides the outcome, so it is not `background_terminal`.
+- **An `error` the child raises once it has a pid is not its end.** It is warned about, and the session keeps waiting
+  for its `exit`, which still comes.
+
+The case "REQ-TOOLS-100/103/179: a spawn that fails after start returns …" in `terminal/terminal.test.ts` pins this
+reading, and the case "REQ-TOOLS-179 (OQ-143): …" in `terminal/streams.test.ts` pins the stream's end.
+
+**What a ruling decides.** Whether REQ-TOOLS-109's `failed` covers a command that never ran with no exit code, or
+whether it needs a code of its own (126 is sandbox-unavailable's, and 127 is the shell's convention for a command it
+could not find), or a status the vocabulary does not have; and whether such a spawn should instead be answered at
+the start, by waiting for Node's `spawn` or `error` before `start` returns.
+
+**OQ-144 — What does a foreground call answer when its command replaces the session's shell, and what becomes of the
+session?** *(REQ-TOOLS-097, REQ-TOOLS-098, REQ-TOOLS-103, REQ-TOOLS-104, REQ-TOOLS-179; `PD-TOOLS-001`. Raised
+2026-09-30 by the repair of
+[`a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`](../defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md)
+under [R-067](../product/requests.md#r-067), acceptance finding A9. Open; numbered OQ-143 on its branch, renumbered
+OQ-144 at the merge, OQ-142 having been taken on `main`.)*
+
+A foreground command that replaces the shell — `exec bash`, `exec sh`, any `exec <program>` — keeps the shell's pid
+and never returns to the rest of the wrapped line, so the end frame never prints. Before this entry the call waited out
+the no-output window and returned a soft pause (REQ-TOOLS-098: exit −1, "The process may still be running") for a
+command that had finished at once, and every later call ran in the new program, not the shell the tool description
+names (REQ-TOOLS-104 on Windows, and the POSIX sentence live-run L1's repair added elsewhere). No requirement says
+whether a command may replace the session's shell, whether the tool refuses or warns about one, or what the call
+answers when one does. A PowerShell session has no `exec`, so the question is the POSIX backend's.
+
+**What the build proceeds under** (`ForegroundSession` in `packages/agent-tools/src/terminal/foreground.ts`, the
+detail and the description in `terminal/index.ts`):
+- **The session keeps the shell it started, and the call ends at once.** While a call runs, the product compares the
+  process behind the session's pid (its executable and argument vector, read from `/proc`) with the shell's own, read
+  when the shell last answered one of the product's lines. A different process ends the call within 200 ms. The
+  program is ended with its tree, and the session restarts on its shell with PD-TOOLS-001's snapshot re-applied, as a
+  hard-timeout reset does. A fresh shell answers one no-op line before its first command so that there is an identity
+  to compare with; a shell that does not answer it within the snapshot bound (15 s), a shell still busy with a
+  soft-paused command, and a host without `/proc` leave the call unwatched.
+- **The handshake honours the call's cancel and a kill from the terminal window.** The no-op line is awaited before
+  the call's command is written, so a run's stop or pause that lands on it ends the round trip where it stands: the
+  command is never written, and the call reads as any cancelled call does (`timeout`, 124, `session_reset`, "the call
+  was cancelled", the snapshot re-applied). A kill from the terminal window that lands on it reads as a killed call
+  (−1, `session_reset`, "killed from the terminal window"), and the command is not written to the shell the kill ended.
+  *(Added 2026-09-30 by acceptance round 1's verifier, who found both lost in the first form of this build: the cancel
+  was ignored and the command ran to its own end — 5,075 ms and `success` where origin/main answered the cancel in
+  310 ms — and after a kill the command was written to the PTY the kill had just ended, so the call waited out its
+  timeout. A signal already aborted before the command is written is now honoured on every call, the handshake or
+  not.)*
+- **The call is REQ-TOOLS-103's failure before completion.** `failure_kind` and `outcome_kind` are `execution_error`,
+  severity `error`, `error_class` `ExecutionError`, no exit code (the command never returned to a line that would
+  report one, so the diagnostic block drops the key and the live stream ends with none), and `kill_status`
+  `session_reset` or `reset_failed`. The detail says the command replaced the session's shell, that the session was
+  restarted with the shell this tool runs commands in, what was restored, and to run the program without `exec`, or
+  in the background.
+- **`exec` with redirections alone** (`exec 3>file`, `exec >log`) keeps the process, and is an ordinary command.
+- **The POSIX description says not to replace the shell** and what a call that does meets on the host it runs on: on
+  Linux that the call normally fails and the shell is restarted, elsewhere that the call reads as still running and
+  every later call runs in that program. *("Normally" added 2026-09-30 by acceptance round 1's second verifier: on
+  Linux too the watch is off in the cases listed under "What the build proceeds under", where the call reads as still
+  running.)*
+
+**What it does not reach.** `/proc` is Linux's, so on macOS the watch is off: such a call still soft-pauses there, and
+the description's sentence, which states that consequence there, is all that applies (no macOS artifact is built,
+IC-3). ~~only the description's sentence applies~~ *(corrected 2026-09-30, acceptance round 1's verifier: the sentence
+first told every POSIX host that such a call fails and the shell is restarted, which only Linux does.)* An `exec` of
+exactly the shell's own executable with exactly its arguments (`exec /bin/sh -i`) is indistinguishable from the shell
+and still soft-pauses. An `exec` inside a command that has already soft-paused is not watched either — the watch ends
+with the call at the pause — so the paused command's later polls read it as still running. The handshake's own wait
+(the fresh shell's startup and one round trip) is not counted toward the call's hard timeout.
+
+The case "REQ-TOOLS-097/098/103/104 (OQ-144, acceptance A9): …" in `terminal/terminal.test.ts` pins this reading, and
+the two cases "… (OQ-144, acceptance round 1): …" beside it pin the handshake's cancel and kill.
+
+**What a ruling decides.** Whether a command that replaces the shell is refused before it runs (an `invalid_request`
+REQ-TOOLS-101 does not list), answered as built, or adopted — the session carrying on in the new program, with the
+description then no longer naming the shell the next command runs in; and whether the call's code is `execution_error`
+with no exit code, as built, or something REQ-TOOLS-179 names.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

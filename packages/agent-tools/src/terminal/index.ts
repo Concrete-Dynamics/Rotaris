@@ -123,7 +123,7 @@ export class TerminalManager {
     return true;
   }
   /** The command's final result arrived (not a soft pause): the closing frame, the exit code, the tap released. */
-  endForeground(key: string, agentId: string, outcome: { exitCode: number; finalText: string }): void {
+  endForeground(key: string, agentId: string, outcome: { exitCode: number | null; finalText: string }): void {
     this.taps.get(key)?.();
     this.taps.delete(key);
     this.streams.end(foregroundStreamId(agentId), outcome);
@@ -277,10 +277,16 @@ export interface BackgroundAttribution {
  * With no backend known, both sentences stand.
  */
 const POWERSHELL_SHELL = 'On Windows the shell is PowerShell, not bash: `&&`, `;`, `2>&1` and `$env:VAR` work; a bash heredoc never returns, and bash arrays, `[[ … ]]` and `source` are unavailable.';
-const posixShell = (file: string): string => `The shell is \`${file}\`, a POSIX shell that may not be bash: write POSIX syntax — bash arrays, \`\${PIPESTATUS[…]}\`, \`[[ … ]]\`, process substitution \`<(…)\` and \`source\` may be unavailable, and a command that uses them fails with a nonzero exit code.`;
+/**
+ * OQ-144: the consequence of `exec <program>` is stated as the host meets it. The watch that notices the replacement
+ * reads `/proc` (`processIdentity`), so only on Linux does such a call fail and the shell come back; elsewhere the call
+ * reads as still running and the program stays in the shell's place (acceptance round 1's verifier). "Normally", because
+ * on Linux too the watch is off where the handshake went unanswered or a soft-paused command holds the shell (OQ-144).
+ */
+const posixShell = (file: string, platform: NodeJS.Platform): string => `The shell is \`${file}\`, a POSIX shell that may not be bash: write POSIX syntax — bash arrays, \`\${PIPESTATUS[…]}\`, \`[[ … ]]\`, process substitution \`<(…)\` and \`source\` may be unavailable, and a command that uses them fails with a nonzero exit code. Do not replace the shell with \`exec <program>\`: ${platform === 'linux' ? 'such a call normally fails, and the program is ended and the shell restarted.' : 'such a call reads as still running, and every later call runs in that program.'}`;
 const TERMINAL_USE = 'One command per call; use `&&` or `;` for sequences. `background=true` runs a command in its own process and returns a session id for later `query` / `kill`. A command that prints nothing for 30 s returns early with exit −1 while it keeps running; poll with an empty command, interrupt with `C-c` and `is_input=true`; stdout and stderr share the captured terminal stream. failure_kind is one of `timeout`, `invalid_request`, `execution_error`, `sandbox_unavailable`; `sandbox_unavailable` means the command never executed because this host could not apply the OS-level confinement the session requires — the cause is the host\'s configuration, neither a retry nor a reformulated command helps, and the detail and output should be relayed to the user.';
-export function terminalDescription(backend: ShellBackend | null | undefined): string {
-  const shell = backend?.kind === 'powershell' ? POWERSHELL_SHELL : backend?.kind === 'posix' ? posixShell(backend.file) : `${POWERSHELL_SHELL} ${posixShell('/bin/sh')}`;
+export function terminalDescription(backend: ShellBackend | null | undefined, platform: NodeJS.Platform = process.platform): string {
+  const shell = backend?.kind === 'powershell' ? POWERSHELL_SHELL : backend?.kind === 'posix' ? posixShell(backend.file, platform) : `${POWERSHELL_SHELL} ${posixShell('/bin/sh', platform)}`;
   return `Run a command in a persistent shell session (working directory and variables persist across calls). ${shell} ${TERMINAL_USE}`;
 }
 
@@ -356,23 +362,23 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
       const r = a.command === '' ? await session.poll() : await session.run(wrapped.line, { timeoutMs: softEligible ? null : timeoutMs, signal: ctx.signal, ...(softEligible ? { hardMs: timeoutMs } : {}) });
       if (!r.softPaused) manager.endForeground(key, ctx.agentName, { exitCode: r.exitCode, finalText: r.output });
       const label = `${resetNote ? '[RESET] ' : ''}${a.command}`;
-      const warnings = r.exitCode === 0 || r.exitCode > 0 ? outputWarnings(a.command, r.output, r.exitCode) : [];
+      const warnings = r.exitCode !== null && r.exitCode >= 0 ? outputWarnings(a.command, r.output, r.exitCode) : [];
       const assigned: FailureKind | null = r.timedOut ? 'timeout' : r.error && !r.softPaused ? 'execution_error' : null;
       const failureKind = relabelIfLauncherFailed(wrapped.confined, assigned, r.exitCode, r.output);
       const { outcomeKind, severity } = classifyOutcome({ failureKind, exitCode: r.exitCode, output: r.output, command: a.command }, warnings);
       let detail: string;
+      // PD-TOOLS-001 narrows what "lost" means after a reset: the cwd and exported variables snapshotted after the
+      // last completed command are re-applied to the fresh shell, and the detail says so, plus the boundary:
+      // aliases, functions and background jobs are not restored.
+      const restoreNote = r.restore.status === 'restored'
+        ? ` The working directory and ${r.restore.vars} exported variable${r.restore.vars === 1 ? '' : 's'} were restored (${r.restore.cwd}); aliases, functions and background jobs were not.`
+        : r.restore.status === 'failed'
+          ? ' Restoring the working directory and variables failed; the session is at its defaults.'
+          : ' There was no earlier shell state to restore.';
       if (failureKind === 'sandbox_unavailable') {
         detail = LAUNCHER_FAILED_DETAIL;
       } else if (r.timedOut) {
-        // PD-TOOLS-001 narrows what "lost" means: the cwd and exported variables snapshotted after the
-        // last completed command are re-applied to the fresh shell. The REQ-TOOLS-099 contract stands —
-        // 124, session_reset, state lost — and the detail says both, plus the boundary: aliases, functions
-        // and background jobs are not restored.
-        const restoreNote = r.restore.status === 'restored'
-          ? ` The working directory and ${r.restore.vars} exported variable${r.restore.vars === 1 ? '' : 's'} were restored (${r.restore.cwd}); aliases, functions and background jobs were not.`
-          : r.restore.status === 'failed'
-            ? ' Restoring the working directory and variables failed; the session is at its defaults.'
-            : ' There was no earlier shell state to restore.';
+        // The REQ-TOOLS-099 contract stands — 124, session_reset, state lost — and the detail says both.
         detail = `The command exceeded its timeout of ${timeoutMs / 1000} seconds; the terminal session was forcibly restarted to terminate the process tree, and shell state (working directory, variables, aliases, background jobs) was lost${r.killStatus === 'reset_failed' ? ' — restarting the session failed' : ''}.${restoreNote}${r.error ? ` (${r.error})` : ''}`;
       } else if (r.softPaused) {
         // REQ-TOOLS-098: an empty capture states the elapsed no-output window. For the soft pause that is the window it
@@ -383,6 +389,11 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
           : r.waited
             ? `No new output in ${seconds(r.waited.sinceObservedMs)} since the previous observation, and none for ${seconds(r.waited.silentMs)} in the merged terminal stream; stdout and stderr are both captured. A poll returns at once rather than waiting for output. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`
             : `No output for ${(config.noOutputWindowMs ?? 30_000) / 1000} seconds in the merged terminal stream; stdout and stderr are both captured. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`;
+      } else if (r.replaced) {
+        // OQ-144 (acceptance A9): REQ-TOOLS-103's failure before completion, and what became of the session, so the agent
+        // knows the shell the description names is the one its next call runs in (REQ-TOOLS-104).
+        const restarted = r.killStatus === 'session_reset' ? `the terminal session was restarted with \`${manager.backend.file}\`, the shell this tool runs commands in.` : 'restarting the terminal session failed.';
+        detail = `Terminal execution failed before completion: ${r.error} (as \`exec <program>\` does), so the command never returned and has no exit code. The program was ended and ${restarted}${r.killStatus === 'session_reset' ? restoreNote : ''} Run a program without \`exec\`, or with background=true if it keeps running.`;
       } else if (r.error) {
         detail = `Terminal execution failed before completion: ${r.error}`;
       } else {
@@ -432,7 +443,7 @@ function startBackground(a: TerminalArgs, manager: TerminalManager, ctx: ToolCon
   });
   if (opened) {
     const untap = s.onOutput((chunk) => manager.streams.data(streamId, chunk));
-    void s.whenExited().then(() => { untap(); manager.streams.end(streamId, { exitCode: s.exitCode ?? -1, finalText: s.readAll().replace(/\s+$/, '') }); });
+    void s.whenExited().then(() => { untap(); manager.streams.end(streamId, { exitCode: s.exitCode, finalText: s.readAll().replace(/\s+$/, '') }); });
   }
   const diag = diagnosticBlock({ backend: BACKEND_NAME, command: a.command, detail: `Background session started: ${s.id}`, exit_code: 0, outcome_kind: 'background_running', outcome_severity: 'info', session_id: s.id, session_status: 'running', warnings: [] });
   return observation(`Background session started: ${s.id}\ncommand: ${a.command}\nsession_status="running"\n${outputSection('', false)}\n${diag}`, { outcomeKind: 'background_running', exitCode: 0, warnings: [] });
@@ -454,10 +465,13 @@ function sessionAction(a: TerminalArgs, bg: BackgroundManager): Promise<Observat
   const finish = (text: string, output: string) => {
     // REQ-SANDBOX-085: a background spawn returns before a launcher failure is visible, so the test
     // is made here, on the whole captured stream, at the poll or the termination that first sees it.
-    const failureKind = relabelIfLauncherFailed(s.confined, null, s.exitCode, s.readAll());
-    const detail = failureKind === 'sandbox_unavailable' ? LAUNCHER_FAILED_DETAIL : text;
+    // REQ-TOOLS-103 (OQ-143): a process Node could not start is an `execution_error` whose detail quotes the cause.
+    const failureKind = relabelIfLauncherFailed(s.confined, s.spawnError === null ? null : 'execution_error', s.exitCode, s.readAll());
+    const detail = failureKind === 'sandbox_unavailable' ? LAUNCHER_FAILED_DETAIL
+      : failureKind === 'execution_error' ? `${text} Terminal execution failed before completion: the background command could not be started: ${s.spawnError ?? ''}`
+        : text;
     const { outcomeKind, severity } = classifyOutcome({ failureKind, exitCode: s.exitCode, output, command: s.command, backgroundStatus: s.status }, []);
-    const diag = diagnosticBlock({ backend: BACKEND_NAME, command: s.command, detail, exit_code: s.exitCode, failure_kind: failureKind, outcome_kind: outcomeKind, outcome_severity: severity, session_id: s.id, session_status: s.status, warnings: [], error_class: failureKind === 'sandbox_unavailable' ? SANDBOX_ERROR_CLASS : null });
+    const diag = diagnosticBlock({ backend: BACKEND_NAME, command: s.command, detail, exit_code: s.exitCode, failure_kind: failureKind, outcome_kind: outcomeKind, outcome_severity: severity, session_id: s.id, session_status: s.status, warnings: [], error_class: failureKind === 'sandbox_unavailable' ? SANDBOX_ERROR_CLASS : failureKind === 'execution_error' ? 'ExecutionError' : null });
     return observation(`${detail}\n${outputSection(output, false)}\n${diag}`, { outcomeKind, exitCode: s.exitCode, warnings: [], isError: severity === 'error', ...(failureKind === null ? {} : { failureKind }) });
   };
   switch (action) {

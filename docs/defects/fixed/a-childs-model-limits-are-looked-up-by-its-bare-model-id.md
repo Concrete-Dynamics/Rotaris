@@ -64,7 +64,7 @@ the same provider model") and `apps/desktop/src/run-host/configuration.test.ts` 
 never share a count" — fails on the `unwrapSynthetic` form, receiving `openai-compatible--alpha/qwen` where
 `openai-compatible--beta/qwen` is expected). The same guess still serves the preference read-back
 (REQ-CONFIG-253/255); recorded, not repaired here:
-[`../preference-read-back-guesses-a-synthetic-copys-origin-by-provider-and-model-id.md`](../preference-read-back-guesses-a-synthetic-copys-origin-by-provider-and-model-id.md).
+[`preference-read-back-guesses-a-synthetic-copys-origin-by-provider-and-model-id.md`](preference-read-back-guesses-a-synthetic-copys-origin-by-provider-and-model-id.md) — repaired 2026-09-30 (acceptance A42), where `syntheticOriginOf` was also found to stop after four recorded origins; it now follows them to the end.
 
 Rows written before this repair keep the bare id in `children.model_key`; a session resumed from before it still meters
 such a child at REQ-MONITOR-080's default and finds no cap for it. Nothing rewrites those rows.

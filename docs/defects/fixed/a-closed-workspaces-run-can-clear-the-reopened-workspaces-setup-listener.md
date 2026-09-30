@@ -33,7 +33,7 @@ repaired together.
 
 ## Outcome
 
-Repaired 2026-09-29 under R-067, on the branch that also repaired the switch-time cancellation. Two changes in
+Repaired 2026-09-30 under R-067, on the branch that also repaired the switch-time cancellation. Two changes in
 `apps/desktop/src/main/initialization.ts`. (1) The sink is cleared only by the follow that installed it
 (`if (this.setupListener === drain)`), and `run`'s `finally` no longer touches it: a run ending late cannot clear another
 run's sink. (2) The coordinator's setups are one at a time (`setupTurn`): the run host holds one setup and pushes its

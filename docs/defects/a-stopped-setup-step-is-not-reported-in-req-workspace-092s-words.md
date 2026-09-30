@@ -6,7 +6,7 @@ that a stopped step reads differently from one that ran and exited non-zero. The
 own sentences instead — "cancelled while running; the child was terminated; its last output: …" and "exceeded its budget
 of N s and was terminated; …" — and `InitializationCoordinator.resultOf` passes each step's detail through unchanged,
 so the task's step rows, its error ("{reason}: {detail}", REQ-WORKSPACE-093) and a background banner carry the run
-host's wording. Neither sentence appears anywhere in the code. Seen in `workspace-proof`'s scenario 8b log on 2026-09-29:
+host's wording. Neither sentence appears anywhere in the code. Seen in `workspace-proof`'s scenario 8b log on 2026-09-30:
 `code-intelligence-setup → failure — Code intelligence could not create this project's configuration: cancelled while
 running; the child was terminated`. Noticed while repairing the initialization setup's overlap under R-067; not repaired
 here. Whether the mapping belongs in this domain's `resultOf` (as REQ-WORKSPACE-093's reasons already do) or in the run

@@ -348,7 +348,7 @@ flight, …", and of a run the user cancels in the same interval) fail without i
 **Not shown:** the Windows orders; a plain close of one of two windows with a run under way, which only the unit cases
 hold; a close landing while the start request is in flight, which only the unit cases hold.
 
-**Seventh round (2026-09-29, R-067): one setup at a time.** "Pushed, not polled" above holds, with a condition it left
+**Seventh round (2026-09-30, R-067): one setup at a time.** "Pushed, not polled" above holds, with a condition it left
 unstated: the run host holds **one** setup and pushes `mcp.setupStatus` with no workspace on it, and the coordinator held
 one step sink for all its runs, which a run's `finally` cleared unconditionally. Once `close` was called, two of the
 coordinator's runs could overlap across a switch: the replacement's start was refused while the outgoing setup was still

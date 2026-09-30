@@ -34,7 +34,7 @@ R-067. Not repaired: outside that task.
 
 ## Outcome
 
-Repaired 2026-09-29 under R-067.
+Repaired 2026-09-30 under R-067.
 
 Confirmed on this branch first. The scratch run the note describes (`fetch-proof` with `spawnElectron`'s bound cut to a
 few seconds, a copy of the script run once and not kept) was taken eleven times against the build of `origin/main`

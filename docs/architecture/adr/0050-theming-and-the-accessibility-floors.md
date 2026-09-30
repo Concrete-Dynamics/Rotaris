@@ -379,6 +379,15 @@ reopened that note, and it is repaired in the proof, not in the palette:
   the fix round's matrix it lay 1.2 CSS px inside at 150 % (skipped), and at 175 % the `svc:` item before it was the
   1.2 px sliver (skipped). So the strip's trailing strings are covered with certainty only at 100 % and 125 %, where
   they are on screen whole on every theme.
+- The one-em rule also skips rows that a pane cuts vertically with most of their glyphs showing. It compares the shown
+  height of the text's box with the font size, and the box is the line box, not the glyphs. At 125 % on every theme,
+  Settings' "Compression threshold", "Iteration cap" and their units "%" and "iterations" (14 px, line box 22.7 px) are
+  cut by their pane at 12.8 of 22.7 CSS px, from below. If the leading is split evenly, the em box starts about 4.3 px
+  into the line box, so what shows is roughly the upper 8.5 px of the 14 px em box. All four are skipped. At 175 %, "No
+  hooks are declared." is skipped the same way at 11.8 of 22.7 px. A threshold below one em for the vertical axis alone,
+  such as cap height, would keep these rows measured. It is not taken here. How much of the glyphs a cut leaves depends
+  on where it falls against the baseline and the leading, and the probe measures neither. A height threshold on the line
+  box cannot ensure a whole stroke. The loss is recorded, row by row, rather than closed by a guess.
 
 **Measured**, as root under Xvfb on Linux, Node 24:
 - **Before the change: FAIL.** With the item placed at x = 1064.83 by a scratch repository's branch label, `rotaris-dim`
@@ -392,7 +401,16 @@ reopened that note, and it is repaired in the proof, not in the palette:
   lowest ratios at any scale were 3.07:1 on `rotaris-dim`, 4.08:1 on `nocturne` and 4.92:1 on `high-contrast`, all at
   125 %; the first two are on texts whose floor is 3:1. The skips were the strip's 1.2 px slivers and texts cut
   vertically by the pane that scrolls them (Settings rows, a tools list). No admitted text had no part on screen.
+- **The full matrix after origin/main `6f80d5f` merged into the branch: 15 of 15 PASS in one run.** The lowest ratios
+  were 3.68:1 on `rotaris-dim` and 4.62:1 on `nocturne`, both at 100 %, and 4.92:1 on `high-contrast` at 125 %. The
+  skips were the ones the coverage boundary above names: the strip's trailing item, 7.8 or 5.8 CSS px on screen at
+  150 % and above, and the Settings rows cut vertically at 125 % and 175 %.
 - **The text counterfactual stays red**, at 1.52:1.
+- **`discovered` is not comparable between runs.** It is the number of admitted texts summed over a cell's captures, and
+  it varies between runs of the same build. `rotaris-dim` at 100 % counted 1384 in one run and 1263 in another, as the
+  verification of `8f79daf` reported them, and 1264 in the merged-branch run; `nocturne` at 100 % counted 1384 in that
+  same run. Nothing in this execution explains the variation. So two matrices are compared by verdict, minimum and the
+  skips named, not by count.
 
 The palette is unchanged, and OQ-56's disabled-text question is untouched. The repaired note is
 `../../defects/fixed/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`. Not shown: Windows or macOS

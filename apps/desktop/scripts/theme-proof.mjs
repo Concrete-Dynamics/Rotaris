@@ -33,7 +33,8 @@ const METADATA = `(() => {
   // What is read of an admitted text is its on-screen part: its box cut by the window and by every ancestor that clips
   // along an axis, up to a fixed-position one, which only the window clips. \`visible\` clamps the box's centre into the
   // window, so it admits a status-strip item scrolled 1.2 px onto the screen. Reading that item's whole box read a
-  // glyph's edge, and textSample now skips a fragment that small (lib/text-sample.mjs).
+  // glyph's edge, and textSample now skips a fragment that small (lib/text-sample.mjs). A text admitted with no part on
+  // screen keeps its record, \`shown\` null, and textSample reports it skipped, so every admitted text is counted.
   const clipRect = ${clipRect.toString()};
   const clipsOf = (element) => { const clips=[{x:0,y:0,width:innerWidth,height:innerHeight}]; const far=1e7; if (getComputedStyle(element).position==='fixed') return clips; for (let node=element.parentElement; node && node!==document.body && node!==document.documentElement; node=node.parentElement) { const s=getComputedStyle(node); if (s.display!=='inline' && s.display!=='contents') { const r=node.getBoundingClientRect(); const cx=s.overflowX!=='visible', cy=s.overflowY!=='visible'; if (cx || cy) clips.push({ x:cx ? r.x+node.clientLeft : -far, y:cy ? r.y+node.clientTop : -far, width:cx ? node.clientWidth : 2*far, height:cy ? node.clientHeight : 2*far }); } if (s.position==='fixed') break; } return clips; };
   const shownOf = (element) => clipRect(rect(element), clipsOf(element));
@@ -43,7 +44,7 @@ const METADATA = `(() => {
   // A control disabled by aria-disabled is disabled to a reader and wears the disabled colour;
   // REQ-SHELL-145's floor follows the appearance, not the attribute that produced it.
   const OFF = ':disabled,[aria-disabled="true"]';
-  const texts = [...document.body.querySelectorAll('*')].filter((element) => element.children.length===0 && (element.textContent||'').trim() && visible(element)).map((element) => ({ element, shown:shownOf(element) })).filter((entry) => entry.shown!==null).map(({ element, shown }) => { const s=getComputedStyle(element); return { text:(element.textContent||'').trim(), rect:rect(element), shown, color:s.color, background:s.backgroundColor, fontSize:parseFloat(s.fontSize), fontWeight:s.fontWeight, disabled:element.matches(OFF) || Boolean(element.closest(OFF)), animating:animating(element) }; });
+  const texts = [...document.body.querySelectorAll('*')].filter((element) => element.children.length===0 && (element.textContent||'').trim() && visible(element)).map((element) => { const s=getComputedStyle(element); return { text:(element.textContent||'').trim(), rect:rect(element), shown:shownOf(element), color:s.color, background:s.backgroundColor, fontSize:parseFloat(s.fontSize), fontWeight:s.fontWeight, disabled:element.matches(OFF) || Boolean(element.closest(OFF)), animating:animating(element) }; });
   const controls = [...document.querySelectorAll('button,input,select,textarea,[tabindex]')].filter(visible).map((element) => ({ name:element.getAttribute('aria-label') || (element.textContent||'').trim() || element.getAttribute('name') || element.tagName, rect:rect(element), focused:element===document.activeElement }));
   const icons = [...document.querySelectorAll('.nav-item i')].map((element) => ({ rect:rect(element), color:getComputedStyle(element).color }));
   const labels = [...document.querySelectorAll('.nav-item span')].map((element) => ({ text:(element.textContent||'').trim(), rect:rect(element), scrollWidth:element.scrollWidth, clientWidth:element.clientWidth }));

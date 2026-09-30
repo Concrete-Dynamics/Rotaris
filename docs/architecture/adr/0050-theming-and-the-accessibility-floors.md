@@ -363,15 +363,35 @@ reopened that note, and it is repaired in the proof, not in the palette:
 - A fragment under one em along either axis is reported as skipped, with its size, and is not measured.
 - `visible()`'s admission is unchanged. A hit test at the on-screen part's centre was tried and dropped, because it
   admitted Settings rows half scrolled out of their pane and read one as its padding (1.24:1).
+- An admitted text with no part on screen keeps its record, and `textSample` reports it skipped ("no part of it is on
+  screen"). The first form dropped it inside the probe, so it was neither measured nor counted; since the verifier's
+  fix round 1 every admitted text is counted, measured or skipped.
+
+**Coverage boundary.** The cut is conservative, so it can hide a text from the proof but cannot fail one falsely:
+- `clipsOf` cuts a text by every ancestor that clips, up to a fixed-position ancestor. An absolutely positioned
+  descendant whose containing block lies outside a clipping ancestor (a popover inside a scroller) is not clipped by
+  that ancestor in the page, but the probe cuts it anyway. Such a text is read in part, or skipped with its size; it is
+  never read against pixels that are not its own. Its loss of coverage shows only as a skip line.
+- The one-em rule skips any fragment under the font size. At high device-pixel ratios that is stricter than needed:
+  7.8 CSS px at a ratio of 2 can hold a whole glyph. At 150 % and above, whether the status strip's trailing items are
+  measured depends on where the strip's layout leaves them, and so on the branch label. In the builder's matrix the
+  last item on `high-contrast` lay 5.8 to 7.8 CSS px inside the window at 150 %, 175 % and 200 % and was skipped. In
+  the fix round's matrix it lay 1.2 CSS px inside at 150 % (skipped), and at 175 % the `svc:` item before it was the
+  1.2 px sliver (skipped). So the strip's trailing strings are covered with certainty only at 100 % and 125 %, where
+  they are on screen whole on every theme.
 
 **Measured**, as root under Xvfb on Linux, Node 24:
 - **Before the change: FAIL.** With the item placed at x = 1064.83 by a scratch repository's branch label, `rotaris-dim`
   at 150 % read 3.05:1 on that item.
 - **After the change: PASS.** The same setup gave a minimum of 3.71:1, with that item skipped in each of its 20
   captures.
-- **The full matrix: 15 of 15 PASS**, with minimums of 3.68:1 on `rotaris-dim`, 4.62:1 on `nocturne` and 5.25:1 on
-  `high-contrast`. `high-contrast` at 100 % had failed once on one incoherent capture under another workflow's live
-  run. Re-run alone, it passed.
+- **The full matrix: 14 of 15 PASS on the builder's first run.** Its minimums at 100 % were 3.68:1 on `rotaris-dim`,
+  4.62:1 on `nocturne` and 5.25:1 on `high-contrast`. `high-contrast` at 100 % failed on one incoherent capture with
+  another workflow's live run on the host, and passed re-run alone.
+- **The full matrix after the verifier's fix round 1: 15 of 15 PASS in one run**, with no incoherent capture. The
+  lowest ratios at any scale were 3.07:1 on `rotaris-dim`, 4.08:1 on `nocturne` and 4.92:1 on `high-contrast`, all at
+  125 %; the first two are on texts whose floor is 3:1. The skips were the strip's 1.2 px slivers and texts cut
+  vertically by the pane that scrolls them (Settings rows, a tools list). No admitted text had no part on screen.
 - **The text counterfactual stays red**, at 1.52:1.
 
 The palette is unchanged, and OQ-56's disabled-text question is untouched. The repaired note is

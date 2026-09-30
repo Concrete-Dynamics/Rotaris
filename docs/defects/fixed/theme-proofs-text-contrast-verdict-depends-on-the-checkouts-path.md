@@ -151,4 +151,21 @@ with another workflow's live run on the host:
 - **The text counterfactual still fails**: `--counterfactual=text` at `rotaris-dim` 1.5 **FAILED**, 1.52:1, 20
   failures.
 
+**The verifier's fix round 1** (2026-09-30):
+- The first form of the probe dropped an admitted text with no part on screen before `textSample` saw it, so the text
+  was neither measured nor counted. The probe now keeps its record with `shown` null, and `textSample` reports it
+  skipped ("no part of it is on screen"). What `visible()` admits is therefore unchanged in the count too.
+- **The sliver setup** (the scratch repository, `rotaris-dim` @ 1.5): **PASS**. The minimum was 3.71:1, with 1,077
+  texts discovered, 1,057 tested and 20 skipped, all of them the 1.2 px sliver.
+- **The full matrix, once: 15 of 15 PASS.** No capture was incoherent. The lowest ratios at any scale were 3.07:1 on
+  `rotaris-dim`, 4.08:1 on `nocturne` and 4.92:1 on `high-contrast`, each at 125 %. The first two are on texts whose floor
+  is 3:1.
+- **The text counterfactual still fails**: `--counterfactual=text` at `rotaris-dim` 1.5 **FAILED**, 1.52:1, 20 failures.
+- **What the rule does not cover.** At 150 % and above, whether the strip's trailing items are measured depends on
+  where the strip leaves them. The last item on `high-contrast` was skipped at 150 % to 200 % in the builder's matrix
+  (5.8 to 7.8 CSS px on screen). In this matrix it was a 1.2 px sliver at 150 %, and at 175 % the `svc:` item before it
+  was the sliver. Those strings are covered with certainty only at 100 % and 125 %. ADR-0050's sixth execution states
+  this boundary, together with the absolutely positioned descendant that `clipsOf` cuts by a scroller that does not
+  clip it in the page.
+
 Not shown: Windows or macOS (IC-3).

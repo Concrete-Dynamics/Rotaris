@@ -638,7 +638,7 @@ export class IterationChildren implements DelegationOps {
     // pause waits for the step in flight, whose own model timeout bounds it (REQ-MONITOR-123). `grace` is what is left of
     // it, counted from the first stop request (`Run.stopGraceLeft`): none when the run already spent it waiting for its
     // root, so what still executes is detached now, and never a fresh 30 s after a root that returned late.
-    if (cause === 'pause') await Promise.allSettled([...this.executing]);
+    if (cause === 'pause') await this.drained();
     else await this.outlast(grace);
     // Clause 3: an explicit cancel that arrived meanwhile is final — nothing more is paused; the caller settles the rest.
     // A child the grace gave up on meanwhile is still counted from its record first (REQ-MONITOR-102), its open calls
@@ -933,10 +933,16 @@ export class IterationChildren implements DelegationOps {
    * The bound, stated: each end fires once with its own fields, but a hook queued here is delivered after a later end's own
    * settle has fired its hook if that later end comes first, since a follow-up does not wait for this queue.
    *
-   * The bound, stated: at a stop or a quit such a hook is awaited as an execution only within what is left of the stop's
-   * 30 s grace (`rest`, `outlast`, REQ-SESSION-092); one still running then is given up on with the executions, as a
-   * settle's own hook inside a child's execution is, and may finish after `session_end` — bounded by its own per-hook
-   * timeout (REQ-HOOKS-033). A pause waits for it, and every other exit waits for all of them (`completionsSettled`).
+   * A rest waits for such a hook as for an execution, whenever it was queued (`drained`), and the run waits for every one
+   * of them before `session_end` (`Run.childCompletionsSettled`). The first reading, "a pause waits for it", was false
+   * until the fourth verification of this repair: a rest waited on a snapshot of the executions taken when it began, so a
+   * hook the user's cancel queued meanwhile ended after `session_end`.
+   *
+   * The bound, stated: at a stop or a quit such a hook is awaited only within what is left of the stop's 30 s grace
+   * (`outlast`, REQ-SESSION-092); one still running then is given up on with the executions, as a settle's own hook
+   * inside a child's execution is, and may finish after `session_end` — bounded by its own per-hook timeout
+   * (REQ-HOOKS-033). The explicit cancel's sweep is awaited (`completionsSettled`) before `outlast`, bounded only by that
+   * per-hook timeout.
    */
   private completedOutside(row: ChildRow): void {
     const hooks = this.deps.hooks;
@@ -1415,12 +1421,24 @@ export class IterationChildren implements DelegationOps {
     if (grace <= 0) this.detach();
     else {
       let timer: TimerHandle | undefined;
-      const executions = Promise.allSettled([...this.executing]).then(() => false);
+      const executions = this.drained().then(() => false);
       const cut = await Promise.race([executions, new Promise<boolean>((r) => { timer = this.deps.clocks.timers.after(grace, () => r(true)); })]);
       timer?.cancel();
       if (cut) this.detach();
     }
     return this.detached;
+  }
+
+  /**
+   * PD-ORCH-005 clause 2 / REQ-HOOKS-080: resolves once no execution is in flight. It looks again whenever the ones it
+   * waited on have ended, since one can have begun meanwhile: a `child_completed` hook the user's cancel of one child
+   * queued while the rest waited (`completedOutside`, tracked as an execution), which a wait on only the executions
+   * running when the rest began let through to `session_end` (found by the fourth verification of
+   * `a-child-settled-outside-its-execution-fires-no-child-completed-hook`'s repair). The scheduler is held from the rest,
+   * so no child starts meanwhile and the wait ends.
+   */
+  private async drained(): Promise<void> {
+    while (this.executing.size > 0) await Promise.allSettled([...this.executing]);
   }
 
   /** REQ-SESSION-094: every execution still in flight is given up on, and which children they are is kept (`givenUpOn`). */

@@ -1511,6 +1511,24 @@ export class Run {
   }
 
   /**
+   * REQ-HOOKS-076 / REQ-HOOKS-080 (the fourth verification of the repair of
+   * `a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`): every `child_completed` hook the last
+   * iteration's children queued from outside a settle (`IterationChildren.completedOutside`) is awaited — after a stop,
+   * only within what is left of its 30 s grace (REQ-SESSION-092), so one the grace gave up on may still finish after
+   * `session_end`, bounded by its own per-hook timeout (REQ-HOOKS-033).
+   */
+  private async childCompletionsSettled(): Promise<void> {
+    const children = this.children;
+    if (!children || !this.hooks) return;
+    if (!this.stop.requested) { await children.completionsSettled(); return; }
+    const grace = this.stopGraceLeft();
+    if (grace <= 0) return;
+    let timer: TimerHandle | undefined;
+    await Promise.race([children.completionsSettled(), new Promise<void>((r) => { timer = this.deps.clocks.timers.after(grace, r); })]);
+    timer?.cancel();
+  }
+
+  /**
    * REQ-SESSION-092: what is left of the stop's 30 s grace, counted from the first stop request — the whole of it when no
    * stop has been requested.
    */
@@ -2106,6 +2124,9 @@ export class Run {
     const elapsed = this.startedAt === null ? null : (clocks.monotonic.now() - this.startedAt) / 1000;
     // REQ-NOTIFY-093: a wait the user cancelled ends the run with the limit condition as its error, so main classifies it (REQ-NOTIFY-063).
     const error = this.lastFailure ?? this.waits.cancelledReason;
+    // REQ-HOOKS-076 / REQ-HOOKS-080: a `child_completed` the user's cancel of one child queued once the iteration's own
+    // waits were done — a paused child cancelled while the rest was being recorded — ends before `session_end`.
+    await this.childCompletionsSettled();
     // REQ-HOOKS-003/081: session_end on every exit path, after the status is decided and before shutdown; `classified.result`
     // is the one string the payload, the result and the session.end event below all carry.
     if (this.hooks) {

@@ -4906,6 +4906,90 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         { name: 'x', state: 'cancelled', summary: 'The user cancelled this child.' },
       ]);
     });
+
+    /**
+     * Two children, `a` and `b`, each held in its step, and `b`'s `child_completed` held. The run is brought to rest by
+     * `op` and the user cancels `b` while the rest waits on the executions it saw when it began (the fourth verification
+     * of this repair). The children are deaf to the stop's abort, so a stop's rest waits on their steps as a pause's does.
+     */
+    async function cancelledWhileTheRestWaits(op: 'pause' | 'cancel') {
+      const { order, completed, hooks, release } = recordingHooks('b');
+      const gateOf = () => { let open!: () => void; const hold = new Promise<void>((r) => { open = r; }); return { hold, open: () => open() }; };
+      const aGate = gateOf();
+      const bGate = gateOf();
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'a', task: 'TASK: a' } }, { callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'b', task: 'TASK: b' } }]) : answer('never');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return { parts: [{ hold: textOf(req).includes('TASK: b') ? bGate.hold : aGate.hold }, ...answer('late').parts] };
+      }, { hooks, deaf: ['child'] });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'a')?.state === 'running' && byName(sid, 'b')?.state === 'running');
+      expect(sessions.control({ op, sessionId: sid, args: {} })).toEqual({ ok: true });
+      await new Promise((r) => setTimeout(r, 20));
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'b').task_id } })).toEqual({ ok: true });
+      bGate.open();
+      await settle(() => order.includes('child_completed(b)'));
+      aGate.open();
+      await settle(() => order.includes('session_end') || dal.timelineOf(sid).some((t) => t.name === 'iteration_paused'), 40);
+      return { sessions, sid, order, completed, release };
+    }
+
+    it('REQ-HOOKS-076 / REQ-HOOKS-080 with PD-ORCH-005 clause 2 (the fourth verification of this repair): a child the user cancels while a pause waits on the executions is waited for too — its `child_completed` ends before the rest is recorded and before `session_end`', async () => {
+      const { sessions, sid, order, completed, release } = await cancelledWhileTheRestWaits('pause');
+      // The rest still waits: the hook `b`'s cancel queued is an execution it waits for, though it began after the rest did.
+      expect(dal.timelineOf(sid).some((t) => t.name === 'iteration_paused')).toBe(false);
+      expect(order).not.toContain('session_end');
+      release();
+      expect((await sessions.running(sid)!).status).toBe('interrupted');
+      expect(byName(sid, 'a').state).toBe('paused');
+      const b = byName(sid, 'b');
+      expect(b.state).toBe('cancelled');
+      expect(completed).toEqual([fieldsOf(b, 'cancelled', 'The user cancelled this child.')]);
+      expect(order).toEqual(['session_start', 'child_completed(b)', 'child_completed(b):end', 'session_end']);
+    });
+
+    it('REQ-HOOKS-076 / REQ-HOOKS-080 with REQ-SESSION-092 (the fourth verification of this repair): a child the user cancels while a stop waits on the executions is waited for within the stop\'s grace — its `child_completed` ends before `session_end`', async () => {
+      const { sessions, sid, order, release } = await cancelledWhileTheRestWaits('cancel');
+      expect(dal.timelineOf(sid).some((t) => t.name === 'iteration_paused')).toBe(false);
+      expect(order).not.toContain('session_end');
+      release();
+      await sessions.running(sid)!;
+      expect(byName(sid, 'b').state).toBe('cancelled');
+      expect(order).toEqual(['session_start', 'child_completed(b)', 'child_completed(b):end', 'session_end']);
+    });
+
+    it('REQ-HOOKS-076 / REQ-HOOKS-080 (the fourth verification of this repair): a paused child the user cancels once the rest is recorded, before the run ends, fires `child_completed` before `session_end`', async () => {
+      const { order, completed, hooks, release } = recordingHooks('work');
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      let releaseDrain!: () => void;
+      const drainHold = new Promise<void>((r) => { releaseDrain = r; });
+      let holding = false;
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : answer('never');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return { parts: [{ hold }, ...answer('late').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      // REQ-EVENTS-165: the open iteration's drain waits on this consumer once the rest is in the timeline.
+      sessions.bus.attach(sid, { mode: 'blocking', deliver: () => { if (dal.timelineOf(sid).some((t) => t.name === 'iteration_paused')) { holding = true; return drainHold; } return undefined; } });
+      await settle(() => byName(sid, 'work')?.state === 'running');
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      releaseChild();
+      await settle(() => holding);
+      expect(byName(sid, 'work').state).toBe('paused');
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'work').task_id } })).toEqual({ ok: true });
+      await settle(() => order.includes('child_completed(work)'));
+      releaseDrain();
+      await settle(() => order.includes('session_end'), 40);
+      expect(order).not.toContain('session_end');
+      release();
+      await sessions.running(sid)!;
+      const work = byName(sid, 'work');
+      expect(work.state).toBe('cancelled');
+      expect(completed).toEqual([fieldsOf(work, 'cancelled', 'The user cancelled this child.')]);
+      expect(order).toEqual(['session_start', 'child_completed(work)', 'child_completed(work):end', 'session_end']);
+    });
   });
 
   describe('PD-ORCH-005 clause 15: a forced stop is a stop, and a quit rests by quit', () => {

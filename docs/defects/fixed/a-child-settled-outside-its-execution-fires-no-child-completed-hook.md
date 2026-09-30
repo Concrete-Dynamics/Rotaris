@@ -116,10 +116,41 @@ hook is still queued fires it for the second cancel too" in the same describe, e
 fields, but a hook queued behind another is delivered after a later end's own hook when that later end comes first,
 because a follow-up does not wait for the queue.
 
-The bound, stated: at a stop or a quit these hooks are awaited as executions only within what is left of the stop's 30 s
+~~The bound, stated: at a stop or a quit these hooks are awaited as executions only within what is left of the stop's 30 s
 grace (REQ-SESSION-092); one still running then is given up on with the executions, as a settle's own hook inside a
 child's execution already is, and may finish after `session_end`, bounded by its per-hook timeout (REQ-HOOKS-033). A pause
-waits for it; every other exit waits for all of them.
+waits for it; every other exit waits for all of them.~~ *(Corrected 2026-09-30, the fourth verification: "a pause waits for
+it" was false of the code. A rest waited on the executions it saw when it began — a pause on a snapshot of `executing`, a
+stop or a quit on `outlast`'s — so a hook the user's cancel of one child queued while the rest waited was awaited by
+nothing, and the run went on to `session_end` while it ran: the order recorded was `session_start`,
+`child_completed(b)`, `session_end`, then that hook's end. The run's rest branch never waited for these hooks either, so a
+paused child the user cancelled once the rest was recorded, before the run ended, had its hook end after `session_end`
+too — REQ-HOOKS-076's order and REQ-HOOKS-080's in-line run both broken.)*
+
+What holds now:
+
+- The rest's wait looks again until no execution is left (`IterationChildren.drained`, used by `rest` for a pause and by
+  `outlast` for a stop or a quit), so a hook queued while the rest waits is waited for: by a pause, bounded only by the
+  hook's own timeout; by a stop or a quit, within what is left of the stop's 30 s grace (REQ-SESSION-092).
+- Before `session_end` the run waits for every hook the last iteration's children queued from outside a settle
+  (`Run.childCompletionsSettled`): bounded only by each hook's own timeout (REQ-HOOKS-033) when no stop was requested,
+  and within what is left of the stop's grace when one was. This covers a paused child the user cancels once the rest is
+  recorded and before the run ends.
+- The bound, stated: at a stop or a quit a hook still running when the grace is spent is given up on with the
+  executions, as a settle's own hook inside a child's execution is, and may finish after `session_end`, bounded by its
+  per-hook timeout. The explicit cancel's finalize sweep is awaited (`completionsSettled`) before `outlast`, so its hooks
+  are bounded by each hook's own timeout only, not by the stop's grace: they hold the run, as REQ-HOOKS-080 has lifecycle
+  hooks do.
+- Not closed here: a user's cancel of one child accepted while the run's own `session_end` hooks run fires its
+  `child_completed` after `session_end`. Recorded as
+  [`a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`](../a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md).
+
+Pinned by three cases in the same describe, each red before this change and each red with only its own part removed:
+"a child the user cancels while a pause waits on the executions is waited for too — its `child_completed` ends before
+the rest is recorded and before `session_end`" (red with the pause's snapshot wait restored), "a child the user cancels
+while a stop waits on the executions is waited for within the stop's grace …" (red with `outlast`'s snapshot restored),
+and "a paused child the user cancels once the rest is recorded, before the run ends, fires `child_completed` before
+`session_end`" (red with `Run.childCompletionsSettled` removed).
 
 Not driven in the built app or live: the live-run scenarios configure no lifecycle hook, and the note was found by
 reading the code.

@@ -52,7 +52,9 @@ child now fire it through `IterationChildren.completedOutside`, in line, and the
 (`RunDeps.settledBeforeStart`, `Run.childCompleted`). An outside hook's fields are taken as the scheduler is told, not
 when a queued hook starts (the second verification). `beginSettle`'s own-entry guard keeps a followed-up child settling
 to a parent's `settlesOf` until the later end's hook is done, corrected in §4 from "fires the hook once for each end" (the
-third verification). Three paths outside a run's hooks fire none, raised as OQ-154. This
+third verification). A rest's wait on the executions looks again until none is left (`IterationChildren.drained`), and
+the run waits for the outside hooks once more before `session_end` (`Run.childCompletionsSettled`), corrected in §4 from
+"awaited as executions" over a snapshot (the fourth verification). Three paths outside a run's hooks fire none, raised as OQ-154. This
 repairs `a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`. The **runtime view**'s §4 gains the
 paragraph after the one on a settle's hook. No package, edge, process, message kind, channel, command or store column
 changed.

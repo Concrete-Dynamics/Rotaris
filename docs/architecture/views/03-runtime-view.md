@@ -767,9 +767,16 @@ ends only its own `settles` entry (`beginSettle`), ~~so a child followed up whil
 settling, to a parent's `settlesOf`, until the later end's hook is done — the parent in the resume loop or in
 `wait_for_tasks` takes it as ended only then (REQ-HOOKS-080). *(Corrected 2026-09-30, the third verification: firing
 once per end now comes from `tellingOwnSettle`, not from this guard.)* An outside hook holds its child as settling the
-same way, so a parent the cancel, the cascade or the sweep wakes waits for that hook before its next model step. At a stop or a quit these hooks are awaited as executions within what is left of
+same way, so a parent the cancel, the cascade or the sweep wakes waits for that hook before its next model step. ~~At a stop or a quit these hooks are awaited as executions within what is left of
 the 30 s grace and then given up on with them, as a settle's own hook is (REQ-SESSION-092), bounded by the per-hook
-timeout. The note is
+timeout.~~ *(Corrected 2026-09-30, the fourth verification: a rest waited on a snapshot of the executions, so a hook the
+user's cancel queued while it waited ended after `session_end`.)* A rest waits for these hooks as executions, looking
+again until none is left (`IterationChildren.drained`): a pause for as long as each hook's own timeout allows, a stop or
+a quit within what is left of the 30 s grace, after which they are given up on with the executions, as a settle's own
+hook is (REQ-SESSION-092). Before `session_end` the run waits again for every one the last iteration's children queued
+(`Run.childCompletionsSettled`) — within what is left of the grace after a stop — so a paused child cancelled once the
+rest is recorded has its hook end first. The explicit cancel's sweep is awaited (`completionsSettled`) before `outlast`,
+bounded only by each hook's timeout. The note is
 [`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](../../defects/fixed/a-child-settled-outside-its-execution-fires-no-child-completed-hook.md).
 Since 2026-09-30 both settles end through one tail, `IterationChildren.afterTerminal`, which tells the scheduler in a
 `finally`: a raise out of the teardown or the hook port no longer leaves a parent waiting on a child that has ended

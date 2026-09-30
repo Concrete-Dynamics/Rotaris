@@ -987,6 +987,29 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE iterations ADD COLUMN cancel_accepted_at TEXT;
     `,
   },
+  {
+    to: 28,
+    /*
+     * REQ-TOOLS-154 items (4) and (5), REQ-LIBRARY-098, REQ-TOOLS-152 (R-067, the repair of
+     * `a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`): two parts of a child's payload were
+     * held in memory by the run that accepted its `delegate` call — the artifacts it attached and its inherited-context
+     * block. Since PD-ORCH-005 a child outlives that run, so a resumed child whose REQ-ORCH-088 retry, or whose follow-up
+     * before it ever started (clause 22), assembles its payload again in a later run found neither, and started without
+     * them with nothing said. Both are now stored with the child's record, as its `write_scope` and its
+     * `suppress_auto_context` are, and every assembly reads them from there.
+     *
+     * `attach_artifacts` is the call's field as given, a JSON array of artifact ids or slugs in the caller's order; the
+     * bodies are read from the artifact store when the payload is assembled, as they were. `inherited_context_block` is the
+     * block rendered at the call from the reports of the siblings that had completed then — "as they stood when the call
+     * was made"; which of the named ids counted is not recoverable later from `inherited_context`, since a sibling ignored as
+     * unfinished may have completed since. `'[]'` and `''` on every row written before this version: such a row's
+     * attachments and block were never recorded, and its retry in a later run carries none, as before.
+     */
+    sql: `
+      ALTER TABLE children ADD COLUMN attach_artifacts TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE children ADD COLUMN inherited_context_block TEXT NOT NULL DEFAULT '';
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

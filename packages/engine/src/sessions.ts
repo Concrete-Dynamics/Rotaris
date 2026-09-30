@@ -9,7 +9,7 @@ import { SequenceCounters } from './sequence.js';
 import { claimLockReaping, SessionWriter, toTranscriptRow, type CheckpointRecordInput, type Committed, type RestoreRecordInput } from './session-writer.js';
 import type { CheckpointPort, CheckpointPortContext } from './checkpoint-port.js';
 import { EventBus } from './run/event-bus.js';
-import { parseTokenSamples, Run, settleClosedIterations, type AgentTerminals, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
+import { parseTokenSamples, Run, settleClosedIterations, type AgentTerminals, type ModelLookup, type PermissionPosture, type RunConfig, type RunDeps, type RunResult } from './run/run.js';
 import { answerOpenCalls, iterationAgents, recordCrash } from './run/crash.js';
 import { resumeNoticeOf } from './run/resume.js';
 import { offersHeldIn, openOfferIds, openOffersText } from './run/offers.js';
@@ -25,7 +25,7 @@ import { UserPresence } from './run/presence.js';
 import type { ToolPort } from './run/turn.js';
 import { settleStaleChildren } from './children/orchestration.js';
 import type { DelegationOps } from './children/delegation.js';
-import { DEFAULT_BUDGET, storeChildReport, userCancellation, type Budget } from './children/ledger.js';
+import { DEFAULT_BUDGET, holdsModelSlot, storeChildReport, userCancellation, type Budget } from './children/ledger.js';
 import { DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryRoot, type EntryToolsPayload, type SessionArtifactLink } from '@rotaris/contracts';
 import type { ChildRow } from '@rotaris/store';
 import { SummaryWriter } from './run/summary.js';
@@ -46,6 +46,7 @@ import type { AgentActivity } from './children/activity.js';
 import type { ModelRef, ThinkingLevel } from '@rotaris/model';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, projectSessionTodos, type AgentTodoDocument } from './todo-view.js';
 import { randomUUID } from 'node:crypto';
+import { ModelSlots, type SlotHolder } from './children/model-slots.js';
 
 /**
  * ADR-0013 — the run host's registry: `Map<sessionId, …>`, the COMPLETE set
@@ -967,11 +968,65 @@ function parsePending(json: string): SessionRecord['pendingApprovals'] {
 
 export class Sessions {
   private readonly live = new Map<SessionId, Live>();
+  /** REQ-CONFIG-094: every session with a place on a model, counted together against each model's cap (acceptance A13). */
+  private readonly modelSlots: ModelSlots;
+  /**
+   * Each session's one place in `modelSlots`, while it runs or rests holding a slot (PD-ORCH-005 clause 4), with the run
+   * a freed slot elsewhere wakes — none while it rests.
+   */
+  private readonly slotHolders = new Map<SessionId, { readonly holder: SlotHolder; readonly leave: () => void; target: { run?: Run } | null }>();
   readonly seq = new SequenceCounters();
   readonly bus: EventBus;
 
   constructor(private readonly deps: SessionsDeps) {
     this.bus = new EventBus({ timers: deps.clocks.timers, warn: deps.warn });
+    this.modelSlots = new ModelSlots(deps.warn);
+  }
+
+  /**
+   * REQ-CONFIG-094: a session's place in the process-wide per-model count — what it answers for its children (read from
+   * its store: every child of the session that holds a slot, `holdsModelSlot`), the wake that promotes a child its run
+   * holds when a slot frees elsewhere, and what its run asks of the others. The session joins when a run of it starts
+   * and stays joined for as long as it runs, or rests with a paused child keeping its place (PD-ORCH-005 clause 4,
+   * OQ-149); `settleModelSlots` lets it go.
+   */
+  private modelSlotsFor(sessionId: SessionId, dal: StoreDal, runRef: { run?: Run }): NonNullable<RunDeps['modelSlots']> {
+    let entry = this.slotHolders.get(sessionId);
+    if (!entry) {
+      const holder: SlotHolder = {
+        // A store that cannot be read answers nothing for this session rather than raising into another session's pass.
+        inUse: (modelKey) => { try { return dal.childrenOf(sessionId).filter((c) => c.model_key === modelKey && holdsModelSlot(c)).length; } catch (cause) { this.deps.warn(`the model slots of ${sessionId} could not be read: ${String(cause)}`); return 0; } },
+        wake: () => { this.slotHolders.get(sessionId)?.target?.run?.wakeForFreedSlot(); },
+      };
+      entry = { holder, leave: this.modelSlots.join(holder), target: null };
+      this.slotHolders.set(sessionId, entry);
+    }
+    entry.target = runRef;
+    const holder = entry.holder;
+    return { heldElsewhere: (modelKey) => this.modelSlots.heldElsewhere(modelKey, holder), freed: () => { this.modelSlots.freed(holder); } };
+  }
+
+  /**
+   * REQ-MONITOR-020: what a session holds may have dropped outside its run's scheduler — its run ended (`runRef`), or a
+   * paused child was cancelled at rest. Every other run passes again; a session with no run and no place left leaves.
+   */
+  private settleModelSlots(sessionId: SessionId, dal: StoreDal, runRef?: { run?: Run }): void {
+    const entry = this.slotHolders.get(sessionId);
+    if (!entry) return;
+    if (runRef !== undefined && entry.target === runRef) entry.target = null;
+    let holds = true;
+    try { holds = entry.target !== null || dal.childrenOf(sessionId).some(holdsModelSlot); } catch (cause) { this.deps.warn(`the model slots of ${sessionId} could not be read: ${String(cause)}`); }
+    if (holds) { this.modelSlots.freed(entry.holder); return; }
+    this.slotHolders.delete(sessionId);
+    entry.leave();
+  }
+
+  /** A session evicted or deleted from this process holds no place any more. */
+  private dropModelSlots(sessionId: SessionId): void {
+    const entry = this.slotHolders.get(sessionId);
+    if (!entry) return;
+    this.slotHolders.delete(sessionId);
+    entry.leave();
   }
 
   /** REQ-SESSION-042/154/182: read-only workspace listing with shared stale semantics. */
@@ -1029,6 +1084,7 @@ export class Sessions {
       existing.log?.close();
       this.bus.detachSession(sessionId);
       this.live.delete(sessionId);
+      this.dropModelSlots(sessionId);
       existing = undefined;
     }
     if (existing && this.isRunActive(sessionId)) return err({ code: 'run-active', reason: `Session ${sessionId} is already active in this application.` });
@@ -1165,6 +1221,7 @@ export class Sessions {
     const cap = runtime?.modelConcurrencyCap ?? null;
     const capFor = runtime?.modelCapFor ?? (() => cap);
     const preflight = this.deps.preflight;
+    const slots = this.modelSlotsFor(sessionId, dal, runRef);
     const run = new Run({
       sessionId, workspaceRoot, effectiveRoot, task: prompt, taskContent: [...(prompt === '' ? [] : [{ kind: 'text' as const, text: prompt }]), ...storedAttachments.content], taskId: `${sessionId}:main:1`, writer, owner, bus: this.bus, clocks: this.deps.clocks,
       ...(setup.value.personas ? { personas: setup.value.personas } : {}),
@@ -1192,7 +1249,7 @@ export class Sessions {
       ...(this.deps.tools ? {
         // REQ-LIBRARY-093: a publish records the instance's canonical name — the root's comes apart from its agent name, its persona.
         toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, ...(parentPersona === undefined ? {} : { parentPersona }), modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: canonicalName ?? agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false, writeClaimFor: (rel) => runRef.run?.writeClaimFor(parentId, rel) ?? null }),
-        artifacts, budget, modelCap: capFor,
+        artifacts, budget, modelCap: capFor, modelSlots: slots,
         summariser: { backend: meteredBackend(model.backend, countUsage), model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
       ...(runtime?.drainTimeoutMs === undefined ? {} : { drainTimeoutMs: runtime.drainTimeoutMs as Millis }),
@@ -1206,7 +1263,8 @@ export class Sessions {
       const onRunResult = this.deps.onRunResult;
       this.bus.attach(sessionId, { mode: 'blocking', deliver: (e) => { if (e.event === 'result' && run.outcome) onRunResult(sessionId, run.outcome); } });
     }
-    live.running = run.start().finally(() => { delete entry.run; log?.info(`run ended ${run.outcome?.status ?? 'unknown'}`); log?.close(); });
+    // REQ-CONFIG-094: counted with every other session in this process (`modelSlotsFor`); its end settles what it held.
+    live.running = run.start().finally(() => { this.settleModelSlots(sessionId, dal, runRef); delete entry.run; log?.info(`run ended ${run.outcome?.status ?? 'unknown'}`); log?.close(); });
     return ok(sessionId);
   }
 
@@ -1380,6 +1438,7 @@ export class Sessions {
       s.memory = ResilienceMemory.rehydrate(s.dal.timelineOf(sessionId), resolve, warn);
       if (s.memory.exhausted.size > 0 || s.memory.overrideCount > 0) s.log?.info(`resilience memory rehydrated: ${s.memory.exhausted.size} exhausted pair(s), ${s.memory.overrideCount} override(s)`);
     }
+    const slots = this.modelSlotsFor(sessionId, s.dal, runRef);
     const run = new Run({
       sessionId, workspaceRoot, effectiveRoot, task: payload, taskContent: [{ kind: 'text', text: payload }, ...attachmentContent], taskLabel: prompt, taskId: continuedTaskId(s.dal, sessionId, todo),
       ...(setupIn.personas ? { personas: setupIn.personas } : {}),
@@ -1415,7 +1474,7 @@ export class Sessions {
       ...(this.deps.tools ? {
         // REQ-LIBRARY-093: a publish records the instance's canonical name — the root's comes apart from its agent name, its persona.
         toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, ...(parentPersona === undefined ? {} : { parentPersona }), modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: canonicalName ?? agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false, writeClaimFor: (rel) => runRef.run?.writeClaimFor(parentId, rel) ?? null }),
-        artifacts, budget, modelCap: capFor,
+        artifacts, budget, modelCap: capFor, modelSlots: slots,
         summariser: { backend: meteredBackend(model.backend, countUsage), model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
       ...(runtime?.drainTimeoutMs === undefined ? {} : { drainTimeoutMs: runtime.drainTimeoutMs as Millis }),
@@ -1427,7 +1486,8 @@ export class Sessions {
       const onRunResult = this.deps.onRunResult;
       this.bus.attach(sessionId, { mode: 'blocking', deliver: (event) => { if (event.event === 'result' && run.outcome) onRunResult(sessionId, run.outcome); } });
     }
-    s.running = run.start().finally(() => { if (s.commitTarget) delete s.commitTarget.run; s.log?.info(`continued run ended ${run.outcome?.status ?? 'unknown'}`); s.log?.close(); });
+    // REQ-CONFIG-094: counted with every other session in this process (`modelSlotsFor`); its end settles what it held.
+    s.running = run.start().finally(() => { this.settleModelSlots(sessionId, s.dal, runRef); if (s.commitTarget) delete s.commitTarget.run; s.log?.info(`continued run ended ${run.outcome?.status ?? 'unknown'}`); s.log?.close(); });
   }
 
   // Part AO
@@ -1866,6 +1926,8 @@ export class Sessions {
       storeChildReport({ writer: s.writer, artifacts, warn }, t.task_id, t, written.report);
       s.writer.appendTimeline('child_user_cancelled', 'user', written.message, written.metadata);
     }
+    // PD-ORCH-005 clause 16 with REQ-CONFIG-094: a cancelled paused child gives up the place it kept (OQ-149).
+    this.settleModelSlots(sid, s.dal);
     s.owner.reconcile();
     return { ok: true };
   }
@@ -2267,6 +2329,7 @@ export class Sessions {
       this.seq.forget(sessionId);
       this.live.delete(sessionId);
     }
+    this.dropModelSlots(sessionId);
     const existed = dal.durableTransaction(() => dal.deleteSession(sessionId));
     const dir = this.deps.sessionFilesDir(dal, sessionId);
     let filesRemoved = false; let filesDetail: string | null = null;
@@ -2464,5 +2527,6 @@ export class Sessions {
       this.seq.forget(id);
     }
     this.live.clear();
+    for (const id of [...this.slotHolders.keys()]) this.dropModelSlots(id);
   }
 }

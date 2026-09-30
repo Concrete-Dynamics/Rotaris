@@ -30,6 +30,7 @@ export * from './children/naming.js';
 export * from './children/personas.js';
 export * from './children/ledger.js';
 export * from './children/scheduler.js';
+export * from './children/model-slots.js';
 export * from './children/notify.js';
 export * from './children/report.js';
 export * from './children/delegation.js';

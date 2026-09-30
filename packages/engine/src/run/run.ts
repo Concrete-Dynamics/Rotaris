@@ -164,6 +164,13 @@ export interface RunDeps {
   readonly artifacts?: ArtifactStore | undefined;
   readonly budget?: ChildBudget | undefined;
   readonly modelCap?: ((modelKey: string) => number | null) | undefined;
+  /**
+   * REQ-CONFIG-094: the process-wide half of the per-model count — the slots the process's other sessions hold on a key,
+   * a paused child's kept place among them (PD-ORCH-005 clause 4) — and the signal that one of this run's children ended or
+   * gave its place up, so another run's held child can be promoted (`ModelSlots`, joined by `Sessions` while the session
+   * runs or rests holding a place). Absent: this run is the only one counted.
+   */
+  readonly modelSlots?: { readonly heldElsewhere: (modelKey: string) => number; readonly freed: () => void } | undefined;
   readonly summariser?: SummariserDeps | null | undefined;
   /** Part AH (ADR-0060): what an agent needs to compress its own context; null or absent means neither trigger fires. */
   readonly compression?: RunCompression | null | undefined;
@@ -621,6 +628,10 @@ export class Run {
   get isPlanGateHeld(): boolean {
     return this.planHeld;
   }
+  /** REQ-MONITOR-020: a slot freed in another run — this run's scheduler passes, so a child it holds can be promoted. */
+  wakeForFreedSlot(): void {
+    this.children?.scheduler.pass();
+  }
   /**
    * PD-TOOLS-006: the live write-scope claim that refuses the agent `callerId` a write to the workspace-relative
    * `rel`, or null. Read through the iteration's children on every call, so a claim lapses the moment its child
@@ -792,7 +803,12 @@ export class Run {
 
       // PD-ORCH-005 clauses 4 and 6: an iteration a previous run left open resumes before anything else runs, as the
       // loop's first iteration below; declined, it closes here.
-      if (this.resumeFrom === null) await this.closeLeftOpenIteration();
+      if (this.resumeFrom === null) {
+        await this.closeLeftOpenIteration();
+        // REQ-CONFIG-094 with PD-ORCH-005 clause 6: a declined iteration's paused agents gave up the places they kept, so
+        // another session's child held on one may start (OQ-149).
+        this.deps.modelSlots?.freed();
+      }
       // REQ-ORCH-153: a held run produces its plan and parks; it never enters the iteration loop, so it selects no
       // task, judges no completion and runs no check suite — the prohibition is structural rather than a branch.
       if (this.planHeld) return await this.parkAtPlanGate();
@@ -1258,6 +1274,7 @@ export class Run {
         compressionFor: this.compressionFor,
         // REQ-ORCH-024: the BUDGET cell only narrows; with no pre-flight the configured policy stands unchanged.
         budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
+        ...(this.deps.modelSlots ? { slotsHeldElsewhere: this.deps.modelSlots.heldElsewhere, onSlotFreed: this.deps.modelSlots.freed } : {}),
         // REQ-MONITOR-102: a child's tool calls are the session's too; the entry agent's own are added at the turn below. The
         // child's own count is persisted with the total, in one transaction, so a crash leaves the two agreeing.
         countToolCalls: (n, child) => { this.aggregates.addToolCalls(n); if (child) this.persistToolCalls({ children: [child] }); },

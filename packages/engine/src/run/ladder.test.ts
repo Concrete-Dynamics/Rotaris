@@ -38,7 +38,8 @@ function delegationPort(ops: DelegationOps, parentId: string, tool?: TestTool): 
     const own = tool?.(name, a);
     if (own) return own;
     if (name === 'delegate') {
-      const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: [], inheritedContext: [], category: '', runInBackground: true });
+      const ids = (k: string): string[] => (Array.isArray(a[k]) ? (a[k] as unknown[]).map(String) : []);
+      const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: ids('depends_on'), inheritedContext: ids('inherited_context'), category: '', runInBackground: true, ...(a['attach_artifacts'] === undefined ? {} : { attachArtifacts: ids('attach_artifacts') }) });
       if (r.status === 'rejected') return { ...ok(`rejected — ${r.message}`), isError: true, status: 'failed' };
       return ok(`Task '${r.canonicalName}': ${r.status}\ntask_id: ${r.taskId}`);
     }
@@ -266,6 +267,60 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const conversation = onFallback[0]!.messages.filter((m) => m.role !== 'system');
     expect(conversation).toHaveLength(1);
     expect(conversation[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).toContain('TASK: be slow');
+  });
+
+  it('REQ-TOOLS-154 with PD-ORCH-005 (the repair of a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context): a resumed child\'s fallback retry in a later run carries its prior-agent context, its attached artifact and its inherited context, as its first payload did', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    let sid!: SessionId;
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'summariser') return answer('{"summary":"surveyed the tree","key_findings":["the tree has three roots"]}');
+      if (persona === 'orchestrator') {
+        if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'survey', task: 'TASK: survey' } }]);
+        if (turn === 3) {
+          // The survey has succeeded with its report stored: the slow child depends on it, inherits it and attaches its report.
+          const survey = dal.childrenOf(sid)[0]!;
+          const report = dal.artifactByTask(sid, survey.task_id)!;
+          return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: be slow', depends_on: [survey.task_id], inherited_context: [survey.task_id], attach_artifacts: [report.slug] } }]);
+        }
+        return answer('ok');
+      }
+      // child 1 and 2: the survey answers, and again at REQ-ORCH-095's re-prompt. child 3: the slow child's step in flight at
+      // the pause; child 4: its resumed step hangs; after that, the fallback answers.
+      if (turn <= 2) return answer('surveyed');
+      if (turn === 3) return { parts: [{ hold: held }, ...toolCalls([{ callId: 'b1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Looking.').parts] };
+      return turn === 4 ? hanging(NEVER) : answer('done on the fallback');
+    };
+    const t = sessionsWith(script, { catalogue, roleFallback: F1, childTimeoutMs: 10_000, delegation: true });
+    sid = (t.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 80 && (t.counts.get('child') ?? 0) < 3; i++) await tick();
+    const text = (r: (typeof t.client.requests)[number]) => r.messages.filter((m) => m.role !== 'system').map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n');
+    const first = t.client.requests.filter((r) => r.model.modelId === A1.modelId && text(r).includes('TASK: be slow'))[0]!;
+    for (const block of ['[Prior agent context', 'PRIOR AGENT CONTEXT (FULL)', '[Inherited context']) expect(text(first)).toContain(block);
+    expect(t.sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await t.sessions.running(sid)!;
+    // A later run: the continue resumes the slow child from its record, in a run whose memory of the launch is gone.
+    expect(t.sessions.continueSession(sid, 'continue').ok).toBe(true);
+    for (let i = 0; i < 80 && (t.counts.get('child') ?? 0) < 4; i++) await tick();
+    clock.advance(10_000);
+    await tick();
+    clock.advance(30_000);
+    await t.sessions.running(sid)!;
+    const onFallback = t.client.requests.filter((r) => r.model.modelId === F1.modelId);
+    expect(onFallback.length).toBeGreaterThan(0);
+    const retry = onFallback[0]!.messages.filter((m) => m.role !== 'system');
+    expect(retry).toHaveLength(1);
+    // REQ-TOOLS-154's order, as the first payload had it: the prior-agent context first, the attached bodies, the inherited block, the task last.
+    const payload = text(onFallback[0]!);
+    const at = (s: string) => payload.indexOf(s);
+    expect(at('[Prior agent context')).toBe(0);
+    expect(at('PRIOR AGENT CONTEXT (FULL)')).toBeGreaterThan(0);
+    expect(at('[Inherited context')).toBeGreaterThan(at('PRIOR AGENT CONTEXT (FULL)'));
+    expect(at('TASK: be slow')).toBeGreaterThan(at('[Inherited context'));
+    expect(payload).toContain('surveyed the tree');
+    expect(payload).toBe(text(first));
   });
 
   it('the second wait on the same agent doubles the local backoff (REQ-NOTIFY-085)', async () => {

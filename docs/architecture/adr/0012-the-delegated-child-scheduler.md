@@ -444,6 +444,9 @@ it does not decide what *exists*. The
 rendering reuses `reportBlock`, so a child inherits the same block its parent read on the resume, and the block is
 rendered at the call — a terminal child's report does not change — and remembered per task id on the same in-memory
 terms as the attachment list, so `execute` gained one argument and nothing else while `PD-ORCH-005` rewrites it.
+*(Falsified 2026-09-30 — see "First execution of a resumed child's retry payload" below: the in-memory terms held only
+while a child could not outlive the run that accepted it. `PD-ORCH-005` let it, and a resumed child's retry in a later
+run lost both the block and the attachment list. Both are now stored with the child's record, store v28.)*
 
 **What the first run showed.** Against the scripted model with the session artifact store in place, the `build`
 child's payload read (1) the workspace root, (3) the sibling-artifact index the `survey` report had become, (5) the
@@ -455,6 +458,42 @@ artifact store — the block it expected immediately after the workspace root st
 where the requirement puts it. **What it could not show:** the refusal under a real model, and an earlier iteration's
 *root* execution record, which is held in memory by the run and not in the store, so an id naming one finds no task
 and is refused as referring to nothing; an earlier iteration's children are in the store and are found.
+
+## First execution of a resumed child's retry payload — 2026-09-30: what the launch held in memory
+
+*`REQ-TOOLS-154` fixes the payload a child starts from; this record's inherited-context section above kept item (5)'s
+block, and the delegation kept item (4)'s attachment list, per task id in memory "for as long as the run lives". Since
+`PD-ORCH-005` a child outlives that run: a paused child is resumed by a later run, whose `IterationChildren` is new. The
+first execution of `REQ-ORCH-088`'s fallback retry for such a child reports here, under R-067
+(`docs/defects/fixed/a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`, acceptance A25).*
+
+**What the execution found.** A case in `run/ladder.test.ts` drives it through `Sessions` over a real store and the
+session's artifact store: a `survey` child succeeds with its report stored; a `slow` child that depends on it, names it in
+`inherited_context` and attaches its report is paused mid-step; the Continue action resumes it; its hard timeout expires
+and the fallback retries it. The first payload carried REQ-ORCH-047's prior-agent context, the attached report's
+`PRIOR AGENT CONTEXT (FULL)` block and the inherited-context block. The retry's payload carried the workspace root, the
+sibling index and the task — **none of the three**, and nothing told the child or its parent. The inherited block and the
+attachments were in the old run's memory; the prior-agent context was guarded by `children.context_injected`, which the
+first run had set, so the retry's `execute` rendered none, where a retry within the first run reuses the block it
+rendered.
+
+**What was changed.** Store **v28** appends `children.attach_artifacts` (the call's references as given) and
+`children.inherited_context_block` (the block rendered at the call, since a sibling ignored then as unfinished may
+complete later and the ids alone would not say which counted). `ChildLedger.spawn` writes both; `IterationChildren`'s
+`attached` and `inherited` maps are removed, and `execute`'s `payload()` and `startingPayload` read the row. A resumed
+execution's retry renders the prior-agent context again from its dependencies' rows: the block is still given once in the
+conversation the payload starts, and never re-prefixed on a state hop (the reading is **OQ-151**). The same case, run
+against the unrepaired code,
+fails on all three blocks; repaired, the retry's payload equals the first payload exactly. `store.test.ts` pins the
+migration and the round trip.
+
+**What was not measured.** No live run: the live-run scenarios never pause a child that attached an artifact and then
+time it out on a fallback, and the case above is the whole of the evidence. The `resume` scenario, run against `katalyst`
+from this build, passed as regression evidence only: the built app migrated to v28 and resumed two paused children, which
+attached and inherited nothing and were not retried. A row written before v28 carries neither, and
+its retry in a later run carries none, as before. A dependency followed up (`PD-ORCH-005` clause 22) between the first
+payload and a later run's retry is rendered as it now reads. The row is in
+[`../first-executions.md`](../first-executions.md).
 
 ## First execution of the stall watchdog — 2026-09-29: consequence 5's watchdog, and the message it makes possible
 
@@ -506,3 +545,49 @@ Neither changes the decision: the watch still reads only the clock port and the 
 words are no longer written: they are session-log lines through the run's `warn`, as OQ-76's are, the reason for
 minting them (that the log was out of reach without editing `Run.turn`) having been false. `children.test.ts` now has
 nine cases, `stall.test.ts` twelve, and `record.test.ts` one more.
+
+## First execution of the process-wide count — 2026-09-30: the cap was one iteration's
+
+This record put the ledger in **one session's rows** and said nothing of a count across sessions; `REQ-CONFIG-094` counts
+every child on a `models:` entry "across the whole process … children belonging to any other session running in the same
+process". The run host holds every live session at once (ADR-0013), so the two disagree the moment two sessions run.
+Acceptance round 1 (finding A13) confirmed it by driving it: two sessions in one `Sessions`, one key with `max_parallel`
+1, the first session's child holding its slot — the second session's child started and ran to `succeeded` beside it
+(`packages/engine/src/children/children.test.ts`, "acceptance A13 …", red before the repair).
+
+**What changed, and what did not.** The ledger is still one iteration's rows and the held-child queue is still each
+session's (`model_slot_queue`). What the cap is judged against is now the process's count: `ModelSlots`
+(`packages/engine/src/children/model-slots.ts`, held by `Sessions`) is joined by every run for as long as it is under way,
+each run answering how many of its own children hold a slot on a key (`ChildLedger.slotsInUseHere`), and
+`ChildLedger.slotsInUse` adds the others' (`slotsHeldElsewhere`). A child's terminal state wakes every other run's
+scheduler for one pass (`onSlotFreed`), and so does a run's end — without the wake, a session whose root is waiting on its
+held child never passes again, which the case pins (it times out with the wake removed). The count is process state,
+held in memory: a slot is a live child, and no child outlives its process (REQ-ORCH-053).
+
+**Corrected in verification, the same day: a paused child keeps its place.** The paragraph above said `ModelSlots` "is
+joined by every run for as long as it is under way", each run answering for children in `starting`, `running` or
+`summarizing`. That was falsified by the branch's own verifier: a `paused` child was counted by nothing, and a run coming
+to rest left `ModelSlots`, so with `max_parallel` 1 a paused session's slot went to another session's child, and a
+Continue then resumed the paused child into `running` beside it — two slots on a key capped at 1, the defect this repair
+exists for, reached through PD-ORCH-005's pause and continue. PD-ORCH-005 clause 4 says each resumed agent "keeps the place
+in every child limit it already held", so the replacement reads it literally (**OQ-149**): a child `paused` out of
+`running` or `summarizing` (its `resume_state`) holds its slot while its session rests (`holdsModelSlot` in
+`children/ledger.ts`, which `ChildLedger.slotsInUseHere` now uses), and it is **each session**, not each run, that joins
+`ModelSlots`: `Sessions` joins a session when a run of it starts or continues, answers for it from its store (every child
+of the session that holds a slot), and lets it go only when no run of it is under way and none of its children holds a
+place. A decline (clause 6) or a cancel at rest (clause 16) gives the place up and wakes the others. Three cases beside
+the first two pin it (`children.test.ts`, "PD-ORCH-005 clause 4 / 6 / 16 …"), each red with its half of the repair
+removed. A paused session therefore holds its places until it is continued, declined or cancelled; a session paused by
+an earlier process holds none until a run of it starts in this one (OQ-149 states both).
+
+**Three edges the count leaves, recorded rather than repaired.** (1) The key is the string alone: sessions of two
+workspaces whose configurations define different entries under one key share a count, each judged against its own
+session's cap (**OQ-150**). (2) A promoted child that `startOne` refuses on `maxActive` sits `queued`, which holds no
+slot, so another session's pass in the same wake may take the slot — the edge one session already had, now across
+sessions. (3) Every `slotFree` check reads each other joined session's children from its store: one query per session
+per scheduling decision, which is nothing at today's scale.
+
+**What was not measured.** No built app or live run starts two sessions at once: the live run's scenarios are one session
+each and one endpoint is registered. `pnpm mission-proof`, whose scenario holds children behind a `max_parallel: 1` cap in
+one session, shows that path unchanged. The release order across sessions is **OQ-148**. The rows are in
+[`../first-executions.md`](../first-executions.md).

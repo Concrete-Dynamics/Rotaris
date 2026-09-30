@@ -598,7 +598,8 @@ and never honoured (ADR-0022 has no backend here). **The persona table** (`engin
 REQ-ORCH-028's thirteen roles, the two aliases, our own system prompts) is the built-in layer `personas:` overlays —
 stated fields win, `system_prompt`/`system_prompt_file` replace the prompt, a configured role is a new role
 (decision 3 of the plan); **the delegation strategy** is `rotaris.delegation_strategy` (`single` grants the entry
-role the direct-work bundle and withholds `delegate`); **the per-model cap** is each entry's `max_parallel`. **A bound
+role the direct-work bundle and withholds `delegate`); **the per-model cap** is each entry's `max_parallel`, counted across every session the run host holds a place for, a paused child's kept place included
+(`children/model-slots.ts`, since 2026-09-30 — acceptance A13; OQ-148, OQ-149, OQ-150). **A bound
 of 100 model steps per turn** (`RUN_CONFIG_DEFAULTS.maxStepsPerTurn`) is a final belt behind the loop supervisor
 (`REQ-ORCH-099..107`, built 2026-09-05 — ADR-0059). `ROTARIS_CHILD_SCRIPT` and the
 `delegate:<persona>:<name>[:after]` and `fail` steps drive the scripted client's children for verification only. The `todo` tool's list is per session in memory; its persistence waits on the

@@ -27,3 +27,24 @@ the D6 repair; the three uses above were left as they are. Noticed 2026-09-29 by
   gate's check, `grantedTools`, `modelKey`).
 - `packages/engine/src/children/personas.ts` — `resolveRole` and `ROLE_ALIASES`.
 - `packages/engine/src/children/ledger.ts` — `ChildLedger.spawn`, which resolves through `resolveRole`.
+
+## Repaired 2026-09-30 under R-067 (acceptance finding A27)
+
+**Confirmed first.** A case building `IterationChildren` with no persona catalogue and a held plan gate (withholding
+`write_file`, `haet_edit`, `haet` and `terminal`) had `delegate({persona: 'coder'})` accepted `queued` on the unrepaired
+code, where REQ-ORCH-153 refuses it. The model key this note names was not observably wrong on this path: a built-in
+persona names no model, so `childModelKey` gave the run's key with or without the persona.
+
+**What changed.** `personaOf` (`packages/engine/src/children/orchestration.ts`) resolves through `resolveRole` where no
+catalogue is configured — the ledger's own resolution — so every reader at the head of `delegate` reads the role the ledger
+will spawn: the plan gate's admission refusal, `grantedTools` and `modelKey`. The write-scope refusal, which had read
+`resolveRole` beside `personaOf` since the D6 repair, now reads `personaOf` like the rest, and so does the delegating
+agent's persona for `tool_restrictions`.
+
+**Pinned by** `packages/engine/src/children/children.test.ts`, "REQ-ORCH-034 / REQ-ORCH-153 (the repair of
+delegate-reads-no-alias-on-the-built-in-table): …": `coder` and `playwright` are refused while the gate holds, naming the
+withheld tools, with no record; released, `coder` is accepted as `coding-agent` with that role's `granted_tools`. It fails on
+the unrepaired code. The earlier alias case for the write-scope refusal still passes. The first execution is reported in
+`docs/architecture/adr/0062-the-plan-gate-as-a-run-segment.md` and its row is in `docs/architecture/first-executions.md`.
+No proof or live-run scenario shows it: the run host always supplies a configured persona resolver, which resolved aliases
+already, so the built app never takes this path.

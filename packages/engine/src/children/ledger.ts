@@ -6,6 +6,7 @@ import type { ArtifactStore } from '../artifacts/store.js';
 import { canonicaliseName, mintTaskId, takenTaskIds, uniqueUnderParent } from './naming.js';
 import { EMPTY_MCP_EVIDENCE, knownRolesMessage, resolveRole, type Persona, type PersonaResolver } from './personas.js';
 import type { RanCommand } from '../artifacts/record.js';
+import { inheritedContextBlock } from './notify.js';
 
 /**
  * PD-LIBRARY-001: the report's `commands` as the artifact record wants them. The report carries `exit_code`
@@ -68,6 +69,18 @@ export function storeChildReport(deps: { readonly writer: SessionWriter; readonl
 }
 
 /**
+ * REQ-CONFIG-094 / REQ-MONITOR-020 / REQ-ORCH-050: whether a child holds a place on its `models:` entry's cap — from the
+ * start claim (`starting`) until its terminal state, through `running` and `summarizing`. PD-ORCH-005 clause 4: "each
+ * agent keeps the place in every child limit it already held", so a child `paused` out of `running` or `summarizing` (its
+ * `resume_state`) keeps its place while its session rests, and resumes into it; one paused while it waited, or before its
+ * start was claimed, held none and holds none (OQ-149).
+ */
+export function holdsModelSlot(c: Pick<ChildRow, 'state' | 'resume_state'>): boolean {
+  if (c.state === 'starting' || c.state === 'running' || c.state === 'summarizing') return true;
+  return c.state === 'paused' && (c.resume_state === 'running' || c.resume_state === 'summarizing');
+}
+
+/**
  * ADR-0012: the ledger is the primary representation — one row per child, written through the session
  * writer, every state change one transaction with its event, every query carrying the session id
  * (REQ-ORCH-151). This class is the engine's view of it: admission (REQ-ORCH-046's five checks in order,
@@ -106,6 +119,8 @@ export interface SpawnInput {
   readonly writeScope?: readonly string[] | undefined;
   /** REQ-TOOLS-152: the call's `suppress_auto_context`, stored with its record; absent means the index is given. */
   readonly suppressAutoContext?: boolean | undefined;
+  /** REQ-LIBRARY-098: the call's `attach_artifacts`, as given, stored with its record; absent means none. */
+  readonly attachArtifacts?: readonly string[] | undefined;
 }
 
 export type SpawnRejection = { readonly reason: string };
@@ -133,6 +148,11 @@ export class ChildLedger {
     readonly iteration: number;
     readonly budget: Budget;
     readonly modelCap: (modelKey: string) => number | null;
+    /**
+     * REQ-CONFIG-094: the slots on a key the process's OTHER runs hold (`ModelSlots.heldElsewhere`) — the cap counts every
+     * child on the entry across the whole process, and this ledger sees one iteration of one session. Absent means none.
+     */
+    readonly slotsHeldElsewhere?: ((modelKey: string) => number) | undefined;
     readonly warn: (m: string) => void;
     readonly personas?: PersonaResolver | undefined;
     readonly artifacts?: ArtifactStore | undefined;
@@ -204,9 +224,16 @@ export class ChildLedger {
    * REQ-MONITOR-020 describes the release (a slot frees when a running or summarizing child ends). Read
    * together: a slot is held from the claim until the terminal state, so the cap is never exceeded by two
    * children claimed in one pass (recorded on ADR-0012).
+   *
+   * REQ-CONFIG-094: the count is the whole process's — this iteration's children and every other run's
+   * (`slotsHeldElsewhere`), so two sessions under way in one run host cannot each fill a cap (acceptance A13).
    */
   slotsInUse(modelKey: string): number {
-    return this.all().filter((c) => c.model_key === modelKey && (c.state === 'starting' || c.state === 'running' || c.state === 'summarizing')).length;
+    return this.slotsInUseHere(modelKey) + (this.deps.slotsHeldElsewhere?.(modelKey) ?? 0);
+  }
+  /** This iteration's children holding a slot on the key (`holdsModelSlot`). */
+  slotsInUseHere(modelKey: string): number {
+    return this.all().filter((c) => c.model_key === modelKey && holdsModelSlot(c)).length;
   }
   slotFree(modelKey: string): boolean {
     const cap = this.deps.modelCap(modelKey);
@@ -292,6 +319,12 @@ export class ChildLedger {
       write_scope: JSON.stringify(input.writeScope ?? []),
       // REQ-TOOLS-152: the call's `suppress_auto_context`, so every assembly of the payload — a retry's included — omits the index.
       suppress_auto_context: input.suppressAutoContext === true ? 1 : 0,
+      // REQ-LIBRARY-098 / REQ-TOOLS-154 (4) and (5): what the payload carries beside the task, stored with the record so an
+      // assembly in a later run — a resumed child's REQ-ORCH-088 retry, a follow-up of a child that never started — carries
+      // it too. The inherited block is rendered now, from the reports as they stand at the call: a sibling ignored here as
+      // unfinished may have completed by then, so the ids alone would not say which counted.
+      attach_artifacts: JSON.stringify(input.attachArtifacts ?? []),
+      inherited_context_block: inheritedContextBlock(inherited),
     };
     const r = this.deps.writer.spawnChild(row);
     if (!r.ok) return { ok: false, error: { reason: `The child could not be recorded: ${r.error.code}` } };

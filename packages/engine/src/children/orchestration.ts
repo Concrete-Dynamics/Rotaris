@@ -230,7 +230,11 @@ export class IterationChildren implements DelegationOps {
   constructor(private readonly deps: ChildrenDeps, readonly iteration: number) {
     this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, ...(deps.slotsHeldElsewhere ? { slotsHeldElsewhere: deps.slotsHeldElsewhere } : {}), warn: deps.warn , personas: deps.personas, ...(deps.artifacts ? { artifacts: deps.artifacts } : {}), ...(deps.rootRecord ? { rootRecord: deps.rootRecord } : {}) });
     this.endedInEarlierRun = new Set(this.ledger.all().filter((c) => isTerminalChildState(c.state)).map((c) => c.task_id));
-    this.scheduler = new Scheduler({ ledger: this.ledger, runChild: (row) => this.track(this.executeSettling(row)), warn: deps.warn, hasConversation: (taskId) => (deps.record?.load(taskId).length ?? 0) > 0 });
+    this.scheduler = new Scheduler({
+      ledger: this.ledger, runChild: (row) => this.track(this.executeSettling(row)), warn: deps.warn, hasConversation: (taskId) => (deps.record?.load(taskId).length ?? 0) > 0,
+      // REQ-ORCH-098: a child the scheduler settles — blocked, or cancelled by the finalize sweep — is torn down as any (OQ-152).
+      teardown: (row, report) => { writeTeardown(deps, row, row.state, String(report['status'] ?? row.state), String(report['summary'] ?? '')); },
+    });
     this.scheduler.onTerminal((row) => { const w = this.resumeWaiters.get(row.parent_id); if (w) { this.resumeWaiters.delete(row.parent_id); w(); } });
     // PD-TOOLS-006: a claim lapses at its child's terminal state. Liveness is also read from the ledger at every
     // query, so a child settled by a path that fires no listener (a stale sweep) holds nothing either; this only
@@ -825,9 +829,7 @@ export class IterationChildren implements DelegationOps {
     if (!t.ok) { deps.warn(t.reason); return; }
     await this.afterTerminal(row, t.row, () => {
       // REQ-ORCH-098: the same teardown the settle in `execute` writes, "whether or not its execution raised".
-      deps.writer.appendTimeline('child_end', 'rotaris', `Child ${row.canonical_name} (${row.task_id}) ended failed.`, { task_id: row.task_id, state: 'failed', at: toIsoUtc(deps.clocks.wall.instant()) });
-      deps.writer.appendTimeline('child_result', 'rotaris', `Child ${row.canonical_name} reported failed: ${message.slice(0, 120)}`, { task_id: row.task_id, status: 'failed' });
-      deps.writer.appendTimeline('child_conversation_closed', 'rotaris', `Child ${row.canonical_name}'s conversation closed.`, { task_id: row.task_id });
+      writeTeardown(deps, row, 'failed', 'failed', message);
     }, { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: 'failed', status: 'failed', summary: message });
   }
 
@@ -1212,10 +1214,7 @@ export class IterationChildren implements DelegationOps {
     // REQ-HOOKS-075: child_completed carries the child's terminal state and its report status side by side.
     await this.afterTerminal(row, t.ok ? t.row : null, () => {
       // REQ-ORCH-098: teardown, whatever the terminal state.
-      const at = toIsoUtc(deps.clocks.wall.instant());
-      deps.writer.appendTimeline('child_end', 'rotaris', `Child ${row.canonical_name} (${row.task_id}) ended ${terminal}.`, { task_id: row.task_id, state: terminal, at });
-      deps.writer.appendTimeline('child_result', 'rotaris', `Child ${row.canonical_name} reported ${report.status}: ${report.summary.slice(0, 120)}`, { task_id: row.task_id, status: report.status });
-      deps.writer.appendTimeline('child_conversation_closed', 'rotaris', `Child ${row.canonical_name}'s conversation closed.`, { task_id: row.task_id });
+      writeTeardown(deps, row, terminal, report.status, report.summary);
     }, { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: terminal, status: report.status, summary: report.summary });
   }
 
@@ -1296,6 +1295,18 @@ export class IterationChildren implements DelegationOps {
   finalize(reason: string): number {
     return this.scheduler.finalizeIncomplete(reason);
   }
+}
+
+/**
+ * REQ-ORCH-098: a child's teardown entries, whatever terminal state it reached — `child_end`, `child_result` and
+ * `child_conversation_closed`, in that order. Written by both settles of a child's execution and, for a child the scheduler
+ * settles without one (blocked, or cancelled by the finalize sweep), by the scheduler (OQ-152): a child that never started
+ * had no conversation, and its closing is recorded all the same, so every terminal child is torn down alike.
+ */
+function writeTeardown(deps: Pick<ChildrenDeps, 'writer' | 'clocks'>, row: Pick<ChildRow, 'task_id' | 'canonical_name'>, terminal: string, status: string, summary: string): void {
+  deps.writer.appendTimeline('child_end', 'rotaris', `Child ${row.canonical_name} (${row.task_id}) ended ${terminal}.`, { task_id: row.task_id, state: terminal, at: toIsoUtc(deps.clocks.wall.instant()) });
+  deps.writer.appendTimeline('child_result', 'rotaris', `Child ${row.canonical_name} reported ${status}: ${summary.slice(0, 120)}`, { task_id: row.task_id, status });
+  deps.writer.appendTimeline('child_conversation_closed', 'rotaris', `Child ${row.canonical_name}'s conversation closed.`, { task_id: row.task_id });
 }
 
 /** PD-TOOLS-006 revision 2: the write scope a child's record stores, as the patterns it declared; none when unreadable. */

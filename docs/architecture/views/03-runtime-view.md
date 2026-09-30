@@ -722,6 +722,12 @@ the turn's persona, tool port, compression and fingerprint, the settle after the
 not decode. The child ends `failed` with a `child_exception` issue and a report naming the raise, and the teardown the
 settle in `execute` writes (REQ-ORCH-098): `child_end`, `child_result`, `child_conversation_closed` and
 `child_completed`. So no child is left `running` with no execution behind it.
+Since 2026-09-30 a child the scheduler settles without an execution — one the cascade blocks, or one the finalize sweep
+cancels, started or not — is torn down too: `SchedulerDeps.teardown` writes the same three entries through
+`writeTeardown`, after its report and before the terminal callbacks (REQ-ORCH-098; OQ-152; the repair of
+[`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](../../defects/fixed/a-child-that-never-started-gets-no-teardown-timeline-entries.md)).
+A child cancelled by any other path still gets none
+([`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../../defects/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md)).
 
 **A settle's hook runs in line (REQ-HOOKS-076 / REQ-HOOKS-080; repaired 2026-09-29).** Both settles, the one at the end
 of `execute` and `settleRaised`, make the terminal move and write the teardown. Then they run the `child_completed` hook

@@ -6712,6 +6712,32 @@ clause 22) between the first payload and a later run's retry is rendered as it r
 which a retry within the first run would then also have to change), and, if again, whether a dependency's report is read
 as it stood at the first payload or as it stands at the retry.
 
+**OQ-152 — Does a child that never started owe REQ-ORCH-098's teardown entries?** *(REQ-ORCH-098, "Whatever terminal
+state a child reaches, and whether or not its execution raised, that child MUST be fully torn down: its conversation is
+closed, a `child_conversation_closed` timeline event is emitted for it, …"; REQ-ORCH-048, whose cascade settles a child
+`blocked` before it starts; REQ-ORCH-052's finalize sweep. Raised 2026-09-30 by the repair of acceptance finding A16,
+[`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](../defects/fixed/a-child-that-never-started-gets-no-teardown-timeline-entries.md),
+under [R-067](../product/requests.md#r-067). Open.)*
+
+A child the cascade blocks, or one the finalize sweep cancels while it waits on its dependencies, in `queued` or on its
+model slot, reaches a terminal state without its execution ever starting, so it never had a conversation. The build
+first read that as nothing to close, and wrote no `child_end`, `child_result` or `child_conversation_closed` for it; that
+reading was stated only on the fixed note
+[`a-child-blocked-by-its-dependency-gets-no-report.md`](../defects/fixed/a-child-blocked-by-its-dependency-gets-no-report.md).
+The requirement's "whatever terminal state" does not except a child that never started, and it does not say what closing a
+conversation that was never opened means.
+
+**What the build proceeds under:** every terminal child is torn down alike. A child the scheduler settles itself —
+`blocked` by the cascade, or `cancelled` by the finalize sweep, started or not — gets the three entries in the same words
+and order as a child whose execution settles it, with its report's status and summary, before the terminal callbacks
+resume its parent (`SchedulerDeps.teardown`, `writeTeardown` in `children/orchestration.ts`; the two cases "REQ-ORCH-098,
+the repair of a-child-that-never-started-gets-no-teardown-timeline-entries" in `children/children.test.ts`). For a child
+that never started, `child_conversation_closed` records that it will have none; no conversation is created to be closed.
+
+**What a ruling decides.** Whether a child that never started is torn down as built, or is excepted from the clause (its
+`child_end` and `child_result` kept, its `child_conversation_closed` dropped, or all three dropped), and whether the words
+of its `child_conversation_closed` should then say it never had one.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

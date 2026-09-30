@@ -577,3 +577,26 @@ per scheduling decision, which is nothing at today's scale.
 each and one endpoint is registered. `pnpm mission-proof`, whose scenario holds children behind a `max_parallel: 1` cap in
 one session, shows that path unchanged. The release order across sessions is **OQ-148**. The rows are in
 [`../first-executions.md`](../first-executions.md).
+
+## First execution of REQ-ORCH-098's teardown for a child the scheduler settles — 2026-09-30
+
+*The first execution above lists "REQ-ORCH-098's teardown entries" under the child's execution, and the cascade and the
+finalize sweep under the scheduler. A child the scheduler settles has no execution to end, so it was never torn down.
+Acceptance round 1 found it (finding A16,
+[`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](../../defects/fixed/a-child-that-never-started-gets-no-teardown-timeline-entries.md)),
+and its repair reports here, under R-067.*
+
+**What the execution found.** Two cases through `Sessions` over a real store: a child blocked by its dependency's failure,
+and the explicit cancel's finalize sweep over a child held on its model slot and one mid-step. On the unrepaired code
+none of the three children got a `child_end`, `child_result` or `child_conversation_closed`. The third was not in the
+note: the sweep can cancel a child whose execution is still returning, and that execution, finding its record terminal,
+writes nothing. The decision held: the teardown belongs with the settle, and the scheduler's two settles lacked it.
+
+**What was changed.** `SchedulerDeps.teardown`, called by both settles after the report is stored and before the terminal
+callbacks, the order a child's own settle keeps. `IterationChildren` answers it with `writeTeardown`, now the one writer of
+the three entries for every settle. The reading, that a child that never started is torn down as any, is **OQ-152**.
+
+**What was not measured.** No built app or live run: none reliably blocks a child or cancels one held on its slot. The
+cancel paths outside the scheduler and the execution still write no teardown, and are a note
+([`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../../defects/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md)).
+The row is in [`../first-executions.md`](../first-executions.md).

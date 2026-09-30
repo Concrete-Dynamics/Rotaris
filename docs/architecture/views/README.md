@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**A child the scheduler settles is torn down (REQ-ORCH-098, REQ-ORCH-048, REQ-ORCH-052, R-067).** `Scheduler.cascadeBlocked`
+and `Scheduler.finalizeIncomplete` call `SchedulerDeps.teardown`, which `IterationChildren` answers with `writeTeardown`
+(`children/orchestration.ts`), so a blocked child and one the finalize sweep cancels get `child_end`, `child_result` and
+`child_conversation_closed` as a settled execution's child does (OQ-152). This repairs
+`a-child-that-never-started-gets-no-teardown-timeline-entries.md` (acceptance A16). The **runtime view**'s "A child settled
+without its turn" paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
 **`delegate`'s admission resolves an alias on the built-in table's path (REQ-ORCH-034, REQ-ORCH-153, PD-TOOLS-006,
 R-067).** `personaOf` (`children/orchestration.ts`) resolves through `resolveRole` where no persona catalogue is configured,
 as `ChildLedger.spawn` does, so the plan gate's admission refusal, the grant and the write-scope refusal read the role the

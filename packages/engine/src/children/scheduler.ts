@@ -25,6 +25,14 @@ export interface SchedulerDeps {
    * means no child has one.
    */
   readonly hasConversation?: ((taskId: string) => boolean) | undefined;
+  /**
+   * REQ-ORCH-098: the teardown of a child this scheduler settles itself — one REQ-ORCH-048's cascade blocks, or one the
+   * finalize sweep cancels — given its terminal row and the report just stored, before the terminal callbacks fire, as a
+   * child's own settle writes it (`IterationChildren.afterTerminal`). The repair of
+   * `a-child-that-never-started-gets-no-teardown-timeline-entries.md`: a child that never started reaches a terminal state
+   * too (OQ-152). A raise out of it is warned and the settle goes on. Absent means nothing is written.
+   */
+  readonly teardown?: ((row: ChildRow, report: Readonly<Record<string, unknown>>) => void) | undefined;
 }
 
 const PRE_START: ReadonlySet<string> = new Set<ChildState>(['waiting_on_dependencies', 'queued', 'waiting_on_model_slot']);
@@ -105,8 +113,11 @@ export class Scheduler {
         const r = this.deps.ledger.transition(c.task_id, 'blocked');
         if (r.ok) {
           changed = true;
-          this.deps.ledger.storeReport(c.task_id, blockedReport(c, cause));
-          this.settled(this.deps.ledger.get(c.task_id) ?? r.row);
+          const report = blockedReport(c, cause);
+          this.deps.ledger.storeReport(c.task_id, report);
+          const row = this.deps.ledger.get(c.task_id) ?? r.row;
+          this.tearDown(row, report);
+          this.settled(row);
         } else this.deps.warn(r.reason);
       }
     }
@@ -173,6 +184,12 @@ export class Scheduler {
     return true;
   }
 
+  /** REQ-ORCH-098: `deps.teardown` for a child settled here; a raise never keeps the scheduler from being told. */
+  private tearDown(row: ChildRow, report: Readonly<Record<string, unknown>>): void {
+    try { this.deps.teardown?.(row, report); }
+    catch (e) { this.deps.warn(`the teardown of child ${row.task_id} raised: ${String(e)}`); }
+  }
+
   /** Called by the child's execution when it reaches a terminal state, and by the sweeps. */
   settled(row: ChildRow): void {
     for (const l of [...this.terminalListeners]) { try { l(row); } catch (e) { this.deps.warn(`a terminal listener raised: ${String(e)}`); } }
@@ -198,7 +215,9 @@ export class Scheduler {
       const r = this.deps.ledger.transition(c.task_id, 'cancelled', 'cancellation');
       if (r.ok) {
         n += 1;
-        this.deps.ledger.storeReport(c.task_id, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: reason, key_findings: [], last_response: '', final_response: '', errors: [{ type: 'cancelled', message: reason }] });
+        const report = { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: reason, key_findings: [], last_response: '', final_response: '', errors: [{ type: 'cancelled', message: reason }] };
+        this.deps.ledger.storeReport(c.task_id, report);
+        this.tearDown(r.row, report);
         this.settled(r.row);
       } else this.deps.warn(r.reason);
     }

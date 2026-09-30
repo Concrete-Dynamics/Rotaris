@@ -4359,6 +4359,80 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       await restsBy(sessions, sid, 'stop');
     });
   });
+
+  describe('REQ-ORCH-098, the repair of a-child-that-never-started-gets-no-teardown-timeline-entries: a child the scheduler settles is torn down too (OQ-152)', () => {
+    const TEARDOWN = ['child_end', 'child_result', 'child_conversation_closed'];
+    const byName = (sid: SessionId, name: string): ChildRow => children(sid).find((c) => c.canonical_name === name)!;
+    const teardownOf = (sid: SessionId, taskId: string) => dal.timelineOf(sid).filter((t) => (JSON.parse(t.metadata) as { task_id?: string }).task_id === taskId && TEARDOWN.includes(t.name));
+    const resultLine = (name: string, status: string, summary: string): string => `Child ${name} reported ${status}: ${summary.slice(0, 120)}`;
+
+    it('REQ-ORCH-048: a child its dependency\'s failure blocks — it never started — gets `child_end`, `child_result` and `child_conversation_closed`, once each, before its parent is resumed', async () => {
+      let sid = '' as SessionId;
+      /** What the timeline held for `b` when the root was resumed with its report. */
+      let atResume: string[] | null = null;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'a', task: 'TASK: a' } }]);
+          if (turn === 2) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'b', task: 'TASK: b', depends_on: [byName(sid, 'a').task_id] } }]);
+          const b = children(sid).find((c) => c.canonical_name === 'b');
+          if (atResume === null && b?.state === 'blocked' && req.messages.some((m) => m.content.some((p) => p.kind === 'text' && p.text.includes('### b (')))) atResume = teardownOf(sid, b.task_id).map((t) => t.name);
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        // `a` says nothing and calls nothing, twice, so it ends failed and `b` is blocked.
+        return answer('');
+      });
+      sid = (sessions.start(dal, 'C:/ws', 'a then b') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const a = byName(sid, 'a');
+      const b = byName(sid, 'b');
+      expect([a.state, b.state]).toEqual(['failed', 'blocked']);
+      expect(teardownOf(sid, b.task_id).map((t) => [t.name, t.message])).toEqual([
+        ['child_end', `Child b (${b.task_id}) ended blocked.`],
+        ['child_result', resultLine('b', 'blocked', `Blocked: Its dependency a (${a.task_id}) ended failed, so this child never started (REQ-ORCH-048).`)],
+        ['child_conversation_closed', 'Child b\'s conversation closed.'],
+      ]);
+      expect(teardownOf(sid, b.task_id).map((t) => JSON.parse(t.metadata) as Record<string, unknown>)).toEqual([
+        { task_id: b.task_id, state: 'blocked', at: expect.any(String) },
+        { task_id: b.task_id, status: 'blocked' },
+        { task_id: b.task_id },
+      ]);
+      // The teardown precedes the terminal callbacks, as the settle in `execute` writes it (`afterTerminal`).
+      expect(atResume).toEqual(TEARDOWN);
+      // `a`, which ran, is torn down once, as before.
+      expect(teardownOf(sid, a.task_id).map((t) => t.name)).toEqual(TEARDOWN);
+    });
+
+    it('REQ-ORCH-052: the finalize sweep the explicit cancel runs tears down every child it settles — one held on its model slot, which never started, and one mid-step — once each', async () => {
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      let childSteps = 0;
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'one', task: 'TASK: one' } }, { callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'two', task: 'TASK: two' } }]) : answer('both delegated');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        childSteps += 1;
+        return childSteps > 1 ? answer('done') : { parts: [{ hold }, ...answer('done').parts] };
+      }, { cap: 1 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 400 && !(children(sid).length === 2 && byName(sid, 'two').state === 'waiting_on_model_slot'); i += 1) await new Promise((r) => setTimeout(r, 5));
+      expect(byName(sid, 'two').state).toBe('waiting_on_model_slot');
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: RUN_AGENT_ID } })).toEqual({ ok: true });
+      release();
+      await sessions.running(sid)!;
+      const one = byName(sid, 'one');
+      const two = byName(sid, 'two');
+      expect([one.state, two.state]).toEqual(['cancelled', 'cancelled']);
+      // `two` never started: no `child_start` names it.
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_start').map((t) => (JSON.parse(t.metadata) as { task_id: string }).task_id)).toEqual([one.task_id]);
+      for (const c of [one, two]) {
+        expect(teardownOf(sid, c.task_id).map((t) => [t.name, t.message])).toEqual([
+          ['child_end', `Child ${c.canonical_name} (${c.task_id}) ended cancelled.`],
+          ['child_result', resultLine(c.canonical_name, 'cancelled', (JSON.parse(c.report!) as { summary: string }).summary)],
+          ['child_conversation_closed', `Child ${c.canonical_name}'s conversation closed.`],
+        ]);
+      }
+    });
+  });
 });
 
 describe('PD-ORCH-005 clause 16 (OQ-101): the user\'s cancel writes one entry for both cancels, the at-rest one saying the session rested', () => {

@@ -66,7 +66,8 @@ What it does not do: a record a compression replaced holds fewer calls than were
 it may fall short (never over); a plan cycle has no `iterations` row, so a crash during one still loses its root's calls
 ([`a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md`](../a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md));
 a child the stop's grace gave up on and a continue then declined still counts nothing
-([`a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`](../a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md));
+([`a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`](a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md);
+repaired 2026-09-30: such a child is now counted from its record at the rest);
 and the total still lags during a pass (OQ-116, open). The agents panel still derives the root's figure as the total less
 the children's. A store a pre-v26 build crashed, continued and let crash again — a child credited from its record at that
 continue, its `tool_calls` never persisted with the credit — has that credit counted a second time when a v26 build records

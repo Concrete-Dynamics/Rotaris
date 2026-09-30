@@ -214,6 +214,12 @@ export class IterationChildren implements DelegationOps {
    */
   private detached = false;
   /**
+   * REQ-MONITOR-102: the children whose executions were still running when the stop's grace gave up on them (`outlast`).
+   * Each returns without its count, so a rest counts it from its record (the repair of
+   * `a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`).
+   */
+  private readonly givenUpOn = new Set<string>();
+  /**
    * PD-ORCH-004 revision 3: this iteration's children that had ended before this run took the iteration up — a resumed
    * iteration's, left by an earlier run. Their offers are the root's to take up, as "a later run" of the session's.
    */
@@ -601,7 +607,25 @@ export class IterationChildren implements DelegationOps {
     // third review).
     const paused = this.ledger.all().filter((c) => this.ledger.get(c.task_id)?.state === 'paused');
     for (const c of paused) answerOpenCalls(this.deps.dal, this.deps.writer, this.deps.sessionId, { taskId: c.task_id, name: c.canonical_name }, c.iteration, cause);
+    for (const c of paused) if (this.givenUpOn.has(c.task_id)) this.countGivenUpOn(c.task_id);
     return paused.length;
+  }
+
+  /**
+   * REQ-MONITOR-102 (the repair of `a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`):
+   * a child the stop's grace gave up on returns no count — `execute` writes nothing once detached — so the calls its record
+   * shows beyond its count join the session's total now, with its own count, once its open calls are answered (so a call
+   * it asked for and never started is not one), as a root given up on is counted (`Run.turn`). A continue that resumes it
+   * then credits nothing twice (`priorCalls` is its record's, less its count), and one that declines it (PD-ORCH-005
+   * clause 6) has nothing left uncounted.
+   */
+  private countGivenUpOn(taskId: string): void {
+    const row = this.ledger.get(taskId);
+    if (!row) return;
+    let recorded: number;
+    try { recorded = callsRun(this.deps.record?.load(taskId) ?? []); }
+    catch (cause) { this.deps.warn(`the calls of child ${taskId}, given up on at the stop's grace, could not be read from its record: ${String(cause)}`); return; }
+    if (recorded > row.tool_calls) this.deps.countToolCalls?.(recorded - row.tool_calls, { taskId, calls: recorded });
   }
 
   /**
@@ -1230,15 +1254,21 @@ export class IterationChildren implements DelegationOps {
    */
   async outlast(grace: Millis): Promise<boolean> {
     if (this.executing.size === 0) return false;
-    if (grace <= 0) this.detached = true;
+    if (grace <= 0) this.detach();
     else {
       let timer: TimerHandle | undefined;
       const executions = Promise.allSettled([...this.executing]).then(() => false);
       const cut = await Promise.race([executions, new Promise<boolean>((r) => { timer = this.deps.clocks.timers.after(grace, () => r(true)); })]);
       timer?.cancel();
-      if (cut) this.detached = true;
+      if (cut) this.detach();
     }
     return this.detached;
+  }
+
+  /** REQ-SESSION-094: every execution still in flight is given up on, and which children they are is kept (`givenUpOn`). */
+  private detach(): void {
+    this.detached = true;
+    for (const taskId of this.executionOf.keys()) this.givenUpOn.add(taskId);
   }
 
   /** REQ-ORCH-052: every exit path leaves every record terminal. */

@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**A child the stop's grace gave up on is counted at the rest (REQ-MONITOR-102, REQ-SESSION-092, PD-ORCH-005 clause 6,
+R-067).** `IterationChildren.outlast` now keeps which children it gave up on (`givenUpOn`), and `rest` counts each one's
+calls from its record once its open calls are answered (`countGivenUpOn`, through the run's `countToolCalls`). A continue
+that declines it therefore loses none of its calls. This repairs
+`a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`. The **runtime view**'s §4 rest
+paragraph and its `children` row say so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A settle tells the scheduler whatever raised before it (REQ-ORCH-048, REQ-ORCH-052, REQ-TOOLS-156, REQ-HOOKS-079,
 R-067).** Both settles of a child — the end of `IterationChildren.execute` and `settleRaised` — now end through
 `afterTerminal`, which writes the teardown, runs the `child_completed` hook and then calls `scheduler.settled` in a

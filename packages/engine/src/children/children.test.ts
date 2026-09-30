@@ -4342,6 +4342,53 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(completed).toEqual([fieldsOf(work, 'cancelled', (JSON.parse(work.report!) as { summary: string }).summary)]);
       expect(order.slice(0, 2)).toEqual(['session_start', 'child_completed(work)']);
     });
+
+    it('REQ-HOOKS-076 with clause 22 (found by the verification of this repair): a child followed up while its cancel\'s hook still runs fires it once for each end, not a third time when the first hook ends mid-way through the second', async () => {
+      const gateOf = () => { let open!: () => void; const hold = new Promise<void>((r) => { open = r; }); return { hold, open: () => open() }; };
+      const ends: string[] = [];
+      const gates = [gateOf(), gateOf()];
+      let n = 0;
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event, fields) => {
+          if (event !== 'child_completed') return [];
+          const i = n; n += 1;
+          ends.push(String(fields['state']));
+          await gates[i]?.hold;
+          return [];
+        },
+        advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      let sid = '' as SessionId;
+      const rootGate = gateOf();
+      let releaseChild!: () => void;
+      const childHold = new Promise<void>((r) => { releaseChild = r; });
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]);
+          // Its second step is held until the cancel's hook is running, then follows the cancelled child up.
+          if (turn === 2) return { parts: [{ hold: rootGate.hold }, ...toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: again', session_id: byName(sid, 'work').task_id } }]).parts] };
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return textOf(req).includes('TASK: again') ? answer('Done again.') : { parts: [{ hold: childHold }, ...answer('late').parts] };
+      }, { hooks });
+      sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'work')?.state === 'running');
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'work').task_id } })).toEqual({ ok: true });
+      releaseChild();
+      await settle(() => ends.length === 1);
+      rootGate.open();
+      // The follow-up ends and its own settle's hook starts while the cancel's hook still runs.
+      await settle(() => ends.length === 2);
+      expect(ends).toEqual(['cancelled', 'succeeded']);
+      gates[0]!.open();
+      await new Promise((r) => setTimeout(r, 20));
+      gates[1]!.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(byName(sid, 'work').state).toBe('succeeded');
+      expect(ends).toEqual(['cancelled', 'succeeded']);
+    });
   });
 
   describe('PD-ORCH-005 clause 15: a forced stop is a stop, and a quit rests by quit', () => {

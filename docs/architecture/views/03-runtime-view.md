@@ -732,7 +732,11 @@ each child held in `settles` until its hook is done, and tracked as an execution
 finalize sweep (`completionsSettled`), before `iteration_end`. The stale settle's children are handed to the run
 (`RunDeps.settledBeforeStart`) and fired after its `session_start`; the decline fires one for each agent it cancels, after
 the continuing run's `session_start`. A child ended where no run's hooks are live — cancelled at rest (clause 16), by the
-explicit cancel's close after `session_end`, or by the record of an accepted cancel — fires none (OQ-151). The note is
+explicit cancel's close after `session_end`, or by the record of an accepted cancel — fires none (OQ-151). A settle
+ends only its own `settles` entry (`beginSettle`), so a child followed up while an earlier end's hook still runs (clause
+22) fires the hook once for each end. At a stop or a quit these hooks are awaited as executions within what is left of
+the 30 s grace and then given up on with them, as a settle's own hook is (REQ-SESSION-092), bounded by the per-hook
+timeout. The note is
 [`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](../../defects/fixed/a-child-settled-outside-its-execution-fires-no-child-completed-hook.md).
 Since 2026-09-30 both settles end through one tail, `IterationChildren.afterTerminal`, which tells the scheduler in a
 `finally`: a raise out of the teardown or the hook port no longer leaves a parent waiting on a child that has ended

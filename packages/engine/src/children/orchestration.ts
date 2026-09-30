@@ -552,11 +552,18 @@ export class IterationChildren implements DelegationOps {
     return execution;
   }
 
-  /** REQ-HOOKS-080: `taskId`'s settle runs its hook from here; the function returned ends it, once the scheduler is told. */
+  /**
+   * REQ-HOOKS-080: `taskId`'s settle runs its hook from here; the function returned ends it, once the scheduler is told.
+   * It removes the entry only while the entry is its own: a child followed up while an earlier end's hook still runs
+   * (PD-ORCH-005 clause 22) begins a second settle over the first, and the first ending must not take the second's entry
+   * with it — the terminal listener would then find none and fire `child_completed` a third time (REQ-HOOKS-076, found by
+   * the verification of `a-child-settled-outside-its-execution-fires-no-child-completed-hook`'s repair).
+   */
   private beginSettle(taskId: string): () => void {
     let end!: () => void;
-    this.settles.set(taskId, new Promise<void>((resolve) => { end = resolve; }));
-    return () => { this.settles.delete(taskId); end(); };
+    const settle = new Promise<void>((resolve) => { end = resolve; });
+    this.settles.set(taskId, settle);
+    return () => { if (this.settles.get(taskId) === settle) this.settles.delete(taskId); end(); };
   }
 
   /**
@@ -849,6 +856,11 @@ export class IterationChildren implements DelegationOps {
    * execution (`track`). These hooks run one after another, in the order the children settled; `completionsSettled` is
    * the wait for all of them, which the run takes after the finalize sweep and before the iteration's own hooks. The
    * fields are the child's record once it is terminal, its report's status and summary among them (REQ-HOOKS-075).
+   *
+   * The bound, stated: at a stop or a quit such a hook is awaited as an execution only within what is left of the stop's
+   * 30 s grace (`rest`, `outlast`, REQ-SESSION-092); one still running then is given up on with the executions, as a
+   * settle's own hook inside a child's execution is, and may finish after `session_end` — bounded by its own per-hook
+   * timeout (REQ-HOOKS-033). A pause waits for it, and every other exit waits for all of them (`completionsSettled`).
    */
   private completedOutside(taskId: string): void {
     const hooks = this.deps.hooks;

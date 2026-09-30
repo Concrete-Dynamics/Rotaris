@@ -68,5 +68,17 @@ explicit cancel's close after its run's `session_end`, and the record of an acce
 (`recordAcceptedCancel`). The last was not in this note's list; it was found by the repair's own sweep of every terminal
 move.
 
+Found by the repair's verification, and closed with it: a settle's end removed its child's `settles` entry whatever
+settle had put it there. A child the user cancelled and its parent then followed up (clause 22) while the cancel's hook
+still ran began a second settle over the first, and the first hook ending took the second's entry with it, so the
+terminal listener found none and fired `child_completed` a third time (REQ-HOOKS-076, "exactly once"). `beginSettle`'s
+end now removes the entry only while it is its own. Pinned by the case "a child followed up while its cancel's hook still
+runs fires it once for each end" in the same describe, red before that change (three hooks for two ends).
+
+The bound, stated: at a stop or a quit these hooks are awaited as executions only within what is left of the stop's 30 s
+grace (REQ-SESSION-092); one still running then is given up on with the executions, as a settle's own hook inside a
+child's execution already is, and may finish after `session_end`, bounded by its per-hook timeout (REQ-HOOKS-033). A pause
+waits for it; every other exit waits for all of them.
+
 Not driven in the built app or live: the live-run scenarios configure no lifecycle hook, and the note was found by
 reading the code.

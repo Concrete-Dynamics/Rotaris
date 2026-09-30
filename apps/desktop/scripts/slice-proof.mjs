@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 /**
@@ -79,7 +79,8 @@ const local = join(root, 'local');
 mkdirSync(workspace, { recursive: true });
 mkdirSync(local, { recursive: true });
 writeFileSync(join(workspace, 'README.md'), '# Slice proof workspace\n\nThis file exists so the agent has something to read.\n');
-const tokensFile = join(local, 'rotaris', 'data', 'tokens', `${PROVIDER_ID}.json`);
+// The credential store (REQ-PROVIDER-014) where the product writes it on THIS platform (`tokensDirFor`).
+const tokensFile = join(tokensDirFor(local), `${PROVIDER_ID}.json`);
 // The discovery snapshot where the product writes it on THIS platform (`configDirFor`), not the Windows spelling alone.
 const snapshotFile = join(configDirFor(local), 'project_settings.yaml');
 const agentsFile = join(workspace, '.rotaris', 'agents.yaml');

@@ -28,7 +28,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { cleanEnvironment, configDirFor, electron, hostSwitches, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, dataDirFor, electron, hostSwitches, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { lineRpcClient } from './lib/line-rpc-client.mjs';
 
@@ -53,17 +53,18 @@ const keepOutput = process.argv.includes('--keep');
 // The runtime's per-user home (the language servers it provisions live there) is kept across proof runs: everything else is wiped.
 const root = join(output, 'profile');
 const local = join(root, 'local');
-const runtimeHome = join(local, 'rotaris', 'data', 'code-intelligence');
+// Where the product keeps it on THIS platform: `join(resolveUserDirs().data, 'code-intelligence')` (`src/main/sentinel.ts`).
+const runtimeHome = join(dataDirFor(local), 'code-intelligence');
 const keep = join(repo, '.proof', '.code-intel-proof-home.tmp');
 let previous = {};
 if (keepOutput && existsSync(join(output, 'results.json'))) { try { previous = JSON.parse(readFileSync(join(output, 'results.json'), 'utf8')); } catch { previous = {}; } }
 if (!keepOutput) {
   if (existsSync(runtimeHome)) { rmSync(keep, { recursive: true, force: true }); renameSync(runtimeHome, keep); }
   rmSync(output, { recursive: true, force: true });
-  mkdirSync(join(local, 'rotaris', 'data'), { recursive: true });
+  mkdirSync(dataDirFor(local), { recursive: true });
   if (existsSync(keep)) renameSync(keep, runtimeHome);
 }
-mkdirSync(join(local, 'rotaris', 'data'), { recursive: true });
+mkdirSync(dataDirFor(local), { recursive: true });
 
 // The bundle, then the build.
 const marker = join(app, 'resources', 'code-intelligence', 'bundle.json');

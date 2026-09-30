@@ -685,7 +685,10 @@ stored credential; (3b, Part L) three more real runs, one prompt per intent fami
 slot and never fall back, the answering rung recorded; (5) sign-out from the card — the file gone, the snapshot kept, a prompt refused. `--resume` keeps
 the profile and skips the paste; `--skip-build` skips the build. Evidence lands under `.proof/slice-proof/`. `--from=<scenario>` replays the
 earlier scenarios from their evidence. On 2026-09-05 every scenario passed on the owner's re-run with an OpenRouter
-key (`.proof/slice-proof/results.json`), after two runs that each found a defect.
+key (`.proof/slice-proof/results.json`), after two runs that each found a defect. Since 2026-09-29 (R-067) it reads the
+credential file where the product writes it on the running platform (`tokensDirFor`): the Windows spelling it used
+everywhere left the first launch's wait, the strays check and the sign-out check with nothing to read off Windows
+([note](../defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md)).
 
 **What `pnpm live-run` does.** It is the only check here that answers to a real model rather than a scripted one,
 and the only one that spends money, so it never runs on its own: `pnpm check` does not reach it and without
@@ -1124,7 +1127,10 @@ propagated); discovery of the real runtime through the token with the tier's nam
 block; the workspace binding on the launch line; a real `get_symbols_overview` call; the three-step project setup —
 completed, skipped on the marker, `skipped-no-code`, a launch-less entry refused, a cancel mid-step; the manifest's
 drift refused; the packaged binary with outbound traffic blocked, which names the fetch it needs (IC-7). Evidence under
-`.proof/code-intel-proof/`. Its branch client is `scripts/lib/line-rpc-client.mjs` (2026-09-28, R-062): every pending
+`.proof/code-intel-proof/`. The runtime's home, which it keeps across runs, is the product's own on the running platform
+(`join(dataDirFor(local), 'code-intelligence')`, as `main/sentinel.ts` joins it) since 2026-09-29 (R-067; the Windows
+spelling kept a directory the product never used off Windows,
+[note](../defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md)). Its branch client is `scripts/lib/line-rpc-client.mjs` (2026-09-28, R-062): every pending
 request rejects when the child exits, errors or is killed by the guard, with the exit status and standard error's tail,
 so a branch that dies fails the launch in seconds instead of hanging it (`line-rpc-client.test.ts`, 12 cases). It launches the token first and the sandbox switch after it, the
 product's order, which `lib/launch-sites.test.ts` holds for every token launch; its workspace file records

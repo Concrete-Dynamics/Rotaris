@@ -152,6 +152,16 @@ describe('R-062: the proof harness platform rules, kept at every script', () => 
     expect(spelled.map((f) => relative(SCRIPTS, f))).toEqual([]);
   });
 
+  it('no script but the harness spells the data directory itself (REQ-PROVIDER-014; rule 1 for the data directory)', () => {
+    // `<local>/rotaris/data` is the Windows answer only: off Windows the data directory is `<XDG_DATA_HOME>/rotaris`.
+    // `slice-proof` waited on, and checked the sign-out against, a credential file at that spelling the product never
+    // wrote off Windows, and `code-intel-proof` kept a code-intelligence home the product never used there
+    // (`docs/defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md`).
+    // `dataDirFor`, `tokensDirFor`, `workspacesRootFor` and `machineIdFileFor` answer it by platform.
+    const spelled = all.filter((f) => f !== HARNESS && /['"]rotaris['"]\s*,\s*['"]data['"]/.test(readFileSync(f, 'utf8')));
+    expect(spelled.map((f) => relative(SCRIPTS, f))).toEqual([]);
+  });
+
   it('every launch of Electron carries hostSwitches where Chromium reads it and no positional reader does', () => {
     const found = all.flatMap((f) => launches(relative(SCRIPTS, f).split(sep).join('/'), readFileSync(f, 'utf8')));
     // The scan must be seeing the launches at all, or the next assertion is vacuous. On 2026-09-28 it sees 42 spawn

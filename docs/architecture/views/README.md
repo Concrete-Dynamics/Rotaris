@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A failing layout contract is filed under `CONTRACT` in the evidence pack (R-067).** `ui-audit` builds each finding
+through `apps/desktop/scripts/lib/audit-finding.mjs`, which spreads the measured detail first and moves a contract row's
+own `kind` to `relation`, so `report.json`, the summary line and `ui-review`'s `manifest.json` (`deterministic.byKind`)
+count a failing contract as `CONTRACT`; the manifest also carries `deterministic.contractsByRelation`. This repairs
+`a-contract-finding-in-ui-audit-is-filed-under-its-relation-kind.md`. The **seams view**'s §8 step 6 says so. No
+package, edge, process, message kind, channel, command or store column changed.
+
 **A count's noun agrees with it everywhere, from one kernel helper (REQ-SHELL-044, R-067).** `countNoun` moved from
 `ui/agents.ts` (which re-exports it) to `kernel/count-noun.ts`, since `providers`, `engine`, `agent-tools`, `contracts`,
 `platform` and `workspace` cannot import `ui`; the sign-in messages, the checkpoint dialogs and notices, the run's

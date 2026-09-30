@@ -34,6 +34,7 @@ import { buildDesktop, evidenceDirectory, repo } from './lib/harness.mjs';
 import { startApp } from './lib/driver.mjs';
 import { evaluateContracts, shrunkBoxes } from './lib/layout-relations.mjs';
 import { readAuditAnswer } from './lib/audit-answer.mjs';
+import { auditFinding, countByKind } from './lib/audit-finding.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -405,7 +406,7 @@ const findings = [];
 const geometryEvidence = [];
 const styleEvidence = [];
 const note = (kind, view, size, detail) => {
-  findings.push({ kind, view, size, ...detail });
+  findings.push(auditFinding(kind, view, size, detail));
   console.log(`  ${kind.padEnd(11)} ${view} @ ${size} — ${JSON.stringify(detail)}`);
 };
 
@@ -543,5 +544,5 @@ try {
   writeFileSync(join(output, 'styles.json'), `${JSON.stringify({ captures: styleEvidence }, null, 2)}\n`);
 }
 
-const byKind = findings.reduce((acc, f) => ({ ...acc, [f.kind]: (acc[f.kind] ?? 0) + 1 }), {});
+const byKind = countByKind(findings);
 console.log(`\n${findings.length} finding(s) ${JSON.stringify(byKind)} — evidence in ${output}`);

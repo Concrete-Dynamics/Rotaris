@@ -33,3 +33,8 @@ CRLF prompt equals an LF one, and that `installPromptSeam` sends exactly these e
 The built app shows it with the scripted model: a five-line prompt holding a blank line, leading spaces and an em
 dash, typed through `ROTARIS_CAPTURE_PROMPT`. It arrived as transcript row 0 character for character, and the launch
 recorded one session, so nothing was submitted early.
+
+**Shown live, 2026-09-30.** `pnpm live-run --confirm --skip-build --only=duress` ran against `katalyst` (pack
+`.live-run/runs/2026-09-30T05-29-56-712Z`). The duress prompt's lines reached the endpoint and the transcript
+separately. The first recorded request carries "Three waves, in order,\neach waiting for the one before it.\n\nWave 1 —
+…", and transcript row 0 reads line for line as the prompt was written, in one session.

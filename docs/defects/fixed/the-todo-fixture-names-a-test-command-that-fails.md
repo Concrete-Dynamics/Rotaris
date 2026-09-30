@@ -27,3 +27,6 @@ the command the fixture's `README.md` and `AGENTS.md` already named, and the one
 all six tests. Pinned by `apps/desktop/scripts/fixtures/todo-app.test.ts`, which runs every `node --test …` command that
 the fixture's `src/todos.js`, `README.md` and `AGENTS.md` name, in a copy of the fixture, on the Node that runs the
 tests, and requires each one to pass. With the old header restored, its `node --test src/` case fails.
+
+**Live, 2026-09-30** (the duress pack `.live-run/runs/2026-09-30T05-29-56-712Z`): each of the run's `node --test` calls
+used the working form, and none was `node --test src/`.

@@ -344,11 +344,25 @@ On the POSIX backend a line the product submits after keystrokes left without a 
 discipline's kill character, `^U`, which erases the partial line; the PowerShell wrapper's first statement already
 takes a prefix without losing the start marker (reasoned, not measured). What becomes of such a line is stated
 nowhere: [OQ-143](../open-questions.md), raised with this reading built. **A second reading is falsified and kept
-beside its replacement in `onData`:** "the active call's end marker, else the paused call's". While a call was
-active, the paused call's frame ahead of it was never matched, so a paused command that ended behind the next call
-never read as finished and the poll after it said "still running" with exit −1. Both frames are matched now, the
-paused one's first. Pinned by the two "(A10)" cases in `terminal.test.ts`, the real-shell one red on the unrepaired
-code.*
+beside its replacement in `onData`:** "the active call's end marker, else the paused call's; a match closes both".
+~~While a call was active, the paused call's frame ahead of it was never matched, so a paused command that ended
+behind the next call never read as finished and the poll after it said "still running" with exit −1. Both frames are
+matched now, the paused one's first.~~ **That account, written by the first repair, is itself falsified** (A10's
+verification, 2026-09-30): the old form did close the paused call when the active call's frame arrived. What it got
+wrong was the status and the collection. The paused call took the **active** call's exit status, so a paused
+`sleep 3; …; false` behind an `echo` read 0; and its listener stayed attached, so when the paused line never printed a
+frame — an interrupt (`C-c`, REQ-TOOLS-098's advice) makes an interactive `sh` abandon the rest of the line — its
+poll read everything after: the later calls' marker frames and 582 of the PD-TOOLS-001 snapshot's `__rot_b64__` lines,
+which encode the shell's whole environment. The first repair's replacement, "the paused call closes
+on its own frame only", fixed the status and broke the interrupt: that call then read "still running" on every poll.
+Now the paused call closes on its own frame with its own status, or else on the next call's frame with none, reported
+as −1 with the reason ([OQ-144](../open-questions.md), raised with that reading built), and what it collected ends at
+the next call's printed start marker; its listener goes with it. Pinned by four "(A10)" cases in `terminal.test.ts`:
+the first repair's two, and two red on the old `onData` — the paused call's own status behind the next call,
+and the interrupted paused call closed by the next call with nothing of the later calls in its poll, which is red on
+the first repair too. A poll made after the `C-c` but before any next call still reads "still running"; that is
+recorded, not repaired
+([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../../defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).*
 
 **Found — defect C: the agent's capture was VT-STRIPPED where every other surface was EMULATED.** Deleting a
 control sequence is not applying it. Measured against the real shell at the session's own 240×50: ConPTY

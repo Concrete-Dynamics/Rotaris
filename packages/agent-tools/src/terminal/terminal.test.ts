@@ -446,6 +446,52 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     } finally { await m.dispose(); }
   }, 30_000);
 
+  // A10's verification: a soft-paused command that ends while the next call is already queued behind it. Before the
+  // repair the paused call was closed by the NEXT call's end frame and took that call's exit status, so a paused command
+  // that failed read as a success. The paused call's own frame is read now, and so is its own status.
+  it.skipIf(PS)('REQ-TOOLS-098/179 (A10): a soft-paused command that ends behind the next call reports its own exit status, not the next call\'s', async () => {
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
+    try {
+      await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
+      expect(diag((await t.execute(args({ command: `${SH.sleep(3)}; ${SH.echo('failed-later')}; ${SH.fails()}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      const next = await t.execute(args({ command: SH.echo('next-ok'), timeout: 15 }), ctx());
+      expect(diag(next.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+      expect(output(next.text)).toBe('next-ok');
+      const poll = await t.execute(args({ command: '' }), ctx());
+      expect(output(poll.text)).toBe('failed-later');
+      expect(diag(poll.text)).toMatchObject({ exit_code: 1, outcome_kind: 'shell_failure' });
+      expect(poll.text).not.toContain('__rot_');
+    } finally { await m.dispose(); }
+  }, 30_000);
+
+  // A10's verification: REQ-TOOLS-098 tells the agent to interrupt a paused command with `C-c` and `is_input=true`. An
+  // interactive `sh` that takes the SIGINT abandons the rest of the wrapper's line, so the paused call's end frame never
+  // prints. The shell reaches the next call's line only once the paused one is done, so that call's frame closes the
+  // paused call — with no exit status of its own (OQ-144's reading), never the next call's — and what the paused call
+  // collected ends where the next call begins: before the repair the poll read the later calls' marker frames and the
+  // PD-TOOLS-001 snapshot's `__rot_b64__` lines, which encode the shell's whole environment, or "still running" forever.
+  it.skipIf(PS)('REQ-TOOLS-098/127/179 (A10): a soft-paused command interrupted with C-c is closed by the next call, with no status borrowed and nothing of the later calls or the snapshot in its poll', async () => {
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
+    try {
+      await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
+      expect(diag((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: 'C-c', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+      const aaa = await t.execute(args({ command: SH.echo('AAA'), timeout: 15 }), ctx());
+      expect(output(aaa.text)).toBe('AAA');
+      const bbb = await t.execute(args({ command: SH.echo('BBB'), timeout: 15 }), ctx());
+      expect(output(bbb.text)).toBe('BBB');
+      const poll = await t.execute(args({ command: '' }), ctx());
+      expect(diag(poll.text)['outcome_kind']).not.toBe('soft_pause');
+      expect(diag(poll.text)).toMatchObject({ exit_code: -1, outcome_kind: 'execution_error' });
+      expect(poll.text).toContain('without an exit status of its own');
+      for (const leaked of ['__rot_', 'AAA', 'BBB', 'done-later']) expect(poll.text).not.toContain(leaked);
+      // The paused call was handed over once; there is nothing left to poll.
+      expect((await t.execute(args({ command: '' }), ctx())).text).toContain('No paused command to poll.');
+    } finally { await m.dispose(); }
+  }, 60_000);
+
   /**
    * ADR-0020's second first execution, 2026-09-12: four defects a real 22-minute run found. Each proof
    * below was RED against the code that run exercised.

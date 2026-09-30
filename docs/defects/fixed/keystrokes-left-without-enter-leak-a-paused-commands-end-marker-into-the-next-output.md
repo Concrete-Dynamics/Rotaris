@@ -36,18 +36,38 @@ branch: the case below, run against `/bin/sh` (dash) through a real PTY on the u
   own line clear nothing. PowerShell is unchanged: its first statement takes the prefix, not the start marker
   (reasoned, not measured on this Linux host). What becomes of a partial line no one ended is stated nowhere, so the
   reading built is raised as [OQ-143](../../architecture/open-questions.md).
-- **The paused call's end frame is its own.** `onData` matched only the active call's frame while a call was active,
-  so a soft-paused command that ended behind the next call never read as finished, and the poll after it said "still
-  running" with exit −1. Both frames are now matched, the paused one's first. The falsified reading is kept beside its
-  replacement in `onData`. What a reset restores is unchanged: no snapshot is taken for a paused call's completion
-  ([OQ-134](../../architecture/open-questions.md)).
+- **The paused call's end frame is its own.** ~~`onData` matched only the active call's frame while a call was
+  active, so a soft-paused command that ended behind the next call never read as finished, and the poll after it said
+  "still running" with exit −1. Both frames are now matched, the paused one's first.~~ **That account was falsified by
+  the repair's verification (2026-09-30)**: the old `onData` did close the paused call when the next call's frame
+  arrived, and with it restored the case below still passed. What it got wrong was the status and the collection. The
+  paused call took the next call's exit status, so a paused `sleep 3; …; false` behind an `echo` read 0. And a paused
+  call interrupted with `C-c` (REQ-TOOLS-098's advice), whose line an interactive `sh` abandons before its frame, was
+  closed with the next call's 0 while its listener stayed: its poll read 8 marker frames and 582 `__rot_b64__` lines of
+  the PD-TOOLS-001 snapshot, which encode the shell's environment. The first repair's form — close on the paused frame
+  only — read that interrupted call "still running" on every poll. Now the paused call closes on its own frame with
+  its own status, or else on the next call's frame with none: its poll reports −1 with the reason, not a soft pause
+  ([OQ-144](../../architecture/open-questions.md)), its output stops at the next call's printed start marker, and its
+  listener goes with it. Both falsified readings are kept beside the replacement in `onData`. What a reset restores is
+  unchanged: no snapshot is taken for a paused call's completion ([OQ-134](../../architecture/open-questions.md)). A
+  poll made after the `C-c` but before any next call still reads −1; that is recorded, not repaired
+  ([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).
 
-Pinned by two cases in `packages/agent-tools/src/terminal/terminal.test.ts`: "REQ-TOOLS-096/097/127 (A10): …" (a real
-shell: the next call reads only its own output, its live tap carries only that, and the poll after reads `done-later`
-with exit 0; red on the unrepaired code, and red on the poll's exit alone with only the frame matching reverted), and
-"REQ-TOOLS-096 (A10): …" (a PTY double: `^U` precedes the next line only after keystrokes left without a line end,
-and never on PowerShell). ADR-0020 is reported back in place, with a row in
-[`first-executions.md`](../../architecture/first-executions.md).
+Pinned by four cases in `packages/agent-tools/src/terminal/terminal.test.ts`:
+- "REQ-TOOLS-096/097/127 (A10): …" (a real shell): the next call reads only its own output, its live tap carries only
+  that, and the poll after reads `done-later` with exit 0. Red on the unrepaired code through the `^U` half. ~~Red on the
+  poll's exit alone with only the frame matching reverted~~ — falsified: that "revert" was a form that never shipped,
+  and this case passes on the old `onData`.
+- "REQ-TOOLS-096 (A10): …" (a PTY double): `^U` precedes the next line only after keystrokes left without a line end,
+  and never on PowerShell.
+- "REQ-TOOLS-098/179 (A10): …" (a real shell): a paused `sleep 3; …; false` that ends behind the next call reports 1,
+  `shell_failure`. Red on the old `onData`, which reported 0.
+- "REQ-TOOLS-098/127/179 (A10): …" (a real shell): a paused `sleep 20; …` interrupted with `C-c`, then two calls, then
+  a poll that reads −1 and `execution_error` with the reason, and nothing of the later calls, their frames or the
+  snapshot; a second poll finds nothing to poll. Red on the old `onData` (exit 0, frames and snapshot lines) and on the
+  first repair ("still running").
+
+ADR-0020 is reported back in place, with a row in [`first-executions.md`](../../architecture/first-executions.md).
 
 ## Specs
 

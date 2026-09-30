@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A row not yet measured is never positioned short of what it draws (PD-CHAT-003, R-067).** `estimateHeight` in
+`ui/transcript/pool.ts` takes the row's block start and adds the 8 px the first row of a block is drawn below its
+neighbour over a row inside one; `reuseOffsets` hands its height reader the row's position, and `TranscriptPane.tsx`
+reads `places[at].blockStart` there. A one-line row that starts a block drew 33.4 px into the 30 px allotted to it and
+was drawn through the row beneath it until its first measurement. This repairs
+`a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`. The **runtime view**'s
+transcript paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A failing layout contract is filed under `CONTRACT` in the evidence pack (R-067).** `ui-audit` builds each finding
 through `apps/desktop/scripts/lib/audit-finding.mjs`, which spreads the measured detail first and moves a contract row's
 own `kind` to `relation`, so `report.json`, the summary line and `ui-review`'s `manifest.json` (`deterministic.byKind`)

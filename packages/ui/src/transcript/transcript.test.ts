@@ -168,6 +168,30 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
       .toBe(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'a\nb\nc' }) }, true));
   });
 
+  // ---- the first row of a block is drawn 12 px below the row above it, not 4 px -------------------------------
+  // docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md: a new
+  // row at the tail is positioned by its estimate until the measurement pass reaches it, and a one-line row that
+  // starts a block drew 33.4 px in the built app (12 px above it, a 1 px border either side, one 19.5 px line) into
+  // the 30 px the estimate allotted it — through the row beneath it for that frame.
+
+  it('PD-CHAT-003: the first row of a block estimates the 12 px it is drawn below, over what one row inside a block is', () => {
+    const DRAWN_ONE_LINE_BLOCK_START = 33.4;
+    const shapes: DisplayRow[] = [
+      { shape: 'row', key: 'k', row: row(0, { body: 'one line' }) },
+      { shape: 'row', key: 't', row: row(0, { kind: 'thinking', body: 'deliberating' }) },
+      asGroup(projectDisplay(options([tool(0, 'read'), tool(1, 'read')]))[0]),
+    ];
+    for (const d of shapes) {
+      const inside = estimateHeight(d, false, 900, false);
+      const first = estimateHeight(d, false, 900, true);
+      // `.row--block-start`'s `--rt-space-3` against `.row`'s 4 px: the only difference between the two boxes.
+      expect(first - inside, d.key).toBe(8);
+      expect(first, d.key).toBeGreaterThanOrEqual(DRAWN_ONE_LINE_BLOCK_START);
+    }
+    // A caller that says nothing about the block keeps the estimate it had (a row inside a block).
+    expect(estimateHeight(shapes[0]!, false, 900)).toBe(estimateHeight(shapes[0]!, false, 900, false));
+  });
+
   // ---- the estimate models WRAPPING (docs/defects/live-rows-are-never-measured.md) ------------------------
   // The three below are the regression for the constant that used to sit in `estimateHeight`: a group was 36 px
   // however many segments it drew, a body line was a `\n` rather than a drawn line, and the role gutter's own
@@ -314,6 +338,18 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
     reads = 0;
     reuseOffsets(table, { display, width: 900, expanded, stamp: ledger.stamp }, remeasured, heightOf);
     expect(reads).toBe(1_202);
+  });
+
+  it('the offset table hands a row\'s height reader its position, where the pane finds the row\'s block (PD-CHAT-003)', () => {
+    const display = Array.from({ length: 5 }, (_, i) => displayed(i));
+    const seen: number[] = [];
+    const table = reuseOffsets(null, { display, width: 800, expanded: new Set(), stamp: 0 }, null, (_d, at) => { seen.push(at); return at === 0 ? 38 : 30; });
+    expect(seen).toEqual([0, 1, 2, 3, 4]);
+    expect(table.offsets).toEqual([0, 38, 68, 98, 128, 158]);
+    // An appended row is read at its own position, and the rows above it are not read again.
+    seen.length = 0;
+    reuseOffsets(table, { display: [...display, displayed(5)], width: 800, expanded: table.expanded, stamp: 0 }, null, (_d, at) => { seen.push(at); return 30; });
+    expect(seen).toEqual([5]);
   });
 
   it('the ledger answers an identity re-measured after a stamp, and forgets what a committed table has read', () => {

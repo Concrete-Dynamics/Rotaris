@@ -15,6 +15,15 @@ import type { DisplayRow } from './types.js';
  * deliberately per-shape: a wrong estimate above the viewport is corrected by the anchor rule of REQ-CHAT-071 on
  * the next settle, and a wrong estimate below it is never seen.
  *
+ * **Falsified 2026-09-29, kept beside its replacement: "a wrong estimate below the viewport is never seen" is not the
+ * whole of it.** A row appended at the tail while the pane follows is INSIDE the viewport, positioned by its estimate
+ * for the frame or two before the measurement pass reaches it, so an estimate SHORT of what the row draws is seen: the
+ * row is drawn through the row beneath it for those frames. An estimate that is long leaves a gap for the same frames
+ * instead, which draws nothing through anything. So the estimate may be coarse, but never short of a one-line row —
+ * and the first row of a block is drawn 12 px below the row above it rather than 4 px (PD-CHAT-003), which the 30 px
+ * unit did not cover: a one-line block-start row drew 33.4 px into 30
+ * (docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
+ *
  * **The estimate must estimate what the row DRAWS.** A thinking row's body is the whole streamed reasoning
  * text, but under REQ-CHAT-167 (show-reasoning default OFF) a collapsed one draws only its one-line summary —
  * and a LIVE row is never measured (`reuseKey` returns null for it), so a body-based estimate for one survives
@@ -37,6 +46,12 @@ const GUTTER = TIME_COLUMN + ROLE_COLUMN + COLUMN_GAPS;
 const CHARACTER = 6.2;
 const LABEL_CHARACTER = 6.6;
 const TEXT_LINE = 18;
+/**
+ * PD-CHAT-003's vertical rhythm: `.row--block-start` carries `--rt-space-3` (12 px) above it, and every other row
+ * `.row`'s 4 px. The 30 px unit already covers a one-line row inside a block (4 px, the 1 px border either side and
+ * one line); the first row of a block is drawn this much taller.
+ */
+const BLOCK_GAP_OVER_ROW_GAP = 12 - 4;
 /** `.row__body` takes a prose measure of 78 %; a diff, a table and a code fence opt out, which this does not model. */
 const PROSE_MEASURE = 0.78;
 
@@ -62,8 +77,17 @@ function wrappedLines(text: string, width: number, advance = CHARACTER): number 
   return Math.max(1, lines);
 }
 
-export function estimateHeight(d: DisplayRow, expanded = false, width = 0): number {
+/**
+ * @param blockStart whether the row starts a block (`placements`' `blockStart`), which draws it 12 px below the row
+ *   above rather than 4 px. A caller that does not know passes nothing and gets the estimate for a row inside a block.
+ */
+export function estimateHeight(d: DisplayRow, expanded = false, width = 0, blockStart = false): number {
   if (d.shape === 'trailer') return 36;
+  return estimateBox(d, expanded, width) + (blockStart ? BLOCK_GAP_OVER_ROW_GAP : 0);
+}
+
+/** A non-trailer row's estimate as a row inside a block — what `estimateHeight` answered before the block gap. */
+function estimateBox(d: Exclude<DisplayRow, { shape: 'trailer' }>, expanded: boolean, width: number): number {
   const main = width > GUTTER ? width - GUTTER : 0;
   // REQ-CHAT-057's attribution shares the row's height: `.row__role` wraps inside its 112 px column rather than
   // truncating (docs/defects/role-gutter-truncation-rule-is-inert.md), so a long agent name costs a second line
@@ -178,8 +202,9 @@ export interface HeightTable extends OffsetTable {
  * cost microseconds at the window's bound.
  *
  * The result is the table `buildOffsets(next.display.map(heightOf))` would build, value for value, provided
- * `heightOf` reads nothing but the row, the width, the expansion set and the measurements filed under the row's
- * identity — the pane's does — and `remeasured` answers true for every identity whose measurements changed since
+ * `heightOf` reads nothing but the row, the width, the expansion set, the measurements filed under the row's
+ * identity and the row's block start — the pane's does; a row reused here has the same row object above it, so its
+ * block start is unchanged — and `remeasured` answers true for every identity whose measurements changed since
  * `previous.stamp` (`transcript.test.ts` holds it to that over seeded walks).
  */
 export function reuseOffsets(
@@ -187,7 +212,8 @@ export function reuseOffsets(
   next: { readonly display: readonly DisplayRow[]; readonly width: number; readonly expanded: ReadonlySet<string>; readonly stamp: number },
   /** Null when nothing has been re-measured since `previous` was built, which spares the lookup for every reused row. */
   remeasured: ((identity: string, since: number) => boolean) | null,
-  heightOf: (d: DisplayRow) => number,
+  /** `at` is the row's position in `next.display`: the pane reads the row's block start there (PD-CHAT-003). */
+  heightOf: (d: DisplayRow, at: number) => number,
 ): HeightTable {
   const { display, width, expanded, stamp } = next;
   const n = display.length;
@@ -202,13 +228,13 @@ export function reuseOffsets(
     for (; i < shared && display[i] === before[i]; i += 1) {
       const d = display[i]!;
       const held = previous.heights[i]!;
-      const height = remeasured !== null && remeasured(d.key, previous.stamp) ? heightOf(d) : held;
+      const height = remeasured !== null && remeasured(d.key, previous.stamp) ? heightOf(d, i) : held;
       heights[i] = height;
       if (height !== held && i < from) from = i;
     }
     if (i < from) from = i;
   }
-  for (; i < n; i += 1) heights[i] = heightOf(display[i]!);
+  for (; i < n; i += 1) heights[i] = heightOf(display[i]!, i);
   // `from` is at most the shorter of the two arrays, so `previous.offsets[from]` exists whenever `from` is above 0.
   const offsets = new Array<number>(n + 1);
   if (from === 0) offsets[0] = 0;

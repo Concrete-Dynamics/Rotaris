@@ -663,3 +663,20 @@ that a frame carrying it was presented. And one reading the round surfaced is on
 — whether REQ-CHAT-055's comparison is read on the update as it arrived or on one that arrived alone, and what "an empty
 transcript" holds once the run has appended to it — **OQ-89**, with the reading the proof takes: both cuts, one frame
 of slack at the cadence it measured.
+
+**A new row before its first measurement, 2026-09-29 (R-067) — repaired.** The pool positions a row that has not been
+measured by `estimateHeight`, and `pool.ts` justified a coarse estimate by "a wrong estimate below the viewport is never
+seen". Falsified at the tail, kept beside its replacement in `pool.ts`: a row appended while the pane follows is inside
+the viewport for the frames before the `ResizeObserver` delivers its height, and the state that delivery sets renders a
+frame later. `transcript-proof`'s geometry stage now reads those frames directly — from the frame the scripted run's
+reasoning row is first bound, the boxes on each of the next twelve animation frames, before that frame's layout and
+observer delivery. On the build before the repair it read **3.4 px** of overlap in two runs of three, both times on the
+second frame, the pair `row:28` / `row:29`: a one-line row that starts a block is drawn 12 px below its neighbour
+(PD-CHAT-003) and drew 33.4 px into the 30 px its estimate allotted. The estimate did not count the block gap at all, so
+the defect was every new block-start row's, not the reasoning row's alone. Repaired in the estimate only: `estimateHeight`
+takes the row's block start and adds the 8 px the block gap draws over the 4 px between rows of one block, and
+`reuseOffsets` hands its height reader the row's position, where the pane reads `places[at].blockStart`. The pool, its
+capacity, the measured heights and the anchor are as they were. On the repaired build the watch read 0 px on every frame
+in every run (`docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`).
+Noticed on the way and recorded, not repaired: the capacity rule's 30 px unit is larger than the rows PD-CHAT-003 draws
+inside a block (`docs/defects/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`).

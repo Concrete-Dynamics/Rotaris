@@ -13,7 +13,9 @@
  *                   a burst of gapped publications producing exactly one `refused` and one `reset`.
  *   3b. geometry   — a planted run whose activity line MUST wrap and whose agent name is too long for the role
  *                   column, with a scripted run appended so that something is live while it is sampled: every
- *                   bound slot carries a measurement key, and no slot is drawn through its neighbour.
+ *                   bound slot carries a measurement key, and no slot is drawn through its neighbour — at
+ *                   appointments, and on each of the frames after the run's reasoning row is first drawn, before
+ *                   the rows it appends have been measured.
  *   4/5. append-empty / append-loaded — the same scripted run appended to an empty transcript and to a 1200-row
  *                   one, timed at REQ-CHAT-055's stated point: after the frame showing the update has been
  *                   painted, never a synchronous figure. Since the R-048 measurement round the two are launched
@@ -419,6 +421,16 @@ const behaviour = await launch('behaviour', {
   const LIVE_WATCH_FROM = 1;
   const LIVE_FIRST = `(async () => { const until = performance.now() + ${LIVE_SAMPLE_AT}; const frame = () => new Promise((resolve) => requestAnimationFrame(resolve)); while (performance.now() < until) { if (document.querySelector('.activity__now')) { await frame(); if (document.querySelector('.activity__now')) break; } await frame(); } return OVERLAP_READ; })()`;
   const SAMPLE_AT = Array.from({ length: 25 }, (_, i) => 3300 + i * 300);
+  // The THIRD reading watches the rows the scripted run appends from the frame they are first drawn, before any
+  // measurement of them can exist: from the frame the run's reasoning row is first bound, it reads the boxes on each
+  // of the next twelve frames. A requestAnimationFrame callback runs before that frame's layout and paint and before
+  // its ResizeObserver delivery, so what it reads is what the frame shows while the rows are positioned by
+  // `estimateHeight` alone. An appointment caught that window once in a run, 33 ms after the row appeared, and read
+  // 3.4 px (docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md);
+  // this reads it on every run.
+  const NEW_ROWS_WATCH_FROM = 2;
+  const NEW_ROWS_FRAMES = 12;
+  const NEW_ROWS = `(async () => { const until = performance.now() + 9000; const frame = () => new Promise((resolve) => requestAnimationFrame(resolve)); const bound = () => [...document.querySelectorAll('.transcript__slot')].map((n) => n.dataset.bound).filter((k) => k); let before = null; let fresh = null; const frames = []; while (performance.now() < until && frames.length < ${NEW_ROWS_FRAMES}) { const keys = bound(); if (keys.length > 0) { if (before === null) before = new Set(keys); else if (fresh === null) fresh = keys.find((k) => k.startsWith('think:') && !before.has(k)) ?? null; if (fresh !== null) frames.push(OVERLAP_READ); } await frame(); } const worst = frames.reduce((a, b) => (b.worstOverlapPx > a.worstOverlapPx ? b : a), { worstOverlapPx: 0, pair: null }); return { fresh, frames: frames.length, perFrame: frames.map((f) => f.worstOverlapPx), worstOverlapPx: worst.worstOverlapPx, pair: worst.pair }; })()`;
   const OVERLAP = `(() => { const boxes = [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound).map((n) => { const r = n.getBoundingClientRect(); return { key: n.dataset.bound, top: r.top, bottom: r.bottom, keyed: n.dataset.measure !== '' }; }).sort((a, b) => a.top - b.top); let worst = 0; let pair = null; for (let i = 1; i < boxes.length; i += 1) { const o = boxes[i - 1].bottom - boxes[i].top; if (o > worst) { worst = o; pair = [boxes[i - 1].key, boxes[i].key]; } } const seg = document.querySelector('[data-shape="group"] .activity__segments'); const segmentLines = seg ? new Set([...seg.querySelectorAll('.activity__segment')].map((e) => Math.round(e.getBoundingClientRect().top))).size : 0; const roles = [...document.querySelectorAll('.row__role')].map((e) => Math.round(e.getBoundingClientRect().height)); const g = document.querySelector('[data-shape="group"]'); return { bound: boxes.length, unkeyed: boxes.filter((b) => !b.keyed).length, worstOverlapPx: Math.round(worst * 10) / 10, pair, segmentLines, tallestRolePx: Math.max(0, ...roles), live: document.querySelectorAll('.activity__now').length, summaryTail: g ? g.innerText.replace(/\\s+/g, ' ').trim().slice(-90) : null }; })()`;
   const geometry = await launch('geometry', {
     // A PLANTED running tool cannot stay running: a resumed session settles its in-flight calls through stale
@@ -427,7 +439,7 @@ const behaviour = await launch('behaviour', {
     ROTARIS_CAPTURE_RESUME: 'SLIVE',
     ROTARIS_SCRIPT: 'think,read,answer',
     ROTARIS_CAPTURE_PROMPT: 'Say something about the notes.',
-    ROTARIS_CAPTURE_EVAL_AT: [`${LIVE_FIRST.replace('OVERLAP_READ', () => OVERLAP)}@${LIVE_WATCH_FROM}`, ...SAMPLE_AT.map((ms) => `${OVERLAP}@${ms}`)].join(';;'),
+    ROTARIS_CAPTURE_EVAL_AT: [`${LIVE_FIRST.replace('OVERLAP_READ', () => OVERLAP)}@${LIVE_WATCH_FROM}`, `${NEW_ROWS.replace('OVERLAP_READ', () => OVERLAP)}@${NEW_ROWS_WATCH_FROM}`, ...SAMPLE_AT.map((ms) => `${OVERLAP}@${ms}`)].join(';;'),
     ROTARIS_CAPTURE_AFTER_MS: '11000',
   }, 240_000);
   const samples = [{ ms: 'on the first live line', ...(evalAt(geometry, LIVE_WATCH_FROM) ?? {}) }, ...SAMPLE_AT.map((ms) => ({ ms, ...(evalAt(geometry, ms) ?? {}) }))].filter((s) => typeof s.bound === 'number');
@@ -446,7 +458,12 @@ const behaviour = await launch('behaviour', {
   expect(unkeyed.length === 0, `bound slots carried no measurement key, so their height was assumed: ${JSON.stringify(unkeyed)}`);
   const worst = samples.reduce((a, b) => (b.worstOverlapPx > a.worstOverlapPx ? b : a));
   expect(worst.worstOverlapPx <= 1, `two rows overlap by ${worst.worstOverlapPx} px ${JSON.stringify(worst.pair)}: ${JSON.stringify(worst)}`);
-  results.geometry = { samples, wrappedToLines: wrapped, liveSamples: liveSamples.length, worstOverlapPx: worst.worstOverlapPx, tallestRolePx: Math.max(...samples.map((s) => s.tallestRolePx)), png: geometry.png };
+  // The rows the run appends, on the frames before their first measurement: a new row is positioned by its estimate
+  // there, and an estimate short of what the row draws puts it through the row beneath it for exactly those frames.
+  const newRows = evalAt(geometry, NEW_ROWS_WATCH_FROM);
+  expect(newRows !== null && typeof newRows.fresh === 'string' && newRows.frames >= NEW_ROWS_FRAMES, `the new-row watch never saw the run's reasoning row drawn, so the frames before its measurement were never read: ${JSON.stringify(newRows)}`);
+  expect(newRows.worstOverlapPx <= 1, `a newly appended row overlaps its neighbour by ${newRows.worstOverlapPx} px before its first measurement ${JSON.stringify(newRows.pair)}: ${JSON.stringify(newRows)}`);
+  results.geometry = { samples, wrappedToLines: wrapped, liveSamples: liveSamples.length, worstOverlapPx: worst.worstOverlapPx, newRows, tallestRolePx: Math.max(...samples.map((s) => s.tallestRolePx)), png: geometry.png };
 }
 
 // ── 4/5. the append comparison ──────────────────────────────────────────────────────────────────────────────

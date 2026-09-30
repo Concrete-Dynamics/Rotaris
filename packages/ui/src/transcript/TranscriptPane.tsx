@@ -295,14 +295,17 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     ledger.committed,
     { display, width: viewport.width, expanded, stamp: ledger.stamp },
     ledger.marked.size === 0 ? null : (identity, since) => remeasuredSince(ledger, identity, since),
-    (d) => {
+    // The row's block start rides to the estimate because the first row of a block is drawn 12 px below the row
+    // above rather than 4 px (PD-CHAT-003): a new one-line row at the tail, estimated without it, was drawn through
+    // the row beneath it until its first measurement (docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
+    (d, at) => {
       const open = expanded.has(d.key);
       const key = measureKey(d, viewport.width, open, null);
-      return measurements.peek(key) ?? lastByIdentity.peek(d.key) ?? estimateHeight(d, open, viewport.width);
+      return measurements.peek(key) ?? lastByIdentity.peek(d.key) ?? estimateHeight(d, open, viewport.width, places[at]?.blockStart ?? false);
     },
   ),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `measuredVersion` is the observer's "the cache changed" signal
-  [display, expanded, viewport.width, measurements, lastByIdentity, ledger, measuredVersion]);
+  [display, places, expanded, viewport.width, measurements, lastByIdentity, ledger, measuredVersion]);
   // The table the next one is built against is the one React committed; the ledger's marks it has read are forgotten.
   useLayoutEffect(() => { commitTable(ledger, table); }, [table, ledger]);
 

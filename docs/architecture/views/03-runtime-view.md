@@ -1178,7 +1178,10 @@ with `H_max` a declared product constant of 4,320 px — allocated at window con
 from, **emptied rather than unmounted**, and rendered whether or not the transcript holds any rows. The slot index is
 the framework key, never the row identity. Heights are **measured** by a `ResizeObserver` into a bounded cache and fed
 to a prefix-sum offset table — rebuilt from the first height that changed, not from the top (REQ-CHAT-055) — which is
-what makes the anchor of REQ-CHAT-071 exact: the identity and viewport offset
+what makes the anchor of REQ-CHAT-071 exact. A row not yet measured is positioned by `estimateHeight`, which is never
+short of a one-line row and counts the 12 px the first row of a block is drawn below its neighbour (PD-CHAT-003; the
+pane reads the row's block start from `places` at its position), because a row appended at the tail while the pane
+follows is inside the viewport for the frames before its first measurement: the identity and viewport offset
 of the top visible row, restored by finding that row again, never by re-applying a stored pixel offset. A retained
 rendering is reused only while identity, content, laid-out width and expansion state are all unchanged; a live row is
 redrawn on every repaint. Expansion state lives in the pane, keyed by stable identity, because a slot rebind would

@@ -6,7 +6,12 @@ import type { StoreDal } from '@rotaris/store';
 export type CaptureAfterRunInput = Omit<CaptureImprovementInput, 'priorArtifactsAvailable' | 'priorArtifacts'>;
 
 export interface CaptureAfterRunDeps {
-  /** The run's result stop reason, as `run.result` reports it — the token REQ-ORCH-137's skip list is written in. */
+  /**
+   * The stop reason of the run's RESULT, as `run.result` reports it — REQ-ORCH-137's "the stop reason", in the tokens its
+   * skip list is written in. It is not the record's: REQ-LIBRARY-032 compares the RECORDED stop reason, which
+   * `captureImprovementJob` reads. The two agree except where recording failed (REQ-EVENTS-088), when the engine
+   * reports `agent_session_aborted` and the record keeps what it last held. That case is OQ-141.
+   */
   readonly stopReason: string;
   readonly input: CaptureAfterRunInput;
   /** The workspace's improvement history, asked of main (REQ-LIBRARY-034); a rejected ask reads as `null`. */
@@ -46,8 +51,9 @@ export function dalWhileOpen(current: HostStoreSlot | undefined, located: HostSt
  * exited (`fixed/an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md`). The outcome was
  * the one the specification names — no job — reached by a throw. Three things now keep it off that path:
  *
- * - a stop reason on REQ-ORCH-137's skip list yields no job before anything is asked or read: the run a quit ended is
- *   `application_shutdown`, so it never reaches the store at all;
+ * - a stop reason on REQ-ORCH-137's skip list, read from the run's result, yields no job before anything is asked or
+ *   read: the run a quit ended is `application_shutdown`, so it never reaches the store at all (the result and the
+ *   record disagree only where recording failed, OQ-141);
  * - the store is looked up again after the await, and a store that is gone or closed is a run with no persisted record
  *   to draw the snapshot from — REQ-LIBRARY-032's last no-job condition, logged rather than thrown;
  * - any other throw from the capture is caught and logged as a warning, and yields no job: REQ-ORCH-137 says a failure of

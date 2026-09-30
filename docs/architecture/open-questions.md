@@ -6287,6 +6287,32 @@ Under Seatbelt all of these commands run, and only the write under the absent na
 3. Narrow the carve-outs to the workspace-relative names REQ-SANDBOX-056 states, so that a configured additional
    root carries none.
 
+**OQ-141 — Which stop reason decides the improvement skip list for a run whose recording failed: the one the run
+reports, or the one its record holds?** *(REQ-ORCH-137, whose skip list names "the stop reason"; REQ-LIBRARY-032, which
+compares "the run's recorded stop reason" and says a stop reason outside the list always yields a job; REQ-EVENTS-088,
+under which a failed recording step stops every further authoritative write for the run. Raised 2026-09-30 by the
+verifier of the repair of
+[`an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md`](../defects/fixed/an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md)
+under [R-067](../product/requests.md#r-067). Open.)*
+
+The two readings agree for every run whose record holds its own ending. They part only under REQ-EVENTS-088. The engine
+then reports the run as `agent_session_aborted`, with completion unconfirmed. The record cannot be written any further,
+so it keeps the stop reason it last held, which may be none or an earlier run's. REQ-ORCH-137's reading, of the result,
+skips the pass. REQ-LIBRARY-032's reading, of the record, yields a job whenever the held value is off the list, and the
+analysis would then be drawn from a record the run itself calls unconfirmed.
+
+**What the build proceeds under:** REQ-ORCH-137's reading. The run host's post-run capture (`captureAfterRun`,
+`apps/desktop/src/run-host/improvement-capture.ts`) checks the stop reason of the run's result before it asks main for
+history or reads the store, so a run that ended on a recording failure yields no job. That check exists so a run the quit
+ended never reaches a store the quit is closing. `captureImprovementJob` still applies REQ-LIBRARY-032's check against
+the record to every run that reaches it. Before this repair, the capture read the record alone, and in this case could
+yield a job. `improvement-capture.test.ts` pins the reading: a result of `agent_session_aborted` over a record that
+still holds `completed` yields no job and reads nothing.
+
+**What a ruling decides.** Whether REQ-LIBRARY-032's "recorded stop reason" means the stop reason the run reports as
+recorded, so that a failed recording leaves no stop reason to compare and REQ-ORCH-137's skip applies. Or whether the
+record governs even then, so that the capture must read the store before it may skip.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

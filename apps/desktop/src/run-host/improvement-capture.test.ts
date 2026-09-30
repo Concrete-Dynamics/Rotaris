@@ -48,6 +48,20 @@ describe('the post-run improvement capture racing a closed store (REQ-ORCH-137, 
     expect(asked).toEqual([]);
   });
 
+  it('OQ-141: a run whose recording failed reports agent_session_aborted and yields no job, whatever its record still holds', async () => {
+    const dal = seeded(); // the record still holds `completed`: REQ-EVENTS-088 stopped every write after it
+    const asked: string[] = [];
+    const job = await captureAfterRun({
+      stopReason: 'agent_session_aborted', input,
+      history: async () => { asked.push('history'); return emptyHistory; },
+      currentDal: () => { asked.push('store'); return dal; },
+      log: () => undefined,
+    });
+    expect(job).toBeNull();
+    expect(asked).toEqual([]);
+    dal.db.close();
+  });
+
   it('a store the quit closed while the history was asked yields no job, resolves, and never rejects', async () => {
     const dal = seeded();
     const logged: Array<[string, string]> = [];

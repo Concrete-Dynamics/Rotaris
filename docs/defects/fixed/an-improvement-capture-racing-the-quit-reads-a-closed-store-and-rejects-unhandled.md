@@ -46,9 +46,14 @@ It is a race: main answers the history ask after the run host's shutdown has clo
 The detached closure moved out of `onRunResult` into `captureAfterRun` (`apps/desktop/src/run-host/improvement-capture.ts`),
 which never rejects. The repair takes both readings the note left open, and a third:
 
-- a stop reason on REQ-ORCH-137's skip list — read from the run's result, the same token `captureImprovementJob` compares
-  against the record — yields no job before main is asked and before the store is read, so a run the quit ended never
-  reaches the store at all;
+- a stop reason on REQ-ORCH-137's skip list — read from the run's result, ~~the same token `captureImprovementJob`
+  compares against the record~~ *(corrected 2026-09-30, the verifier's fix round 1: the result's stop reason, not the
+  record's that `captureImprovementJob` and REQ-LIBRARY-032 compare. The two differ where recording failed
+  (REQ-EVENTS-088): the engine then reports `agent_session_aborted`, while the record keeps what it last held. There the
+  capture now yields no job where the first form, reading the record, could have yielded one. The build follows
+  REQ-ORCH-137's reading, an eighth case in `improvement-capture.test.ts` pins it, and the disagreement is
+  [OQ-141](../../architecture/open-questions.md))* — yields no job before main is asked and before the store is read,
+  so a run the quit ended never reaches the store at all;
 - the store is looked up again after the history's await (`stores.get(workspaceId)` still the same slot, its handle
   still open), and a store gone or closed by then is a run with no persisted record to draw the snapshot from —
   REQ-LIBRARY-032's last no-job condition — logged at `info`, not thrown;

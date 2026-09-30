@@ -145,6 +145,10 @@ describe('engine/children/report — a write the record answers with an error is
     expect(editedFilesFrom(messages, ['docs/api.md', 'docs/b.md', 'docs/notes.md'])).toEqual(['docs/a.md', 'docs/notes.md']);
   });
 
+  it("the summariser's own list spelled another way — a leading `./`, backslashes, a doubled slash — neither brings back a refused path nor repeats a listed one", () => {
+    expect(editedFilesFrom(messages, ['./docs/api.md', 'docs\\b.md', 'docs//c.md', '.\\docs\\a.md', 'docs/notes.md'])).toEqual(['docs/a.md', 'docs/notes.md']);
+  });
+
   it('the facts, the fallback\'s "Files touched" and every construction site agree', async () => {
     expect(reportFacts(messages)).toBe('Edited files: docs/a.md\nCommands run: (none)');
     const fallback = fallbackReport(input({ messages, toolCallCount: 4, lastText: '' }), 'no summariser is configured');

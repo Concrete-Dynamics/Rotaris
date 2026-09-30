@@ -59,6 +59,14 @@ had in fact refused it is listed, since the record cannot tell the two apart and
 rather than overstating one. A write executor that raised after its file was written (a failure rendering the diff,
 say) is answered as an ordinary error and is not listed.
 
+*Added by the repair's second verification:* the summariser's own list was compared with the calls' paths as raw
+strings, so an entry spelled another way than the call (`docs\api.md` or `./docs/api.md` for `docs/api.md`) was not
+filtered and brought back a path whose every write was refused, or repeated one already listed. `editedFilesFrom` now
+compares by one key — backslashes as `/`, a doubled slash as one, a leading `./` dropped — and lists each path at its
+first spelling. Pinned by the case "the summariser's own list spelled another way … neither brings back a refused path
+nor repeats a listed one" in `report.test.ts`, red before the change. Not compared, stated: an absolute path against a
+relative one (it would need the workspace root) and letter case.
+
 Shown against the record, not driven: in the two live-run packs of 2026-09-29 (`2026-09-29T02-41-56-779Z`,
 `2026-09-29T03-06-14-929Z`) every refused write (four of them: a stale hash twice, a `write_file` missing its operation
 twice) was followed by a write to the same path that landed, so neither pack's reports list a path only a refusal

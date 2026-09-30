@@ -266,25 +266,36 @@ export function commandsFrom(messages: readonly ChatMessage[]): readonly { comma
  * whose executor had in fact refused it is listed, since the record cannot tell the two apart, and REQ-ORCH-109
  * forbids concealing a file rather than overstating one. A write executor that raised AFTER its file was
  * written (a failure rendering the diff, say) is answered as an ordinary error and is not listed.
+ *
+ * Paths are compared by `pathKey` — backslashes as `/`, a doubled slash as one, a leading `./` dropped — so the
+ * summariser's list spelled another way than the call (`docs\api.md`, `./docs/api.md`) neither brings back a refused
+ * path nor repeats a listed one; each is listed as its first spelling. Found by the second verification of the repair.
+ * Not compared: an absolute path against a relative one, which would need the workspace root, and letter case.
  */
 export function editedFilesFrom(messages: readonly ChatMessage[], reported: readonly string[] = []): readonly string[] {
   const erred = new Set<string>();
   for (const m of messages) if (m.role === 'tool') for (const p of m.content) if (p.kind === 'tool-result' && p.isError && !ranBeforeItWasCut(p.result)) erred.add(p.callId);
   const out: string[] = [];
+  const listed = new Set<string>();
   const refused = new Set<string>();
-  const add = (v: string): void => { if (v !== '' && !out.includes(v)) out.push(v); };
+  const add = (v: string): void => { const k = pathKey(v); if (k !== '' && !listed.has(k)) { listed.add(k); out.push(v); } };
   for (const m of messages) {
     if (m.role !== 'assistant') continue;
     for (const p of m.content) {
       if (p.kind !== 'tool-call' || !isFileWritingTool(p.name)) continue;
       const a = jsonObject(p.args);
       const path = asText(a?.['path']) || asText(a?.['file_path']);
-      if (erred.has(p.callId)) refused.add(path);
+      if (erred.has(p.callId)) refused.add(pathKey(path));
       else add(path);
     }
   }
-  for (const r of reported) if (!refused.has(r) || out.includes(r)) add(r);
+  for (const r of reported) if (!refused.has(pathKey(r)) || listed.has(pathKey(r))) add(r);
   return out;
+}
+
+/** `editedFilesFrom`'s comparison key for a path: backslashes as `/`, runs of `/` as one, leading `./` segments dropped. */
+function pathKey(v: string): string {
+  return v.replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/^(?:\.\/)+/, '');
 }
 
 /**

@@ -2648,11 +2648,15 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 >   one, recorded below revision 4's note.
 > - Only Linux under Xvfb was driven.
 > - The scripted model client restarts its script for every run
->   ([`the-scripted-client-restarts-its-script-for-every-run.md`](../defects/the-scripted-client-restarts-its-script-for-every-run.md)),
+>   ([`the-scripted-client-restarts-its-script-for-every-run.md`](../defects/fixed/the-scripted-client-restarts-its-script-for-every-run.md)),
 >   so a driven agent's steps after a continue are the script's first steps again. Its record is what is resumed.
+>   *(2026-09-29, R-067: repaired. A resumed agent now takes the step after the ones its own record holds, in the same
+>   process or after a relaunch; `part-j-proof`'s steer-at-rest scenario pins it.)*
 > - The driver's own quit is an immediate exit that skips the shutdown
->   ([`the-drivers-quit-skips-the-applications-shutdown.md`](../defects/the-drivers-quit-skips-the-applications-shutdown.md));
+>   ([`the-drivers-quit-skips-the-applications-shutdown.md`](../defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md));
 >   the quit above was a window close.
+>   *(2026-09-29, R-067: repaired. The driver's `quit` is now the application's quit unless it names the immediate exit,
+>   and `driver-proof` quits a live run through it and reads the session at rest.)*
 >
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
@@ -2721,7 +2725,9 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > - The four repairs of the last review round were checked in the built app by the round that made them; the independent
 >   re-drive did not run, because the subagents' usage limit was reached.
 > - Persona windows cannot be addressed by the driver, so their state was read from screen captures
->   ([`the-driver-cannot-address-persona-or-approval-windows.md`](../defects/the-driver-cannot-address-persona-or-approval-windows.md)).
+>   ([`the-driver-cannot-address-persona-or-approval-windows.md`](../defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md)).
+>   *(2026-09-29, R-067: repaired. The driver names a persona window, the approval dialog and the terminal window by
+>   role, and `driver-proof` probes a persona window's state and answers an approval in its dialog.)*
 > - Clause 14's orchestrator-instructions and tool-change variants were not driven.
 > - Clause 20 is not observable with the scripted client; its evidence is the tests.
 > - No live run was made with the build, and only Linux under Xvfb was driven; the live run of 2026-09-29 follows.

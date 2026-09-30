@@ -53,6 +53,8 @@ for (const theme of selectedThemes) {
     writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), 'models:\n  scripted: { provider: scripted, model_id: scripted }\nruntime:\n  permission_mode: autonomous\n');
     const record = { theme, scale, processExit: null, signal: null, items: {}, failures: [] };
     const staleCaptures = [];
+    /** Captures whose metadata still moved across the photograph after three attempts: a harness failure, said as one. */
+    const incoherentCaptures = [];
     let started;
     try {
       started = await startApp({
@@ -92,18 +94,39 @@ for (const theme of selectedThemes) {
        * and says so, rather than a verdict about the product.
        */
       let previous = null;
+      /**
+       * The document measured and the photograph taken must be of the same moment. Since 2026-09-29 the driver's
+       * `screenshot` waits four of the renderer's frames before it captures (a capture straight after a change used to
+       * return the frame before it: `docs/defects/fixed/the-drivers-shot-can-return-a-stale-frame.md`), and a surface
+       * that mounts in those frames moved every text below it: the startup notice "No model provider is authenticated
+       * yet", mounting after the settle, put the Workspace view's texts some ninety pixels lower in the picture than in
+       * the metadata, and four runs read ratios of 1:1 for texts that were there. So the metadata is read on both sides
+       * of the photograph and the photograph is retaken, at most three times, until the two agree; the second reading is
+       * the one measured.
+       */
+      const shoot = async (file) => {
+        let metadata = null;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const before = await d.eval(`JSON.stringify(${METADATA})`);
+          await d.screenshot(file);
+          const after = await d.eval(`JSON.stringify(${METADATA})`);
+          metadata = JSON.parse(after);
+          if (before === after) return { metadata, coherent: true };
+          await settle();
+        }
+        return { metadata, coherent: false };
+      };
       const take = async (name, { mustChange = false } = {}) => {
         await settle();
         const file = join(runDir, `${name}.png`);
-        let metadata = JSON.parse(await d.eval(`JSON.stringify(${METADATA})`));
-        await d.screenshot(file);
+        let { metadata, coherent } = await shoot(file);
+        if (!coherent) incoherentCaptures.push(name);
         let digest = createHash('sha256').update(readFileSync(file)).digest('hex');
         for (let attempt = 0; mustChange && previous !== null && digest === previous && attempt < 3; attempt += 1) {
           await d.resize(metadata.viewport.width + 1, metadata.viewport.height);
           await d.resize(metadata.viewport.width, metadata.viewport.height);
           await settle();
-          metadata = JSON.parse(await d.eval(`JSON.stringify(${METADATA})`));
-          await d.screenshot(file);
+          ({ metadata, coherent } = await shoot(file));
           digest = createHash('sha256').update(readFileSync(file)).digest('hex');
         }
         const stale = mustChange && previous !== null && digest === previous;
@@ -191,7 +214,7 @@ for (const theme of selectedThemes) {
       iconScale = iconScale && metadata.icons.every((icon) => Math.abs(icon.rect.width - 17) <= 1 && Math.abs(icon.rect.height - 17) <= 1);
     }
     const badText = contrast.filter((entry) => entry.ratio + 0.02 < entry.floor);
-    record.items.contrast = { pass: badText.length === 0 && contrast.length > 0, discovered: contrast.length + skippedText.length, tested: contrast.length, skipped: skippedText.length, skippedExamples: skippedText.slice(0, 5), measured: contrast.length, minimum: contrast.length === 0 ? null : Math.min(...contrast.map((entry) => entry.ratio)), failures: badText.slice(0, 20) };
+    record.items.contrast = { pass: badText.length === 0 && contrast.length > 0 && incoherentCaptures.length === 0, incoherentCaptures, discovered: contrast.length + skippedText.length, tested: contrast.length, skipped: skippedText.length, skippedExamples: skippedText.slice(0, 5), measured: contrast.length, minimum: contrast.length === 0 ? null : Math.min(...contrast.map((entry) => entry.ratio)), failures: badText.slice(0, 20) };
     // A section that names no sample size cannot be told apart from one that found nothing to look at.
     record.items.railLabelFit = { pass: railFit && railLabels > 0, discovered: railLabels + railLabelsSkipped, tested: railLabels, skipped: railLabelsSkipped };
     record.items.iconScaling = { pass: iconScale && railIcons > 0, discovered: railIcons, tested: railIcons, skipped: 0 };

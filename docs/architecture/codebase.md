@@ -596,7 +596,8 @@ of 100 model steps per turn** (`RUN_CONFIG_DEFAULTS.maxStepsPerTurn`) is a final
 (`REQ-ORCH-099..107`, built 2026-09-05 — ADR-0059). `ROTARIS_CHILD_SCRIPT` and the
 `delegate:<persona>:<name>[:after]` and `fail` steps drive the scripted client's children for verification only. The `todo` tool's list is per session in memory; its persistence waits on the
 per-child record of Part B (`REQ-ORCH-043`). `ROTARIS_SCRIPT` drives the scripted client's tool calls for
-verification only. **The hooks read their two file scopes for real** (`<config>/agents.yaml` and
+verification only; each agent keeps its own place in its list, and an agent resumed from its record (PD-ORCH-005, in the
+same process or after a relaunch) carries on with the step after the ones that record holds (repaired 2026-09-29). **The hooks read their two file scopes for real** (`<config>/agents.yaml` and
 `<workspace>/.rotaris/agents.yaml`, REQ-CONFIG-001) through `@rotaris/config`; `ROTARIS_CONFIG_DIR` and
 `ROTARIS_CLAUDE_SETTINGS_PATH` are the specification's own variables (REQ-HOOKS-110/115), not stopgaps.
 `ROTARIS_CAPTURE_HOOK_REVIEW`, `ROTARIS_CAPTURE_REVIEW_PNG`, `ROTARIS_CAPTURE_SETTINGS` and
@@ -1285,8 +1286,9 @@ connection dropped. The proof asserts both halves — the refusal, and that the 
 down with it.
 
 **What the first execution found.** The endpoint file **outlived the process it described**. Cleanup hung on
-`app.on('will-quit')`, and `app.exit()` — how the `quit` op ends the process, and how every capture seam beside it
-ends one — emits neither `will-quit` nor `quit`. The next `pnpm app:drive` command therefore read a live-looking
+`app.on('will-quit')`, and `app.exit()` — how the `quit` op ended the process until 2026-09-29 (it is now the
+immediate exit the op sends only when asked; see below), and how every capture seam beside it ends one — emits neither
+`will-quit` nor `quit`. The next `pnpm app:drive` command therefore read a live-looking
 port nothing was listening on and failed with a connection error where it should have said "no app is being
 driven". The falsified assumption is kept beside its replacement in `driver.ts`: an Electron exit path is not one
 path, and a cleanup that matters is called by the op that knows it is ending as well as hung on the event that
@@ -1387,6 +1389,37 @@ failed **thirteen of seventeen**; after it, seventeen of seventeen. Two more che
 the modal's hit test and its confirmation — and the second of those failed on its own first execution against
 correct behaviour, asserting an empty transcript where the product had legitimately rewritten the record under a
 live run. The assertion is the user row's absence now, and the reason is kept beside it.
+
+**The quit and the shot, repaired (2026-09-29, R-067).** Two claims this section made by omission were falsified by
+use. *The `quit` op ended the process the way a person's quit does*: it did not — it was the immediate exit
+(`exitCleanly`), which asks the run host nothing, so a driven quit during a live run left the session `running` with no
+stop reason, as a crash does (phase 7's rehearsal of `PD-ORCH-005`, and the duress live run's deadline quit through the
+capture seam's same exit; re-measured on the build before the repair: `running`, `stop_reason` NULL). `quit` now sends
+`app.quit()` — the close guards, then `window-all-closed`'s `shutdown` — and the seam stays up until `will-quit`, so a
+quit a close guard keeps can still be seen and answered; `{ immediate: true }` (`pnpm app:drive stop --crash`) is the old
+exit, kept for a drive that means to leave a crash. A capture whose wait timed out ends through the same quit
+(`CaptureHost.quit`), one whose wait was satisfied by the immediate exit as before. *A shot shows the window as it
+is*: `capturePage()` copies the frame last submitted, and straight after the first navigation to the Workspace it
+returned the Overview's bytes although the document already showed the Workspace — in 16 launches of 20 after one
+frame, 12 of 52 after two, 1 of 20 after three with three cores busy, none of 55 after four. `screenshot` now waits
+four of the renderer's frames (`PAINT_FRAMES`), bounded at 1 s for a window that presents none, and says in its reply
+whether the paint was confirmed; `theme-proof`, which measured a view's texts and then shot it, now reads the texts on
+both sides of the shot and retakes it until they agree, because a surface mounting in those four frames (the startup
+notice) moved the picture away from the metadata. `driver.test.ts` and `capture/probe.test.ts` pin both; `driver-proof` adds a live run
+quit through the driver (the session at rest, `application_shutdown`) and shots straight after each navigation. The
+register row is in `first-executions.md`
+([`the-drivers-quit-skips-the-applications-shutdown.md`](../defects/fixed/the-drivers-quit-skips-the-applications-shutdown.md),
+[`the-drivers-shot-can-return-a-stale-frame.md`](../defects/fixed/the-drivers-shot-can-return-a-stale-frame.md)).
+
+**The windows beside a main window (2026-09-29, R-067).** A4 gave the driver main windows and nothing else, so the
+revision 4 drive read persona windows' `paused` state from X11 captures and answered approvals through
+`session.control` rather than in their dialog. A selector may now name a role — `persona:<persona>`, `approval`,
+`terminal` — resolved over `DriverDeps.auxiliary`, which main fills from each main window's registries; `windows`
+lists them, and a selector naming no open window is refused with what is open. The per-request `window` A4's comment
+promised was read by no op until now; each op resolves `request.window ?? selected`. `pnpm app:drive` gains
+`useWindow` and `--window=`. `driver.test.ts` pins the resolution; `driver-proof`'s second launch answers both of its
+run's approvals with the dialog's own button and probes the child's persona window
+([`the-driver-cannot-address-persona-or-approval-windows.md`](../defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md)).
 
 **What is still owed.** No existing proof has been rewritten onto the driver — the protocol is proved by its own
 proof and not yet by a migrated one. And the strip covers **main only**: the renderer bundle still carries Part AA's

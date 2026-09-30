@@ -49,7 +49,13 @@ export interface CaptureHost {
   readonly themeName: () => string;
   /** Whether the first terminal result has been presented — what `ROTARIS_CAPTURE_WAIT=result` waits on. */
   readonly resultSeen: () => boolean;
+  /** The immediate exit (`exitCleanly`): the run host is asked nothing, so a live run is left as a crash leaves it. */
   readonly exit: (code: number) => void;
+  /**
+   * The application's quit (`app.quit()`): the main windows closed through their guards, then the run host's `shutdown`,
+   * so a live run comes to rest as a quit leaves it (PD-ORCH-005 clause 3). How a capture whose wait timed out ends.
+   */
+  readonly quit: () => void;
 }
 
 /** Whatever `ask` returns for a request the capture makes on the run host's behalf. */

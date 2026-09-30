@@ -6287,7 +6287,7 @@ Under Seatbelt all of these commands run, and only the write under the absent na
 3. Narrow the carve-outs to the workspace-relative names REQ-SANDBOX-056 states, so that a configured additional
    root carries none.
 
-**OQ-141 — Which stop reason decides the improvement skip list for a run whose recording failed: the one the run
+**OQ-142 — Which stop reason decides the improvement skip list for a run whose recording failed: the one the run
 reports, or the one its record holds?** *(REQ-ORCH-137, whose skip list names "the stop reason"; REQ-LIBRARY-032, which
 compares "the run's recorded stop reason" and says a stop reason outside the list always yields a job; REQ-EVENTS-088,
 under which a failed recording step stops every further authoritative write for the run. Raised 2026-09-30 by the

@@ -52,7 +52,7 @@ which never rejects. The repair takes both readings the note left open, and a th
   (REQ-EVENTS-088): the engine then reports `agent_session_aborted`, while the record keeps what it last held. There the
   capture now yields no job where the first form, reading the record, could have yielded one. The build follows
   REQ-ORCH-137's reading, an eighth case in `improvement-capture.test.ts` pins it, and the disagreement is
-  [OQ-141](../../architecture/open-questions.md))* — yields no job before main is asked and before the store is read,
+  [OQ-142](../../architecture/open-questions.md))* — yields no job before main is asked and before the store is read,
   so a run the quit ended never reaches the store at all;
 - the store is looked up again after the history's await (`stores.get(workspaceId)` still the same slot, its handle
   still open), and a store gone or closed by then is a run with no persisted record to draw the snapshot from —

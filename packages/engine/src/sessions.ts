@@ -110,6 +110,11 @@ export interface ToolPortContext {
   readonly delegation?: DelegationOps | undefined;
   readonly parentId?: string | undefined;
   readonly depth?: number | undefined;
+  /**
+   * REQ-TOOLS-006 (4) under OQ-145: the persona of the agent that delegated this one, whose `tool_restrictions` entry
+   * naming this agent's persona narrows its grant. Absent for the entry agent, which nobody delegated.
+   */
+  readonly parentPersona?: string | undefined;
   /** ADR-0015: the session's tool hooks for the gate's two slots; absent means none. */
   readonly hooks?: ToolHookBridge | undefined;
   /** REQ-ORCH-016/018: the entry role's grant for this run, decided by the pre-flight; other roles ignore it. */
@@ -1184,7 +1189,7 @@ export class Sessions {
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
         // REQ-LIBRARY-093: a publish records the instance's canonical name — the root's comes apart from its agent name, its persona.
-        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: canonicalName ?? agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false, writeClaimFor: (rel) => runRef.run?.writeClaimFor(parentId, rel) ?? null }),
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, ...(parentPersona === undefined ? {} : { parentPersona }), modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: canonicalName ?? agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false, writeClaimFor: (rel) => runRef.run?.writeClaimFor(parentId, rel) ?? null }),
         artifacts, budget, modelCap: capFor,
         summariser: { backend: meteredBackend(model.backend, countUsage), model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
@@ -1405,7 +1410,7 @@ export class Sessions {
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, previousIntent: priorIntent, hasUnfinishedWork: true }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
         // REQ-LIBRARY-093: a publish records the instance's canonical name — the root's comes apart from its agent name, its persona.
-        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: canonicalName ?? agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false, writeClaimFor: (rel) => runRef.run?.writeClaimFor(parentId, rel) ?? null }),
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, ...(parentPersona === undefined ? {} : { parentPersona }), modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: canonicalName ?? agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false, writeClaimFor: (rel) => runRef.run?.writeClaimFor(parentId, rel) ?? null }),
         artifacts, budget, modelCap: capFor,
         summariser: { backend: meteredBackend(model.backend, countUsage), model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),

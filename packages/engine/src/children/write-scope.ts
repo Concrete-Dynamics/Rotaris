@@ -1,6 +1,7 @@
 import { posix } from 'node:path';
 import { globToRegExp } from '@rotaris/kernel';
-import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver } from './personas.js';
+import { restrictionsAllow } from '@rotaris/contracts';
+import { BUILT_IN_PERSONAS, toolRestrictionsFor, type Persona, type PersonaResolver } from './personas.js';
 import { isFileWritingTool } from './report.js';
 
 /**
@@ -34,18 +35,25 @@ const ABSOLUTE = /^(?:[\\/]|[A-Za-z]:)/;
  * `coordinator_only` is applied here unconditionally. The run host's tool port (`apps/desktop/src/run-host/tools.ts`)
  * applies it only where delegation is available and the session is not in direct work; a delegated child always has
  * delegation, so the two agree today. A change to either condition changes this check with it.
+ *
+ * The fourth control, the `tool_restrictions` map, is applied as the port applies it (OQ-145): the lists the persona's own
+ * map and the map of `parentPersona` — the persona delegating — give the persona's name. The reason it was not, kept beside
+ * its replacement: until acceptance finding A4 (R-067) the map narrowed no agent's grant, so this check followed the
+ * grant the port built and read the first three controls alone.
  */
-export function writesFiles(persona: Pick<Persona, 'tools' | 'coordinatorOnly' | 'readOnly'>): boolean {
-  return !persona.coordinatorOnly && !persona.readOnly && persona.tools.some(isFileWritingTool);
+export function writesFiles(persona: Pick<Persona, 'name' | 'tools' | 'coordinatorOnly' | 'readOnly' | 'toolRestrictions'>, parentPersona?: Pick<Persona, 'toolRestrictions'> | null): boolean {
+  const lists = toolRestrictionsFor(persona, parentPersona);
+  return !persona.coordinatorOnly && !persona.readOnly && persona.tools.some((t) => isFileWritingTool(t) && restrictionsAllow(lists, t));
 }
 
 /**
  * PD-TOOLS-006 revision 3: the personas of the catalogue that can write files, in its order — the known roles the ledger's
- * unknown-persona refusal lists, or the built-in table where no configuration resolves them.
+ * unknown-persona refusal lists, or the built-in table where no configuration resolves them. Each is judged as a child of
+ * `parentPersona` would be granted it (OQ-145), so the refusal never names a writer the delegating agent's map forbids.
  */
-export function fileWriters(personas: PersonaResolver | undefined): readonly string[] {
+export function fileWriters(personas: PersonaResolver | undefined, parentPersona?: Pick<Persona, 'toolRestrictions'> | null): readonly string[] {
   const catalogue = personas ? personas.knownRoles().map((n) => personas.resolve(n)?.persona) : Object.values(BUILT_IN_PERSONAS);
-  return catalogue.filter((p): p is Persona => p !== undefined && writesFiles(p)).map((p) => p.name);
+  return catalogue.filter((p): p is Persona => p !== undefined && writesFiles(p, parentPersona)).map((p) => p.name);
 }
 
 /**

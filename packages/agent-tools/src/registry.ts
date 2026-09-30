@@ -1,4 +1,4 @@
-import { PUBLIC_TOOL_NAMES, TOOL_ALIASES, type PublicToolName } from '@rotaris/contracts';
+import { PUBLIC_TOOL_NAMES, restrictionsAllow, TOOL_ALIASES, type PublicToolName } from '@rotaris/contracts';
 
 /**
  * ADR-0016: the tool registry is ONE frozen table from public name to the three facets of
@@ -93,8 +93,12 @@ export interface NarrowingControls {
   readonly runAllowList?: readonly string[] | null;
   readonly coordinatorOnly?: boolean;
   readonly readOnly?: boolean;
-  /** REQ-TOOLS-006 (4): a name mapped to `false` is removed. */
-  readonly toolRestrictions?: Readonly<Record<string, boolean>> | null;
+  /**
+   * REQ-TOOLS-006 (4) with REQ-CONFIG-103: the allowed-tool lists of the `tool_restrictions` maps that bind this agent
+   * (the engine's `toolRestrictionsFor`, OQ-145); a tool survives only the lists that name it. Null or empty narrows
+   * nothing. It was a map from a tool to `false`, a shape no configuration could produce (acceptance finding A4).
+   */
+  readonly toolRestrictions?: readonly (readonly string[])[] | null;
 }
 
 export interface Removal {
@@ -142,9 +146,9 @@ export function narrow(declared: readonly string[], controls: NarrowingControls,
     ['coordinator_only', (tools) => (controls.coordinatorOnly ? tools.filter((t) => !COORDINATOR_REMOVES.has(t as PublicToolName)) : tools)],
     ['read_only', (tools) => (controls.readOnly ? tools.filter((t) => READ_ONLY_CLASS.has(canonicalToolName(t) as PublicToolName)) : tools)],
     ['tool_restrictions', (tools) => {
-      const r = controls.toolRestrictions;
-      if (!r) return tools;
-      return tools.filter((t) => r[t] !== false && r[canonicalToolName(t)] !== false);
+      const lists = controls.toolRestrictions;
+      if (!lists || lists.length === 0) return tools;
+      return tools.filter((t) => restrictionsAllow(lists, t));
     }],
   ];
   let tools: readonly string[] = expandDeclared(declared);
@@ -201,7 +205,8 @@ export interface PersonaToolConfig {
   readonly tools: readonly string[];
   readonly coordinatorOnly?: boolean;
   readonly readOnly?: boolean;
-  readonly toolRestrictions?: Readonly<Record<string, boolean>> | null;
+  /** REQ-TOOLS-006 (4): the allowed-tool lists that bind this agent — see `NarrowingControls.toolRestrictions`. */
+  readonly toolRestrictions?: readonly (readonly string[])[] | null;
 }
 
 export interface ResolvedToolSet {

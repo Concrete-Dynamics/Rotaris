@@ -691,9 +691,10 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     // Sent the instant `start` returned, 38 of 200 such sessions survived under load (0 of 150 under `bash`, 0 of
     // 150 with `exec`); gated on the marker, with `exec`, none does. The product's delivery reaches every process of
     // the group and reports it sent in every one of those runs
-    // (docs/defects/fixed/a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md); what the window still
-    // costs the product, outside this case, is recorded open (docs/defects/a-sigint-that-reaches-a-command-as-sh-starts-
-    // it-does-not-stop-the-session.md, OQ-135).
+    // (docs/defects/fixed/a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md). What the window cost
+    // the product outside this case is repaired by re-delivery to a member that never received the signal, and is
+    // pinned in background.test.ts (docs/defects/fixed/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-
+    // the-session.md, OQ-135).
     const command = PS ? `Write-Output 'up'; ${SH.sleep(30)}` : `printf 'up\\n'; exec sleep 30`;
     const started = await t.execute(args({ command, background: true }), ctx());
     const id = /ts_[0-9a-f]{8}/.exec(started.text)![0];

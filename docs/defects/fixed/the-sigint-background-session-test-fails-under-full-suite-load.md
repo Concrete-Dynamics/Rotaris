@@ -41,7 +41,7 @@ child until the child `exec`s. A SIGINT that reaches the group in that instant i
 The parent shell acts on its own copy only when the command ends. The repair below closes that window for the case,
 by making the command `exec` and by signalling only once it runs. It does not close it for the product: a signal the
 agent or the user sends into that window is reported sent and the session runs on until its command ends, recorded
-open in [`a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session`](../a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md)
+open in [`a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session`](a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md)
 ([OQ-135](../../architecture/open-questions.md)).*
 
 **Fix (test only; the product's delivery was never at fault — it reported the signal sent every time).** The

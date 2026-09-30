@@ -1250,7 +1250,13 @@ rather than throw. Each `launch` became `async` and each call site awaits it (`t
 `package.mjs`'s app step as `stepAsync`, and `terminal-proof/packaged.mjs`'s `packagedTerminalStreaming` with it).
 `lib/launch-sites.test.ts` fails a `spawnSync` launch of Electron anywhere under `scripts/` (its rule 4), and a launch
 with `ELECTRON_RUN_AS_NODE`, which starts no application, stays exempt
-([note](../defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md)).
+([note](../defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md)). Three launches that were
+never `spawnSync`'s had bounds of their own that passed an overrun the same way or not at all, and are `spawnBounded`'s
+since 2026-09-30: `fetch-proof`'s (a bare `child.kill()` at 150 s, whose SIGTERM the application answers with exit
+status 0), `workspace-proof`'s hand-over launch (SIGTERM alone at 30 s, no log) and `mcp-console-spike`'s (no bound).
+Since then the same test also fails a bare `spawn` of Electron outside three it names with their reasons: the driver's,
+`code-intel-proof`'s branch (a stdio server guarded by its RPC client) and `live-run`'s `runElectron` (SIGKILL at its
+bound, reported as a signal). And it checks each `spawnBounded` site, not each file, for its `.overran`.
 
 **The driver.** `apps/desktop/src/main/driver.ts`, reached only when `ROTARIS_DRIVER` names an endpoint file at
 launch, opens a loopback listener and answers newline-delimited JSON: `waitFor`, `click` (by selector, optionally

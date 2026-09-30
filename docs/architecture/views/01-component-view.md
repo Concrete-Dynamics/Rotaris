@@ -279,8 +279,11 @@ that carry a licence file (REQ-STARTUP-143), so this module is named for the sur
 `scripts/lib/package-verdict.mjs` holds the lines `package.mjs` closes on, each printed only when the steps that ran
 make it true. `scripts/lib/staged-resources.mjs` is `settings-proof`'s, for staging the two files and giving them back;
 the proof also takes the writer's list of git's redirecting variables from `build-id.mjs`. `package.mjs` launches the
-packaged application through `scripts/lib/bounded-launch.mjs`'s `spawnBounded`, as every proof launch does since
-2026-09-29, so a launch that overruns its bound is ended and reported as a failure with its log tail. **Edges unchanged**:
+packaged application through `scripts/lib/bounded-launch.mjs`'s `spawnBounded`, as every proof launch a script starts
+itself does since 2026-09-29 (`fetch-proof`'s, `workspace-proof`'s hand-over and `mcp-console-spike`'s since 2026-09-30),
+so a launch that overruns its bound is ended and reported as a failure with its log tail. The driven launch is ended by
+`lib/driver.mjs`'s `stopApp`; `code-intel-proof`'s branch and `live-run`'s `runElectron` keep their own bounds, for the
+reasons `scripts/lib/launch-sites.test.ts` names beside them. **Edges unchanged**:
 `apps/desktop/scripts/**` and `tools/**` are outside the boundary rule, the scripts reach the tools and never the
 reverse, and no product code imports either.
 

@@ -28,7 +28,10 @@ that moves a shared seam breaks a neighbour's proof, and that is the point of ha
 wrong.
 
 No proof hangs on a launch that overruns. Every launch a script starts itself goes through
-`lib/bounded-launch.mjs`'s `spawnBounded`, and a driven one through the driver's `stopApp`. At its bound the
+`lib/bounded-launch.mjs`'s `spawnBounded`, and a driven one through the driver's `stopApp`. Two launches are neither,
+and `lib/launch-sites.test.ts` names them with their reasons: `code-intel-proof`'s branch, a stdio server whose RPC
+client fails every request when it dies or hangs, and `live-run`'s `runElectron`, whose bound is SIGKILL reported as
+a signal, never as a clean exit. Any other bare `spawn` of Electron fails that test. At its bound the
 application is sent SIGTERM with its pipes still open, and it answers: its quit path runs and it exits within a
 fraction of a second. SIGKILL follows a grace only if it does not. The proof then fails with the launch's last log
 lines. `lib/launch-sites.test.ts` refuses a `spawnSync` launch of Electron: its timeout closes the pipes as it signals,

@@ -24,9 +24,9 @@
  * `"[object Object]" is not valid JSON` at the first assertion, before anything has been measured.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { app as appDirectory, buildDesktop, cleanEnvironment, electron, evidenceDirectory, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { startApp } from './lib/driver.mjs';
 
 const output = evidenceDirectory('.workspace-proof');
@@ -118,15 +118,20 @@ async function launch(name, { workspace, folders = [], extra = {}, preferences }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let handOverSequence = 0;
-/** Launch the same profile again and wait for the secondary process to hand its request to the owner. */
+/**
+ * Launch the same profile again and wait for the secondary process to hand its request to the owner. The launch is
+ * `spawnBounded`'s since 2026-09-30: its own 30 s bound sent SIGTERM alone and rejected at once, so a secondary that
+ * did not answer SIGTERM outlived the proof, and the failure carried none of its log
+ * (`docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`).
+ */
 async function handOver(started, workspace) {
   const sequence = ++handOverSequence;
   // `hostSwitches` as the driver's launch carries them: as root this second instance died with SIGTRAP and the proof's
   // two hand-over checks were red for the host, not the product (`fixed/a-driven-launch-dies-as-root-on-linux.md`).
-  const child = spawn(electron, [mainEntry, ...hostSwitches, ...(workspace ? [workspace] : [])], {
+  const result = await spawnBounded(electron, [mainEntry, ...hostSwitches, ...(workspace ? [workspace] : [])], {
+    timeoutMs: 30_000,
     cwd: appDirectory,
     windowsHide: false,
-    stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...cleanEnvironment(),
       ...proofIsolationEnv({ local: started.local, preferences: started.preferences }),
@@ -134,16 +139,11 @@ async function handOver(started, workspace) {
       ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
     },
   });
-  let outputText = '';
-  child.stdout?.on('data', (chunk) => { outputText += String(chunk); });
-  child.stderr?.on('data', (chunk) => { outputText += String(chunk); });
-  const exit = await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => { child.kill(); reject(new Error('the hand-over launch did not exit within 30 s')); }, 30_000);
-    child.on('error', (cause) => { clearTimeout(timeout); reject(cause); });
-    child.on('exit', (code, signal) => { clearTimeout(timeout); resolve({ code, signal }); });
-  });
+  const outputText = `${result.stdout}${result.stderr}`;
   writeFileSync(join(output, `hand-over-${sequence}.log`), outputText);
-  return exit;
+  if (result.error) throw result.error;
+  if (result.overran) throw new Error(overrunMessage(`the hand-over launch ${sequence}`, result, outputText));
+  return { code: result.status, signal: result.signal };
 }
 async function waitForWindowCount(driver, count, timeoutMs = 30_000) {
   const began = Date.now();

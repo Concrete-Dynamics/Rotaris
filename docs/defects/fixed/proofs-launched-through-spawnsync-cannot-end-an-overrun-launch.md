@@ -5,16 +5,16 @@ at thirty-four sites. `spawnSync`'s timeout does not bound the launch. At the ti
 own ends of the child's standard output and error, and then waits, without a bound, for the process to exit. The
 application's quit path writes a line to the closed stream at once and loops on the EPIPE
 (`a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`), so the process never exits and the proof never
-returns. *(2026-09-29, R-067: that loop is repaired — `fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`
+returns. Nothing is reported, and the proof hangs until something outside kills it. *(2026-09-29, R-067: that loop is repaired — `fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md`
 — and a launch whose pipes are closed as it is signalled now quits in about 60 ms, measured with an async launch; the
-`spawnSync` sites were not re-run. The sentence above is kept as it was written.)* *(Corrected 2026-09-30, R-067: re-run
+`spawnSync` sites were not re-run. The sentences above are kept as they were written.)* *(Corrected 2026-09-30, R-067: re-run
 on this branch's build, the hang is gone. An application launched with `ROTARIS_CAPTURE_AFTER_MS=60000` under
 `spawnSync(electron, …, { timeout: 8000 })` returned after 8075, 8081 and 8098 ms in three runs, as root under Xvfb,
 with `status` 0, `signal` null and `error.code` `ETIMEDOUT`, and no `quit:` line in its captured output — its pipes were
 closed before the quit path wrote. So on this build the defect is a different one: an overrun under `spawnSync` is
 reported as a clean exit 0, with only `error.code === 'ETIMEDOUT'` to show it. Every `launch` checked only
 `status !== 0`, so an overrun passed that check silently, without its log tail, and the proof went on as if the launch
-had done its work. The hang described above is the 2026-09-28 reading, before the EPIPE repair.)* Nothing is reported, and the proof hangs until something outside kills it. `resilience-proof`'s override launch
+had done its work. The hang described above is the 2026-09-28 reading, before the EPIPE repair.)* `resilience-proof`'s override launch
 was seen alive 649 s into a 180 s timeout. On 2026-09-28 a scratch `spawnSync` of scenario 4's launch with a 20 s timeout
 had not returned at 70 s, when a second SIGTERM from outside ended it.
 
@@ -56,11 +56,36 @@ launch ended by itself within its bound", `terminal-proof`'s failures list, and 
 
 Pinned by `apps/desktop/scripts/lib/launch-sites.test.ts`'s rule 4, "no launch of Electron goes through spawnSync, whose
 timeout reports an overrun as a clean exit" (named, until 2026-09-30, "… whose timeout cannot end an overrun launch"). Before the change it failed naming all thirty-five sites; after it, it passes.
-It also asserts that the scan sees at least thirty-six `spawnBounded` launches, and that a `spawnSync` launch is still
+It also asserts that the scan sees at least thirty-six `spawnBounded` launches (thirty-nine since 2026-09-30, below), and that a `spawnSync` launch is still
 recognised when one is written. A launch with `ELECTRON_RUN_AS_NODE` starts no application and is exempt, as under
 rule 2 (`build-hooks.cjs`'s probe). A second case, "every script that launches through spawnBounded reports an overrun
 with overrunMessage's log tail", pins the report: `updater-proof`'s overrun check named only the bound and how the launch
 ended until 2026-09-30, when it failed that case alone, and it now carries `overrunMessage`'s tail as the others do.
+
+*(Added 2026-09-30, R-067.)* Three launches that were never `spawnSync`'s escaped rule 4, whose scan saw only
+`spawnSync(`, and two of them had the defect this note names in another form. `fetch-proof`'s own asynchronous launch
+was bounded by a bare `child.kill()` at 150 s: SIGTERM, no SIGKILL, no overrun flag. The application answers SIGTERM
+with `quit: exiting with status 0`, so the overrun passed `launch`'s `status !== 0` check as a clean exit, with no log
+tail, and the proof failed later, misattributed, at `ok: the run ended paused (application_shutdown)` (the verifier's
+scratch run with the bound cut to 4 s). `workspace-proof`'s hand-over launch sent SIGTERM alone at 30 s and rejected at
+once, so a secondary that did not answer it outlived the proof, and the failure carried none of its log.
+`mcp-console-spike`'s launch had no bound at all. All three are `spawnBounded`'s, each checking `.overran` and throwing
+`overrunMessage`. A new case, "every other launch of Electron is spawnBounded's too, but for the three named with their
+reasons", fails a bare `spawn(electron|exe` outside the driver (ended by `stopApp`), `code-intel-proof`'s branch (a stdio
+server its RPC client guards, and a branch that outlives the close is reported `killed-after-30s`) and `live-run`'s
+`runElectron` (SIGKILL at its bound, reported as `signal` SIGKILL with `status` null, never as a clean exit; its fault
+scenarios need the child in flight). Before the change it failed naming `fetch-proof.mjs`, `mcp-console-spike.mjs` and
+`workspace-proof.mjs`; after it, it passes. The overrun case also checks each `spawnBounded` SITE for its own `.overran`
+before the file's next launch and within forty lines, not just each file for `overrunMessage`; a scratch removal of
+`config-proof`'s check failed it at `config-proof.mjs:90`.
+Measured on this branch's build the same day, as root under Xvfb, another workflow on the host (load average 2.0 to
+5.1): `fetch-proof` exited 0 in 58 s and `workspace-proof` passed 34 checks, both hand-over checks among them. With the
+bound cut for one scratch run each, then restored: `fetch-proof` at 4 s exited 1 in 4.5 s with `ok overran its 4000 ms
+bound: SIGTERM ended it after 248 ms` and the log tail ending `quit: exiting with status 0`; `workspace-proof`'s
+hand-over at 300 ms failed with `the hand-over launch 1 overran its 300 ms bound: SIGTERM ended it after 80 ms` and its
+tail. `mcp-console-spike` needs a Windows package (IC-3) and was syntax-checked and scanned only. The `fetch-proof`
+scratch run's log also carried a run-host rejection after the quit, recorded as
+[`an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md`](../an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md).
 
 **Measured on the built app of this branch**, as root under Xvfb on Linux with Node 24. Another workflow was running on
 the same host; no other Electron was running at the first launch, and the load average stayed between 0.7 and 2.3.

@@ -195,8 +195,33 @@ describe('R-062: the proof harness platform rules, kept at every script', () => 
     const unbounded = found.filter((l) => l.call.startsWith('spawnSync(') && !/ELECTRON_RUN_AS_NODE/.test(l.call)).map((l) => l.file);
     expect(unbounded).toEqual([]);
     // Not vacuous: the scan sees the bounded launches, and it sees a `spawnSync` launch where one is written.
-    expect(found.filter((l) => l.call.startsWith('spawnBounded(')).length).toBeGreaterThanOrEqual(36);
+    expect(found.filter((l) => l.call.startsWith('spawnBounded(')).length).toBeGreaterThanOrEqual(39);
     expect(launches('fixture.mjs', "const r = spawnSync(electron, [mainEntry, ...hostSwitches, ws], { timeout: 1 });")[0]!.call).toMatch(/^spawnSync\(/);
+  });
+
+  it('every other launch of Electron is spawnBounded\'s too, but for the three named with their reasons (rule 4)', () => {
+    // Rule 4 once scanned only `spawnSync(`, so a script that spawned the app itself with a bound of its own escaped it.
+    // `fetch-proof`'s bound was a bare `child.kill()`: SIGTERM, no SIGKILL, no overrun flag, and the app answers SIGTERM
+    // with `quit: exiting with status 0`, so its overrun passed `status !== 0` as a clean exit with no log tail — the
+    // defect rule 4 exists for. `workspace-proof`'s hand-over launch and `mcp-console-spike`'s launch were the same
+    // shape (the spike had no bound at all). Each is `spawnBounded`'s since 2026-09-30.
+    const exempt: Record<string, string> = {
+      // The driven launch: `stopApp` ends it (quit, then `endOverrun`) and `driverOverrunMessage` names it.
+      'lib/driver.mjs': 'the driver',
+      // Not an application launch: the code-intelligence branch is a stdio server whose standard input the proof writes;
+      // `line-rpc-client`'s guard rejects every request when it dies or hangs, and a branch that outlives the proof's
+      // close is killed and reported as `killed-after-30s`, never as a clean exit.
+      'code-intel-proof.mjs': 'the branch',
+      // The live run: its timeout sends SIGKILL and reports `status` null with `signal` SIGKILL, never a clean exit,
+      // and its fault scenarios act on the child in flight (`launchInFlight`), which `spawnBounded` does not hand out.
+      'live-run.mjs': 'runElectron',
+    };
+    const found = all.flatMap((f) => launches(relative(SCRIPTS, f).split(sep).join('/'), readFileSync(f, 'utf8')));
+    const bare = found.filter((l) => l.call.startsWith('spawn(') && !/ELECTRON_RUN_AS_NODE/.test(l.call));
+    expect(bare.filter((l) => !(l.file in exempt)).map((l) => l.file)).toEqual([]);
+    // Not vacuous: the scan sees each exemption where it is written, and a bare launch where one is written.
+    expect([...new Set(bare.map((l) => l.file))].sort()).toEqual(Object.keys(exempt).sort());
+    expect(launches('fixture.mjs', "const child = spawn(electron, [mainEntry, ...hostSwitches, ws], { env });")[0]!.call).toMatch(/^spawn\(/);
   });
 
   it('every script that launches through spawnBounded reports an overrun with overrunMessage\'s log tail (rule 4)', () => {
@@ -204,9 +229,20 @@ describe('R-062: the proof harness platform rules, kept at every script', () => 
     // check. `updater-proof` recorded its overrun check with only the bound and how it ended until 2026-09-30.
     const found = all.flatMap((f) => launches(relative(SCRIPTS, f).split(sep).join('/'), readFileSync(f, 'utf8')));
     const files = [...new Set(found.filter((l) => l.call.startsWith('spawnBounded(')).map((l) => l.file))];
-    expect(files.length).toBeGreaterThanOrEqual(34);
+    expect(files.length).toBeGreaterThanOrEqual(37);
     const untold = files.filter((f) => !/\boverrunMessage\(/.test(readFileSync(join(SCRIPTS, f), 'utf8')));
     expect(untold).toEqual([]);
+    // And per SITE, not per file: each `spawnBounded` launch reads its `.overran` before the file's next launch and within
+    // forty lines of its own, so a script whose second launch forgot the check does not pass on its first one's.
+    const unchecked = files.flatMap((f) => {
+      const text = readFileSync(join(SCRIPTS, f), 'utf8');
+      const at = [...text.matchAll(/\bspawnBounded\(\s*(?:electron|exe)\s*,/g)].map((m) => m.index!);
+      return at.flatMap((start, i) => {
+        const window = text.slice(start, at[i + 1] ?? text.length).split('\n').slice(0, 40).join('\n');
+        return /\.overran\b/.test(window) ? [] : [`${f}:${text.slice(0, start).split('\n').length}`];
+      });
+    });
+    expect(unchecked).toEqual([]);
   });
 
   it('a launch of the reserved token keeps it at the sentinel\'s index, the switch after it, including code-intel-proof as it was (REQ-MCP-033)', () => {

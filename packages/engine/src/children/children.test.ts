@@ -4110,6 +4110,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(rootAsked).toHaveLength(3);
       expect(rootAsked[2]).toContain('slow: done');
       expect((await sessions.running(sid)!).status).toBe('completed');
+      // The report reached the root once: its last request, which carries its whole conversation, holds it once.
+      expect(rootAsked[2]!.split('slow: done')).toHaveLength(2);
       expect(fired).toEqual(['slow']);
       expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
     });
@@ -4136,6 +4138,9 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       // Then resumed once more, with `first`'s report — whose own hook raised too.
       expect(rootAsked).toHaveLength(3);
       expect(rootAsked[2]).toContain('first: done');
+      // Each report reached the root once: its last request, which carries its whole conversation, holds each once.
+      expect(rootAsked[2]!.split('no tool port for broken')).toHaveLength(2);
+      expect(rootAsked[2]!.split('first: done')).toHaveLength(2);
       expect(fired.sort()).toEqual(['broken', 'first']);
       expect(warnings.filter((w) => w.includes('child_completed') && w.includes('the hook port exploded'))).toHaveLength(2);
       expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });

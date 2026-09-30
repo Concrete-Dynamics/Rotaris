@@ -850,7 +850,11 @@ export class IterationChildren implements DelegationOps {
         catch (cause) { deps.warn(`the child_completed hooks raised for child ${row.canonical_name} (${row.task_id}): ${String(cause instanceof Error ? cause.message : cause)}`); }
       }
     } finally {
-      try { const settled = this.ledger.get(row.task_id) ?? moved; if (settled) this.scheduler.settled(settled); }
+      // The terminal row as it stands; the one the move returned when the store cannot be read, so a raising store does
+      // not replace what raised before it and leave the scheduler untold.
+      let settled: ChildRow | null;
+      try { settled = this.ledger.get(row.task_id) ?? moved; } catch { settled = moved; }
+      try { if (settled) this.scheduler.settled(settled); }
       finally { endSettle(); }
     }
   }

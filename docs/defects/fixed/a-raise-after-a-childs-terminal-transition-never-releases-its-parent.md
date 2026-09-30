@@ -50,7 +50,10 @@ tells the scheduler (`scheduler.settled`) **in a `finally`**, so the terminal ca
 wait on the child is released (REQ-TOOLS-156) whatever raised before it. A raise out of the hook port is caught there and
 reduced to a warning naming the child — REQ-HOOKS-079: the occurrence completes, the child's terminal status is
 unaffected, and no error reaches an agent — as the run already did for `session_end`. A raise out of the teardown is
-re-raised after the scheduler is told, and reaches `settleRaised`, which finds the child terminal and only warns.
+re-raised after the scheduler is told, and reaches `settleRaised`, which finds the child terminal and only warns. The
+`finally` reads the terminal row from the store; should that read raise too (the store being what failed), it tells the
+scheduler with the row the terminal move returned, so the read's raise neither replaces what raised before it nor leaves
+the scheduler untold (added at the repair's verification; defensive — no case drives a raising store read).
 
 The question the note left open — whether `settleRaised`'s terminal branch could call `scheduler.settled` without
 delivering a cancelled child's report twice — no longer arises: whatever made a child terminal has told the scheduler
@@ -60,7 +63,10 @@ Pinned by `packages/engine/src/children/children.test.ts`, the describe "the rep
 a-raise-after-a-childs-terminal-transition-never-releases-its-parent": the settle in `execute` under a foreground wait
 and under the resume loop, and the settle in `settleRaised` under a foreground wait (the child held behind a model slot
 of one so that it starts, and raises, only once its parent is waiting). Each also asserts the hook fired once per child,
-the report reached the parent once, and the iteration closed. No proof or live-run scenario shows it: the product's hook
+the report reached the parent once (the root's last request, which carries its whole conversation, holds each report's
+text once — made explicit in the second and third cases at the repair's verification), and the iteration closed. The
+teardown-raise limb (the scheduler told, then the raise re-raised to `settleRaised`) has no case: the writer's
+`appendTimeline` does not raise, so no case reaches it without a writer stub. No proof or live-run scenario shows it: the product's hook
 engine (`packages/hooks/src/engine.ts`) is written so that `fireLifecycle` completes (REQ-HOOKS-079), so the defect is
 reachable only through a port that raises anyway, which only a unit test can supply. Repaired 2026-09-30 under R-067.
 

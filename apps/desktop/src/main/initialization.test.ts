@@ -41,7 +41,7 @@ interface Harness {
 /** A hold a test can set at any moment: every setup status read taken while it is set waits on it. */
 interface StatusHold { current: Promise<void> | null }
 
-function harness(options: { applicable?: boolean; startFails?: boolean; writeFails?: string | null; modelReachable?: boolean; statusGate?: Promise<void>; hold?: StatusHold; onStart?: () => void; onCancel?: () => void; writeHold?: StatusHold } = {}): Harness {
+function harness(options: { applicable?: boolean; startFails?: boolean; writeFails?: string | null; modelReachable?: boolean; statusGate?: Promise<void>; hold?: StatusHold; onStart?: () => void; onCancel?: () => void; writeHold?: StatusHold; startHold?: StatusHold } = {}): Harness {
   const { root, agents } = workspace();
   const published: InitializationStateView[] = [];
   const banners: { headline: string; detail: string }[] = [];
@@ -69,7 +69,7 @@ function harness(options: { applicable?: boolean; startFails?: boolean; writeFai
       return landed;
     },
     setup: {
-      start: async () => { options.onStart?.(); return options.startFails ? { ok: false, reason: 'not a local launch' } : { ok: true, status: status() }; },
+      start: async () => { options.onStart?.(); await options.startHold?.current; return options.startFails ? { ok: false, reason: 'not a local launch' } : { ok: true, status: status() }; },
       cancel: async () => { options.onCancel?.(); },
       status: async () => { await options.statusGate; await options.hold?.current; return status({ applicable: options.applicable !== false }); },
     },
@@ -760,6 +760,58 @@ describe('one setup at a time across a workspace switch', () => {
     h.push(completedSetup());
     await settle();
     expect(readInitializationState(other.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+  });
+
+  it('cancels the setup of a workspace closed while its start request is in flight, and starts the replacement\'s once it has ended (REQ-WORKSPACE-013, REQ-WORKSPACE-109, REQ-WORKSPACE-092)', async () => {
+    // The run host has been asked to start the setup and has not answered yet when the switch lands. The abort then
+    // comes before the follow listens for it, and must still reach the run host once the start has answered.
+    let starts = 0;
+    let cancels = 0;
+    const startHold: StatusHold = { current: null };
+    let answer: () => void = () => undefined;
+    startHold.current = new Promise<void>((r) => { answer = r; });
+    const h = harness({ startHold, onStart: () => { starts += 1; }, onCancel: () => { cancels += 1; } });
+    await h.coordinator.resolve(true);
+    await settle();
+    expect(starts).toBe(1);
+    startHold.current = null;
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents);
+    h.coordinator.close(h.root);
+    await h.coordinator.resolve(true);
+    answer();
+    await settle();
+    // REQ-WORKSPACE-092: the run host is asked to end what the outgoing setup launched …
+    expect(cancels).toBe(1);
+    // … and the replacement's setup waits for it, then starts once the cancelled finish is pushed.
+    expect(starts).toBe(1);
+    h.push(cancelledSetup());
+    await settle();
+    expect(starts).toBe(2);
+    h.push(completedSetup());
+    await settle();
+    expect(readInitializationState(other.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    expect(readInitializationState(h.agents).completed).toEqual([]);
+    expect(cancels).toBe(1);
+  });
+
+  it('cancels the setup of a run the user cancels while its start request is in flight (REQ-WORKSPACE-109, REQ-WORKSPACE-092)', async () => {
+    let cancels = 0;
+    const startHold: StatusHold = { current: null };
+    let answer: () => void = () => undefined;
+    startHold.current = new Promise<void>((r) => { answer = r; });
+    const h = harness({ startHold, onCancel: () => { cancels += 1; } });
+    await h.coordinator.resolve(true);
+    await settle();
+    startHold.current = null;
+    await h.coordinator.cancel();
+    answer();
+    await settle();
+    expect(cancels).toBe(1);
+    h.push(cancelledSetup());
+    await settle();
+    expect(h.published.at(-1)?.view.running).toBe(false);
+    expect(h.published.at(-1)?.report.outcome).toBe('cancelled');
   });
 
   it('ends a run cancelled while its setup waits for another as a retryable failure, starting nothing, and keeps the order for the next (REQ-WORKSPACE-109, REQ-WORKSPACE-093)', async () => {

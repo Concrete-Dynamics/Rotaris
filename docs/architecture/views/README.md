@@ -63,7 +63,8 @@ ended, so an earlier run's close or Cancel never reaches the next run's setup. T
 **A workspace switch cancels the outgoing workspace's initialization run (REQ-WORKSPACE-013, R-067).** `MainWindows`
 gained `workspaceClosed`, called once the last live main window holding a workspace has closed, and main answers it with
 `InitializationCoordinator.close`, which nothing called before: the run is cancelled, nothing is recorded or published
-for it, and a return to the root resolves again (REQ-WORKSPACE-102). This repairs
+for it, and a return to the root resolves again (REQ-WORKSPACE-102); a close landing while the setup's start request is
+in flight is sent to the run host once the start answers. This repairs
 `a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`. The **process view**'s `initialization.*`
 paragraph says so, and the **runtime view**'s `initialization:` bullet says a closed workspace's recordings are refused
 inside their turn of the marker queue. The same rule for a close that is not a switch's is a reading, raised as OQ-141.

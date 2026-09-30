@@ -435,7 +435,8 @@ not a switch's; 2026-09-29, R-067). The run
 host holds one setup and pushes `mcp.setupStatus` with no workspace on it, so the coordinator runs its setups one at a
 time (`setupTurn`): a run's `code-intelligence-setup` starts once the setup before it has ended — after a switch, the
 outgoing one, still ending — the one step sink is cleared only by the follow that set it, and a run's abort reaches the
-run host's one cancel only while that run's own setup is live, never once the next run's has started behind it (REQ-WORKSPACE-084/109;
+run host's one cancel only while that run's own setup is live, never once the next run's has started behind it — and
+an abort that lands while the setup's start request is in flight is sent as soon as the start answers (REQ-WORKSPACE-084/092/109;
 2026-09-29, R-067). Main is the coordinator because REQ-WORKSPACE-085 gives the marker **one writer** and that file
 is the workspace service's (`config.setField`, Tier A) while the one shipped task's work is the run host's
 (`mcp.setup`) — and the matrix gives neither of those two an edge to the other. The run host gained one event,

@@ -223,6 +223,7 @@ export class InitializationCoordinator {
   private followSetup(first: McpSetupStatus, signal: AbortSignal, onStep: (s: { name: string; status: string; detail: string }) => void): Promise<TaskResult> {
     return new Promise<TaskResult>((resolve) => {
       const seen = new Map<string, string>();
+      let ended = false;
       const drain = (status: McpSetupStatus): void => {
         for (const step of status.steps) {
           if (step.status === 'pending' || step.status === 'running') continue;
@@ -238,6 +239,7 @@ export class InitializationCoordinator {
         // outcome — so a close or a Cancel landing in that interval cancelled the next workspace's setup
         // (ADR-0064's seventh round).
         signal.removeEventListener('abort', onAbort);
+        ended = true;
         resolve(this.resultOf(status));
       };
       // REQ-WORKSPACE-092: the run host ends what the setup launched. A cancel whose request fails is said, not dropped.
@@ -245,6 +247,13 @@ export class InitializationCoordinator {
       this.setupListener = drain;
       signal.addEventListener('abort', onAbort, { once: true });
       drain(first);
+      // An abort that landed while the start request was in flight fired before the listener was added, and an aborted
+      // signal fires no more: without this, the setup ran to the end of its stages uncancelled, and `setupTurn` held every
+      // later setup behind it (ADR-0064's sixth round). A setup that had already ended in its first status is left be.
+      if (signal.aborted && !ended) {
+        signal.removeEventListener('abort', onAbort);
+        onAbort();
+      }
     });
   }
 

@@ -338,8 +338,15 @@ REQ-WORKSPACE-013 names none of the three, and the build applies its rule to all
 [OQ-141](../open-questions.md), not taken as settled. **Also corrected in verification:** main's setup port had
 dropped a cancellation it could not deliver — with no window holding a workspace it sent nothing, and a refusal from the
 run host was taken as delivered. The port now rejects in both cases (`deliverSetupCancel`), so the coordinator logs it.
+**Found by the second verification, and repaired in it:** a close — or a Cancel — that lands while the setup's start
+request is still in flight to the run host aborts the run before the follow listens for the abort, and an aborted signal
+fires no more: no cancellation was sent, the outgoing setup ran to the end of its stages (300 / 1800 / 120 s budgets)
+against REQ-WORKSPACE-092, and the seventh round's one-at-a-time order held the replacement's setup behind it for all of
+that time. The follow now sends the cancellation at once when it finds its signal already aborted and its setup not yet
+finished; two cases in `initialization.test.ts` ("cancels the setup of a workspace closed while its start request is in
+flight, …", and of a run the user cancels in the same interval) fail without it, each with no cancellation sent.
 **Not shown:** the Windows orders; a plain close of one of two windows with a run under way, which only the unit cases
-hold.
+hold; a close landing while the start request is in flight, which only the unit cases hold.
 
 **Seventh round (2026-09-29, R-067): one setup at a time.** "Pushed, not polled" above holds, with a condition it left
 unstated: the run host holds **one** setup and pushes `mcp.setupStatus` with no workspace on it, and the coordinator held

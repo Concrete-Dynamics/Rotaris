@@ -71,3 +71,12 @@ project started nothing; with it, all five passed, the step's process ending 201
 under Xvfb, Node 24, `--skip-build` after one `pnpm build`).
 
 The overlap the second note describes stayed open with this repair alone; it was repaired next, on the same branch.
+
+The second verification of this repair found one ordering still uncancelled: a switch (or a Cancel) landing while the
+setup's start request was in flight to the run host aborted the run before `followSetup` listened for the abort, so no
+cancellation was ever sent, the outgoing setup ran to the end of its stage budgets, and the replacement's setup waited
+behind it in `setupTurn`. `followSetup` now sends the cancellation at once when its signal is already aborted and its
+setup has not finished. Pinned by "cancels the setup of a workspace closed while its start request is in flight, and
+starts the replacement's once it has ended" and "cancels the setup of a run the user cancels while its start request is
+in flight" in `initialization.test.ts`, both of which fail without it (no cancellation sent). Not shown in the built app:
+`workspace-proof` cannot hold the run host's answer to a start.

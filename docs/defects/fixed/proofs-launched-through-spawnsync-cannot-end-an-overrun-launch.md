@@ -110,4 +110,4 @@ the same host; no other Electron was running at the first launch, and the load a
 package proof and the packaged terminal launch need a Windows build (IC-3). The SIGKILL step against the real
 application was never needed; it is pinned against a child that ignores SIGTERM in `bounded-launch.test.ts`. While
 moving the packaged launch, a separate defect in its checks was noticed and recorded:
-[`the-packaged-terminal-streaming-checks-throw-on-a-launch-that-found-no-store.md`](../the-packaged-terminal-streaming-checks-throw-on-a-launch-that-found-no-store.md).
+[`the-packaged-terminal-streaming-checks-throw-on-a-launch-that-found-no-store.md`](the-packaged-terminal-streaming-checks-throw-on-a-launch-that-found-no-store.md).

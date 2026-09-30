@@ -1270,7 +1270,10 @@ passed as a clean exit with no log tail. Every one of them is now
 `lib/bounded-launch.mjs`'s `spawnBounded` (SIGTERM with the pipes open and read, a grace, SIGKILL to the launch's process
 group), and an overrun is a failure named by `overrunMessage` with the launch's last thirty log lines — thrown by a
 `launch`, recorded as a failed check by `updater-proof`, `terminal-proof` and the packaged terminal launch, which report
-rather than throw. Each `launch` became `async` and each call site awaits it (`transcript-proof`'s `appendRun`,
+rather than throw. The packaged section's checks threw on its other early return — a launch that found no workspace store,
+which carried no `terminal` or `probe` field — and lost both launches' evidence until 2026-09-29; its checks are
+`packagedChecks`, which reads either field absent or `null` as absent evidence
+([note](../defects/fixed/the-packaged-terminal-streaming-checks-throw-on-a-launch-that-found-no-store.md)). Each `launch` became `async` and each call site awaits it (`transcript-proof`'s `appendRun`,
 `package.mjs`'s app step as `stepAsync`, and `terminal-proof/packaged.mjs`'s `packagedTerminalStreaming` with it).
 `lib/launch-sites.test.ts` fails a `spawnSync` launch of Electron anywhere under `scripts/` (its rule 4), and a launch
 with `ELECTRON_RUN_AS_NODE`, which starts no application, stays exempt

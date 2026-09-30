@@ -64,7 +64,8 @@ case reads a total of **2** where **1** is due without that guard. The double co
 
 What it does not do: a record a compression replaced holds fewer calls than were made, so what the crash record adds from
 it may fall short (never over); a plan cycle has no `iterations` row, so a crash during one still loses its root's calls
-([`a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md`](../a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md));
+([`a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md`](a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md);
+repaired 2026-09-30: the session records the plan cycle's root under way, store v29, and the crash record counts it);
 a child the stop's grace gave up on and a continue then declined still counts nothing
 ([`a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`](a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md);
 repaired 2026-09-30: such a child is now counted from its record at the rest);

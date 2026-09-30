@@ -1010,6 +1010,28 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE children ADD COLUMN inherited_context_block TEXT NOT NULL DEFAULT '';
     `,
   },
+  {
+    to: 29,
+    /*
+     * REQ-MONITOR-102 with REQ-ORCH-153 (R-067, the repair of
+     * `a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md`): a root's calls join the session total when
+     * its turn returns, and a crash ends that turn without returning. For an execution iteration's root the crash record
+     * reads what the total holds from `iterations.root_tool_calls` (v26); a plan cycle is not an iteration and has no
+     * `iterations` row, so nothing told the crash record that a plan cycle's root was under way, and its calls were lost.
+     *
+     * `plan_root_task_id` names the plan cycle's root while its turn runs and none of its calls is counted; `plan_root_persona`
+     * is the name its transcript rows carry. Both are written when the plan cycle's root starts and cleared, in the same
+     * transaction that adds its calls to the total, when its turn returns or the stop's grace gives up on it — or with none
+     * counted when its turn raises. A row that still names one after its process died is a crash during that plan cycle: the
+     * next repair or continue answers the root's open calls, adds the calls its record holds, and clears both. At most one
+     * plan cycle runs at a time in a session, so one pair of columns holds it. NULL on every row written before this
+     * version, and true of them: no plan cycle's root was recorded as under way.
+     */
+    sql: `
+      ALTER TABLE sessions ADD COLUMN plan_root_task_id TEXT;
+      ALTER TABLE sessions ADD COLUMN plan_root_persona TEXT;
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

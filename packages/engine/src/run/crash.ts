@@ -84,6 +84,8 @@ export interface CrashRecord {
  * - an agent whose record ends on tool calls with no results — nothing ran to answer them — gains their results
  *   (`answerOpenCalls`): a call whose row settled keeps what it returned, and every other gains the result that it was
  *   interrupted before it completed and was not re-run, its row left `running` settling with the same (clauses 3 and 4);
+ * - a plan cycle's root the session still records as under way (REQ-ORCH-153; a plan cycle has no iteration row) has its
+ *   open calls answered the same way and the calls its record holds join the session total (`recordPlanRootCrash`);
  * - every approval still listed as pending is withdrawn by the crash, never denied (clause 9);
  * - every background terminal session still recorded as running, and not held by this process, is recorded as ended by
  *   the crash (clause 10: a crash ends them).
@@ -125,6 +127,7 @@ export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: Ses
     countCrashedCalls(dal, writer, sessionId, open, unfinished.map((c) => c.taskId), warn);
     writer.appendTimeline('iteration_paused', 'rotaris', `Iteration ${open.iteration} was left open by ${interruptionPhrase('crash')}; its unfinished agents are paused and resume when the session is continued.`, { iteration: open.iteration, interruption: 'crash', paused_agents: paused });
   }
+  recordPlanRootCrash(dal, writer, sessionId, warn);
   const withdrawn = withdrawStoredApprovals(dal, writer, sessionId);
   let terminals = 0;
   for (const t of dal.agentTerminalsOf(sessionId)) {
@@ -199,6 +202,24 @@ function countCrashedCalls(dal: StoreDal, writer: SessionWriter, sessionId: Sess
   const root = open.root_tool_calls === null ? 0 : Math.max(0, recorded(open.root_task_id) - open.root_tool_calls);
   const r = writer.countToolCalls({ root: { iteration: open.iteration, add: root }, children: unfinished.map((taskId) => ({ taskId, calls: recorded(taskId) })) });
   if (!r.ok) warn(`the calls a crash left uncounted in ${sessionId} were not counted: ${r.error.code}`);
+}
+
+/**
+ * REQ-MONITOR-102 with REQ-ORCH-153 (the repair of `a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md`):
+ * a plan cycle's root the session still records as under way (`sessions.plan_root_task_id`, store v29) is one a crash
+ * ended: its turn never returned, so none of its calls is counted. A plan cycle is not an iteration and is never at rest
+ * (OQ-96), so nothing is paused and it is never resumed; its open calls are answered as a crash's, under the plan cycle's
+ * 0, so the call the crash cut settles its row (REQ-SESSION-129) and a call it asked for and never started is not one; then
+ * every call its record holds joins the total, in the transaction that releases it — so a second recording finds nothing.
+ * A record a compression replaced holds fewer calls than were made, so what this adds may fall short; it never exceeds.
+ */
+function recordPlanRootCrash(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, warn: (m: string) => void): void {
+  const row = dal.getSession(sessionId);
+  const taskId = row?.plan_root_task_id ?? null;
+  if (taskId === null) return;
+  answerOpenCalls(dal, writer, sessionId, { taskId, name: row?.plan_root_persona ?? '' }, 0, 'crash');
+  const r = writer.countToolCalls({ planRoot: { taskId, add: callsRun(conversationOf(dal.agentConversation(sessionId, taskId))) } });
+  if (!r.ok) warn(`the calls of the plan cycle's root ${taskId} a crash left uncounted in ${sessionId} were not counted: ${r.error.code}`);
 }
 
 /** Clause 9 after a crash: every approval the dead run left listed as pending leaves the list, recorded as withdrawn. */

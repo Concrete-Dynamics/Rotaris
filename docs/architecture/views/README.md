@@ -45,6 +45,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**A plan cycle's root calls before a crash reach the session total (REQ-MONITOR-102, REQ-ORCH-153, R-067).** A plan cycle
+has no `iterations` row, so the crash record never reached its root. `sessions.plan_root_task_id` / `plan_root_persona`
+(store **v29**) name the plan cycle's root while its turn runs and none of its calls is counted: `Run.turn` records it when
+the plan cycle starts (`SessionWriter.openPlanRoot`) and releases it in the transaction that adds its calls to the total
+(`countToolCalls`'s `planRoot`), or with none counted when its turn raises. `recordCrash` answers the open calls of one still
+recorded and adds its record's calls (`recordPlanRootCrash`). This repairs
+`a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md` (acceptance A19). The **runtime view**'s §2 crash
+paragraph and its §7 `sessions` row, and the **state-ownership view**'s tool-call row, say so. No package, edge, process,
+message kind, channel or command changed.
+
 **A stalled agent is shown stalled; the root is watched; a stall evaluation lands a steer (REQ-ORCH-089, REQ-MONITOR-117..122,
 REQ-MONITOR-135, R-067).** `AgentRecord.stalledSeconds` and `SessionRecord.entryStalledSeconds` carry each stall watch's
 figure, kept in `AgentActivity` and republished by `ProjectionOwner.refreshRecord` when it changes; the agent trees, the

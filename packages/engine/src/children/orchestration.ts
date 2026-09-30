@@ -13,7 +13,7 @@ import type { ArtifactStore } from '../artifacts/store.js';
 import { ChildLedger, storeChildReport, userCancellation, type Budget } from './ledger.js';
 import { childPayload, completionNotification, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
 import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, type CutOff } from './cut-off.js';
-import { BUILT_IN_PERSONAS, resolveRole, type Persona, type PersonaResolver, type RoleName } from './personas.js';
+import { resolveRole, type Persona, type PersonaResolver } from './personas.js';
 import { fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
 import { correctiveInstruction, correctiveMessageLine, hadCorrectiveMessage, StallWatch, stallRecoveredLine, stallRecoveryDue, stallWaitingLine, stallWarning } from './stall.js';
@@ -164,8 +164,14 @@ export function childModelKey(persona: Pick<Persona, 'modelRef' | 'modelKey'> | 
   return run.modelKey ?? run.model.modelId;
 }
 
+/**
+ * The persona `name` names, an alias resolved to its target (REQ-ORCH-034: "Role aliases MUST be resolved before spawn") —
+ * the one the ledger will spawn, so admission reads the same role: REQ-ORCH-153's plan-gate refusal, the grant and the
+ * model key. The built-in path read `BUILT_IN_PERSONAS` alone until 2026-09-30, so `coder` and `playwright` read as no
+ * persona there (`docs/defects/fixed/delegate-reads-no-alias-on-the-built-in-table.md`).
+ */
 function personaOf(deps: ChildrenDeps, name: string): Persona | undefined {
-  return deps.personas ? deps.personas.resolve(name)?.persona : BUILT_IN_PERSONAS[name as RoleName];
+  return (deps.personas ? deps.personas.resolve(name) : resolveRole(name))?.persona;
 }
 
 /** How a resumed child carries on (PD-ORCH-005 clause 4). */
@@ -253,17 +259,14 @@ export class IterationChildren implements DelegationOps {
     if (!scope.ok) return { status: 'rejected', canonicalName: req.taskName, message: scope.reason };
     /*
      * PD-TOOLS-006 revision 3 (OQ-112): a scope for a persona that cannot write files. The persona is the one the ledger
-     * will resolve, an alias included — `personaOf`'s built-in path reads the table alone, so `playwright` would pass
-     * as unknown and the ledger would then accept it as `ui-verifier` (found by the branch's verification). Its other
-     * readers above are recorded in `docs/defects/delegate-reads-no-alias-on-the-built-in-table.md`. An unknown persona
-     * is the ledger's refusal.
+     * will resolve, an alias included (`personaOf`), so `playwright` is refused as `ui-verifier`. An unknown persona is
+     * the ledger's refusal.
      */
-    const named = this.deps.personas ? persona : resolveRole(req.persona)?.persona;
     // REQ-TOOLS-006 (4), OQ-145: the parent agent's `tool_restrictions` bind the child's grant, so they bind this check too.
     const parentName = this.parentPersonaOf(parentId);
-    const parentPersona = parentName === undefined ? undefined : this.deps.personas ? personaOf(this.deps, parentName) : resolveRole(parentName)?.persona;
-    if (scope.patterns.length > 0 && named !== undefined && !writesFiles(named, parentPersona)) {
-      return { status: 'rejected', canonicalName: req.taskName, message: scopeWithoutWriterReason(named.name, fileWriters(this.deps.personas, parentPersona)) };
+    const parentPersona = parentName === undefined ? undefined : personaOf(this.deps, parentName);
+    if (scope.patterns.length > 0 && persona !== undefined && !writesFiles(persona, parentPersona)) {
+      return { status: 'rejected', canonicalName: req.taskName, message: scopeWithoutWriterReason(persona.name, fileWriters(this.deps.personas, parentPersona)) };
     }
     // PD-ORCH-004: a continuation is admitted only for the caller's own child that offered one, and only once.
     const continuationOf = req.continuationOf ?? '';

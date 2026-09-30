@@ -160,7 +160,8 @@ While the hold stands, three places enforce the planning grants of REQ-ORCH-153 
 (`createToolPort`, which only removes, and which hands the gate the set of names it removed), `Gate.dispatch`
 ahead of the permission resolution (so a refused call's tool hooks never fire, REQ-HOOKS-004 — and which refuses
 a name that is a tool, letting a name that is no tool reach REQ-TOOLS-032's unknown-tool answer instead of a
-promise no approval can keep), and child admission (`IterationChildren.delegate`) — and the hook engine
+promise no approval can keep), and child admission (`IterationChildren.delegate`, which reads the role an alias names
+through `personaOf` — `resolveRole` on the built-in table's path since 2026-09-30, as the ledger does) — and the hook engine
 starts no process, emitting one `hook.finish` with `skip_reason: 'plan_gate'` per withheld invocation
 (REQ-HOOKS-126). The check suite is unreachable rather than guarded: a held segment never enters the loop.
 

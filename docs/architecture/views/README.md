@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**`delegate`'s admission resolves an alias on the built-in table's path (REQ-ORCH-034, REQ-ORCH-153, PD-TOOLS-006,
+R-067).** `personaOf` (`children/orchestration.ts`) resolves through `resolveRole` where no persona catalogue is configured,
+as `ChildLedger.spawn` does, so the plan gate's admission refusal, the grant and the write-scope refusal read the role the
+ledger will spawn. This repairs `delegate-reads-no-alias-on-the-built-in-table.md` (acceptance A27). The **runtime view**'s
+plan-gate paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A child's attachments and inherited-context block are stored with its record (REQ-TOOLS-154, REQ-LIBRARY-098,
 REQ-TOOLS-152, PD-ORCH-005, R-067).** Store **v28** appends `children.attach_artifacts` and
 `children.inherited_context_block`, written by `ChildLedger.spawn`; `IterationChildren`'s two in-memory maps are gone, and

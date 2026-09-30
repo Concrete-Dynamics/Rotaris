@@ -20,3 +20,13 @@ Live-run finding: H-a (live runs of 2026-09-29)
 ## Relevant files
 
 - `apps/desktop/scripts/live-run.mjs:1899-1900` — `final_response === ''` alone.
+
+## Outcome
+
+Repaired 2026-09-29 under R-067. A failed child counts as silent only when its report says nothing at all: no
+`final_response`, no `last_response`, no `cut_off` block and no error entry with a message (`saysSomething` and
+`silentFailedChildren` in `apps/desktop/scripts/lib/duress-checks.mjs`, called from the `duress` scenario). The summary is
+not counted, because REQ-ORCH-110 makes one for every report. Pinned by `apps/desktop/scripts/lib/duress-checks.test.ts`
+("a failed child with something to say is not silent"): child `d`'s recorded report is not silent, and each of the four
+fields alone is something to say; a report with none of them, or no report, still is. Replayed over the 2026-09-29
+pack's store, the check now finds no silent child where it flagged `d`.

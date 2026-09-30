@@ -39,3 +39,27 @@ export function zeroCostLine(row) {
   const r = zeroCostCoherence(row);
   return `  zero cost with tokens: ${r.zeroCostWithTokens} (${r.reason})`;
 }
+
+/**
+ * The statuses of a session that has not stopped: the four the reader has always treated so (`idle`, `running`,
+ * `background`, `waiting`), which are also the engine autopsy's (`packages/engine/src/autopsy.ts`).
+ */
+const NOT_STOPPED = new Set(['idle', 'running', 'background', 'waiting']);
+
+/**
+ * The "null summary on stopped run" line, answering `unasked` for a session that never stopped. It printed
+ * `stopped && summary === ''`, so a session left `running` read `false` and the live run's check passed a question
+ * about how a stopped run ends on a run that had not ended (live-run finding H-c, the duress run of 2026-09-29).
+ */
+export function nullSummaryReading(row) {
+  const status = String(row.execution_status ?? '');
+  if (NOT_STOPPED.has(status)) return { reading: 'unasked', reason: `execution_status ${status}: the session never stopped` };
+  const empty = (row.summary_text ?? '') === '';
+  return { reading: empty ? 'true' : 'false', reason: `execution_status ${status}${row.stop_reason ? `, ${row.stop_reason}` : ''}, summary ${empty ? 'empty' : 'recorded'}` };
+}
+
+/** The line the autopsy prints; the live run reads its first `true|false|unasked` token. */
+export function nullSummaryLine(row) {
+  const r = nullSummaryReading(row);
+  return `  null summary on stopped run: ${r.reading} (${r.reason})`;
+}

@@ -19,3 +19,11 @@ Live-run finding: H-b (live runs of 2026-09-29)
 
 - `apps/desktop/scripts/live-run.mjs:1903` — `call.agent_name === c.given_name`.
 - `apps/desktop/scripts/live-run.mjs:1880` — the children query selects `given_name` and not `canonical_name`.
+
+## Outcome
+
+Repaired 2026-09-29 under R-067. The children query selects `canonical_name`, and a child's terminal calls are found
+under it (`childrenThatRanCommands` in `apps/desktop/scripts/lib/duress-checks.mjs`). Pinned by
+`apps/desktop/scripts/lib/duress-checks.test.ts` ("a child's terminal calls are found under its canonical name"): child
+`b` is found by its canonical name, where the given name found no child. Replayed over the 2026-09-29 pack's store, the
+check finds `b` and its 12 reported commands, and the question is asked.

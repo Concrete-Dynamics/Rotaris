@@ -113,6 +113,7 @@ import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
+import { attributeWait, childrenThatRanCommands, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall } from './lib/duress-checks.mjs';
 import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
@@ -1913,7 +1914,9 @@ if (wanted.includes('terminal')) {
  * scenario cheap to write and hard to fool. What the model produced is NOT asserted: a weak model doing the work
  * badly is a fact about the model.
  *
- * Its wall clock is `LIVE_RUN_DURESS_MS` (default 40 minutes, the owner's figure of 2026-09-22).
+ * Its wall clock is `LIVE_RUN_DURESS_MS` (default 40 minutes, the owner's figure of 2026-09-22). An overrun says where
+ * the time went, and one the endpoint held while the run was still progressing is a NOTE that the window was the bound,
+ * not a failure of the product (live-run finding H-h; `lib/duress-checks.mjs`, AGENTS.md "`LIVE_RUN_DURESS_MS`").
  *
  * **The fixture question, ruled rather than left open (2026-09-22, delegated by the owner): the default stays
  * `todo-app`, and the LENGTH comes from the work asked for rather than from the tree's weight.** A bigger
@@ -1959,8 +1962,25 @@ if (wanted.includes('duress')) {
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(DURESS_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
   }, DURESS_MS + 180_000);
   const elapsed = Date.now() - startedAt;
-  check(!/capture: wait for result timed out/.test(log), 'the long run reached its result inside the wait', `${Math.round(elapsed / 1000)} s of ${Math.round(DURESS_MS / 1000)} s`);
   const read = readSession();
+  /*
+   * Where the wait went, from the traffic (each call's interval at the endpoint) and the store (each tool call's), so
+   * an overrun says whose it was (live-run finding H-h). The first execution failed at 2,406 s of 2,400 s with nothing
+   * beside the two figures, and a request was open at the endpoint for all but seven seconds of it. An overrun while
+   * the run was still progressing and the product held almost none of the wait is the WINDOW's bound — a NOTE, and
+   * `LIVE_RUN_DURESS_MS` is what asks the longer question; the owner's forty minutes stay the default (AGENTS.md).
+   */
+  const durTraffic = readTraffic('duress').map(trafficCall);
+  const durCalls = read === null ? [] : readToolCalls(read.session.session_id);
+  const attribution = attributeWait({
+    startedAt, endedAt: startedAt + elapsed,
+    requests: durTraffic,
+    tools: durCalls.filter((c) => c.endedAt !== null && c.elapsedMs !== null).map((c) => ({ start: c.endedAt - c.elapsedMs, end: c.endedAt })),
+  });
+  const usage = { completionTokens: durTraffic.reduce((t, c) => t + (c.completionTokens ?? 0), 0), reasoningTokens: durTraffic.reduce((t, c) => t + (c.reasoningTokens ?? 0), 0) };
+  const deadline = deadlineReading({ timedOut: /capture: wait for result timed out/.test(log), attribution, budgetMs: DURESS_MS, traffic: proxy !== null && durTraffic.length > 0, usage });
+  if (deadline.outcome === 'window') noted('the long run was bounded by the window, not by the product', deadline.detail);
+  else check(deadline.outcome === 'inside', 'the long run reached its result inside the wait', deadline.detail);
   checkPricing('duress', read?.session);
   if (read === null) check(false, 'the long run left a session row', 'no session was recorded at all');
   else {
@@ -1969,10 +1989,13 @@ if (wanted.includes('duress')) {
     preserveRun('duress', sessionId);
     const autopsyFile = join(scenarioDir('duress'), 'autopsy.txt');
     const autopsy = existsSync(autopsyFile) ? readFileSync(autopsyFile, 'utf8') : '';
-    const coherent = (label) => new RegExp(`${label}: (true|false)`).exec(autopsy)?.[1] ?? null;
+    const coherent = (label) => new RegExp(`${label}: (true|false|unasked)`).exec(autopsy)?.[1] ?? null;
     if (autopsy === '') check(false, 'the autopsy reader produced a reading of the long run', 'autopsy.txt is absent or empty');
     else {
-      check(coherent('null summary on stopped run') === 'false', 'a stopped run did not end with a null summary', `autopsy says ${coherent('null summary on stopped run')}`);
+      // A session that never stopped is not a stopped run, so the question is unasked rather than passed (H-c).
+      const nullSummary = coherent('null summary on stopped run');
+      if (nullSummary === 'unasked') noted('the null-summary question is unasked: the long run never stopped', `execution_status ${read.session.execution_status}, stop_reason ${read.session.stop_reason ?? 'none'}`);
+      else check(nullSummary === 'false', 'a stopped run did not end with a null summary', `autopsy says ${nullSummary}`);
       /*
        * "Zero cost with tokens" is only incoherent where a cost COULD have been computed. This check used to condition
        * itself on the endpoint's accounting kind, because the reader answered `true` for any zero cost beside tokens —
@@ -1989,12 +2012,12 @@ if (wanted.includes('duress')) {
     let compressed = 0;
     let aggregate = null;
     try {
-      children = db.prepare('SELECT given_name, persona, state, tool_calls, report FROM children WHERE session_id = ? ORDER BY spawned_at').all(sessionId);
+      children = db.prepare('SELECT canonical_name, given_name, persona, state, tool_calls, report FROM children WHERE session_id = ? ORDER BY spawned_at').all(sessionId);
       compressed = db.prepare("SELECT COUNT(*) AS n FROM timeline WHERE session_id = ? AND name = 'context_compressed'").get(sessionId)?.n ?? 0;
       aggregate = db.prepare('SELECT compressions FROM sessions WHERE session_id = ?').get(sessionId)?.compressions ?? null;
     } finally { db.close(); }
     const reportOf = (child) => { try { return JSON.parse(child.report ?? '{}'); } catch { return {}; } };
-    const calls = readToolCalls(sessionId);
+    const calls = durCalls;
 
     // A run that commissioned nobody asked none of the questions below. That is a fact about the model and the
     // fixture, not a fault of the product, so it is a NOTE — and the checks that depend on it say so too.
@@ -2007,12 +2030,15 @@ if (wanted.includes('duress')) {
       noted('what the long run commissioned', children.map((c) => `${c.given_name} [${c.persona}] ${c.state}, ${c.tool_calls} calls`).join('; '));
       // The eighty-second defect's shape at the child level: four of eleven children died with an empty
       // `final_response` because a model timeout was read as a user abort. An empty report from a failed child
-      // is the observable, whatever the cause underneath it.
-      const silent = children.filter((c) => c.state === 'failed' && String(reportOf(c).final_response ?? '') === '');
+      // is the observable, whatever the cause underneath it — but an empty `final_response` alone is not one:
+      // REQ-ORCH-110 leaves it empty for a child cut off mid-work, whose `last_response`, `cut_off` and timeout
+      // error say what it did (H-a).
+      const silent = silentFailedChildren(children, reportOf);
       check(silent.length === 0, 'no child ended failed with nothing to say', silent.length === 0 ? 'every failed child reported' : `${silent.length}: ${silent.map((c) => c.given_name).join(', ')}`);
       // The eighty-eighth: `commands: []` was hardcoded at all three construction sites, so a child that ran
       // eight commands reported none. Derived from the transcript now; this is the live reading of that.
-      const ranCommands = children.filter((c) => c.tool_calls > 0 && calls.some((call) => call.agent_name === c.given_name && call.tool_name === 'terminal'));
+      // A call names its agent by the canonical name, never the given one (H-b).
+      const ranCommands = childrenThatRanCommands(children, calls);
       const mute = ranCommands.filter((c) => (reportOf(c).commands ?? []).length === 0);
       if (ranCommands.length === 0) noted('no child ran a terminal command', 'the report.commands reading is unasked this run');
       else check(mute.length === 0, 'every child that ran a command reported its commands', mute.length === 0 ? `${ranCommands.length} child(ren) reported theirs` : `${mute.length} reported none, e.g. ${mute[0].given_name}`);
@@ -2020,7 +2046,14 @@ if (wanted.includes('duress')) {
 
     // The eighty-seventh: the session `compressions` aggregate was declared, rehydrated, copied into every save
     // and never added to — three `context_compressed` entries against a persisted 0 (REQ-SESSION-139, ADR-0008).
-    if (compressed === 0) noted('the long run never compressed its context', `${read.session.iterations_completed} iteration(s) was not long enough; the compressions aggregate is unasked`);
+    // Why not is the size of the largest prompt against the trigger, never the iteration count (H-d).
+    if (compressed === 0) {
+      const yaml = existsSync(agentsFile) ? readFileSync(agentsFile, 'utf8') : '';
+      const setting = (key) => { const m = new RegExp(`^\\s+${key}:\\s*(\\d+)\\s*$`, 'm').exec(yaml); return m === null ? undefined : Number(m[1]); };
+      const prompts = durTraffic.map((c) => c.promptTokens).filter((t) => t !== null);
+      const trigger = compressionTrigger({ contextTokens: endpoint.contextTokens ?? null, thresholdPercentage: setting('threshold_percentage'), defaultThreshold: setting('default_threshold') });
+      noted('the long run never compressed its context', compressionNote({ largestPrompt: prompts.length === 0 ? null : Math.max(...prompts), trigger }));
+    }
     else check(aggregate === compressed, 'the compressions aggregate counted what the timeline recorded', `aggregate ${aggregate} against ${compressed} timeline entr${compressed === 1 ? 'y' : 'ies'}`);
 
     const leaked = calls.filter((call) => call.tool_name === 'terminal' && /__rot_/.test(call.result));

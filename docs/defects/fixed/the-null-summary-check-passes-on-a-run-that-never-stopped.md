@@ -18,3 +18,13 @@ Live-run finding: H-c (live runs of 2026-09-29)
 
 - `apps/desktop/scripts/live-run.mjs:1861` — the check.
 - `apps/desktop/scripts/autopsy.mjs:202` — `null summary on stopped run: ${stopped && …}`.
+
+## Outcome
+
+Repaired 2026-09-29 under R-067. The autopsy reader's line answers `unasked` for a session that never stopped, meaning
+one whose status is `idle`, `running`, `background` or `waiting`, the same four the engine's autopsy treats so
+(`nullSummaryReading` and `nullSummaryLine` in `apps/desktop/scripts/lib/autopsy-coherence.mjs`, printed by
+`apps/desktop/scripts/autopsy.mjs`). The live run reports `unasked` as a NOTE, "the null-summary question is unasked: the
+long run never stopped", and checks the other two readings as before. Pinned by
+`apps/desktop/scripts/lib/autopsy-coherence.test.ts`: six readings, plus the reader run over a store holding a
+`running` session, which printed `false` before the repair and prints `unasked` after it.

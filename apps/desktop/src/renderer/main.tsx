@@ -888,7 +888,7 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
       onTheme={onTheme}
       onReducedMotion={onMotion}
       onCategory={(id) => { void bridge.command({ kind: 'prefs.set', key: 'interface/settingsTab', value: id }); }}
-      config={{ ...config, providersCard, confinement: confinement.verdict, onRecheckConfinement: confinement.onRecheck }}
+      config={{ ...config, providersCard, confinement: confinement.verdict, onRecheckConfinement: confinement.onRecheck, planReleased: session?.planReleased === true }}
       mcp={mcp}
       display={{
         autoCollapseTools: display.autoCollapseTools,

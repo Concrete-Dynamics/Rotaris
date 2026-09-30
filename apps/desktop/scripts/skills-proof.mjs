@@ -253,7 +253,7 @@ results.push({ launch: 'listing-reopen', session: listingSession, count: reread[
 /*
  * A GLOBAL policy for one skill, so REQ-CONFIG-258's "write the baseline out explicitly" case is reachable at
  * all. The path is `resolveUserDirs().config` by the platform that reads it (`configDirFor`): on Windows
- * `%LOCALAPPDATA%/rotaris/config`, off Windows `<XDG_CONFIG_HOME>/rotaris` — the proof points both at the scratch
+ * `%LOCALAPPDATA%/rotaris/rotaris`, off Windows `<XDG_CONFIG_HOME>/rotaris` — the proof points both at the scratch
  * tree, so this is that tree's own global scope and not the operator's. Spelled for Windows alone, the run host
  * never read it off Windows and this launch failed at the explicit baseline
  * (`docs/defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`).

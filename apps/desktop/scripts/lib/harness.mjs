@@ -113,8 +113,8 @@ export function machineIdFileFor(local, platform = process.platform, home = scra
 
 /**
  * The configuration directory (`resolveUserDirs().config`) of a launch isolated at `local`, by the same copied rule:
- * on Windows `local/rotaris/config`, on macOS `<home>/Library/Application Support/rotaris`, elsewhere
- * `<XDG_CONFIG_HOME>/rotaris`. The live run read the discovery snapshot (`project_settings.yaml`) at the Windows
+ * on Windows `local/rotaris/rotaris` (REQ-CONFIG-001's `%LOCALAPPDATA%\rotaris\rotaris\`), on macOS
+ * `<home>/Library/Application Support/rotaris`, elsewhere `<XDG_CONFIG_HOME>/rotaris`. The live run read the discovery snapshot (`project_settings.yaml`) at the Windows
  * spelling on every platform, so on Linux it reported the authenticated provider missing from a file it never
  * opened. Found by the Linux live run, 2026-09-24.
  *
@@ -123,9 +123,13 @@ export function machineIdFileFor(local, platform = process.platform, home = scra
  * a directory the product never reads on macOS
  * (`docs/defects/fixed/config-dir-for-answers-the-linux-directory-on-macos.md`). A caller that hands its launch a
  * home of its own passes the same one here; one that does not takes the default `proofIsolationEnv` sets.
+ *
+ * The Windows answer moved with the product's on 2026-09-29: `resolveUserDirs` had spelled it `rotaris\config`, a
+ * name REQ-CONFIG-001 never spells, and this copy followed it
+ * (`docs/defects/fixed/the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md`).
  */
 export function configDirFor(local, platform = process.platform, home = scratchHomeFor(local)) {
-  if (platform === 'win32') return win32.join(local, 'rotaris', 'config');
+  if (platform === 'win32') return win32.join(local, 'rotaris', 'rotaris');
   if (platform === 'darwin') return macosApplicationSupport(home);
   return posix.join(toPosix(local), 'rotaris', 'config', 'rotaris');
 }

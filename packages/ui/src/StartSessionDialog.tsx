@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react';
-import { confinementMessage, NO_CONFINEMENT_DISCLOSURE, SANDBOX_MODE_NAMES, validateBranchName, type ConfinementVerdict, type SandboxModeName } from '@rotaris/contracts';
+import { confinementMessage, NO_CONFINEMENT_DISCLOSURE, owesNoConfinementDisclosure, SANDBOX_MODE_NAMES, validateBranchName, type ConfinementVerdict, type SandboxModeName } from '@rotaris/contracts';
 import { Button as DesignButton, Checkbox as DesignCheckbox, Input as DesignInput, Select as DesignSelect, layoutContractAttributes, type UiLayoutContract } from './design-system/index.js';
 
 /**
@@ -181,8 +181,9 @@ export function StartSessionDialog({ sessionId, runActive, defaultSandboxMode, d
           {!confinementAvailable && confinement !== null && confinement.reason !== '' && (
             <p className="start-session__hint text-secondary" data-testid="start-session-sandbox-reason">{confinementMessage(confinement)}</p>
           )}
-          {/* REQ-SANDBOX-130: shown for attended and unattended sessions alike, and whatever mode is selected. */}
-          {!confinementAvailable && <p className="start-session__disclosure text-secondary" data-testid="start-session-disclosure">{NO_CONFINEMENT_DISCLOSURE}</p>}
+          {/* REQ-SANDBOX-130: shown for attended and unattended sessions alike, and whatever mode is selected — on a host with
+              no mechanism at all, and only there, which is the settings surface's condition too (REQ-SANDBOX-071). */}
+          {owesNoConfinementDisclosure(confinement) && <p className="start-session__disclosure text-secondary" data-testid="start-session-disclosure">{NO_CONFINEMENT_DISCLOSURE}</p>}
           {/* REQ-SANDBOX-107: the advisory, beside the disclosure and never suppressing it. */}
           {advisory !== '' && <p className="start-session__hint text-secondary" role="status" data-testid="start-session-advisory">{advisory}</p>}
         </section>

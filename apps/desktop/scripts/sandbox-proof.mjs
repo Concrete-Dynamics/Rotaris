@@ -1,7 +1,8 @@
 import { accessSync, constants, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { delimiter, join, relative, resolve, sep } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { createRequire } from 'node:module';
+import { cleanEnvironment, configDirFor, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 /**
@@ -21,12 +22,16 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  * - `linux` or `darwin` whose trial succeeds reports the backend available; the run that demands
  *   confinement STARTS, and scenario 6 runs REQ-SANDBOX-127's six observable effects on a live confined
  *   process through the product's own terminal tool — IC-8's measurement for that platform, and the only
- *   one no rendered string may stand in for.
+ *   one no rendered string may stand in for. A third confined launch, in a workspace with no `.git`, is
+ *   REQ-SANDBOX-077's absent-subpath case: under Seatbelt the name is denied by rule and the commands run;
+ *   under bubblewrap, which cannot hide an absent name without creating it on the host, every command is
+ *   refused (`sandbox_unavailable`, 126) and the name is still absent afterwards.
  *
  * IC-8 is discharged only when the six effects have been run on a real macOS host AND a real Linux host,
  * so no run of this proof on one platform discharges it (`docs/defects/fixed/
  * sandbox-proof-asserts-the-windows-verdict-on-every-platform.md` is why the proof reads the host).
  */
+const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
@@ -206,6 +211,47 @@ if (read.standIn === true) throw new Error('the withdrawn stand-in sentence is s
 results.settingsSurface = { disclosure: expected === 'outside' ? 'present with sandbox_mode at its off default' : 'absent: this platform has a mechanism', controls: read.controls };
 
 /*
+ * 2b. REQ-SANDBOX-130 on its second surface, the per-session launch dialog, with the same fact as the settings surface
+ *     and on the same condition: drawn only where no mechanism exists at all. Where a mechanism exists but is not
+ *     usable (launcher missing, trial failed) the dialog carries that mechanism's own reason and remediation instead
+ *     (REQ-SANDBOX-119), and where it is available, neither. The dialog drew the disclosure whenever confinement was
+ *     not available until 2026-09-29 (`docs/defects/fixed/
+ *     the-launch-dialog-draws-the-no-mechanism-disclosure-where-a-mechanism-exists.md`). The select's disabled state
+ *     is read too: it says the verdict had arrived when the dialog was read, so an absent text is not a verdict not yet
+ *     taken.
+ */
+const READ_DIALOG = `({
+  disclosure: document.querySelector('[data-testid="start-session-disclosure"]')?.textContent ?? '',
+  reason: document.querySelector('[data-testid="start-session-sandbox-reason"]')?.textContent ?? '',
+  disabled: document.querySelector('[data-testid="start-session-sandbox"]')?.disabled ?? null
+})`.replace(/\n\s*/g, ' ');
+const log2b = await launch('dialog', s1, {
+  ROTARIS_CAPTURE_CLICKS: '.btn>>New session@~6000',
+  ROTARIS_CAPTURE_EVAL_AT: `${READ_DIALOG}>>[data-testid="start-session-dialog"]@~9000`,
+  ROTARIS_CAPTURE_AFTER_MS: '10000',
+});
+const dialogLine = log2b.split('\n').find((line) => line.includes('capture: eval-at') && line.includes('disclosure')) ?? '';
+if (dialogLine === '') throw new Error(`the launch dialog was not read (did it open?):\n${log2b}`);
+const dialogRead = JSON.parse(dialogLine.slice(dialogLine.indexOf('→') + 1).trim());
+if (expected === 'outside') {
+  if (!String(dialogRead.disclosure).includes('This host cannot confine anything')) throw new Error("the launch dialog does not carry REQ-SANDBOX-130's disclosure");
+  if (dialogRead.disclosure !== read.disclosure) throw new Error('the two surfaces carry different disclosures (REQ-SANDBOX-130: the same fact on both)');
+} else if (dialogRead.disclosure !== '') {
+  throw new Error(`the launch dialog drew REQ-SANDBOX-130's no-mechanism disclosure on ${process.platform}, which has one (the settings surface drew none):\n${dialogRead.disclosure}`);
+}
+if (expected === 'available') {
+  if (dialogRead.disabled !== false) throw new Error(`the launch dialog's sandbox control is not enabled on a host whose confinement is available (disabled: ${dialogRead.disabled})`);
+  if (dialogRead.reason !== '') throw new Error(`the launch dialog carried an unavailability reason on a host whose confinement is available:\n${dialogRead.reason}`);
+} else {
+  if (dialogRead.disabled !== true) throw new Error(`the launch dialog's sandbox control is not disabled on a host that cannot confine (disabled: ${dialogRead.disabled})`);
+  // REQ-SANDBOX-119 and REQ-SANDBOX-071: the same reason and remediation scenario 1 read, visible without hovering.
+  for (const literal of literalsFor(expected)) {
+    if (!String(dialogRead.reason).includes(literal)) throw new Error(`the launch dialog's reason did not carry the ${expected} verdict's '${literal}' (REQ-SANDBOX-119):\n${dialogRead.reason}`);
+  }
+}
+results.launchDialog = { disclosure: dialogRead.disclosure === '' ? 'absent' : 'present', reason: dialogRead.reason, controlDisabled: dialogRead.disabled };
+
+/*
  * 3. REQ-SANDBOX-095, -097, -126: a workspace whose configuration demands confinement this host cannot
  *    deliver does NOT start. No session, no session lock, no snapshot; the refusal carries the reason
  *    and the remediation; nothing ran unconfined. On a host that CAN deliver it the same workspace
@@ -325,9 +371,9 @@ async function effects(name, allowNetwork, preGit) {
     writeInsideRoot: { passed: read('inside.txt') === 'inside', observed: read('inside.txt') },
     writeOutsideRefused: { passed: !existsSync(join(outside, 'written.txt')), observed: read('outside.status') },
     writeUnderGitRefused: { passed: !existsSync(join(ws, '.git', 'planted')) && !existsSync(join(ws, '.git', 'hooks')), existedBefore: preGit, observed: read('git.status') },
-    // REQ-SANDBOX-077 (c), which REQ-SANDBOX-127's third effect cites: a protected subpath absent before the
-    // command is STILL absent after it — no empty directory left on the host for anything to clean up.
-    ...(preGit ? {} : { absentGitStaysAbsent: { passed: !existsSync(join(ws, '.git')), observed: existsSync(join(ws, '.git')) ? `an empty .git directory remains on the host (${readdirSync(join(ws, '.git')).length} entries)` : 'absent' } }),
+    // REQ-SANDBOX-077 (c), which REQ-SANDBOX-127's third effect cites — a protected subpath absent before the command —
+    // is `absentSubpath` below, a launch of its own: under bubblewrap it refuses every command in the root, so the six
+    // effects here are measured with `.git` present.
     writeUnderRotarisRefused: { passed: !existsSync(join(ws, '.rotaris', 'planted')), existedBefore: true, observed: read('rotaris.status') },
     readOutsideRoots: { passed: read('read.txt') === secret, observed: read('read.txt') },
     outboundSocket: {
@@ -339,10 +385,65 @@ async function effects(name, allowNetwork, preGit) {
   return e;
 }
 
+/*
+ * REQ-SANDBOX-077 (c), in a workspace with no `.git`: the protected name absent inside the writable root. Under
+ * Seatbelt the profile denies the name by rule, so the commands run and only the write under it fails. Under
+ * bubblewrap no mount can hide a name that does not exist without a mountpoint at that name, and bubblewrap creates
+ * that mountpoint through the writable bind, on the host — which the requirement's closing paragraph forbids — so the
+ * backend refuses each command under REQ-SANDBOX-083 instead (measured 2026-09-28; repaired 2026-09-29). Either way
+ * the host holds no `.git` afterwards. The refusal is read from the store's `tool_calls`, the host side of it from disk.
+ */
+async function absentSubpath(name) {
+  const s = scenario(name, workspaceEffects(false));
+  const ws = realpathSync(s.workspace);
+  const q = (p) => `'${p.replace(/'/g, "'\\''")}'`;
+  const commands = {
+    git: { command: `mkdir -p ${q(join(ws, '.git', 'hooks'))}; echo planted > ${q(join(ws, '.git', 'planted'))}; echo "exit=$?" > ${q(join(ws, 'git.status'))}` },
+    inside: { command: `echo inside > ${q(join(ws, 'inside.txt'))}` },
+  };
+  const log = await launch(name, s, {
+    ROTARIS_CAPTURE_PROMPT: 'run the absent-subpath checks', ROTARIS_CAPTURE_PROMPT_MS: '1200',
+    ROTARIS_SCRIPT: `${Object.keys(commands).map((k) => `terminal:${k}`).join(',')},answer`,
+    ROTARIS_SCRIPT_TERMINAL_ARGS: JSON.stringify(commands),
+    ROTARIS_CAPTURE_AFTER_MS: '12000',
+  });
+  if (!/session .* started/.test(log)) throw new Error(`${name}: the confined run did not start:\n${log}`);
+  const Database = require('better-sqlite3');
+  const db = new Database(oneDatabase(s.local), { readonly: true });
+  let calls;
+  try {
+    const session = db.prepare('SELECT session_id FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
+    calls = db.prepare("SELECT entry FROM tool_calls WHERE session_id = ? AND tool_name = 'terminal' ORDER BY ordinal").all(session.session_id)
+      .map((row) => { const entry = JSON.parse(row.entry); return { failureKind: entry.failure_kind ?? null, result: String(entry.result ?? '') }; });
+  } finally { db.close(); }
+  if (calls.length !== Object.keys(commands).length) throw new Error(`${name}: expected ${Object.keys(commands).length} terminal calls in the store; found ${calls.length}`);
+  const refusedEach = calls.every((c) => c.failureKind === 'sandbox_unavailable' && /"exit_code":126/.test(c.result));
+  const ranEach = calls.every((c) => c.failureKind === null);
+  const exists = (file) => existsSync(join(ws, file));
+  const e = {
+    absentGitStaysAbsent: { passed: !exists('.git'), observed: exists('.git') ? `a .git remains on the host (${readdirSync(join(ws, '.git')).length} entries)` : 'absent' },
+    writeUnderGitRefused: { passed: !exists('.git/planted') && !exists('.git/hooks'), existedBefore: false, observed: exists('git.status') ? readFileSync(join(ws, 'git.status'), 'utf8').trim() : 'the command did not run' },
+  };
+  if (mechanism.launcher === 'bwrap') {
+    // REQ-SANDBOX-077's closing paragraph and REQ-SANDBOX-078: refused, one command at a time, and nothing ran.
+    e.eachCommandRefused = { passed: refusedEach, observed: calls.map((c) => c.failureKind ?? 'ran') };
+    e.nothingRan = { passed: !exists('inside.txt') && !exists('git.status'), observed: ['inside.txt', 'git.status'].filter(exists) };
+    e.causeNamesThePath = { passed: calls.every((c) => c.result.includes(`${join(ws, '.git')} does not exist`)), observed: calls[0]?.result.split('\n')[0] ?? '' };
+  } else {
+    // Seatbelt denies the absent name by rule, so the commands run and only the write under the name fails.
+    e.commandsRan = { passed: ranEach && readFileSync(join(ws, 'inside.txt'), 'utf8').trim() === 'inside', observed: calls.map((c) => c.failureKind ?? 'ran') };
+  }
+  return e;
+}
+
 if (expected === 'available') {
-  results.effects = { denied: await effects('effects-network-denied', false, false), allowed: await effects('effects-network-allowed', true, true) };
+  results.effects = {
+    denied: await effects('effects-network-denied', false, true),
+    allowed: await effects('effects-network-allowed', true, true),
+    absent: await absentSubpath('effects-absent-git'),
+  };
   const failed = Object.entries(results.effects).flatMap(([run, e]) => Object.entries(e).filter(([, v]) => !v.passed).map(([k]) => `${run}.${k}`));
-  results.effectsVerdict = failed.length === 0 ? `all six REQ-SANDBOX-127 effects, and REQ-SANDBOX-077's no-residue clause, observed under ${mechanism.name} on ${process.platform}` : `FAILED: ${failed.join(', ')}`;
+  results.effectsVerdict = failed.length === 0 ? `all six REQ-SANDBOX-127 effects, and REQ-SANDBOX-077's absent-subpath case with its no-residue clause, observed under ${mechanism.name} on ${process.platform}` : `FAILED: ${failed.join(', ')}`;
   writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
   if (failed.length > 0) throw new Error(`REQ-SANDBOX-127 / -077: ${failed.join(', ')} did not hold under an active confinement; see results.json`);
 } else {

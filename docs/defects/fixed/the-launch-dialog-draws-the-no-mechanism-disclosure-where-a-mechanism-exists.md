@@ -32,3 +32,28 @@ carries the mechanism's own reason and remediation (REQ-SANDBOX-119), and that t
 
 Noticed 2026-09-28 under R-062 while repairing `sandbox-proof` for Linux. Not repaired, because it is outside that
 harness-only task.
+
+## Repaired — 2026-09-29
+
+Repaired 2026-09-29 under R-067. Both surfaces now read one predicate, `owesNoConfinementDisclosure`
+(`packages/contracts/src/confinement.ts`, beside `NO_CONFINEMENT_DISCLOSURE`). It is true only for a verdict whose
+backend is `unavailable`, which is REQ-SANDBOX-065's no-mechanism case. The launch dialog now draws the disclosure
+under that predicate instead of under `available !== true`, and the settings surface uses the same predicate in
+place of its own inline condition, so the two surfaces can no longer disagree. On a host with a mechanism that is
+unusable, the dialog carries only that mechanism's own reason and remediation (REQ-SANDBOX-119), as it already did.
+Before the verdict arrives, the dialog states nothing.
+
+Pinned by `packages/ui/src/start-session-disclosure.test.ts`, whose five cases render the dialog for each verdict
+shape; three of them fail on the code before the repair. Also pinned by `sandbox-proof`'s new scenario 2b, which
+reads the launch dialog in the built app, as root under Xvfb:
+
+- **Linux with `bwrap` moved out of `PATH`:** the build before the repair went red on this check ("the launch dialog
+  drew REQ-SANDBOX-130's no-mechanism disclosure on linux"). After the repair it is green: no disclosure, and the
+  control is disabled with the launcher-missing reason and both install lines.
+- **Linux with `bwrap`:** green, with no disclosure, no reason, and the control enabled.
+
+The one run that went red after the repair failed in scenario 5, not in this check. It ran without `bwrap` while
+another workflow loaded the host (load average 4.2). Its selects were chosen but its Save never matched. Re-run once
+alone, the proof was green. That is consistent with the open
+[`the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`](../the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md),
+which names `sandbox-proof`, but the run did not establish that it was the cause.

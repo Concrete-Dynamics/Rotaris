@@ -12,6 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 import { findShell, nodePtyFactory, seconds, TerminalManager, terminalDescription, terminalTool, TERMINAL_DEFAULTS, type BackgroundSession } from './index.js';
 import type { ToolContext } from '../tools/types.js';
+import type { ConfinementPort } from '../confinement/index.js';
 
 /**
  * ADR-0020's first execution, against a REAL shell through a REAL pseudo-terminal (REQ-TOOLS-104: the
@@ -212,6 +213,26 @@ describe.skipIf(process.platform === 'win32')('PD-TOOLS-001: the POSIX shell-sta
 });
 
 describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020, REQ-TOOLS-097..104, 179, 187)', () => {
+  it('REQ-SANDBOX-077, -078, -083: under bubblewrap a root missing a protected name refuses the command, runs nothing and creates neither name', async () => {
+    await tool();
+    const bare = mkdtempSync(join(tmpdir(), 'rotaris-absent-'));
+    try {
+      const confinement: ConfinementPort = { resolve: (executionRoot) => ({ spec: { mode: 'workspace-write', executionRoot, writableRoots: [], allowNetwork: false }, verdict: { available: true, backend: 'bubblewrap', reason: '', remediation: '' } }) };
+      const t = terminalTool(manager!, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, confinement);
+      const at = { ...ctx(), workspaceRoot: bare, sessionId: 's-absent' };
+      const marker = join(bare, 'ran.txt');
+      for (const background of [false, true]) {
+        const r = await t.execute(args({ command: SH.writeVar('HOME', marker), background }), at);
+        expect(r).toMatchObject({ isError: true, failureKind: 'sandbox_unavailable', outcomeKind: 'sandbox_unavailable', exitCode: 126 });
+        expect(diag(r.text)).toMatchObject({ error_class: 'SandboxUnavailableError', exit_code: 126 });
+        expect(r.text).toContain(`${bare}/.git and ${bare}/.rotaris do not exist`);
+      }
+      // Nothing reached the shell or the background registry, and the host holds what it held before.
+      expect(existsSync(marker)).toBe(false);
+      expect(existsSync(join(bare, '.git'))).toBe(false);
+      expect(existsSync(join(bare, '.rotaris'))).toBe(false);
+    } finally { rmSync(bare, { recursive: true, force: true }); }
+  });
   it('runs a command, recovers the exit status, cleans the echo and the markers, and persists shell state across calls', async () => {
     const t = await tool();
     // The FIRST call on a session pays `pwsh`'s cold start, which under full-suite load can outlast the 1.5 s

@@ -428,6 +428,9 @@ expect(cascadeProblems.length === 0, `the cascade premise: ${cascadeProblems.joi
 withDb((db) => db.prepare("INSERT INTO delivery_runs (req_id, unit, session_id, worktree_ref, permissions, status, stage, outcome, started_at, ended_at) VALUES ('REQ-PROOF-001', 'u1', ?, NULL, '', 'running', NULL, NULL, '2026-09-05T09:00:00.000Z', NULL)").run(A));
 // v20 (REQ-SESSION-166): A's VERBATIM plan text is planted so the built-app delete below measures the cascade taking it.
 withDb((db) => db.prepare("INSERT INTO plan_cycles (session_id, cycle, opened_at, plan, intent, todo) VALUES (?, 1, 't', 'proof plan, verbatim', 'small_feature', '')").run(A));
+// PD-ORCH-005 clause 12 (v23): the scripted runs start no background terminal, so A's `agent_terminals` row is planted —
+// one ended terminal, as plan_cycles' is — and the delete below measures the cascade taking that table too.
+withDb((db) => db.prepare("INSERT INTO agent_terminals (session_id, terminal_id, task_id, command, started_at, state, exit_code, output_tail, updated_at) VALUES (?, 'proof-terminal', 'root', 'echo proof', 't', 'completed', 0, 'proof', 't')").run(A));
 const plantedBefore = Object.fromEntries(tables.map((t) => [t, countIn(t, A)]));
 expect(refsOf(workspace, A).length === 2, `A's refs before: ${JSON.stringify(refsOf(workspace, A))}`);
 const del = await launch('delete', {
@@ -449,8 +452,9 @@ const del = await launch('delete', {
   expect(plantedBefore.delivery_runs === 1 && after.delivery_runs === 1, `A's delivery run: ${plantedBefore.delivery_runs} before, ${after.delivery_runs} after`);
   // REQ-SESSION-166 (v20): A's VERBATIM plan text leaves with the session; it is not a second `delivery_runs`.
   expect(plantedBefore.plan_cycles === 1 && after.plan_cycles === 0, `A's plan cycles: ${plantedBefore.plan_cycles} before, ${after.plan_cycles} after`);
-  // PD-ORCH-005 clause 12: the conversation record A's two runs wrote (v23-v24) belongs to A and leaves with it.
-  const record = ['iterations', 'agent_messages', 'agent_fingerprints'];
+  // PD-ORCH-005 clause 12: the conversation record A's two runs wrote (v23-v24), with the terminal planted above,
+  // belongs to A and leaves with it.
+  const record = ['iterations', 'agent_messages', 'agent_terminals', 'agent_fingerprints'];
   expect(record.every((t) => plantedBefore[t] > 0 && after[t] === 0), `A's agent record: ${record.map((t) => `${t} ${plantedBefore[t]} before, ${after[t]} after`).join('; ')}`);
   expect(refsOf(workspace, A).length === 0, `A's refs after: ${JSON.stringify(refsOf(workspace, A))}`);
   expect(!existsSync(filesA), `A's files remain at ${filesA}`);

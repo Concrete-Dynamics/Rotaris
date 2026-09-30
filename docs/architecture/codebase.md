@@ -1141,8 +1141,9 @@ premise — every reference to `sessions` is `session_id` → `session_id` `ON D
 carries the column as a fact — is read from the schema by `scripts/lib/session-cascade.mjs`; the count pin of sixteen it
 replaced stopped the proof before the delete on every run once v23–v24 made the cascading tables twenty (R-067;
 [the note](../defects/fixed/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md)). The delete now
-also asserts that A's agent record (`iterations`, `agent_messages`, `agent_fingerprints`) was there and leaves with it
-(PD-ORCH-005 clause 12).
+also asserts that A's agent record (`iterations`, `agent_messages`, `agent_terminals`, `agent_fingerprints`) was there and
+leaves with it (PD-ORCH-005 clause 12); the scripted runs start no background terminal, so A's `agent_terminals` row is
+planted, as its `plan_cycles` row is.
 
 **What `pnpm code-intel-proof` does.** After `pnpm code-intel:bundle` (once per checkout; the tree is git-ignored), it
 launches the app seven times: the branch guard on the dev entry and, under `ROTARIS_CODE_INTEL_PACKAGED=1`, on

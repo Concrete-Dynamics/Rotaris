@@ -67,6 +67,13 @@ first spelling. Pinned by the case "the summariser's own list spelled another wa
 nor repeats a listed one" in `report.test.ts`, red before the change. Not compared, stated: an absolute path against a
 relative one (it would need the workspace root) and letter case.
 
+*Added by the repair's third verification:* the key dropped a `./` only at the start, so `docs/./api.md` for a refused
+`docs/api.md` still came back. It now drops a `./` segment wherever it stands. Pinned by the case "the summariser's own
+list with a `./` segment inside the path …" in `report.test.ts`, red before the change. The bound is stated in full now:
+not compared are an absolute path against a relative one and a `..` segment (each is resolved only against the workspace
+root, which `editedFilesFrom` does not hold), and letter case, which a Windows workspace does not distinguish, so there a
+summariser entry spelled `Docs/API.md` for a refused `docs/api.md` is still listed.
+
 Shown against the record, not driven: in the two live-run packs of 2026-09-29 (`2026-09-29T02-41-56-779Z`,
 `2026-09-29T03-06-14-929Z`) every refused write (four of them: a stale hash twice, a `write_file` missing its operation
 twice) was followed by a write to the same path that landed, so neither pack's reports list a path only a refusal

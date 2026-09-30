@@ -267,10 +267,12 @@ export function commandsFrom(messages: readonly ChatMessage[]): readonly { comma
  * forbids concealing a file rather than overstating one. A write executor that raised AFTER its file was
  * written (a failure rendering the diff, say) is answered as an ordinary error and is not listed.
  *
- * Paths are compared by `pathKey` — backslashes as `/`, a doubled slash as one, a leading `./` dropped — so the
- * summariser's list spelled another way than the call (`docs\api.md`, `./docs/api.md`) neither brings back a refused
- * path nor repeats a listed one; each is listed as its first spelling. Found by the second verification of the repair.
- * Not compared: an absolute path against a relative one, which would need the workspace root, and letter case.
+ * Paths are compared by `pathKey` — backslashes as `/`, a doubled slash as one, a `./` segment dropped wherever it
+ * stands — so the summariser's list spelled another way than the call (`docs\api.md`, `./docs/api.md`,
+ * `docs/./api.md`) neither brings back a refused path nor repeats a listed one; each is listed as its first spelling.
+ * Found by the second verification of the repair; the interior `./` by the third. Not compared: an absolute path
+ * against a relative one, which would need the workspace root; a `..` segment, which is resolved only against a root
+ * too (`docs/../docs/a.md` stays its own spelling); and letter case, which a Windows workspace does not distinguish.
  */
 export function editedFilesFrom(messages: readonly ChatMessage[], reported: readonly string[] = []): readonly string[] {
   const erred = new Set<string>();
@@ -293,9 +295,9 @@ export function editedFilesFrom(messages: readonly ChatMessage[], reported: read
   return out;
 }
 
-/** `editedFilesFrom`'s comparison key for a path: backslashes as `/`, runs of `/` as one, leading `./` segments dropped. */
+/** `editedFilesFrom`'s comparison key for a path: backslashes as `/`, runs of `/` as one, `./` segments dropped. */
 function pathKey(v: string): string {
-  return v.replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/^(?:\.\/)+/, '');
+  return v.replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/\/(?:\.\/)+/g, '/').replace(/^(?:\.\/)+/, '');
 }
 
 /**

@@ -32,6 +32,20 @@ export type ConfinementVerdict = z.infer<typeof ConfinementVerdictSchema>;
  */
 export const NO_CONFINEMENT_DISCLOSURE = 'This host cannot confine anything: every command an agent runs executes with the same operating-system privileges as the account running Rotaris, reaching whatever that account can read and whatever it can write, and no value of the sandbox mode changes that here. That is a stated limit of the product on this platform, not a fault to fix; the answer changes only when the workspace runs on a host Rotaris can confine.';
 
+/**
+ * Whether a surface owes REQ-SANDBOX-130's disclosure: only on a host for which no confinement
+ * mechanism exists at all, which REQ-SANDBOX-065 reports as the `unavailable` backend. A Linux or
+ * macOS host whose launcher is missing or whose trial failed HAS a mechanism, and installing or
+ * repairing it changes the answer, so the disclosure's "no value of the sandbox mode changes that
+ * here" would be untrue there; its own reason and remediation are what it owes (REQ-SANDBOX-119). A
+ * verdict not yet taken states nothing. One predicate for both surfaces, so they cannot disagree
+ * (REQ-SANDBOX-071); the launch dialog once used `available !== true` and did
+ * (`docs/defects/fixed/the-launch-dialog-draws-the-no-mechanism-disclosure-where-a-mechanism-exists.md`).
+ */
+export function owesNoConfinementDisclosure(verdict: ConfinementVerdict | null): boolean {
+  return verdict !== null && verdict.backend === 'unavailable';
+}
+
 /** REQ-SANDBOX-072: the reason, then the remediation on its own line; a generic line when neither exists. */
 export function confinementMessage(verdict: ConfinementVerdict): string {
   if (verdict.reason === '') return 'No OS-level confinement can be used on this host.';

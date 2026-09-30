@@ -554,8 +554,8 @@ creates it through the writable bind, so it lands on the host. The write under t
 hook cannot be planted. But the name now exists on the host, and REQ-SANDBOX-077 says in so many words that it must
 not. The renderer's comment says both options "leave nothing on the host". That reason is falsified and is kept where
 it stands until the repair replaces it:
-[`the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`](../defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md).
-The proof stays red on a Linux host with `bwrap` until the defect is repaired.
+[`the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`](../defects/fixed/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md).
+~~The proof stays red on a Linux host with `bwrap` until the defect is repaired.~~ *(Repaired 2026-09-29; see below.)*
 
 **What it could not show, stated so it is not read as shown.**
 
@@ -574,3 +574,39 @@ The proof stays red on a Linux host with `bwrap` until the defect is repaired.
 **What the proof checks on every host.** It now reads the host's own verdict and checks the product against it:
 `win32`, launcher missing, trial failed, or available. So `pnpm sandbox-proof` is the check this condition names on
 Linux and on macOS, and on win32 it is still ESC-6's path.
+
+### Linux again — 2026-09-29 (R-067): the absent-subpath case is refused, and nothing remains on the host
+
+**Not discharged.** The macOS half has still not run.
+
+**The repair.** The 2026-09-28 measurement falsified the renderer's reason for case (c): "both options live in the
+confined process's own mount view and leave nothing on the host". It stays in `render-bwrap.ts`, beside what replaced
+it. There is no mount arrangement that hides an absent name without a mountpoint at that name, so case (c) is no
+longer rendered on Linux. The renderer refuses the command under REQ-SANDBOX-083, which is REQ-SANDBOX-077's own
+fallback, and names each absent path in the cause. The consequence is raised as
+[OQ-140](open-questions.md): on Linux, a writable root that lacks `.git` or `.rotaris` refuses every confined command,
+while Seatbelt runs them.
+
+**What ran.** `pnpm sandbox-proof`, as root under Xvfb, Node 24, bubblewrap 0.9.0, on the same kind of host as
+before (kernel `6.18.44-fc-v50`). There were three confined launches. The first two ran the six effects with `.git`
+present, one with the network denied and one with it allowed. The third, `effects-absent-git`, ran with the network
+denied, `.git` absent and `.rotaris` present, and made two `terminal` calls: the `.git` plant and a write inside the
+root. The whole proof exited 0. The same proof on the code before the repair exited non-zero on
+`denied.absentGitStaysAbsent`, because an empty `.git` directory remained on the host.
+
+| REQ-SANDBOX-127 effect | network denied, `.git` present | network allowed, `.git` present | `.git` absent (`effects-absent-git`) |
+| --- | --- | --- | --- |
+| a write inside the effective writable root succeeds | held | held | refused with the command (below) |
+| a write outside every root and every temporary location is refused | held | held | not run |
+| a write under `<root>/.git` is refused | held (`exit=2`) | held (`exit=2`) | held: the command never ran |
+| a write under `<root>/.rotaris` is refused (present before) | held | held | not run |
+| a read outside every writable root succeeds | held | held | not run |
+| an outbound socket is refused while the network is off, and succeeds while it is on | held (the host accepted 0) | held (`pong`; the host accepted 1) | not run |
+| the working directory the command observes is unchanged | held | held | not run |
+| REQ-SANDBOX-077 (c): each command is refused (`sandbox_unavailable`, 126), and nothing runs | — | — | **held**: 2 of 2 refused, read from the store's `tool_calls`; the cause names `<root>/.git` |
+| REQ-SANDBOX-077 (c): an absent protected subpath is still absent afterwards | — | — | **held**: absent |
+
+**What it could not show, beyond the list above.** `.rotaris` absent was still not measured live, because the
+configuration lives there. It takes the same code path as `.git`, which the unit tests pin with both names absent.
+A configured additional root was not measured either. Under this repair such a root refuses every command, and OQ-140
+names that.

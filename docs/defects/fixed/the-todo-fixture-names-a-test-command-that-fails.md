@@ -18,3 +18,12 @@ Live-run finding: H2 (live runs of 2026-09-29)
 ## Relevant files
 
 - `apps/desktop/scripts/fixtures/todo-app/src/todos.js:3` — the header's command.
+
+## Outcome
+
+Repaired 2026-09-29 under R-067. `src/todos.js`'s header names `node --test`, run from the repository's root. That is
+the command the fixture's `README.md` and `AGENTS.md` already named, and the one the live run itself runs. On Node
+24.21, `node --test src/` fails ("✖ src … 'test failed'", measured in a copy of the fixture), and `node --test` passes
+all six tests. Pinned by `apps/desktop/scripts/fixtures/todo-app.test.ts`, which runs every `node --test …` command that
+the fixture's `src/todos.js`, `README.md` and `AGENTS.md` name, in a copy of the fixture, on the Node that runs the
+tests, and requires each one to pass. With the old header restored, its `node --test src/` case fails.

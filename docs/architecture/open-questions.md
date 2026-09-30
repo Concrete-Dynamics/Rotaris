@@ -5322,6 +5322,10 @@ after the scope's own validation (`writesFiles`, `scopeWithoutWriterReason` and 
 repaired. "After REQ-TOOLS-006's controls" is read as the two a child's grant meets, `coordinator_only` and
 `read_only`: the run-scoped allow-list binds the entry agent alone, and the `tool_restrictions` map is applied to no
 agent's grant today (recorded as a defect of its own), so the check follows the grant the tool port builds.
+*Superseded 2026-09-29 under R-067 (acceptance finding A4):* the map now narrows the grant as OQ-141 builds it, and the
+check reads it too. It applies the lists the persona's own map and the delegating persona's map give the persona's name,
+and the writers the reason names are the ones the caller's map lets write (`writesFiles` and `fileWriters` take the
+persona of the parent agent). The sentence above is kept as the reason the check first read two controls.
 The persona checked is the one the ledger resolves, an alias included; the first build read the built-in table without
 its aliases, so `playwright` with a scope was accepted as `ui-verifier` (found by the branch's verification, repaired).
 Live again on 2026-09-29 (duress, session `059ae1d7`), scopes given to `codebase-analyst` and to `verifier` were both
@@ -6286,6 +6290,37 @@ Under Seatbelt all of these commands run, and only the write under the absent na
    stays on the host.
 3. Narrow the carve-outs to the workspace-relative names REQ-SANDBOX-056 states, so that a configured additional
    root carries none.
+
+**OQ-141 — Whose grant does a persona's `tool_restrictions` map narrow, and what do its keys and lists mean?**
+*(REQ-TOOLS-006 (4), "the per-persona `tool_restrictions` map"; REQ-CONFIG-103, "map from name to allowed-tool list …
+restricts named entities; an entity absent from the map is unrestricted"; REQ-CONFIG-062, which canonicalises "every key
+of a role's `tool_restrictions` mapping" as a role name; REQ-CONFIG-046; `PD-TOOLS-006` revision 3's "after
+REQ-TOOLS-006's controls". Raised 2026-09-29 under [R-067](../product/requests.md#r-067) by the repair of
+[`a-personas-tool-restrictions-never-narrow-its-grant.md`](../defects/fixed/a-personas-tool-restrictions-never-narrow-its-grant.md),
+acceptance finding A4. Open.)*
+
+The map sits on a persona, and REQ-CONFIG-062 makes its keys role names. REQ-TOOLS-006 says it narrows "a persona's
+declared tool set". The requirements do not say whose set an entry narrows when it names a role other than the persona
+that holds the map, nor how an allowed-tool list treats an alias, `delegate`'s two companions or a tool-server tool. Three
+readings were weighed:
+- **The entry naming the holder only.** An entry naming another role would narrow nothing — a configured restriction
+  silently ignored, which is the defect's own shape.
+- **Every persona's entry for a role, everywhere.** A coordinator's restriction on a role would bind that role when a
+  different persona delegates it.
+- **The holder's own entry and the delegating persona's entry.** A map restricts the persona itself and the roles it
+  delegates to, the way `delegates_to`, the key REQ-CONFIG-062 canonicalises beside it, names the roles it delegates to.
+
+**What the build proceeds under:** the third. An agent's grant is narrowed by the allowed-tool list its own persona's
+map gives its persona's name, and by the list the map of the persona that delegated it gives that name (the entry agent
+has no parent agent; a grandparent's map is not read). A tool survives only when every binding list names it, after the
+first three controls, and nothing is restored or added. A name and its alias are one tool (`haet` is `haet_edit`), and a
+list naming `delegate` names `background_output` and `wait_for_tasks` with it (REQ-TOOLS-005). A tool-server tool the
+list does not name is withheld, since the list is closed and a withholding rule withholds a tool outside the registry
+(ADR-0016). Each removal is logged `by tool_restrictions` with the persona. `PD-TOOLS-006`'s write-scope refusal reads
+the same lists, including the delegating persona's. The writers its reason names are those the caller's map lets write.
+
+**What a ruling decides.** Which of the three readings binds, or another one. Whether a grandparent's map binds too.
+Whether an allowed-tool list may name a tool-server tool or reach tool-server tools at all.
 
 ## Design-reference dependencies
 

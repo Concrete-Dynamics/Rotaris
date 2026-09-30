@@ -18,6 +18,20 @@ export const PUBLIC_TOOL_NAME_SET: ReadonlySet<string> = new Set(PUBLIC_TOOL_NAM
 export const TOOL_ALIASES: Readonly<Record<string, PublicToolName>> = Object.freeze({ haet: 'haet_edit' });
 
 /**
+ * REQ-TOOLS-006's fourth control, the per-persona `tool_restrictions` map (REQ-CONFIG-103: a name mapped to an
+ * allowed-tool list), read as OQ-141 builds it: `tool` survives only when EVERY list that binds the agent names it.
+ * A name and its alias are one tool (REQ-TOOLS-001), and a list naming `delegate` names the two tools declaring
+ * `delegate` surfaces with it (REQ-TOOLS-005). No list binding the agent leaves every tool standing. The engine's
+ * write-scope refusal and the run host's narrowing both read this one predicate, so the two cannot disagree.
+ */
+export function restrictionsAllow(lists: readonly (readonly string[])[], tool: string): boolean {
+  const canonical = (n: string): string => TOOL_ALIASES[n.trim()] ?? n.trim();
+  const wanted = canonical(tool);
+  const companion = wanted === 'background_output' || wanted === 'wait_for_tasks';
+  return lists.every((list) => list.some((n) => { const c = canonical(n); return c === wanted || (companion && c === 'delegate'); }));
+}
+
+/**
  * REQ-CONFIG-277 / REQ-TOOLS-165 (Part AG): the runtime target behind each public name, which the Tools
  * inventory renders as the entry's description. It lives here rather than beside the declarations in
  * `@rotaris/agent-tools` because the settings surface may reach `contracts` and nothing below it, and an

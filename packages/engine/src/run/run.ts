@@ -155,9 +155,10 @@ export interface RunDeps {
   /**
    * Part B: the tool surface for an agent with a delegation identity (the root and every child). Absent: no delegation.
    * `canonicalName` is the instance name its publishes record as `created_by` (REQ-LIBRARY-093) — the root's, whose
-   * `agentName` is its persona; absent for a child, whose `agentName` is its canonical name.
+   * `agentName` is its persona; absent for a child, whose `agentName` is its canonical name. `parentPersona` is the persona of
+   * the agent that delegated a child (REQ-TOOLS-006 (4), OQ-141); absent for the root.
    */
-  readonly toolsFor?: ((persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string) => ToolPort | null) | undefined;
+  readonly toolsFor?: ((persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string) => ToolPort | null) | undefined;
   readonly dal?: StoreDal | undefined;
   /** Part Y (REQ-ORCH-149): the session artifact store, shared across iterations; absent means no artifacts exist. */
   readonly artifacts?: ArtifactStore | undefined;
@@ -1445,8 +1446,8 @@ export class Run {
     if (port) this.ports.add(port);
     return port;
   }
-  private readonly portFor = (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string): ToolPort | null => {
-    const p = this.deps.toolsFor ? this.deps.toolsFor(persona, agentName, delegation, parentId, depth, canonicalName) : null;
+  private readonly portFor = (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string): ToolPort | null => {
+    const p = this.deps.toolsFor ? this.deps.toolsFor(persona, agentName, delegation, parentId, depth, canonicalName, parentPersona) : null;
     return this.register(p);
   };
 

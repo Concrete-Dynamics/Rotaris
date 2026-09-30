@@ -53,9 +53,25 @@ describe('registry (ADR-0016, REQ-TOOLS-001/004/005/006/007)', () => {
     // the allow-list binds the orchestrator alone
     expect(narrow(['read_file', 'terminal'], { runAllowList: ['read_file'] }, false).tools).toEqual(['read_file', 'terminal']);
     // a later stage never restores
-    const chained = narrow(['terminal', 'grep'], { runAllowList: ['grep'], toolRestrictions: { terminal: true } }, true);
+    const chained = narrow(['terminal', 'grep'], { runAllowList: ['grep'], toolRestrictions: [['terminal', 'grep']] }, true);
     expect(chained.tools).toEqual(['grep']);
     expect(chained.removals).toEqual([{ tool: 'terminal', control: 'run_allow_list' }]);
+  });
+
+  it('REQ-TOOLS-006 (4) / REQ-CONFIG-103 (OQ-141): the tool_restrictions stage keeps what every allowed-tool list names, an alias as its tool, delegate with its two', () => {
+    const declared = ['read_file', 'haet', 'write_file', 'delegate', 'grep'];
+    const one = narrow(declared, { toolRestrictions: [['read_file', 'haet_edit', 'delegate']] }, false);
+    expect(one.tools).toEqual(['read_file', 'haet', 'delegate', 'background_output', 'wait_for_tasks']);
+    expect(one.removals).toEqual([{ tool: 'write_file', control: 'tool_restrictions' }, { tool: 'grep', control: 'tool_restrictions' }]);
+    // Two lists bind at once: the intersection. A list naming an undeclared tool adds nothing.
+    expect(narrow(declared, { toolRestrictions: [['read_file', 'grep', 'terminal'], ['grep', 'write_file', 'terminal']] }, false).tools).toEqual(['grep']);
+    // An empty list leaves nothing; no list leaves everything.
+    expect(narrow(declared, { toolRestrictions: [[]] }, false).tools).toEqual([]);
+    expect(narrow(declared, { toolRestrictions: [] }, false).tools).toEqual(expandDeclared(declared));
+    // It follows the earlier stages and restores nothing they removed.
+    const after = narrow(['write_file', 'grep'], { readOnly: true, toolRestrictions: [['write_file', 'grep']] }, false);
+    expect(after.tools).toEqual(['grep']);
+    expect(after.removals).toEqual([{ tool: 'write_file', control: 'read_only' }]);
   });
 
   it('REQ-TOOLS-005 / REQ-TOOLS-004: delegate surfaces three; unmet prerequisites remove with stable codes', () => {

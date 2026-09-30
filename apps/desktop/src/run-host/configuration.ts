@@ -253,6 +253,10 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
       ...(entry?.skip_auto_sibling_context === true ? { skipAutoSiblingContext: true } : {}),
       // REQ-MCP-065 (Part S): the grant evidence the ledger records at spawn, read from the run host's memoised surface at that moment.
       ...(mcpEvidence ? { mcpEvidence: () => mcpEvidence(role) } : {}),
+      // REQ-CONFIG-103 / REQ-TOOLS-006 (4): the role's `tool_restrictions`, its keys already canonical (REQ-CONFIG-062). The
+      // tool port and the write-scope refusal read it through `toolRestrictionsFor` (OQ-141); until acceptance finding A4
+      // (R-067) the loader parsed it and nothing carried it here, so it narrowed no grant.
+      ...(entry?.tool_restrictions ? { toolRestrictions: entry.tool_restrictions } : {}),
     };
     return persona;
   };

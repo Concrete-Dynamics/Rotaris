@@ -149,6 +149,9 @@ Invariants:
   Each removal is logged with the persona and the control (REQ-TOOLS-006) by `createToolPort`: a narrowing
   control's (`run_allow_list`, `coordinator_only`, `read_only`, `tool_restrictions`) at `info` through
   `ToolPortContext.info`, a prerequisite's (REQ-TOOLS-004's reason codes, `executor_absent` among them) at `warning`.
+  `tool_restrictions` binds by the allowed-tool lists `toolRestrictionsFor` reads (OQ-141): the entry naming the persona
+  in its own map and in the map of `ToolPortContext.parentPersona`, the persona that delegated the agent. A public tool
+  and an MCP tool alike survive only when every list names it (`restrictionsAllow`).
 - The gate decides; the executor never asks. An approval travels `gate → presenter → main → dialog` — see
   [`06-sequences.md` §2](06-sequences.md#2-a-permission-approval-end-to-end).
 - A tool that reaches the filesystem states its read roots; a tool that reaches the network reads the egress

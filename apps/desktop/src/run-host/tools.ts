@@ -1,12 +1,12 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { toIsoUtc, type Clocks } from '@rotaris/kernel';
-import { presetRank, resolvePreset, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
+import { presetRank, resolvePreset, restrictionsAllow, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
   askQuestionsTool, buildPolicy, directWorkBundle, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
   resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type BackgroundAttribution, type BackgroundSession, type ConfinementPort, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
-import { BUILT_IN_PERSONAS, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
+import { BUILT_IN_PERSONAS, toolRestrictionsFor, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import { CODE_INTELLIGENCE_MEMORY_GATE } from '@rotaris/config';
 import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
 import type { McpHost } from './mcp.js';
@@ -268,6 +268,14 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   // ADR-0036: the configured persona over the built-in table; the built-in table alone when no configuration resolved.
   const resolver = deps.personas(ctx.workspaceRoot);
   const persona = resolver?.resolve(ctx.persona)?.persona ?? BUILT_IN_PERSONAS[ctx.persona as RoleName] ?? BUILT_IN_PERSONAS.orchestrator;
+  /*
+   * REQ-TOOLS-006 (4) with REQ-CONFIG-103, under OQ-141's reading: the allowed-tool lists binding this agent — the entry
+   * its own persona's `tool_restrictions` gives its name, and the entry the delegating persona's map gives it. The reason
+   * no restriction ever narrowed a grant, kept beside its replacement (acceptance finding A4, R-067): this call passed the
+   * persona's name, tools, `coordinator_only` and `read_only`, and never its map.
+   */
+  const parentAgentPersona = ctx.parentPersona === undefined ? null : resolver?.resolve(ctx.parentPersona)?.persona ?? BUILT_IN_PERSONAS[ctx.parentPersona as RoleName] ?? null;
+  const restrictions = toolRestrictionsFor(persona, parentAgentPersona);
   const isEntry = isEntryPort(ctx);
   // REQ-ORCH-025: `single` grants the entry role the direct-work bundle and withholds delegate from every role.
   const single = runtime.runOverride === 'single';
@@ -330,7 +338,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   // `canPublishArtifacts` follows the store's presence: REQ-TOOLS-004 reserves `artifact_publish_not_granted`
   // for a build that withholds publishing separately, and no requirement in this part names such a grant — a
   // persona that must not publish declares no `artifact_write` (REQ-TOOLS-002). Recorded as a decision taken.
-  const resolved = resolveToolSet({ name: ctx.persona, tools: declared, coordinatorOnly: persona.coordinatorOnly && delegationAvailable && !directWork, readOnly: persona.readOnly }, {}, {
+  const resolved = resolveToolSet({ name: ctx.persona, tools: declared, coordinatorOnly: persona.coordinatorOnly && delegationAvailable && !directWork, readOnly: persona.readOnly, toolRestrictions: restrictions }, {}, {
     // Part AC: `userPromptChannel` is attendedness (REQ-TOOLS-053/069) — an unattended run has no surface to put a
     // prompt in front of, so the registry removes `ask_questions` with `user_prompt_channel_absent`. It stood at a
     // literal `false` until this part, because there was no executor for it to be true of.
@@ -424,6 +432,9 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
         // tool offered under a public read-only name (`read_file`, on a persona whose public set lacks one) through
         // the hold until 2026-09-28.
         if (planGateHeld() && withheldUnderPlanGate(e.name, false)) { withheldAtPlanGate.add(e.name); ctx.warn(`mcp: '${e.name}' is withheld while this run is held at the plan gate (REQ-ORCH-153)`); continue; }
+        // REQ-TOOLS-006 (4), OQ-141: an allowed-tool list is closed — a server's tool it does not name is withheld, as a
+        // withholding rule withholds a tool outside the registry (ADR-0016), and logged with the control like a native one.
+        if (!restrictionsAllow(restrictions, e.name)) { logInfo(`tool '${e.name}' removed from ${ctx.persona} by tool_restrictions (REQ-TOOLS-004/006)`); continue; }
         if (callable.has(e.name)) { ctx.warn(`mcp: the tool name '${e.name}' collides with a native tool of ${ctx.persona}; the MCP tool is not offered`); continue; }
         callable.set(e.name, e);
         specs.push(toolSpec(e));

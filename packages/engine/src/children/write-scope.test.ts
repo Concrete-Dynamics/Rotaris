@@ -90,6 +90,20 @@ describe('PD-TOOLS-006 revision 3 (OQ-112) — a write scope is for a persona th
     expect(writesFiles(BUILT_IN_PERSONAS.verifier)).toBe(false);
   });
 
+  it('REQ-TOOLS-006 (4) (OQ-141): the tool_restrictions entry naming the persona, in its own map or its parentPersona\'s, is applied like the other controls', () => {
+    // Its own map: an entry naming another role leaves it whole; the entry naming it is an allowed-tool list.
+    expect(writesFiles(p('writer', ['read_file', 'write_file'], { toolRestrictions: { tester: ['read_file'] } }))).toBe(true);
+    expect(writesFiles(p('writer', ['read_file', 'write_file'], { toolRestrictions: { writer: ['read_file'] } }))).toBe(false);
+    // An alias in the list names its tool.
+    expect(writesFiles(p('editor', ['haet_edit'], { toolRestrictions: { editor: ['haet'] } }))).toBe(true);
+    // The parent agent's map, by the entry naming the persona.
+    const lead = { toolRestrictions: { writer: ['read_file'] } };
+    expect(writesFiles(p('writer', ['read_file', 'write_file']), lead)).toBe(false);
+    expect(writesFiles(p('other', ['read_file', 'write_file']), lead)).toBe(true);
+    // The writers the refusal names are the ones this parent agent lets write.
+    expect(fileWriters(undefined, { toolRestrictions: { 'coding-agent': ['read_file'], tester: ['read_file', 'write_file'] } })).toEqual(['tester', 'docs-writer', 'refactorer']);
+  });
+
   it("the catalogue's writers: the built-in table in its order, or the configured known roles resolved", () => {
     expect(fileWriters(undefined)).toEqual(['coding-agent', 'tester', 'docs-writer', 'refactorer']);
     const table: Record<string, Persona> = { orchestrator: BUILT_IN_PERSONAS.orchestrator, scribe: p('scribe', ['haet_edit']), 'codebase-analyst': BUILT_IN_PERSONAS['codebase-analyst'], frozen: p('frozen', ['write_file'], { readOnly: true }) };

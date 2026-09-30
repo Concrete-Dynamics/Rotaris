@@ -47,6 +47,30 @@ export interface Persona {
    * tool port reads; absent for the built-in table, which carries no MCP surface.
    */
   readonly mcpEvidence?: (() => McpGrantEvidence) | undefined;
+  /**
+   * REQ-CONFIG-103 / REQ-TOOLS-006 (4): the role's `tool_restrictions` — role names (REQ-CONFIG-062) mapped to allowed-tool
+   * lists. Absent for the built-in table, which restricts nothing. Read through `toolRestrictionsFor`.
+   */
+  readonly toolRestrictions?: Readonly<Record<string, readonly string[]>> | undefined;
+}
+
+/**
+ * REQ-TOOLS-006 (4) under OQ-141's reading: the allowed-tool lists that bind an agent of `persona` — the entry its own
+ * persona's map gives its name, and the entry the map of the persona that DELEGATED it gives that name. The entry agent
+ * has no parent agent. A tool survives only the lists that name it (`restrictionsAllow`); an empty answer restricts
+ * nothing (REQ-CONFIG-103: "an entity absent from the map is unrestricted").
+ *
+ * The reason the map narrowed nothing, kept beside its replacement (acceptance finding A4, R-067): the loader parsed it,
+ * the registry held a stage for a map from a tool to `false`, and the persona the run host built carried no such field,
+ * so no configured restriction ever reached a grant.
+ */
+export function toolRestrictionsFor(persona: Pick<Persona, 'name' | 'toolRestrictions'>, parentPersona?: Pick<Persona, 'toolRestrictions'> | null): readonly (readonly string[])[] {
+  const lists: (readonly string[])[] = [];
+  const own = persona.toolRestrictions?.[persona.name];
+  if (own) lists.push(own);
+  const theirs = parentPersona?.toolRestrictions?.[persona.name];
+  if (theirs) lists.push(theirs);
+  return lists;
 }
 
 export interface McpGrantEvidence {

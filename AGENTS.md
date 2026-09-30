@@ -447,7 +447,11 @@ and the live run asserts that in `ask`.
 The sandbox holds a **real credential** — the app writes the leased key into its own store, as it would on the
 owner's machine — so the credential directory is deleted on every exit path there is: the normal end, `--keep`,
 a thrown error, and a Ctrl-C. `--keep` keeps the workspace and the store to read and marks the directory `KEPT`;
-the next run sweeps every unmarked leftover, and takes the credentials out of the marked ones too.
+the next run sweeps every unmarked leftover, and takes the credentials out of the marked ones too. Live runs may
+**overlap** on one host: each writes `OWNER` (its pid and start) into its sandbox as it makes it, and the sweep leaves
+a sandbox whose owner is still running — its key included — and one with no `OWNER` for twelve hours
+(`apps/desktop/scripts/lib/sandbox-sweep.mjs`;
+[fixed](docs/defects/fixed/a-live-run-sweeps-a-concurrent-live-runs-sandbox.md)).
 
 ### Reading a failure
 

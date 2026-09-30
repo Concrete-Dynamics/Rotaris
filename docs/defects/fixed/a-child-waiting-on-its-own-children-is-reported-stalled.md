@@ -36,8 +36,18 @@ or token for 90 … 120 seconds", its last model event `finish`).
   stalled*, and reports a stall under way when the turn ended as recovered. `execute`'s `turn` closure
   (`packages/engine/src/children/orchestration.ts`) calls it when each turn's promise settles, so a wait inside
   `runWithChildren` on the child's own children is outside the watch, and the next turn counts from its start.
+- The second path this note names — a child the run resumes into waiting from its record (PD-ORCH-005 clause 4, its
+  record ending on its own answer) — takes no step before its wait, so no turn settles: `execute` marks its watch
+  between turns as it is armed, when the execution's start is resumed and waiting. *Corrected in place 2026-09-30:* the
+  bullet above first read "a wait inside `runWithChildren` on the child's own children is outside the watch" of both
+  paths, which was false of this one — a child paused while waiting on its child and continued had a `stall` issue at
+  every evaluation of the wait and the warning (seven issues in 120 s, found by the verifier's review of the repair).
 - The children it waits on keep their own watches: a silent child is still reported, by its own watch.
 - The reading is OQ-152's, raised by this repair; OQ-127's two mentions of this note are corrected in place.
 - Pinned by `children.test.ts`, "REQ-ORCH-089 / REQ-MONITOR-119 (OQ-152): a child waiting on its own child between its
   turns is not reported stalled; the child that is silent is, by its own watch", and `stall.test.ts`'s two cases for
   `betweenTurns`. All three fail with the `between` limb of `evaluate` reverted.
+- The second path is pinned by `children.test.ts`, "REQ-ORCH-089 / REQ-MONITOR-119 (OQ-152) with PD-ORCH-005 clause 4:
+  a child resumed into waiting on its own child is not reported stalled; the child that is silent is, by its own watch"
+  (pause while `mid` waits on `leaf`, continue, 120 s with `leaf` silent in its resumed step): it fails without the mark
+  in `execute`, `mid` then carrying seven `stall` issues.

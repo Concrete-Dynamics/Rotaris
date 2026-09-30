@@ -6724,7 +6724,8 @@ the repair of acceptance finding A7,
 under [R-067](../product/requests.md#r-067). Open.)*
 
 A child that delegated, and then waits for its children's reports before the run resumes it (REQ-ORCH-055 to
-REQ-ORCH-059), has no model step and no tool call in flight while it waits. The requirements tell a stall from a wait
+REQ-ORCH-059), or that the run resumes into that wait from its record (PD-ORCH-005 clause 4), has no model step and no
+tool call in flight while it waits. The requirements tell a stall from a wait
 only by "active tool calls", so read literally the wait is "the same silence with no tool call in flight", and
 REQ-MONITOR-119 asks every evaluation to warn that the child "appears stalled" and to write a `stall` issue. Through a
 wait on a child that works for twenty minutes, that is some 240 warning-severity issues about a child working as
@@ -6738,7 +6739,12 @@ being read as REQ-MONITOR-120's "activity resumes" — the step the silence was 
 with its final event or by settling. The next turn
 the run starts counts from its start, as OQ-127 already reads for REQ-NOTIFY-112's recovery. Each child it waits on has
 its own watch, which reports that child's own silence (`StallWatch.betweenTurns`; `stall.test.ts` and `children.test.ts`,
-"a child waiting on its own child between its turns is not reported stalled").
+"a child waiting on its own child between its turns is not reported stalled"). A child the run resumes into waiting
+(PD-ORCH-005 clause 4: its record ends on its own answer) takes no step until a child of its own reports, so its watch
+is between turns from the start of that execution (`execute`, when its start is resumed and waiting; `children.test.ts`,
+"a child resumed into waiting on its own child is not reported stalled"). *Corrected in place 2026-09-30:* the reading's
+first build marked the watch only as a turn settled, which such an execution never reaches before its wait, so a child
+paused while waiting and continued had a `stall` issue at every evaluation of the wait (found by the verifier's review).
 
 **What a ruling decides.** Whether the wait is outside the watch (as built), or is reported at REQ-MONITOR-118's
 informational level as "waiting on N active children", which would need words no requirement has and, while REQ-ORCH-139's

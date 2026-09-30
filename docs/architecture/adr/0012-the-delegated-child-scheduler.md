@@ -537,7 +537,10 @@ child's last event, so a child waiting on its own children between its turns had
 past the window, and the warning, while it worked as designed. The turn's end is now fed to the watch too
 (`betweenTurns`), and until the run starts the next turn no silence is counted. The decision stands: the watch still
 reads only the clock port and the child's own events. The reading is OQ-152's; `children.test.ts` has ten cases for the
-watch and `stall.test.ts` fourteen, each new one failing with the limb reverted.
+watch and `stall.test.ts` fourteen, each new one failing with the limb reverted. *Corrected in place the same day:* an
+execution resumed into waiting (PD-ORCH-005 clause 4) ends no turn before its wait, so the turn's end never marked it and
+the wait was still counted; `execute` now marks such an execution between turns as its watch is armed, and
+`children.test.ts` has eleven cases for the watch.
 
 ## First execution of the process-wide count — 2026-09-30: the cap was one iteration's
 

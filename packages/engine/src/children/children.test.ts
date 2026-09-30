@@ -1508,6 +1508,57 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(warnings.filter((m) => m.startsWith('child stall recovered:') && m.includes('(mid,'))).toEqual([]);
       expect(stallsOf('mid')).toEqual([]);
     });
+
+    it('REQ-ORCH-089 / REQ-MONITOR-119 (OQ-152) with PD-ORCH-005 clause 4: a child resumed into waiting on its own child is not reported stalled; the child that is silent is, by its own watch', async () => {
+      const leafGates: (() => void)[] = [];
+      let midAsked = 0;
+      let leafAsked = 0;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'mid', task: 'TASK: mid' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        if (!userText(req).includes('TASK: mid')) {
+          leafAsked += 1;
+          // Its only call never ran, so REQ-ORCH-095's one re-prompt follows its resumed answer: that one is not held.
+          if (leafAsked > 2) return answer('leaf done');
+          const hold = new Promise<void>((r) => { leafGates.push(r); });
+          // The leaf's first step is the one in flight when the pause is accepted: it asks for a call the pause cuts.
+          if (leafAsked === 1) return { parts: [{ hold }, ...toolCalls([{ callId: 'l1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Checking.').parts] };
+          return { parts: [{ hold }, ...answer('leaf done').parts] };
+        }
+        midAsked += 1;
+        if (midAsked === 1) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'leaf', task: 'TASK: leaf' } }], 'Delegating.');
+        if (midAsked === 2) return answer('Waiting on leaf.');
+        return answer('Leaf reported; done.');
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      const byName = (name: string) => children(sid).find((c) => c.canonical_name === name)!;
+      await settle(() => midAsked === 2 && leafGates.length === 1);
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      leafGates[0]!();
+      expect((await sessions.running(sid)!).status).toBe('interrupted');
+      expect(byName('mid')).toMatchObject({ state: 'paused' });
+      expect(byName('leaf')).toMatchObject({ state: 'paused' });
+      // Continued: `mid`'s record ends on its answer, so it resumes into waiting and takes no step; the leaf's resumed step
+      // is held, silent.
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await settle(() => leafGates.length === 2);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(midAsked).toBe(2);
+      clock.advance(120_000);
+      const stallsOf = (name: string) => dal.issuesOf(sid).filter((i) => i.kind === 'stall' && i.actor === name);
+      // The leaf is silent inside a model step: its own watch reports it (REQ-MONITOR-119).
+      expect(stallsOf('leaf').length).toBeGreaterThan(0);
+      expect(warnings.some((m) => m.startsWith(`child appears stalled: no model event or token for 90 seconds (leaf, ${byName('leaf').task_id})`))).toBe(true);
+      // `mid`, resumed into waiting and asked for nothing, is not silent: no `stall` issue and no stall warning name it.
+      expect(stallsOf('mid')).toEqual([]);
+      expect(warnings.filter((m) => m.startsWith('child appears stalled') && m.includes(`(mid, ${byName('mid').task_id})`))).toEqual([]);
+      leafGates[1]!();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(midAsked).toBe(3);
+      expect(byName('mid').state).toBe('succeeded');
+      expect(warnings.filter((m) => m.startsWith('child stall recovered:') && m.includes('(mid,'))).toEqual([]);
+      expect(stallsOf('mid')).toEqual([]);
+    });
   });
 
   it('REQ-ORCH-088: the ceiling asks the child to land, so the step in flight finishes and its words reach the report', async () => {

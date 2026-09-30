@@ -763,7 +763,11 @@ as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds
   child is waiting on its own children or ending, and an evaluation counts no silence — no stall, no wait on tools, the
   callback *not stalled* — so a wait on its own children is not reported as its stall (OQ-152; the repair of
   [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md)).
-  Each child it waits on is watched by its own watch.
+  Each child it waits on is watched by its own watch;
+- the start of an execution resumed into waiting (PD-ORCH-005 clause 4, `execute`, as the watch is armed): the child
+  takes no step until a child of its own reports, so it is between its turns from the start. (Corrected 2026-09-30: the
+  bullet above was first read as covering this path too, but no turn settles before such a wait, so it was counted as
+  silence.)
 
 What it writes:
 - a silence of the threshold with no call in flight: a `stall` issue at every evaluation (REQ-MONITOR-119), and a

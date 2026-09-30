@@ -54,8 +54,9 @@ paragraph says so. No package, edge, process, message kind, channel, command or 
 
 **A child waiting on its own children is not reported stalled (REQ-ORCH-089, REQ-MONITOR-119, REQ-NOTIFY-112, OQ-152,
 R-067).** `StallWatch.betweenTurns` (`children/stall.ts`), called by `execute`'s `turn` closure as each turn settles,
-holds the watch's evaluation off the silence until the run starts the child's next turn, so the wait inside
-`runWithChildren` writes no `stall` issue and no warning. This repairs
+holds the watch's evaluation off the silence until the run starts the child's next turn, and `execute` calls it as the
+watch is armed for an execution resumed into waiting (PD-ORCH-005 clause 4; added 2026-09-30, the first reading having
+missed that path), so the wait inside `runWithChildren` writes no `stall` issue and no warning. This repairs
 `a-child-waiting-on-its-own-children-is-reported-stalled.md` (acceptance A7). The **runtime view**'s stall-watch paragraph
 says so. No package, edge, process, message kind, channel, command or store column changed.
 

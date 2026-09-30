@@ -402,7 +402,7 @@ paragraph names it; no package, edge, message or store table changes.
 the blocks the payload puts ahead of it marked omitted) and the most recent part, within 12,000 characters, with
 `… [N characters omitted] …` between them. It also gives `reportFacts`, the
 edited files and each command with its exit code, derived from the whole transcript. The head-only `transcriptText`
-remains the compressor's alone. The **runtime view**'s children paragraph names it; no package, edge, message or store
+remains the compressor's alone (removed 2026-09-30 with the compressor's own reader, OQ-153). The **runtime view**'s children paragraph names it; no package, edge, message or store
 table changes.
 
 **A continue in the process that ran the session takes the lock back (ADR-0005, REQ-SESSION-047/048/083, 2026-09-29,

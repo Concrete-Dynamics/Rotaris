@@ -25,8 +25,8 @@ Noticed 2026-09-29 while repairing the report summariser's cut; not reproduced l
 ## Relevant files
 
 - `packages/engine/src/run/compression.ts` — `compress`, whose ask embeds `transcriptText(compressible)`.
-- `packages/engine/src/children/report.ts` — `transcriptText`, the head-only cut to `TRANSCRIPT_CAP`, now read by the
-  compressor alone; `reportTranscript` beside it is the report's head-and-tail reading.
+- `packages/engine/src/children/report.ts` — `transcriptText`, the head-only cut to `TRANSCRIPT_CAP`, then read by the
+  compressor alone (removed by the repair below); `reportTranscript` beside it is the report's head-and-tail reading.
 - `docs/architecture/adr/0060-context-compression-over-a-replaceable-conversation.md` — the compression's decision record.
 
 ## Outcome
@@ -38,7 +38,9 @@ its facts past the first reads and past each result's first 2,000 characters abs
 - The compressor has a reader of its own, `compressorTranscript` (`packages/engine/src/run/compression.ts`). It gives each
   event whole and the history whole up to the compressing model's own effective threshold (REQ-MONITOR-078) at
   `chars_per_token`. Past that bound it keeps the start and the most recent part, with OQ-111's marker between them
-  saying how many characters were left out.
+  saying how many characters were left out. Where the most recent part is shorter than the other half of the bound, it is
+  given whole with no marker and the start has what it leaves (found by the branch's verification: the start held to
+  half in every case wrote a negative count there).
 - `CompressorDeps.inputTokens` carries that threshold: `Run.compressionFor` resolves it for the compressing model
   (`compressor.model` when configured, else the agent's own) through the same `triggerFor` the trigger uses.
 - `transcriptText` is gone from `packages/engine/src/children/report.ts`; the report's pass reads `reportTranscript` as
@@ -47,4 +49,6 @@ its facts past the first reads and past each result's first 2,000 characters abs
 - Pinned by `compression.test.ts`: "at the default trigger … is given whole", "a history longer than the compressing
   model's own threshold keeps its start and its most recent part …", and, through `Sessions`, "the compressing pass reads
   the history up to its model's own threshold at chars_per_token …". All three fail on the previous code; the last also
-  fails with `inputTokens` left unwired.
+  fails with `inputTokens` left unwired. "a first event longer than half the cap, followed by a short most recent part …"
+  pins the negative count's repair, and "with compressor.model configured, the compressing pass reads the history up to
+  THAT model's threshold …" fails when the bound is resolved for the agent's model instead.

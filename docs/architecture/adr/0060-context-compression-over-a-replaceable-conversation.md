@@ -462,8 +462,12 @@ the three survivors are still never sent.
 **What was measured.** `compression.test.ts`: the default trigger's shape (150 reads of 4,000 characters, over 600,000 in
 all) reaches the model whole where it reached it as an ask of 12,301 characters; a slice past the bound keeps its start
 and most recent part with the count of what was left out exact; and through `Sessions`, a run whose compressing model's
-threshold is 4,000 tokens reads 16,000 characters of an 18,100-character slice, its most recent result whole past 2,000.
-Each fails on the previous code. `pnpm compression-proof` on the built app, its four scenarios unchanged, is the
+threshold is 4,000 tokens reads 16,000 characters of an 18,100-character slice, its most recent result whole past 2,000,
+and a run with a configured `compressor.model` whose threshold is 2,000 tokens reads 8,000 — the agent's own threshold
+there fails it. Each fails on the previous code. *Found by the branch's verification and repaired before merge:* the
+reader first held the start to half the bound in every case, so a first event longer than half before a short most
+recent part wrote a second marker with a negative count and left the rest of the bound unused; a case now pins that
+the most recent part is then whole, unmarked, and the start has what it leaves. `pnpm compression-proof` on the built app, its four scenarios unchanged, is the
 regression. **Not measured:** a live run — none of the live-run scenarios reaches the compression trigger (the largest
 prompt of the duress runs was 64,038 and 77,043 tokens against a trigger of 157,286), so a real model's summary over a
 whole slice has not been read. The row is in [`../first-executions.md`](../first-executions.md).

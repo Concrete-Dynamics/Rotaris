@@ -82,7 +82,8 @@ function omitted(n: number): string {
  * which a history at the agent's own trigger is under whenever the compressing model is the agent's own — it keeps its
  * START (a previous compression's summary, when there was one, else the agent's first act) and its MOST RECENT part,
  * the part the preserved turns carry on from, with the omission marked between them and saying how much was left out.
- * The start is held to half the cap, so the most recent part always has the other half.
+ * The start is held to half the cap, so the most recent part always has the other half; where the most recent part is
+ * shorter than that half it is given whole and the start has the rest of the cap.
  *
  * The reason it did not, kept beside its replacement: it read `transcriptText`, the report pass's reader, which cuts each
  * event to REQ-ORCH-110's 2,000 characters and the whole to its 12,000 from the head. At the default trigger (60 % of
@@ -95,14 +96,24 @@ export function compressorTranscript(messages: readonly ChatMessage[], capChars 
   if (whole.length <= capChars) return whole;
   const cap = Math.floor(capChars);
   // One event alone keeps its head.
-  if (parts.length < 2) { const kept = Math.max(0, cap - omitted(whole.length).length); return `${whole.slice(0, kept)}${omitted(whole.length - kept)}`; }
+  if (parts.length < 2) return headOf(whole, cap);
   const half = Math.floor(cap / 2);
   const first = parts[0] ?? '';
-  const head = first.length > half ? `${first.slice(0, half)}${omitted(first.length - half)}` : first;
   const rest = parts.slice(1).join('\n');
+  // The start is held to half the cap — unless the most recent part fits whole in less than the other half, when
+  // the start has what the most recent part leaves (never a budget left unused, never a marker where nothing is left out).
+  const head = first.length <= half ? first : headOf(first, Math.max(half, cap - rest.length - 1));
+  if (head.length + 1 + rest.length <= cap) return `${head}\n${rest}`;
   // The marker's length depends on the count it states, never more than `rest`'s own length: reserve that widest marker.
+  // `keep` is below `rest.length` here, since `head`, a line break and the whole `rest` do not fit.
   const keep = Math.max(0, cap - head.length - omitted(rest.length).length - 2);
   return `${head}\n${omitted(rest.length - keep)}\n${rest.slice(rest.length - keep)}`;
+}
+
+/** `text`'s head within `room` characters, its omission marked with the count left out. */
+function headOf(text: string, room: number): string {
+  const kept = Math.max(0, room - omitted(text.length).length);
+  return `${text.slice(0, kept)}${omitted(text.length - kept)}`;
 }
 
 /**

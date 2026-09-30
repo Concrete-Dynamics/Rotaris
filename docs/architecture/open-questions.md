@@ -6767,9 +6767,18 @@ own count ran well below the estimate; so is a manual compression's. Where it pa
 from a context rejection, or a configured `compressor.model` whose threshold is smaller —
 the reading keeps its **start** (a previous compression's summary where there was one, else the agent's first act), held
 to half the bound, and its **most recent part**, the part the preserved turns carry on from, with OQ-111's marker between
-them saying how many characters were left out (`compressorTranscript`, `packages/engine/src/run/compression.ts`;
-`compression.test.ts`, "REQ-MONITOR-082 (OQ-153, acceptance A12) …"). A threshold that resolves to no tokens gives the
-history whole.
+them saying how many characters were left out. Where the most recent part is shorter than the other half it is given
+whole, with no marker, and the start has what it leaves of the bound (`compressorTranscript`,
+`packages/engine/src/run/compression.ts`; `compression.test.ts`, "REQ-MONITOR-082 (OQ-153, acceptance A12) …" and
+"REQ-MONITOR-082 / REQ-MONITOR-080 (OQ-153) …"). A threshold that resolves to no tokens gives the history whole.
+*Found by the branch's verification and kept beside its repair:* the reading first held the start to half the bound in
+every case, so a first event longer than half before a short most recent part wrote a second marker with a negative
+count where nothing was left out, and left the rest of the bound unused.
+
+**A consequence the build accepts, and the ruling may weigh.** The compressing request can now approach the compressing
+model's threshold (some 159,000 tokens at the defaults) where it was about 3,000, under the same 120-second compression
+timeout (REQ-MONITOR-080). A slow endpoint will reach that timeout more often, and where it does REQ-ORCH-093 surfaces
+the original rejection unchanged.
 
 **What a ruling decides.** Whether the compressing model's input has a bound at all, and if so which figure: its own
 threshold (as built), its capacity, or a figure of the compressor's section; and, past the bound, whether the start and

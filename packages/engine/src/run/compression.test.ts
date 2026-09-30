@@ -7,7 +7,7 @@ import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/stor
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ChatMessage, type ModelRef, type ScriptedCall } from '@rotaris/model';
 import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, type ModelLookup, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
 import { Conversation, estimateTokens, preservedFrom, turnStarts } from './conversation.js';
-import { clampSummary, compress, compressionReason, rebuild, SUMMARY_LINE_CAP, type ResolvedTrigger } from './compression.js';
+import { clampSummary, compress, compressionReason, compressorTranscript, rebuild, SUMMARY_LINE_CAP, type ResolvedTrigger } from './compression.js';
 
 /**
  * Part AH (ADR-0060) — context compression. The pure half proves the reconstruction REQ-MONITOR-084 fixes and
@@ -16,6 +16,7 @@ import { clampSummary, compress, compressionReason, rebuild, SUMMARY_LINE_CAP, t
  */
 const HOST = mintMachineId('0000000000000000000000000000000e') as MachineId;
 const A1: ModelRef = { providerId: 'a', modelId: 'a1', dialect: 'chat' };
+const A2: ModelRef = { providerId: 'a', modelId: 'a2', dialect: 'chat' };
 const text = (role: 'user' | 'assistant', body: string): ChatMessage => ({ role, content: [{ kind: 'text', text: body }] } as ChatMessage);
 const call = (id: string): ChatMessage => ({ role: 'assistant', content: [{ kind: 'tool-call', callId: id, name: 'read_file', args: '{}' }] });
 const result = (id: string): ChatMessage => ({ role: 'tool', content: [{ kind: 'tool-result', callId: id, name: 'read_file', result: 'contents', isError: false }] });
@@ -124,6 +125,28 @@ describe('engine/run/compression — the reconstruction and the turn alignment (
       const whole = a.history.flatMap((m) => m.content.map((p) => (p.kind === 'tool-call' ? `tool-call ${p.name}: ${p.args}` : p.kind === 'tool-result' ? `tool-result ${p.name}: ${p.result}` : ''))).join('\n');
       expect(Number(marker![1])).toBe(whole.length - (activity.length - marker![0].length) - 1);
     });
+
+    it('a first event longer than half the cap, followed by a short most recent part, gives that part whole with no second marker and the start the rest of the cap — never a negative count', () => {
+      // A 100,000-character write_file call first, then its short result and a short reply, against 8,000 characters.
+      const first = `{"path":"big.txt","content":"${'z'.repeat(99_970)}"}`;
+      const slice: ChatMessage[] = [
+        { role: 'assistant', content: [{ kind: 'tool-call', callId: 'w1', name: 'write_file', args: first }] },
+        { role: 'tool', content: [{ kind: 'tool-result', callId: 'w1', name: 'write_file', result: 'ok', isError: false }] },
+        text('assistant', 'done'),
+      ];
+      const out = compressorTranscript(slice, 8_000);
+      expect(out).not.toMatch(/\[-\d+ characters omitted\]/);
+      expect(out.length).toBeLessThanOrEqual(8_000);
+      // The start is given what the most recent part leaves, not held to half with the rest unused.
+      expect(out.length).toBeGreaterThan(8_000 - 10);
+      const markers = [...out.matchAll(/… \[(\d+) characters omitted\] …/g)];
+      expect(markers).toHaveLength(1);
+      // The most recent part is whole, and the one count is exactly what was left out of the first event.
+      expect(out.endsWith('\ntool-result write_file: ok\nassistant: done')).toBe(true);
+      const shown = out.slice(0, markers[0]!.index);
+      expect(`tool-call write_file: ${first}`.startsWith(shown)).toBe(true);
+      expect(Number(markers[0]![1])).toBe(`tool-call write_file: ${first}`.length - shown.length);
+    });
   });
 
   it('a failed compressing pass changes nothing, so the caller can surface the original rejection', async () => {
@@ -227,10 +250,12 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
     cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
   }; };
 
-  function sessionsWith(script: (persona: string, turn: number) => ScriptedCall, compression: { triggerTokens?: number; preserveRecentTurns?: number; resultText?: (n: number) => string } = {}) {
+  function sessionsWith(script: (persona: string, turn: number) => ScriptedCall, compression: { triggerTokens?: number; preserveRecentTurns?: number; resultText?: (n: number) => string; compressor?: { model: ModelRef; triggerTokens: number } } = {}) {
     const counts = new Map<string, number>();
     /** What each compressing pass was asked: every message after its system prompt, as text. */
     const asked: string[] = [];
+    /** The model each compressing pass was sent to. */
+    const askedOf: ModelRef[] = [];
     const client = new ScriptedModelClient([]);
     const original = client.stream.bind(client);
     client.stream = (req) => {
@@ -238,6 +263,7 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
       const persona = /^You condense an agent conversation/.test(system) ? 'compressor' : /^You are the orchestrator/.test(system) ? 'orchestrator' : 'child';
       const n = (counts.get(persona) ?? 0) + 1;
       counts.set(persona, n);
+      if (persona === 'compressor') askedOf.push(req.model);
       if (persona === 'compressor') asked.push(req.messages.slice(1).map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n'));
       client.push(script(persona, n));
       return original(req);
@@ -255,8 +281,9 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
         model: {
           backend, config,
           compression: {
-            model: null, timeoutMs: 120_000, charsPerToken: 4, preserveRecentTurns: compression.preserveRecentTurns ?? 1,
-            triggerFor: () => ({ ...TRIGGER, tokens: compression.triggerTokens ?? 0 }),
+            model: compression.compressor ? { model: compression.compressor.model, thinking: 'unset' } : null, timeoutMs: 120_000, charsPerToken: 4, preserveRecentTurns: compression.preserveRecentTurns ?? 1,
+            // Each model its own threshold: a configured compressor's differs from the agent's (REQ-MONITOR-078).
+            triggerFor: (m: ModelRef) => ({ ...TRIGGER, tokens: compression.compressor && m.modelId === compression.compressor.model.modelId ? compression.compressor.triggerTokens : compression.triggerTokens ?? 0 }),
           },
         },
         models, personas,
@@ -264,7 +291,7 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
         resilience: { catalogue: [], fallbackModel: null },
       } }),
     });
-    return { sessions, client, pub, counts, asked };
+    return { sessions, client, pub, counts, asked, askedOf };
   }
   const tick = () => new Promise((r) => setTimeout(r, 5));
   const timeline = (sid: SessionId) => dal.timelineOf(sid);
@@ -475,6 +502,28 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
     expect(activity).toMatch(/\n… \[\d+ characters omitted\] …\n/);
     // The preserved turn is not sent.
     expect(activity).not.toContain('FACT-4.');
+    expect(dal.getSession(sid)!.execution_status).toBe('completed');
+  });
+
+  it('REQ-MONITOR-082 / REQ-MONITOR-080 (OQ-153): with compressor.model configured, the compressing pass reads the history up to THAT model\'s threshold, not the agent\'s', async () => {
+    // The same history of some 18,100 characters, the same agent trigger of 4,000 tokens; the configured compressor's
+    // own threshold is 2,000 tokens, so it is given 8,000 characters — the agent's 16,000 would pass it.
+    const { sessions, counts, asked, askedOf } = sessionsWith((persona, turn) => {
+      if (persona === 'compressor') return answer('Work performed: three globs. Findings reached: three facts. Questions left open: none.');
+      if (turn <= 3) return toolCalls([{ callId: `c${turn}`, name: 'glob', args: {} }], `looking ${turn}`, { input: 20, output: 10 });
+      if (turn === 4) return toolCalls([{ callId: 'c4', name: 'glob', args: {} }], 'looking 4', { input: 5_000, output: 10 });
+      return answer('done');
+    }, { triggerTokens: 4_000, preserveRecentTurns: 1, resultText: (n) => `${'y'.repeat(5_990)}FACT-${n}.`, compressor: { model: A2, triggerTokens: 2_000 } });
+    const sid = (sessions.start(dal, 'C:/ws', 'do the thing') as { value: SessionId }).value;
+    for (let i = 0; i < 60 && dal.getSession(sid)!.execution_status === 'running'; i++) await tick();
+    expect(counts.get('compressor')).toBe(1);
+    // The pass went to the configured compressor (REQ-MONITOR-080), and was held to its threshold at chars_per_token.
+    expect(askedOf).toEqual([A2]);
+    const activity = asked[0]!.slice(asked[0]!.indexOf('Activity:\n') + 'Activity:\n'.length);
+    expect(activity.length).toBeLessThanOrEqual(8_000);
+    expect(activity.length).toBeGreaterThan(8_000 - 10);
+    expect(activity.endsWith('FACT-3.')).toBe(true);
+    expect(activity).toMatch(/\n… \[\d+ characters omitted\] …\n/);
     expect(dal.getSession(sid)!.execution_status).toBe('completed');
   });
 

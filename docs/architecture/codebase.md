@@ -1229,6 +1229,19 @@ is green for the same reason after it, which is why the move was made mechanical
 extracted**: twenty-six scripts define one and twenty are genuinely different, so a common form would be a rewrite
 of the evidence rather than a move of it, and the driver below removes the pressure that produced the variants.
 
+**Every launch a proof starts itself is bounded (2026-09-29, R-067).** Each script still keeps its own `launch`; what
+changed is the one call inside it. `spawnSync(electron|exe, …, { timeout })` stood at thirty-five sites in thirty-four
+scripts (`terminal-proof/packaged.mjs` among them), and its timeout could not end a launch: Node signals the child and
+closes its ends of the pipes at the same moment, then waits for an exit without a bound. Every one of them is now
+`lib/bounded-launch.mjs`'s `spawnBounded` (SIGTERM with the pipes open and read, a grace, SIGKILL to the launch's process
+group), and an overrun is a failure named by `overrunMessage` with the launch's last thirty log lines — thrown by a
+`launch`, recorded as a failed check by `updater-proof`, `terminal-proof` and the packaged terminal launch, which report
+rather than throw. Each `launch` became `async` and each call site awaits it (`transcript-proof`'s `appendRun`,
+`package.mjs`'s app step as `stepAsync`, and `terminal-proof/packaged.mjs`'s `packagedTerminalStreaming` with it).
+`lib/launch-sites.test.ts` fails a `spawnSync` launch of Electron anywhere under `scripts/` (its rule 4), and a launch
+with `ELECTRON_RUN_AS_NODE`, which starts no application, stays exempt
+([note](../defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md)).
+
 **The driver.** `apps/desktop/src/main/driver.ts`, reached only when `ROTARIS_DRIVER` names an endpoint file at
 launch, opens a loopback listener and answers newline-delimited JSON: `waitFor`, `click` (by selector, optionally
 by the name on screen), `type`, `chord`, `inspect`, `probe`, `eval`, `screenshot`, `resize`, `command` (relayed to

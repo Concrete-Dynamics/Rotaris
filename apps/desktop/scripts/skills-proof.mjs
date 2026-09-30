@@ -38,8 +38,8 @@
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { app, buildDesktop, configDirFor, electron, evidenceDirectory, hostSwitches, launchOptions, readProbes, repo } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const output = evidenceDirectory('skills-proof');
 rmSync(output, { recursive: true, force: true });
@@ -68,12 +68,12 @@ const PROBES = [
 const results = [];
 const fail = (message) => { writeFileSync(join(output, 'results.json'), JSON.stringify(results, null, 2)); throw new Error(message); };
 
-function launch(name, workspace, extra, timeoutMs = 120_000) {
+async function launch(name, workspace, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
   const args = [join(app, 'out', 'main', 'index.js'), ...hostSwitches];
   if (workspace !== null) args.push(workspace);
-  const result = spawnSync(electron, args, {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, args, {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...launchOptions({ local: scratch.local, preferences: scratch.preferences }),
       /*
@@ -102,6 +102,7 @@ function launch(name, workspace, extra, timeoutMs = 120_000) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) fail(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) fail(`${name} exited ${result.status ?? result.signal ?? 'unknown'}`);
   if (!existsSync(png)) fail(`${name} produced no screenshot`);
   return { log, probes: readProbes(log) };
@@ -152,7 +153,7 @@ write(join(scratch.base, 'by-hand', 'SKILL.md'), skill('by-hand', 'Loaded by han
 const agentsYaml = join(workspace, '.rotaris', 'agents.yaml');
 
 // ── 1. discover ─────────────────────────────────────────────────────────────────────────────────────
-const discover = launch('discover', workspace, openSkills());
+const discover = await launch('discover', workspace, openSkills());
 const discovered = rows(discover.probes, '[data-testid="skill-row"]').map((r) => r.data['data-name']);
 const expected = ['auto-only', 'home-skill', 'kept', ...(hasMachineRoot ? ['machine-skill'] : []), 'repo-wide', 'stop', 'ws-skill'];
 if (JSON.stringify(discovered) !== JSON.stringify(expected)) fail(`the table listed ${JSON.stringify(discovered)}, not ${JSON.stringify(expected)} in ascending name order`);
@@ -183,7 +184,7 @@ if (byName['ws-skill'].data['data-load'] !== 'name-only') fail('the zero-migrati
 // replaces Workspace among REQ-SHELL-023's seven views, so a launch sitting in Settings has no composer at all.
 // A prompt is submitted first: the registrar mounts with the transcript toolbar, which the Workspace view
 // draws once there is a transcript to put it above (measured — with no session the probe found no element).
-const commandsLaunch = launch('commands', workspace, { ROTARIS_CAPTURE_PROMPT: 'Say hello and stop.', ROTARIS_CAPTURE_AFTER_MS: '9000' }, 180_000);
+const commandsLaunch = await launch('commands', workspace, { ROTARIS_CAPTURE_PROMPT: 'Say hello and stop.', ROTARIS_CAPTURE_AFTER_MS: '9000' }, 180_000);
 const registered = (rows(commandsLaunch.probes, '[data-testid="skill-commands"]')[0]?.data['data-names'] ?? '').split(',').filter((s) => s !== '');
 for (const name of ['ws-skill', 'render', 'pdf', 'home-skill', 'stop-2']) {
   if (!registered.includes(name)) fail(`/${name} was not registered; the catalogue holds ${JSON.stringify(registered)}`);
@@ -197,7 +198,7 @@ results.push({ launch: 'commands', commands: registered });
 // no session is refused). Then `/skills` typed into the composer; the launch ends when the row is DRAWN, not at an
 // appointment, and the command is listed in the same popup the generated skill commands are.
 const listingWait = `js:document.querySelector('[data-testid="row-system"] [data-testid="skill-listing"]') !== null`;
-const listingLaunch = launch('listing', workspace, {
+const listingLaunch = await launch('listing', workspace, {
   ROTARIS_CAPTURE_PROMPT: 'Say hello and stop.',
   ROTARIS_CAPTURE_TYPE: '/skills>>composer@9000',
   ROTARIS_CAPTURE_WAIT: listingWait,
@@ -236,7 +237,7 @@ results.push({ launch: 'listing', session: listingSession, row: Number(listedLin
 
 // ── 1d. the session reopened: the row is read back, not written again ─────────────────────────────────────
 // A new launch reopens THAT session from the session browser (REQ-SHELL-126, REQ-SESSION-118); nothing is typed.
-const listingReopen = launch('listing-reopen', workspace, {
+const listingReopen = await launch('listing-reopen', workspace, {
   ROTARIS_CAPTURE_RESUME: listingSession,
   ROTARIS_CAPTURE_WAIT: listingWait,
   ROTARIS_CAPTURE_WAIT_MS: '30000',
@@ -260,7 +261,7 @@ results.push({ launch: 'listing-reopen', session: listingSession, count: reread[
  */
 const globalAgents = join(configDirFor(scratch.local), 'agents.yaml');
 write(globalAgents, 'skills:\n  overrides:\n    home-skill: on\n');
-const policy = launch('policy', workspace, openSkills({
+const policy = await launch('policy', workspace, openSkills({
   // The Load selector for `ws-skill` to always, its Invocation to manual only, and `home-skill` back to the
   // on-demand baseline — which a lower layer states, so it must be written out rather than deleted.
   ROTARIS_CAPTURE_SELECT: '[aria-label="Load policy for ws-skill"]>>on@1500;;[aria-label="Invocation policy for ws-skill"]>>manual-only@1900;;[aria-label="Load policy for home-skill"]>>name-only@2300',
@@ -282,7 +283,7 @@ if (!/home-skill:\s*name-only/.test(written)) fail(`the baseline over a global o
 if (/repo-wide|auto-only|kept\s*:/.test(written)) fail(`the save was not sparse: ${written}`);
 
 // ── 3. reopen ───────────────────────────────────────────────────────────────────────────────────────
-const reopen = launch('reopen', workspace, openSkills());
+const reopen = await launch('reopen', workspace, openSkills());
 const reopened = Object.fromEntries(rows(reopen.probes, '[data-testid="skill-row"]').map((r) => [r.data['data-name'], r.data]));
 if (reopened['ws-skill']['data-load'] !== 'on') fail(`after reopening, the Load selector read ${reopened['ws-skill']['data-load']}`);
 if (reopened['ws-skill']['data-invocation'] !== 'manual-only') fail('after reopening, the Invocation selector did not hold');
@@ -292,7 +293,7 @@ results.push({ launch: 'reopen', wsSkill: reopened['ws-skill'], status });
 
 // ── 4. run ──────────────────────────────────────────────────────────────────────────────────────────
 // A scripted run: the units are composed at agent construction, so the log carries them.
-const run = launch('run', workspace, {
+const run = await launch('run', workspace, {
   ROTARIS_CAPTURE_PROMPT: 'Say hello and stop.',
   ROTARIS_CAPTURE_AFTER_MS: '9000',
 }, 180_000);
@@ -312,7 +313,7 @@ results.push({ launch: 'run', units: unitLine.slice(unitLine.indexOf('skills:'))
 
 // ── 5. rescan, the chooser's dismissal, and a bad path ───────────────────────────────────────────────
 write(join(workspace, '.agents', 'skills', 'added-later', 'SKILL.md'), skill('added-later', 'Added while the session was open.'));
-const rescan = launch('rescan', workspace, openSkills({
+const rescan = await launch('rescan', workspace, openSkills({
   ROTARIS_CAPTURE_CLICKS: '[data-testid="skills-rescan"]@1600;;[data-testid="skills-load-file"]@3000;;[data-testid="skills-load-file"]@4400',
   // Two answers, consumed in order: a dismissal, then a real selection.
   ROTARIS_CAPTURE_SKILL_FILE: `(cancel);;${join(scratch.base, 'by-hand')}`,
@@ -333,12 +334,12 @@ results.push({ launch: 'rescan', skills: afterRescan, status: rescanStatus });
 write(agentsYaml, `${readFileSync(agentsYaml, 'utf8').replace(/^skills:$/m, 'skills:\n  enabled: false')}\n`);
 if (!readFileSync(agentsYaml, 'utf8').includes('enabled: false')) write(agentsYaml, `${readFileSync(agentsYaml, 'utf8')}\nskills:\n  enabled: false\n`);
 // On the Workspace view, for the same reason launch 1b is: the command registrar mounts with the composer.
-const disabled = launch('disabled', workspace, { ROTARIS_CAPTURE_PROMPT: 'Say hello and stop.', ROTARIS_CAPTURE_AFTER_MS: '9000' }, 180_000);
+const disabled = await launch('disabled', workspace, { ROTARIS_CAPTURE_PROMPT: 'Say hello and stop.', ROTARIS_CAPTURE_AFTER_MS: '9000' }, 180_000);
 // REQ-WORKSPACE-064: no catalog is injected and nothing is invocable.
 const disabledCommands = (rows(disabled.probes, '[data-testid="skill-commands"]')[0]?.data['data-names'] ?? '').split(',').filter((s) => s !== '');
 if (disabledCommands.length > 0) fail(`with skills off the catalogue still offered ${JSON.stringify(disabledCommands)}`);
 // And once more in Settings, so the switch itself is read off the file.
-const disabledTab = launch('disabled-tab', workspace, openSkills());
+const disabledTab = await launch('disabled-tab', workspace, openSkills());
 const toggle = rows(disabledTab.probes, '[data-testid="skills-enabled"]')[0];
 if (!toggle) fail('the Skills tab drew no switch');
 if (toggle.data['aria-checked'] === 'true') fail('the switch read on while the file said off');

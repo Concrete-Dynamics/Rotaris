@@ -27,6 +27,14 @@ that moves a shared seam breaks a neighbour's proof, and that is the point of ha
 **evidence, not a test of the harness**: a red is a defect of the product until the harness is shown to be
 wrong.
 
+No proof hangs on a launch that overruns. Every launch a script starts itself goes through
+`lib/bounded-launch.mjs`'s `spawnBounded`, and a driven one through the driver's `stopApp`. At its bound the
+application is sent SIGTERM with its pipes still open, and it answers: its quit path runs and it exits within a
+fraction of a second. SIGKILL follows a grace only if it does not. The proof then fails with the launch's last log
+lines. `lib/launch-sites.test.ts` refuses a `spawnSync` launch of Electron, whose timeout closes the pipes as it signals
+and then waits without a bound
+([note](docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md)).
+
 | Area | Script | What it measures |
 |---|---|---|
 | **The run** | `part-h-proof` | the loop supervisor and `continue` (ADR-0059) |

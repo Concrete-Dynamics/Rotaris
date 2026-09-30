@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 /**
  * ADR-0064's first execution in the BUILT app (Part AS): project initialization resolved once per
@@ -81,10 +82,10 @@ function scenario(name, files, { code = false } = {}) {
   return { root, workspace, local, configDir, workspaceFile: join(workspace, '.rotaris', 'agents.yaml') };
 }
 
-function launch(name, s, extra, timeout = 120_000) {
+async function launch(name, s, extra, timeout = 120_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
-    cwd: app, encoding: 'utf8', timeout, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
+    cwd: app, timeoutMs: timeout, windowsHide: true,
     env: {
       ...cleanEnvironment(),
       ...proofIsolationEnv({ local: s.local, preferences: join(s.root, 'preferences') }),
@@ -96,6 +97,7 @@ function launch(name, s, extra, timeout = 120_000) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   return log;
@@ -117,7 +119,7 @@ const results = {};
  *    every other line of the file survives.
  * --------------------------------------------------------------------------------------------- */
 const s1 = scenario('background', WORKSPACE);
-const log1 = launch('background', s1, {
+const log1 = await launch('background', s1, {
   ROTARIS_CAPTURE_VIEW: '2',
   ROTARIS_CAPTURE_EVAL_AT: [
     'JSON.stringify({probe:"gate",dialog:!!document.querySelector(\'[data-testid="project-setup-dialog"]\'),send:document.querySelector(\'[data-testid="composer-send"]\')?.disabled??null})>>[data-testid="composer-send"]@~10000',
@@ -143,7 +145,7 @@ results.background = { workspaceFile: ws1, dialogRaised: gate1.dialog, sendDisab
  *    applicable task: it is marked initialized silently, with both lists empty and `last_run` alone.
  * --------------------------------------------------------------------------------------------- */
 const s2 = scenario('nothing-applicable', WORKSPACE_NO_TASK);
-const log2 = launch('nothing-applicable', s2, { ROTARIS_CAPTURE_AFTER_MS: '12000' }, 120_000);
+const log2 = await launch('nothing-applicable', s2, { ROTARIS_CAPTURE_AFTER_MS: '12000' }, 120_000);
 const ws2 = readFileSync(s2.workspaceFile, 'utf8').replace(/\r/g, '');
 if (!/last_run:/.test(ws2)) throw new Error(`a workspace with nothing applicable was not marked:\n${ws2}`);
 if (/code-intelligence-setup/.test(ws2)) throw new Error(`an inapplicable task was recorded:\n${ws2}`);
@@ -156,7 +158,7 @@ results.nothingApplicable = { workspaceFile: ws2 };
  *    REQ-WORKSPACE-112's exact reason, and Escape records a skip that does not re-prompt on reopen.
  * --------------------------------------------------------------------------------------------- */
 const s3 = scenario('consent', WORKSPACE);
-const log3 = launch('consent', s3, {
+const log3 = await launch('consent', s3, {
   ROTARIS_INIT_TEST_TASK: 'consent',
   ROTARIS_CAPTURE_VIEW: '2',
   ROTARIS_CAPTURE_EVAL_AT: [
@@ -188,7 +190,7 @@ if (!/verification-consent/.test(ws3)) throw new Error(`Escape did not record th
 // both (`docs/defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
 if (!/initialization: running code-intelligence-setup[^\n]*\(background\)/.test(log3)) throw new Error('the background task did not start by itself beside the consent prompt (REQ-WORKSPACE-083)');
 if (!/completed:\s*\n?\s*(-\s*code-intelligence-setup|\[\s*code-intelligence-setup\s*\])/.test(ws3)) throw new Error(`the background task beside the consent prompt was not recorded completed (REQ-WORKSPACE-088):\n${ws3}`);
-const log3b = launch('consent-reopen', s3, {
+const log3b = await launch('consent-reopen', s3, {
   ROTARIS_INIT_TEST_TASK: 'consent',
   ROTARIS_CAPTURE_VIEW: '2',
   ROTARIS_CAPTURE_EVAL_AT: 'JSON.stringify({probe:"reopen",dialog:!!document.querySelector(\'[data-testid="project-setup-dialog"]\'),send:document.querySelector(\'[data-testid="composer-send"]\')?.disabled??null,section:document.querySelector(\'[data-testid="project-section-hint"]\')?.textContent??null})>>[data-testid="project-section"]@~12000',
@@ -206,7 +208,7 @@ results.skipHolds = { dialogReturned: reopen.dialog, sendDisabled: reopen.send, 
  *    while the shipped task beside it still runs and IS recorded.
  * --------------------------------------------------------------------------------------------- */
 const s4 = scenario('failure', WORKSPACE);
-const log4 = launch('failure', s4, { ROTARIS_INIT_TEST_TASK: 'fail', ROTARIS_CAPTURE_AFTER_MS: '30000' }, 180_000);
+const log4 = await launch('failure', s4, { ROTARIS_INIT_TEST_TASK: 'fail', ROTARIS_CAPTURE_AFTER_MS: '30000' }, 180_000);
 const ws4 = readFileSync(s4.workspaceFile, 'utf8').replace(/\r/g, '');
 if (/verification-fail/.test(ws4)) throw new Error(`a failed task recorded an outcome:\n${ws4}`);
 if (!/code-intelligence-setup/.test(ws4)) throw new Error(`the task after the failure was not attempted:\n${ws4}`);
@@ -219,7 +221,7 @@ results.failure = { workspaceFile: ws4 };
  *    the classification sentence, after a completed background run.
  * --------------------------------------------------------------------------------------------- */
 const s5 = scenario('settings-card', WORKSPACE, { code: false });
-const log5 = launch('settings-card', s5, {
+const log5 = await launch('settings-card', s5, {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Project',
   ROTARIS_CAPTURE_EVAL_AT: 'JSON.stringify({probe:"card",state:document.querySelector(\'[data-project-init]\')?.getAttribute(\'data-init-state\')??null,headline:document.querySelector(\'[data-init-headline]\')?.textContent??null,lines:[...document.querySelectorAll(\'[data-init-detail]\')].map(n=>n.textContent),reason:document.querySelector(\'[data-init-reason]\')?.textContent??null})>>[data-init-state="completed"]@~40000',
   ROTARIS_CAPTURE_AFTER_MS: '45000',

@@ -73,6 +73,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -155,10 +156,10 @@ const PROBES = [
   '.app-shell', '[data-testid="requirements"]', '[data-testid="req-total"]', '[data-testid="req-column"]', '[data-testid="req-rail"]', '[data-testid="req-card"]', '[data-testid="req-epic"]',
   '[data-testid="req-filter-summary"]', '[data-testid="req-feedback"]', '[data-testid="req-move-control"]', '[data-testid="req-error"]', '[data-testid="req-empty-source"]', '[data-testid="req-blocked"]',
 ];
-function launch(name, workspace, local, preferences, extra, timeoutMs = 180_000) {
+async function launch(name, workspace, local, preferences, extra, timeoutMs = 180_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -167,6 +168,7 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 180_000)
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   const probes = {};
@@ -302,7 +304,7 @@ const deferred = [];
 
 // ── board: the fixture at 1264 px, the budget, the partition, the header ─────────────────────────
 const boardProfile = profile('board');
-const board = launch('board', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
+const board = await launch('board', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
   ROTARIS_CAPTURE_EVAL_AT: [`${ARM_LONGTASKS}@900`, `${READ_LONGTASKS}@4600`].join(';;'),
   ROTARIS_CAPTURE_VIEWS: '4@1200',
@@ -347,7 +349,7 @@ stage2.board = { view: 'requirements', paintMs, longestTaskMs: longTasks.longest
 // from the board's header, its host's box is compared with the window, and the host is asserted to be a child of the
 // same board body that holds the columns, which is what "one stack" means when it is read off the built DOM.
 const PANE_AT_MINIMUM = `(() => { const host = document.querySelector('[data-testid="req-pane-host"]'); const body = document.querySelector('.req-body'); const cols = document.querySelector('[data-testid="req-columns"]'); if (host === null) return null; const r = host.getBoundingClientRect(); const pane = host.querySelector('[data-testid="req-pane-queue"]'); const p = pane === null ? null : pane.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height), sharesStackWithBoard: body !== null && host.parentElement === body && cols !== null && cols.parentElement === body, clipsHorizontally: host.scrollWidth > host.clientWidth + 1, pane: p === null ? null : { w: Math.round(p.width), h: Math.round(p.height) }, paneClipsHorizontally: pane === null ? null : pane.scrollWidth > pane.clientWidth + 1, close: document.querySelector('[data-testid="req-pane-close"]') !== null, viewport: { width: window.innerWidth, height: window.innerHeight } }; })()`;
-const minimum = launch('minimum', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
+const minimum = await launch('minimum', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1000x680@300',
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="req-column"]@4200;;.req-header .btn, .req-header .select, .req-header input@4200',
@@ -389,7 +391,7 @@ const SCROLL_TO_DONE = `(() => { const el = document.querySelector('[data-testid
 // nothing at all. The claim belongs in the one stage that folds a column, and this is it. REQ-TRACE-493's two
 // accessible names and the rail's operability without a pointer are read in the same instant, from the same DOM.
 const RAIL_AND_HEADING = `(() => { const rail = document.querySelector('[data-testid="req-rail"]'); const heading = document.querySelector('[data-testid="req-heading"]'); if (rail === null) return null; const s = getComputedStyle(rail); const r = rail.getBoundingClientRect(); return { writingMode: s.writingMode, transform: s.transform, w: Math.round(r.width), h: Math.round(r.height), railName: rail.getAttribute('aria-label'), railTag: rail.tagName, railDisabled: rail.disabled === true, railTabIndex: rail.tabIndex, headingName: heading === null ? null : (heading.getAttribute('aria-label') ?? heading.textContent.trim()), headingTag: heading === null ? null : heading.tagName }; })()`;
-const folded = launch('fold', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
+const folded = await launch('fold', boardProfile.workspace, boardProfile.local, boardProfile.preferences, {
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   ROTARIS_CAPTURE_EVAL_AT: `${SCROLL_TO_DONE}@3200;;${RAIL_AND_HEADING}@4600`,
   ROTARIS_CAPTURE_CLICKS: '[data-testid="req-column"][data-column="done"] [data-testid="req-heading"]@3600',
@@ -413,18 +415,18 @@ expect(railShape.w > 0 && railShape.h > 0, `REQ-TRACE-497: the folded rail occup
 expect(typeof railShape.railName === 'string' && railShape.railName.length > 0, `REQ-TRACE-493: the folded rail has no accessible name (${JSON.stringify(railShape)})`);
 expect(railShape.railTag === 'BUTTON' && !railShape.railDisabled && railShape.railTabIndex >= 0, `REQ-TRACE-493: the rail is not operable without a pointer (${JSON.stringify({ tag: railShape.railTag, disabled: railShape.railDisabled, tabIndex: railShape.railTabIndex })})`);
 expect(typeof railShape.headingName === 'string' && railShape.headingName.length > 0, `REQ-TRACE-493: an unfolded column heading has no accessible name (${JSON.stringify(railShape)})`);
-const relaunched = launch('fold-relaunch', boardProfile.workspace, boardProfile.local, boardProfile.preferences, { ROTARIS_CAPTURE_VIEWS: '4@1200', ROTARIS_CAPTURE_AFTER_MS: '4600' });
+const relaunched = await launch('fold-relaunch', boardProfile.workspace, boardProfile.local, boardProfile.preferences, { ROTARIS_CAPTURE_VIEWS: '4@1200', ROTARIS_CAPTURE_AFTER_MS: '4600' });
 const relaunchRails = (relaunched.probes['[data-testid="req-rail"]'] ?? []).map((r) => r.data['data-column']);
 expect(relaunchRails.join(',') === 'done', `REQ-TRACE-321: after the relaunch the folded columns are ${JSON.stringify(relaunchRails)}, not the Done column alone`);
 const otherProfile = profile('other', boardProfile.preferences);
-const other = launch('fold-other-workspace', otherProfile.workspace, otherProfile.local, otherProfile.preferences, { ROTARIS_CAPTURE_VIEWS: '4@1200', ROTARIS_CAPTURE_AFTER_MS: '4600' });
+const other = await launch('fold-other-workspace', otherProfile.workspace, otherProfile.local, otherProfile.preferences, { ROTARIS_CAPTURE_VIEWS: '4@1200', ROTARIS_CAPTURE_AFTER_MS: '4600' });
 const otherRails = (other.probes['[data-testid="req-rail"]'] ?? []).map((r) => r.data['data-column']);
 expect(otherRails.length === 0, `REQ-TRACE-312: a fold made in one workspace reached another (${JSON.stringify(otherRails)})`);
 stage2.fold = { folded: 'done', offscreenBeforeScroll: doneColumn.offscreen, focusAfterFold: railInspect.active?.testId, railName: railInspect.matches[0].attrs['aria-label'], afterRelaunch: relaunchRails, otherWorkspace: otherRails, railShape };
 
 // ── filter: an epic filter survives the axis switch (REQ-TRACE-299) ───────────────────────────────
 const filterProfile = profile('filter');
-const filtered = launch('filter', filterProfile.workspace, filterProfile.local, filterProfile.preferences, {
+const filtered = await launch('filter', filterProfile.workspace, filterProfile.local, filterProfile.preferences, {
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="req-filter-toggle"]@3400',
   ROTARIS_CAPTURE_SELECT: '[data-testid="req-filter-epic"]>>REQ-100@3900;;[data-testid="req-axis"]>>epic@4700',
@@ -444,7 +446,7 @@ stage2.filter = { summaryBefore, cardsBefore: 7, summaryAfter, columnsAfter: aft
 
 // ── chord: Ctrl+M focuses the move control, which names the first reachable target with the consequence ──
 const chordProfile = profile('chord');
-const chord = launch('chord', chordProfile.workspace, chordProfile.local, chordProfile.preferences, {
+const chord = await launch('chord', chordProfile.workspace, chordProfile.local, chordProfile.preferences, {
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   ROTARIS_CAPTURE_CLICKS: '[data-req-card="REQ-101"]@3400',
   ROTARIS_CAPTURE_CHORDS: 'Ctrl+M@4600',
@@ -470,7 +472,7 @@ const DROP = `(async () => { const board = window.__rotarisBoard; if (!board || 
 const dropProfile = profile('drop');
 const deprecatedPath = join(dropProfile.workspace, 'docs', 'requirements', 'REQ-100-fixture-epic', 'REQ-104-draft.md');
 writeFileSync(deprecatedPath, readFileSync(deprecatedPath, 'utf8').replace('status: draft', 'status: deprecated'));
-const drop = launch('drop', dropProfile.workspace, dropProfile.local, dropProfile.preferences, {
+const drop = await launch('drop', dropProfile.workspace, dropProfile.local, dropProfile.preferences, {
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   ROTARIS_CAPTURE_EVAL_AT: `${DROP}@3600`,
   ROTARIS_CAPTURE_AFTER_MS: '5400',
@@ -491,7 +493,7 @@ stage2.drop = { revealed: dropped.revealed, transferTypes: dropped.types, feedba
 const scaleProfile = generatedProfile('scale');
 const SCROLL = `(async () => { const list = document.querySelector('[data-testid="req-column"][data-column="backlog"] [data-testid="req-list"]'); if (!list) return 'no list'; const seen = []; for (let i = 0; i <= 10; i += 1) { list.scrollTop = ((list.scrollHeight - list.clientHeight) * i) / 10; await new Promise((r) => setTimeout(r, 80)); const ids = [...list.querySelectorAll('[data-req-card]')].map((el) => el.getAttribute('data-req-card')); seen.push({ top: Math.round(list.scrollTop), realised: ids.length, first: ids[0] ?? null, last: ids.at(-1) ?? null }); } list.scrollTop = list.scrollHeight; await new Promise((r) => setTimeout(r, 120)); const endIds = [...list.querySelectorAll('[data-req-card]')].map((el) => el.getAttribute('data-req-card')); return { seen, scrollHeight: list.scrollHeight, clientHeight: list.clientHeight, atEnd: list.scrollTop + list.clientHeight >= list.scrollHeight - 1, endLast: endIds.at(-1) ?? null, endRealised: endIds.length }; })()`;
 const SCROLL_COLUMNS = `(() => { const el = document.querySelector('[data-testid="req-columns"]'); if (!el) return null; const present = el.querySelectorAll(':scope > [data-column]').length; const built = el.querySelectorAll(':scope > [data-column]:not([data-offscreen])').length; el.scrollLeft = el.scrollWidth; return { scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, scrollLeft: el.scrollLeft, columns: el.querySelectorAll('[data-testid="req-column"]').length, rails: el.querySelectorAll('[data-testid="req-rail"]').length, present, built, placeholders: present - built }; })()`;
-const scale = launch('scale', scaleProfile.workspace, scaleProfile.local, scaleProfile.preferences, {
+const scale = await launch('scale', scaleProfile.workspace, scaleProfile.local, scaleProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
   ROTARIS_CAPTURE_EVAL_AT: [`${ARM_LONGTASKS}@900`, `${READ_LONGTASKS}@9000`, `${SCROLL}@9200`, `${ARM_LONGTASKS}@11000`, `${READ_LONGTASKS}@14500`, `${SCROLL_COLUMNS}@14600`, `${ARM_LONGTASKS}@16000`, `${READ_LONGTASKS}@19000`].join(';;'),
   ROTARIS_CAPTURE_VIEWS: '4@1200',
@@ -589,7 +591,7 @@ const REVIEW_AT = `(() => { const p = document.querySelector('[data-testid="req-
 const HISTORY_AT = `(() => { const p = document.querySelector('[data-testid="req-history-state"]'); const d = document.querySelector('[data-testid="req-detail"]'); return { state: p === null ? null : p.getAttribute('data-state'), entries: p === null ? [] : [...p.querySelectorAll('li')].map((l) => l.textContent.trim()), detailHealth: d === null ? null : (d.querySelector('[data-section="requirement"] dd .mono') || {}).textContent, runs: d === null ? [] : [...d.querySelectorAll('.req-detail__run')].map((r) => r.textContent.trim()) }; })()`;
 
 const e2e = profile('end-to-end');
-const release = launch('end-to-end', e2e.workspace, e2e.local, e2e.preferences, {
+const release = await launch('end-to-end', e2e.workspace, e2e.local, e2e.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   ROTARIS_CAPTURE_CLICKS: [
@@ -711,7 +713,7 @@ const edited = before
   .trimEnd();
 expect(edited !== before.trimEnd(), `the proof could not edit ${docName}: neither a title nor a heading was found in it`);
 writeFileSync(docPath, `${edited}\n\nEdited on disk by requirements-proof after the delivery was accepted, so the text no longer matches the accepted snapshot.\n`);
-const noticed = launch('end-to-end-edited', e2e.workspace, e2e.local, e2e.preferences, {
+const noticed = await launch('end-to-end-edited', e2e.workspace, e2e.local, e2e.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   // `needs-update` is the fifth column and lies outside the viewport at 1264 px, so the card is revealed first.
@@ -749,7 +751,7 @@ const EPIC_AND_RAIL = `(() => { const epic = document.querySelector('[data-testi
 const DRAG_ON_EPIC_AXIS = `(async () => { const card = document.querySelector('[data-req-card="REQ-101"]'); if (card === null) return 'absent'; const dt = new DataTransfer(); const ev = new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }); card.dispatchEvent(ev); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); const area = document.querySelector('[data-testid="req-columns"]'); return { defaultPrevented: ev.defaultPrevented, types: [...dt.types], dragging: area === null ? null : area.getAttribute('data-dragging'), feedback: [...document.querySelectorAll('[data-testid="req-feedback"]')].map((f) => f.textContent.trim()) }; })()`;
 
 const paneProfile = profile('panes');
-const panes = launch('panes', paneProfile.workspace, paneProfile.local, paneProfile.preferences, {
+const panes = await launch('panes', paneProfile.workspace, paneProfile.local, paneProfile.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   ROTARIS_CAPTURE_CLICKS: [

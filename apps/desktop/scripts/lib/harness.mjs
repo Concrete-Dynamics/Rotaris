@@ -11,7 +11,9 @@
  * Not extracted, deliberately: `launch`. Twenty-six scripts define one and twenty are genuinely different —
  * different environments, different probes, different timeouts, different return shapes. Normalising them
  * would be a rewrite of the evidence, and the driver (`lib/driver.mjs`) replaces the reason they diverged.
- * `launchOptions` below is the part they DO share, offered to new code rather than forced on old.
+ * `launchOptions` below is the part they DO share, offered to new code rather than forced on old. The one call inside
+ * every `launch` IS shared since 2026-09-29: `lib/bounded-launch.mjs`'s `spawnBounded`, because `spawnSync`'s timeout
+ * cannot end a launch that overruns it (`lib/launch-sites.test.ts`, rule 4).
  *
  * Nothing here is product code. It runs only from the proofs.
  */

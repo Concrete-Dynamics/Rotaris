@@ -26,6 +26,7 @@ import { tmpdir } from 'node:os';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -151,8 +152,9 @@ try {
   // `hostSwitches` after the four positional arguments the driver destructures from `process.argv.slice(2)`:
   // Electron keeps a Chromium switch in `process.argv`, so ahead of them `--no-sandbox` became the service bundle as
   // root. Chromium honours a switch anywhere before a bare `--`, so the end of the list still reaches it.
-  const drove = spawnSync(electron, [driver, join(app, 'out', 'main', 'workspace-service.js'), processFixture, scale, processOut, ...hostSwitches], { cwd: app, encoding: 'utf8', timeout: 180_000, windowsHide: true, env });
+  const drove = await spawnBounded(electron, [driver, join(app, 'out', 'main', 'workspace-service.js'), processFixture, scale, processOut, ...hostSwitches], { cwd: app, timeoutMs: 180_000, windowsHide: true, env });
   writeFileSync(join(output, 'process.log'), `${drove.stdout ?? ''}\n${drove.stderr ?? ''}`);
+  if (drove.overran) throw new Error(`${overrunMessage('the Electron driver', drove, `${drove.stdout}\n${drove.stderr}`)}\n(see .proof/traceability-proof/process.log)`);
   expect(drove.status === 0, `the Electron driver exited ${drove.status ?? drove.signal ?? 'unknown'} (see .proof/traceability-proof/process.log)`);
   const proc = JSON.parse(readFileSync(processOut, 'utf8'));
   results.process = proc;

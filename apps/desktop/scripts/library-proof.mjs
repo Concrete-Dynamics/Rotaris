@@ -27,6 +27,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -67,10 +68,10 @@ const PROBES = [
   '[data-testid="composer-stash"]', '[data-testid="transcript-stash"]', '.composer__input', '[data-testid="notice"]', '[data-testid="notice-title"]',
 ];
 
-function launch(name, workspace, local, preferences, extra, timeoutMs = 180_000) {
+async function launch(name, workspace, local, preferences, extra, timeoutMs = 180_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -79,6 +80,7 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 180_000)
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   const probes = {};
@@ -135,7 +137,7 @@ const results = {};
 
 // ── 1. The Library, shown by its own shortcut (REQ-LIBRARY-102/103) ────────────────────────────────
 const shellProfile = profile('shell');
-const shown = launch('shell', shellProfile.workspace, shellProfile.local, shellProfile.preferences, {
+const shown = await launch('shell', shellProfile.workspace, shellProfile.local, shellProfile.preferences, {
   ROTARIS_CAPTURE_VIEWS: '6@900',
   // The final probe carries only `data-*` and `aria-value*`; the field's and the splitter's stated NAMES need every attribute.
   ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="library-divider"]@2600;;[data-testid="library-search"]@2600',
@@ -160,7 +162,7 @@ if (dividerAttrs['role'] !== 'separator' || dividerAttrs['tabindex'] !== '0') th
 results.shell = { view: 'library', title: 'Library', tabs: tabNames, labels: tabLabels, stashEmpty: true, historyEmpty: true, searchName: searchAttrs['aria-label'], splitterName: dividerAttrs['aria-label'] };
 
 // ── 2. Stashed from the composer, then measured across a real restart (REQ-CHAT-042, REQ-LIBRARY-138) ──
-const stashed = launch('stash', shellProfile.workspace, shellProfile.local, shellProfile.preferences, {
+const stashed = await launch('stash', shellProfile.workspace, shellProfile.local, shellProfile.preferences, {
   ROTARIS_CAPTURE_VIEWS: '2@700',
   // The composer clicked (which focuses it), typed into WITHOUT submitting, then the Stash control clicked.
   ROTARIS_CAPTURE_CLICKS: '.composer__input@1000;;[data-testid="composer-stash"]@1900',
@@ -183,7 +185,7 @@ if (toolbar?.text !== 'Apply stash (1)') throw new Error(`the transcript toolbar
 if (toolbar.attrs['aria-label'] !== 'Manage prompt stash' || toolbar.attrs['title'] !== 'Apply or pop a stashed prompt') throw new Error(`the toolbar control's names are ${JSON.stringify(toolbar.attrs)}`);
 
 // The relaunch: a second process against the same profile — the entry is loaded from the store, not remembered.
-const relaunched = launch('relaunch', shellProfile.workspace, shellProfile.local, shellProfile.preferences, {
+const relaunched = await launch('relaunch', shellProfile.workspace, shellProfile.local, shellProfile.preferences, {
   ROTARIS_CAPTURE_VIEWS: '6@900',
   ROTARIS_CAPTURE_AFTER_MS: '3200',
 });
@@ -193,7 +195,7 @@ results.stash = { stored: afterStash.stash, historyRows: afterStash.history.leng
 
 // ── 3. Use, and Use-and-remove under a filter (REQ-LIBRARY-104/107, REQ-CHAT-044) ──────────────────
 const useProfile = profile('use');
-const used = launch('use', useProfile.workspace, useProfile.local, useProfile.preferences, {
+const used = await launch('use', useProfile.workspace, useProfile.local, useProfile.preferences, {
   // Seeded through the real `prompts.push` command; newest first afterwards: alpha two(0), beta(1), alpha one(2).
   ROTARIS_CAPTURE_PROMPTS: 'stash>>alpha one@600;;stash>>beta@700;;stash>>alpha two@800',
   ROTARIS_CAPTURE_VIEWS: '6@1300;;6@3000',
@@ -294,7 +296,7 @@ results.use = { switchedTo: 'workspace', focused: 'composer', filteredRows: filt
 
 // ── 4. A burst of writes settles, and the typed search text is untouched (REQ-LIBRARY-105) ─────────
 const burstProfile = profile('burst');
-const burst = launch('burst', burstProfile.workspace, burstProfile.local, burstProfile.preferences, {
+const burst = await launch('burst', burstProfile.workspace, burstProfile.local, burstProfile.preferences, {
   ROTARIS_CAPTURE_VIEWS: '6@700',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="library-search"]@1100',
   ROTARIS_CAPTURE_TYPE_AT: 'burst@1300',
@@ -313,7 +315,7 @@ results.burst = { writes: 20, searchTextAfter: burstSearch, newestOnScreen: burs
 
 // ── 5. The cap: 201 entries leave 200, oldest first, silently (REQ-LIBRARY-139) ────────────────────
 const capProfile = profile('cap');
-const capped = launch('cap', capProfile.workspace, capProfile.local, capProfile.preferences, {
+const capped = await launch('cap', capProfile.workspace, capProfile.local, capProfile.preferences, {
   ROTARIS_CAPTURE_PROMPTS: 'history>>{201}entry @700',
   ROTARIS_CAPTURE_VIEWS: '6@4000',
   ROTARIS_CAPTURE_AFTER_MS: '6000',
@@ -337,7 +339,7 @@ results.cap = { pushed: 201, stored: capStored.history.length, newest: capStored
 
 // ── 6. A notice action opens the named tab (REQ-SHELL-115, REQ-LIBRARY-102/103) ────────────────────
 const noticeProfile = profile('notice');
-const notice = launch('notice', noticeProfile.workspace, noticeProfile.local, noticeProfile.preferences, {
+const notice = await launch('notice', noticeProfile.workspace, noticeProfile.local, noticeProfile.preferences, {
   // Reported late enough that the scratch profile's own start-up notice (no provider authenticated) has already
   // been raised and replaced, so the slot holds this one when the action is activated.
   ROTARIS_CAPTURE_NOTICES: `${JSON.stringify({ op: 'report', severity: 'info', title: 'Artifacts were published', persistent: true, action: { label: 'Open Library', action: { kind: 'open-library', tab: 'artifacts' } } })}@3000`,

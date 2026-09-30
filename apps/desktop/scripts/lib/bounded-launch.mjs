@@ -9,7 +9,8 @@
  * each took.
  *
  * `spawnBounded` is the same ending for a launch a proof starts itself, where `spawnSync(…, { timeout })` used to
- * stand. That call cannot bound a launch: at its timeout Node sends the signal AND closes its ends of the child's
+ * stand — in every proof since 2026-09-29, which `launch-sites.test.ts` (rule 4) keeps
+ * (`docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`). That call cannot bound a launch: at its timeout Node sends the signal AND closes its ends of the child's
  * standard output and error, so the application's first quit-path line (`quit: requested (before-quit)`) fails with
  * EPIPE, and the main process's uncaught-exception handler logs that failure to the same closed stream — a loop at full
  * CPU that never reaches the quit, and a `spawnSync` that never returns

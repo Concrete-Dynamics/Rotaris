@@ -47,8 +47,8 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { startApp } from './lib/driver.mjs';
+import { endedHow, spawnBounded } from './lib/bounded-launch.mjs';
 import { app, buildDesktop, cleanEnvironment, electron, evidenceDirectory, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
 
 const output = evidenceDirectory('updater-proof');
@@ -140,8 +140,8 @@ mkdirSync(local, { recursive: true });
 writeFileSync(join(workspace, 'README.md'), '# scratch\n');
 writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), 'models:\n  scripted: { provider: scripted, model_id: scripted }\nsmall_model: scripted\nmedium_model: scripted\nlarge_model: scripted\nruntime:\n  permission_mode: autonomous\nrotaris:\n  delegation_strategy: single\n');
 const environmentFile = 'terminal-environment.txt';
-const launched = spawnSync(electron, [mainEntry, ...hostSwitches, workspace], {
-  cwd: app, encoding: 'utf8', timeout: 180_000, windowsHide: true,
+const launched = await spawnBounded(electron, [mainEntry, ...hostSwitches, workspace], {
+  cwd: app, timeoutMs: 180_000, windowsHide: true,
   env: {
     ...cleanEnvironment(), ...proofIsolationEnv({ profileRoot: stage2, local }),
     ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off',
@@ -156,6 +156,7 @@ const launched = spawnSync(electron, [mainEntry, ...hostSwitches, workspace], {
   },
 });
 writeFileSync(join(stage2, 'app.log'), `${launched.stdout ?? ''}\n${launched.stderr ?? ''}`);
+check('the capture launch ended by itself within its bound', launched.overran === null, launched.overran === null ? `exit ${launched.status ?? launched.signal} in ${launched.elapsedMs} ms` : `it overran its ${launched.overran.timeoutMs} ms bound: ${endedHow(launched.overran)}; see children/app.log`);
 const written = join(workspace, environmentFile);
 const terminalEnvironment = existsSync(written) ? readFileSync(written, 'utf8').split(/\r?\n/) : null;
 const has = (name) => terminalEnvironment !== null && terminalEnvironment.some((l) => l.toUpperCase().startsWith(`${name}=`));

@@ -32,6 +32,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { CPU_PROFILE_CATEGORIES, bundleRegions, profileDifference, readTrace, spread, summariseAppendProfile, summariseAppendTrace } from './lib/trace-summary.mjs';
 
 const require = createRequire(import.meta.url);
@@ -66,10 +67,10 @@ const PROBES = [
  * comparison's traced launches pass the startup-tracing switches through it; `hostSwitches` is what this host needs
  * on every launch (`--no-sandbox` as root, nothing elsewhere).
  */
-function launch(name, extra, timeoutMs = 240_000, electronArgs = []) {
+async function launch(name, extra, timeoutMs = 240_000, electronArgs = []) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, ...electronArgs, workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, ...electronArgs, workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -78,6 +79,7 @@ function launch(name, extra, timeoutMs = 240_000, electronArgs = []) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'} (see ${name}.log)`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   // `spawnSync` returns when MAIN exits; the run host is a child that can outlive it by a moment, and a session it
@@ -144,7 +146,7 @@ const results = {};
 // REQ-CHAT-073's empty state, word for word, and ADR-0045's structural counts with nothing in the transcript.
 const EMPTY_TITLE = 'No transcript yet';
 const EMPTY_BODY = 'Describe the outcome you want. Rotaris will show agent activity and results here.';
-const empty = launch('empty', {
+const empty = await launch('empty', {
   ROTARIS_CAPTURE_VIEWS: '2@900',
   ROTARIS_CAPTURE_EVAL_AT: 'window.__rotarisCounts()@2200;;window.__rotarisReplica()@2400',
   ROTARIS_CAPTURE_AFTER_MS: '3200',
@@ -245,7 +247,7 @@ plant('S0', 1);
 // ADR-0045's own claim, measured in the product: the count of live structural elements the application's layout
 // owns does not move across 0, 1, 601 and 1200 displayed rows, nor across REQ-UIBENCH-060's five window sizes.
 const COUNTS = 'window.__rotarisCounts()';
-const invariance = launch('invariance', {
+const invariance = await launch('invariance', {
   ROTARIS_CAPTURE_VIEWS: '2@900',
   ROTARIS_CAPTURE_OPEN_AT: 'S1@3000;;S601@8000;;S1200@13000',
   ROTARIS_CAPTURE_RESIZE: '1000x680@21000;;1440x900@22500;;1180x760@24000;;1000x680@25500;;1440x900@27000',
@@ -282,7 +284,7 @@ const invariance = launch('invariance', {
 // ── 3. behaviour ────────────────────────────────────────────────────────────────────────────────────────────
 const SCROLL = `document.querySelector('[data-testid="transcript-scroll"]')`;
 const GROUPS = `[...document.querySelectorAll('[data-shape="group"]')]`;
-const behaviour = launch('behaviour', {
+const behaviour = await launch('behaviour', {
   ROTARIS_CAPTURE_RESUME: 'S1200',
   ROTARIS_CAPTURE_EVAL_AT: [
     `(() => { const s = ${SCROLL}; return { displayed: s.dataset.displayed, following: s.dataset.following, slots: s.dataset.slots }; })()@4000`,
@@ -418,7 +420,7 @@ const behaviour = launch('behaviour', {
   const LIVE_FIRST = `(async () => { const until = performance.now() + ${LIVE_SAMPLE_AT}; const frame = () => new Promise((resolve) => requestAnimationFrame(resolve)); while (performance.now() < until) { if (document.querySelector('.activity__now')) { await frame(); if (document.querySelector('.activity__now')) break; } await frame(); } return OVERLAP_READ; })()`;
   const SAMPLE_AT = Array.from({ length: 25 }, (_, i) => 3300 + i * 300);
   const OVERLAP = `(() => { const boxes = [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound).map((n) => { const r = n.getBoundingClientRect(); return { key: n.dataset.bound, top: r.top, bottom: r.bottom, keyed: n.dataset.measure !== '' }; }).sort((a, b) => a.top - b.top); let worst = 0; let pair = null; for (let i = 1; i < boxes.length; i += 1) { const o = boxes[i - 1].bottom - boxes[i].top; if (o > worst) { worst = o; pair = [boxes[i - 1].key, boxes[i].key]; } } const seg = document.querySelector('[data-shape="group"] .activity__segments'); const segmentLines = seg ? new Set([...seg.querySelectorAll('.activity__segment')].map((e) => Math.round(e.getBoundingClientRect().top))).size : 0; const roles = [...document.querySelectorAll('.row__role')].map((e) => Math.round(e.getBoundingClientRect().height)); const g = document.querySelector('[data-shape="group"]'); return { bound: boxes.length, unkeyed: boxes.filter((b) => !b.keyed).length, worstOverlapPx: Math.round(worst * 10) / 10, pair, segmentLines, tallestRolePx: Math.max(0, ...roles), live: document.querySelectorAll('.activity__now').length, summaryTail: g ? g.innerText.replace(/\\s+/g, ' ').trim().slice(-90) : null }; })()`;
-  const geometry = launch('geometry', {
+  const geometry = await launch('geometry', {
     // A PLANTED running tool cannot stay running: a resumed session settles its in-flight calls through stale
     // detection (ADR-0002), which is correct and is why the fixture alone cannot produce a live line. The wrap
     // and the long name come from the planted run; the LIVENESS comes from a scripted run appended to it.
@@ -486,9 +488,9 @@ const APPEND_SCRIPT = 'read,glob,read,glob,read,glob,think';
 const APPEND_LAUNCHES = 2;
 const APPEND_READ_AT = 26_000;
 const TRACE_CATEGORIES = ['devtools.timeline', 'disabled-by-default-devtools.timeline', 'blink', 'blink.user_timing', 'v8.execute', 'cc', 'toplevel', ...CPU_PROFILE_CATEGORIES].join(',');
-function appendRun(name, sid, tracePath = null) {
+async function appendRun(name, sid, tracePath = null) {
   const electronArgs = tracePath === null ? [] : [`--trace-startup=${TRACE_CATEGORIES}`, `--trace-startup-file=${tracePath}`, '--trace-startup-format=json', '--trace-startup-duration=300'];
-  const r = launch(name, {
+  const r = await launch(name, {
     ROTARIS_SCRIPT: APPEND_SCRIPT,
     ROTARIS_CAPTURE_RESUME: sid,
     ROTARIS_CAPTURE_PROMPT: 'Say something about the notes.',
@@ -572,14 +574,14 @@ function side(launches, frameMs) {
 const emptyLaunches = [];
 const loadedLaunches = [];
 for (let i = 1; i <= APPEND_LAUNCHES; i += 1) {
-  emptyLaunches.push(appendRun(`append-empty-${i}`, 'S0'));
-  loadedLaunches.push(appendRun(`append-loaded-${i}`, 'S1200'));
+  emptyLaunches.push(await appendRun(`append-empty-${i}`, 'S0'));
+  loadedLaunches.push(await appendRun(`append-loaded-${i}`, 'S1200'));
 }
 // The traced pair, after the comparison's own launches and outside them.
 const emptyTracePath = join(output, 'append-empty.trace.json');
 const loadedTracePath = join(output, 'append-loaded.trace.json');
-const emptyTraced = appendRun('append-empty-traced', 'S0', emptyTracePath);
-const loadedTraced = appendRun('append-loaded-traced', 'S1200', loadedTracePath);
+const emptyTraced = await appendRun('append-empty-traced', 'S0', emptyTracePath);
+const loadedTraced = await appendRun('append-loaded-traced', 'S1200', loadedTracePath);
 {
   const cadences = [...emptyLaunches, ...loadedLaunches].map((l) => l.cadence.medianMs);
   const frameMs = spread(cadences).median;

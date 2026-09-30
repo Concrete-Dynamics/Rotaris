@@ -34,6 +34,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { choose, startApp, stopApp, stopOverrunMessage, until } from './lib/driver.mjs';
 
 const require = createRequire(import.meta.url);
@@ -119,15 +120,15 @@ function resetPids() { for (const f of ['alpha', 'beta', 'gamma', 'browser']) wr
 const pidLines = (name) => readFileSync(join(pids, `${name}.pids`), 'utf8').split('\n').filter((l) => l.trim() !== '');
 const sha = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
 
-function launch(name, extra, { files = {}, timeout = 150_000 } = {}) {
+async function launch(name, extra, { files = {}, timeout = 150_000 } = {}) {
   writeFileSync(join(configDir, 'agents.yaml'), files.global ?? globalYaml());
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), files.workspace ?? WORKSPACE);
   writeFileSync(join(workspace, '.mcp.json'), files.mcpJson ?? MCP_JSON);
   resetPids();
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs: timeout, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', ROTARIS_CAPTURE_PNG: png,
@@ -141,6 +142,7 @@ function launch(name, extra, { files = {}, timeout = 150_000 } = {}) {
   const elapsedMs = Date.now() - started;
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   return { log, elapsedMs, png };
 }
@@ -289,7 +291,7 @@ const ROUND_OVER = `(() => {
   const before = sha(join(workspace, '.mcp.json'));
   const clients = join(output, 'alpha.clients.jsonl');
   writeFileSync(clients, '');
-  const r = launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'call echo on alpha', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000' }, { files: { global: globalYaml({ alphaFlags: ['--client-file', clients] }) } });
+  const r = await launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'call echo on alpha', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000' }, { files: { global: globalYaml({ alphaFlags: ['--client-file', clients] }) } });
   if (sha(join(workspace, '.mcp.json')) !== before) throw new Error('the discovery file changed across the load (REQ-MCP-027)');
   const surface = lines(r.log, /mcp: surface for orchestrator/);
   if (surface.length === 0) throw new Error(`no surface line:\n${r.log}`);
@@ -326,7 +328,7 @@ const ROUND_OVER = `(() => {
 
 // ---- 2. A call end to end, and the allowance ------------------------------------------------------------------
 {
-  const r = launch('call', { ROTARIS_CAPTURE_PROMPT: 'slow then echo', ROTARIS_SCRIPT: 'mcp:alpha.slow,mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '12000' }, { files: { global: globalYaml({ alphaTimeout: 2 }) } });
+  const r = await launch('call', { ROTARIS_CAPTURE_PROMPT: 'slow then echo', ROTARIS_SCRIPT: 'mcp:alpha.slow,mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '12000' }, { files: { global: globalYaml({ alphaTimeout: 2 }) } });
   const db = new Database(oneDatabase(), { readonly: true });
   const s = latestSession(db);
   const slow = toolRows(db, s.session_id, 'slow');
@@ -345,7 +347,7 @@ const ROUND_OVER = `(() => {
 
 // ---- 3. One connection per server per session ---------------------------------------------------------------
 {
-  const r = launch('one-process', {
+  const r = await launch('one-process', {
     ROTARIS_CAPTURE_PROMPT: 'fan out', ROTARIS_SCRIPT: 'delegate:coding-agent:one,delegate:coding-agent:two,wait:2500,delegate:coding-agent:three,wait:2500,answer', ROTARIS_CHILD_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '16000', ROTARIS_INTENT_SCRIPT: 'moderate_feature',
   }, { files: { global: globalYaml({ personas: { 'coding-agent': '{ mcp_servers: [alpha] }' } }), workspace: WORKSPACE.replace('  delegation_strategy: single\n', '  delegation_strategy: orchestrator\n') } });
   const db = new Database(oneDatabase(), { readonly: true });
@@ -366,7 +368,7 @@ const ROUND_OVER = `(() => {
 
 // ---- 4. Narrowing ---------------------------------------------------------------------------------------------
 {
-  const r = launch('narrowing', { ROTARIS_CAPTURE_PROMPT: 'echo then extra', ROTARIS_SCRIPT: 'mcp:alpha.echo,wait:2000,mcp:alpha.extra,answer', ROTARIS_CAPTURE_AFTER_MS: '12000' }, { files: { global: globalYaml({ alphaFlags: ['--rename-after', '300'] }) } });
+  const r = await launch('narrowing', { ROTARIS_CAPTURE_PROMPT: 'echo then extra', ROTARIS_SCRIPT: 'mcp:alpha.echo,wait:2000,mcp:alpha.extra,answer', ROTARIS_CAPTURE_AFTER_MS: '12000' }, { files: { global: globalYaml({ alphaFlags: ['--rename-after', '300'] }) } });
   const db = new Database(oneDatabase(), { readonly: true });
   const s = latestSession(db);
   const extra = toolRows(db, s.session_id, 'extra');
@@ -381,7 +383,7 @@ const ROUND_OVER = `(() => {
 
 // ---- 5. Unreachable after connect ---------------------------------------------------------------------------
 {
-  const r = launch('crash', { ROTARIS_CAPTURE_PROMPT: 'slow then echo after a crash', ROTARIS_SCRIPT: 'mcp:alpha.slow,mcp:alpha.echo,mcp:beta.beta_echo,answer', ROTARIS_CAPTURE_AFTER_MS: '14000' }, { files: { global: globalYaml({ alphaFlags: ['--crash-after', '200'] }) } });
+  const r = await launch('crash', { ROTARIS_CAPTURE_PROMPT: 'slow then echo after a crash', ROTARIS_SCRIPT: 'mcp:alpha.slow,mcp:alpha.echo,mcp:beta.beta_echo,answer', ROTARIS_CAPTURE_AFTER_MS: '14000' }, { files: { global: globalYaml({ alphaFlags: ['--crash-after', '200'] }) } });
   const db = new Database(oneDatabase(), { readonly: true });
   const s = latestSession(db);
   const slow = toolRows(db, s.session_id, 'slow');
@@ -504,12 +506,12 @@ const ROUND_OVER = `(() => {
 // ---- 8. Fatal YAML defects; the same in the discovery file --------------------------------------------------
 {
   const broken = `${globalYaml()}\n`.replace('mcp_servers:\n', 'mcp_servers:\n  nocmd: { type: stdio }\n  badtimeout: { command: node, request_timeout: -1 }\n');
-  const r = launch('fatal', { ROTARIS_CAPTURE_PROMPT: 'run on a broken file', ROTARIS_CAPTURE_AFTER_MS: '4000' }, { files: { global: broken } });
+  const r = await launch('fatal', { ROTARIS_CAPTURE_PROMPT: 'run on a broken file', ROTARIS_CAPTURE_AFTER_MS: '4000' }, { files: { global: broken } });
   const refusal = lines(r.log, /could not be loaded/)[0] ?? '';
   if (!/mcp_servers\.nocmd\.command/.test(refusal) || !/mcp_servers\.badtimeout\.request_timeout/.test(refusal)) throw new Error(`the refusal did not report both defects: ${refusal}`);
   if (/session .* started/.test(r.log)) throw new Error('a run started on a fatal configuration');
   const mcpJson = `{\n  "mcpServers": {\n    "nocmd": { "type": "stdio" },\n    "empty": { "command": "" },\n    "gamma": { "command": ${y(node)}, "args": ${y([fixture])} }\n  }\n}\n`;
-  const r2 = launch('fatal-discovered', { ROTARIS_CAPTURE_PROMPT: 'run with dropped discovered entries', ROTARIS_SCRIPT: 'mcp:gamma.gamma_echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000' }, { files: { mcpJson } });
+  const r2 = await launch('fatal-discovered', { ROTARIS_CAPTURE_PROMPT: 'run with dropped discovered entries', ROTARIS_SCRIPT: 'mcp:gamma.gamma_echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000' }, { files: { mcpJson } });
   const dropped = lines(r2.log, /the entry is dropped \(REQ-MCP-023\)/);
   if (dropped.length < 2) throw new Error(`the discovered defects were not dropped: ${dropped.length}`);
   if (!/ended completed/.test(r2.log)) throw new Error('the run with dropped discovered entries did not complete');
@@ -520,7 +522,7 @@ const ROUND_OVER = `(() => {
 {
   // The run's first port waits on the mute server's discovery; the bound fires at 35 s, the run proceeds with alpha listed bare,
   // and the user closes the window at 40 s — the exit must follow without waiting on anything.
-  const r = launch('exit-bound', { ROTARIS_CAPTURE_PROMPT: 'a server that never answers', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '60000', ROTARIS_CAPTURE_QUIT_MS: '40000' }, { files: { global: globalYaml({ alphaFlags: ['--never-init'] }) }, timeout: 120_000 });
+  const r = await launch('exit-bound', { ROTARIS_CAPTURE_PROMPT: 'a server that never answers', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '60000', ROTARIS_CAPTURE_QUIT_MS: '40000' }, { files: { global: globalYaml({ alphaFlags: ['--never-init'] }) }, timeout: 120_000 });
   const disc = lines(r.log, /mcp: discovery of 'alpha' failed/)[0] ?? '';
   const ms = Number(/in (\d+) ms/.exec(disc)?.[1] ?? NaN);
   if (!(ms >= 34_000 && ms <= 35_500)) throw new Error(`discovery did not return at the 35 s bound: ${disc}`);

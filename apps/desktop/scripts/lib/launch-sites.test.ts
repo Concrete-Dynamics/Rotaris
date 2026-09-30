@@ -20,6 +20,12 @@
  *      (`src/run-host/code-intelligence-launch.ts`). Rule 2 admits the switch ahead of the token too, and
  *      `code-intel-proof` put it there: as root the application started instead of the server
  *      (`docs/defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`).
+ *   4. **No launch of Electron goes through `spawnSync`.** Its `timeout` cannot end a launch: Node signals the child and
+ *      closes its ends of the pipes at the same moment, then waits for an exit without a bound, so a launch that overran
+ *      hung its proof instead of failing it. Every launch is `spawnBounded`'s (`lib/bounded-launch.mjs`: SIGTERM with the
+ *      pipes open, a grace, SIGKILL to the group, reported with the log tail) or the driver's
+ *      (`docs/defects/fixed/proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`). A launch with
+ *      `ELECTRON_RUN_AS_NODE` starts no application and no quit path, and is exempt here as under rule 2.
  *
  * This is a static scan, not a launch: it reads the scripts' text, so it is decidable on any host and in `pnpm check`.
  * What it does not measure is that Chromium honours the switch where the rule puts it; the proofs measure that.
@@ -166,6 +172,15 @@ describe('R-062: the proof harness platform rules, kept at every script', () => 
     expect(launchProblem(call("[join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace]"))).toBeNull();
     expect(launchProblem(call("[driver, join(app, 'out', 'main', 'workspace-service.js'), fixture, ...hostSwitches]"))).toBeNull();
     expect(launchProblem(launches('fixture.cjs', "spawnSync(exe, [probe, dir], { env: { ELECTRON_RUN_AS_NODE: '1' } });")[0]!)).toBeNull();
+  });
+
+  it('no launch of Electron goes through spawnSync, whose timeout cannot end an overrun launch (rule 4)', () => {
+    const found = all.flatMap((f) => launches(relative(SCRIPTS, f).split(sep).join('/'), readFileSync(f, 'utf8')));
+    const unbounded = found.filter((l) => l.call.startsWith('spawnSync(') && !/ELECTRON_RUN_AS_NODE/.test(l.call)).map((l) => l.file);
+    expect(unbounded).toEqual([]);
+    // Not vacuous: the scan sees the bounded launches, and it sees a `spawnSync` launch where one is written.
+    expect(found.filter((l) => l.call.startsWith('spawnBounded(')).length).toBeGreaterThanOrEqual(36);
+    expect(launches('fixture.mjs', "const r = spawnSync(electron, [mainEntry, ...hostSwitches, ws], { timeout: 1 });")[0]!.call).toMatch(/^spawnSync\(/);
   });
 
   it('a launch of the reserved token keeps it at the sentinel\'s index, the switch after it, including code-intel-proof as it was (REQ-MCP-033)', () => {

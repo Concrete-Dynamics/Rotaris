@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 /**
  * ADR-0049's first execution in full (Part V), in the built application.
@@ -70,11 +71,11 @@ function scenario(name, { globalHooks = null, workspaceHook = false } = {}) {
   }
   return { root, workspace, local, preferences: join(root, 'preferences') };
 }
-function launch(name, s, extra, opts = {}) {
+async function launch(name, s, extra, opts = {}) {
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
-    cwd: app, encoding: 'utf8', timeout: opts.timeout ?? 150_000, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
+    cwd: app, timeoutMs: opts.timeout ?? 150_000, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local: s.local, preferences: s.preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true', ...extra,
@@ -82,6 +83,7 @@ function launch(name, s, extra, opts = {}) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   const errors = log.split('\n').filter((l) => /renderer console:/.test(l));
@@ -106,7 +108,7 @@ const s1 = scenario('advisory', {
   ].join('\n'),
 });
 {
-  const r = launch('advisory', s1, {
+  const r = await launch('advisory', s1, {
     ROTARIS_SCRIPT: 'read,read,read,read,answer',
     ROTARIS_CAPTURE_PROMPT: 'read a few files so the hook fails its way to being switched off',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '90000', ROTARIS_CAPTURE_AFTER_MS: '2500',
@@ -162,7 +164,7 @@ const s1 = scenario('advisory', {
 const s2 = scenario('scoping');
 {
   const step = (at, obj) => `${JSON.stringify(obj)}@${at}`;
-  const r = launch('scoping', s2, {
+  const r = await launch('scoping', s2, {
     ROTARIS_CAPTURE_NOTICES: [
       // Unscoped, then a run starts: cleared (REQ-NOTIFY-058).
       step(2600, { op: 'report', severity: 'info', title: 'unscoped notice' }),
@@ -206,7 +208,7 @@ const s2 = scenario('scoping');
 const s3 = scenario('stack');
 {
   const step = (at, obj) => `${JSON.stringify(obj)}@${at}`;
-  const r = launch('stack', s3, {
+  const r = await launch('stack', s3, {
     ROTARIS_CAPTURE_NOTICES: [
       // One alone: the wide presentation (REQ-NOTIFY-013).
       step(2600, { op: 'acknowledge', kind: 'info', title: 'alone' }),
@@ -262,7 +264,7 @@ const s3 = scenario('stack');
 // 6. ESC-34: the review action names its workspace, and that name reaches the review.
 const s4 = scenario('review-action', { workspaceHook: true });
 {
-  const r = launch('review-action', s4, {
+  const r = await launch('review-action', s4, {
     ROTARIS_CAPTURE_AFTER_MS: '6000',
     // The notice is raised 800 ms after the workspace opens; probe it, then click its action.
     ROTARIS_CAPTURE_PROBE_AT: '[data-testid="notice-title"]@2500',

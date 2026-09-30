@@ -20,6 +20,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -42,10 +43,10 @@ if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${ele
 
 const PROBES = ['[data-testid="overview-session"]', '[data-testid="overview-empty"]', '[data-testid="overview-tokens"]', '.ov-spark', '[data-testid="overview-cost"]', '[data-testid="overview-tool-calls"]', '[data-testid="overview-tool-chips"] .tag', '[data-testid="overview-repo-state"]', '[data-testid="overview-repo-branch"]', '[data-testid="overview-repo-counts"]', '[data-testid="overview-agent-count"]', '[data-testid="overview-agent-caps"]', '[data-testid="overview-agent-states"]', '[data-testid="overview-sessions"] .ov-session', '[data-testid="overview-sessions-empty"]', '[data-testid="overview-divider"]', '.app-shell'];
 
-function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
+async function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -54,6 +55,7 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000)
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   const probes = {};
@@ -100,7 +102,7 @@ writeFileSync(join(workspace, 'NOTES.md'), 'untracked\n');
 const results = {};
 
 // 1. The empty Overview, as the startup view (REQ-SHELL-026, REQ-MONITOR-165's onboarding state).
-const empty = launch('empty', workspace, local, preferences, { ROTARIS_CAPTURE_AFTER_MS: '3500' });
+const empty = await launch('empty', workspace, local, preferences, { ROTARIS_CAPTURE_AFTER_MS: '3500' });
 const emptyView = first(empty.probes, '.app-shell')?.data?.['data-view'];
 if (emptyView !== 'overview') throw new Error(`the first view painted was ${emptyView ?? 'none'}, not overview`);
 if (text(empty.probes, '[data-testid="overview-empty"]').length !== 1) throw new Error('the onboarding empty state was not on screen with no session and no stored run');
@@ -109,7 +111,7 @@ const readMs = Number(/repository .* in (\d+) ms/.exec(empty.log)?.[1] ?? -1);
 results.empty = { view: emptyView, emptyState: true, repositoryReadMs: readMs };
 
 // 1b. PATH emptied of git: the reads end in a state — no dialog, no throw (REQ-GIT-102/103).
-const noGit = launch('no-git', workspace, local, preferences, { ROTARIS_CAPTURE_AFTER_MS: '3500', PATH: process.platform === 'win32' ? 'C:\\Windows\\System32' : '/nonexistent', Path: process.platform === 'win32' ? 'C:\\Windows\\System32' : '/nonexistent' });
+const noGit = await launch('no-git', workspace, local, preferences, { ROTARIS_CAPTURE_AFTER_MS: '3500', PATH: process.platform === 'win32' ? 'C:\\Windows\\System32' : '/nonexistent', Path: process.platform === 'win32' ? 'C:\\Windows\\System32' : '/nonexistent' });
 if (!/repository .*: git=false repo=false/.test(noGit.log)) throw new Error(`with no git on the path the repository read did not end in the empty state:\n${noGit.log.split('\n').filter((l) => /repository/.test(l)).join('\n')}`);
 if (/Error box|dialog/i.test(noGit.log.split('\n').filter((l) => /repository/.test(l)).join('\n'))) throw new Error('a dialog was raised for a missing git');
 results.noGit = { repositoryState: 'git=false', dialog: false };
@@ -117,7 +119,7 @@ results.noGit = { repositoryState: 'git=false', dialog: false };
 // 2. A scripted run driven from the Workspace view, the Overview read afterwards. The orchestrator's first call waits
 //    21 s (three sample periods), then delegates one child, then reads a file, then answers.
 const RUN_WAIT_MS = 21_000;
-const run = launch('run', workspace, local, preferences, {
+const run = await launch('run', workspace, local, preferences, {
   ROTARIS_SCRIPT: `wait:${RUN_WAIT_MS},delegate:coding-agent:helper,read,answer`,
   ROTARIS_CHILD_SCRIPT: 'glob,answer',
   ROTARIS_CAPTURE_PROMPT: 'Exercise the overview.',
@@ -172,7 +174,7 @@ mkdirSync(preferences, { recursive: true });
 writeFileSync(join(preferences, 'preferences.json'), JSON.stringify({ ...JSON.parse(existsSync(join(preferences, 'preferences.json')) ? require('node:fs').readFileSync(join(preferences, 'preferences.json'), 'utf8') : '{}'), 'panels/overview': { version: 1, panes: 2, sizes: [800, 420] } }, null, 2));
 
 // 3. Relaunch: the samples identical, the split restored, the session listed.
-const again = launch('relaunch', workspace, local, preferences, { ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_END_VIEW: '1', ROTARIS_CAPTURE_END_VIEW_MS: '3500', ROTARIS_CAPTURE_AFTER_MS: '2500' });
+const again = await launch('relaunch', workspace, local, preferences, { ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_END_VIEW: '1', ROTARIS_CAPTURE_END_VIEW_MS: '3500', ROTARIS_CAPTURE_AFTER_MS: '2500' });
 const sparkAgain = Number(first(again.probes, '.ov-spark')?.data?.['data-samples'] ?? -1);
 if (sparkAgain !== samples.length) throw new Error(`after the relaunch the sparkline carries ${sparkAgain} samples; the store holds ${samples.length}`);
 const divider = first(again.probes, '[data-testid="overview-divider"]');

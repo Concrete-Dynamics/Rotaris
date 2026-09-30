@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**Every proof launch is bounded (R-067).** `package.mjs` launches the packaged application through
+`scripts/lib/bounded-launch.mjs`'s `spawnBounded`, as every proof script now does, so the **component view**'s paragraph
+on the modules `package.mjs` shares names that one too. No edge moves: a script reaching a script module under
+`apps/desktop/scripts/`, outside the boundary rule. This repairs `proofs-launched-through-spawnsync-cannot-end-an-overrun-launch.md`.
+
 **The run-start mode hint says what `plan` does and states a session's release (REQ-ORCH-152, REQ-CONFIG-320,
 PD-ORCH-003, R-067).** The Settings Runtime category's hint no longer says the plan gate is not built: `runStartModeHint`
 (`ui/settings/ConfigSettings.tsx`) says what `plan` does and, when the followed session's `SessionRecord.planReleased` is

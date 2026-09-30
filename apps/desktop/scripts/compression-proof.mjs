@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 /**
  * Part AH's first execution in the built app: context compression (ADR-0060; REQ-ORCH-093,
@@ -65,11 +66,11 @@ function scenario(name, compressorLines, opts = {}) {
   ].join('\n'));
   return { root, workspace, local };
 }
-function launch(name, s, extra, opts = {}) {
+async function launch(name, s, extra, opts = {}) {
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
-    cwd: app, encoding: 'utf8', timeout: opts.timeout ?? 180_000, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
+    cwd: app, timeoutMs: opts.timeout ?? 180_000, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local: s.local, preferences: join(s.root, 'preferences') }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true', ...extra,
@@ -77,6 +78,7 @@ function launch(name, s, extra, opts = {}) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   return { log, png, elapsedMs: Date.now() - started };
 }
@@ -104,7 +106,7 @@ function assertFourInputs(entry, where) {
 // 1. A context rejection: condense, retry, complete on the compressed context (REQ-ORCH-093, REQ-MONITOR-077).
 const s1 = scenario('rejection', ['  threshold_percentage: 60', '  preserve_recent_turns: 1']);
 {
-  const r = launch('rejection', s1, { ROTARIS_SCRIPT: 'glob,glob,glob,glob,fail:context,answer', ROTARIS_CAPTURE_PROMPT: 'read the repository four times, then answer', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
+  const r = await launch('rejection', s1, { ROTARIS_SCRIPT: 'glob,glob,glob,glob,fail:context,answer', ROTARIS_CAPTURE_PROMPT: 'read the repository four times, then answer', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
   const db = open(s1);
   const row = session(db);
   const entries = timeline(db, row.session_id);
@@ -128,7 +130,7 @@ const s1 = scenario('rejection', ['  threshold_percentage: 60', '  preserve_rece
 // 2. The threshold: the reported prompt count crosses it and compression runs BEFORE the next call (REQ-MONITOR-076/081).
 const s2 = scenario('automatic', ['  threshold_percentage: 60', '  preserve_recent_turns: 1']);
 {
-  const r = launch('automatic', s2, { ROTARIS_SCRIPT: 'glob,glob,glob,tokens:900,answer', ROTARIS_CAPTURE_PROMPT: 'work until the context fills', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
+  const r = await launch('automatic', s2, { ROTARIS_SCRIPT: 'glob,glob,glob,tokens:900,answer', ROTARIS_CAPTURE_PROMPT: 'work until the context fills', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
   const db = open(s2);
   const row = session(db);
   const entries = timeline(db, row.session_id);
@@ -151,7 +153,7 @@ const s2 = scenario('automatic', ['  threshold_percentage: 60', '  preserve_rece
 // 3. The compressing pass itself fails: the ORIGINAL rejection is what surfaces (REQ-ORCH-093).
 const s3 = scenario('compressor-down', ['  model: broken', '  threshold_percentage: 60', '  preserve_recent_turns: 1'], { brokenCompressor: true });
 {
-  const r = launch('compressor-down', s3, { ROTARIS_SCRIPT: 'glob,glob,glob,glob,fail:context,answer', ROTARIS_COMPRESSOR_SCRIPT: 'fail', ROTARIS_CAPTURE_PROMPT: 'the compressor is down', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
+  const r = await launch('compressor-down', s3, { ROTARIS_SCRIPT: 'glob,glob,glob,glob,fail:context,answer', ROTARIS_COMPRESSOR_SCRIPT: 'fail', ROTARIS_CAPTURE_PROMPT: 'the compressor is down', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
   const db = open(s3);
   const row = session(db);
   const entries = timeline(db, row.session_id).map((t) => t.name);
@@ -170,7 +172,7 @@ const s3 = scenario('compressor-down', ['  model: broken', '  threshold_percenta
 // 4. At most twice for one call (REQ-ORCH-093).
 const s4 = scenario('twice-only', ['  threshold_percentage: 60', '  preserve_recent_turns: 1']);
 {
-  const r = launch('twice-only', s4, { ROTARIS_SCRIPT: 'glob,glob,glob,glob,fail:context,fail:context,fail:context,fail:context', ROTARIS_CAPTURE_PROMPT: 'never fits', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
+  const r = await launch('twice-only', s4, { ROTARIS_SCRIPT: 'glob,glob,glob,glob,fail:context,fail:context,fail:context,fail:context', ROTARIS_CAPTURE_PROMPT: 'never fits', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
   const db = open(s4);
   const row = session(db);
   const entries = timeline(db, row.session_id).filter((t) => t.name === 'context_compressed');

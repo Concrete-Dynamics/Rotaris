@@ -51,6 +51,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { cleanEnvironment, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { parseEvals, readEval } from './lib/capture-evals.mjs';
 import { spawn, spawnSync } from 'node:child_process'; // Part C2 — `spawn` writes a file WHILE a launch blocks this script.
 
@@ -74,10 +75,10 @@ if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${ele
 const expect = (condition, message) => { if (!condition) throw new Error(message); };
 
 
-function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000) {
+async function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+  const result = await spawnBounded(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+    cwd: app, timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_VIEW: '2', ROTARIS_CAPTURE_VIEW_MS: '1000', ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
@@ -86,6 +87,7 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000)
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}\n${log.split('\n').slice(-40).join('\n')}`);
   const inspects = {};
   for (const line of log.split('\n')) {
@@ -225,7 +227,7 @@ const T = {
   compress: 27200, compressEnter: 27400, compressFailed: 28000, stop2: 28200, stop2Enter: 28400, stopped: 29600, end: 30200,
 };
 
-const run = launch('catalogue', workspace, local, preferences, {
+const run = await launch('catalogue', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'wait:12000,answer',
   ROTARIS_CAPTURE_CHORDS: `Ctrl+L@${T.focus}`,
   ROTARIS_CAPTURE_TYPE_AT: `/@${T.slash};;mod@${T.mod};;el@${T.el};;/mo@${T.mo}`,
@@ -518,7 +520,7 @@ const writeSetting = `(async () => { const r = await window.rotaris.command({ ki
 const paletteProfile = scratch('profile-palettes');
 /** Each palette gets the same six steps from its own base; `+2800` apart, never interleaved. */
 const PALETTE_PLAN = [['rotaris-dim', 2000], ['nocturne', 4800], ['high-contrast', 7600]];
-const palettes = launch('palettes', paletteProfile.workspace, paletteProfile.local, paletteProfile.preferences, {
+const palettes = await launch('palettes', paletteProfile.workspace, paletteProfile.local, paletteProfile.preferences, {
   ROTARIS_CAPTURE_KEYS: PALETTE_PLAN.map(([, at]) => `Return@${at + 200}`).join(';;'),
   ROTARIS_CAPTURE_EVAL_AT: PALETTE_PLAN.flatMap(([name, at]) => [
     `${setComposer(`/theme ${name}`)}@${at}`, `${readTheme}@${at + 600}`,
@@ -565,7 +567,7 @@ expect(preferenceDocument['appearance/theme'] === 'high-contrast', `"/theme" mus
 results.palettes = { themes: paletteResults, storedTheme: preferenceDocument['appearance/theme'] };
 
 // ── The theme the command wrote is the theme a restart paints ─────────────────────────────────────────────────────
-const restarted = launch('theme-restart', paletteProfile.workspace, paletteProfile.local, paletteProfile.preferences, {
+const restarted = await launch('theme-restart', paletteProfile.workspace, paletteProfile.local, paletteProfile.preferences, {
   ROTARIS_CAPTURE_EVAL_AT: `${readTheme}@2000`,
   ROTARIS_CAPTURE_AFTER_MS: '2600',
 });
@@ -592,7 +594,7 @@ const W = {
 };
 writeDuringLaunch(latePrompt, '---\ndescription: Written while the window was open\n---\nA prompt file that did not exist when the catalogue was first built.\n', 16_000);
 const launchedAt = Date.now();
-const wired = launch('wired', wiredProfile.workspace, wiredProfile.local, wiredProfile.preferences, {
+const wired = await launch('wired', wiredProfile.workspace, wiredProfile.local, wiredProfile.preferences, {
   ROTARIS_CAPTURE_PROMPTS: `stash>>a stashed prompt@${W.stash}`,
   ROTARIS_CAPTURE_KEYS: `Return@${W.logoutEnter};;Return@${W.unknownEnter}`,
   ROTARIS_CAPTURE_EVAL_AT: [

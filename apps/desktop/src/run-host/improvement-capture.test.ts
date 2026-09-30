@@ -6,7 +6,7 @@ import type { ProcessReply } from '@rotaris/contracts';
 import { captureImprovementJob } from '@rotaris/engine';
 import { asSessionId, mintWorkspaceId } from '@rotaris/kernel';
 import { forgetSpelling, openWorkspaceStore, StoreDal } from '@rotaris/store';
-import { captureAfterRun, type CaptureAfterRunInput } from './improvement-capture.js';
+import { captureAfterRun, dalWhileOpen, type CaptureAfterRunInput, type HostStoreSlot } from './improvement-capture.js';
 
 /**
  * Defect `an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled` (R-067): the run host's
@@ -89,5 +89,21 @@ describe('the post-run improvement capture racing a closed store (REQ-ORCH-137, 
     expect(job).toMatchObject({ source_session_id: 'session-1', prior_artifacts_available: false, prior_artifacts: [] });
     expect(logged).toEqual([['warn', expect.stringMatching(/history capture failed for session-1: main did not answer/)]]);
     dal.db.close();
+  });
+
+  it("host.ts's store check: the located slot's DAL only while the host holds that same slot and its handle is open", () => {
+    const dal = seeded();
+    const located: HostStoreSlot = { db: dal.db, dal };
+    expect(dalWhileOpen(located, located)).toBe(dal);
+    // The workspace closed: the host's map no longer holds a slot for it.
+    expect(dalWhileOpen(undefined, located)).toBeNull();
+    // A restore reopened the store: the map holds a new slot, even one over the same handle.
+    expect(dalWhileOpen({ db: dal.db, dal }, located)).toBeNull();
+    // The host let go of the handle but kept the slot.
+    const dropped: HostStoreSlot = { db: null, dal };
+    expect(dalWhileOpen(dropped, dropped)).toBeNull();
+    // The quit closed the handle while the history was asked.
+    dal.db.close();
+    expect(dalWhileOpen(located, located)).toBeNull();
   });
 });

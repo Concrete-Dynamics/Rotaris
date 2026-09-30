@@ -14,7 +14,7 @@ import { McpHost } from './mcp.js';
 import { CHECKPOINTS_DEFAULTS, INSTRUCTIONS_DEFAULTS, loadConfiguration, RUNTIME_DEFAULTS, SKILLS_DEFAULTS, type LiveState } from '@rotaris/config';
 import { codeIntelligenceLaunchFor } from './code-intelligence-launch.js';
 import { SkillHost } from './skills.js'; // ADR-0063
-import { captureAfterRun } from './improvement-capture.js';
+import { captureAfterRun, dalWhileOpen } from './improvement-capture.js';
 import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, type ConfiguredRun } from './configuration.js';
 import { leaseForContinuation, LeaseReportLog } from './launch.js';
 import { randomUUID } from 'node:crypto';
@@ -368,7 +368,7 @@ export function createRunHost() {
         stopReason: result.stop_reason,
         input: { workspaceId, workspaceRoot: run.cfg.workspaceRoot, sessionId, generatedAt: toIsoUtc(clocks.wall.instant()), timeoutSeconds: run.cfg.runtime.improvement_collector_timeout, collectorModel: collector.key },
         history: () => ask({ kind: 'improvements.command', workspaceRoot: run.cfg.workspaceRoot, command: { action: 'list' } }, millis(10_000)),
-        currentDal: () => (stores.get(workspaceId) === store && store.db !== null && store.db.open ? store.dal : null),
+        currentDal: () => dalWhileOpen(stores.get(workspaceId), store),
         log,
       }).then((job) => {
         if (job === null) return;

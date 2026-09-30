@@ -63,7 +63,10 @@ Pinned by:
   reproduced; an `application_shutdown` run asks nothing and reads nothing; a store closed during the history ask, and
   a store the host has let go of, yield no job and resolve; a throwing capture yields no job with a warning; an open
   store still yields its job, and a rejected history ask reads as history unavailable. With the skip, the re-read and
-  the catch taken out, three of its six cases fail.
+  the catch taken out, three of its six cases fail. *(Added 2026-09-30, the verifier's fix round 1.)* A seventh case
+  pins the store check `host.ts` wires into `currentDal`, now `dalWhileOpen` beside `captureAfterRun`: the located
+  slot's DAL only while the host's map still holds that same slot and its handle is open, and `null` for a slot dropped,
+  replaced or holding no handle, and for a closed handle. It fails with any one of its three conditions taken out.
 - The same scratch run against this branch's build, twenty-one times at bounds from 3.5 to 6.0 s (nine at 5.0 s): no
   rejection in any log, every run `application_shutdown → paused` and `quit: exiting with status 0`. The race is timing,
   so twenty-one clean runs against one in eleven narrow it and do not prove it absent; the unit test is the pin.

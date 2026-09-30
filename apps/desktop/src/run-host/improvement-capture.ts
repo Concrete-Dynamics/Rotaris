@@ -21,6 +21,22 @@ export interface CaptureAfterRunDeps {
   readonly capture?: typeof captureImprovementJob;
 }
 
+/** A workspace store as the run host holds it: the handle a quit, a workspace close or a restore closes or drops. */
+export interface HostStoreSlot {
+  readonly db: { readonly open: boolean } | null;
+  readonly dal: StoreDal | null;
+}
+
+/**
+ * The `currentDal` `host.ts` hands `captureAfterRun`: the located slot's DAL only while the host still holds that SAME
+ * slot for the workspace (`current`, read from its map at the moment of asking) and its handle is still open. A slot the
+ * host dropped or replaced (a workspace close, a restore that reopened the store) and a handle the quit closed all
+ * answer `null`.
+ */
+export function dalWhileOpen(current: HostStoreSlot | undefined, located: HostStoreSlot): StoreDal | null {
+  return current === located && located.db !== null && located.db.open ? located.dal : null;
+}
+
 /**
  * REQ-ORCH-137 / REQ-LIBRARY-032: the run host's post-run capture, run detached from the run's result.
  *

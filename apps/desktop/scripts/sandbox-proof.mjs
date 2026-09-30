@@ -1,7 +1,8 @@
 import { accessSync, constants, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { delimiter, join, relative, resolve, sep } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { createRequire } from 'node:module';
+import { cleanEnvironment, configDirFor, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 
 /**
@@ -21,12 +22,16 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  * - `linux` or `darwin` whose trial succeeds reports the backend available; the run that demands
  *   confinement STARTS, and scenario 6 runs REQ-SANDBOX-127's six observable effects on a live confined
  *   process through the product's own terminal tool — IC-8's measurement for that platform, and the only
- *   one no rendered string may stand in for.
+ *   one no rendered string may stand in for. A third confined launch, in a workspace with no `.git`, is
+ *   REQ-SANDBOX-077's absent-subpath case: under Seatbelt the name is denied by rule and the commands run;
+ *   under bubblewrap, which cannot hide an absent name without creating it on the host, every command is
+ *   refused (`sandbox_unavailable`, 126) and the name is still absent afterwards.
  *
  * IC-8 is discharged only when the six effects have been run on a real macOS host AND a real Linux host,
  * so no run of this proof on one platform discharges it (`docs/defects/fixed/
  * sandbox-proof-asserts-the-windows-verdict-on-every-platform.md` is why the proof reads the host).
  */
+const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
@@ -325,9 +330,9 @@ async function effects(name, allowNetwork, preGit) {
     writeInsideRoot: { passed: read('inside.txt') === 'inside', observed: read('inside.txt') },
     writeOutsideRefused: { passed: !existsSync(join(outside, 'written.txt')), observed: read('outside.status') },
     writeUnderGitRefused: { passed: !existsSync(join(ws, '.git', 'planted')) && !existsSync(join(ws, '.git', 'hooks')), existedBefore: preGit, observed: read('git.status') },
-    // REQ-SANDBOX-077 (c), which REQ-SANDBOX-127's third effect cites: a protected subpath absent before the
-    // command is STILL absent after it — no empty directory left on the host for anything to clean up.
-    ...(preGit ? {} : { absentGitStaysAbsent: { passed: !existsSync(join(ws, '.git')), observed: existsSync(join(ws, '.git')) ? `an empty .git directory remains on the host (${readdirSync(join(ws, '.git')).length} entries)` : 'absent' } }),
+    // REQ-SANDBOX-077 (c), which REQ-SANDBOX-127's third effect cites — a protected subpath absent before the command —
+    // is `absentSubpath` below, a launch of its own: under bubblewrap it refuses every command in the root, so the six
+    // effects here are measured with `.git` present.
     writeUnderRotarisRefused: { passed: !existsSync(join(ws, '.rotaris', 'planted')), existedBefore: true, observed: read('rotaris.status') },
     readOutsideRoots: { passed: read('read.txt') === secret, observed: read('read.txt') },
     outboundSocket: {
@@ -339,10 +344,65 @@ async function effects(name, allowNetwork, preGit) {
   return e;
 }
 
+/*
+ * REQ-SANDBOX-077 (c), in a workspace with no `.git`: the protected name absent inside the writable root. Under
+ * Seatbelt the profile denies the name by rule, so the commands run and only the write under it fails. Under
+ * bubblewrap no mount can hide a name that does not exist without a mountpoint at that name, and bubblewrap creates
+ * that mountpoint through the writable bind, on the host — which the requirement's closing paragraph forbids — so the
+ * backend refuses each command under REQ-SANDBOX-083 instead (measured 2026-09-28; repaired 2026-09-29). Either way
+ * the host holds no `.git` afterwards. The refusal is read from the store's `tool_calls`, the host side of it from disk.
+ */
+async function absentSubpath(name) {
+  const s = scenario(name, workspaceEffects(false));
+  const ws = realpathSync(s.workspace);
+  const q = (p) => `'${p.replace(/'/g, "'\\''")}'`;
+  const commands = {
+    git: { command: `mkdir -p ${q(join(ws, '.git', 'hooks'))}; echo planted > ${q(join(ws, '.git', 'planted'))}; echo "exit=$?" > ${q(join(ws, 'git.status'))}` },
+    inside: { command: `echo inside > ${q(join(ws, 'inside.txt'))}` },
+  };
+  const log = await launch(name, s, {
+    ROTARIS_CAPTURE_PROMPT: 'run the absent-subpath checks', ROTARIS_CAPTURE_PROMPT_MS: '1200',
+    ROTARIS_SCRIPT: `${Object.keys(commands).map((k) => `terminal:${k}`).join(',')},answer`,
+    ROTARIS_SCRIPT_TERMINAL_ARGS: JSON.stringify(commands),
+    ROTARIS_CAPTURE_AFTER_MS: '12000',
+  });
+  if (!/session .* started/.test(log)) throw new Error(`${name}: the confined run did not start:\n${log}`);
+  const Database = require('better-sqlite3');
+  const db = new Database(oneDatabase(s.local), { readonly: true });
+  let calls;
+  try {
+    const session = db.prepare('SELECT session_id FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
+    calls = db.prepare("SELECT entry FROM tool_calls WHERE session_id = ? AND tool_name = 'terminal' ORDER BY ordinal").all(session.session_id)
+      .map((row) => { const entry = JSON.parse(row.entry); return { failureKind: entry.failure_kind ?? null, result: String(entry.result ?? '') }; });
+  } finally { db.close(); }
+  if (calls.length !== Object.keys(commands).length) throw new Error(`${name}: expected ${Object.keys(commands).length} terminal calls in the store; found ${calls.length}`);
+  const refusedEach = calls.every((c) => c.failureKind === 'sandbox_unavailable' && /"exit_code":126/.test(c.result));
+  const ranEach = calls.every((c) => c.failureKind === null);
+  const exists = (file) => existsSync(join(ws, file));
+  const e = {
+    absentGitStaysAbsent: { passed: !exists('.git'), observed: exists('.git') ? `a .git remains on the host (${readdirSync(join(ws, '.git')).length} entries)` : 'absent' },
+    writeUnderGitRefused: { passed: !exists('.git/planted') && !exists('.git/hooks'), existedBefore: false, observed: exists('git.status') ? readFileSync(join(ws, 'git.status'), 'utf8').trim() : 'the command did not run' },
+  };
+  if (mechanism.launcher === 'bwrap') {
+    // REQ-SANDBOX-077's closing paragraph and REQ-SANDBOX-078: refused, one command at a time, and nothing ran.
+    e.eachCommandRefused = { passed: refusedEach, observed: calls.map((c) => c.failureKind ?? 'ran') };
+    e.nothingRan = { passed: !exists('inside.txt') && !exists('git.status'), observed: ['inside.txt', 'git.status'].filter(exists) };
+    e.causeNamesThePath = { passed: calls.every((c) => c.result.includes(`${join(ws, '.git')} does not exist`)), observed: calls[0]?.result.split('\n')[0] ?? '' };
+  } else {
+    // Seatbelt denies the absent name by rule, so the commands run and only the write under the name fails.
+    e.commandsRan = { passed: ranEach && readFileSync(join(ws, 'inside.txt'), 'utf8').trim() === 'inside', observed: calls.map((c) => c.failureKind ?? 'ran') };
+  }
+  return e;
+}
+
 if (expected === 'available') {
-  results.effects = { denied: await effects('effects-network-denied', false, false), allowed: await effects('effects-network-allowed', true, true) };
+  results.effects = {
+    denied: await effects('effects-network-denied', false, true),
+    allowed: await effects('effects-network-allowed', true, true),
+    absent: await absentSubpath('effects-absent-git'),
+  };
   const failed = Object.entries(results.effects).flatMap(([run, e]) => Object.entries(e).filter(([, v]) => !v.passed).map(([k]) => `${run}.${k}`));
-  results.effectsVerdict = failed.length === 0 ? `all six REQ-SANDBOX-127 effects, and REQ-SANDBOX-077's no-residue clause, observed under ${mechanism.name} on ${process.platform}` : `FAILED: ${failed.join(', ')}`;
+  results.effectsVerdict = failed.length === 0 ? `all six REQ-SANDBOX-127 effects, and REQ-SANDBOX-077's absent-subpath case with its no-residue clause, observed under ${mechanism.name} on ${process.platform}` : `FAILED: ${failed.join(', ')}`;
   writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
   if (failed.length > 0) throw new Error(`REQ-SANDBOX-127 / -077: ${failed.join(', ')} did not hold under an active confinement; see results.json`);
 } else {

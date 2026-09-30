@@ -143,7 +143,9 @@ _Avoid_: "sandbox config" — the configuration is the six keys; this is what th
 **Carve-out**:
 A protected name (`.git`, `.rotaris`) made unwritable inside a writable root. Which of three forms it
 takes turns on whether the name exists when the invocation is rendered, and no form leaves anything on
-the host filesystem. — `REQ-SANDBOX-056`, `REQ-SANDBOX-077`
+the host filesystem; a backend that cannot establish one without creating something there refuses the
+command instead, which is what bubblewrap does for an absent name (OQ-140). — `REQ-SANDBOX-056`,
+`REQ-SANDBOX-077`, `REQ-SANDBOX-083`
 
 **Effective writable root**:
 A directory writable inside an active confinement: the session's actual execution directory first,

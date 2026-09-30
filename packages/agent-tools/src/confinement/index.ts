@@ -12,21 +12,14 @@ import { renderSeatbelt } from './render-seatbelt.js';
 import { computeConfinement, type ConfinementSpec, type SpecDeps, type SpecInput } from './spec.js';
 import type { AvailabilityVerdict, BackendName } from './availability.js';
 import { renderUnavailability } from './availability.js';
+import { SandboxUnavailableError } from './errors.js';
 
 export * from './availability.js';
+export * from './errors.js';
 export * from './quote.js';
 export * from './render-bwrap.js';
 export * from './render-seatbelt.js';
 export * from './spec.js';
-
-/**
- * REQ-SANDBOX-083 fixes `error_class` to this name. An implementation exception name MAY appear in
- * optional, redacted diagnostic detail; it MUST NOT change the class.
- */
-export class SandboxUnavailableError extends Error {
-  override readonly name = 'SandboxUnavailableError';
-  constructor(message: string) { super(message); }
-}
 
 /** REQ-SANDBOX-071's stable error-class name, for the observation that carries it. */
 export const SANDBOX_ERROR_CLASS = 'SandboxUnavailableError';

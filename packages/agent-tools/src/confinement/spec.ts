@@ -53,8 +53,9 @@ export interface SpecInput {
 export interface SpecDeps {
   /**
    * REQ-SANDBOX-078: the check lands on the restrictive side and follows links, so a symlink with
-   * no target counts as absent and takes case (c) — the empty read-only mount, under which the
-   * name reads as empty and nothing can be created.
+   * no target counts as absent and takes case (c) — denied by rule under Seatbelt, and refused as a
+   * whole command under bubblewrap, which cannot hide an absent name without creating it on the
+   * host (REQ-SANDBOX-077's closing paragraph; `render-bwrap.ts`).
    */
   readonly exists: (path: string) => boolean;
 }

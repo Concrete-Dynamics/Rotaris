@@ -187,3 +187,96 @@ describe('REQ-NOTIFY-111/112: the corrective message', () => {
     expect(hadCorrectiveMessage([user(`TASK: explain what a ${composed}`)])).toBe(false);
   });
 });
+
+describe('REQ-MONITOR-135: "each successful injection refreshes the agent\'s last-activity timestamp"', () => {
+  it('a steering drain that delivers refreshes once; one that delivers nothing does not', async () => {
+    const { refreshing } = await import('./orchestration.js');
+    let pending = [{ id: 'p1', text: 'look again' }];
+    let refreshed = 0;
+    const drain = refreshing(() => { const out = pending; pending = []; return out; }, () => { refreshed += 1; });
+    expect(drain()).toEqual([{ id: 'p1', text: 'look again' }]);
+    expect(refreshed).toBe(1);
+    expect(drain()).toEqual([]);
+    expect(refreshed).toBe(1);
+  });
+
+  it('a refresh restarts the silence the watch evaluates: a stall under way is recovered at the next evaluation', () => {
+    const clock = new FakeClock();
+    const seen: string[] = [];
+    const watch = new StallWatch(clock, millis(30_000), { stalled: () => seen.push('stalled'), waiting: () => undefined, recovered: () => seen.push('recovered'), evaluated: () => undefined });
+    watch.start();
+    clock.advance(30_000);
+    expect(seen).toEqual(['stalled']);
+    expect(watch.silentSeconds).toBe(30);
+    watch.activity();
+    expect(watch.silentSeconds).toBe(0);
+    clock.advance(5_000);
+    expect(seen).toEqual(['stalled', 'recovered']);
+    watch.stop();
+  });
+});
+
+describe('REQ-MONITOR-120 with OQ-153: a stall under way when the watch is disarmed is recovered only if the agent was active', () => {
+  it('stop() after a stall and then activity reports the recovery once; stop() with no stall reports nothing', () => {
+    const clock = new FakeClock();
+    let recovered = 0;
+    const watch = new StallWatch(clock, millis(30_000), { stalled: () => undefined, waiting: () => undefined, recovered: () => { recovered += 1; }, evaluated: () => undefined });
+    watch.start();
+    watch.stop();
+    expect(recovered).toBe(0);
+    watch.start();
+    clock.advance(30_000);
+    expect(watch.stalled).toBe(true);
+    // The retry streamed, and the turn ended before the next evaluation (the live run's case).
+    watch.modelEvent('text');
+    watch.stop();
+    expect([recovered, watch.stalled]).toEqual([1, false]);
+    watch.stop();
+    expect(recovered).toBe(1);
+  });
+
+  it('stop() after a stall with no activity since — a cancel, a stop, a pause, a hard timeout — ends the stall and reports no recovery', () => {
+    const clock = new FakeClock();
+    let recovered = 0;
+    const watch = new StallWatch(clock, millis(30_000), { stalled: () => undefined, waiting: () => undefined, recovered: () => { recovered += 1; }, evaluated: () => undefined });
+    watch.start();
+    clock.advance(30_000);
+    expect(watch.stalled).toBe(true);
+    watch.stop();
+    expect([recovered, watch.stalled]).toEqual([0, false]);
+    // The call's own abort or timeout reaches the watch as an error part: that is not the agent active again.
+    watch.start();
+    clock.advance(30_000);
+    expect(watch.stalled).toBe(true);
+    watch.modelEvent('error');
+    watch.stop();
+    expect([recovered, watch.stalled]).toEqual([0, false]);
+  });
+
+  it('activity before the stall was last found is not activity after it: only what arrives after the stalled evaluation counts', () => {
+    const clock = new FakeClock();
+    let recovered = 0;
+    const watch = new StallWatch(clock, millis(30_000), { stalled: () => undefined, waiting: () => undefined, recovered: () => { recovered += 1; }, evaluated: () => undefined });
+    watch.start();
+    watch.modelEvent('text');
+    clock.advance(35_000);
+    expect(watch.stalled).toBe(true);
+    watch.stop();
+    expect(recovered).toBe(0);
+  });
+
+  it('a turn that ended while stalled, its agent then between turns, is not reported recovered at the next evaluation', () => {
+    const clock = new FakeClock();
+    let recovered = 0;
+    const evaluated: boolean[] = [];
+    const watch = new StallWatch(clock, millis(30_000), { stalled: () => undefined, waiting: () => undefined, recovered: () => { recovered += 1; }, evaluated: (s) => { evaluated.push(s); } });
+    watch.start();
+    clock.advance(30_000);
+    expect(watch.stalled).toBe(true);
+    watch.modelEvent('error');
+    watch.betweenTurns();
+    clock.advance(5_000);
+    expect([recovered, watch.stalled, evaluated[evaluated.length - 1]]).toEqual([0, false, false]);
+    watch.stop();
+  });
+});

@@ -218,6 +218,12 @@ export const AgentRecordSchema = z.object({
   mcpServers: z.array(z.object({ name: z.string(), transport: z.string(), origin: z.string(), fate: z.enum(['connected', 'dropped']), reason: z.string().optional() })),
   /** PD-ORCH-005: what left this agent `paused`; null for an agent that is not paused. */
   interruption: z.enum(INTERRUPTIONS).nullable(),
+  /**
+   * REQ-ORCH-089 / REQ-MONITOR-119/120: the seconds this agent has gone with no model event or token, as its stall watch's
+   * latest evaluation found them, while that evaluation finds it stalled; null while it is not (recovered, waiting on its
+   * tool calls, or not running). Refreshed at every evaluation, so a surface's figure advances at the watch's cadence.
+   */
+  stalledSeconds: z.number().int().nonnegative().nullable(),
 });
 export type AgentRecord = z.infer<typeof AgentRecordSchema>;
 

@@ -152,6 +152,16 @@ export class ProjectionOwner {
     this.publishIncrement(index, this.residentRows.filter((r) => r.index >= index));
   }
 
+  /**
+   * REQ-MONITOR-122: "a host's stall callback may refresh its agent snapshot". A stall watch's evaluation changed an
+   * agent's stalled figure — a DISPLAY fact held in the writer's activity tracker, never recorded — so the whole-session
+   * record is published again, coalesced with the child and tool events of the same interval (`RECORD_TICK`).
+   */
+  refreshRecord(): void {
+    if (this.frozen) return;
+    this.scheduleRecord();
+  }
+
   /** REQ-MONITOR-220: at run end, pending publications are flushed. */
   flushPending(): void {
     if (this.frozen) return;

@@ -55,9 +55,26 @@ the scripts before the change, naming `code-intel-proof.mjs` and `slice-proof.mj
 passed both times. It needed the bundle built first, with `pnpm code-intel:bundle` in this worktree. After the first run
 the runtime's home stood at `profile/local/rotaris/data/rotaris/code-intelligence` (26 MB: `language_servers`,
 `memories`, `serena_config.yml`), and nothing stood at the Windows spelling. The second run kept it. Section 4's real
-call logged **5** provisioning lines on the first run and **0** on the second. The call took about 242 s both times,
-so the time the note said re-provisioning costs was not what that call spent. Another workflow was loading the host
-during the second run: load average 20.7 at its end.
+call logged **5** provisioning lines on the first run and **0** on the second. ~~The call took about 242 s both times,
+so the time the note said re-provisioning costs was not what that call spent.~~ *(Corrected 2026-09-30: the 242 s is
+`results.call.elapsedMs`, the whole launch, and section 4 launches with `ROTARIS_CAPTURE_AFTER_MS: '240000'`, so every
+run lasts about 242 s whatever provisioning costs. That instrument cannot show the cost, so the claim was unmeasured,
+not falsified.)* Another workflow was loading the host during the second run: load average 20.7 at its end.
+
+**The cost, measured by the run's own duration** — from the run host's `session … started; row 0 recorded` to `run …
+ended completed` in `call.log` — with `code-intel-proof --skip-build --steps=4` run twice back to back on 2026-09-30,
+the first with the runtime's home moved away (cold) and the second keeping the home the first provisioned (retained).
+The load average was between 0.9 and 3.5.
+
+| Run | Provisioning lines | Session started → ended completed | `elapsedMs` (the 240 s capture window) |
+|---|---|---|---|
+| cold, home moved away | 5 | 02:38:54.423 → 02:39:05.988, **11.6 s** | 241 606 |
+| retained home | 0 | 02:42:56.126 → 02:43:05.819, **9.7 s** | 241 527 |
+
+So a retained home saved about 2 s of the run's own 10 to 12 s, in one run of each. That is small because the host's
+npm cache was warm, so the three `npm install` commands the cold run logged did not download anything. On a host with a
+cold npm cache the saving would be larger, and that was not measured. The verifier's re-run of the full proof on the
+same home gave 10.5 s (02:23:02.377 → 02:23:12.922, 0 provisioning lines), which matches the retained reading.
 
 **Not measured:** `slice-proof` was not run. It needs a real key pasted by the owner and spends money, and the live run
 authorised for this round is `pnpm live-run`, not this proof. Its change is pinned only by the two tests above.

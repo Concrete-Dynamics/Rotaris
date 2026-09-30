@@ -12,8 +12,9 @@ appear once. It did not change the line's level.
 
 ## Outcome
 
-Repaired 2026-09-29 under [R-067](../../product/requests.md#r-067), as acceptance finding A41. Confirmed first on the
-branch: both cases below were red on the unrepaired code, the diagnostic at `info` and the log line at `info`.
+Repaired 2026-09-29 under [R-067](../../product/requests.md#r-067), as acceptance finding A41; the code was written on
+2026-09-29 and verified on 2026-09-30, the day the live runs below ran and the day its
+[`first-executions.md`](../../architecture/first-executions.md) row carries. Confirmed first on the branch: both cases below were red on the unrepaired code, the diagnostic at `info` and the log line at `info`.
 
 - `DiagnosticSeverity` gains `debug`, with a log-only `debug(…)` builder beside `info(…)`
   (`packages/config/src/mcp/diagnostics.ts`).

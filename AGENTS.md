@@ -163,6 +163,13 @@ It is **never** automatic. It is not in `pnpm check`, `pnpm test` collects nothi
 step may call it. It runs when the owner asks for it, or when an agent asks the owner and is told yes.
 An agent must not run it on its own initiative: it costs money the owner pays.
 
+An owner's yes is not always enough in an agent session. On the Linux agent host, the harness's automatic permission
+classifier has refused `live-run.mjs --confirm` as a real-world transaction even where the owner authorised the run
+(R-066, R-067; `docs/defects/no-live-run-has-executed-on-merged-main.md`). An agent that meets that refusal stops, and
+it does not reach the run by another route. It records the refusal where its task lives and says so in its report.
+Only the owner can close the gap: by allowing `node apps/desktop/scripts/live-run.mjs --confirm` for agent sessions in
+the harness's permission rules, or by running the command by hand.
+
 ### Registering an endpoint, and storing its key
 
 Any OpenAI-compatible endpoint works — a self-hosted or custom model as readily as a hosted one. Register it

@@ -46,3 +46,12 @@ settings, which only the owner can change. Two ways would close the gap:
 
 Either way, the result is recorded as a row in `docs/architecture/first-executions.md`, and this note is moved to
 `fixed/`.
+
+## Seen a third time 2026-09-30, the verifier's fix round 1
+
+The verifier ran the same launch in the same worktree (`timeout 3600 xvfb-run … node apps/desktop/scripts/live-run.mjs
+--confirm --skip-build`), and the host's automatic classifier refused it the same way, before it started. The repairer
+of that round did not launch it again. A fourth attempt at the same command on the same head would have added no
+evidence, and a refusal is not something an agent retries until it passes. The note stays open until the owner closes
+the gap in one of the two ways above. `AGENTS.md`'s live-run section now says that an agent session on this host can
+be refused this way, and what closes it.

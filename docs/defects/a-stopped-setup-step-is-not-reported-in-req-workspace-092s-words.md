@@ -12,6 +12,12 @@ running; the child was terminated`. Noticed while repairing the initialization s
 here. Whether the mapping belongs in this domain's `resultOf` (as REQ-WORKSPACE-093's reasons already do) or in the run
 host's status is for the repair to decide; the MCP category's own reading of the same status is REQ-MCP-099/112's.
 
+A third sentence belongs with these. A run cancelled while its setup waits for another's to end (`setupTurn`) starts no
+setup and fails with `CANCELLED_BEFORE_SETUP_ERROR`, "…: the setup was cancelled before it started.", which is the
+build's own sentence: REQ-WORKSPACE-092/093 fix the details of a stopped step, and name none for a setup that never
+started. Added 2026-09-30 from an optional finding of the repair's verification; whether that failure should read in
+REQ-WORKSPACE-092's "Setup was stopped before this step finished." or needs a question of its own is for the repair.
+
 ## Specs
 
 - REQ-WORKSPACE-092: the two fixed details for a stopped step, distinguishable from a non-zero exit.
@@ -20,4 +26,4 @@ host's status is for the repair to decide; the MCP category's own reading of the
 ## Relevant files
 
 - `packages/mcp/src/setup.ts` — `runSetupSteps`, where a cancelled or timed-out step's detail is written.
-- `apps/desktop/src/main/initialization.ts` — `resultOf`, which maps the setup status onto the task result and passes step details through.
+- `apps/desktop/src/main/initialization.ts` — `resultOf`, which maps the setup status onto the task result and passes step details through; `CANCELLED_BEFORE_SETUP_ERROR`, the build's sentence for a run cancelled before its setup started.

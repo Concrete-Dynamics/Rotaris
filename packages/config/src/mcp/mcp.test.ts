@@ -253,6 +253,13 @@ describe('REQ-MCP-055..062, 038..042 — persona resolution', () => {
     expect(candidateSpellings('beta', 'mcp__beta__x')).toEqual(['mcp__beta__x', 'x']);
     expect(grantDecision('s', 's_t', ['t'], ['s_t'])).toBe('denied');
   });
+  it('REQ-MCP-059 (A41): the count of a narrowed server\'s granted tools is a debug diagnostic, for the log alone', () => {
+    const d = resolvePersonaMcp({ ...base, persona: 'p', carried: ['beta'], grants: { beta: ['pref', 'orig'] } });
+    const counts = d.diagnostics.filter((x) => /tools granted on server/.test(x.message));
+    expect(counts.map((x) => [x.message, x.severity, x.channels])).toEqual([["persona p: 2 of 5 tools granted on server 'beta' (REQ-MCP-059)", 'debug', 'log']]);
+    // No narrowing, no count.
+    expect(resolvePersonaMcp({ ...base, persona: 'p', carried: ['beta'], grants: null }).diagnostics.filter((x) => /tools granted/.test(x.message))).toEqual([]);
+  });
   it('a rename colliding with another survivor is refused with a warning (REQ-MCP-005)', () => {
     const f = filterServerTools('beta', servers.beta, [tool('clash'), tool('keep')], undefined);
     expect(f.value.map((t) => t.callable)).toEqual(['clash', 'keep']);

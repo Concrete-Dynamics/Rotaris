@@ -4,6 +4,13 @@
  * an absent field is `undefined`, so `.status` of it threw a `TypeError`, `packagedTerminalStreaming` never returned,
  * and `terminal-stream-proof --packaged` lost BOTH launches' evidence and reported neither REQ-TOOLS-126 nor
  * REQ-TOOLS-127 — against the file's own rule that a read that throws is reported, never thrown.
+ *
+ * The repair has two hunks, and each case pins one. The end-to-end case pins the store-count return in `launch`: it now
+ * carries `terminal: null` and `probe: null` like every other return, and with that return put back as it was the case
+ * fails on `expected undefined to be null`. The pure case pins `packagedChecks`: its `??` guards read a missing field as
+ * missing evidence, so a launch of any shape reads false instead of throwing; with the guards removed the first form's
+ * `TypeError` comes back on the lost half. Each hunk alone would stop the throw on this path; the two are kept because
+ * the second holds for any other early return a later edit adds.
  */
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

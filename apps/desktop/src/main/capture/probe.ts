@@ -48,7 +48,7 @@ function enterEvents(modifiers?: readonly ('shift' | 'control')[]): TypedEvent[]
  * `per` keeps each site's own shape for an ordinary character: `char` is one `char` event (the prompt and the TYPE seam),
  * `key` is `keyDown`, `char`, `keyUp` (the driver and TYPE_AT). A `\n` is never sent as a character at any site: it is
  * Shift+Enter, which a textarea takes as a newline and REQ-CHAT-001 makes the composer's newline, never its submit. A `\r`
- * is dropped. Until 2026-09-29 the three other sites sent a `\n` as a `char` (or as a `keyDown` whose key code was
+ * is dropped. Until 2026-09-30 the three other sites sent a `\n` as a `char` (or as a `keyDown` whose key code was
  * `\n`), which is the shape that dropped the duress prompt's line breaks (live-run finding H-e;
  * `docs/defects/fixed/the-driver-and-the-type-seams-type-a-newline-as-a-character.md`).
  */

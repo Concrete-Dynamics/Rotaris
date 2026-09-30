@@ -31,7 +31,7 @@ Noticed 2026-09-29 while repairing H-e under R-067.
 
 ## Outcome
 
-Repaired 2026-09-29 under R-067. Confirmed first in the built app, before the repair: the text `first line\nsecond
+Repaired 2026-09-30 under R-067. Confirmed first in the built app, before the repair: the text `first line\nsecond
 line\nthird line`, typed into the composer without a submit, arrived as `first linesecond linethird line` through all
 three sites. The driver's `type`, `ROTARIS_CAPTURE_TYPE` with `>>no-enter`, and `ROTARIS_CAPTURE_TYPE_AT` each lost both
 breaks. None of them submitted early.

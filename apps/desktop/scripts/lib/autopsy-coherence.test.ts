@@ -12,7 +12,7 @@ import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { migrateStore, openStore } from '@rotaris/store';
 // @ts-expect-error — the reader's helpers are plain ESM beside the scripts that run them.
-import { isZeroAmount, zeroCostCoherence, zeroCostLine } from './autopsy-coherence.mjs';
+import { isZeroAmount, nullSummaryLine, nullSummaryReading, zeroCostCoherence, zeroCostLine } from './autopsy-coherence.mjs';
 
 describe('the autopsy\'s zero-cost coherence line (REQ-MONITOR-166, PD-MONITOR-001)', () => {
   it.each([
@@ -39,17 +39,36 @@ describe('the autopsy\'s zero-cost coherence line (REQ-MONITOR-166, PD-MONITOR-0
   });
 });
 
+describe('the autopsy\'s null-summary line asks only about a stopped run (H-c; REQ-ORCH-082)', () => {
+  it.each([
+    ['a session left running — the duress run of 2026-09-29, which the old line answered false and the check passed', { execution_status: 'running', stop_reason: null, summary_text: null }, 'unasked'],
+    ['an idle session', { execution_status: 'idle', summary_text: null }, 'unasked'],
+    ['a background session', { execution_status: 'background', summary_text: '' }, 'unasked'],
+    ['a waiting session', { execution_status: 'waiting', summary_text: null }, 'unasked'],
+    ['a stopped run with no summary', { execution_status: 'stopped', stop_reason: 'user_cancelled', summary_text: null }, 'true'],
+    ['a completed run with its summary', { execution_status: 'completed', stop_reason: 'tasks_complete', summary_text: 'All tasks completed.' }, 'false'],
+  ])('%s', (_name, row, expected) => {
+    expect(nullSummaryReading(row).reading).toBe(expected);
+  });
+
+  it('prints the reading first — what the live run reads — then says why', () => {
+    const line = nullSummaryLine({ execution_status: 'running', summary_text: null });
+    expect(/null summary on stopped run: (true|false|unasked)/.exec(line)?.[1]).toBe('unasked');
+    expect(line).toContain('never stopped');
+  });
+});
+
 describe('the autopsy reader over a store (K2(b))', () => {
   let dir: string;
   beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'rotaris-autopsy-')); });
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
   /** A store with one session row carrying the given cost, qualifier and tokens, read back by `autopsy.mjs` itself. */
-  function autopsyOf(cost: string, qualifier: string): string {
+  function autopsyOf(cost: string, qualifier: string, status = 'completed'): string {
     const path = join(dir, 'workspace.db');
     const db = openStore(path);
     migrateStore(db);
-    db.prepare("INSERT INTO sessions (session_id, workspace_root, execution_status, created_at, updated_at, run_started_at) VALUES ('K2', ?, 'completed', '2026-09-29T00:00:00.000Z', '2026-09-29T00:00:01.000Z', '2026-09-29T00:00:00.000Z')").run(dir);
+    db.prepare("INSERT INTO sessions (session_id, workspace_root, execution_status, created_at, updated_at, run_started_at) VALUES ('K2', ?, ?, '2026-09-29T00:00:00.000Z', '2026-09-29T00:00:01.000Z', '2026-09-29T00:00:00.000Z')").run(dir, status);
     db.prepare('UPDATE sessions SET cost = ?, cost_qualifier = ?, tokens_input = 18810, tokens_output = 900 WHERE session_id = ?').run(cost, qualifier, 'K2');
     db.close();
     const repo = resolve(__dirname, '..', '..', '..', '..');
@@ -65,5 +84,13 @@ describe('the autopsy reader over a store (K2(b))', () => {
 
   it('a session whose cost had a figure and still totals 0 against its tokens reads true', () => {
     expect(reading(autopsyOf('0', 'configured'))).toBe('true');
+  });
+
+  it('a session that never stopped reads unasked on the null-summary line — it read false, and the live run passed on it (H-c)', () => {
+    expect(/null summary on stopped run: (true|false|unasked)/.exec(autopsyOf('0', 'unknown', 'running'))?.[1]).toBe('unasked');
+  });
+
+  it('a completed session with no summary still reads true on the null-summary line (H-c)', () => {
+    expect(/null summary on stopped run: (true|false|unasked)/.exec(autopsyOf('0', 'unknown', 'completed'))?.[1]).toBe('true');
   });
 });

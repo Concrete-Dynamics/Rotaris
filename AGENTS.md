@@ -264,7 +264,7 @@ neither path depends on what the other did.
 | `frictions` | one real run engineered to trip the inducible autopsy frictions, read back from the store | first-use `write_file` with no operation repair, every settled create reporting the lines its content holds (a final newline ends a line; live-run L6), SIGINT delivered with no platform refusal — **red by design until the fixes land**; the exit-trace friction is recorded but not inducible on demand, and the stall-abort one moved to `faults` |
 | `faults` | two runs against an endpoint the proxy makes misbehave: a 429-then-500 ladder, and a stream that stops mid-answer with the socket open | the ladder run still completes, and each injected refusal left the trace of the layer that retried it — the session log's dispatch-layer line or the ladder's own issue (OQ-110), never the call count alone; the stalled run does **not** report `user_cancelled` with nobody having pressed anything (defect 82's shape), **and the product is shown to have noticed the stall** in its own `issues` row — the negative alone would pass on a run that met no fault at all |
 | `terminal` | one run issuing the commands the record names verbatim: a multi-line here-string, forty long lines, off Windows a bash-ism `/bin/sh` cannot expand (live-run L1), a wedge with no `timeout` and one empty poll of it (live-run L2), an exit-0 output carrying docker's lower-case `failed to connect` line, a `git diff` exiting 1, a pipeline through a pipe | the here-string terminated; all forty lines arrived, none concatenated, none carrying an escape sequence; the bash-ism ended at once with the shell's own error status, never a soft pause; a call with no `timeout` was still bounded; the poll stated no more waiting than had passed and did not claim the no-output window; the docker line printed at exit 0 was neither `suspicious_success` nor given a failure-marker warning (`PD-TOOLS-003`); exit 1 from `git diff` was not `shell_failure`; **no end marker in anything the model read**. The pipeline is a NOTE — its deny fires as its requirements specify — and a shape the model never issued is a NOTE too |
-| `duress` | **opt-in** (`--only=duress`): one delegating run of **three dependent waves, six children**, under `LIVE_RUN_DURESS_MS` (default 40 min) against `--duress-fixture` | the autopsy's coherence section is clean (no null summary on a stopped run, no tokens against a zero cost where a request had a figure — the reader reads `cost_qualifier`); no child ended `failed` with nothing to say; a child that ran commands reported them; the `compressions` aggregate agrees with the timeline. Length, children and compressions are **reported**, so a run that was not duress says so |
+| `duress` | **opt-in** (`--only=duress`): one delegating run of **three dependent waves, six children**, under `LIVE_RUN_DURESS_MS` (default 40 min) against `--duress-fixture` | the result inside the wait, with **where the time went** (endpoint, tools, launch, the product with nothing in flight) — an overrun the endpoint held while the run progressed — read only from requests and tool calls that ended on their own, never one the quit cut off — is a NOTE that the window was the bound; the autopsy's coherence section is clean (no null summary on a stopped run — `unasked`, a NOTE, for a session that never stopped — and no tokens against a zero cost where a request had a figure — the reader reads `cost_qualifier`); no child ended `failed` with nothing to say (`final_response`, `last_response` and `cut_off` each count, REQ-ORCH-110; an error entry alone does not — the product writes one on every failed child, and the eighty-second defect's children carried nothing else); a child that ran commands, found by its canonical name, reported them; the `compressions` aggregate agrees with the timeline. Length, children and compressions are **reported** — a run that never compressed names its largest prompt against the REQ-CONFIG-134 trigger — so a run that was not duress says so. Readings in `scripts/lib/duress-checks.mjs` |
 
 An endpoint that discovers no model catalogue is not a dead end. The sign-in takes the dialog's own "Continue
 anyway" (the zero-model recovery), the catalogue check is recorded as a **NOTE** rather than a silent pass, and
@@ -394,6 +394,45 @@ executed against a real endpoint on 2026-09-29** (pack `.live-run/runs/2026-09-2
 check is genuine — 2,406 s of 2,400 s, about 98 % of it the endpoint generating — and the "failed with nothing to say"
 check is the harness's false positive on a child cut off with a continuation offer. What the run let through is recorded
 as notes in `docs/defects/` carrying "Live-run finding: D…" and "H-…" lines.
+
+**Five of the scenario's own readings were wrong on that run, and were repaired on 2026-09-29 (R-067).** They now live in
+`apps/desktop/scripts/lib/duress-checks.mjs`, pinned by `duress-checks.test.ts` against the recorded shapes, and in the
+autopsy reader's null-summary line (`lib/autopsy-coherence.mjs`). A cut-off child's `last_response` and `cut_off` are
+something to say (H-a); an error entry alone is not, because the product writes one on every failed child (corrected
+2026-09-30 in the verifier's fix round 1, where the first repair had counted it and so passed the eighty-second defect's
+shape). A child's terminal calls are found under its canonical name, the one `tool_calls`
+records (H-b). A session that never stopped answers `unasked`, a NOTE, where it used to pass (H-c). A run that never
+compressed names its largest prompt against the REQ-CONFIG-134 trigger rather than its iteration count (H-d). And the
+deadline check says **where the time went** (H-h): endpoint, tools alone, launch, and the product with nothing in flight,
+each from the traffic and the store. The notes are in `docs/defects/fixed/`. **Run again on 2026-09-30** (pack
+`.live-run/runs/2026-09-30T05-29-56-712Z`, `katalyst`), the repaired checks read as they claim: the overrun was a NOTE
+(2,406 s of 2,400 s, 99 % the endpoint generating, 1 s of the product with nothing in flight); the session came to rest
+`paused`, `application_shutdown`, with its summary, so the null-summary question was asked and passed; no child
+failed; the no-compression note named a largest prompt of 77,043 tokens against a trigger of 157,286; and the prompt
+arrived with its line breaks (H-e). The commands question, asked at last, **failed falsely once more**: `f`, paused by
+the deadline quit after 26 terminal calls, had no report yet. It is now asked only of a child with a report, and
+an unsettled one is a NOTE — replayed over that pack, `b` is asked (6 commands) and `f` is noted. **Run a third time
+the same day, after the verifier's fix round 1** (pack `.live-run/runs/2026-09-30T06-33-14-401Z`), the scenario
+**passed**: the overrun a NOTE naming the one request the quit cut off (the last to end on its own 68 s before the
+launch did), a cut-off child (`w2d`, `last_response` and `cut_off`) met live and not counted silent, the commands
+question asked of the one settled child that ran commands and the paused `w3` noted.
+
+**`LIVE_RUN_DURESS_MS` — the default stays 40 minutes, and the check says when the window was the bound (decided
+2026-09-29).** The figure is the owner's of 2026-09-22, taken for this endpoint, and a harness repair does not reverse it.
+What the first execution falsified was the check's reading, not the figure: 2,406 s of 2,400 s was a FAIL, and replayed
+through the attribution it reads 99 % endpoint generating (200 requests, 178,627 reasoning tokens), 6 s of tools alone,
+5 s of launch, 3 s of the product with nothing in flight, and a request ending 2 s before the quit. A verdict that
+blames the product for the endpoint's throughput teaches its reader to ignore it (the rule above), so an overrun in
+which the run was still progressing (the last request or tool call **to end on its own** ended within 120 s of the
+launch's end) and the product had nothing in flight for at most a tenth of the wait is a **NOTE, "bounded by the window,
+not by the product"**. "On its own" is a request the endpoint completed, or anything that ended before the instant the
+wait ran out (the seam's timed-out line): a request the quit cut off ends at the quit whatever it was doing, and the
+first form of this reading let a stream hung from early in the wait pass as progress (corrected 2026-09-30, the
+verifier's fix round 1); such a request is named in the detail instead. The four figures are **occupancy, not a
+critical path**: a request open while the run's next step waits on something else still counts to the endpoint. Any other overrun, or one with no traffic to attribute, stays a FAIL naming the shares. To ask for the
+result on a reasoning endpoint like `katalyst`, give the run the time: `LIVE_RUN_DURESS_MS=5400000`, for example (90 minutes; the first
+execution on `katalyst` was still in its third wave at 40, and the launch's own bound is the wait plus 180 s, so a
+`timeout` around the command must sit above that).
 
 **The traffic is recorded through a loopback proxy**, so the sandbox's `base_url` is the proxy and the endpoint
 is one hop further on. Two consequences worth knowing before reading a pack: a `model request POST` line in

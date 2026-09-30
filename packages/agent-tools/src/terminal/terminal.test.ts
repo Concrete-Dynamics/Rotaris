@@ -6,7 +6,8 @@ import { FakeClock, type Clocks } from '@rotaris/kernel';
 import { foregroundStreamId } from '@rotaris/contracts';
 import { nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
-import { CommandRegion, parseSnapshot, snapshotCommand, wrapCommand } from './foreground.js';
+import { CommandRegion, ForegroundSession, parseSnapshot, snapshotCommand, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
+import { xtermEmulatorFactory } from './emulator.js';
 import { endOfExit } from './background.js';
 import { execFileSync } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
@@ -192,6 +193,45 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     expect(endOfExit(null, 'SIGTERM', none)).toEqual({ status: 'failed', exitCode: 143 });
     expect(endOfExit(null, 'SIGSEGV', new Set(['SIGINT']))).toEqual({ status: 'failed', exitCode: 139 });
   });
+  it('REQ-TOOLS-096 (A10): keystrokes with no line end after them are cleared from the shell\'s input before the next POSIX line, and only then', async () => {
+    // A PTY that answers every wrapped line with its two frames at once, and remembers what was written to it.
+    const session = (backend: ShellBackend) => {
+      const writes: string[] = [];
+      let emit: (d: string) => void = () => undefined;
+      const factory: PtyFactory = {
+        spawn: () => ({
+          // Never disposed: `dispose` signals the pid's process group, and this PTY has no process behind it.
+          pid: 2 ** 30, onData: (cb) => { emit = cb; }, onExit: () => undefined, resize: () => undefined, kill: () => undefined,
+          write: (data) => {
+            writes.push(data);
+            const nonce = /__rot_([0-9a-f]+)_s/.exec(data)?.[1];
+            if (nonce) setImmediate(() => emit(`__rot_${nonce}_s\r\n__rot_${nonce}_e:0\r\n`));
+          },
+        }),
+      };
+      const s = new ForegroundSession({ factory, backend, cwd: root, env: {}, monotonic: clocks.monotonic, timers: clocks.timers, emulator: xtermEmulatorFactory, warn: () => undefined });
+      return { s, writes, lines: () => writes.filter((w) => w.includes('__rot_')) };
+    };
+    const posix = session({ kind: 'posix', file: '/bin/sh' });
+    await posix.s.run('true', { timeoutMs: 5_000 });
+    expect(posix.lines().every((w) => w.startsWith('printf'))).toBe(true);
+    posix.s.sendInput('x');
+    posix.writes.length = 0;
+    await posix.s.run('true', { timeoutMs: 5_000 });
+    // The command's line clears the partial one (`^U`, node-pty's VKILL); the snapshot after it has nothing left to clear.
+    expect(posix.lines()[0]!.startsWith('\x15printf')).toBe(true);
+    expect(posix.lines().slice(1).every((w) => w.startsWith('printf'))).toBe(true);
+    // Keystrokes that end their own line leave nothing behind, and nothing is cleared.
+    posix.s.sendInput('x\r');
+    posix.writes.length = 0;
+    await posix.s.run('true', { timeoutMs: 5_000 });
+    expect(posix.lines().every((w) => w.startsWith('printf'))).toBe(true);
+    // PowerShell's line is never prefixed with the POSIX kill character.
+    const pwsh = session({ kind: 'powershell', file: 'pwsh' });
+    pwsh.s.sendInput('x');
+    await pwsh.s.run('$true', { timeoutMs: 5_000 });
+    expect(pwsh.lines().every((w) => w.startsWith('$global:LASTEXITCODE'))).toBe(true);
+  });
 });
 
 describe.skipIf(process.platform === 'win32')('PD-TOOLS-001: the POSIX shell-state capture survives a screen that wraps', () => {
@@ -370,6 +410,41 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(output((await t.execute(args({ command: SH.bracketVar('ROTARIS_SEEN'), timeout: 15 }), ctx())).text)).toBe('[set]');
     } finally { await m.dispose(); rmSync(marker, { force: true }); }
   }, 60_000);
+
+  // docs/defects/fixed/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md: the
+  // OQ-38 case above types `x` and `y` with no Enter while its `sleep 3` runs soft-paused. The line discipline held them,
+  // the next wrapped line was appended to them, `xyprintf: not found` replaced the start marker, and with no start marker
+  // the capture kept the whole screen — `done-later`, the paused call's own `__rot_…_e:0`, the shell's error — while the
+  // live stream, which opens only at the printed start marker (L9), carried nothing. POSIX only: the kill character is the
+  // POSIX line discipline's, and PowerShell's first statement already takes a prefix without losing the start marker.
+  it.skipIf(PS)('REQ-TOOLS-096/097/127 (A10): keystrokes left without Enter under a soft-paused command neither leak its end frame and late output into the next call nor blank that call\'s live stream', async () => {
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
+    try {
+      await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
+      expect(diag((await t.execute(args({ command: `${SH.sleep(3)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      // Both roads the note names: the agent's own `is_input`, and the control surface's send-keys.
+      expect(diag((await t.execute(args({ command: 'x', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+      expect(m.streams.sendKeys(foregroundStreamId('orchestrator'), 'y').ok).toBe(true);
+      const session = m.session('s1:orchestrator', root);
+      let tapped = '';
+      const untap = session.onOutput((chunk) => { tapped += chunk; });
+      const r = await t.execute(args({ command: SH.echo('own-output'), timeout: 15 }), ctx());
+      untap();
+      expect(diag(r.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+      expect(output(r.text)).toBe('own-output');
+      expect(r.text).not.toContain('__rot_');
+      expect(r.text).not.toContain('done-later');
+      expect(r.text).not.toContain('not found');
+      // The live stream carries the call's own output again, and nothing of the wrapper or the paused call.
+      expect(stripVt(tapped).split('\n').map((l) => l.trim()).filter((l) => l !== '')).toEqual(['own-output']);
+      // The paused call's end frame is its own: the poll after reads its late output and the exit status it ended with.
+      const poll = await t.execute(args({ command: '' }), ctx());
+      expect(output(poll.text)).toBe('done-later');
+      expect(diag(poll.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+      expect(poll.text).not.toContain('__rot_');
+    } finally { await m.dispose(); }
+  }, 30_000);
 
   /**
    * ADR-0020's second first execution, 2026-09-12: four defects a real 22-minute run found. Each proof

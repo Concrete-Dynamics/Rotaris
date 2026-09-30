@@ -6354,6 +6354,32 @@ still holds `completed` yields no job and reads nothing.
 recorded, so that a failed recording leaves no stop reason to compare and REQ-ORCH-137's skip applies. Or whether the
 record governs even then, so that the capture must read the store before it may skip.
 
+**OQ-143 — Are keystrokes left without a line end cleared before the product submits the next command line?**
+*(REQ-TOOLS-096, under which keystroke input "may be a special key" or text and is written as is; REQ-TOOLS-097 and
+REQ-TOOLS-098, under which a soft-paused command keeps running and the next call is typed behind it; REQ-TOOLS-127,
+under which the live stream and the observation carry what the command wrote. Raised 2026-09-29 by the repair of
+acceptance finding A10,
+[`keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md`](../defects/fixed/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md),
+under [R-067](../product/requests.md#r-067). Open.)*
+
+An agent's `is_input` text or a control surface's send-keys with no Enter after it waits in the shell's input as a
+partial line when nothing reads it, as under a soft-paused `sleep`. A person at a terminal would see it on the next
+prompt and could erase it. The agent cannot see it, and the product's next wrapped line was appended to it: the
+start marker's `printf` became `xyprintf`, and the observation and the live stream lost their framing. No requirement
+says what becomes of such a partial line. The product could leave it (the prefix, and the leak the note records), submit
+it as a line of its own (running text the agent never ended as a command), or clear it.
+
+**What the build proceeds under:** on the POSIX backend, when the last keystrokes the session wrote did not end with
+a line end, the next line the product submits — a command, or its own snapshot or restore — is preceded by the line
+discipline's kill character, `^U` (node-pty sets `VKILL` to it; an interactive shell's line editor binds it to the
+same). The partial line is erased, never run. Keystrokes that end their own line clear nothing, and the PowerShell
+backend is unchanged: its wrapper's first statement is the exit-status reset, so a prefix costs that statement and,
+by the wrapper's construction, not the start marker — reasoned, not measured, since no Windows host ran it. The cases "REQ-TOOLS-096 (A10): …" and "REQ-TOOLS-096/097/127 (A10): …" in `terminal.test.ts` pin that reading.
+
+**What a ruling decides.** Whether a partial line no one ended is erased, submitted, or left, and whether the
+observation of the call that clears it should say so. A command still running and reading its own input line by line
+receives the product's next line under every reading, which is REQ-TOOLS-187's queue and not this question.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

@@ -334,6 +334,22 @@ measured on the monotonic clock: the time since the previous observation of the 
 last wrote anything, and that a poll does not wait. How long a poll should wait is not stated anywhere:
 [OQ-136](../open-questions.md), raised with this reading built.*
 
+*Reported back 2026-09-29 (R-067), from acceptance finding A10
+([`keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output`](../../defects/fixed/keystrokes-left-without-enter-leak-a-paused-commands-end-marker-into-the-next-output.md)):
+the wrapper assumed it was the whole of the line the shell reads, and **keystrokes can stand in front of it**. An
+agent's `is_input` or a control surface's send-keys with no Enter waits in the shell's input as a partial line under a
+command that does not read it, and the next wrapped line was appended: `xyprintf: not found`, no start marker, the
+whole screen kept — the paused call's late output and its own end frame with it — and, since L9, an empty live stream.
+On the POSIX backend a line the product submits after keystrokes left without a line end is now preceded by the line
+discipline's kill character, `^U`, which erases the partial line; the PowerShell wrapper's first statement already
+takes a prefix without losing the start marker (reasoned, not measured). What becomes of such a line is stated
+nowhere: [OQ-143](../open-questions.md), raised with this reading built. **A second reading is falsified and kept
+beside its replacement in `onData`:** "the active call's end marker, else the paused call's". While a call was
+active, the paused call's frame ahead of it was never matched, so a paused command that ended behind the next call
+never read as finished and the poll after it said "still running" with exit −1. Both frames are matched now, the
+paused one's first. Pinned by the two "(A10)" cases in `terminal.test.ts`, the real-shell one red on the unrepaired
+code.*
+
 **Found — defect C: the agent's capture was VT-STRIPPED where every other surface was EMULATED.** Deleting a
 control sequence is not applying it. Measured against the real shell at the session's own 240×50: ConPTY
 expresses a tab stop as `ESC[7C`, and `Write-Host ('a' + [char]9 + 'b')` reached the agent as **`ab`** where

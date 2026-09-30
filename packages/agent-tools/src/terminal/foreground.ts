@@ -442,6 +442,12 @@ export class ForegroundSession {
   private size = { cols: 240, rows: 50 };
   private active: { readonly start: string; readonly end: string; readonly onEnd: (code: number) => void; readonly onKill: (reset: boolean) => void } | null = null;
   private pendingText = '';
+  /**
+   * True while keystrokes the session wrote (REQ-TOOLS-096: an agent's `is_input`, a control surface's send-keys) may
+   * still sit in the shell's input as a partial line — their last byte was not a line end. The next line the product
+   * submits clears that line first (`submit`), so the keystrokes cannot prefix the wrapper (A10).
+   */
+  private typeahead = false;
   private reinitialized = false;
   private pausedCommand: PausedCall | null = null;
   /** A paused command that has since finished: its output and exit status wait for the next poll. */
@@ -512,6 +518,8 @@ export class ForegroundSession {
       ? ['-NoLogo', '-NoProfile', '-NoExit', '-Command', "Remove-Module PSReadLine -ErrorAction SilentlyContinue; function prompt { '' }; $ProgressPreference = 'SilentlyContinue'"]
       : ['-i'];
     const p = this.deps.factory.spawn(backend.file, args, { cwd: this.deps.cwd, env: { ...this.deps.env, ...NO_PAGER, TERM: 'dumb', PSModuleAnalysisCachePath: '' }, cols: this.size.cols, rows: this.size.rows, name: 'dumb' });
+    // A fresh shell's input holds nothing: whatever was typed into the last one went with it.
+    this.typeahead = false;
     p.onData((d) => this.onData(d));
     p.onExit(() => { if (this.pty === p) this.pty = null; });
     this.pty = p;
@@ -524,18 +532,32 @@ export class ForegroundSession {
     for (const l of this.listeners) l(chunk);
     if (!this.active && !this.pausedCommand) return;
     this.pendingText += chunk;
-    const end = this.active?.end ?? this.pausedCommand?.end;
-    if (!end) return;
     // The echoed wrapper carries the marker text too (`'__rot_x_e:' + $(...`), so the match is the marker
     // FOLLOWED BY DIGITS on the VT-stripped stream — only the shell's own Write-Output produces that.
-    const m = new RegExp(`${end}:(-?\\d+)`).exec(stripVt(this.pendingText));
-    if (!m) return;
-    const code = Number(m[1]);
-    const handler = this.active?.onEnd ?? this.pausedCommand?.onEnd;
-    this.pendingText = '';
-    if (this.active) this.active = null;
-    if (this.pausedCommand) { this.pausedCommand.code = code; this.pausedDone = this.pausedCommand; this.pausedCommand = null; }
-    handler?.(code);
+    const text = stripVt(this.pendingText);
+    const frame = (end: string): number | null => {
+      const m = new RegExp(`${end}:(-?\\d+)`).exec(text);
+      return m ? Number(m[1]) : null;
+    };
+    // A soft-paused call and the call queued behind it are BOTH in the stream, the paused one's frame first: the shell
+    // runs the lines in order. FALSIFIED, kept beside its replacement (A10, 2026-09-29): "the active call's end marker,
+    // else the paused call's" — while a call was active the paused call's frame was never matched, so the paused call
+    // never read as finished and a poll after it said "still running" with exit −1 over a command that had ended.
+    const paused = this.pausedCommand;
+    const pausedCode = paused ? frame(paused.end) : null;
+    if (paused && pausedCode !== null) {
+      paused.code = pausedCode;
+      this.pausedDone = paused;
+      this.pausedCommand = null;
+      paused.onEnd?.(pausedCode);
+    }
+    const active = this.active;
+    const activeCode = active ? frame(active.end) : null;
+    if (active && activeCode !== null) {
+      this.active = null;
+      active.onEnd(activeCode);
+    }
+    if (!this.active && !this.pausedCommand) this.pendingText = '';
   }
 
   /** The capture: the emulated screen with the echoed command line and both marker frames removed. */
@@ -629,7 +651,7 @@ export class ForegroundSession {
     });
     this.pendingText = '';
     this.region = new CommandRegion(start, end);
-    p.write(`${wrapCommand(this.deps.backend, command, start, end)}\r`);
+    this.submit(p, wrapCommand(this.deps.backend, command, start, end));
     const outcome = await done;
     // Only a soft-paused command keeps writing to its stream; after any other outcome what the PTY carries is the
     // product's own — the snapshot, the reset, the restore — and none of it is the command's (live-run L9).
@@ -771,6 +793,25 @@ export class ForegroundSession {
   /** REQ-TOOLS-096: keystroke input, a special key or text, written to the PTY as is. */
   sendInput(text: string): void {
     this.ensure().write(text);
+    if (text !== '') this.typeahead = !/[\r\n]$/.test(text);
+  }
+
+  /**
+   * One wrapped line, submitted. Keystrokes written with no line end after them (REQ-TOOLS-096) wait in the shell's input
+   * as a partial line when nothing reads them — a soft-paused `sleep` does not — and the wrapped line was APPENDED to
+   * them: `xy` + `printf '%s\n' '<start>'; …` ran `xyprintf`, which is not found, so the start marker never printed; the
+   * capture kept the whole screen, the paused call's late output and its own `__rot_…_e` frame with it, and the live
+   * stream, which opens at the printed start marker (L9), stayed blank (A10). The partial line is cleared first with
+   * the POSIX line discipline's kill character — `^U`, which node-pty sets as `VKILL` and an interactive shell's own line
+   * editor binds to the same — so the wrapper is the whole of the line the shell reads. The keystrokes were written as
+   * is; what is cleared is a line no one ended, which is OQ-143's reading. PowerShell is left as it was: its wrapper's
+   * first statement is the exit-status reset, not the start marker, so a prefix costs that statement and, by construction,
+   * not the marker (reasoned; no Windows host has run it), and ConPTY's cooked input has no `^U`.
+   */
+  private submit(p: PtyLike, wrapped: string): void {
+    const clear = this.typeahead && this.deps.backend.kind === 'posix' ? '\x15' : '';
+    this.typeahead = false;
+    p.write(`${clear}${wrapped}\r`);
   }
 
   /**
@@ -853,7 +894,7 @@ export class ForegroundSession {
       };
       this.pendingText = '';
       this.active = { start, end, onEnd: finish, onKill: () => finish(-1) };
-      p.write(`${wrapCommand(this.deps.backend, line, start, end)}\r`);
+      this.submit(p, wrapCommand(this.deps.backend, line, start, end));
     });
   }
 

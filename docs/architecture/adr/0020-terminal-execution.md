@@ -447,9 +447,18 @@ delivery once to the session's group. Acceptance finding A8 graded its known exp
 and the session runs on until the command ends. Measured through `BackgroundManager` on the branch before the repair,
 45 of 200 `sleep 30` sessions signalled the instant they started were still running 3 s later under six CPU burners.
 **Found: delivery reached every process, as decided, and did not stop the session, which R-044 rules it must.** The
-repair keeps delivery to the group and adds a check on Linux, the one host whose `/bin/sh` has the window. At 250 ms and
+repair keeps delivery to the group and adds a check on Linux, the one host whose `/bin/sh` has the window. ~~At 250 ms and
 1.5 s, while the session runs, the process table (`linuxProcessTable`, `@rotaris/platform`) is read for members that
 never received the signal: alive at SIGINT's default, created within one second before it. Each is sent SIGINT once
 more, alone (`missedSigint`), and the re-delivery is logged. After it, 0 of 200 ran on, with and without the burners.
-A command that catches SIGINT is never sent a second. OQ-135 records the reading and stays open
+A command that catches SIGINT is never sent a second.~~ *Falsified 2026-09-30 by the verifier, kept beside its
+replacement: "alive at the default, created within a second before the signal" is also how a command stands whose
+one-shot handler (`process.once('SIGINT')`) restored the default as it ran, so such a command signalled the instant it
+was up was sent a second SIGINT that cut its shutdown off.* The group is now read the instant before the signal
+(`ProcessTable.tree`, a walk of the shell's descendants, so the reading does not push the signal past the window), and
+again at 250 ms and 1.5 s while the session runs. A member is sent SIGINT once more, alone (`missedSigint`), only when
+the first reading found it still the shell, holding SIGINT off (the aimed reading found `dash` and its `vfork`ed child
+both `blocked`), and the later one finds it running another image at SIGINT's default. A process the first reading
+found running the command is never sent a second. With that predicate 0 of 200 ran on under six burners (twice) and
+without them; with re-delivery disabled, 8 of 200 still ran on under the burners. OQ-135 records the reading and stays open
 ([the note](../../defects/fixed/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md)).

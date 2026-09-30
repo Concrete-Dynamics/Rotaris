@@ -6153,26 +6153,54 @@ graded the exposure a product defect): the reading above left a dev server or a 
 Measured through the product's own manager, 45 of 200 sessions ran on under six CPU burners, and 12 of 200 on the
 shared host without them.*
 
-The build now proceeds under a narrow form of the first repair: re-deliver only to a process that shows it never
-received the signal. After a SIGINT to a session's group, on Linux, the session reads the process table at 250 ms and
-again at 1.5 s while it is still running. `BackgroundSession.checkSigint` and `missedSigint` do the reading, over
-`linuxProcessTable` in `@rotaris/platform`. A member is sent SIGINT once more, alone, only when all three hold:
-- it is alive and stands at SIGINT's default — not catching, ignoring, blocking or already holding it;
-- it was created within one second before the signal was sent;
+*The reading built 2026-09-29, falsified 2026-09-30 and kept beside its replacement below:*
+
+> The build now proceeds under a narrow form of the first repair: re-deliver only to a process that shows it never
+> received the signal. After a SIGINT to a session's group, on Linux, the session reads the process table at 250 ms and
+> again at 1.5 s while it is still running. `BackgroundSession.checkSigint` and `missedSigint` do the reading, over
+> `linuxProcessTable` in `@rotaris/platform`. A member is sent SIGINT once more, alone, only when all three hold:
+> - it is alive and stands at SIGINT's default — not catching, ignoring, blocking or already holding it;
+> - it was created within one second before the signal was sent;
+> - it has not been sent SIGINT again already.
+>
+> A process at the default that had received SIGINT would be gone, so such a member never received it. The re-delivery is
+> therefore its first SIGINT, not its second. A command that catches SIGINT — a server shutting down gracefully — is never
+> sent a second, however long it takes. The start-time bound spares one that restored the default after its first; a
+> command that started more than a second before the signal cannot have been in the window. A process started after the
+> signal is spared too. Each re-delivery is written to the log as a warning. After the repair, the same measurement left
+> 0 of 200 running under load (58 re-deliveries) and 0 of 200 without burners (12).
+
+*Falsified 2026-09-30 by the verifier of the same change: "a process at the default that had received SIGINT would be
+gone" is false of a command whose one-shot handler restores the default as it runs (`process.once('SIGINT')`, C's
+`SA_RESETHAND`). Signalled within a second of its start, such a command was sent a second SIGINT that cut its shutdown
+off, so "a command that catches SIGINT … is never sent a second" did not hold.*
+
+The build now proceeds under a narrower form: re-deliver only to a process the product **saw in the window**. On Linux,
+the instant before a SIGINT is sent to a session's group, the session reads the group (`ProcessTable.tree`, a walk of
+the shell's descendants through `/proc`, a few reads, so it does not push the signal past the window it is read for).
+While the session still runs, it reads the group again at 250 ms and at 1.5 s. A member is sent SIGINT once more, alone
+(`missedSigint`), only when all of these hold:
+- the reading before the signal found it **the shell** — its name the shell's, not yet replaced by the command — and
+  holding SIGINT off: catching it, blocking it or holding it pending (the reading of an aimed signal found `dash` and
+  its `vfork`ed child both `blocked`);
+- the later reading finds it alive, **running another image** (its name changed: it `exec`ed), and at SIGINT's default;
 - it has not been sent SIGINT again already.
 
-A process at the default that had received SIGINT would be gone, so such a member never received it. The re-delivery is
-therefore its first SIGINT, not its second. A command that catches SIGINT — a server shutting down gracefully — is never
-sent a second, however long it takes. The start-time bound spares one that restored the default after its first; a
-command that started more than a second before the signal cannot have been in the window. A process started after the
-signal is spared too. Each re-delivery is written to the log as a warning. After the repair, the same measurement left
-0 of 200 running under load (58 re-deliveries) and 0 of 200 without burners (12). The second and third repairs were not
-taken, since each changes what every command runs under. Off Linux nothing is checked: macOS's `/bin/sh` is `bash`,
-which has no window, and on Windows every signal terminates the tree (OQ-10).
+That is the command `dash` was starting: the SIGINT was taken by the shell's handler in the shell's image and lost with it
+at `exec`. A process the first reading found already running the command is never sent a second SIGINT, whatever it did
+with the first, one-shot handlers included; a process started after the signal is not in the first reading. Two
+exposures remain, both narrow: a command that `exec`s and installs a one-shot handler between the reading and the
+delivery (one synchronous step) would be sent a second; and a command the window cost its SIGINT that installs a
+handler of its own before the 250 ms reading stands `caught` and is not sent one. With this predicate, 0 of 200 ran on
+under six CPU burners (twice; 18 and 14 re-deliveries) and 0 of 200 without them (none needed); with re-delivery
+disabled after the same reading, 8 of 200 ran on under the burners. The second and third repairs were not taken, since
+each changes what every command runs under. Off Linux nothing is checked: macOS's `/bin/sh` is `bash`, which has no
+window, and on Windows every signal terminates the tree (OQ-10).
 
 **What a ruling decides.** Whether R-044's "stops" binds the product past delivery, and if so, which of the three
 repairs is acceptable, or whether the window is accepted as the shell's. Since 2026-09-29 the build takes the narrow
-re-delivery above, so a ruling against re-delivery removes it.
+re-delivery above, so a ruling against re-delivery removes it. A ruling for it also decides whether the two remaining
+exposures stated above are accepted.
 
 **OQ-136 — How long does an empty poll wait for a soft-paused command?** *(REQ-TOOLS-096, whose empty `command`
 "polls for more output after a soft pause"; REQ-TOOLS-097, whose no-output window bounds the command's own call and

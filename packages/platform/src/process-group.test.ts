@@ -26,32 +26,55 @@ describe('OQ-135: the process table a SIGINT is checked against', () => {
     expect(sigintStanding(status({ SigCgt: '0000000000004000', SigIgn: '0000000000001000' }))).toBe('default');
   });
 
-  it('parses stat past a command name holding spaces and parentheses', () => {
+  it('parses stat\'s command name, holding spaces and parentheses, and the fields after it', () => {
     const fields = ['S', '1', '4242', '4242', '0', '-1', '4194560', ...Array.from({ length: 12 }, () => '0'), '987654'];
-    expect(parseStat(`4243 (a (b) c) ${fields.join(' ')} 0 0`)).toEqual({ state: 'S', pgrp: 4242, startTicks: 987654 });
+    expect(parseStat(`4243 (a (b) c) ${fields.join(' ')} 0 0`)).toEqual({ comm: 'a (b) c', state: 'S', pgrp: 4242 });
     expect(parseStat('garbage')).toBeNull();
   });
 
-  it('reads a group from a /proc tree: its members only, with their state, start and standing', () => {
+  it('reads a group from a /proc tree: its members only, with their name, state and standing', () => {
     const root = mkdtempSync(join(tmpdir(), 'rotaris-proc-'));
     try {
-      const proc = (pid: number, pgrp: number, start: number, st: string) => {
+      const proc = (pid: number, comm: string, pgrp: number, st: string) => {
         mkdirSync(join(root, String(pid)));
-        writeFileSync(join(root, String(pid), 'stat'), `${pid} (sh) S 1 ${pgrp} ${pgrp} 0 -1 0 ${Array.from({ length: 12 }, () => '0').join(' ')} ${start} 0`);
+        writeFileSync(join(root, String(pid), 'stat'), `${pid} (${comm}) S 1 ${pgrp} ${pgrp} 0 -1 0 ${Array.from({ length: 12 }, () => '0').join(' ')} 5000 0`);
         writeFileSync(join(root, String(pid), 'status'), st);
       };
-      writeFileSync(join(root, 'uptime'), '1234.56 999.00\n');
-      proc(10, 10, 5000, status({ SigCgt: '0000000000010002' }));
-      proc(11, 10, 123455, status({}));
-      proc(12, 99, 1, status({}));
+      proc(10, 'sh', 10, status({ SigCgt: '0000000000010002' }));
+      proc(11, 'sleep', 10, status({}));
+      proc(12, 'sh', 99, status({}));
       mkdirSync(join(root, 'self'));
       const table = linuxProcessTable(root, 'linux')!;
-      expect(table.nowTicks()).toBe(123456);
       expect([...table.group(10)].sort((a, b) => a.pid - b.pid)).toEqual([
-        { pid: 10, state: 'S', startTicks: 5000, sigint: 'caught' },
-        { pid: 11, state: 'S', startTicks: 123455, sigint: 'default' },
+        { pid: 10, comm: 'sh', state: 'S', sigint: 'caught' },
+        { pid: 11, comm: 'sleep', state: 'S', sigint: 'default' },
       ]);
       expect(table.group(77)).toEqual([]);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it('reads the group a leader leads by walking its descendants, and the whole table where the kernel keeps no children file', () => {
+    const root = mkdtempSync(join(tmpdir(), 'rotaris-proc-'));
+    try {
+      const proc = (pid: number, comm: string, pgrp: number, children: string | null) => {
+        mkdirSync(join(root, String(pid), 'task', String(pid)), { recursive: true });
+        writeFileSync(join(root, String(pid), 'stat'), `${pid} (${comm}) S 1 ${pgrp} ${pgrp} 0 -1 0 ${Array.from({ length: 12 }, () => '0').join(' ')} 5000 0`);
+        writeFileSync(join(root, String(pid), 'status'), status({}));
+        if (children !== null) writeFileSync(join(root, String(pid), 'task', String(pid), 'children'), children);
+      };
+      // 10 leads; 11 is its child and 12 its grandchild; 13 left the group with its child 14; 15 is in the group but
+      // no descendant (reparented), which only the whole table finds.
+      proc(10, 'sh', 10, '11 13 ');
+      proc(11, 'sh', 10, '12 ');
+      proc(12, 'sleep', 10, '');
+      proc(13, 'setsid', 13, '14 ');
+      proc(14, 'x', 13, '');
+      proc(15, 'orphan', 10, '');
+      const table = linuxProcessTable(root, 'linux')!;
+      expect(table.tree(10).map((m) => m.pid)).toEqual([10, 11, 12]);
+      expect(table.tree(99)).toEqual([]);
+      rmSync(join(root, '10', 'task'), { recursive: true });
+      expect(table.tree(10).map((m) => m.pid).sort((a, b) => a - b)).toEqual([10, 11, 12, 15]);
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 
@@ -66,19 +89,19 @@ describe('OQ-135: the process table a SIGINT is checked against', () => {
     let child: ChildProcess | null = null;
     afterEach(() => { if (child?.pid) { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* gone */ } } child = null; });
 
-    it('a `dash -c` group reads its shell catching SIGINT and its command at the default, both started before now', async () => {
+    it('a `dash -c` group reads its shell catching SIGINT under the shell\'s name, and its command at the default under its own', async () => {
       child = spawn('/bin/sh', ['-c', 'sleep 30'], { detached: true, stdio: 'ignore' });
       const table = linuxProcessTable()!;
       const pid = child.pid!;
       let members = table.group(pid);
-      for (let i = 0; i < 200 && members.length < 2; i++) { await new Promise((r) => setTimeout(r, 10)); members = table.group(pid); }
-      const now = table.nowTicks()!;
+      for (let i = 0; i < 200 && !members.some((m) => m.comm === 'sleep'); i++) { await new Promise((r) => setTimeout(r, 10)); members = table.group(pid); }
       const shell = members.find((m) => m.pid === pid)!;
       const command = members.find((m) => m.pid !== pid)!;
       expect(members).toHaveLength(2);
-      expect(shell.sigint).toBe('caught');
-      expect(command.sigint).toBe('default');
-      for (const m of members) expect(m.startTicks).toBeLessThanOrEqual(now);
+      expect(shell).toMatchObject({ comm: 'sh', sigint: 'caught' });
+      expect(command).toMatchObject({ comm: 'sleep', sigint: 'default' });
+      // The walk from the leader reads the same two.
+      expect([...table.tree(pid)].sort((a, b) => a.pid - b.pid)).toEqual([...members].sort((a, b) => a.pid - b.pid));
     });
   });
 });

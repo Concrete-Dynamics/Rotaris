@@ -25,7 +25,7 @@ The verifier of that repair reproduced it independently: 4 of 40 under load, and
 opens again at every command a script starts, not only at the session's start. It is widest while the host is loaded.
 
 That note's own test flake is repaired by `9fc2fdc`: the case waits for its command and `exec`s it. This exposure in
-the product is not repaired. Recorded 2026-09-29 under R-067.
+the product is not repaired. Recorded 2026-09-29 under R-067. *(Superseded by the Outcome below: repaired the same day.)*
 
 ## Specs
 
@@ -49,36 +49,51 @@ the product is not repaired. Recorded 2026-09-29 under R-067.
 
 ## Outcome
 
-Repaired 2026-09-29 under R-067 (acceptance finding A8). The reading built is recorded in
-[OQ-135](../../architecture/open-questions.md), which stays open for the owner's ruling. It is a narrow form of its first
-repair: re-deliver only to a process that shows it never received the signal.
-- **What changed.** After a SIGINT to the group, on Linux, `BackgroundSession.checkSigint` reads the process table at
-  250 ms and at 1.5 s while the session still runs. It reads through `linuxProcessTable` in
-  `packages/platform/src/process-group.ts`. A member that is alive, stands at SIGINT's default, was created within one
-  second before the signal, and has not been re-sent it is sent SIGINT once more, alone (`missedSigint`). Each
-  re-delivery is logged as a warning.
-- **Why exactly those.** A process at the default that received SIGINT would be gone, so this re-delivery is its first
-  SIGINT, not its second. A command that catches SIGINT is never sent a second. Neither is one that restored the
-  default after its first and started more than a second before the signal. A process started after the signal is
-  spared too.
+Repaired 2026-09-29 under R-067 (acceptance finding A8), and its predicate corrected 2026-09-30 in the same round. The
+reading built is recorded in [OQ-135](../../architecture/open-questions.md), which stays open for the owner's ruling. It
+is a narrow form of its first repair: re-deliver only to a process the product saw in the window.
+- **What changed.** `BackgroundSession.signal` reads the group the instant before it sends SIGINT
+  (`ProcessTable.tree`, a walk of the shell's descendants through `/proc/<pid>/task/<pid>/children`, in
+  `packages/platform/src/process-group.ts`). While the session still runs, `checkSigint` reads it again at 250 ms and
+  at 1.5 s. A member is sent SIGINT once more, alone (`missedSigint`), only when the first reading found it **the
+  shell** (its name the shell's: not yet replaced by the command) holding SIGINT off (catching, blocking or holding it
+  pending), and the later one finds it alive, **running another image** and at SIGINT's default, and it has not been
+  re-sent it. Each re-delivery is logged as a warning.
+- **Why exactly those.** That is the command `dash` was starting: the reading of an aimed signal found both the shell and
+  its `vfork`ed child standing `blocked`, and a SIGINT landing there is taken by the shell's handler and lost with the
+  image at `exec`. A process the first reading found already running the command is never sent a second SIGINT,
+  whatever it did with the first. A process started after the signal is not in the first reading.
+- **The first predicate, falsified and kept.** It re-delivered to every member alive at the default and created within
+  one second before the signal, on the reasoning "a process at the default that received SIGINT would be gone". The
+  verifier showed a command whose one-shot handler restored the default as it ran (`process.once('SIGINT')`, signalled
+  the instant it was up) stands the same way: it was sent a second SIGINT that cut its 2 s shutdown off, and its status
+  read `killed` with no "clean exit". Its statements that such a command is never sent a second were false.
+- **The residue.** A command that `exec`s and installs a one-shot handler between the first reading and the delivery,
+  one synchronous step apart, would still be sent a second. A command the window cost its SIGINT that installs a handler
+  of its own before the 250 ms reading stands `caught`, and is not sent one.
 - **Off Linux** nothing is checked: macOS's `/bin/sh` is `bash`, and on Windows every signal terminates the tree.
 
 Measured through the product's own `BackgroundManager`: 200 sessions of `sleep 30`, each signalled the instant it
 started, counting those still running 3 s later. Node 24, the 4-CPU container, shared with another workflow's agents
-(load average 4 to 5 before any burner):
+(load average 4 to 5 before any burner on 2026-09-29, 1 to 2 on 2026-09-30):
 
 | delivery | six CPU burners | sessions still running | re-deliveries |
 |---|---|---|---|
 | once (the old code; branch head before the repair) | yes | 45 of 200 | — |
 | once (the check disabled) | no | 12 of 200 | — |
-| with the check | yes | 0 of 200; 0 of 200 | 30; 58 |
-| with the check | no | 0 of 200 | 12 |
+| with the first predicate | yes | 0 of 200; 0 of 200 | 30; 58 |
+| with the first predicate | no | 0 of 200 | 12 |
+| once, after the reading before the signal (re-delivery disabled; 2026-09-30) | yes | 8 of 200 | — |
+| once, after the reading before the signal (re-delivery disabled; 2026-09-30) | no | 0 of 200 | — |
+| with the corrected predicate (2026-09-30) | yes | 0 of 200; 0 of 200 | 18; 14 |
+| with the corrected predicate (2026-09-30) | no | 0 of 200 | 0 |
 
 Pinned by `packages/agent-tools/src/terminal/background.test.ts`. Its case "REQ-TOOLS-128 / R-044: a SIGINT that lands
 while dash is starting the command still stops the session" aims the signal at `dash`'s not-yet-`exec`ed child through
-`/proc`, and requires that a hit occurred. It went red with the check disabled: its first attempt hit the window and the
-session was still running 4 s later. It was green in four runs with the check. Two cases check what is spared, each
-with no re-delivery: a command that catches SIGINT and shuts down over 2 s, and one that restores the default after its
-first. `missedSigint` has pure cases, and `packages/platform/src/process-group.test.ts` covers the table's parsing and
-the host's own `/proc`. The live run's `frictions` scenario, which stops a background command with SIGINT, is the
-scenario to show it in the built app; its result is in the branch report.
+`/proc`, and requires that a hit occurred within 400 attempts (about 1 aimed attempt in 37 lands in the window with the
+reading taken first). It goes red with the check disabled. Three cases check what is spared, each with no re-delivery and
+the command's own shutdown finished: a command that catches SIGINT and shuts down over 2 s, and one that restores the
+default after its first, signalled 1.2 s after it is up and, in two shapes (`exec` and forked), the instant it is up. The
+last two were red on the first predicate. `missedSigint` has pure cases, and `packages/platform/src/process-group.test.ts`
+covers the table's parsing, the descendant walk with its fallback, and the host's own `/proc`. The live run's `frictions`
+scenario, which stops a background command with SIGINT, shows it in the built app; its result is in the branch report.

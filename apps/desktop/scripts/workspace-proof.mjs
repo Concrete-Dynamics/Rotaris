@@ -680,10 +680,14 @@ try {
         !slowFile.includes('code-intelligence-setup') && !slowFile.includes('last_run'),
         `the outgoing workspace's file ${slowFile.includes('initialization:') ? `carries ${JSON.stringify(slowFile.slice(slowFile.indexOf('initialization:')))}` : 'carries no initialization section'}`);
       const quickRecorded = await waitUntil(() => readFileSync(join(INIT_QUICK, '.rotaris', 'agents.yaml'), 'utf8').includes('code-intelligence-setup'), 30_000);
+      // The coordinator logs a run's outcome once the run has ended, which is after its recording has landed, so the file
+      // can carry the outcome a few ms before the log says it: wait for the log line too before reading it.
+      const quickLogged = () => { const l = logOf(s); const at = l.search(/mcp setup: started for [^\n]*init-quick/); return at >= 0 && /code-intelligence-setup → (success|failure)/.test(l.slice(at)); };
+      await waitUntil(quickLogged, 10_000);
       log = logOf(s);
       check('REQ-WORKSPACE-013 / REQ-WORKSPACE-084 / REQ-WORKSPACE-109: the replacement resolves its own workspace, and its run is followed to its own recorded outcome',
         quickRecorded && startedFor('init-quick') === 1 && /code-intelligence-setup → success/.test(log.slice(log.search(/mcp setup: started for [^\n]*init-quick/))),
-        `the replacement's setup ${startedFor('init-quick') === 1 ? 'started' : `started ${startedFor('init-quick')} time(s)`}${/init-quick waits for the setup under way to end/.test(log) ? ', once the outgoing setup had ended' : ''}; its outcome is ${quickRecorded ? 'recorded' : 'NOT recorded'}${/not a local launch/.test(log) ? '; a start was refused and reported as "not a local launch"' : ''}`);
+        `the replacement's setup ${startedFor('init-quick') === 1 ? 'started' : `started ${startedFor('init-quick')} time(s)`}${/init-quick waits for the setup under way to end/.test(log) ? ', once the outgoing setup had ended' : ''}; its outcome is ${quickRecorded ? 'recorded' : 'NOT recorded'}${/code-intelligence-setup → success/.test(log.slice(log.search(/mcp setup: started for [^\n]*init-quick/))) ? '' : ', and the log after its start says no success'}${/not a local launch/.test(log) ? '; a start was refused and reported as "not a local launch"' : ''}`);
       await s.driver.command({ kind: 'workspace.choose' });
       const resolvedAgain = await waitUntil(() => startedFor('init-slow') === 2, 30_000);
       check('REQ-WORKSPACE-102: a return to the first project is a new open, with its own automatic resolution',

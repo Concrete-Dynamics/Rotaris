@@ -103,7 +103,7 @@ the same host; no other Electron was running at the first launch, and the load a
 - With the bounds as written, these proofs exited 0: `part-h-proof`, `part-j-proof`, `overview-proof`, `config-proof`,
   `traceability-proof`, `terminal-proof` (116 of 116) and `updater-proof`, whose new check passed with exit 0 in
   10.6 s. `sessions-proof` exited 1 at its schema check, after every launch before it had returned. That red is
-  [`sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md`](../sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md),
+  [`sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md`](sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md),
   recorded before this change.
 
 **Not measured:** the other twenty-six moved scripts were syntax-checked (`node --check`) and scanned, not run. The

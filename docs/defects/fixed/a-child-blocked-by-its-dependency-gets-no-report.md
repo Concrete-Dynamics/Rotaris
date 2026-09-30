@@ -56,4 +56,7 @@ ends. `Scheduler.finalizeIncomplete`'s cancel of a child that had not started be
 changes nothing there; the report and its artifact are what a blocked child is owed (REQ-ORCH-108, REQ-ORCH-112).
 That is a reading of REQ-ORCH-098's "whatever terminal state a child reaches", not a clause of it. The verifier's
 third round asked that it be recorded where a reading of a clause belongs, so it is also recorded in
-[`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](../a-child-that-never-started-gets-no-teardown-timeline-entries.md).
+[`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](a-child-that-never-started-gets-no-teardown-timeline-entries.md).
+*Superseded 2026-09-30 under R-067 (acceptance finding A16).* The reading above, kept as it was recorded, is replaced: a
+blocked child, and one the finalize sweep cancels, now get REQ-ORCH-098's three teardown entries, since the clause's
+"whatever terminal state" excepts none (OQ-152).

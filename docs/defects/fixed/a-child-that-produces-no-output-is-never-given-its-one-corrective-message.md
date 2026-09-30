@@ -92,10 +92,12 @@ Evidence:
 The positive end-to-end cases fail with the wiring removed. The retry case fails with the once-per-child flag removed,
 and the role case fails with the role's window dropped.
 
-**Still not built** (recorded in [`a-stalled-child-is-never-shown-stalled.md`](../a-stalled-child-is-never-shown-stalled.md)):
+**Still not built** (recorded in [`a-stalled-child-is-never-shown-stalled.md`](a-stalled-child-is-never-shown-stalled.md)):
 - the stall callback reaches no host, so no badge draws;
 - the root is not watched;
 - REQ-MONITOR-135's stall-evaluation leg is missing.
+
+*All three built 2026-09-30 under R-067 (acceptance finding A6); the note above is repaired and its readings are OQ-153.*
 
 REQ-NOTIFY-112's other three recovery-eligible conditions are not detected, so REQ-NOTIFY-111's third-recovery
 escalation is unreachable (OQ-127). No live run was made (the `duress` scenario was not run).
@@ -130,7 +132,7 @@ and OQ-127 now records the gap and the reading built.
   the last event and so still reports such a child stalled while the wait lasts. The runtime view and the
   first-executions row now say so, and that half stays recorded in
   [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../a-child-waiting-on-its-own-children-is-reported-stalled.md).
-- *The recovery.* [`a-stalled-child-is-never-shown-stalled.md`](../a-stalled-child-is-never-shown-stalled.md) still
+- *The recovery.* [`a-stalled-child-is-never-shown-stalled.md`](a-stalled-child-is-never-shown-stalled.md) still
   said a recovery is recorded in the timeline; it is the session-log line `child stall recovered: …`.
 - *A row that does not decode.* `ConversationRecord.everRecorded` parsed every row, the ones before the last
   replacement that `load` never reads included, so one corrupt early row failed a resume `load` allowed. It now skips

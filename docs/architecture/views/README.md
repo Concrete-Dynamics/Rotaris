@@ -50,7 +50,7 @@ REQ-ORCH-053, REQ-ORCH-133, PD-ORCH-005 clause 6, R-067).** The cascade, the fin
 child now fire it through `IterationChildren.completedOutside`, in line, and the run waits for them after the sweep
 (`completionsSettled`); the stale settle's and the decline's fire after the run's `session_start`
 (`RunDeps.settledBeforeStart`, `Run.childCompleted`). An outside hook's fields are taken as the scheduler is told, not
-when a queued hook starts (the second verification). Three paths outside a run's hooks fire none, raised as OQ-152. This
+when a queued hook starts (the second verification). Three paths outside a run's hooks fire none, raised as OQ-154. This
 repairs `a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`. The **runtime view**'s §4 gains the
 paragraph after the one on a settle's hook. No package, edge, process, message kind, channel, command or store column
 changed.
@@ -63,6 +63,22 @@ stop's abort, a crash) is still listed, since it may have landed: `run/interrupt
 statement the turn records for it. The report's `edited_files`, the fallback's "Files touched" and the facts the pass is told never to deny all
 read it. This repairs `a-reports-edited-files-counts-refused-writes.md`. The **runtime view**'s §4 report sentence says
 so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A stalled agent is shown stalled; the root is watched; a stall evaluation lands a steer (REQ-ORCH-089, REQ-MONITOR-117..122,
+REQ-MONITOR-135, R-067).** `AgentRecord.stalledSeconds` and `SessionRecord.entryStalledSeconds` carry each stall watch's
+figure, kept in `AgentActivity` and republished by `ProjectionOwner.refreshRecord` when it changes; the agent trees, the
+Mission table, the persona window and the inspector draw it. `Run.turn` arms a `StallWatch` for the root. An evaluation wakes
+an agent waiting on its own children for a pending steer (`IterationChildren.wakeForSteering`, `ChildrenDeps.steeringPending`).
+This repairs `a-stalled-child-is-never-shown-stalled.md` (acceptance A6; OQ-153). The **runtime view**'s stall-watch
+paragraph and its `entryTools` paragraph say so. No package, edge, process, message kind, channel, command or store column
+changed; the snapshot channel's `SessionRecord` gained the two fields.
+
+**A child the scheduler settles is torn down (REQ-ORCH-098, REQ-ORCH-048, REQ-ORCH-052, R-067).** `Scheduler.cascadeBlocked`
+and `Scheduler.finalizeIncomplete` call `SchedulerDeps.teardown`, which `IterationChildren` answers with `writeTeardown`
+(`children/orchestration.ts`), so a blocked child and one the finalize sweep cancels get `child_end`, `child_result` and
+`child_conversation_closed` as a settled execution's child does (OQ-152). This repairs
+`a-child-that-never-started-gets-no-teardown-timeline-entries.md` (acceptance A16). The **runtime view**'s "A child settled
+without its turn" paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
 
 **`delegate`'s admission resolves an alias on the built-in table's path (REQ-ORCH-034, REQ-ORCH-153, PD-TOOLS-006,
 R-067).** `personaOf` (`children/orchestration.ts`) resolves through `resolveRole` where no persona catalogue is configured,

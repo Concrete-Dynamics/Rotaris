@@ -7,13 +7,13 @@ import { useShellState } from './shell-state.js';
 const agent = (over: Partial<AgentRecord>): AgentRecord => ({
   id: 'bg_00000001', name: 'helper', givenName: 'Helper', persona: 'coding-agent', state: 'running', presentationState: 'running', parentId: 'root:1', dependencies: [], activity: 'do the thing', model: 'scripted/alpha',
   depth: 1, background: true, category: 'quick', spawnedAt: '2026-09-05T10:00:00.000Z', completedAt: null, toolCalls: 2, delegationTask: 'do the thing', reasoning: 'medium', contextUsed: 1000, contextLimit: DEFAULT_CONTEXT_CAPACITY,
-  grantedTools: ['read_file', 'grep'], calledTools: ['grep'], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, ...over,
+  grantedTools: ['read_file', 'grep'], calledTools: ['grep'], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null, ...over,
 });
 const row = (over: Partial<TranscriptRow>): TranscriptRow => ({ index: 0, kind: 'agent', settled: true, body: 'x', at: '2026-09-05T10:00:00.000Z', ts: '10:00:00', ...over });
 const session = (over: Partial<SessionRecord>): SessionRecord => ({
   id: 's1', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-09-05T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [],
   tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: null, runType: 'task_run', improvementArtifactIds: [], runStartedAt: '2026-09-05T10:00:00.000Z', iterationsCompleted: 0, summary: null, permissionMode: 'ask', sandboxed: false, backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
-  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], ...over,
+  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryStalledSeconds: null, ...over,
 });
 
 describe('agents — the shared selection (REQ-MONITOR-042) and the run-level agent (REQ-MONITOR-043/057)', () => {
@@ -34,6 +34,9 @@ describe('agents — the shared selection (REQ-MONITOR-042) and the run-level ag
     expect(runLevelAgent(session({ executionStatus: 'failed' }), entry, false)?.presentationState).toBe('failed');
     expect(runLevelAgent(session({ executionStatus: 'paused' }), entry, false)?.presentationState).toBe('cancelled');
     expect(runLevelAgent(session({ runStartedAt: null }), entry, false)).toBeNull();
+    // REQ-MONITOR-117/119: the entry agent's own stall figure, while its run is live; none once it has ended.
+    expect(runLevelAgent(session({ entryStalledSeconds: 90 }), entry, false)?.stalledSeconds).toBe(90);
+    expect(runLevelAgent(session({ executionStatus: 'completed', entryStalledSeconds: 90 }), entry, false)?.stalledSeconds).toBeNull();
     expect(runLevelAgent(null, entry, false)).toBeNull();
   });
 });
@@ -144,6 +147,8 @@ describe('agents — the table order, the ring, the meta line, the nouns (REQ-MO
   it('the meta line and the nouns', () => {
     expect(metaLine(agent({ toolCalls: 1 }), '12s')).toBe('running · 12s · 1 tool call');
     expect(metaLine(agent({ toolCalls: 0 }), null)).toBe('running · — · 0 tool calls');
+    // REQ-ORCH-089 / REQ-MONITOR-119: a stalled agent's line ends with the watch's figure.
+    expect(metaLine(agent({ toolCalls: 1, stalledSeconds: 95 }), '12s')).toBe('running · 12s · 1 tool call · stalled\u00a095s');
     expect(countNoun(1, 'instance')).toBe('1 instance');
     expect(countNoun(2, 'instance')).toBe('2 instances');
   });

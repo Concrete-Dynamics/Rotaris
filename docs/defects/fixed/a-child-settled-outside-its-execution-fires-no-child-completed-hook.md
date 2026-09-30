@@ -37,7 +37,7 @@ where no hook port is at hand, such as `Sessions` at rest.
 
 **Repaired 2026-09-30 under [R-067](../../product/requests.md#r-067)** (acceptance round 1, finding A15), for every path
 the specification places inside a run; three paths outside one are raised as
-[OQ-152](../../architecture/open-questions.md) and built to fire nothing until it is ruled.
+[OQ-154](../../architecture/open-questions.md) and built to fire nothing until it is ruled.
 
 Confirmed on the branch first: five cases in `packages/engine/src/children/children.test.ts` (the describe "… a child
 settled outside its execution fires `child_completed`") were red on the code as it stood; a sixth, added with the repair,
@@ -66,7 +66,7 @@ What changed:
 - The decline (`Run.closeLeftOpenIteration`) fires one for each paused agent it cancels, after the continuing run's
   `session_start` and before the declined iteration closes.
 
-Not fired, per OQ-152's reading as built: the cancel of a paused child at rest (clause 16, no run and no hook port), the
+Not fired, per OQ-154's reading as built: the cancel of a paused child at rest (clause 16, no run and no hook port), the
 explicit cancel's close after its run's `session_end`, and the record of an accepted cancel whose host died
 (`recordAcceptedCancel`). The last was not in this note's list; it was found by the repair's own sweep of every terminal
 move. A fourth was added by the second verification: the stale settle of a run that ends before its `session_start` (a

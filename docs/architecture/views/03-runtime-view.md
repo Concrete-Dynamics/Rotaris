@@ -607,7 +607,8 @@ REQ-MONITOR-061), `called`
 and `active` the tracker's under the name the root dispatches as (`Run.entryTools`, `rootName`: a root resumed as the
 entry role keeps the persona its iteration was opened with, OQ-97); with no run live nothing is
 resolved, the history is read under the latest iteration's `root_persona` (`entryToolsOf`), and the surface lets the
-role's declared tools stand in (REQ-MONITOR-060; the snapshot's `declaredTools`). A LIVE run-level agent whose root port
+role's declared tools stand in (REQ-MONITOR-060; the snapshot's `declaredTools`). **`SessionRecord.entryStalledSeconds`**
+(2026-09-30, OQ-153) is the same route for the root's stall watch's figure. A LIVE run-level agent whose root port
 has not resolved yet — the pre-flight, before `Run.iterate` sets the port — lists nothing (`runLevelGrant`), never the
 declared set (REQ-MONITOR-061). **`SessionRecord.artifacts`** is the
 session's artifacts not superseded, with producer, ready flag and consumers (`artifactLinksOf`, one body-free read through
@@ -723,6 +724,12 @@ the turn's persona, tool port, compression and fingerprint, the settle after the
 not decode. The child ends `failed` with a `child_exception` issue and a report naming the raise, and the teardown the
 settle in `execute` writes (REQ-ORCH-098): `child_end`, `child_result`, `child_conversation_closed` and
 `child_completed`. So no child is left `running` with no execution behind it.
+Since 2026-09-30 a child the scheduler settles without an execution — one the cascade blocks, or one the finalize sweep
+cancels, started or not — is torn down too: `SchedulerDeps.teardown` writes the same three entries through
+`writeTeardown`, after its report and before the terminal callbacks (REQ-ORCH-098; OQ-152; the repair of
+[`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](../../defects/fixed/a-child-that-never-started-gets-no-teardown-timeline-entries.md)).
+A child cancelled by any other path still gets none
+([`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../../defects/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md)).
 
 **A settle's hook runs in line (REQ-HOOKS-076 / REQ-HOOKS-080; repaired 2026-09-29).** Both settles, the one at the end
 of `execute` and `settleRaised`, make the terminal move and write the teardown. Then they run the `child_completed` hook
@@ -754,7 +761,7 @@ finalize sweep (`completionsSettled`), before `iteration_end`. The stale settle'
 (`RunDeps.settledBeforeStart`) and fired after its `session_start`; the decline fires one for each agent it cancels, after
 the continuing run's `session_start`. A child ended where no run's hooks are live — cancelled at rest (clause 16), by the
 explicit cancel's close after `session_end`, or by the record of an accepted cancel — fires none, nor does a stale-settled
-child whose run ends before its `session_start` (OQ-152). A settle
+child whose run ends before its `session_start` (OQ-154). A settle
 ends only its own `settles` entry (`beginSettle`), so a child followed up while an earlier end's hook still runs (clause
 22) fires the hook once for each end. At a stop or a quit these hooks are awaited as executions within what is left of
 the 30 s grace and then given up on with them, as a settle's own hook is (REQ-SESSION-092), bounded by the per-hook
@@ -784,12 +791,28 @@ What it writes:
 - a silence of the threshold with no call in flight: a `stall` issue at every evaluation (REQ-MONITOR-119), and a
   warning at entry and then every `max(threshold, 30)` s (REQ-MONITOR-120);
 - the same silence with calls in flight: a `child waiting on tools: …` line (REQ-MONITOR-118);
-- activity resuming after a stall: a `child stall recovered: …` line (REQ-MONITOR-120).
+- activity resuming after a stall: a `child stall recovered: …` line (REQ-MONITOR-120) — only when the agent was active
+  after the evaluation that last found it stalled (a model event that is not an error, or something the run gave it). A
+  stall that ends otherwise — a cancel, a stop, a pause, a hard timeout, a failed turn, at the watch's `stop` or at an
+  evaluation between its turns — clears the figure with no line (`StallWatch.endStall`, OQ-153).
 
 Those lines, and the `child corrective message: …` line below, go to the session log through the run's `warn`, as
 OQ-76's do: REQ-ORCH-139's closed timeline vocabulary has no word for them and none is minted (OQ-127).
 
-Its per-evaluation callback has no listener yet. A child's turn can end `failed` after no output for the whole window,
+Its per-evaluation callback reaches the host (REQ-ORCH-089, REQ-MONITOR-119/120/122; OQ-153; the repair of
+[`a-stalled-child-is-never-shown-stalled.md`](../../defects/fixed/a-stalled-child-is-never-shown-stalled.md), 2026-09-30):
+`IterationChildren.stallEvaluated` keeps the silence of a stalled evaluation, else null, beside the agent's tool activity
+(`AgentActivity.stalled`), and `ProjectionOwner.refreshRecord` republishes the record whenever the figure changes — at every
+evaluation of a stall, and once at its recovery. The figure is `AgentRecord.stalledSeconds`, which the agent trees, the
+Mission table and the persona window draw as a `tag-wait` badge (`stalled Ns`) and the inspector's meta line ends with. The
+same evaluation serves REQ-MONITOR-135: an agent waiting between its turns on its own children with a steer pending
+(`ChildrenDeps.steeringPending`, a read that takes nothing) is woken (`wakeForSteering`), and the step `runWithChildren` then
+starts for it injects the steer; every delivered steer restarts the watch's silence (`refreshing`). **The root is watched
+too**: `Run.turn` arms a `StallWatch` over the root's whole execution, against its role's `stall_timeout`, else
+`runtime.child_stall_timeout`, else 90 s, fed as a child's is, with no silence counted between its turns
+(`betweenTurns`) — a root resumed into waiting (PD-ORCH-005 clause 4) is between its turns from the start. It writes the same warning, `stall` issue and log lines naming `agent`, and its figure is
+`SessionRecord.entryStalledSeconds` (`Run.entryStalledSeconds`), which the run-level agent carries. It gets no corrective
+message. A child's turn can end `failed` after no output for the whole window,
 with no call in flight. Unless the outcome is one REQ-NOTIFY-112 excludes, that child is given one corrective message:
 the next user message of the conversation the failed turn left, run through the resume loop. It is given once per
 child task: across the fallback retry, and across PD-ORCH-005's resume, whose execution reads the task's whole

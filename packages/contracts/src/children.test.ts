@@ -65,7 +65,7 @@ describe('PD-ORCH-005: the paused state in the child machine (REQ-MONITOR-300 na
       id: 'bg_00000001', name: 'helper', givenName: 'Helper', persona: 'coding-agent', state: 'paused', presentationState: 'paused', parentId: 'bg_00000000', dependencies: [],
       activity: '', model: 'm', depth: 1, background: true, category: '', spawnedAt: 't', completedAt: null, toolCalls: 3, delegationTask: '', reasoning: 'medium',
       contextUsed: 0, contextLimit: 1, compressions: 0, grantedTools: [], calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: false,
-      grantedMcp: {}, mcpServers: [],
+      grantedMcp: {}, mcpServers: [], stalledSeconds: null,
     };
     expect(AgentRecordSchema.parse({ ...base, interruption: 'stop' }).interruption).toBe('stop');
     expect(AgentRecordSchema.parse({ ...base, state: 'running', interruption: null }).interruption).toBeNull();

@@ -115,6 +115,8 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
     grantedMcp: {}, mcpServers: [],
     // PD-ORCH-005: the interruption belongs to a delegated agent's record; the synthetic run-level agent carries none.
     interruption: null,
+    // REQ-MONITOR-117/119: the entry agent's own stall watch's figure, while its run is live.
+    stalledSeconds: busy ? session.entryStalledSeconds : null,
   };
 }
 
@@ -330,7 +332,19 @@ export function personaArtifacts(instances: readonly (Pick<AgentRecord, 'name'> 
   return artifacts.filter((a) => names.has(a.producer));
 }
 
-/** REQ-MONITOR-052/069: the meta line and the context line, the elapsed fallback an em-dash / a hyphen. */
+/**
+ * REQ-ORCH-089 / REQ-MONITOR-119 (the repair of `a-stalled-child-is-never-shown-stalled.md`): the stalled badge's text — the
+ * silence the agent's stall watch last found, in the elapsed figure's own form. The figure is the engine's, refreshed at
+ * each evaluation, so it advances at the watch's cadence (REQ-MONITOR-117) rather than on the surface's clock; null draws
+ * nothing. State is text as well as colour (REQ-SHELL-149).
+ */
+export function stalledText(seconds: number | null): string | null {
+  // A no-break space: the figure never wraps away from its word (the live run's inspector broke `stalled` / `104s`).
+  return seconds === null ? null : `stalled\u00a0${Math.max(0, Math.floor(seconds))}s`;
+}
+
+/** REQ-MONITOR-052/069: the meta line and the context line, the elapsed fallback an em-dash / a hyphen; a stalled agent says so. */
 export function metaLine(agent: AgentRecord, elapsed: string | null): string {
-  return `${agent.presentationState} · ${elapsed ?? '—'} · ${countNoun(agent.toolCalls, 'tool call')}`;
+  const stalled = stalledText(agent.stalledSeconds);
+  return `${agent.presentationState} · ${elapsed ?? '—'} · ${countNoun(agent.toolCalls, 'tool call')}${stalled === null ? '' : ` · ${stalled}`}`;
 }

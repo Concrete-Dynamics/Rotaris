@@ -11,7 +11,7 @@ import { StopRequest } from './stop-request.js';
 import { Todo, type Task, type TodoDocument } from './todo.js';
 import { planRequestSection, resumedWorkSection } from './plan-text.js';
 import { recordSteeringInjected, runTurn, steeringMessage, type ToolPort, type TurnOutcome } from './turn.js';
-import { childCompletedFields, IterationChildren } from '../children/orchestration.js';
+import { childCompletedFields, IterationChildren, refreshing } from '../children/orchestration.js';
 import type { DelegationOps } from '../children/delegation.js';
 import type { Budget as ChildBudget } from '../children/ledger.js';
 import { canonicaliseName, mintTaskId, takenTaskIds } from '../children/naming.js';
@@ -38,6 +38,8 @@ import { callsRun, interruptedResult } from './interruption.js';
 import { firstTurn, resumedStart, resumeNoticeOf, type TurnStart } from './resume.js';
 import { offersForFirstMessage } from './offers.js';
 import { randomUUID } from 'node:crypto';
+import { StallWatch, stallRecoveredLine, stallWaitingLine, stallWarning } from '../children/stall.js';
+import { CHILD_STALL_TIMEOUT_MS } from '../children/cut-off.js';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, type AgentTodoDocument } from '../todo-view.js';
 
 /**
@@ -676,6 +678,13 @@ export class Run {
     return { used: this.deps.writer.activity.contextUsed(this.rootName), limit: advertised !== null && advertised > 0 ? advertised : DEFAULT_CONTEXT_CAPACITY };
   }
   /**
+   * REQ-MONITOR-117/119/120: the entry agent's stalled figure — the seconds of silence its stall watch's latest evaluation
+   * found while it finds the root stalled, else null — kept beside its tools in the writer's activity tracker.
+   */
+  get entryStalledSeconds(): number | null {
+    return this.deps.writer.activity.stalledSeconds(this.rootName);
+  }
+  /**
    * REQ-MONITOR-060/061 (live-run finding K1, R-067): the entry role's tools as the run-level agent presents them — the native
    * set its port's one resolution kept (policy narrowing applied), and its called and in-flight tools from the tracker the
    * writer feeds, keyed by the name the root dispatches under (`rootName`, as `entryContext` reads it). Not the run's
@@ -1052,7 +1061,7 @@ export class Run {
    * `only` names the one iteration the caller may close. False when none is open, or the open one is not that one.
    * `completed`: each agent it cancels fires `child_completed` (REQ-HOOKS-003), in line, before the iteration closes — the
    * decline's close, which runs after this run's `session_start`. The explicit cancel's close after the run's
-   * `session_end` fires none (OQ-152).
+   * `session_end` fires none (OQ-154).
    */
   private async closeOpenIteration(summary: (open: IterationRow) => string, agentReport: (c: ChildRow) => string, only?: number | null, completed = false): Promise<boolean> {
     const dal = this.deps.dal;
@@ -1287,7 +1296,7 @@ export class Run {
         ...(this.deps.contextUnits ? { contextUnits: this.deps.contextUnits } : {}),
         ...(this.deps.supervisorFor ? { supervisorFor: this.deps.supervisorFor } : {}),
         ...(this.deps.personas ? { personas: this.deps.personas } : {}),
-        steeringFor: (id: string) => this.steeringFor(id), shouldPause: () => this.pauseRequested,
+        steeringFor: (id: string) => this.steeringFor(id), steeringPending: (id: string) => this.steeringPending(id), shouldPause: () => this.pauseRequested,
         // PD-ORCH-005: the rest the run is coming to, and the pause's tool deadline every child's calls run under.
         restCause: () => this.restCause, cutCalls: this.toolCut.signal, resumeNotice: (taskId: string) => this.resumeNotice(taskId),
         // PD-ORCH-005 clause 1: every child's conversation is recorded under its task id.
@@ -1313,11 +1322,33 @@ export class Run {
     const fingerprint = this.record.fingerprint(rootTaskId, rootCanonical, iteration);
     /** REQ-SESSION-092: the stop's grace ran out before the root's turn returned, and the run went on without it. */
     let rootDetached = false;
+    /*
+     * REQ-MONITOR-117 ("each agent is evaluated for a stall"), the repair of `a-stalled-child-is-never-shown-stalled.md`: the
+     * entry agent has a stall watch too, over its whole execution, as a child's has over each attempt. Its threshold is the
+     * one REQ-MONITOR-118 names — the role's own `stall_timeout`, else `runtime.child_stall_timeout`, else 90 s (OQ-153). It
+     * is visibility only (REQ-MONITOR-121); it writes what a child's watch writes, naming the agent, and its callback carries
+     * the root's figure to the session record and wakes a root waiting on its children for a steer (REQ-MONITOR-135). Between
+     * its turns — while it waits on its own children — no silence is counted against it (`betweenTurns`). No corrective
+     * message: REQ-NOTIFY-112's is a child task's.
+     */
+    const rootWatch = new StallWatch(this.deps.clocks, millis(this.deps.personas?.resolve(config.persona)?.persona.stallTimeoutMs ?? this.deps.childStallTimeoutMs ?? CHILD_STALL_TIMEOUT_MS), {
+      stalled: (r) => {
+        if (rootDetached) return;
+        const message = stallWarning(rootName, rootTaskId, r.silentS, 'agent');
+        if (r.warn) this.deps.warn(message);
+        writer.recordIssue({ kind: 'stall', severity: 'warning', actor: rootName, message, metadata: { task_id: rootTaskId, silent_seconds: r.silentS, active_tools: r.activeTools, recent_tool_calls: r.recentCalls, last_model_event: r.lastModelEvent } });
+      },
+      waiting: (w) => { if (!rootDetached) this.deps.warn(stallWaitingLine(rootName, rootTaskId, w.activeCalls, w.silentS, 'agent')); },
+      recovered: () => { if (!rootDetached) this.deps.warn(stallRecoveredLine(rootName, rootTaskId, 'agent')); },
+      evaluated: (stalled) => { if (!rootDetached) this.rootStallEvaluated(rootName, stalled ? rootWatch.silentSeconds : null); },
+    });
     const turnFn = (text: string | null, history: readonly ChatMessage[]) => {
       const content = launching ? this.firstMessage(text ?? task, contentOverride ?? this.deps.taskContent, iterationOverride === undefined) : undefined;
       const initialCall = initial;
       launching = false;
       initial = false;
+      // The run hands the root something to answer: its silence counts from here (as a child's, OQ-127).
+      rootWatch.activity();
       return runTurn({
       writer, owner, backend, tools, clocks: this.deps.clocks, persona: config.persona, agentName: rootName,
       // REQ-ORCH-019: the rendered playbook is part of the instructions the role is given.
@@ -1331,7 +1362,8 @@ export class Run {
       // the user. Read here rather than captured once because `turnFn` is built once per segment and called per
       // turn; the hold itself is settled once and never cleared in place (REQ-ORCH-153), so the two agree.
       ...(this.deps.supervisorFor && !this.planHeld ? { supervisor: this.deps.supervisorFor(this.rootId) } : {}),
-      steering: this.steeringFor('root'), shouldPause: () => this.pauseRequested,
+      // REQ-MONITOR-135: a steer delivered refreshes the root's last activity, as a child's (`refreshing`).
+      steering: refreshing(this.steeringFor('root'), () => rootWatch.activity()), shouldPause: () => this.pauseRequested,
       // PD-ORCH-005: the pause's tool deadline, and what the root's interrupted calls are recorded as interrupted by.
       cutCalls: this.toolCut.signal, interruption: () => this.restCause,
       resilience: this.rootResilience(),
@@ -1348,7 +1380,11 @@ export class Run {
       fingerprint,
       // REQ-SESSION-094: a root the stop's grace gave up on writes nothing more when its call returns.
       detached: () => rootDetached,
-      }, text, history, this.abort.signal, content);
+      // REQ-MONITOR-117: the root's stall watch is fed as a child's is — every streamed part, every call's start and end.
+      onModelEvent: (kind) => rootWatch.modelEvent(kind),
+      onToolStarted: (call) => rootWatch.toolStarted(call.callId, call.name),
+      onToolCompleted: (call) => rootWatch.toolCompleted(call.callId),
+      }, text, history, this.abort.signal, content).finally(() => rootWatch.betweenTurns());
     };
     let outcome: TurnOutcome | null = null;
     /**
@@ -1358,8 +1394,12 @@ export class Run {
     const recordedAtStart = resume ? callsRun(this.record.load(rootTaskId)) : 0;
     /** An execution iteration's root has a count on its row (`iterations.root_tool_calls`); a plan cycle's has no row. */
     const rootCount = iterationOverride === undefined ? iteration : null;
+    rootWatch.start();
     try {
       const start: TurnStart = resume ? this.resumedRootStart(rootTaskId) : { kind: 'fresh', task };
+      // OQ-153 with PD-ORCH-005 clause 4: a root resumed into waiting takes no step until a child's report — it is between
+      // its turns from the start, and no silence is counted against it while it waits (found by the verifier's review).
+      if (start.kind === 'resumed' && start.waiting) rootWatch.betweenTurns();
       const running = children ? children.runWithChildren(this.rootId, turnFn, start, this.abort.signal) : firstTurn(turnFn, start);
       /*
        * REQ-SESSION-092 / REQ-MONITOR-129: a stop bounds how long the root is awaited, as a rest bounds a child's execution
@@ -1389,6 +1429,9 @@ export class Run {
       // A root given up on reports nothing of its own: `iterate` reads the stop before the report (REQ-SESSION-092).
       return outcome?.report ?? { status: 'succeeded', text: '', usage: { input: 0, output: 0 } };
     } finally {
+      // The root's execution is over, or given up on: its watch is disarmed and its figure cleared (REQ-MONITOR-120).
+      rootWatch.stop();
+      this.rootStallEvaluated(rootName, null);
       /*
        * PD-ORCH-005 clause 2 (narrowing REQ-ORCH-052): an iteration that comes to rest with work unfinished — the root
        * stopped where it stood, or a child is not terminal — leaves every unfinished agent `paused` and the iteration
@@ -1509,6 +1552,24 @@ export class Run {
     const who = key === 'root' ? this.rootName : this.children?.ledger.get(key)?.canonical_name ?? key;
     this.deps.writer.appendTimeline('steering_submitted', 'user', `A steering prompt was submitted for ${who} (${id.slice(0, 8)}).`, { prompt_id: id, agent: key });
     return id;
+  }
+  /**
+   * The host's stall callback for the entry agent (REQ-MONITOR-119/120/122): its figure beside its tools, the record
+   * republished when it changed; then REQ-MONITOR-135's injection — a root waiting on its children with a steer pending is
+   * woken to take its next step. Neither may block or fail the run.
+   */
+  private rootStallEvaluated(rootName: string, seconds: number | null): void {
+    try {
+      if (this.deps.writer.activity.stalled(rootName, seconds)) this.deps.owner.refreshRecord();
+      if (this.children !== null && this.steeringPending('root')) this.children.wakeForSteering(this.rootId);
+    } catch (cause) {
+      this.deps.warn(`the stall evaluation of ${rootName} could not reach its host: ${String(cause instanceof Error ? cause.message : cause)}`);
+    }
+  }
+  /** REQ-MONITOR-135: whether a steer is pending for `conversationId`, read without taking it (a stall evaluation asks). */
+  private steeringPending(conversationId: string): boolean {
+    const key = this.isRootAgent(conversationId) ? 'root' : conversationId;
+    return (this.steering.get(key)?.length ?? 0) > 0;
   }
   private steeringFor(conversationId: string): () => readonly { id: string; text: string }[] {
     const key = this.isRootAgent(conversationId) ? 'root' : conversationId;

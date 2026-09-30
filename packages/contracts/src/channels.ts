@@ -346,6 +346,11 @@ export const SessionRecordSchema = z.object({
    * persona's name on its rows, and a root's publishes and reads record its canonical name.
    */
   entryRoots: z.array(EntryRootSchema),
+  /**
+   * REQ-MONITOR-117/119/120: the entry agent's stall, as `AgentRecord.stalledSeconds` carries a child's — the seconds with
+   * no model event or token while its watch finds it stalled, else null. Null for a record read with no live run.
+   */
+  entryStalledSeconds: z.number().int().nonnegative().nullable(),
 });
 export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 

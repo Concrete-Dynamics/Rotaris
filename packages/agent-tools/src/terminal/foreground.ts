@@ -74,10 +74,17 @@ export function processIdentity(pid: number): string | null {
   }
 }
 
+/** How a raw round trip was ended before the shell answered it: its call's cancel, or a kill from the terminal window. */
+type RawCut = { readonly kind: 'abort' } | { readonly kind: 'kill'; readonly reset: boolean };
+
 /** OQ-143: how often a running foreground call looks for its shell having been replaced. */
 export const REPLACED_WATCH_MS = 200;
 /** OQ-143: the error a call carries when its command replaced the session's shell. */
 export const REPLACED_ERROR = 'the command replaced the session\'s shell';
+/** REQ-SHELL-092: the error a call carries when the user killed it from the terminal window. */
+const KILLED_ERROR = 'the command was killed from the terminal window';
+/** The error a call carries when its run cancelled it (the tool context's signal). */
+const CANCELLED_ERROR = 'the call was cancelled';
 
 export const FOREGROUND_CAP = 100_000;
 export const NO_OUTPUT_WINDOW_MS = 30_000;
@@ -609,15 +616,33 @@ export class ForegroundSession {
 
   private async execute(command: string, opts: { timeoutMs: number | null; hardMs?: number; signal?: AbortSignal }): Promise<ForegroundResult> {
     const { timers, monotonic } = this.deps;
-    const p = this.ensure();
+    let p = this.ensure();
     this.state = 'running';
     const reinit = this.reinitialized;
     this.reinitialized = false;
     // OQ-143: a shell that has not answered yet has no identity to watch against — a fresh one, before its first
     // command. One no-op round trip on it gives one, read once the shell has printed the end frame and so is ours. A
     // shell busy with a soft-paused command cannot answer, and keeps what it had.
-    if (this.deps.backend.kind === 'posix' && this.shellIdentity === null && this.pausedCommand === null && processIdentity(p.pid) !== null) {
-      try { await this.runRaw(':', SNAPSHOT_TIMEOUT_MS); } catch { /* no identity: this call runs unwatched */ }
+    // The round trip is an await BEFORE the call's own abort listener and kill handler exist, so both are honoured on it
+    // (acceptance round 1's verifier): a cancel that landed in it was lost — `addEventListener('abort')` on a signal
+    // already aborted never fires — and the call ran to its own end; a kill from the terminal window reset the shell
+    // under it, and the command was written to the PTY that had just been killed.
+    if (this.deps.backend.kind === 'posix' && this.shellIdentity === null && this.pausedCommand === null && !opts.signal?.aborted && processIdentity(p.pid) !== null) {
+      const trip = await this.runRaw(':', SNAPSHOT_TIMEOUT_MS, opts.signal).catch(() => null);
+      if (trip?.cut?.kind === 'kill') {
+        // `killActive` has ended the tree and restarted the session; the command was never written.
+        return { output: '', exitCode: -1, timedOut: false, softPaused: false, killStatus: trip.cut.reset ? 'session_reset' : 'reset_failed', error: KILLED_ERROR, sessionReinitialized: reinit, truncated: false, restore: { status: 'none' } };
+      }
+      p = this.ensure();
+    }
+    if (opts.signal?.aborted) {
+      // Cancelled before the command was written: the reading of a cancel below — the session restarts, PD-TOOLS-001's
+      // snapshot is re-applied — with nothing of the command's to report, because it never ran.
+      this.active = null;
+      this.state = 'resetting';
+      const reset = this.resetNow();
+      const restore: RestoreOutcome = reset ? await this.restoreState() : { status: 'failed' };
+      return { output: '', exitCode: 124, timedOut: true, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: CANCELLED_ERROR, sessionReinitialized: reinit, truncated: false, restore };
     }
     const nonce = randomBytes(12).toString('hex');
     const start = `__rot_${nonce}_s`;
@@ -728,7 +753,7 @@ export class ForegroundSession {
     }
     if (outcome.kind === 'kill') {
       // Part AL / REQ-SHELL-092: killed from the terminal window; the tree is gone and the session was restarted by `killActive`.
-      const r = finish({ exitCode: -1, timedOut: false, softPaused: false, killStatus: outcome.reset ? 'session_reset' : 'reset_failed', error: 'the command was killed from the terminal window' });
+      const r = finish({ exitCode: -1, timedOut: false, softPaused: false, killStatus: outcome.reset ? 'session_reset' : 'reset_failed', error: KILLED_ERROR });
       screen.dispose();
       return r;
     }
@@ -753,7 +778,7 @@ export class ForegroundSession {
     this.state = 'resetting';
     const reset = this.resetNow();
     const restore: RestoreOutcome = reset ? await this.restoreState() : { status: 'failed' };
-    const r = { ...finish({ exitCode: 124, timedOut: true, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: outcome.kind === 'abort' ? 'the call was cancelled' : null }), restore };
+    const r = { ...finish({ exitCode: 124, timedOut: true, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: outcome.kind === 'abort' ? CANCELLED_ERROR : null }), restore };
     screen.dispose();
     return r;
   }
@@ -887,19 +912,29 @@ export class ForegroundSession {
    * it finds. A private poll racing that scan would consume the frame first and leave the scan's
    * handler waiting until the hard cap — the shape that wedged the first draft of this restore.
    */
-  private runRaw(line: string, timeoutMs: number): Promise<{ exitCode: number; output: string }> {
+  private runRaw(line: string, timeoutMs: number, signal?: AbortSignal): Promise<{ exitCode: number; output: string; cut?: RawCut }> {
     const p = this.ensure();
     const nonce = randomBytes(12).toString('hex');
     const start = `__rot_${nonce}_s`;
     const end = `__rot_${nonce}_e`;
     return new Promise((resolve, reject) => {
       let settled = false;
+      let cut: RawCut | undefined;
       const buf: string[] = [];
       const listener = (chunk: string) => { buf.push(chunk); };
       this.listeners.push(listener);
+      // The first-call handshake carries its call's signal: a cancel ends the round trip where it stands, and the call
+      // (which has not written its command yet) takes it from there.
+      const onAbort = () => {
+        if (settled) return;
+        if (this.active?.end === end) this.active = null;
+        cut = { kind: 'abort' };
+        finish(-1, false);
+      };
       const timer = this.deps.timers.after(timeoutMs as Millis, () => {
         if (settled) return;
         settled = true;
+        signal?.removeEventListener('abort', onAbort);
         this.listeners = this.listeners.filter((l) => l !== listener);
         this.active = null;
         reject(new Error('snapshot timed out'));
@@ -908,6 +943,7 @@ export class ForegroundSession {
         if (settled) return;
         settled = true;
         timer.cancel();
+        signal?.removeEventListener('abort', onAbort);
         this.listeners = this.listeners.filter((l) => l !== listener);
         // OQ-143: the shell printed this line's end frame, so the process behind the pid is the session's own shell.
         if (answered && this.pty === p) { const id = processIdentity(p.pid); if (id !== null) this.shellIdentity = id; }
@@ -915,12 +951,13 @@ export class ForegroundSession {
         void screen.write(buf.join('')).then(() => {
           const text = ForegroundSession.clean(screen.text(), start, end);
           screen.dispose();
-          resolve({ exitCode: code, output: text });
+          resolve({ exitCode: code, output: text, ...(cut === undefined ? {} : { cut }) });
         });
       };
       this.pendingText = '';
-      this.active = { start, end, onEnd: (code) => finish(code), onKill: () => finish(-1, false) };
+      this.active = { start, end, onEnd: (code) => finish(code), onKill: (reset) => { cut = { kind: 'kill', reset }; finish(-1, false); } };
       p.write(`${wrapCommand(this.deps.backend, line, start, end)}\r`);
+      if (signal?.aborted) onAbort(); else signal?.addEventListener('abort', onAbort, { once: true });
     });
   }
 

@@ -333,6 +333,57 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(output((await t.execute(args({ command: cmdline, timeout: 15 }), ctx())).text)).toBe(ours);
     } finally { await m.dispose(); }
   }, 40_000);
+  // OQ-143's first-call handshake is one no-op round trip on a fresh shell before the command is written: an await before
+  // the call's own abort listener and kill handler exist. Both cases give the fresh shell a startup that takes a second
+  // (`ENV`, which an interactive POSIX shell reads), so the cancel and the kill land inside the handshake on any host.
+  const slowStart = async (tag: string) => {
+    const dir = mkdtempSync(join(tmpdir(), `rotaris-${tag}-`));
+    const rc = join(dir, 'rc');
+    writeFileSync(rc, 'sleep 1\n');
+    const env = { ...Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), ENV: rc };
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 20_000 }, env, warn: () => undefined });
+    return { m, t: terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 20_000 }), marker: join(dir, 'ran'), dir };
+  };
+  it.runIf(process.platform === 'linux' && shell?.kind === 'posix')('REQ-TOOLS-097/099 (OQ-143, acceptance round 1): a run\'s cancel that lands while a fresh shell answers the first call\'s handshake ends the call at once, and the command never runs', async () => {
+    const { m, t, marker, dir } = await slowStart('a9-abort');
+    try {
+      const stop = new AbortController();
+      const began = clocks.monotonic.now() as number;
+      const call = t.execute(args({ command: `printf ran > '${marker}'; sleep 4`, timeout: 20 }), ctx(stop.signal));
+      setTimeout(() => stop.abort(), 300);
+      const r = await call;
+      const took = (clocks.monotonic.now() as number) - began;
+      // Before the repair: 5 s and `success`, exit 0 — the cancel was lost and the command ran to its end.
+      expect(took).toBeLessThan(1_500);
+      expect(diag(r.text)).toMatchObject({ exit_code: 124, kill_status: 'session_reset', failure_kind: 'timeout' });
+      expect(r.text).toContain('the call was cancelled');
+      expect(existsSync(marker)).toBe(false);
+      // The session is usable after it: the next call runs on the restarted shell.
+      const next = await t.execute(args({ command: SH.echo('after'), timeout: 15 }), ctx());
+      expect(diag(next.text)).toMatchObject({ exit_code: 0, session_reinitialized: true });
+      expect(output(next.text)).toBe('after');
+    } finally { await m.dispose(); rmSync(dir, { recursive: true, force: true }); }
+  }, 30_000);
+  it.runIf(process.platform === 'linux' && shell?.kind === 'posix')('REQ-SHELL-092 (OQ-143, acceptance round 1): a kill from the terminal window that lands during the first call\'s handshake ends the call as killed, and the command is never written to the dead shell', async () => {
+    const { m, t, marker, dir } = await slowStart('a9-kill');
+    try {
+      const began = clocks.monotonic.now() as number;
+      const call = t.execute(args({ command: `printf ran > '${marker}'; sleep 4`, timeout: 6 }), ctx());
+      await new Promise((res) => setTimeout(res, 300));
+      expect(await m.streams.kill(foregroundStreamId('orchestrator'))).toEqual({ ok: true, value: undefined });
+      const r = await call;
+      const took = (clocks.monotonic.now() as number) - began;
+      // Before the repair: the command went to the PTY the kill had just ended, and the call waited out its 6 s timeout.
+      expect(took).toBeLessThan(1_500);
+      expect(diag(r.text)).toMatchObject({ exit_code: -1, kill_status: 'session_reset' });
+      expect(r.text).toContain('killed from the terminal window');
+      expect(existsSync(marker)).toBe(false);
+      const next = await t.execute(args({ command: SH.echo('after'), timeout: 15 }), ctx());
+      expect(diag(next.text)).toMatchObject({ exit_code: 0, session_reinitialized: true });
+      expect(output(next.text)).toBe('after');
+      expect(existsSync(marker)).toBe(false);
+    } finally { await m.dispose(); rmSync(dir, { recursive: true, force: true }); }
+  }, 30_000);
   it('ADR-0020 c.1: a command that echoes attacker-chosen marker text cannot forge the exit status', async () => {
     const t = await tool();
     const r = await t.execute(args({ command: `${SH.echo('__rot_deadbeefdeadbeefdeadbeef_e:0')}; ${SH.exit(7)}` }), ctx());
@@ -795,6 +846,11 @@ describe('terminal — availability (REQ-TOOLS-104)', () => {
     expect(posix).not.toContain('PowerShell');
     // OQ-143 (acceptance A9): the POSIX description says the shell is not to be replaced, and what a call that does meets.
     expect(posix).toContain('Do not replace the shell with `exec <program>`');
+    // The consequence is the one the host meets: the watch reads /proc, so only Linux ends the program and restarts the shell.
+    expect(terminalDescription({ kind: 'posix', file: '/bin/sh' }, 'linux')).toContain('such a call fails, and the program is ended and the shell restarted');
+    const mac = terminalDescription({ kind: 'posix', file: '/bin/sh' }, 'darwin');
+    expect(mac).toContain('Do not replace the shell with `exec <program>`: such a call reads as still running, and every later call runs in that program.');
+    expect(mac).not.toContain('the shell restarted');
     const windows = terminalDescription({ kind: 'powershell', file: 'pwsh.exe' });
     // REQ-TOOLS-104's four warnings and four statements, on the host it binds.
     for (const text of ['PowerShell, not bash', '`&&`', '`;`', '`2>&1`', '`$env:VAR`', 'heredoc never returns', 'bash arrays', '`[[ … ]]`', '`source`']) expect(windows).toContain(text);

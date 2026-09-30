@@ -39,7 +39,9 @@ Recorded, not repaired.
 [OQ-143](../../architecture/open-questions.md), and the build proceeds under the reading recorded there.**
 - `ForegroundSession` (`foreground.ts`) keeps the identity of its shell — the executable and argument vector of the
   process behind its pid, read from `/proc` (`processIdentity`) each time the shell answers one of the product's own
-  lines. A fresh shell answers one no-op line before its first command, so there is always one to compare with.
+  lines. A fresh shell answers one no-op line before its first command, so that there is one to compare with. A shell
+  that does not answer that line within 15 s, a shell busy with a soft-paused command, and a host without `/proc`
+  leave the call unwatched.
 - While a call runs, the session compares the process behind the pid with that identity every 200 ms. A different
   process ends the call: the program is ended with its tree, and the session restarts on its shell with PD-TOOLS-001's
   snapshot re-applied, as after a hard-timeout reset.
@@ -47,9 +49,10 @@ Recorded, not repaired.
   exit code, `kill_status` `session_reset`. The detail says the command replaced the session's shell, that the session
   was restarted with the shell this tool runs commands in, what was restored, and to run the program without `exec`.
   `exec` with redirections alone keeps the process and is an ordinary command.
-- The POSIX tool description now says not to replace the shell with `exec <program>`, and what such a call meets.
-- Not reached: macOS, which has no `/proc` (the watch is off there, IC-3), and an `exec` of exactly the shell's own
-  executable and arguments.
+- The POSIX tool description now says not to replace the shell with `exec <program>`, and what such a call meets on
+  the host: on Linux that it fails and the shell is restarted, elsewhere that it reads as still running.
+- Not reached: macOS, which has no `/proc` (the watch is off there, IC-3), an `exec` of exactly the shell's own
+  executable and arguments, and an `exec` inside a command that has already soft-paused.
 
 **Pinned by** `terminal.test.ts`, "REQ-TOOLS-097/098/103/104 (OQ-143, acceptance A9): a command that replaces the
 session's shell ends at once as an execution_error …", red before the change (the soft pause above). It now ends in
@@ -64,3 +67,14 @@ description case pins the new sentence.
 code, `kill_status` `session_reset`. The bash-ism that followed was refused by `/bin/sh` (`shell_failure`, exit 2,
 `Bad substitution`, 153 ms), where the verifier's run had seen bash expand it. All the scenario's checks passed. Repaired
 2026-09-30 under R-067.
+
+**Fix round 1 (acceptance round 1's verifier).** The first form of this repair lost a cancel and a kill that landed
+during the fresh shell's no-op line, because that line is awaited before the call's own abort listener and kill
+handler existed: the cancel never fired (an `AbortSignal` already aborted does not deliver `abort` to a listener added
+later) and the command ran to its end, and after a kill the command was written to the PTY the kill had just ended.
+The round trip now carries the call's signal and reports a kill; a cancel or a kill on it ends the call before its
+command is written, as a cancelled call (124, `session_reset`) or a killed one (−1, `session_reset`), and the PTY is
+re-taken after the round trip. Pinned by the two cases "… (OQ-143, acceptance round 1): …" in `terminal.test.ts`,
+over a real PTY whose fresh shell takes a second to start: red before (5,097 ms and 6,330 ms, the command having run
+or waited out its timeout), green after (each under 1.5 s, the command never run). The description's consequence is
+now stated per host, since only Linux has the watch.

@@ -6385,7 +6385,18 @@ detail and the description in `terminal/index.ts`):
   when the shell last answered one of the product's lines. A different process ends the call within 200 ms. The
   program is ended with its tree, and the session restarts on its shell with PD-TOOLS-001's snapshot re-applied, as a
   hard-timeout reset does. A fresh shell answers one no-op line before its first command so that there is an identity
-  to compare with.
+  to compare with; a shell that does not answer it within the snapshot bound (15 s), a shell still busy with a
+  soft-paused command, and a host without `/proc` leave the call unwatched.
+- **The handshake honours the call's cancel and a kill from the terminal window.** The no-op line is awaited before
+  the call's command is written, so a run's stop or pause that lands on it ends the round trip where it stands: the
+  command is never written, and the call reads as any cancelled call does (`timeout`, 124, `session_reset`, "the call
+  was cancelled", the snapshot re-applied). A kill from the terminal window that lands on it reads as a killed call
+  (−1, `session_reset`, "killed from the terminal window"), and the command is not written to the shell the kill ended.
+  *(Added 2026-09-30 by acceptance round 1's verifier, who found both lost in the first form of this build: the cancel
+  was ignored and the command ran to its own end — 5,075 ms and `success` where origin/main answered the cancel in
+  310 ms — and after a kill the command was written to the PTY the kill had just ended, so the call waited out its
+  timeout. A signal already aborted before the command is written is now honoured on every call, the handshake or
+  not.)*
 - **The call is REQ-TOOLS-103's failure before completion.** `failure_kind` and `outcome_kind` are `execution_error`,
   severity `error`, `error_class` `ExecutionError`, no exit code (the command never returned to a line that would
   report one, so the diagnostic block drops the key and the live stream ends with none), and `kill_status`
@@ -6393,13 +6404,21 @@ detail and the description in `terminal/index.ts`):
   restarted with the shell this tool runs commands in, what was restored, and to run the program without `exec`, or
   in the background.
 - **`exec` with redirections alone** (`exec 3>file`, `exec >log`) keeps the process, and is an ordinary command.
-- **The POSIX description says not to replace the shell** and what a call that does meets.
+- **The POSIX description says not to replace the shell** and what a call that does meets on the host it runs on: on
+  Linux that the call fails and the shell is restarted, elsewhere that the call reads as still running and every later
+  call runs in that program.
 
 **What it does not reach.** `/proc` is Linux's, so on macOS the watch is off: such a call still soft-pauses there, and
-only the description's sentence applies (no macOS artifact is built, IC-3). An `exec` of exactly the shell's own
-executable with exactly its arguments (`exec /bin/sh -i`) is indistinguishable from the shell and still soft-pauses.
+the description's sentence, which states that consequence there, is all that applies (no macOS artifact is built,
+IC-3). ~~only the description's sentence applies~~ *(corrected 2026-09-30, acceptance round 1's verifier: the sentence
+first told every POSIX host that such a call fails and the shell is restarted, which only Linux does.)* An `exec` of
+exactly the shell's own executable with exactly its arguments (`exec /bin/sh -i`) is indistinguishable from the shell
+and still soft-pauses. An `exec` inside a command that has already soft-paused is not watched either — the watch ends
+with the call at the pause — so the paused command's later polls read it as still running. The handshake's own wait
+(the fresh shell's startup and one round trip) is not counted toward the call's hard timeout.
 
-The case "REQ-TOOLS-097/098/103/104 (OQ-143, acceptance A9): …" in `terminal/terminal.test.ts` pins this reading.
+The case "REQ-TOOLS-097/098/103/104 (OQ-143, acceptance A9): …" in `terminal/terminal.test.ts` pins this reading, and
+the two cases "… (OQ-143, acceptance round 1): …" beside it pin the handshake's cancel and kill.
 
 **What a ruling decides.** Whether a command that replaces the shell is refused before it runs (an `invalid_request`
 REQ-TOOLS-101 does not list), answered as built, or adopted — the session carrying on in the new program, with the

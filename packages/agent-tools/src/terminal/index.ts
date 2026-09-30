@@ -277,10 +277,15 @@ export interface BackgroundAttribution {
  * With no backend known, both sentences stand.
  */
 const POWERSHELL_SHELL = 'On Windows the shell is PowerShell, not bash: `&&`, `;`, `2>&1` and `$env:VAR` work; a bash heredoc never returns, and bash arrays, `[[ … ]]` and `source` are unavailable.';
-const posixShell = (file: string): string => `The shell is \`${file}\`, a POSIX shell that may not be bash: write POSIX syntax — bash arrays, \`\${PIPESTATUS[…]}\`, \`[[ … ]]\`, process substitution \`<(…)\` and \`source\` may be unavailable, and a command that uses them fails with a nonzero exit code. Do not replace the shell with \`exec <program>\`: such a call fails, and the program is ended and the shell restarted.`;
+/**
+ * OQ-143: the consequence of `exec <program>` is stated as the host meets it. The watch that notices the replacement
+ * reads `/proc` (`processIdentity`), so only on Linux does such a call fail and the shell come back; elsewhere the call
+ * reads as still running and the program stays in the shell's place (acceptance round 1's verifier).
+ */
+const posixShell = (file: string, platform: NodeJS.Platform): string => `The shell is \`${file}\`, a POSIX shell that may not be bash: write POSIX syntax — bash arrays, \`\${PIPESTATUS[…]}\`, \`[[ … ]]\`, process substitution \`<(…)\` and \`source\` may be unavailable, and a command that uses them fails with a nonzero exit code. Do not replace the shell with \`exec <program>\`: ${platform === 'linux' ? 'such a call fails, and the program is ended and the shell restarted.' : 'such a call reads as still running, and every later call runs in that program.'}`;
 const TERMINAL_USE = 'One command per call; use `&&` or `;` for sequences. `background=true` runs a command in its own process and returns a session id for later `query` / `kill`. A command that prints nothing for 30 s returns early with exit −1 while it keeps running; poll with an empty command, interrupt with `C-c` and `is_input=true`; stdout and stderr share the captured terminal stream. failure_kind is one of `timeout`, `invalid_request`, `execution_error`, `sandbox_unavailable`; `sandbox_unavailable` means the command never executed because this host could not apply the OS-level confinement the session requires — the cause is the host\'s configuration, neither a retry nor a reformulated command helps, and the detail and output should be relayed to the user.';
-export function terminalDescription(backend: ShellBackend | null | undefined): string {
-  const shell = backend?.kind === 'powershell' ? POWERSHELL_SHELL : backend?.kind === 'posix' ? posixShell(backend.file) : `${POWERSHELL_SHELL} ${posixShell('/bin/sh')}`;
+export function terminalDescription(backend: ShellBackend | null | undefined, platform: NodeJS.Platform = process.platform): string {
+  const shell = backend?.kind === 'powershell' ? POWERSHELL_SHELL : backend?.kind === 'posix' ? posixShell(backend.file, platform) : `${POWERSHELL_SHELL} ${posixShell('/bin/sh', platform)}`;
   return `Run a command in a persistent shell session (working directory and variables persist across calls). ${shell} ${TERMINAL_USE}`;
 }
 

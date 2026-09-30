@@ -883,7 +883,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   const suggestions = useMemo(() => (slashPopupShouldOpen(text) ? registry.filter(slashNameToken(text)) : []), [text, registry]);
   const popupOpen = suggestions.length > 0 && dismissedFor !== text;
   const current = Math.min(rowIndex, Math.max(0, suggestions.length - 1));
-  /** REQ-CHAT-027: the token's state and the four colours of the active theme, each cleared to 4.5:1 on the input's ground. */
+  /** REQ-CHAT-027: the token's state and the four colours of the active theme, each cleared to 4.5:1 on the ground the field is painted on — the dock's (`COMPOSER_GROUND`). */
   const tokenState = useMemo(() => slashTokenState(text, registry), [text, registry]);
   const themeName = useThemeName();
   const roleColours = useMemo(() => slashRoleColours(resolveTheme(themeName)), [themeName]);

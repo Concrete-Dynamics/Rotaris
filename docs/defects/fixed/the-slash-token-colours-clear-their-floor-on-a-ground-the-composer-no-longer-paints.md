@@ -26,12 +26,32 @@ is that palette's `--rt-bg`" check on all three palettes, which is the same fact
 Until the proof's reader was repaired, this was invisible: the proof read the input's own `backgroundColor`, which has
 been `rgba(0, 0, 0, 0)` since the dock, and its contrast arithmetic took the transparent value's channels as black, so
 the catalogue launch "passed" REQ-CHAT-027's floor against a ground nobody sees — and the stuck eval at 5,900 ms
-([fixed](fixed/slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md)) kept the palette launch
+([fixed](slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md)) kept the palette launch
 from running at all.
 
 Recorded, not repaired: the product's, noticed while repairing `slash-proof` under R-062. Which side moves — the
 derivation to the dock's `--rt-surface`, or the input back onto `--rt-bg` — is the repair's to choose; the proof's
 palette assertion encodes the product's stated premise (`--rt-bg`) and moves with the derivation if that is the choice.
+
+## Outcome
+
+**Repaired 2026-09-29 under R-067 — the derivation moved to the ground the dock paints.** The composer's docked strip
+is PD-CHAT-001 revision 2's, chosen by the owner, so the field stays transparent inside `.composer__dock` and the
+colours follow it: `highlight.ts` names the composer's ground once, `COMPOSER_GROUND = '--rt-surface'`, and
+`slashRoleColours` defaults to it (the call in `WorkspaceView.tsx` is unchanged and now derives on the dock's ground).
+The partial shade is still that accent blended toward "the surface behind it", now the surface that is behind it.
+
+- `slash.test.ts`, "derives the four against the ground the composer actually paints": reads the dock's background
+  token out of `shell.css`, checks the field inside it is transparent and that the token is `COMPOSER_GROUND`, and
+  measures the four on every built-in theme against it. On the old default it failed at `rotaris-dim partial on
+  --rt-surface 4.06:1`; the neighbouring test's surface pin moved from `--rt-bg` to the dock's token with it.
+- `slash-proof`'s palette launch now asserts the painted ground is the palette's `--rt-surface` (the check that failed
+  on all three palettes when it asserted `--rt-bg`). `pnpm slash-proof --skip-build`, 2026-09-29, as root under Xvfb on
+  Linux, Node 24, after one `pnpm build`: **PASSED**. Measured on the dock (`composer__dock`): `rotaris-dim` ground
+  `oklch(0.25 0 0)` — partial `oklch(0.62939 0.05 292)` 4.50:1, unknown `oklch(0.64999 0.2 25)` 4.50:1, resolved 9.20:1,
+  argument 8.56:1; `nocturne` `oklch(0.18 0 0)` — partial 4.50:1, unknown 9.94:1, resolved 10.82:1, argument 11.14:1;
+  `high-contrast` `oklch(0.12 0 0)` — partial 4.50:1, unknown 13.91:1, resolved 15.07:1, argument 16.02:1. The
+  restart paints the same ground; every other check in the proof passed.
 
 ## Specs
 

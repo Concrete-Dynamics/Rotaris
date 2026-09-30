@@ -7,7 +7,7 @@ capacity at 4 characters per token, about 636,000 characters. So the model sees 
 after the cut, up to the preserved turns, is removed from the conversation and is absent from the summary that
 stands in for it. The ask even warns that "a fact you drop is lost to the agent for good". The report summariser had
 the same head-only cut; OQ-111 repaired it there
-([`a-long-childs-report-denies-the-edits-it-made`](fixed/a-long-childs-report-denies-the-edits-it-made.md)). The
+([`a-long-childs-report-denies-the-edits-it-made`](a-long-childs-report-denies-the-edits-it-made.md)). The
 compressor was left as it was, because that repair's scope was the report's pass.
 
 Noticed 2026-09-29 while repairing the report summariser's cut; not reproduced live.
@@ -28,3 +28,23 @@ Noticed 2026-09-29 while repairing the report summariser's cut; not reproduced l
 - `packages/engine/src/children/report.ts` — `transcriptText`, the head-only cut to `TRANSCRIPT_CAP`, now read by the
   compressor alone; `reportTranscript` beside it is the report's head-and-tail reading.
 - `docs/architecture/adr/0060-context-compression-over-a-replaceable-conversation.md` — the compression's decision record.
+
+## Outcome
+
+**Repaired 2026-09-30 under R-067** (acceptance finding A12, confirmed on the branch before the change: a history of
+150 reads of 4,000 characters, over 600,000 characters, reached the compressing model as an ask of 12,301 characters,
+its facts past the first reads and past each result's first 2,000 characters absent).
+
+- The compressor has a reader of its own, `compressorTranscript` (`packages/engine/src/run/compression.ts`). It gives each
+  event whole and the history whole up to the compressing model's own effective threshold (REQ-MONITOR-078) at
+  `chars_per_token`. Past that bound it keeps the start and the most recent part, with OQ-111's marker between them
+  saying how many characters were left out.
+- `CompressorDeps.inputTokens` carries that threshold: `Run.compressionFor` resolves it for the compressing model
+  (`compressor.model` when configured, else the agent's own) through the same `triggerFor` the trigger uses.
+- `transcriptText` is gone from `packages/engine/src/children/report.ts`; the report's pass reads `reportTranscript` as
+  before, and `report.test.ts` states the old head-only cut itself where it reproduces the report's finding.
+- The reading is OQ-153's, raised by this repair.
+- Pinned by `compression.test.ts`: "at the default trigger … is given whole", "a history longer than the compressing
+  model's own threshold keeps its start and its most recent part …", and, through `Sessions`, "the compressing pass reads
+  the history up to its model's own threshold at chars_per_token …". All three fail on the previous code; the last also
+  fails with `inputTokens` left unwired.

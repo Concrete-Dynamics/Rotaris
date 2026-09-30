@@ -578,7 +578,11 @@ resolution of REQ-CONFIG-134 — capacity from the model's `context_compression_
 call**, the original rejection surfaced unchanged when the condensation itself fails; the issue is
 `llm_bad_request`, or `parent_resume_bad_request` on the first call of a turn resumed with child reports. A
 compression asks the `compressor.model` (else the agent's own, REQ-MONITOR-080) for a summary of **only** the slice
-between the original request and the preserved turns (REQ-MONITOR-082 forbids sending the three survivors), then
+between the original request and the preserved turns (REQ-MONITOR-082 forbids sending the three survivors) — read by
+`compressorTranscript`, each event whole and the slice whole up to the compressing model's own threshold at
+`chars_per_token` (`CompressorDeps.inputTokens`, which `Run.compressionFor` resolves through `triggerFor`), past which it
+keeps the start and the most recent part with the omission marked (OQ-153; the report pass's 12,000-character head cut
+it once shared is gone) — then
 rebuilds the conversation as REQ-MONITOR-084's five parts: the original request, the summary (clamped to 300 lines
 and nothing else is, REQ-MONITOR-083), the todo items one for one, and the most recent `preserve_recent_turns`
 turns verbatim — a **turn boundary being any message that is not a `tool` message**, so a cut can never orphan a

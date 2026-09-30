@@ -81,6 +81,51 @@ describe('engine/run/compression — the reconstruction and the turn alignment (
     expect(conv.snapshot()[0]).toEqual(text('user', 'THE-ORIGINAL-REQUEST'));
   });
 
+  describe('REQ-MONITOR-082 (OQ-153, acceptance A12): the compressing model reads the whole history it replaces', () => {
+    /** A read whose result is `size` characters, its fact at the END — past REQ-ORCH-110's 2,000 per event. */
+    const read = (i: number, size: number): ChatMessage[] => [
+      { role: 'assistant', content: [{ kind: 'tool-call', callId: `r${i}`, name: 'read_file', args: `{"path":"src/f${i}.js"}` }] },
+      { role: 'tool', content: [{ kind: 'tool-result', callId: `r${i}`, name: 'read_file', result: `${'x'.repeat(size - 12)}FACT-${String(i).padStart(4, '0')}.`, isError: false }] },
+    ];
+    /** What the compressing model was asked, and a conversation of `reads` reads of `size` characters each. */
+    function asked(reads: number, size: number, inputTokens?: number) {
+      const seen: string[] = [];
+      const history = Array.from({ length: reads }, (_, i) => read(i, size)).flat();
+      const conv = new Conversation([text('user', 'THE-ORIGINAL-REQUEST'), ...history, text('user', 'RECENT-TURN')]);
+      const backend = { runTurn: async (req: { messages: readonly ChatMessage[] }) => { seen.push(req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('')); return { status: 'succeeded' as const, text: 'the summary', usage: { input: 1, output: 1 } }; } };
+      const deps = { backend: backend as never, model: A1, thinking: 'unset' as const, timers: new FakeClock().timers, credentialFor: () => async () => 'k', ...(inputTokens !== undefined ? { inputTokens } : {}) };
+      return { run: () => compress({ conversation: conv, preserveRecentTurns: 1, charsPerToken: 4, todoLines: [] }, deps, new AbortController().signal), seen, history };
+    }
+
+    it('at the default trigger (60 % of 265,000 tokens at 4 characters each), a history of 150 reads of 4,000 characters is given whole: every fact, the last before the preserved turns included, and no omission', async () => {
+      const a = asked(150, 4_000, 159_000);
+      expect((await a.run()).ok).toBe(true);
+      const ask = a.seen[0]!;
+      expect(ask.length).toBeGreaterThan(600_000);
+      for (const i of [0, 1, 74, 148, 149]) expect(ask).toContain(`FACT-${String(i).padStart(4, '0')}.`);
+      expect(ask).not.toContain('characters omitted');
+      // The preserved turn and the original request are not sent (REQ-MONITOR-082).
+      expect(ask).not.toContain('RECENT-TURN');
+      expect(ask).not.toContain('THE-ORIGINAL-REQUEST');
+    });
+
+    it('a history longer than the compressing model\'s own threshold keeps its start and its most recent part within it, the omission marked between them with its count', async () => {
+      // 2,000 tokens at 4 characters: 8,000 characters for a history of 40 reads of 1,000.
+      const a = asked(40, 1_000, 2_000);
+      expect((await a.run()).ok).toBe(true);
+      const activity = a.seen[0]!.slice(a.seen[0]!.indexOf('Activity:\n') + 'Activity:\n'.length);
+      expect(activity.length).toBeLessThanOrEqual(8_000);
+      expect(activity.length).toBeGreaterThan(8_000 - 10);
+      expect(activity.startsWith('tool-call read_file: {"path":"src/f0.js"}\n')).toBe(true);
+      expect(activity.endsWith('FACT-0039.')).toBe(true);
+      const marker = /\n… \[(\d+) characters omitted\] …\n/.exec(activity);
+      expect(marker).not.toBeNull();
+      // The count is exactly what was left out: the whole less what is shown on either side and the one line break the marker stands in for.
+      const whole = a.history.flatMap((m) => m.content.map((p) => (p.kind === 'tool-call' ? `tool-call ${p.name}: ${p.args}` : p.kind === 'tool-result' ? `tool-result ${p.name}: ${p.result}` : ''))).join('\n');
+      expect(Number(marker![1])).toBe(whole.length - (activity.length - marker![0].length) - 1);
+    });
+  });
+
   it('a failed compressing pass changes nothing, so the caller can surface the original rejection', async () => {
     const before: ChatMessage[] = [text('user', 'original'), call('c1'), result('c1'), text('user', 'recent')];
     const conv = new Conversation(before);
@@ -176,14 +221,16 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
   const recorder = (): Publisher & { snapshots: unknown[] } => { const snapshots: unknown[] = []; return { snapshots, increment: () => undefined, snapshot: (p) => snapshots.push(p.session) }; };
 
   /** A one-tool port, so a turn takes several steps and the conversation actually grows. */
-  const globPort = (): ToolPort => ({
+  const globPort = (resultText?: (n: number) => string): ToolPort => { let n = 0; return {
     specs: () => [{ name: 'glob', description: 'list files', parameters: { type: 'object' } }],
-    dispatch: async () => ({ text: ['README.md', 'NOTES.md'].join(String.fromCharCode(10)), isError: false, status: 'ok', durationMs: 1, label: 'glob', args: {} }),
+    dispatch: async () => ({ text: resultText ? resultText(++n) : ['README.md', 'NOTES.md'].join(String.fromCharCode(10)), isError: false, status: 'ok', durationMs: 1, label: 'glob', args: {} }),
     cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
-  });
+  }; };
 
-  function sessionsWith(script: (persona: string, turn: number) => ScriptedCall, compression: { triggerTokens?: number; preserveRecentTurns?: number } = {}) {
+  function sessionsWith(script: (persona: string, turn: number) => ScriptedCall, compression: { triggerTokens?: number; preserveRecentTurns?: number; resultText?: (n: number) => string } = {}) {
     const counts = new Map<string, number>();
+    /** What each compressing pass was asked: every message after its system prompt, as text. */
+    const asked: string[] = [];
     const client = new ScriptedModelClient([]);
     const original = client.stream.bind(client);
     client.stream = (req) => {
@@ -191,6 +238,7 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
       const persona = /^You condense an agent conversation/.test(system) ? 'compressor' : /^You are the orchestrator/.test(system) ? 'orchestrator' : 'child';
       const n = (counts.get(persona) ?? 0) + 1;
       counts.set(persona, n);
+      if (persona === 'compressor') asked.push(req.messages.slice(1).map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n'));
       client.push(script(persona, n));
       return original(req);
     };
@@ -202,7 +250,7 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
     const sessions = new Sessions({
       clocks: clock, publisher: pub, pid: 78, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++minted}`,
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: () => undefined,
-      tools: () => globPort(),
+      tools: () => globPort(compression.resultText),
       configure: () => ({ ok: true, value: {
         model: {
           backend, config,
@@ -216,7 +264,7 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
         resilience: { catalogue: [], fallbackModel: null },
       } }),
     });
-    return { sessions, client, pub, counts };
+    return { sessions, client, pub, counts, asked };
   }
   const tick = () => new Promise((r) => setTimeout(r, 5));
   const timeline = (sid: SessionId) => dal.timelineOf(sid);
@@ -401,6 +449,33 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
     expect(snapshots.at(-1)!.compression).toBeNull();
     // REQ-MONITOR-086: one completion, counted once — a second iteration must not re-count it.
     expect(timeline(sid).filter((t) => t.name === 'context_compressed')).toHaveLength(1);
+  });
+
+  it('REQ-MONITOR-082 (OQ-153, acceptance A12): the compressing pass reads the history up to its model\'s own threshold at chars_per_token, each event whole, and not 12,000 characters of its head', async () => {
+    // Three results of 6,000 characters, each with its fact at the END; the fourth step reports 5,000 prompt tokens
+    // against a trigger of 4,000, so the fifth compresses first. The compressing model is the agent's own, whose
+    // threshold is those 4,000 tokens: 16,000 characters at 4 each, for a history of some 18,100.
+    const { sessions, counts, asked } = sessionsWith((persona, turn) => {
+      if (persona === 'compressor') return answer('Work performed: three globs. Findings reached: three facts. Questions left open: none.');
+      if (turn <= 3) return toolCalls([{ callId: `c${turn}`, name: 'glob', args: {} }], `looking ${turn}`, { input: 20, output: 10 });
+      if (turn === 4) return toolCalls([{ callId: 'c4', name: 'glob', args: {} }], 'looking 4', { input: 5_000, output: 10 });
+      return answer('done');
+    }, { triggerTokens: 4_000, preserveRecentTurns: 1, resultText: (n) => `${'y'.repeat(5_990)}FACT-${n}.` });
+    const sid = (sessions.start(dal, 'C:/ws', 'do the thing') as { value: SessionId }).value;
+    for (let i = 0; i < 60 && dal.getSession(sid)!.execution_status === 'running'; i++) await tick();
+    expect(counts.get('compressor')).toBe(1);
+    const activity = asked[0]!.slice(asked[0]!.indexOf('Activity:\n') + 'Activity:\n'.length);
+    expect(activity.length).toBeLessThanOrEqual(16_000);
+    expect(activity.length).toBeGreaterThan(12_100);
+    // The most recent part before the preserved turn is whole, its fact past REQ-ORCH-110's 2,000 per event included.
+    expect(activity.endsWith('FACT-3.')).toBe(true);
+    expect(activity).toContain('FACT-2.');
+    // The start is the agent's first act, and the omission between is marked.
+    expect(activity.startsWith('assistant: looking 1\n')).toBe(true);
+    expect(activity).toMatch(/\n… \[\d+ characters omitted\] …\n/);
+    // The preserved turn is not sent.
+    expect(activity).not.toContain('FACT-4.');
+    expect(dal.getSession(sid)!.execution_status).toBe('completed');
   });
 
   it("REQ-SESSION-139 / ADR-0008: a completed compression INCREMENTS the session's compressions aggregate", async () => {

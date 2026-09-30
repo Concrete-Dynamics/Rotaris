@@ -1,6 +1,5 @@
 import { type Clocks, countNoun, millis, type Millis, type Timers } from '@rotaris/kernel';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
-import { transcriptText } from '../children/report.js';
 import type { SessionWriter } from '../session-writer.js';
 import { estimateTokens, preservedFrom, type Conversation } from './conversation.js';
 import type { ConversationRegistry, ManualCompressionResult } from './conversations.js'; // Part AO
@@ -28,6 +27,11 @@ export interface CompressorDeps {
   readonly timers: Timers;
   readonly credentialFor: (model: ModelRef) => () => Promise<string>;
   readonly timeoutMs?: Millis;
+  /**
+   * OQ-153: the most of the history the pass is given, in tokens — the compressing model's own effective threshold
+   * (REQ-MONITOR-078, its `ResolvedTrigger.tokens`), read at `chars_per_token`. Absent, the history is given whole.
+   */
+  readonly inputTokens?: number | undefined;
 }
 
 export interface CompressionOutcome {
@@ -60,6 +64,45 @@ export function clampSummary(text: string): string {
   const lines = text.split('\n');
   if (lines.length <= SUMMARY_LINE_CAP) return text.trim();
   return `${lines.slice(0, SUMMARY_LINE_CAP).join('\n').trim()}\n[the summary was cut at ${SUMMARY_LINE_CAP} lines; ${countNoun(lines.length - SUMMARY_LINE_CAP, 'further line')} omitted]`;
+}
+
+/** One event of the history as one line of text, whole: an agent's words, a tool call with its arguments, a tool's result. */
+function eventText(m: ChatMessage): string[] {
+  return m.content.map((p) => (p.kind === 'text' ? `${m.role}: ${p.text}` : p.kind === 'tool-call' ? `tool-call ${p.name}: ${p.args}` : p.kind === 'tool-result' ? `tool-result ${p.name}: ${p.result}` : '')).filter((t) => t !== '');
+}
+
+/** OQ-111's omission marker, which this reader shares: how many characters were left out where it stands. */
+function omitted(n: number): string {
+  return `… [${n} characters omitted] …`;
+}
+
+/**
+ * `REQ-MONITOR-082` as OQ-153 reads it: the history the compressing model condenses, as text, each event whole. It is
+ * the whole of what the summary stands in for; only where it passes `capChars` — the compressing model's own threshold,
+ * which a history at the agent's own trigger is under whenever the compressing model is the agent's own — it keeps its
+ * START (a previous compression's summary, when there was one, else the agent's first act) and its MOST RECENT part,
+ * the part the preserved turns carry on from, with the omission marked between them and saying how much was left out.
+ * The start is held to half the cap, so the most recent part always has the other half.
+ *
+ * The reason it did not, kept beside its replacement: it read `transcriptText`, the report pass's reader, which cuts each
+ * event to REQ-ORCH-110's 2,000 characters and the whole to its 12,000 from the head. At the default trigger (60 % of
+ * 265,000 tokens at 4 characters each) the history is some 636,000 characters, so the model saw its first 2 % and the
+ * rest was removed from the conversation absent from its summary (acceptance finding A12).
+ */
+export function compressorTranscript(messages: readonly ChatMessage[], capChars = Number.POSITIVE_INFINITY): string {
+  const parts = messages.flatMap(eventText);
+  const whole = parts.join('\n');
+  if (whole.length <= capChars) return whole;
+  const cap = Math.floor(capChars);
+  // One event alone keeps its head.
+  if (parts.length < 2) { const kept = Math.max(0, cap - omitted(whole.length).length); return `${whole.slice(0, kept)}${omitted(whole.length - kept)}`; }
+  const half = Math.floor(cap / 2);
+  const first = parts[0] ?? '';
+  const head = first.length > half ? `${first.slice(0, half)}${omitted(first.length - half)}` : first;
+  const rest = parts.slice(1).join('\n');
+  // The marker's length depends on the count it states, never more than `rest`'s own length: reserve that widest marker.
+  const keep = Math.max(0, cap - head.length - omitted(rest.length).length - 2);
+  return `${head}\n${omitted(rest.length - keep)}\n${rest.slice(rest.length - keep)}`;
 }
 
 /**
@@ -110,7 +153,7 @@ export async function compress(input: CompressionInput, deps: CompressorDeps, si
   let failure = '';
   try {
     // REQ-MONITOR-082: the summary must state the work performed, the findings reached and the questions left open.
-    const ask = `Condense the agent activity below into a summary the agent can work from. State, in this order: the work performed, the findings reached, and the questions left open. Be specific about files, commands and results; a fact you drop is lost to the agent for good.\n\nActivity:\n${transcriptText(compressible)}`;
+    const ask = `Condense the agent activity below into a summary the agent can work from. State, in this order: the work performed, the findings reached, and the questions left open. Be specific about files, commands and results; a fact you drop is lost to the agent for good.\n\nActivity:\n${compressorTranscript(compressible, deps.inputTokens !== undefined && deps.inputTokens > 0 ? deps.inputTokens * input.charsPerToken : undefined)}`;
     const r = await deps.backend.runTurn(
       { persona: 'compressor', systemPrompt: SYSTEM, messages: [{ role: 'user', content: [{ kind: 'text', text: ask }] }], tools: [], model: deps.model, thinking: deps.thinking, timeoutMs: timeout, retries: 0, resolveCredential: deps.credentialFor(deps.model) },
       { delta: () => undefined, reasoning: () => undefined, usage: () => undefined },

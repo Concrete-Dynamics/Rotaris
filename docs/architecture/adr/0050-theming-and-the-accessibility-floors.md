@@ -326,9 +326,26 @@ unknown 9.94:1, resolved 10.82:1, argument 11.14:1; `high-contrast` on `oklch(0.
 `../../defects/fixed/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`. Not
 shown: any of it on Windows or macOS (IC-3).
 
+**The design material.** *(Added 2026-09-30, the verifier's fix round 1.)* The mockup (`pnpm mockup`, its
+`<!-- queue + composer -->` block) draws the composer as the design's `.input` textarea on its own `--rt-bg`
+(`docs/design/system/components.css`), inside a block that paints nothing. The built dock paints `--rt-surface` behind a
+transparent field. That departure is PD-CHAT-001 revision 2's, and the directive governs over the mockup's structure
+(`docs/design/README.md` §2). So the mockup confirms where the second execution's `--rt-bg` came from, and changes
+nothing in this repair.
+
 **`theme-proof` beside it.** The slash colours are painted only while a slash command is typed, and `theme-proof` types
-none. Its full matrix on the branch failed only on `rotaris-dim` at 150 % and 175 %, both times on status-strip text and
+none. ~~Its full matrix on the branch failed only on `rotaris-dim` at 150 % and 175 %, both times on status-strip text and
 never on a slash role. Rebuilt with `highlight.ts` reverted, the 150 % case still failed. The same case passed on
 origin/main built in a checkout whose path is five characters longer, which shifts the elided strip item across the
-device-pixel grid. Recorded as a proof defect
-(`../../defects/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`), and not absorbed here.
+device-pixel grid.~~ *(Corrected 2026-09-30, the verifier's fix round 1. The first reading is falsified: the path's length
+moves nothing, and the matrix it described did not reproduce on the final tree.)* Its first run on the branch failed on
+`rotaris-dim` at 150 % and 175 %, and rebuilt with `highlight.ts` reverted the 150 % case still failed. On the final
+build, in the same checkout, the full matrix fails only `nocturne` at 150 %, and `rotaris-dim` passes at every scale.
+Every red is on status-strip text and none is on a slash role. The strip is wider than the 1066 px window at 150 % and
+scrolls, and the failing item lies 1.2 px inside the window's right edge. The proof's `visible()` admits it, and
+`textContrast` reads two device-pixel columns of its first glyph's anti-aliased edge (3.25:1; the same item measured
+whole reads 6.74:1). Whether an item lands in that position depends on the widths the strip draws ahead of it: the
+branch label with its ahead count, which is the checkout's branch because the scratch workspace sits inside it, and the
+theme's name. The elided `svc:` path stays at its 48 px floor. Recorded as a proof defect
+(`../../defects/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`, corrected in place), and not
+absorbed here.

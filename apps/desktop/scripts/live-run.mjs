@@ -113,6 +113,7 @@ import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
+import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
 import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
@@ -588,7 +589,6 @@ if (!has('skip-build')) {
 if (!existsSync(electron)) throw new Error(`the Electron executable is absent: ${electron}`);
 
 const SANDBOX_ROOT = join(tmpdir(), 'rotaris-live-run');
-const KEPT = 'KEPT';
 /**
  * The sandbox holds a real credential — the app writes the leased key into its own store, exactly as it would on
  * the owner's machine — so the credential directory is deleted on every exit path there is, including `--keep`,
@@ -597,25 +597,25 @@ const KEPT = 'KEPT';
 const dropCredentials = (dir) => rmSync(tokensDirFor(join(dir, 'local')), { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 function cleanup(keep) {
   dropCredentials(sandbox);
-  if (keep) writeFileSync(join(sandbox, KEPT), `kept by --keep at ${new Date().toISOString()}; its credential store was deleted.\n`);
+  if (keep) writeFileSync(join(sandbox, KEPT_FILE), `kept by --keep at ${new Date().toISOString()}; its credential store was deleted.\n`);
   else rmSync(sandbox, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
 }
 // Whatever a previous run left behind loses its credentials now, and loses everything unless it was kept on purpose.
-// A locked handle (measured 2026-09-19: a Serena language server kept the prior sandbox's workspace open past
-// process exit, so `rmSync` threw EPERM out of the sweep and the run died before starting) must never kill the
-// run: the sweep reports the leftover and continues, and the startup of THIS run re-sweeps it next time.
-for (const old of existsSync(SANDBOX_ROOT) ? readdirSync(SANDBOX_ROOT) : []) {
-  const dir = join(SANDBOX_ROOT, old);
-  try {
-    dropCredentials(dir);
-    if (!existsSync(join(dir, KEPT))) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-  } catch (cause) {
-    console.error(`warning: the previous sandbox could not be swept (${dir}): ${cause instanceof Error ? cause.message : String(cause)} — continuing with a fresh one.`);
-  }
+// A sandbox whose `OWNER` is a live process is a concurrent live run's, and is left alone with its key: the sweep
+// used to take every directory here for a leftover, and a run that started second deleted a running sibling's
+// workspace, store and key (`docs/defects/fixed/a-live-run-sweeps-a-concurrent-live-runs-sandbox.md`; the rule is
+// `lib/sandbox-sweep.mjs`'s). A locked handle (measured 2026-09-19: a Serena language server kept the prior sandbox's
+// workspace open past process exit, so `rmSync` threw EPERM out of the sweep and the run died before starting) must
+// never kill the run: the sweep reports the leftover and continues, and the startup of THIS run re-sweeps it next time.
+for (const left of sweepSandboxes(SANDBOX_ROOT, { dropCredentials })) {
+  if (left.action === 'leave') console.log(`sandbox sweep: left ${left.dir} — ${left.reason}`);
 }
 const sandbox = join(SANDBOX_ROOT, stamp);
 const workspace = join(sandbox, 'workspace');
 const local = join(sandbox, 'local');
+// `OWNER` first, before anything else goes in: from here on a concurrent run's sweep reads this sandbox as live.
+mkdirSync(sandbox, { recursive: true });
+writeOwner(sandbox);
 mkdirSync(workspace, { recursive: true });
 mkdirSync(local, { recursive: true });
 // An interrupt or a crash is an exit path too: it may not strand the key in the temp directory.

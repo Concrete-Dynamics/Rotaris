@@ -56,5 +56,5 @@ literal "(s)"" passed. In the same run, frictions' `write_file` create read "Cre
 created." `checkpoint-proof` and `chat-controls-proof` pass on the same build, with their assertions moved to the
 agreeing wording. `chat-controls-proof` needed the code-intelligence bundle built in the checkout first, the
 precondition recorded in
-[`chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`](../chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md).
+[`chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`](chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md).
 `slice-proof`'s sign-in regex was moved too, but it signs in to OpenRouter with the owner's key, so it was not run.

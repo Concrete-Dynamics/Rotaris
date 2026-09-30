@@ -617,7 +617,10 @@ root whose name was not the entry persona fell outside it
 run start kicks discovery off for every carried, launchable server (`McpHost.prepare`, each bounded by REQ-MCP-053's 35 s
 watchdog on the clock port) and the turn awaits the port's `ready()` before reading `specs()` and the prompt section.
 `ready()` resolves ONE surface per persona (`surfaceFor`: the drop rules, grants `undefined` ≠ `[]`, denial, rename, the
-collision prefix) and from it, in one place, the executors outside the registry (named by callable name, dispatching the
+collision prefix; memoised on the versions of its inputs and the names the port reserves — its native tools — while the
+spawn evidence of REQ-MCP-065 (`evidenceFor`) resolves with none reserved, so a first spawn resolves twice and the second
+writes only a line the first did not: the surface line and REQ-MCP-059's grant count once per persona, a second surface
+line only where a collision prefix made it differ — live-run finding D7, 2026-09-29) and from it, in one place, the executors outside the registry (named by callable name, dispatching the
 reported name to the session's shared connection under the entry's allowance, 300 s by default), the model's listing and
 `## MCP servers` appended to the system prompt (REQ-MCP-101, byte-exact). Under `restricted` or `read_only` the MCP
 tools are withheld from the surface (ADR-0016's reading), and while the plan gate holds every server executor is withheld by identity — `withheldUnderPlanGate(name, false)` — rather than by the registry's answer for its name, which a server's tool offered under a free public name such as `read_file` would otherwise borrow (REQ-ORCH-153; the gate refuses the same call on dispatch through its `publicTool` predicate and the port's withheld set). The session's connections open on first demand under a keyed

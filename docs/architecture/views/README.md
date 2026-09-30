@@ -53,6 +53,16 @@ diagram and files-on-disk table and the **state-ownership view**'s configuration
 process view says that on Windows it is also the directory the preference store's `Rotaris\Rotaris` root names. No
 package, edge, process, message kind, channel, command or store column changed.
 
+**A by-design tool removal is logged at `info`, and a persona's MCP lines once per spawn (REQ-TOOLS-006, PD-MONITOR-002,
+R-067, live-run findings L14 and D7).** `ToolPortContext` gains `info` — the application log at `info` and the session
+log at `INFO` — which `Sessions` fills on a start and a continuation; `createToolPort` logs a REQ-TOOLS-006 narrowing
+control's removal through it and a REQ-TOOLS-004 prerequisite's through `warn`, as before. `McpHost.surfaceFor` keeps
+what each persona's resolutions have written (`announced`, keyed without the reserved names), so the spawn evidence's
+resolution and the port's no longer write the surface line and the grant count twice. This repairs
+`coordinator-only-removals-are-logged-as-warnings.md` and `a-personas-mcp-lines-are-logged-twice-on-first-spawn.md`.
+The **runtime view**'s MCP-surface paragraph and the **seams view**'s tool invariants say so. No package, edge, process,
+message kind, channel, command or store column changed.
+
 **The application log survives the loss of its reader (REQ-MONITOR-131, R-067).** Main's log writes through
 `standardStreamWriter` (`main/app-log.ts`) instead of `console.log`: the stream's `error` event is listened for, and from
 its first failure nothing more is written to it; standard error gets the same listener. A quit whose standard output

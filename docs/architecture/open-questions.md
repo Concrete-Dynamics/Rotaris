@@ -5747,7 +5747,8 @@ None of them says what ends a silent child's step so that there is an outcome to
   when it had been asked for no output in that time. REQ-NOTIFY-112's condition is that *it* produced none. The turn the
   run starts is now the fourth event (`children.test.ts`, "a child that waited on its own child past the window …"). The
   watch's own warnings and issues during such a wait are a separate question
-  ([`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/a-child-waiting-on-its-own-children-is-reported-stalled.md)).
+  ([`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md)),
+  since 2026-09-30 OQ-152's: the watch counts no silence between the child's turns.
 - **The outcomes that earn nothing, as a failed step carries them:**
   - `cancelled`: the child's own abort or the run's;
   - `blocked`: such a child never runs;
@@ -5840,10 +5841,13 @@ None of them says what ends a silent child's step so that there is an outcome to
   ([`a-stalled-child-is-never-shown-stalled.md`](../defects/a-stalled-child-is-never-shown-stalled.md)). The run's own root agent is not watched: REQ-MONITOR-117
   says "each agent", and REQ-ORCH-089's threshold is a child's. Whether the root is watched, and against which
   threshold, is left open in the same note.
-- **A child waiting on its own children reads as stalled.** It has no model step and no call in flight while it waits,
+- ~~**A child waiting on its own children reads as stalled.** It has no model step and no call in flight while it waits,
   and the requirements tell a wait from a stall only by active tool calls. The build reports it stalled; whether the
   wait pauses the watch or counts as waiting on N children is recorded in
-  [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/a-child-waiting-on-its-own-children-is-reported-stalled.md).
+  [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md).~~
+  *Corrected in place, 2026-09-30, by the repair of acceptance finding A7:* the watch counts no silence between the
+  child's turns, so a wait on its own children is neither a stall nor a wait on calls; the reading, and what a ruling
+  decides, is OQ-152's.
 
 **OQ-128 — What becomes of a steering prompt still pending when the run comes to rest, or ends?** *(REQ-MONITOR-133, "the
 prompt is pending until injected"; REQ-MONITOR-134, "all pending steering prompts for an agent are delivered into its
@@ -6711,6 +6715,32 @@ clause 22) between the first payload and a later run's retry is rendered as it r
 **What a ruling decides.** Whether a retry is given the block again (as built, in both runs) or never (in neither run,
 which a retry within the first run would then also have to change), and, if again, whether a dependency's report is read
 as it stood at the first payload or as it stands at the retry.
+
+**OQ-152 — Is a child waiting on its own children silent, for the stall watchdog?** *(REQ-ORCH-089, "when active tool
+calls exist, the condition is reported at informational level as waiting on N active tool calls instead of as a stall";
+REQ-MONITOR-117 to REQ-MONITOR-120, "each agent is evaluated for a stall"; REQ-NOTIFY-112; OQ-127. Raised 2026-09-30 by
+the repair of acceptance finding A7,
+[`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md),
+under [R-067](../product/requests.md#r-067). Open.)*
+
+A child that delegated, and then waits for its children's reports before the run resumes it (REQ-ORCH-055 to
+REQ-ORCH-059), has no model step and no tool call in flight while it waits. The requirements tell a stall from a wait
+only by "active tool calls", so read literally the wait is "the same silence with no tool call in flight", and
+REQ-MONITOR-119 asks every evaluation to warn that the child "appears stalled" and to write a `stall` issue. Through a
+wait on a child that works for twenty minutes, that is some 240 warning-severity issues about a child working as
+designed, each carrying the words "no model event or token", which describe a step it is not taking.
+
+**What the build proceeds under.** The watch measures the silence of the child's model steps. Once a turn ends and
+until the run starts its next — which is exactly the wait on its own children, or the end of its execution — the run
+asks the child for no output, so no silence is counted against it: an evaluation there reports no stall and no wait,
+and calls the callback with *not stalled*; a stall under way when the turn ended is reported recovered. The next turn
+the run starts counts from its start, as OQ-127 already reads for REQ-NOTIFY-112's recovery. Each child it waits on has
+its own watch, which reports that child's own silence (`StallWatch.betweenTurns`; `stall.test.ts` and `children.test.ts`,
+"a child waiting on its own child between its turns is not reported stalled").
+
+**What a ruling decides.** Whether the wait is outside the watch (as built), or is reported at REQ-MONITOR-118's
+informational level as "waiting on N active children", which would need words no requirement has and, while REQ-ORCH-139's
+vocabulary has none, a session-log line in the manner OQ-127 records.
 
 ## Design-reference dependencies
 

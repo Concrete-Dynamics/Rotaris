@@ -109,6 +109,36 @@ describe('REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch', () => {
     expect(w.stalled).toEqual([]);
   });
 
+  it('REQ-MONITOR-119 (OQ-152): between the child\'s turns there is no step to be silent: no stall is reported, the callback reads not stalled, and the next turn counts from its start', () => {
+    const w = watched(12_000);
+    w.watch.start();
+    w.watch.modelEvent('finish');
+    w.watch.betweenTurns();
+    w.clock.advance(60_000);
+    expect(w.stalled).toEqual([]);
+    expect(w.waiting).toEqual([]);
+    expect(w.evaluated.length).toBeGreaterThan(0);
+    expect(w.evaluated.every((s) => !s)).toBe(true);
+    // The run starts its next turn: the silence counts from here, not from the turn before the wait.
+    w.watch.activity();
+    w.clock.advance(10_000);
+    expect(w.stalled).toEqual([]);
+    w.clock.advance(2_000);
+    expect(w.stalled.map((r) => [r.silentS, r.entry])).toEqual([[12, true]]);
+  });
+
+  it('a stall under way when the turn ends is reported recovered at the next evaluation', () => {
+    const w = watched(12_000);
+    w.watch.start();
+    w.clock.advance(12_000);
+    expect(w.stalled).toHaveLength(1);
+    w.watch.betweenTurns();
+    w.clock.advance(2_000);
+    expect(w.recovered()).toBe(1);
+    expect(w.watch.stalled).toBe(false);
+    expect(w.stalled).toHaveLength(1);
+  });
+
   it('the warning says what REQ-ORCH-089 and REQ-MONITOR-119 say', () => {
     expect(stallWarning('build', 'bg_0000000a', 90)).toBe('child appears stalled: no model event or token for 90 seconds (build, bg_0000000a); the run is still waiting on it.');
   });

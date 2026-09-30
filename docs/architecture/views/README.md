@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**A child waiting on its own children is not reported stalled (REQ-ORCH-089, REQ-MONITOR-119, REQ-NOTIFY-112, OQ-152,
+R-067).** `StallWatch.betweenTurns` (`children/stall.ts`), called by `execute`'s `turn` closure as each turn settles,
+holds the watch's evaluation off the silence until the run starts the child's next turn, so the wait inside
+`runWithChildren` writes no `stall` issue and no warning. This repairs
+`a-child-waiting-on-its-own-children-is-reported-stalled.md` (acceptance A7). The **runtime view**'s stall-watch paragraph
+says so. No package, edge, process, message kind, channel, command or store column changed.
+
 **`delegate`'s admission resolves an alias on the built-in table's path (REQ-ORCH-034, REQ-ORCH-153, PD-TOOLS-006,
 R-067).** `personaOf` (`children/orchestration.ts`) resolves through `resolveRole` where no persona catalogue is configured,
 as `ChildLedger.spawn` does, so the plan gate's admission refusal, the grant and the write-scope refusal read the role the

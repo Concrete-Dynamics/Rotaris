@@ -1472,6 +1472,42 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toEqual([]);
       expect(byName('mid')!.state).toBe('failed');
     });
+
+    it('REQ-ORCH-089 / REQ-MONITOR-119 (OQ-152): a child waiting on its own child between its turns is not reported stalled; the child that is silent is, by its own watch', async () => {
+      let releaseLeaf!: () => void;
+      const leafHeld = new Promise<void>((r) => { releaseLeaf = r; });
+      let midAsked = 0;
+      let leafAsked = 0;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'mid', task: 'TASK: mid' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        if (!userText(req).includes('TASK: mid')) { leafAsked += 1; return { parts: [{ hold: leafHeld }, ...answer('leaf done').parts] }; }
+        midAsked += 1;
+        if (midAsked === 1) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'leaf', task: 'TASK: leaf' } }], 'Delegating.');
+        if (midAsked === 2) return answer('Waiting on leaf.');
+        return answer('Leaf reported; done.');
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      const byName = (name: string) => children(sid).find((c) => c.canonical_name === name)!;
+      await settle(() => midAsked === 2 && leafAsked === 1);
+      await new Promise((r) => setTimeout(r, 20));
+      // Two minutes: past the 90 s window, the leaf silent in its step and `mid` waiting on it between its turns.
+      clock.advance(120_000);
+      const stallsOf = (name: string) => dal.issuesOf(sid).filter((i) => i.kind === 'stall' && i.actor === name);
+      // The leaf is silent inside a model step: its own watch reports it (REQ-MONITOR-119), at every evaluation.
+      expect(stallsOf('leaf').length).toBeGreaterThan(0);
+      expect(warnings.some((m) => m.startsWith(`child appears stalled: no model event or token for 90 seconds (leaf, ${byName('leaf').task_id})`))).toBe(true);
+      // `mid`, asked for nothing while it waits, is not silent: no `stall` issue and no stall warning name it.
+      expect(stallsOf('mid')).toEqual([]);
+      expect(warnings.filter((m) => m.startsWith('child appears stalled') && m.includes(`(mid, ${byName('mid').task_id})`))).toEqual([]);
+      releaseLeaf();
+      await sessions.running(sid)!;
+      expect(midAsked).toBe(3);
+      expect(byName('mid').state).toBe('succeeded');
+      // Its resumed turn after the wait is not a recovery from a stall it never had.
+      expect(warnings.filter((m) => m.startsWith('child stall recovered:') && m.includes('(mid,'))).toEqual([]);
+      expect(stallsOf('mid')).toEqual([]);
+    });
   });
 
   it('REQ-ORCH-088: the ceiling asks the child to land, so the step in flight finishes and its words reach the report', async () => {

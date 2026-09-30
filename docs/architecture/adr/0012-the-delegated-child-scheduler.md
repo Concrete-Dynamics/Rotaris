@@ -532,6 +532,13 @@ words are no longer written: they are session-log lines through the run's `warn`
 minting them (that the log was out of reach without editing `Run.turn`) having been false. `children.test.ts` now has
 nine cases, `stall.test.ts` twelve, and `record.test.ts` one more.
 
+**Repaired in place by acceptance finding A7, 2026-09-30.** The watch's own evaluation still read the time since the
+child's last event, so a child waiting on its own children between its turns had a `stall` issue at every evaluation
+past the window, and the warning, while it worked as designed. The turn's end is now fed to the watch too
+(`betweenTurns`), and until the run starts the next turn no silence is counted. The decision stands: the watch still
+reads only the clock port and the child's own events. The reading is OQ-152's; `children.test.ts` has ten cases for the
+watch and `stall.test.ts` fourteen, each new one failing with the limb reverted.
+
 ## First execution of the process-wide count — 2026-09-30: the cap was one iteration's
 
 This record put the ledger in **one session's rows** and said nothing of a count across sessions; `REQ-CONFIG-094` counts

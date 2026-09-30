@@ -754,10 +754,12 @@ as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds
 - each tool call's start and end (`onToolStarted`, `onToolCompleted`);
 - every turn the run starts for the child (the `turn` closure in `execute`): its payload or record, its children's
   reports, a re-prompt, the corrective message — so a wait on its own children is not counted in the silence
-  REQ-NOTIFY-112's recovery reads (`quietFor`). The watch's own evaluation still counts such a wait, and reports the
-  child stalled while it waits
-  ([`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../defects/a-child-waiting-on-its-own-children-is-reported-stalled.md),
-  OQ-127).
+  REQ-NOTIFY-112's recovery reads (`quietFor`);
+- the end of each of those turns (`betweenTurns`, when the turn's promise settles): until the run starts the next, the
+  child is waiting on its own children or ending, and an evaluation counts no silence — no stall, no wait on tools, the
+  callback *not stalled* — so a wait on its own children is not reported as its stall (OQ-152; the repair of
+  [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md)).
+  Each child it waits on is watched by its own watch.
 
 What it writes:
 - a silence of the threshold with no call in flight: a `stall` issue at every evaluation (REQ-MONITOR-119), and a

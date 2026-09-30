@@ -129,7 +129,8 @@ and OQ-127 now records the gap and the reading built.
   true of the silence REQ-NOTIFY-112's recovery reads (`quietFor`) and false of the watch's own evaluation, which reads
   the last event and so still reports such a child stalled while the wait lasts. The runtime view and the
   first-executions row now say so, and that half stays recorded in
-  [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../a-child-waiting-on-its-own-children-is-reported-stalled.md).
+  [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](a-child-waiting-on-its-own-children-is-reported-stalled.md),
+  repaired 2026-09-30 (acceptance A7, OQ-152): the watch now counts no silence between the child's turns.
 - *The recovery.* [`a-stalled-child-is-never-shown-stalled.md`](../a-stalled-child-is-never-shown-stalled.md) still
   said a recovery is recorded in the timeline; it is the session-log line `child stall recovered: …`.
 - *A row that does not decode.* `ConversationRecord.everRecorded` parsed every row, the ones before the last

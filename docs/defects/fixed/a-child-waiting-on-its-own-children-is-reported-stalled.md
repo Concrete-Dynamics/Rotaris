@@ -24,3 +24,20 @@ N active children at the informational level of REQ-MONITOR-118, is a reading OQ
 - `packages/engine/src/children/orchestration.ts` — `execute`, where the watch is started per attempt, and
   `runWithChildren`, where the wait happens between turns.
 - `packages/engine/src/children/stall.ts` — `StallWatch.evaluate`, which knows only tool calls in flight.
+
+## Outcome
+
+**Repaired 2026-09-30 under R-067** (acceptance finding A7, confirmed on the branch by a failing end-to-end case before
+the change: `mid`, waiting 120 s on its child `leaf`, had a `stall` issue at every evaluation from 90 s, "no model event
+or token for 90 … 120 seconds", its last model event `finish`).
+
+- `StallWatch.betweenTurns` (`packages/engine/src/children/stall.ts`): once a child's turn ends and until the run starts
+  its next (`activity`), an evaluation counts no silence. It reports no stall and no wait, calls the callback with *not
+  stalled*, and reports a stall under way when the turn ended as recovered. `execute`'s `turn` closure
+  (`packages/engine/src/children/orchestration.ts`) calls it when each turn's promise settles, so a wait inside
+  `runWithChildren` on the child's own children is outside the watch, and the next turn counts from its start.
+- The children it waits on keep their own watches: a silent child is still reported, by its own watch.
+- The reading is OQ-152's, raised by this repair; OQ-127's two mentions of this note are corrected in place.
+- Pinned by `children.test.ts`, "REQ-ORCH-089 / REQ-MONITOR-119 (OQ-152): a child waiting on its own child between its
+  turns is not reported stalled; the child that is silent is, by its own watch", and `stall.test.ts`'s two cases for
+  `betweenTurns`. All three fail with the `between` limb of `evaluate` reverted.

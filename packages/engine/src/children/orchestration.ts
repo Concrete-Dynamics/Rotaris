@@ -1018,7 +1018,8 @@ export class IterationChildren implements DelegationOps {
         detached: () => this.detached,
         // REQ-ORCH-093: the resume limb — a child's turn after its first is a parent being resumed with reports.
         parentResume: !wasFirst,
-      }, task, history, controller.signal); };
+        // OQ-152: once the turn ends the child waits on its own children, or ends; neither is a silence of its own.
+      }, task, history, controller.signal).finally(() => stallWatch.betweenTurns()); };
       // A resumed child's first attempt carries on from its record; REQ-ORCH-088's retry starts again from its payload.
       const fromRecord = start !== null;
       try {

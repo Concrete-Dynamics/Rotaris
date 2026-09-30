@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { ChildProcess } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { constants as osConstants } from 'node:os';
 import type { Millis, MonotonicClock, TimerHandle, Timers, WallClock } from '@rotaris/kernel';
 import { COMM_MAX_CHARS, linuxProcessTable, spawnChild, type GroupMember, type ProcessTable } from '@rotaris/platform';
@@ -54,13 +55,34 @@ export function endOfExit(code: number | null, signal: NodeJS.Signals | null, de
  * A process the reading found already running the command is never sent a second SIGINT, whatever it did with the
  * first — one that catches it, and one whose handler restored the default as it ran (`process.once`, `SA_RESETHAND`).
  * A process started after the reading by a member that did receive the signal is never sent one, so a clean-up the
- * command starts on its way out is not interrupted.
+ * command starts on its way out is not interrupted. All of this holds for `dash` alone, so only a session whose shell is
+ * `dash` is read (`hasVforkWindow`): `bash` as `/bin/sh` absorbs a SIGINT its command handled, goes on, and `exec`s the
+ * clean-up that follows in place, which by name and arguments is a shell replaced after the signal.
  *
  * The residue: a member that `exec`s between the reading and the delivery (one synchronous step) received the signal as
  * the command, and is sent a second if it is still alive at the check; and a script that traps SIGINT and then `exec`s
- * (`trap … INT; …; exec server`) chose to absorb the signal, and its command is sent one all the same.
+ * (`trap … INT; …; exec server`) chose to absorb the signal, and its command is sent one all the same; and a shell
+ * other than `dash` that loses a SIGINT across its fork, if one does, is not read — nor is a `dash` the command starts
+ * itself where the session's shell is another.
  */
 export const SIGINT_RECHECK_AFTER_MS: readonly number[] = [250, 1_500];
+
+/**
+ * OQ-135: whether the session's shell has the vfork window — the check is armed only where it does. `dash` has it: it
+ * catches SIGINT under `-c` and blocks signals across its `vfork`. It is told by the shell file's real path, since
+ * `/bin/sh` is a link to it on Debian and Ubuntu. Any other shell has not been measured to have it and is not read.
+ *
+ * The reason it was armed on every Linux host, falsified and kept beside its replacement: "a member that was the shell
+ * took the signal into the shell's handler if it took it at all, and a new image it runs afterwards never received it".
+ * Where `/bin/sh` is `bash` (Fedora, RHEL, Arch), bash waits on a command that handles SIGINT, goes on when that command
+ * exits 0, and `exec`s the last command of its `-c` list in place (bash 5.1 on). That clean-up replaced the shell after
+ * the signal, and was sent a second SIGINT that killed it, under a false "vfork window" warning (acceptance finding A8,
+ * round 4, measured through this manager with a `sh` link to `/bin/bash`, signalled 1 s and 5 s after the start).
+ */
+export function hasVforkWindow(backend: ShellBackend, realpath: (file: string) => string = realpathSync): boolean {
+  if (backend.kind !== 'posix') return false;
+  try { return shellComm(realpath(backend.file)) === 'dash'; } catch { return false; }
+}
 
 /** The name a process running the session's shell carries: the shell file's base name, cut as the kernel cuts it. */
 export function shellComm(file: string): string {
@@ -69,10 +91,11 @@ export function shellComm(file: string): string {
 
 /**
  * OQ-135: the members of a still-running session's group that never received the SIGINT. `before` is the reading taken
- * the instant before it was sent, `now` the one taken since, and `shell` the shell's name. A member `before` found running
- * the shell, and not ignoring SIGINT, took the signal into the shell's handler if it took it at all (at the default it
- * would be gone). Named, each with its descendants alive `now` that `before` did not hold, since those started after the
- * signal:
+ * the instant before it was sent, `now` the one taken since, and `shell` the shell's name; the shell is `dash`, the one
+ * shell read (`hasVforkWindow`). A member `before` found running the shell, and not ignoring SIGINT, took the signal into
+ * the shell's handler if it took it at all (at the default it would be gone), and `dash` under `-c` ends on it once its
+ * running command ends, starting nothing more. Named, each with its descendants alive `now` that `before` did not hold,
+ * since those started after the signal:
  *
  * - such a member alive `now` and running another image — its name or its arguments changed — whatever it does with
  *   SIGINT: the command replaced the shell after the signal, and never received it;
@@ -116,6 +139,8 @@ export interface BackgroundDeps {
   readonly warn: (m: string) => void;
   /** OQ-135: the process table a SIGINT's delivery is checked against; absent means the host's (Linux only), null none. */
   readonly processes?: ProcessTable | null;
+  /** OQ-135: whether the session's shell has the vfork window; absent means its real path decides (`hasVforkWindow`). */
+  readonly vforkWindow?: boolean;
   /** The signal primitive, `process.kill` by default — a seam for a test to stand in for a discarded delivery. */
   readonly kill?: (pid: number, signal: NodeJS.Signals) => void;
 }
@@ -232,8 +257,10 @@ export class BackgroundSession {
       return true;
     }
     const kill = this.deps.kill ?? ((p: number, s: NodeJS.Signals) => { process.kill(p, s); });
-    // OQ-135: the group as it stands before a SIGINT lands — which members are still the shell, catching it.
-    const table = name === 'SIGINT' ? (this.deps.processes === undefined ? linuxProcessTable() : this.deps.processes) : null;
+    // OQ-135: the group as it stands before a SIGINT lands — which members are still the shell, catching it. Read only
+    // where the shell has the vfork window (`dash`): elsewhere a member that was the shell and runs another image since may
+    // be a clean-up the shell `exec`d after absorbing the signal (bash as `/bin/sh`).
+    const table = name === 'SIGINT' && this.deps.vforkWindow === true ? (this.deps.processes === undefined ? linuxProcessTable() : this.deps.processes) : null;
     const before = table === null ? [] : table.tree(pid);
     try { kill(-pid, name); } catch { return false; }
     this.delivered.add(name);
@@ -244,7 +271,8 @@ export class BackgroundSession {
   /**
    * OQ-135: after a SIGINT, the checks that find a member of the group which never received it — `missedSigint` says
    * which — and send it the signal once, alone. Only SIGINT has the window: `dash` catches it under `-c` and catches no
-   * other signal `send_signal` offers. Where there is no process table (every host but Linux) nothing is checked.
+   * other signal `send_signal` offers. Only `dash` is read (`hasVforkWindow`), and where there is no process table (every
+   * host but Linux) nothing is checked.
    *
    * The reason it was not, kept beside its replacement: delivery once to the group, as REQ-TOOLS-110 states, with the
    * session left to report what its process did. Measured through this manager, `/bin/sh -c 'sleep 30'` signalled the
@@ -292,7 +320,11 @@ export class BackgroundManager {
   private readonly sessions = new Map<string, BackgroundSession>();
   /** Part AL: the cap as the run's configuration set it (REQ-TOOLS-108); null means the construction-time value. */
   private maxOverride: number | null = null;
-  constructor(private readonly deps: BackgroundDeps) {}
+  private readonly deps: BackgroundDeps;
+  constructor(deps: BackgroundDeps) {
+    // OQ-135: whether the shell has the vfork window is told once, here, so neither a start nor a signal pays for it.
+    this.deps = { ...deps, vforkWindow: deps.vforkWindow ?? hasVforkWindow(deps.backend) };
+  }
 
   get running(): number {
     return [...this.sessions.values()].filter((s) => s.status === 'running').length;

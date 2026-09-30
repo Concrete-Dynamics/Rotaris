@@ -6208,7 +6208,8 @@ signalled the instant they started still ran 3 s later, with 0, 3 and 6 re-deliv
 both narrow" was false: the second was every Node command.*
 
 The build now proceeds under this form: re-deliver to a process the product **saw as the shell** when the signal was
-sent, and to what it has started since. On Linux, the instant before a SIGINT is sent to a session's group, the session
+sent, and to what it has started since. On Linux, *where the session's shell is `dash` (added 2026-09-30, fix round 3:
+see the correction after the reason below)*, the instant before a SIGINT is sent to a session's group, the session
 reads the group (`ProcessTable.tree`, a walk of the shell's descendants through `/proc`: each member's name, parent,
 arguments and SIGINT standing, a few reads, so the reading does not push the signal past the window it is read for).
 While the session still runs, it reads the group again at 250 ms and at 1.5 s. `missedSigint` names:
@@ -6225,7 +6226,27 @@ once, alone, and the re-delivery is logged as a warning. The reason: a member th
 the shell's handler if it took it at all (at the default it would be gone), and a new image, or a child started after
 the signal, never received it. What a process does with SIGINT says nothing about whether it received one. A process the
 first reading found already running the command is never sent a second SIGINT, whatever it did with the first (one-shot
-handlers included), and neither is what it starts on receiving it, such as a clean-up.
+handlers included), and neither is what it starts on receiving it, such as a clean-up. *(That reason holds of `dash`
+alone: corrected below.)*
+
+*Falsified 2026-09-30 by the verifier of the same change (acceptance finding A8, fix round 3), and kept above: the check
+was armed on every Linux host, whatever `/bin/sh` is, and "a member that was the shell took the signal into the shell's
+handler … and a new image … never received it" is false where `/bin/sh` is `bash` (Fedora, RHEL, Arch). There `bash`,
+waiting on a command that handles SIGINT, absorbs the signal; when that command exits 0 it goes on, and `exec`s the last
+command of its `-c` list in place (bash 5.1 on). That clean-up changes the shell member's name and arguments, so it was
+named and sent a second SIGINT that killed it, under a warning naming a "vfork window" bash does not have; and "neither
+is what it starts on receiving it, such as a clean-up" did not hold. Measured through the manager with a `sh` link to
+`/bin/bash` 5.2, the command `node -e "<SIGINT handler, exit 0 after 100 ms>"; node -e "<clean-up printing over 1.5 s>"`
+signalled 1 s and 5 s after its start, with `;` and with `&&`: the session read `killed` after "cleanup start", where
+with no reading it completed with exit 0 after "cleanup done". `dash` under `-c` ends on the signal once its running
+command ends and starts nothing more, so the same command under `dash` stops after the handler, with no re-delivery.*
+
+*Since then the check is armed only where the session's shell has the window: `dash`, told once per manager by the shell
+file's real path (`hasVforkWindow`; `/bin/sh` is a link to it on Debian and Ubuntu). Any other shell is not read, and
+its sessions are signalled once, as REQ-TOOLS-110 states. With `bash` as `/bin/sh` the same command now completes with
+exit 0 after "cleanup done", with no reading and no warning, at 1 s and at 5 s, with `;` and `&&`. The `dash` path is
+unchanged: aimed at the window without burners, 0 of 900 sessions ran on (29 re-deliveries; 20 of 900 with the code
+before this correction, the same rate within the spread).*
 
 The residue:
 - a member that `exec`s between the first reading and the delivery (one synchronous step, about 0.1 ms on this host)
@@ -6233,7 +6254,9 @@ The residue:
   installed by the new image within that step;
 - a script that traps SIGINT (`trap … INT`) chose to absorb it, and is overridden: its command is sent the signal when
   the script `exec`s it afterwards (`trap … INT; …; exec server`), and so are the commands its trap runs when the
-  signal found the shell with nothing started.
+  signal found the shell with nothing started;
+- a shell other than `dash` that loses a SIGINT across its fork, if one does, is not read (none has been measured to;
+  `bash` has no window), nor is a `dash` a command starts itself where the session's shell is another.
 
 Measured 2026-09-30 through the product's own manager, each session signalled the instant it started and counted 3 s
 later, under six CPU burners unless stated, on a host shared with another workflow (load average 0.5 to 5):
@@ -6251,14 +6274,15 @@ A command whose handler counts its SIGINTs and exits 2 s after the first, signal
 two in none of 150 sessions; 13 received exactly one, each by a re-delivery (the rest died of the signal before their
 handler was installed). The second and third repairs were not taken, since each changes what every command runs under.
 Off Linux nothing is checked: macOS's `/bin/sh` is `bash`, which has no window, and on Windows every signal terminates
-the tree (OQ-10).
+the tree (OQ-10). On Linux, a session whose shell is not `dash` is not read either (2026-09-30, fix round 3).
 
 **What a ruling decides.** Whether R-044's "stops" binds the product past delivery, and if so, which of the three
 repairs is acceptable, or whether the window is accepted as the shell's. Since 2026-09-29 the build takes the narrow
 re-delivery above, so a ruling against re-delivery removes it. ~~A ruling for it also decides whether the two remaining
 exposures stated above are accepted.~~ *(Replaced 2026-09-30: the second of those two was every Node command, and not
 narrow.)* A ruling for it also decides whether the residue stated above is accepted: a second SIGINT to a command that
-`exec`ed within the reading's step, and a trapping script's choice overridden.
+`exec`ed within the reading's step, and a trapping script's choice overridden; and whether a shell other than `dash`
+is left unread.
 
 **OQ-136 — How long does an empty poll wait for a soft-paused command?** *(REQ-TOOLS-096, whose empty `command`
 "polls for more output after a soft pause"; REQ-TOOLS-097, whose no-output window bounds the command's own call and

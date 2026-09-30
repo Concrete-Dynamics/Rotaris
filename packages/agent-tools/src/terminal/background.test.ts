@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { readFileSync, realpathSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { FakeClock } from '@rotaris/kernel';
 import { nodeClocks, type GroupMember, type ProcessTable } from '@rotaris/platform';
-import { BackgroundManager, missedSigint, shellComm, type BackgroundSession } from './background.js';
+import { BackgroundManager, hasVforkWindow, missedSigint, shellComm, type BackgroundSession } from './background.js';
 
 /**
  * OQ-135 (REQ-TOOLS-110, REQ-TOOLS-128; OQ-10 as ruled in R-044), acceptance finding A8: where `/bin/sh` is `dash`, a
@@ -79,6 +80,16 @@ describe('OQ-135: which members of a still-running group never received the SIGI
     expect(missedSigint(before, [m(10, 1, 'sh', 'caught'), m(12, 10, 'cleanup', 'default')], 'sh', none)).toEqual([]);
   });
 
+  it('acceptance finding A8, round 4: only `dash` has the vfork window, told by the shell file\'s real path', () => {
+    const at = (real: string) => (file: string): string => { if (file !== '/bin/sh') throw new Error('ENOENT'); return real; };
+    expect(hasVforkWindow({ kind: 'posix', file: '/bin/sh' }, at('/usr/bin/dash'))).toBe(true);
+    expect(hasVforkWindow({ kind: 'posix', file: '/bin/sh' }, at('/usr/bin/bash'))).toBe(false);
+    expect(hasVforkWindow({ kind: 'posix', file: '/bin/sh' }, at('/bin/busybox'))).toBe(false);
+    expect(hasVforkWindow({ kind: 'posix', file: '/bin/sh' }, at('/bin/sh'))).toBe(false);
+    expect(hasVforkWindow({ kind: 'posix', file: '/usr/local/bin/sh' }, at('/usr/bin/dash'))).toBe(false);
+    expect(hasVforkWindow({ kind: 'powershell', file: '/bin/sh' }, at('/usr/bin/dash'))).toBe(false);
+  });
+
   it('names the shell as the kernel does: the file\'s base name, cut to 15 characters', () => {
     expect(shellComm('/bin/sh')).toBe('sh');
     expect(shellComm('/usr/local/bin/a-very-long-shell-name')).toBe('a-very-long-she');
@@ -93,13 +104,14 @@ describe.skipIf(process.platform === 'win32')('OQ-135: the checks a SIGINT arms,
   let manager: BackgroundManager | null = null;
   afterEach(async () => { await manager?.dispose(); manager = null; });
   /** A session of a real `sleep` whose group the scripted `reading` stands for; the signals it is sent are recorded. */
-  const session = (reading: (leader: number, n: number) => GroupMember[]) => {
+  // The shell stands for `dash` (`vforkWindow`) unless a case says otherwise, whatever the host's `/bin/sh` is.
+  const session = (reading: (leader: number, n: number) => GroupMember[], vforkWindow = true) => {
     const clock = new FakeClock();
     const kills: (readonly [number, string])[] = [];
     const warnings: string[] = [];
     let reads = 0;
     const table: ProcessTable = { group: () => [], tree: (leader) => reading(leader, reads++) };
-    manager = new BackgroundManager({ backend: { kind: 'posix', file: '/bin/sh' }, cwd: tmpdir(), env: { PATH: process.env['PATH'] ?? '' }, monotonic: clock, wall: clock, timers: clock, warn: (w) => warnings.push(w), processes: table, kill: (p, sig) => { kills.push([p, sig]); } });
+    manager = new BackgroundManager({ backend: { kind: 'posix', file: '/bin/sh' }, cwd: tmpdir(), env: { PATH: process.env['PATH'] ?? '' }, monotonic: clock, wall: clock, timers: clock, warn: (w) => warnings.push(w), processes: table, vforkWindow, kill: (p, sig) => { kills.push([p, sig]); } });
     const r = manager.start('sleep 30', 60);
     if (!r.ok) throw new Error(r.error);
     const pid = (r.session as unknown as { readonly child: { readonly pid: number } }).child.pid;
@@ -130,6 +142,21 @@ describe.skipIf(process.platform === 'win32')('OQ-135: the checks a SIGINT arms,
     t.s.signal('SIGINT');
     t.clock.advance(1_500);
     expect(t.reads()).toBe(3);
+    expect(t.kills).toEqual([[-t.pid, 'SIGINT']]);
+    expect(t.warnings).toEqual([]);
+  });
+
+  it('acceptance finding A8, round 4: a shell without the vfork window is not read — the clean-up bash execs after absorbing SIGINT is sent nothing', () => {
+    // The verifier's reading, bash as `/bin/sh`: before, the shell waiting on a command that handles SIGINT; after, the
+    // shell's own pid running the clean-up it exec'd once that command exited 0. Read, it would be named (below).
+    const reading = (leader: number, n: number): GroupMember[] => n === 0
+      ? [m(leader, 1, 'sh', 'caught', 'sh\0-c\0node graceful; node cleanup'), m(900_001, leader, 'MainThread', 'caught', 'node\0graceful')]
+      : [m(leader, 1, 'MainThread', 'caught', 'node\0cleanup')];
+    expect(missedSigint(reading(1, 0), reading(1, 1), 'sh', new Set())).toEqual([1]);
+    const t = session(reading, false);
+    expect(t.s.signal('SIGINT')).toBe(true);
+    t.clock.advance(1_500);
+    expect(t.reads()).toBe(0);
     expect(t.kills).toEqual([[-t.pid, 'SIGINT']]);
     expect(t.warnings).toEqual([]);
   });
@@ -168,9 +195,11 @@ describe.skipIf(!dash)('OQ-135 through the manager, against the host\'s own dash
     it(`REQ-TOOLS-128 / R-044: a SIGINT that lands while dash is starting the command still stops the session (${label})`, async () => {
       const m = make();
       let hit = false;
-      // About 1 aimed `sleep` attempt in 37 lands in the window (10, 11 and 10 of about 385 measured on 2026-09-30, with
-      // the reading taken before the signal), so 400 leave a miss about 2 in 100 000; a miss costs a few ms, a hit ~250 ms.
-      for (let attempt = 0; attempt < 400 && !hit; attempt++) {
+      // About 1 aimed `sleep` attempt in 37 lands in the window under load (10, 11 and 10 of about 385 measured on
+      // 2026-09-30), but on a quieter host as few as 1 in 60 (5 to 18 of 300 at load 1.9 to 2.1, the same day), and one
+      // of the three cases went red at 400 attempts in 4 of 13 runs at load 0.3 to 1.4 (acceptance finding A8, round 4).
+      // 1 500 leave a miss below 1 in 10 000 000 at 1 in 60; a miss costs a few ms, a hit ~250 ms.
+      for (let attempt = 0; attempt < 1_500 && !hit; attempt++) {
         const r = m.start(command, 60);
         if (!r.ok) throw new Error(r.error);
         // The shell's pid, which leads the session's group (the session keeps its process private).
@@ -235,6 +264,42 @@ describe.skipIf(!dash)('OQ-135 through the manager, against the host\'s own dash
     r.session.signal('SIGINT');
     expect(await ended(r.session, 6_000)).toBe(true);
     expect(r.session.readAll()).toContain('clean exit');
+    expect(warnings).toEqual([]);
+  }, 20_000);
+});
+
+// Acceptance finding A8, round 4 (the verifier's case): where `/bin/sh` is `bash` (Fedora, RHEL, Arch), the shell waits on
+// a command that handles SIGINT, goes on when it exits 0, and `exec`s the last command of its `-c` list in place (bash 5.1
+// on). That clean-up replaced the shell after the signal, and was sent a second SIGINT under a false "vfork window"
+// warning. Bash has no window, so its sessions are not read at all. The backend is a `sh` link to the host's `bash`, as on
+// those distributions. Not applicable off Linux (no process table is read there) or where the host has no `bash`.
+const bash = process.platform === 'linux' && (() => { try { return realpathSync('/bin/bash'); } catch { return null; } })();
+
+describe.skipIf(!bash)('OQ-135: a shell without the vfork window (bash as /bin/sh, Linux)', () => {
+  const clocks = nodeClocks();
+  let manager: BackgroundManager | null = null;
+  let dir: string | null = null;
+  afterEach(async () => { await manager?.dispose(); manager = null; if (dir !== null) rmSync(dir, { recursive: true, force: true }); dir = null; });
+  const ended = (s: BackgroundSession, ms: number) => Promise.race([s.whenExited().then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), ms))]);
+
+  for (const sep of ['; ', ' && '] as const) it(`REQ-TOOLS-110: a clean-up bash execs after the command absorbed SIGINT is not sent a second, and completes ('${sep.trim()}')`, async () => {
+    dir = mkdtempSync(join(tmpdir(), 'oq135-bash-'));
+    const sh = join(dir, 'sh');
+    symlinkSync(bash as string, sh);
+    const warnings: string[] = [];
+    manager = new BackgroundManager({ backend: { kind: 'posix', file: sh }, cwd: tmpdir(), env: { PATH: process.env['PATH'] ?? '' }, monotonic: clocks.monotonic, wall: clocks.wall, timers: clocks.timers, warn: (w) => warnings.push(w) });
+    const node = process.execPath;
+    const graceful = "process.on('SIGINT',()=>{console.log('graceful');setTimeout(()=>process.exit(0),100)});console.log('up');setInterval(()=>{},1000)";
+    const cleanup = "console.log('cleanup start');setTimeout(()=>console.log('cleanup done'),1500)";
+    const r = manager.start(`'${node}' -e "${graceful}"${sep}'${node}' -e "${cleanup}"`, 60);
+    if (!r.ok) throw new Error(r.error);
+    for (let i = 0; i < 400 && !r.session.readAll().includes('up'); i++) await new Promise((res) => setTimeout(res, 25));
+    // Signalled well after it started — nowhere near a vfork window.
+    await new Promise((res) => setTimeout(res, 1_000));
+    expect(r.session.signal('SIGINT')).toBe(true);
+    expect(await ended(r.session, 8_000)).toBe(true);
+    expect(r.session.readAll()).toContain('cleanup done');
+    expect(r.session.status).toBe('completed');
     expect(warnings).toEqual([]);
   }, 20_000);
 });

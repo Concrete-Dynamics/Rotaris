@@ -1,3 +1,4 @@
+import { countNoun } from '@rotaris/kernel';
 import { z } from 'zod';
 
 /**
@@ -91,11 +92,11 @@ export const CHECKPOINTS_STORE_UNREADABLE = 'Rotaris could not reach the session
 
 /** REQ-GIT-097: the summary sentence, once. */
 export function restoreSummary(sequence: number, changed: number, treeRoot: string): string {
-  return `This replaces ${changed === 0 ? 'nothing' : `${changed} file(s)`} in ${treeRoot} with the state recorded in checkpoint ${sequence}. Rotaris records a safety checkpoint of the current tree first, so the rollback can itself be rolled back. Your branch history is not rewritten.`;
+  return `This replaces ${changed === 0 ? 'nothing' : countNoun(changed, 'file')} in ${treeRoot} with the state recorded in checkpoint ${sequence}. Rotaris records a safety checkpoint of the current tree first, so the rollback can itself be rolled back. Your branch history is not rewritten.`;
 }
 /** REQ-GIT-100: the success notice's body. */
 export function restoredNoticeBody(changed: number, safetySequence: number | null): string {
-  return `${changed} file(s) changed. ${safetySequence === null ? 'No safety checkpoint was needed: the tree already matched the last commit.' : `Safety checkpoint ${safetySequence} holds the pre-restore state.`}`;
+  return `${countNoun(changed, 'file')} changed. ${safetySequence === null ? 'No safety checkpoint was needed: the tree already matched the last commit.' : `Safety checkpoint ${safetySequence} holds the pre-restore state.`}`;
 }
 /** REQ-GIT-090: `YYYY-MM-DD HH:MM:SS` in local time, formatted where the clock is — never in the view. */
 export function localCheckpointLabel(iso: string): string {

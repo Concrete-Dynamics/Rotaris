@@ -1,3 +1,4 @@
+import { countNoun } from '@rotaris/kernel';
 import { useState } from 'react';
 import type { ChangeEntry, Finding, InitializationStateView, ParseError, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
 import { RESOLUTION_FAILED_DETAIL, RESOLUTION_FAILED_HEADLINE } from '@rotaris/contracts';
@@ -75,7 +76,6 @@ export interface OperationStatement {
   readonly tone: 'ok' | 'warning' | 'error';
 }
 
-const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
 
 function describeFailure(operation: TraceabilityOperation, error: TraceabilityFailure): OperationStatement {
   const noun = OPERATION_NOUN[operation];
@@ -87,7 +87,7 @@ function describeFailure(operation: TraceabilityOperation, error: TraceabilityFa
       // REQ-TRACE-509: each parse error reported, nothing written, the artifact left exactly as it stood.
       const lines = error.errors.map(describeParseError);
       lines.push(operation === 'regenerate' ? 'Nothing was written; the artifact was left exactly as it stood.' : 'Nothing was written.');
-      return { tone: 'error', headline: `The requirement store does not parse: ${plural(error.errors.length, 'parse error')}.`, lines };
+      return { tone: 'error', headline: `The requirement store does not parse: ${countNoun(error.errors.length, 'parse error')}.`, lines };
     }
     case 'busy':
       // REQ-TRACE-512: at most one operation of a kind per workspace; a second is refused with the reason, never queued.
@@ -105,28 +105,28 @@ const describeParseError = (e: ParseError): string => `parse error: ${e.path}${e
 function describeCheck(value: { readonly report: VerificationReport; readonly parseErrorsOnly: boolean }): OperationStatement {
   const { report, parseErrorsOnly } = value;
   if (parseErrorsOnly) {
-    return { tone: 'error', headline: `The requirement store does not parse: ${plural(report.findings.length, 'parse error')}.`, lines: [...report.findings.map((f) => `parse error: ${f.message}`), 'Nothing else was checked; the parse errors are the whole report.'] };
+    return { tone: 'error', headline: `The requirement store does not parse: ${countNoun(report.findings.length, 'parse error')}.`, lines: [...report.findings.map((f) => `parse error: ${f.message}`), 'Nothing else was checked; the parse errors are the whole report.'] };
   }
   const errors = report.findings.filter((f) => f.severity === 'error').length;
   const warnings = report.findings.filter((f) => f.severity === 'warning').length;
   const s = report.statistics;
   const lines = report.findings.map((f: Finding) => `${f.severity}: ${f.message}`);
   // REQ-TRACE-101: the statistics, stated on every check.
-  lines.push(`Statistics: ${plural(s.total, 'requirement')}; ${s.approved} approved, ${s.traced} traced, ${s.testCovered} test-covered; baselined debt — trace ${s.debt.trace}, test ${s.debt.test}, orphan ${s.debt.orphan}, orphan-test ${s.debt.orphanTest}.`);
-  const tail = warnings === 0 ? '' : ` ${plural(warnings, 'warning')}.`;
+  lines.push(`Statistics: ${countNoun(s.total, 'requirement')}; ${s.approved} approved, ${s.traced} traced, ${s.testCovered} test-covered; baselined debt — trace ${s.debt.trace}, test ${s.debt.test}, orphan ${s.debt.orphan}, orphan-test ${s.debt.orphanTest}.`);
+  const tail = warnings === 0 ? '' : ` ${countNoun(warnings, 'warning')}.`;
   return errors === 0
     ? { tone: warnings === 0 ? 'ok' : 'warning', headline: `No violations.${tail}`, lines }
-    : { tone: 'error', headline: `${plural(errors, 'violation')}.${tail}`, lines };
+    : { tone: 'error', headline: `${countNoun(errors, 'violation')}.${tail}`, lines };
 }
 
 function describeRegenerate(value: { readonly artifactPath: string; readonly outcome: 'regenerated' | 'already up to date'; readonly count: number }): OperationStatement {
   // REQ-TRACE-509: the path, which of the two outcomes, the count — a rewrite distinguishable from nothing to do.
-  return { tone: 'ok', headline: `${value.artifactPath}: ${value.outcome} (${plural(value.count, 'requirement')}).`, lines: [value.outcome === 'regenerated' ? 'The retired-identifier log was written before the artifact.' : 'Nothing was written.'] };
+  return { tone: 'ok', headline: `${value.artifactPath}: ${value.outcome} (${countNoun(value.count, 'requirement')}).`, lines: [value.outcome === 'regenerated' ? 'The retired-identifier log was written before the artifact.' : 'Nothing was written.'] };
 }
 
 function describeBaselines(value: readonly { readonly path: string; readonly entries: number }[]): OperationStatement {
   // REQ-TRACE-510 / REQ-TRACE-123: each baseline, the file written and the resulting entry count.
-  return { tone: 'ok', headline: `${plural(value.length, 'baseline')} written.`, lines: value.map((b) => `${b.path}: ${plural(b.entries, 'entry', 'entries')}`) };
+  return { tone: 'ok', headline: `${countNoun(value.length, 'baseline')} written.`, lines: value.map((b) => `${b.path}: ${countNoun(b.entries, 'entry', 'entries')}`) };
 }
 
 /** The Data & Formats line form of a change-comparison entry (REQ-TRACE-164/165/166), sites beneath it. */
@@ -143,9 +143,9 @@ function describeCompare(value: { readonly entries: readonly ChangeEntry[]; read
   if (value.entries.length === 0) return { tone: 'ok', headline: 'No requirement changes.', lines: [] };
   const lines = value.entries.flatMap(changeEntryLines);
   // REQ-TRACE-511: the drift finding presented distinctly from the changes themselves; the unpropagated count stated.
-  lines.push(`${plural(value.unpropagated, 'unpropagated requirement')}.`);
+  lines.push(`${countNoun(value.unpropagated, 'unpropagated requirement')}.`);
   if (value.drift) lines.push('Drift: at least one changed requirement has annotation sites untouched since the base (REQ-TRACE-168); those sites are marked [drift] above.');
-  return { tone: value.drift ? 'warning' : 'ok', headline: `${plural(value.entries.length, 'requirement change')}; ${value.unpropagated} unpropagated${value.drift ? '; drift found' : ''}.`, lines };
+  return { tone: value.drift ? 'warning' : 'ok', headline: `${countNoun(value.entries.length, 'requirement change')}; ${value.unpropagated} unpropagated${value.drift ? '; drift found' : ''}.`, lines };
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;

@@ -1,4 +1,4 @@
-import { millis, type Clocks, type Millis, type TimerHandle } from '@rotaris/kernel';
+import { type Clocks, countNoun, millis, type Millis, type TimerHandle } from '@rotaris/kernel';
 import type { ChatMessage, ModelError } from '@rotaris/model';
 
 /**
@@ -177,7 +177,7 @@ export function stallWarning(agentName: string, taskId: string, silentS: number)
 
 /** REQ-MONITOR-118's informational message: the silence with tool calls in flight, which is a wait and not a stall. */
 export function stallWaitingLine(agentName: string, taskId: string, activeCalls: number, silentS: number): string {
-  return `child waiting on tools: ${agentName} (${taskId}) has ${activeCalls} active tool call(s) and no model event or token for ${silentS} seconds; the run is still waiting on it (REQ-MONITOR-118)`;
+  return `child waiting on tools: ${agentName} (${taskId}) has ${countNoun(activeCalls, 'active tool call')} and no model event or token for ${silentS} seconds; the run is still waiting on it (REQ-MONITOR-118)`;
 }
 
 /** REQ-MONITOR-120's recovery: activity resumed after a stall. */

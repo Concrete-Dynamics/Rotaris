@@ -1,6 +1,6 @@
 import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeSync, chmodSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
-import { err, failure, ok, type Failure, type Millis, type Result, type Timers } from '@rotaris/kernel';
+import { countNoun, err, type Failure, failure, type Millis, ok, type Result, type Timers } from '@rotaris/kernel';
 
 /**
  * ADR-0004 — one document primitive, three write shapes, and a guarded read.
@@ -93,7 +93,7 @@ export async function replaceDocument(target: string, content: string | Uint8Arr
         continue;
       }
       rmSync(staged, { force: true });
-      return err(failure('document.replace', 'Could not replace the document', `${code ?? 'unknown'} after ${attempt} attempt(s): ${target}`, e));
+      return err(failure('document.replace', 'Could not replace the document', `${code ?? 'unknown'} after ${countNoun(attempt, 'attempt')}: ${target}`, e));
     }
   }
 

@@ -1,3 +1,4 @@
+import { countNoun } from '@rotaris/kernel';
 import type { Clocks } from '@rotaris/kernel';
 import type { ParseError } from '@rotaris/contracts';
 import { DECLARATIONS_MODULE, REGENERATE_ACTION } from './artifact.js';
@@ -92,8 +93,8 @@ export async function regenerateBeforeCollection(root: string, deps: ConsumerDep
   const engine = engineFor(deps);
   try {
     const r = await engine.regenerate(root, { signal: new AbortController().signal });
-    if (r.ok) return { outcome: r.value.outcome, notice: `${DECLARATIONS_MODULE}: the requirement-symbol artifact ${r.value.artifactPath} is ${r.value.outcome} (${r.value.count} requirement(s))`, parseErrors: [] };
-    if (r.error.kind === 'parse') return { outcome: 'skipped', notice: `${DECLARATIONS_MODULE}: regeneration skipped — the requirement store does not parse (${r.error.errors.length} error(s)); the artifact was left exactly as it stood`, parseErrors: r.error.errors };
+    if (r.ok) return { outcome: r.value.outcome, notice: `${DECLARATIONS_MODULE}: the requirement-symbol artifact ${r.value.artifactPath} is ${r.value.outcome} (${countNoun(r.value.count, 'requirement')})`, parseErrors: [] };
+    if (r.error.kind === 'parse') return { outcome: 'skipped', notice: `${DECLARATIONS_MODULE}: regeneration skipped — the requirement store does not parse (${countNoun(r.error.errors.length, 'error')}); the artifact was left exactly as it stood`, parseErrors: r.error.errors };
     return { outcome: 'skipped', notice: `${DECLARATIONS_MODULE}: regeneration skipped — ${describeFailure(r.error)}`, parseErrors: [] };
   } catch (e) {
     return { outcome: 'skipped', notice: `${DECLARATIONS_MODULE}: regeneration skipped — ${e instanceof Error ? e.message : String(e)}`, parseErrors: [] };
@@ -133,9 +134,9 @@ export async function metaTests(root: string, deps: ConsumerDeps): Promise<MetaT
     const artifact = report.findings.find((f) => f.code === 'artifact');
     const errors = parseErrorsOnly ? parseErrors.length : report.findings.filter((f) => f.severity === 'error').length;
     const assertions: MetaTestReport['assertions'] = [
-      { name: 'store parses and is non-empty', ok: parseErrors.length === 0 && !empty, message: parseErrors.length > 0 ? `the store does not parse: ${parseErrors.map((e) => e.message).join('; ')}` : empty ? report.findings.find((f) => f.code === 'empty-store')!.message : `the store parses: ${report.statistics.total} requirement(s)` },
+      { name: 'store parses and is non-empty', ok: parseErrors.length === 0 && !empty, message: parseErrors.length > 0 ? `the store does not parse: ${parseErrors.map((e) => e.message).join('; ')}` : empty ? report.findings.find((f) => f.code === 'empty-store')!.message : `the store parses: ${countNoun(report.statistics.total, 'requirement')}` },
       { name: 'artifact is up to date', ok: !parseErrorsOnly && artifact === undefined, message: parseErrorsOnly ? 'the artifact cannot be judged while the store does not parse' : artifact === undefined ? 'the generated requirement-symbol artifact is up to date' : `${artifact.message} — regenerate it with ${REGENERATE_ACTION}` },
-      { name: 'verification reports zero errors', ok: errors === 0, message: errors === 0 ? 'verification reports no error; only baseline-suppressed debt remains' : `verification reports ${errors} error(s): ${report.findings.filter((f) => f.severity === 'error').slice(0, 5).map((f) => f.message).join('; ')}${errors > 5 ? ` (+${errors - 5} more)` : ''}` },
+      { name: 'verification reports zero errors', ok: errors === 0, message: errors === 0 ? 'verification reports no error; only baseline-suppressed debt remains' : `verification reports ${countNoun(errors, 'error')}: ${report.findings.filter((f) => f.severity === 'error').slice(0, 5).map((f) => f.message).join('; ')}${errors > 5 ? ` (+${errors - 5} more)` : ''}` },
     ];
     return { ok: assertions.every((a) => a.ok), assertions };
   } finally {

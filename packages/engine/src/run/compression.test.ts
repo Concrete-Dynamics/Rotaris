@@ -61,7 +61,7 @@ describe('engine/run/compression — the reconstruction and the turn alignment (
     const long = Array.from({ length: 420 }, (_, i) => `line ${i}`).join('\n');
     const clamped = clampSummary(long);
     expect(clamped.split('\n')).toHaveLength(SUMMARY_LINE_CAP + 1);
-    expect(clamped).toContain('120 further line(s) omitted');
+    expect(clamped).toContain('120 further lines omitted');
     const todos = Array.from({ length: 40 }, (_, i) => `[open] main — item ${i}`);
     const turns = Array.from({ length: 12 }, (_, i) => text('user', `turn ${i}`));
     const rebuilt = rebuild(text('user', 'original'), clamped, todos, turns);

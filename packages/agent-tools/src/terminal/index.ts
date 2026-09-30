@@ -1,3 +1,4 @@
+import { countNoun } from '@rotaris/kernel';
 import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -444,7 +445,7 @@ function sessionAction(a: TerminalArgs, bg: BackgroundManager): Promise<Observat
     const glyph = (s: string) => (s === 'running' ? '▶' : s === 'completed' ? '✓' : '✗');
     const table = rows.length === 0 ? '(no background sessions)' : rows.map((s) => `${glyph(s.status)} ${s.id}  ${s.status.padEnd(9)}  ${s.exitCode ?? '-'}  ${s.startedAt}  ${s.command}`).join('\n');
     const entries = rows.map((s) => ({ session_id: s.id, command: s.command, status: s.status, exit_code: s.exitCode, started_at: s.startedAt }));
-    const diag = diagnosticBlock({ backend: BACKEND_NAME, command: '[list]', detail: `${rows.length} background session(s).`, exit_code: 0, outcome_kind: 'success', outcome_severity: 'info', sessions: entries, warnings: [] });
+    const diag = diagnosticBlock({ backend: BACKEND_NAME, command: '[list]', detail: `${countNoun(rows.length, 'background session')}.`, exit_code: 0, outcome_kind: 'success', outcome_severity: 'info', sessions: entries, warnings: [] });
     return observation(`${table}\n${outputSection('', false)}\n${diag}`, { outcomeKind: 'success', exitCode: 0, warnings: [] });
   }
   if (!a.session_id) return invalid(`session_action '${action}' requires session_id.`, a);

@@ -1,4 +1,4 @@
-import { displayMask, err, failure, ok, type Failure, type Result, type WallClock } from '@rotaris/kernel';
+import { countNoun, displayMask, err, failure, ok, type Failure, type Result, type WallClock } from '@rotaris/kernel';
 import { toIsoUtc } from '@rotaris/kernel';
 import { CATALOGUE, displayNameFor, instanceId, isInstanceId, lookupProvider, METHOD_LABELS, modelsEndpoint, normalizeBaseUrl, PROVIDER_IDS, signInMethodFor, type SignInMethod } from './catalogue.js';
 import { credentialStatus, headerValidKey, type CredentialStatus, type CredentialStore, type StoredCredential } from './credentials/store.js';
@@ -154,7 +154,7 @@ export class ProviderService {
     if (key.value.length === 0) return { outcome: 'failed', message: 'API key is required.' };
     const exists = this.deps.credentials.exists(id) || this.snapshotRecord(id) !== null;
     if (exists && !req.replace) return { outcome: 'needs-confirmation', id, message: `Replace the existing provider instance '${req.label}'?` };
-    return this.completeApiKeySignIn(id, req.label.trim(), 'openai-compatible', base.value, base.value, key.value, { provider_family: 'openai-compatible', api_base: base.value }, req.allowEmpty ?? false, `Added ${req.label.trim()}; discovered {n} model(s).`);
+    return this.completeApiKeySignIn(id, req.label.trim(), 'openai-compatible', base.value, base.value, key.value, { provider_family: 'openai-compatible', api_base: base.value }, req.allowEmpty ?? false, `Added ${req.label.trim()}; discovered {models}.`);
   }
 
   /** REQ-PROVIDER-050: a built-in API-key provider (deepseek); persist only after discovery with ≥1 model. */
@@ -171,7 +171,7 @@ export class ProviderService {
     if (!key.ok) return { outcome: 'failed', message: key.error };
     if (key.value.length === 0) return { outcome: 'failed', message: 'API key is required.' };
     // The record carries the catalogue's base URL so the configuration layer needs no catalogue of its own (REQ-PROVIDER-091).
-    return this.completeApiKeySignIn(id, entry.value.displayName, null, null, entry.value.baseUrl, key.value, {}, allowEmpty, `Login complete for ${entry.value.displayName}; discovered {n} model(s).`);
+    return this.completeApiKeySignIn(id, entry.value.displayName, null, null, entry.value.baseUrl, key.value, {}, allowEmpty, `Login complete for ${entry.value.displayName}; discovered {models}.`);
   }
 
   private async completeApiKeySignIn(id: string, displayName: string, family: string | null, discoveryBase: string | null, recordBase: string | null, key: string, extra: Record<string, string>, allowEmpty: boolean, successTemplate: string): Promise<SignInOutcome> {
@@ -202,7 +202,7 @@ export class ProviderService {
     }
     this.clearError(id);
     const publicCatalog = await this.catalogIsPublic(id, discoveryBase, displayName);
-    const message = `${successTemplate.replace('{n}', String(found.value.length))}${publicCatalog ? ` ${ProviderService.PUBLIC_CATALOG_NOTE}` : ''}`;
+    const message = `${successTemplate.replace('{models}', countNoun(found.value.length, 'model'))}${publicCatalog ? ` ${ProviderService.PUBLIC_CATALOG_NOTE}` : ''}`;
     this.deps.log(message);
     return { outcome: 'signed-in', id, displayName, discovered: found.value.length, message, keyValidated: !publicCatalog };
   }
@@ -232,7 +232,7 @@ export class ProviderService {
       if (!p.ok) return err(p.error.headline);
     }
     this.clearError(id);
-    return ok(models ? `Validated ${this.displayName(id)}; discovered ${models.length} model(s).` : `Saved the key for ${this.displayName(id)}.`);
+    return ok(models ? `Validated ${this.displayName(id)}; discovered ${countNoun(models.length, 'model')}.` : `Saved the key for ${this.displayName(id)}.`);
   }
 
   /** REQ-PROVIDER-141: a changed base URL re-runs discovery when a key is stored and updates both places. */
@@ -249,7 +249,7 @@ export class ProviderService {
       const p = await this.persistModels(id, this.displayName(id), 'openai-compatible', base.value, found.value);
       if (!p.ok) return err(p.error.headline);
       this.clearError(id);
-      return ok(`Validated ${this.displayName(id)} at ${base.value}; discovered ${found.value.length} model(s).`);
+      return ok(`Validated ${this.displayName(id)} at ${base.value}; discovered ${countNoun(found.value.length, 'model')}.`);
     }
     const rec = this.snapshotRecord(id);
     if (!rec) return err(`${this.displayName(id)} is not configured.`);
@@ -272,7 +272,7 @@ export class ProviderService {
     const p = await this.persistModels(id, this.displayName(id), isInstanceId(id) ? 'openai-compatible' : null, this.recordBase(id, cred), found.value);
     if (!p.ok) return err(p.error.headline);
     this.clearError(id);
-    return ok(`Validated ${this.displayName(id)}; discovered ${found.value.length} model(s).${p.value.preserved > 0 ? ` ${p.value.preserved} previously known model(s) preserved.` : ''}`);
+    return ok(`Validated ${this.displayName(id)}; discovered ${countNoun(found.value.length, 'model')}.${p.value.preserved > 0 ? ` ${countNoun(p.value.preserved, 'previously known model')} preserved.` : ''}`);
   }
 
   /** REQ-PROVIDER-102/060: sign-out. Never touches the snapshot. */
@@ -372,7 +372,7 @@ export class ProviderService {
     }
     const p = await this.persistModels(id, this.displayName(id), isInstanceId(id) ? 'openai-compatible' : null, this.recordBase(id, cred), found.value);
     if (!p.ok) return { state: 'error', detail: p.error.headline, available: true };
-    return { state: 'healthy', detail: `Validated ${this.displayName(id)}; discovered ${found.value.length} model(s).`, available: true };
+    return { state: 'healthy', detail: `Validated ${this.displayName(id)}; discovered ${countNoun(found.value.length, 'model')}.`, available: true };
   }
 
   /** REQ-PROVIDER-140: the union of credential ids, catalogue ids and snapshot ids, each once, by id. */

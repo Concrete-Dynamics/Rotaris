@@ -1,3 +1,4 @@
+import { countNoun } from '@rotaris/kernel';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { errorObservation, observation, type ToolExecutor } from './types.js';
@@ -93,7 +94,7 @@ const PROTECTED: ReadonlySet<TodoState> = new Set(['COMPLETED', 'ABANDONED', 'IN
  * the operation that takes it and says what became of what was sent.
  */
 const batchRemedy = (phases: number, what: string): string =>
-  phases === 0 ? '' : ` ${what} at a time and does not read \`phases\`, so the ${phases} phase(s) sent here were not added; call replace with the whole \`phases\` array to create them in one call.`;
+  phases === 0 ? '' : ` ${what} at a time and does not read \`phases\`, so the ${phases === 1 ? 'phase' : `${phases} phases`} sent here ${phases === 1 ? 'was' : 'were'} not added; call replace with the whole \`phases\` array to create them in one call.`;
 
 const fieldsFor = (op: string): string => ({
   replace: 'replace reads `phases`: [{name, tasks: [{name, description, state}]}].',
@@ -152,7 +153,7 @@ export function todoTool(list: TodoList): ToolExecutor<z.infer<typeof todoSchema
           const actives = next.flatMap((p) => p.tasks.filter((t) => t.state === 'IN_PROGRESS'));
           if (actives.length > 1) return errorObservation(singleActive(actives[0]!.id, actives[0]!.name));
           list.phases.splice(0, list.phases.length, ...next);
-          return done(`Replaced the todo list: ${next.length} phase(s), ${next.reduce((n, p) => n + p.tasks.length, 0)} task(s).`);
+          return done(`Replaced the todo list: ${countNoun(next.length, 'phase')}, ${countNoun(next.reduce((n, p) => n + p.tasks.length, 0), 'task')}.`);
         }
         case 'add_phase': {
           const name = a.name ?? a.title;

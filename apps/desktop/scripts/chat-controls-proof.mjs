@@ -9,7 +9,7 @@
  *   1. compress-two     a root that delegates and then waits on a model call, a child that reads twice and waits: TWO
  *                       live conversations. "Compress context" pressed in the run header → the button relabels
  *                       "Compressing…" and disables, "Compressing active agent contexts…" is toasted, then "Compressed
- *                       context for 2 active agent(s)." and the label is back (REQ-CHAT-079/080, REQ-MONITOR-093/094);
+ *                       context for 2 active agents." and the label is back (REQ-CHAT-079/080, REQ-MONITOR-093/094);
  *                       the store holds one `context_compressed` entry PER AGENT, `trigger: manual`, no threshold figure
  *                       (REQ-CHAT-081, REQ-MONITOR-096), and both conversations shrank (REQ-MONITOR-092).
  *   2. compress-partial the same run with the scripted compressor failing on the child's slice alone (`fail-if:`): the root
@@ -186,7 +186,7 @@ const T1 = { arm: 13900, press: 14000, pressing: 14300, done: 15500 };
     ...TWO,
     ROTARIS_CAPTURE_CLICKS: `[data-testid="run-compress"]@${T1.press}`,
     ROTARIS_CAPTURE_EVAL_AT: [`${readCompress}@${T1.press - 200}`, `${armCompressObserver}@${T1.arm}`, `${readCompressObserved}@${T1.pressing}`, `${readCompress}@${T1.done}`, `${readNotice}@${T1.done + 50}`].join(';;'),
-    ROTARIS_CAPTURE_TEXT_AT: `Compressing active agent contexts…@${T1.pressing};;Compressed context for 2 active agent(s).@${T1.done}`,
+    ROTARIS_CAPTURE_TEXT_AT: `Compressing active agent contexts…@${T1.pressing};;Compressed context for 2 active agents.@${T1.done}`,
   });
   const before = evalAt(r, T1.press - 200);
   const observed = evalAt(r, T1.pressing);
@@ -196,7 +196,7 @@ const T1 = { arm: 13900, press: 14000, pressing: 14300, done: 15500 };
   const pressing = Array.isArray(observed) ? observed.find((o) => o.text === 'Compressing…') ?? null : null;
   expect(pressing !== null && pressing.disabled === true && pressing.pending === '1', `on activation the control relabels "Compressing…" and disables (REQ-CHAT-079, REQ-MONITOR-093): ${JSON.stringify(observed)}`);
   expect(text(r, 'Compressing active agent contexts…', T1.pressing), 'the start toast "Compressing active agent contexts…" was not shown');
-  expect(text(r, 'Compressed context for 2 active agent(s).', T1.done), '"Compressed context for 2 active agent(s)." was not shown (REQ-CHAT-080)');
+  expect(text(r, 'Compressed context for 2 active agents.', T1.done), '"Compressed context for 2 active agents." was not shown (REQ-CHAT-080)');
   expect(done?.text === 'Compress context' && done.pending === '0', `on completion the label is restored: ${JSON.stringify(done)}`);
   expect(evalAt(r, T1.done + 50) === null, `no persistent notice on a complete pass: ${JSON.stringify(evalAt(r, T1.done + 50))}`);
   const db = openStore(s.local);
@@ -214,7 +214,7 @@ const T1 = { arm: 13900, press: 14000, pressing: 14300, done: 15500 };
     expect(m.after_messages < m.before_messages, `${m.agent}'s conversation did not shrink: ${JSON.stringify(m)}`);
   }
   // The run host's own `manual compression:` line is the SESSION log's; main's stdout carries the acknowledgement it relayed and the control's answer.
-  expect(/acknowledgement from the run host: ok "Compressed context for 2 active agent\(s\)\."/.test(r.log) && /control forceCompression on \S+ → ok/.test(r.log), 'main did not relay the settled pass');
+  expect(/acknowledgement from the run host: ok "Compressed context for 2 active agents\."/.test(r.log) && /control forceCompression on \S+ → ok/.test(r.log), 'main did not relay the settled pass');
   results.compressTwo = { agents: metas.map((m) => ({ agent: m.agent, before: m.before_messages, after: m.after_messages, latencyMs: m.latency_ms })), pressing, done };
 }
 
@@ -229,7 +229,7 @@ const T1 = { arm: 13900, press: 14000, pressing: 14300, done: 15500 };
   });
   const notice = evalAt(r, T1.done);
   expect(notice?.title === 'Context compression incomplete' && notice.severity === 'error', `the persistent incomplete notice: ${JSON.stringify(notice)}`);
-  expect(notice.message === '1 of 2 active agent context(s) compressed; 1 failed.', `the notice's message: ${JSON.stringify(notice.message)}`);
+  expect(notice.message === '1 of 2 active agent contexts compressed; 1 failed.', `the notice's message: ${JSON.stringify(notice.message)}`);
   expect(typeof notice.detail === 'string' && /child-a/.test(notice.detail) && /scripted compressor failure/.test(notice.detail), `the detail block should list the failing agent with its reason (REQ-MONITOR-094): ${JSON.stringify(notice.detail)}`);
   expect(!notice.inComposer, 'the notice must be the shell\'s one slot, not a composer-drawn banner');
   expect(!text(r, 'Compressed context for', T1.done), 'a partial pass must not toast the completion count');

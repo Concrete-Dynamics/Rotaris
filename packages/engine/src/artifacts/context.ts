@@ -1,3 +1,4 @@
+import { countNoun } from '@rotaris/kernel';
 import { isReadyArtifactStatus } from '@rotaris/contracts';
 import type { ArtifactRecord } from './record.js';
 
@@ -50,7 +51,7 @@ export function siblingIndexBlock(records: readonly ArtifactRecord[], budget = S
   const ordered = siblingIndexOrder(records.filter((r) => r.supersededBy === null));
   if (ordered.length === 0) return { text: '', included: 0, elided: 0 };
   const head = `${SIBLING_INDEX_HEADING}\n`;
-  const marker = (n: number, first: boolean) => `${first ? '' : '\n'}… ${n} further artifact(s) are not listed here; call artifact_list to reach them.`;
+  const marker = (n: number, first: boolean) => `${first ? '' : '\n'}… ${countNoun(n, 'further artifact')} ${n === 1 ? 'is' : 'are'} not listed here; call artifact_list to reach them.`;
   const lines = ordered.map(siblingIndexLine);
   for (let take = lines.length; take >= 0; take -= 1) {
     const elided = lines.length - take;
@@ -92,8 +93,8 @@ export function fullContextBlock(resolved: readonly AttachedResolution[], budget
   }
   const notes: string[] = [];
   for (const f of failures) notes.push(`\n(the document of ${f.record!.id} could not be read: ${f.failure ?? 'unknown reason'})`);
-  if (unresolved.length > 0) notes.push(`\n(${unresolved.length} attached reference(s) could not be resolved: ${unresolved.join(', ')})`);
-  if (elided.length > 0) notes.push(`\n(${elided.length} attached artifact(s) did not fit the context budget and were left out: ${elided.join(', ')}; call artifact_read to fetch one)`);
+  if (unresolved.length > 0) notes.push(`\n(${countNoun(unresolved.length, 'attached reference')} could not be resolved: ${unresolved.join(', ')})`);
+  if (elided.length > 0) notes.push(`\n(${countNoun(elided.length, 'attached artifact')} did not fit the context budget and ${elided.length === 1 ? 'was' : 'were'} left out: ${elided.join(', ')}; call artifact_read to fetch ${elided.length === 1 ? 'it' : 'one'})`);
   if (sections.length === 0 && notes.length === 0) return { text: '', included: 0, elided, unresolved };
   return { text: `${head}${sections.join('\n')}${notes.join('')}`, included: sections.length, elided, unresolved };
 }

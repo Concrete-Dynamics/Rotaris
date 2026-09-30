@@ -164,7 +164,7 @@ describe('engine/sessions — forceCompression and clearTranscript in a run (REQ
     const r = await sessions.controlAsync({ op: 'forceCompression', sessionId: sid, args: {} });
     expect(r).toEqual({ ok: true, compression: { compressed: 1, unchanged: 0, failed: [] } });
     expect(counts.get('compressor')).toBe(1);
-    expect(toasts).toEqual([{ kind: 'ok', title: 'Compressed context for 1 active agent(s).' }]);
+    expect(toasts).toEqual([{ kind: 'ok', title: 'Compressed context for 1 active agent.' }]);
     expect(reports).toEqual([]);
     const entry = timeline(sid).find((t) => t.name === 'context_compressed');
     expect(entry).toBeDefined();
@@ -195,7 +195,7 @@ describe('engine/sessions — forceCompression and clearTranscript in a run (REQ
     expect(reports).toHaveLength(1);
     expect(reports[0]!.title).toBe('Context compression incomplete');
     expect(reports[0]!.severity).toBe('error');
-    expect(reports[0]!.message).toBe('0 of 1 active agent context(s) compressed; 1 failed.');
+    expect(reports[0]!.message).toBe('0 of 1 active agent context compressed; 1 failed.');
     expect(reports[0]!.detail).toBe(`${report.failed[0]!.agent}: ${report.failed[0]!.reason}`);
     expect(reports[0]!.sessionId).toBe(sid);
     expect(timeline(sid).some((t) => t.name === 'context_compressed')).toBe(false);

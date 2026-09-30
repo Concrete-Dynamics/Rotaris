@@ -19,7 +19,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, utilityProcess,
 import { join } from 'node:path';
 import { mkdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { millis, toIsoUtc } from '@rotaris/kernel';
+import { countNoun, millis, toIsoUtc } from '@rotaris/kernel';
 import { type AcknowledgementAction, CHANNEL, CommandRequestSchema, type CommandRequest, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
 import { claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // The updater (first-release-plan.md §4.6, ADR-0054): the pure module, and the one file of it that touches Electron.
@@ -1354,14 +1354,13 @@ async function main(): Promise<void> {
     if (assessed.kind !== 'workspace.restore.assessment') return refusal(assessed, 'The backup could not be assessed');
     const a = assessed.assessment;
     if (a.refusal) { raiseNotice('error', 'The restore was refused', a.refusal.detail); return { ok: false, code: `restore.${a.refusal.why}`, headline: 'The restore was refused', detail: a.refusal.detail }; }
-    const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
     const cancel = (): CommandOutcome => ({ ok: true, value: { cancelled: true } });
 
     // 1 — which workspace, when, and what it does to the store that is there now. Cancel is the default.
     const from = a.artifact.lastSeenWorkspacePath ?? a.artifact.workspaceId;
     const nowText = a.target.exists
-      ? `The store this backup restores into currently holds ${plural(a.target.sessions, 'session')}. Restoring replaces it: those sessions are moved aside and kept (never deleted), and the backup's ${plural(a.artifact.sessions, 'session')} take their place. A session here and absent from the backup will no longer be listed; one in the backup and absent here will appear.`
-      : `No store exists here for this backup's workspace yet; restoring creates it with the backup's ${plural(a.artifact.sessions, 'session')}.`;
+      ? `The store this backup restores into currently holds ${countNoun(a.target.sessions, 'session')}. Restoring replaces it: those sessions are moved aside and kept (never deleted), and the backup's ${countNoun(a.artifact.sessions, 'session')} take their place. A session here and absent from the backup will no longer be listed; one in the backup and absent here will appear.`
+      : `No store exists here for this backup's workspace yet; restoring creates it with the backup's ${countNoun(a.artifact.sessions, 'session')}.`;
     const first = await askBox(w.win, {
       type: 'question', title: 'Restore the session store', message: `This backup was taken from ${from} on ${a.artifact.takenAtUtc}.`, detail: nowText,
       buttons: ['Cancel', 'Restore'], defaultId: 0, cancelId: 0, noLink: true,
@@ -1388,7 +1387,7 @@ async function main(): Promise<void> {
     if (a.target.foreignLocks.length > 0) {
       const third = await askBox(w.win, {
         type: 'warning', title: 'Lock records name another machine',
-        message: `${plural(a.target.foreignLocks.length, 'session')} in the store carry lock records naming another machine: ${a.target.foreignLocks.join(', ')}.`,
+        message: `${countNoun(a.target.foreignLocks.length, 'session')} in the store ${a.target.foreignLocks.length === 1 ? 'carries' : 'carry'} lock records naming another machine: ${a.target.foreignLocks.join(', ')}.`,
         detail: 'Nothing on this machine is writing under them. If this store genuinely is reachable from another machine, a run there may be writing to it now, and the restore replaces what it writes. Nothing needs to be cleared one at a time.',
         buttons: ['Cancel', 'Restore anyway'], defaultId: 0, cancelId: 0, noLink: true,
       });
@@ -1402,7 +1401,7 @@ async function main(): Promise<void> {
     if (rep.ok) {
       // The workspace now resolves as the restore left it; hand the run host the store again (W-18).
       await openWorkspace(root, w);
-      raiseNotice('info', `Restored ${plural(a.artifact.sessions, 'session')} from the backup taken on ${a.artifact.takenAtUtc}.${rep.identifierEstablished ? ' This workspace now carries the backup\'s identifier.' : ''}${rep.displaced ? ` The previous store was kept at ${rep.displaced}.` : ''}`);
+      raiseNotice('info', `Restored ${countNoun(a.artifact.sessions, 'session')} from the backup taken on ${a.artifact.takenAtUtc}.${rep.identifierEstablished ? ' This workspace now carries the backup\'s identifier.' : ''}${rep.displaced ? ` The previous store was kept at ${rep.displaced}.` : ''}`);
       return { ok: true, value: { restoredInto: rep.restoredInto, identifierEstablished: rep.identifierEstablished } };
     }
     const why = rep.refusal

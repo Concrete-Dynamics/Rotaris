@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import type { Clocks, Result } from '@rotaris/kernel';
-import { err, ok } from '@rotaris/kernel';
+import { countNoun, err, ok } from '@rotaris/kernel';
 import { declaredToolsOf, resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName } from '@rotaris/contracts';
 import { compressionTrigger, effectivePricing, isPlainMap, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import { renderUnavailability, type AvailabilityVerdict, type PolicyRead } from '@rotaris/agent-tools';
@@ -540,7 +540,7 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
   if (moded.referential.length > 0) {
     const lines = moded.referential.map((m) => `configuration: ${m}`);
     // REQ-CONFIG-246: with no person present, referential errors are always fatal to the run.
-    if (!attended) return err({ reason: `The configuration has ${moded.referential.length} unresolved reference(s) and no one is present to correct them: ${moded.referential.join('; ')}`, cfg: moded });
+    if (!attended) return err({ reason: `The configuration has ${countNoun(moded.referential.length, 'unresolved reference')} and no one is present to correct ${moded.referential.length === 1 ? 'it' : 'them'}: ${moded.referential.join('; ')}`, cfg: moded });
     warnings.push(...lines);
   }
   const scripted = deps.env['ROTARIS_MODEL_DIALECT'] === 'scripted';

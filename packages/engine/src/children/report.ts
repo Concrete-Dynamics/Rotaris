@@ -1,4 +1,4 @@
-import { millis, type Millis, type Timers } from '@rotaris/kernel';
+import { countNoun, millis, type Millis, type Timers } from '@rotaris/kernel';
 import { normaliseReportStatus, type ReportStatus } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
 import type { CutOff } from './cut-off.js';
@@ -274,7 +274,7 @@ export function fallbackReport(input: ReportInput, why: string): ChildReport {
   const ended = (input.errors ?? []).map((e) => e.message).join('; ');
   const derived = [
     ended ? `Ended: ${ended}.` : '',
-    `${input.toolCallCount} tool call(s); tools used: ${input.toolsUsed.join(', ') || '(none)'}.`,
+    `${countNoun(input.toolCallCount, 'tool call')}; tools used: ${input.toolsUsed.join(', ') || '(none)'}.`,
     edited.length > 0 ? `Files touched: ${edited.join(', ')}.` : '',
     ran.length > 0 ? `Commands run: ${ran.length}.` : '',
     `No summary was produced (${why}).`,

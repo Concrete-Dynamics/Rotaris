@@ -1,3 +1,4 @@
+import { countNoun } from '@rotaris/kernel';
 import type { BoardCard, EpicCard, ReqId, RequirementDetail } from '@rotaris/contracts';
 import { compareReqIds } from '@rotaris/contracts';
 import { HEALTH_GLOSS, RELATION_LABEL, columnLabel } from '@rotaris/ui-core';
@@ -198,8 +199,7 @@ export function contentsSummary(centre: ReqId, nodes: readonly GraphNode[], dept
   const requirements = nodes.filter((n) => n.kind === 'requirement' || n.kind === 'epic').length;
   const implementations = nodes.filter((n) => n.kind === 'implementation').length;
   const tests = nodes.filter((n) => n.kind === 'test').length;
-  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-  return `Centred on ${centre}: ${plural(requirements, 'requirement', 'requirements')}, ${plural(implementations, 'implementation site', 'implementation sites')} and ${plural(tests, 'covering test', 'covering tests')} at depth ${depth}.`;
+  return `Centred on ${centre}: ${countNoun(requirements, 'requirement', 'requirements')}, ${countNoun(implementations, 'implementation site', 'implementation sites')} and ${countNoun(tests, 'covering test', 'covering tests')} at depth ${depth}.`;
 }
 
 /**

@@ -113,7 +113,7 @@ import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
-import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall } from './lib/duress-checks.mjs';
+import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
 import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
@@ -1969,11 +1969,13 @@ if (wanted.includes('duress')) {
    * beside the two figures, and a request was open at the endpoint for all but seven seconds of it. An overrun while
    * the run was still progressing and the product held almost none of the wait is the WINDOW's bound — a NOTE, and
    * `LIVE_RUN_DURESS_MS` is what asks the longer question; the owner's forty minutes stay the default (AGENTS.md).
+   * "Still progressing" is read only from what ENDED ON ITS OWN before the wait ran out — a request the quit cut off
+   * ends at the quit whatever it was doing, so a stream hung from early in the wait would otherwise read as progress.
    */
   const durTraffic = readTraffic('duress').map(trafficCall);
   const durCalls = read === null ? [] : readToolCalls(read.session.session_id);
   const attribution = attributeWait({
-    startedAt, endedAt: startedAt + elapsed,
+    startedAt, endedAt: startedAt + elapsed, quitAt: waitRanOutAt(log),
     requests: durTraffic,
     tools: durCalls.filter((c) => c.endedAt !== null && c.elapsedMs !== null).map((c) => ({ start: c.endedAt - c.elapsedMs, end: c.endedAt })),
   });
@@ -2031,8 +2033,9 @@ if (wanted.includes('duress')) {
       // The eighty-second defect's shape at the child level: four of eleven children died with an empty
       // `final_response` because a model timeout was read as a user abort. An empty report from a failed child
       // is the observable, whatever the cause underneath it — but an empty `final_response` alone is not one:
-      // REQ-ORCH-110 leaves it empty for a child cut off mid-work, whose `last_response`, `cut_off` and timeout
-      // error say what it did (H-a).
+      // REQ-ORCH-110 leaves it empty for a child cut off mid-work, whose `last_response` and `cut_off` say what it
+      // did (H-a). An error entry alone says nothing: the product writes one on every failed child, and the
+      // eighty-second's children carried one naming the abort and nothing else.
       const silent = silentFailedChildren(children, reportOf);
       check(silent.length === 0, 'no child ended failed with nothing to say', silent.length === 0 ? 'every failed child reported' : `${silent.length}: ${silent.map((c) => c.given_name).join(', ')}`);
       // The eighty-eighth: `commands: []` was hardcoded at all three construction sites, so a child that ran
@@ -2053,7 +2056,7 @@ if (wanted.includes('duress')) {
       const setting = (key) => { const m = new RegExp(`^\\s+${key}:\\s*(\\d+)\\s*$`, 'm').exec(yaml); return m === null ? undefined : Number(m[1]); };
       const prompts = durTraffic.map((c) => c.promptTokens).filter((t) => t !== null);
       const trigger = compressionTrigger({ contextTokens: endpoint.contextTokens ?? null, thresholdPercentage: setting('threshold_percentage'), defaultThreshold: setting('default_threshold') });
-      noted('the long run never compressed its context', compressionNote({ largestPrompt: prompts.length === 0 ? null : Math.max(...prompts), trigger }));
+      noted('the long run never compressed its context', compressionNote({ largestPrompt: prompts.length === 0 ? null : Math.max(...prompts), trigger, calls: { withUsage: prompts.length, total: durTraffic.length } }));
     }
     else check(aggregate === compressed, 'the compressions aggregate counted what the timeline recorded', `aggregate ${aggregate} against ${compressed} timeline entr${compressed === 1 ? 'y' : 'ies'}`);
 

@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the readers are plain ESM beside the script that runs them.
-import { PRODUCT_SHARE_BOUND, PROGRESSING_TAIL_MS, attributeWait, childrenThatRanCommands, commandsReading, compressionNote, compressionTrigger, deadlineReading, saysSomething, silentFailedChildren, trafficCall, usageOf } from './duress-checks.mjs';
+import { PRODUCT_SHARE_BOUND, PROGRESSING_TAIL_MS, attributeWait, childrenThatRanCommands, commandsReading, compressionNote, compressionTrigger, deadlineReading, saysSomething, silentFailedChildren, trafficCall, usageOf, waitRanOutAt } from './duress-checks.mjs';
 
 type Report = Record<string, unknown>;
 const reportOf = (c: { report: Report | null }) => c.report ?? {};
@@ -29,13 +29,29 @@ describe('a failed child with something to say is not silent (H-a; REQ-ORCH-110,
   it.each([
     ['its last response alone', { final_response: '', last_response: 'I read three files.' }],
     ['a cut_off block alone (PD-ORCH-004)', { final_response: '', cut_off: { changed_paths: [] } }],
-    ['an error entry alone', { final_response: '', errors: [{ type: 'timeout', message: 'Child timed out after 1200s' }] }],
+    ['a cut_off block with its timeout error (PD-ORCH-004)', { final_response: '', cut_off: { changed_paths: ['a.md'] }, errors: [{ type: 'timeout', message: 'Child timed out after 1200s' }] }],
     ['its final response', { final_response: 'Done.' }],
   ])('REQ-ORCH-110: a failed child speaks through %s', (_name, report) => {
     expect(saysSomething(report)).toBe(true);
   });
 
-  it('REQ-ORCH-110: a failed child whose report carries no words, no cut-off and no error is silent — the eighty-second defect\'s observable', () => {
+  it('REQ-ORCH-110: the eighty-second defect\'s shape — failed, an error naming the abort, no words, no cut_off — is silent; the first repair counted its error entry as something to say', () => {
+    const aborted = {
+      given_name: 'x', state: 'failed',
+      report: { status: 'failed', summary: 'Used read_file, terminal.', final_response: '', last_response: '', errors: [{ type: 'model', message: 'The request was aborted.' }] },
+    };
+    expect(silentFailedChildren([aborted], reportOf).map((c: { given_name: string }) => c.given_name)).toEqual(['x']);
+  });
+
+  it.each([
+    ['a timeout that was not making progress (REQ-ORCH-088\'s report, no cut_off)', [{ type: 'timeout', message: 'Child timed out after 1200s' }]],
+    ['a raise (`child_exception`)', [{ type: 'child_exception', message: 'boom' }]],
+    ['no activity (`incomplete_execution`)', [{ type: 'incomplete_execution', message: 'no_activity' }]],
+  ])('REQ-ORCH-110: an error entry alone is nothing to say — %s', (_name, errors) => {
+    expect(saysSomething({ status: 'failed', final_response: '', last_response: '', errors })).toBe(false);
+  });
+
+  it('REQ-ORCH-110: a failed child with no report, or an empty one, is silent; a succeeded child is not asked', () => {
     const mute = { given_name: 'x', state: 'failed', report: { status: 'failed', summary: 'Used read_file.', final_response: '', last_response: '  ', errors: [] } };
     const none = { given_name: 'y', state: 'failed', report: null };
     const fine = { given_name: 'z', state: 'succeeded', report: {} };
@@ -90,6 +106,12 @@ describe('a run that never compressed says how large its prompts grew against th
     expect(note).not.toContain('(s)');
   });
 
+  it('says which calls the largest prompt is the largest of, and whose count it is', () => {
+    const note = compressionNote({ largestPrompt: 77_043, trigger: compressionTrigger({ contextTokens: 262_144 }), calls: { withUsage: 213, total: 218 } });
+    expect(note).toContain('the largest prompt of the 213 calls that carried usage (5 did not) was 77,043 tokens');
+    expect(note).toContain("the endpoint's `prompt_tokens`, not the product's own chars_per_token estimate (REQ-CONFIG-132)");
+  });
+
   it('says so when a prompt reached the trigger and nothing compressed, and when no prompt size was recorded', () => {
     expect(compressionNote({ largestPrompt: 200_000, trigger: compressionTrigger({ contextTokens: 262_144 }) })).toContain('at or above the 60 % compression trigger');
     expect(compressionNote({ largestPrompt: null, trigger: compressionTrigger({}) })).toContain('traffic not recorded');
@@ -115,7 +137,7 @@ describe('an overrun says where the time went (H-h)', () => {
       requests: [{ start: t(5), end: t(40) }, { start: t(30), end: t(60) }], // overlapping: parallel children
       tools: [{ start: t(55), end: t(70) }, { start: t(80), end: t(85) }],
     });
-    expect(a).toEqual({ waitMs: 100_000, endpointMs: 55_000, toolsMs: 15_000, launchMs: 5_000, productMs: 25_000, quietTailMs: 15_000, requests: 2 });
+    expect(a).toEqual({ waitMs: 100_000, endpointMs: 55_000, toolsMs: 15_000, launchMs: 5_000, productMs: 25_000, quietTailMs: 15_000, requests: 2, openAtQuit: 0, longestOpenAtQuitMs: 0 });
     expect(a.endpointMs + a.toolsMs + a.launchMs + a.productMs).toBe(a.waitMs);
   });
 
@@ -152,6 +174,54 @@ describe('an overrun says where the time went (H-h)', () => {
     const r = deadlineReading({ timedOut: true, attribution: a, budgetMs: 1_000_000, traffic: true, usage: { completionTokens: 1, reasoningTokens: 0 } });
     expect(r.outcome).toBe('product');
     expect(r.detail).toContain('nothing had been in flight for 150 s');
+  });
+
+  /** The quit at 2,402 s: the seam's wait ran out there, and the application exited at 2,406 s. */
+  const quitAt = t(2402);
+
+  it('a stream hung from early in the wait and cut off by the quit is not progress: the overrun is the product\'s, and the detail names the open request', () => {
+    const hung = { requests: [{ start: t(10), end: t(299), outcome: 'complete' }, { start: t(300), end: t(2406), outcome: 'aborted' }], tools: [{ start: t(5), end: t(9) }] };
+    // What the first repair read: the cut-off request's end — the quit — counted as the run's latest progress.
+    const unguarded = attributeWait({ startedAt: t(0), endedAt: t(2406), requests: hung.requests.map(({ start, end }) => ({ start, end })), tools: hung.tools });
+    expect(unguarded.quietTailMs).toBe(0);
+    const a = attributeWait({ startedAt: t(0), endedAt: t(2406), quitAt, ...hung });
+    expect(a).toMatchObject({ endpointMs: 2_395_000, quietTailMs: 2_107_000, openAtQuit: 1, longestOpenAtQuitMs: 2_106_000 });
+    const r = deadlineReading({ timedOut: true, attribution: a, budgetMs: 2_400_000, traffic: true, usage: { completionTokens: 1, reasoningTokens: 0 } });
+    expect(r.outcome).toBe('product');
+    expect(r.detail).toContain('nothing had ended on its own for 2,107 s when the launch ended; 1 request still open when the wait ran out, the longest open for 2,106 s, cut off by the quit');
+  });
+
+  it('the 2026-09-30 shape — the last completed request 30.6 s before the end, one cut off by the quit, two the product aborted mid-run — is still the window\'s bound, and names the one', () => {
+    const a = attributeWait({
+      startedAt: t(0), endedAt: t(2406), quitAt,
+      requests: [
+        { start: t(7), end: t(680), outcome: 'complete' }, { start: t(680), end: t(682), outcome: 'aborted' }, { start: t(682), end: t(2375.4), outcome: 'complete' },
+        { start: t(2375.5), end: t(2406), outcome: 'aborted' },
+      ],
+      tools: [],
+    });
+    expect(a).toMatchObject({ quietTailMs: 30_600, openAtQuit: 1, longestOpenAtQuitMs: 30_500 });
+    const r = deadlineReading({ timedOut: true, attribution: a, budgetMs: 2_400_000, traffic: true, usage: { completionTokens: 1, reasoningTokens: 0 } });
+    expect(r.outcome).toBe('window');
+    expect(r.detail).toContain('the last request or tool call to end on its own ended 31 s before the launch did; 1 request still open when the wait ran out, the longest open for 31 s');
+  });
+
+  it('a request the endpoint completed counts wherever it ended; a tool call ended at the quit does not; a stall is never an end; without the instant, the quit\'s outcomes do not count', () => {
+    const late = attributeWait({ startedAt: t(0), endedAt: t(2406), quitAt, requests: [{ start: t(5), end: t(2404), outcome: 'complete' }], tools: [{ start: t(2403), end: t(2405) }] });
+    expect(late.quietTailMs).toBe(2_000);
+    const toolAtQuit = attributeWait({ startedAt: t(0), endedAt: t(2406), quitAt, requests: [{ start: t(5), end: t(1000), outcome: 'complete' }], tools: [{ start: t(1000), end: t(2405) }] });
+    expect(toolAtQuit.quietTailMs).toBe(1_406_000);
+    const stalled = attributeWait({ startedAt: t(0), endedAt: t(2406), quitAt, requests: [{ start: t(5), end: t(100), outcome: 'complete' }, { start: t(100), end: t(2300), outcome: 'stalled' }], tools: [] });
+    expect(stalled).toMatchObject({ quietTailMs: 2_306_000, openAtQuit: 0 });
+    const noInstant = attributeWait({ startedAt: t(0), endedAt: t(2406), requests: [{ start: t(5), end: t(100), outcome: 'complete' }, { start: t(100), end: t(2406), outcome: 'in-flight at close' }], tools: [] });
+    expect(noInstant).toMatchObject({ quietTailMs: 2_306_000, openAtQuit: 1 });
+  });
+
+  it('reads the instant the wait ran out from the seam\'s timed-out line, and nothing from a log without one', () => {
+    const log = '[main 2026-09-30T06:10:09.517Z] info    capture: png-at 1440000\n[main 2026-09-30T06:10:09.600Z] info    capture: wait for result timed out after 2400000 ms\n';
+    expect(waitRanOutAt(log)).toBe(Date.parse('2026-09-30T06:10:09.600Z'));
+    expect(waitRanOutAt('[main 2026-09-30T06:10:09.600Z] info    capture: result')).toBeNull();
+    expect(waitRanOutAt(undefined)).toBeNull();
   });
 
   it('without recorded traffic an overrun stays a failure and says it cannot be attributed; a run inside the wait passes with its figures', () => {

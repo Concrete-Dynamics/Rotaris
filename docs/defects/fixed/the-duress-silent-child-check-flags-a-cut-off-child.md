@@ -23,13 +23,25 @@ Live-run finding: H-a (live runs of 2026-09-29)
 
 ## Outcome
 
-Repaired 2026-09-29 under R-067. A failed child counts as silent only when its report says nothing at all: no
-`final_response`, no `last_response`, no `cut_off` block and no error entry with a message (`saysSomething` and
+Repaired 2026-09-29 under R-067. A failed child counts as silent only when its report carries none of its own words
+and no cut-off: no `final_response`, no `last_response` and no `cut_off` block (`saysSomething` and
 `silentFailedChildren` in `apps/desktop/scripts/lib/duress-checks.mjs`, called from the `duress` scenario). The summary is
 not counted, because REQ-ORCH-110 makes one for every report. Pinned by `apps/desktop/scripts/lib/duress-checks.test.ts`
-("a failed child with something to say is not silent"): child `d`'s recorded report is not silent, and each of the four
-fields alone is something to say; a report with none of them, or no report, still is. Replayed over the 2026-09-29
+("a failed child with something to say is not silent"): child `d`'s recorded report is not silent, and its last
+response alone, its `cut_off` block alone (with or without the timeout error PD-ORCH-004 puts beside it) and a final
+response are each something to say; a report with none of them, or no report, still is. Replayed over the 2026-09-29
 pack's store, the check now finds no silent child where it flagged `d`.
+
+~~…and no error entry with a message … each of the four fields alone is something to say.~~ *Corrected 2026-09-30 (the
+verifier's fix round 1), the first repair's reading kept struck through beside it: an error entry alone is **not**
+something to say. The product writes one on every failed child — `timeout`, the caught error, `model` with the
+report's error headline and `incomplete_execution` in `packages/engine/src/children/orchestration.ts`'s status
+decision, and `child_exception` in `settleRaised` — so counting it left the check able to flag only a child with no
+outcome at all. The eighty-second defect's children, failed with an error naming the abort and no words or `cut_off`,
+passed it, and the case that claimed to pin that defect's observable pinned `errors: []`, a shape it never produced.
+The case "the eighty-second defect's shape … is silent" now pins the recorded shape and fails on the first repair, and
+three cases pin that a `timeout` without `cut_off`, a `child_exception` and an `incomplete_execution` entry alone are
+nothing to say.*
 
 **Live, 2026-09-30** (pack `.live-run/runs/2026-09-30T05-29-56-712Z`): no child ended `failed`, and the check passed.
 The cut-off shape was not met live this time; the unit cases pin it.

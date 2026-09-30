@@ -32,3 +32,10 @@ any agent sent was 64,038 tokens, 24 % of the model's 262,144-token window and b
 
 **Shown live, 2026-09-30** (pack `.live-run/runs/2026-09-30T05-29-56-712Z`): "the largest prompt any agent sent was
 77,043 tokens, 29 % of the model's 262,144-token window and below the 60 % compression trigger, 157,286 tokens".
+
+**Sharpened 2026-09-30 (the verifier's fix round 1).** "The largest prompt any agent sent" overstated its reach: the
+figure is read only from the calls that carried a usage chunk, and in the 2026-09-30 pack 5 of 218 did not (aborted, or
+cut at the recorder's body cap). The note now says "of the 213 calls that carried usage (5 did not)", and names whose
+count it compares — the endpoint's `prompt_tokens`, not the product's own `chars_per_token` estimate (REQ-CONFIG-132),
+which is what the product tests the trigger against. Pinned by the case "says which calls the largest prompt is the
+largest of, and whose count it is".

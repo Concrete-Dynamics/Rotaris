@@ -5,7 +5,8 @@
  * could not show:
  *
  *   H-a  a child cut off mid-work was counted as "failed with nothing to say" because its `final_response` was empty —
- *        which REQ-ORCH-110 requires of every child whose last assistant message was followed by tool activity;
+ *        which REQ-ORCH-110 requires of every child whose last assistant message was followed by tool activity (and an
+ *        error entry alone is still nothing to say: the product writes one on every failed child);
  *   H-b  a child's terminal calls were looked for under its given name, and `tool_calls.agent_name` holds the
  *        canonical one, so no child was ever found to have run a command;
  *   H-d  a run that never compressed was said to have run too few iterations, when the question is how large its
@@ -22,19 +23,28 @@ const text = (value) => (typeof value === 'string' ? value.trim() : '');
 
 /**
  * What a child's report says for it, beyond its status. REQ-ORCH-110 puts the child's last words in `final_response`
- * only where no tool activity followed them, and in `last_response` otherwise; a child cut off at its ceiling carries
- * `cut_off` with its changed paths and the continuation offer (`PD-ORCH-004`) and an error naming the timeout. Any of
- * these is something to say. The summary is not counted: REQ-ORCH-110 makes one for every report, from the tools used
- * where there are no words, so it cannot tell a silent child from a speaking one.
+ * only where no tool activity followed them, and in `last_response` otherwise; a child cut off at its ceiling while it
+ * was making progress carries `cut_off` with its changed paths and the continuation offer (`PD-ORCH-004`). Its words and
+ * that block are something to say.
+ *
+ * An error entry ALONE is not. The product writes one on every failed child — `timeout`, the caught error, `model` with
+ * the report's error headline, `incomplete_execution` (`packages/engine/src/children/orchestration.ts`, the status
+ * decision in `execute`) and `child_exception` (`settleRaised`) — so counting it would leave the check nothing to find.
+ * The eighty-second defect's children were exactly that shape: failed, an error naming the abort, no words and no
+ * `cut_off`. A cut-off child's timeout error is counted with its `cut_off` block, where PD-ORCH-004 puts it (the
+ * verifier's finding against the first repair, 2026-09-30). The summary is not counted either: REQ-ORCH-110 makes one for
+ * every report, from the tools used where there are no words, so it cannot tell a silent child from a speaking one.
  */
 export function saysSomething(report) {
   const r = report !== null && typeof report === 'object' ? report : {};
   if (text(r.final_response) !== '' || text(r.last_response) !== '') return true;
-  if (r.cut_off !== null && typeof r.cut_off === 'object') return true;
-  return Array.isArray(r.errors) && r.errors.some((e) => text(e?.message) !== '');
+  return r.cut_off !== null && typeof r.cut_off === 'object';
 }
 
-/** The children that ended `failed` with nothing to say — the eighty-second defect's observable (H-a). */
+/**
+ * The children that ended `failed` with nothing to say — the eighty-second defect's observable: a failed child whose
+ * report carries an error and nothing else (H-a).
+ */
 export function silentFailedChildren(children, reportOf) {
   return children.filter((c) => c.state === 'failed' && !saysSomething(reportOf(c)));
 }
@@ -102,14 +112,48 @@ const pct = (part, whole) => (whole > 0 ? Math.round((100 * part) / whole) : 0);
  * send, not to how many iterations the run completed — the first execution's only iteration never ended, so the old
  * note blamed "0 iteration(s)" for a run whose largest prompt was 64,038 tokens against a trigger of 157,286.
  */
-export function compressionNote({ largestPrompt, trigger }) {
+export function compressionNote({ largestPrompt, trigger, calls = null }) {
   const window = trigger.advertised === null ? `the ${n(trigger.capacity)}-token default capacity (the model advertises no input limit)` : `the model's ${n(trigger.advertised)}-token window`;
   const at = `the ${trigger.thresholdPercentage} % compression trigger, ${n(trigger.tokens)} tokens (REQ-CONFIG-134)`;
   if (largestPrompt === null) return `no recorded call carried its prompt size (traffic not recorded), so whether a prompt ever neared ${at} is unknown; the compressions aggregate is unasked`;
+  // Which calls the figure is the largest of, and whose count it is: a call aborted, or cut at the recorder's body cap,
+  // carries no usage chunk; and the product tests the trigger against its own estimate at `chars_per_token`
+  // (REQ-CONFIG-132), not against the endpoint's count.
+  const of = calls === null ? 'any agent sent' : `of the ${n(calls.withUsage)} calls that carried usage (${n(calls.total - calls.withUsage)} did not)`;
+  const whose = "the endpoint's `prompt_tokens`, not the product's own chars_per_token estimate (REQ-CONFIG-132)";
   if (largestPrompt < trigger.tokens) {
-    return `the largest prompt any agent sent was ${n(largestPrompt)} tokens, ${pct(largestPrompt, trigger.advertised ?? trigger.capacity)} % of ${window} and below ${at} — the run never grew that far; the compressions aggregate is unasked`;
+    return `the largest prompt ${of} was ${n(largestPrompt)} tokens, ${pct(largestPrompt, trigger.advertised ?? trigger.capacity)} % of ${window} and below ${at} — the run never grew that far, by ${whose}; the compressions aggregate is unasked`;
   }
-  return `the largest prompt any agent sent was ${n(largestPrompt)} tokens, at or above ${at}, and no compression was recorded — worth reading beside the session log; the compressions aggregate is unasked`;
+  return `the largest prompt ${of} was ${n(largestPrompt)} tokens, at or above ${at} by ${whose}, and no compression was recorded — worth reading beside the session log; the compressions aggregate is unasked`;
+}
+
+/**
+ * The instant the capture seam's wait for the result ran out, from its timed-out line in the launch's log
+ * (`[main <ISO instant>] info    capture: wait for result timed out …`); null when the wait did not run out or the line
+ * carries no instant. What ends after it was ended by the quit that follows, not by the run.
+ */
+export function waitRanOutAt(log) {
+  const m = /\[\w+ (\d{4}-\d\d-\d\dT[\d:.]+Z)\][^\n]*capture: wait for result timed out/.exec(typeof log === 'string' ? log : '');
+  const at = m === null ? Number.NaN : Date.parse(m[1]);
+  return Number.isFinite(at) ? at : null;
+}
+
+/** The traffic outcomes the quit gives a call it cuts off (`lib/model-traffic.mjs`'s `settle`). */
+const CUT_BY_THE_QUIT = new Set(['aborted', 'in-flight at close']);
+
+/**
+ * Whether an interval ENDED ON ITS OWN, so that its end says the run was still moving. A request the endpoint finished
+ * (`complete`) did, whenever it ended. A stall's first record (`stalled`) marks the silence beginning, never an end.
+ * Otherwise an interval that ended before the wait ran out did; one that ended at or after it was ended by the quit,
+ * and its end says only when the application exited — a stream hung from early in the wait and cut at the quit would
+ * otherwise read as the run's latest progress (the verifier's finding against the first repair, 2026-09-30). Where the
+ * instant the wait ran out is unknown, a request the quit's outcomes name is not counted.
+ */
+function endedOnItsOwn(interval, quitAt) {
+  if (interval.outcome === 'complete') return true;
+  if (interval.outcome === 'stalled') return false;
+  if (quitAt !== null) return interval.end < quitAt;
+  return !CUT_BY_THE_QUIT.has(interval.outcome);
 }
 
 /**
@@ -119,22 +163,30 @@ export function compressionNote({ largestPrompt, trigger }) {
  *   tools     no request was open and at least one tool call was running (the store: each call's end and `elapsed_ms`);
  *   launch    before the first request or tool call — the application starting and the run being set up;
  *   product   the rest: the product between steps with nothing in flight, and the quit after the wait.
- * `quietTailMs` is how long before the launch ended the last request or tool call did: small when the run was still
- * progressing when the wait ran out, large when it had stopped moving.
+ * The buckets are OCCUPANCY, not a critical path: a request open while the run's next step waits on something else is
+ * still counted to the endpoint.
+ * `quietTailMs` is how long before the launch ended the last request or tool call that ENDED ON ITS OWN did (see
+ * `endedOnItsOwn`; `quitAt` is the instant the wait ran out, `waitRanOutAt`): small when the run was still progressing
+ * when the wait ran out, large when it had stopped moving — even with a request open the whole time. The requests the
+ * quit cut off are counted in `openAtQuit`, the longest of them in `longestOpenAtQuitMs`.
  */
-export function attributeWait({ startedAt, endedAt, requests, tools }) {
+export function attributeWait({ startedAt, endedAt, requests, tools, quitAt = null }) {
   const clip = (list) => list
     .filter((i) => Number.isFinite(i.start) && Number.isFinite(i.end) && i.end > i.start)
-    .map((i) => ({ start: Math.max(i.start, startedAt), end: Math.min(i.end, endedAt) }))
+    .map((i) => ({ start: Math.max(i.start, startedAt), end: Math.min(i.end, endedAt), outcome: i.outcome ?? null }))
     .filter((i) => i.end > i.start);
   const req = clip(requests);
   const tool = clip(tools);
   const waitMs = Math.max(0, endedAt - startedAt);
-  if (req.length === 0 && tool.length === 0) return { waitMs, endpointMs: 0, toolsMs: 0, launchMs: waitMs, productMs: 0, quietTailMs: waitMs, requests: 0 };
+  const cutAtQuit = req.filter((i) => !endedOnItsOwn(i, quitAt) && i.outcome !== 'stalled');
+  const openAtQuit = cutAtQuit.length;
+  const longestOpenAtQuitMs = cutAtQuit.reduce((m, i) => Math.max(m, i.end - i.start), 0);
+  if (req.length === 0 && tool.length === 0) return { waitMs, endpointMs: 0, toolsMs: 0, launchMs: waitMs, productMs: 0, quietTailMs: waitMs, requests: 0, openAtQuit, longestOpenAtQuitMs };
   // One sweep over every boundary: between two consecutive boundaries nothing opens or closes.
   const points = [...new Set([startedAt, endedAt, ...req.flatMap((i) => [i.start, i.end]), ...tool.flatMap((i) => [i.start, i.end])])].sort((a, b) => a - b);
   const firstActivity = Math.min(...req.map((i) => i.start), ...tool.map((i) => i.start));
-  const lastActivity = Math.max(...req.map((i) => i.end), ...tool.map((i) => i.end));
+  const settled = [...req, ...tool].filter((i) => endedOnItsOwn(i, quitAt));
+  const lastSettled = settled.length === 0 ? startedAt : Math.max(...settled.map((i) => i.end));
   let endpointMs = 0; let toolsMs = 0; let launchMs = 0; let productMs = 0;
   for (let k = 0; k + 1 < points.length; k += 1) {
     const a = points[k]; const b = points[k + 1]; const span = b - a;
@@ -145,7 +197,7 @@ export function attributeWait({ startedAt, endedAt, requests, tools }) {
     else if (b <= firstActivity) launchMs += span;
     else productMs += span;
   }
-  return { waitMs, endpointMs, toolsMs, launchMs, productMs, quietTailMs: Math.max(0, endedAt - lastActivity), requests: req.length };
+  return { waitMs, endpointMs, toolsMs, launchMs, productMs, quietTailMs: Math.max(0, endedAt - lastSettled), requests: req.length, openAtQuit, longestOpenAtQuitMs };
 }
 
 /** A run whose last request or tool call ended this close to the end of the launch was still moving when it ran out. */
@@ -176,7 +228,12 @@ export function deadlineReading({ timedOut, attribution: a, budgetMs, traffic, u
   if (!traffic) return { outcome: 'product', detail: `${head}; traffic not recorded, so the time cannot be attributed to the endpoint or the product` };
   const progressing = a.quietTailMs <= PROGRESSING_TAIL_MS;
   const productBound = a.productMs > PRODUCT_SHARE_BOUND * a.waitMs;
-  const tail = progressing ? `the last request or tool call ended ${s(a.quietTailMs)} before the launch did` : `nothing had been in flight for ${s(a.quietTailMs)} when the launch ended`;
+  const cut = (a.openAtQuit ?? 0) > 0
+    ? `${a.openAtQuit} request${a.openAtQuit === 1 ? '' : 's'} still open when the wait ran out, the longest open for ${s(a.longestOpenAtQuitMs)}, cut off by the quit and not counted as progress`
+    : '';
+  const tail = progressing
+    ? `the last request or tool call to end on its own ended ${s(a.quietTailMs)} before the launch did${cut === '' ? '' : `; ${cut}`}`
+    : cut === '' ? `nothing had been in flight for ${s(a.quietTailMs)} when the launch ended` : `nothing had ended on its own for ${s(a.quietTailMs)} when the launch ended; ${cut}`;
   if (progressing && !productBound) return { outcome: 'window', detail: `${head}: ${parts.join(', ')}; ${tail} — raise LIVE_RUN_DURESS_MS to ask for the result on this endpoint` };
   return { outcome: 'product', detail: `${head}: ${parts.join(', ')}; ${tail}` };
 }

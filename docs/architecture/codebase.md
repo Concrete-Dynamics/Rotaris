@@ -817,7 +817,9 @@ alongside any other scenario, because one sandbox holds one store and every othe
 files. *Corrected 2026-09-29 (live-run findings H-a to H-d, H-h; R-067), with the reading above kept as it was written:
 "a failed child with an empty `final_response`" was the wrong observable. REQ-ORCH-110 leaves that field empty for every
 child cut off mid-work, and the first execution flagged exactly such a child, `d`, whose `last_response`, `cut_off` and
-timeout error said what it did. A failed child is now silent only when none of the four speaks. Two other readings
+timeout error said what it did. A failed child is now silent only when none of the four speaks. *(Corrected
+2026-09-30, the verifier's fix round 1: of the three that can speak — `final_response`, `last_response`, `cut_off` — since an
+error entry alone is on every failed child's report, and counting it passed the eighty-second defect's own shape.)* Two other readings
 were also wrong. The commands question compared a call's canonical agent name with a child's given name, so it was
 never asked. The autopsy's null-summary boolean answered `false`, and passed, for a session that never stopped; it
 answers `unasked` now. The readings live in `scripts/lib/duress-checks.mjs`, pinned by `duress-checks.test.ts`, and the

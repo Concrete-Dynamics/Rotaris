@@ -30,9 +30,19 @@ tokens and reasoning tokens (`attributeWait` and `deadlineReading` in `apps/desk
 There are three outcomes:
 
 - **inside**: the run reached its result within the wait. A PASS, with the attribution beside it.
-- **window**: the wait ran out while the run was still progressing (the last request or tool call ended within 120 s
-  of the launch's end), and the product had nothing in flight for at most a tenth of the wait. The window was the
-  bound, not the product: a NOTE saying so, which names `LIVE_RUN_DURESS_MS` as what asks the longer question.
+- **window**: the wait ran out while the run was still progressing (the last request or tool call **to end on its
+  own** ended within 120 s of the launch's end), and the product had nothing in flight for at most a tenth of the wait.
+  The window was the bound, not the product: a NOTE saying so, which names `LIVE_RUN_DURESS_MS` as what asks the longer
+  question. ~~(the last request or tool call ended within 120 s of the launch's end)~~ *Corrected 2026-09-30 (the
+  verifier's fix round 1): a request still open when the wait ran out ends at the quit whatever it was doing, so it
+  alone met that test, and a stream hung from early in the wait read as the window's bound — the eighty-second
+  defect's stalled-stream shape turned into a NOTE, where before this repair every overrun was a FAIL. "Ended on its
+  own" is now a request the endpoint completed (`complete`), wherever it ended, or any request or tool call that ended
+  before the instant the wait ran out (the seam's timed-out line in the launch's log, `waitRanOutAt`); a stall's first
+  record never counts. The requests the quit cut off are named in the detail and not counted as progress. Pinned by the
+  cases "a stream hung from early in the wait and cut off by the quit is not progress" (a `product` reading, failing on
+  the first repair, which read `window` with a tail of 0 s), "the 2026-09-30 shape … is still the window's bound", and
+  the edge cases beside them.*
 - **product**: any other overrun, or one that cannot be attributed because no traffic was recorded. A FAIL, naming
   the shares.
 
@@ -46,10 +56,17 @@ asks for the result on a reasoning endpoint.
 Pinned by `apps/desktop/scripts/lib/duress-checks.test.ts` ("an overrun says where the time went"). Replayed over the
 2026-09-29 pack, the reading is `window`: "2,406 s of 2,400 s: endpoint generating 2,391 s (99 %; 200 requests, 234,130
 output tokens of which 178,627 reasoning), tools alone 6 s, launch 5 s, the product with nothing in flight 3 s (0 %);
-the last request or tool call ended 2 s before the launch did".
+the last request or tool call ended 2 s before the launch did". *Replayed again 2026-09-30 with the correction, the
+launch's end taken from the quit's log line: still `window` — every one of its 200 requests `complete`, the last to end
+on its own 1 s before the launch did, none cut off by the quit.*
 
 **Shown live, 2026-09-30.** `pnpm live-run --confirm --skip-build --only=duress` ran against `katalyst` (pack
 `.live-run/runs/2026-09-30T05-29-56-712Z`, session `c95d822d`). The check read "NOTE the long run was bounded by the
 window, not by the product — 2,406 s of 2,400 s: endpoint generating 2,390 s (99 %; 218 requests, 215,916 output tokens of
 which 144,543 reasoning), tools alone 7 s, launch 7 s, the product with nothing in flight 1 s (0 %)". The run was in its
-third wave when the wait ran out, `f` verifying, and it came to rest `paused`, `application_shutdown`.
+third wave when the wait ran out, `f` verifying, and it came to rest `paused`, `application_shutdown`. ~~Its "last request
+or tool call ended 0 s before the launch did"~~ *Corrected 2026-09-30 (the verifier's fix round 1): that 0 s was the
+request the quit cut off (`aborted`, open for 30 s, ending at the quit). Replayed over the pack with the correction, the
+reading is still `window`: the last request or tool call to end on its own ended 31 s before the launch did, and the
+detail names the one request still open when the wait ran out. The two other `aborted` records ended at 05:41 and 05:43,
+mid-run, and count as ended on their own.*

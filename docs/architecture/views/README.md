@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**The per-model cap counts every child in the process (REQ-CONFIG-094, REQ-MONITOR-020, REQ-ORCH-050, acceptance A13,
+R-067).** `ChildLedger.slotsInUse` counted one iteration's children, so two sessions under way in one run host could each
+fill a `max_parallel`. `Sessions` now holds a `ModelSlots` every run joins for as long as it is under way; the ledger adds
+the other runs' slots to its own, and a child's end or a run's end wakes the other runs' schedulers. This repairs
+`the-per-model-cap-counts-only-one-iterations-children.md`. The **runtime view**'s §4 and a **state-ownership view** row
+say so; OQ-146 asks the release order across sessions. No package, edge, process, message kind, channel, command or store
+column changed.
+
 **The post-run improvement capture never rejects (REQ-ORCH-137, REQ-LIBRARY-032, R-067).** `onRunResult`'s detached
 closure moved into `captureAfterRun` (`run-host/improvement-capture.ts`): a skip-list stop reason yields no job before main
 is asked for the history, the store is re-read after that ask, and a store closed meanwhile or a throwing capture yields

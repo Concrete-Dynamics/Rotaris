@@ -7339,3 +7339,32 @@ Electron binary that tree carries: run against `node_modules` in the checkout it
 asar unpacking, and run under the host Node it passes on exactly the artifact that fails. **A proof
 written the easy way is worse than none, because it reads as verified.** Somebody must establish that it
 is constructible on all three release runners before it is relied on as the only defence.
+
+**OQ-146 — In what order are children held on one `models:` key released when they belong to different sessions?**
+*(REQ-ORCH-050, "Held children MUST be released in the order they were held, one returning to `queued` each time a child
+bound to the same model key reaches a terminal state"; REQ-MONITOR-020, "the freed slot must promote exactly one waiting
+agent"; REQ-CONFIG-094, which counts "children belonging to any other session running in the same process" against the
+cap; ADR-0012 and ADR-0013. Raised 2026-09-30 under [R-067](../product/requests.md#r-067) by the repair of
+[`the-per-model-cap-counts-only-one-iterations-children.md`](../defects/fixed/the-per-model-cap-counts-only-one-iterations-children.md),
+acceptance finding A13. Open.)*
+
+REQ-ORCH-050 and REQ-MONITOR-020 were written against one ledger, where "the order they were held" is one queue. Once the
+count is the process's (REQ-CONFIG-094), a slot freed in one session can be the slot a child held in another session is
+waiting for, and the requirements do not say whether "the order they were held" is one order across the process or each
+session's own. Two readings were weighed:
+- **One order across the process.** Every held child on a key waits in one queue whatever its session, and a freed slot
+  goes to the oldest. This needs a process-wide queue beside the per-session `model_slot_queue` rows, and a session's own
+  scheduler could no longer promote its own held child while an older one waits in another session.
+- **Each session's own order.** A session's held children are released in the order that session held them, from its own
+  persisted queue, as before; which session takes a freed slot is whichever run's scheduler passes first.
+
+**What the build proceeds under:** the second. The count is process-wide (`ModelSlots` in
+`packages/engine/src/children/model-slots.ts`, joined by every run `Sessions` starts or continues, for as long as it is
+under way); the queue stays per session. When a child ends, its own run's scheduler passes after the others are woken
+(`ModelSlots.freed` runs in the terminal listener, the freeing run's pass follows the child's execution), so a slot freed
+in one session is offered first to the other sessions under way, in the order their runs joined, and then to the freeing
+session. A session never waits on a slot while the process-wide count is below the cap.
+
+**What a ruling decides.** Whether release order is process-wide, and if so whether a session's own held child may be
+passed over for an older one elsewhere; or, if per session, whether the freeing session or the others take a freed slot
+first.

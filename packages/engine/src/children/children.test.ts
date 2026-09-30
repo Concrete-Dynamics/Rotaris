@@ -1943,6 +1943,72 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     });
   });
 
+  describe('acceptance A13: the per-model cap counts every child in the process, not one iteration\'s (REQ-CONFIG-094, REQ-MONITOR-020, REQ-ORCH-050)', () => {
+    const KEY = 'openai-compatible--katalyst/m';
+    const textOf = (m: ModelRequest['messages'][number]): string => m.content.map((p) => ('text' in p && typeof p.text === 'string' ? p.text : '')).join('');
+    /**
+     * Two sessions in one `Sessions` — one run host — each delegating one coding-agent child on the same `models:` key
+     * with `max_parallel` 1. The first session's child holds its model call until released.
+     */
+    function twoSessions() {
+      let releaseFirst!: () => void;
+      const hold = new Promise<void>((r) => { releaseFirst = r; });
+      // The first session's root, once it has delegated, holds its every later turn until released — so that run is still
+      // under way when its child ends, and only the child's end can free the slot for the other session.
+      let releaseFirstRoot!: () => void;
+      const rootHold = new Promise<void>((r) => { releaseFirstRoot = r; });
+      const setup = sessionsWith((persona, _turn, req) => {
+        const all = req.messages.map(textOf).join('\n');
+        if (persona === 'orchestrator') {
+          // A first turn has no tool result in it yet; the task name is the session's own prompt.
+          if (!req.messages.some((m) => m.role === 'tool')) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: /first/.test(all) ? 'one' : 'two', task: /first/.test(all) ? 'TASK: one' : 'TASK: two' } }]);
+          if (/the first task/.test(all)) return { parts: [{ hold: rootHold }, { part: { kind: 'text', delta: 'done' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+          return answer('done');
+        }
+        if (persona === 'summariser') return answer('{"summary":"ok"}');
+        return /TASK: one/.test(all) ? { parts: [{ hold }, { part: { kind: 'text', delta: 'done' } }, { part: { kind: 'finish', reason: 'stop' } }] } : answer('done');
+      }, { modelKey: KEY, capFor: (k) => (k === KEY ? 1 : null) });
+      return { ...setup, releaseFirst, releaseFirstRoot };
+    }
+    const until = async (cond: () => boolean): Promise<void> => { for (let i = 0; i < 400 && !cond(); i += 1) await new Promise((r) => setTimeout(r, 5)); };
+
+    it('a second session\'s child on a key the first session\'s child holds at its cap is held waiting_on_model_slot, and runs once that child ends', async () => {
+      const { sessions, releaseFirst, releaseFirstRoot } = twoSessions();
+      const s1 = (sessions.start(dal, 'C:/ws', 'the first task') as { value: SessionId }).value;
+      await until(() => children(s1)[0]?.state === 'running');
+      expect(children(s1).map((c) => c.state)).toEqual(['running']);
+      const s2 = (sessions.start(dal, 'C:/ws', 'the second task') as { value: SessionId }).value;
+      await until(() => children(s2).length === 1 && children(s2)[0]!.state !== 'queued');
+      // REQ-CONFIG-094: "children belonging to any other session running in the same process" count against the cap.
+      expect(children(s2).map((c) => [c.model_key, c.state])).toEqual([[KEY, 'waiting_on_model_slot']]);
+      const told = dal.residentRows(s2).find((r) => r.kind === 'tool' && r.tool_name === 'delegate')?.output ?? '';
+      expect(told).toMatch(new RegExp(`waiting_on_model_slot — Queued behind model '${KEY}''s slot cap: 1 of 1 slots in use`));
+      // REQ-MONITOR-020: the first session's child finishing frees the slot, and the held child in the OTHER session is
+      // promoted — while the first session's run is still under way, its root held.
+      releaseFirst();
+      expect((await sessions.running(s2)!).status).toBe('completed');
+      expect(sessions.running(s1)).not.toBeNull();
+      expect(dal.getSession(s1)!.execution_status).toBe('running');
+      releaseFirstRoot();
+      expect((await sessions.running(s1)!).status).toBe('completed');
+      expect(children(s1).map((c) => c.state)).toEqual(['succeeded']);
+      expect(children(s2).map((c) => c.state)).toEqual(['succeeded']);
+      // Created held (REQ-ORCH-050), its first move is the promotion back to `queued`, then its start.
+      const moves = dal.eventsOfKind(s2, 'child.transition').map((e) => (JSON.parse(e.payload) as { to_state: string }).to_state);
+      expect(moves.slice(0, 2)).toEqual(['queued', 'starting']);
+    });
+
+    it('a session whose run has ended holds no slot: the next session\'s child starts at once', async () => {
+      const { sessions, releaseFirst, releaseFirstRoot } = twoSessions();
+      releaseFirst(); releaseFirstRoot();
+      const s1 = (sessions.start(dal, 'C:/ws', 'the first task') as { value: SessionId }).value;
+      expect((await sessions.running(s1)!).status).toBe('completed');
+      const s2 = (sessions.start(dal, 'C:/ws', 'the second task') as { value: SessionId }).value;
+      expect((await sessions.running(s2)!).status).toBe('completed');
+      expect(dal.eventsOfKind(s2, 'child.transition').map((e) => (JSON.parse(e.payload) as { to_state: string }).to_state)).not.toContain('waiting_on_model_slot');
+    });
+  });
+
   it('REQ-MONITOR-009 / REQ-ORCH-133: cancelAgent settles one child cancelled with the user\'s timeline entry; the reserved id cancels the run; unknown ids refuse', async () => {
     let releaseChild!: () => void;
     const hold = new Promise<void>((r) => { releaseChild = r; });

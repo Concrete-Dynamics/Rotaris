@@ -9,7 +9,7 @@ import { SequenceCounters } from './sequence.js';
 import { claimLockReaping, SessionWriter, toTranscriptRow, type CheckpointRecordInput, type Committed, type RestoreRecordInput } from './session-writer.js';
 import type { CheckpointPort, CheckpointPortContext } from './checkpoint-port.js';
 import { EventBus } from './run/event-bus.js';
-import { parseTokenSamples, Run, settleClosedIterations, type AgentTerminals, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
+import { parseTokenSamples, Run, settleClosedIterations, type AgentTerminals, type ModelLookup, type PermissionPosture, type RunConfig, type RunDeps, type RunResult } from './run/run.js';
 import { answerOpenCalls, iterationAgents, recordCrash } from './run/crash.js';
 import { resumeNoticeOf } from './run/resume.js';
 import { offersHeldIn, openOfferIds, openOffersText } from './run/offers.js';
@@ -46,6 +46,7 @@ import type { AgentActivity } from './children/activity.js';
 import type { ModelRef, ThinkingLevel } from '@rotaris/model';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, projectSessionTodos, type AgentTodoDocument } from './todo-view.js';
 import { randomUUID } from 'node:crypto';
+import { ModelSlots, type SlotHolder } from './children/model-slots.js';
 
 /**
  * ADR-0013 — the run host's registry: `Map<sessionId, …>`, the COMPLETE set
@@ -967,11 +968,24 @@ function parsePending(json: string): SessionRecord['pendingApprovals'] {
 
 export class Sessions {
   private readonly live = new Map<SessionId, Live>();
+  /** REQ-CONFIG-094: every run under way in this process, counted together against each model's cap (acceptance A13). */
+  private readonly modelSlots: ModelSlots;
   readonly seq = new SequenceCounters();
   readonly bus: EventBus;
 
   constructor(private readonly deps: SessionsDeps) {
     this.bus = new EventBus({ timers: deps.clocks.timers, warn: deps.warn });
+    this.modelSlots = new ModelSlots(deps.warn);
+  }
+
+  /**
+   * REQ-CONFIG-094: a run's place in the process-wide per-model count — what it answers for its own children, the wake
+   * that promotes a child it holds when a slot frees elsewhere, and what it asks of the others. It joins when it starts
+   * and leaves when it ends (`join`'s return), so a finished run holds nothing.
+   */
+  private modelSlotsFor(runRef: { run?: Run }): { readonly holder: SlotHolder; readonly deps: NonNullable<RunDeps['modelSlots']> } {
+    const holder: SlotHolder = { inUse: (modelKey) => runRef.run?.modelSlotsInUse(modelKey) ?? 0, wake: () => { runRef.run?.wakeForFreedSlot(); } };
+    return { holder, deps: { heldElsewhere: (modelKey) => this.modelSlots.heldElsewhere(modelKey, holder), freed: () => { this.modelSlots.freed(holder); } } };
   }
 
   /** REQ-SESSION-042/154/182: read-only workspace listing with shared stale semantics. */
@@ -1163,6 +1177,7 @@ export class Sessions {
     const cap = runtime?.modelConcurrencyCap ?? null;
     const capFor = runtime?.modelCapFor ?? (() => cap);
     const preflight = this.deps.preflight;
+    const slots = this.modelSlotsFor(runRef);
     const run = new Run({
       sessionId, workspaceRoot, effectiveRoot, task: prompt, taskContent: [...(prompt === '' ? [] : [{ kind: 'text' as const, text: prompt }]), ...storedAttachments.content], taskId: `${sessionId}:main:1`, writer, owner, bus: this.bus, clocks: this.deps.clocks,
       ...(setup.value.personas ? { personas: setup.value.personas } : {}),
@@ -1190,7 +1205,7 @@ export class Sessions {
       ...(this.deps.tools ? {
         // REQ-LIBRARY-093: a publish records the instance's canonical name — the root's comes apart from its agent name, its persona.
         toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, ...(parentPersona === undefined ? {} : { parentPersona }), modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: canonicalName ?? agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false, writeClaimFor: (rel) => runRef.run?.writeClaimFor(parentId, rel) ?? null }),
-        artifacts, budget, modelCap: capFor,
+        artifacts, budget, modelCap: capFor, modelSlots: slots.deps,
         summariser: { backend: meteredBackend(model.backend, countUsage), model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
       ...(runtime?.drainTimeoutMs === undefined ? {} : { drainTimeoutMs: runtime.drainTimeoutMs as Millis }),
@@ -1204,7 +1219,9 @@ export class Sessions {
       const onRunResult = this.deps.onRunResult;
       this.bus.attach(sessionId, { mode: 'blocking', deliver: (e) => { if (e.event === 'result' && run.outcome) onRunResult(sessionId, run.outcome); } });
     }
-    live.running = run.start().finally(() => { delete entry.run; log?.info(`run ended ${run.outcome?.status ?? 'unknown'}`); log?.close(); });
+    // REQ-CONFIG-094: counted with every other run under way in this process until it ends.
+    const leaveSlots = this.modelSlots.join(slots.holder);
+    live.running = run.start().finally(() => { leaveSlots(); delete entry.run; log?.info(`run ended ${run.outcome?.status ?? 'unknown'}`); log?.close(); });
     return ok(sessionId);
   }
 
@@ -1376,6 +1393,7 @@ export class Sessions {
       s.memory = ResilienceMemory.rehydrate(s.dal.timelineOf(sessionId), resolve, warn);
       if (s.memory.exhausted.size > 0 || s.memory.overrideCount > 0) s.log?.info(`resilience memory rehydrated: ${s.memory.exhausted.size} exhausted pair(s), ${s.memory.overrideCount} override(s)`);
     }
+    const slots = this.modelSlotsFor(runRef);
     const run = new Run({
       sessionId, workspaceRoot, effectiveRoot, task: payload, taskContent: [{ kind: 'text', text: payload }, ...attachmentContent], taskLabel: prompt, taskId: continuedTaskId(s.dal, sessionId, todo),
       ...(setupIn.personas ? { personas: setupIn.personas } : {}),
@@ -1411,7 +1429,7 @@ export class Sessions {
       ...(this.deps.tools ? {
         // REQ-LIBRARY-093: a publish records the instance's canonical name — the root's comes apart from its agent name, its persona.
         toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, ...(parentPersona === undefined ? {} : { parentPersona }), modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: canonicalName ?? agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false, writeClaimFor: (rel) => runRef.run?.writeClaimFor(parentId, rel) ?? null }),
-        artifacts, budget, modelCap: capFor,
+        artifacts, budget, modelCap: capFor, modelSlots: slots.deps,
         summariser: { backend: meteredBackend(model.backend, countUsage), model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
       ...(runtime?.drainTimeoutMs === undefined ? {} : { drainTimeoutMs: runtime.drainTimeoutMs as Millis }),
@@ -1423,7 +1441,9 @@ export class Sessions {
       const onRunResult = this.deps.onRunResult;
       this.bus.attach(sessionId, { mode: 'blocking', deliver: (event) => { if (event.event === 'result' && run.outcome) onRunResult(sessionId, run.outcome); } });
     }
-    s.running = run.start().finally(() => { if (s.commitTarget) delete s.commitTarget.run; s.log?.info(`continued run ended ${run.outcome?.status ?? 'unknown'}`); s.log?.close(); });
+    // REQ-CONFIG-094: counted with every other run under way in this process until it ends.
+    const leaveSlots = this.modelSlots.join(slots.holder);
+    s.running = run.start().finally(() => { leaveSlots(); if (s.commitTarget) delete s.commitTarget.run; s.log?.info(`continued run ended ${run.outcome?.status ?? 'unknown'}`); s.log?.close(); });
   }
 
   // Part AO

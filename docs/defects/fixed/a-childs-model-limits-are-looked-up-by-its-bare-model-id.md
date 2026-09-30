@@ -69,4 +69,4 @@ never share a count" — fails on the `unwrapSynthetic` form, receiving `openai-
 Rows written before this repair keep the bare id in `children.model_key`; a session resumed from before it still meters
 such a child at REQ-MONITOR-080's default and finds no cap for it. Nothing rewrites those rows.
 
-Noticed while repairing it: [`../the-per-model-cap-counts-only-one-iterations-children.md`](../the-per-model-cap-counts-only-one-iterations-children.md).
+Noticed while repairing it: [`the-per-model-cap-counts-only-one-iterations-children.md`](the-per-model-cap-counts-only-one-iterations-children.md) — repaired 2026-09-30 (acceptance A13).

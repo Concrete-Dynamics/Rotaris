@@ -133,6 +133,11 @@ export class ChildLedger {
     readonly iteration: number;
     readonly budget: Budget;
     readonly modelCap: (modelKey: string) => number | null;
+    /**
+     * REQ-CONFIG-094: the slots on a key the process's OTHER runs hold (`ModelSlots.heldElsewhere`) — the cap counts every
+     * child on the entry across the whole process, and this ledger sees one iteration of one session. Absent means none.
+     */
+    readonly slotsHeldElsewhere?: ((modelKey: string) => number) | undefined;
     readonly warn: (m: string) => void;
     readonly personas?: PersonaResolver | undefined;
     readonly artifacts?: ArtifactStore | undefined;
@@ -204,8 +209,15 @@ export class ChildLedger {
    * REQ-MONITOR-020 describes the release (a slot frees when a running or summarizing child ends). Read
    * together: a slot is held from the claim until the terminal state, so the cap is never exceeded by two
    * children claimed in one pass (recorded on ADR-0012).
+   *
+   * REQ-CONFIG-094: the count is the whole process's — this iteration's children and every other run's
+   * (`slotsHeldElsewhere`), so two sessions under way in one run host cannot each fill a cap (acceptance A13).
    */
   slotsInUse(modelKey: string): number {
+    return this.slotsInUseHere(modelKey) + (this.deps.slotsHeldElsewhere?.(modelKey) ?? 0);
+  }
+  /** This iteration's children holding a slot on the key — what its run answers `ModelSlots` for. */
+  slotsInUseHere(modelKey: string): number {
     return this.all().filter((c) => c.model_key === modelKey && (c.state === 'starting' || c.state === 'running' || c.state === 'summarizing')).length;
   }
   slotFree(modelKey: string): boolean {

@@ -666,6 +666,16 @@ facts — edited files, commands and exit codes (OQ-111; OQ-119 and OQ-120 ask i
 the parent resumes with the report. Every exit from an iteration leaves every child record terminal — except a rest
 (PD-ORCH-005), which leaves every unfinished child `paused`.
 
+**The per-model count is the process's (REQ-CONFIG-094, acceptance A13, 2026-09-30).** A ledger sees one iteration of one
+session, and the run host runs every live session at once, so the cap a spawn and a promotion are judged against is
+`ChildLedger.slotsInUse` — this iteration's children in `starting`, `running` or `summarizing` (`slotsInUseHere`) plus the
+slots every other run under way holds on that key (`slotsHeldElsewhere`). `Sessions` holds one `ModelSlots`
+(`children/model-slots.ts`, in memory) that each run joins at its start or continue and leaves when it ends; each run
+answers for its own children (`Run.modelSlotsInUse`), and a child's terminal state, or a run's end, wakes every other run's
+scheduler for one pass (`Run.wakeForFreedSlot`), so a child another session holds `waiting_on_model_slot` is promoted when
+the slot frees rather than when its own run next changes. The held-child queue stays each session's (`model_slot_queue`);
+the release order across sessions is **OQ-146**.
+
 **The eleventh state (PD-ORCH-005).** `CHILD_TRANSITIONS` admits `paused` from every non-terminal state and leaves it
 for exactly the state the child resumes into (`RESUME_STATES`, `resumeStateFor`: where it waited, `queued` again for a
 child claimed but not started, `running`, `summarizing`); either settling path still ends it. It presents as `paused`,

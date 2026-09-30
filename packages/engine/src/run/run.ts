@@ -164,6 +164,12 @@ export interface RunDeps {
   readonly artifacts?: ArtifactStore | undefined;
   readonly budget?: ChildBudget | undefined;
   readonly modelCap?: ((modelKey: string) => number | null) | undefined;
+  /**
+   * REQ-CONFIG-094: the process-wide half of the per-model count — the slots the process's other runs hold on a key — and
+   * the signal that one of this run's children ended, so another run's held child can be promoted (`ModelSlots`, joined by
+   * `Sessions` for the run's lifetime). Absent: this run is the only one counted.
+   */
+  readonly modelSlots?: { readonly heldElsewhere: (modelKey: string) => number; readonly freed: () => void } | undefined;
   readonly summariser?: SummariserDeps | null | undefined;
   /** Part AH (ADR-0060): what an agent needs to compress its own context; null or absent means neither trigger fires. */
   readonly compression?: RunCompression | null | undefined;
@@ -614,6 +620,14 @@ export class Run {
    */
   get isPlanGateHeld(): boolean {
     return this.planHeld;
+  }
+  /** REQ-CONFIG-094: how many of this run's children hold a slot on the key now — its answer to `ModelSlots`. */
+  modelSlotsInUse(modelKey: string): number {
+    return this.children?.ledger.slotsInUseHere(modelKey) ?? 0;
+  }
+  /** REQ-MONITOR-020: a slot freed in another run — this run's scheduler passes, so a child it holds can be promoted. */
+  wakeForFreedSlot(): void {
+    this.children?.scheduler.pass();
   }
   /**
    * PD-TOOLS-006: the live write-scope claim that refuses the agent `callerId` a write to the workspace-relative
@@ -1233,6 +1247,7 @@ export class Run {
         compressionFor: this.compressionFor,
         // REQ-ORCH-024: the BUDGET cell only narrows; with no pre-flight the configured policy stands unchanged.
         budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
+        ...(this.deps.modelSlots ? { slotsHeldElsewhere: this.deps.modelSlots.heldElsewhere, onSlotFreed: this.deps.modelSlots.freed } : {}),
         // REQ-MONITOR-102: a child's tool calls are the session's too; the entry agent's own are added at the turn below. The
         // child's own count is persisted with the total, in one transaction, so a crash leaves the two agreeing.
         countToolCalls: (n, child) => { this.aggregates.addToolCalls(n); if (child) this.persistToolCalls({ children: [child] }); },

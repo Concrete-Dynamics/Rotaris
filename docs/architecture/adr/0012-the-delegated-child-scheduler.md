@@ -492,3 +492,26 @@ Neither changes the decision: the watch still reads only the clock port and the 
 words are no longer written: they are session-log lines through the run's `warn`, as OQ-76's are, the reason for
 minting them (that the log was out of reach without editing `Run.turn`) having been false. `children.test.ts` now has
 nine cases, `stall.test.ts` twelve, and `record.test.ts` one more.
+
+## First execution of the process-wide count — 2026-09-30: the cap was one iteration's
+
+This record put the ledger in **one session's rows** and said nothing of a count across sessions; `REQ-CONFIG-094` counts
+every child on a `models:` entry "across the whole process … children belonging to any other session running in the same
+process". The run host holds every live session at once (ADR-0013), so the two disagree the moment two sessions run.
+Acceptance round 1 (finding A13) confirmed it by driving it: two sessions in one `Sessions`, one key with `max_parallel`
+1, the first session's child holding its slot — the second session's child started and ran to `succeeded` beside it
+(`packages/engine/src/children/children.test.ts`, "acceptance A13 …", red before the repair).
+
+**What changed, and what did not.** The ledger is still one iteration's rows and the held-child queue is still each
+session's (`model_slot_queue`). What the cap is judged against is now the process's count: `ModelSlots`
+(`packages/engine/src/children/model-slots.ts`, held by `Sessions`) is joined by every run for as long as it is under way,
+each run answering how many of its own children hold a slot on a key (`ChildLedger.slotsInUseHere`), and
+`ChildLedger.slotsInUse` adds the others' (`slotsHeldElsewhere`). A child's terminal state wakes every other run's
+scheduler for one pass (`onSlotFreed`), and so does a run's end — without the wake, a session whose root is waiting on its
+held child never passes again, which the case pins (it times out with the wake removed). The count is process state,
+held in memory: a slot is a live child, and no child outlives its process (REQ-ORCH-053).
+
+**What was not measured.** No built app or live run starts two sessions at once: the live run's scenarios are one session
+each and one endpoint is registered. `pnpm mission-proof`, whose scenario holds children behind a `max_parallel: 1` cap in
+one session, shows that path unchanged. The release order across sessions is **OQ-146**. The row is in
+[`../first-executions.md`](../first-executions.md).

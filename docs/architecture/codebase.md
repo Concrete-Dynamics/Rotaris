@@ -628,7 +628,11 @@ The theme write is synchronous and flushed. `ROTARIS_CAPTURE_THEME`, `ROTARIS_CA
 at scale factors 1, 1.25, 1.5, 1.75 and 2. Each process captures all seven views, all thirteen Settings
 categories, keyboard focus positions and a live theme switch. The script samples painted PNG pixels, checks
 focus bands, rail-label fit, vector-icon scale, complete recolouring, preserved composer/view state and
-renderer errors, then writes its result table under `.proof/theme-proof/`. Two counterfactual commands lower text or
+renderer errors, then writes its result table under `.proof/theme-proof/`. Since 2026-09-30 a text's contrast is read
+only from its on-screen part: its box cut by the window and by every ancestor that clips it. A text with less than one
+em on screen is reported as skipped, with its size, and is not measured (`apps/desktop/scripts/lib/text-sample.mjs`).
+Before that, a status-strip item scrolled 1.2 px onto the screen was read as a glyph's edge
+(`../defects/fixed/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`). Two counterfactual commands lower text or
 focus contrast and must exit non-zero. The first execution and its coverage boundary are
 `spikes/theme-proof.md`.
 

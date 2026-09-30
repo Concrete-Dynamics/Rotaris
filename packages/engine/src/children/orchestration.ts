@@ -72,6 +72,10 @@ export interface ChildrenDeps {
   readonly maxStepsPerTurn: number;
   readonly budget: Budget;
   readonly modelCap: (modelKey: string) => number | null;
+  /** REQ-CONFIG-094: the slots the process's other runs hold on a key (`ModelSlots.heldElsewhere`); absent means none. */
+  readonly slotsHeldElsewhere?: ((modelKey: string) => number) | undefined;
+  /** REQ-MONITOR-020: a child of this iteration reached a terminal state, so a slot may have freed for another run. */
+  readonly onSlotFreed?: (() => void) | undefined;
   /** The tool surface for an agent — the root or a child — with its own delegation identity. */
   readonly toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number, canonicalName?: string, parentPersona?: string) => ToolPort | null;
   readonly summariser: SummariserDeps | null;
@@ -226,7 +230,7 @@ export class IterationChildren implements DelegationOps {
   private readonly endedInEarlierRun: ReadonlySet<string>;
 
   constructor(private readonly deps: ChildrenDeps, readonly iteration: number) {
-    this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, warn: deps.warn , personas: deps.personas, ...(deps.artifacts ? { artifacts: deps.artifacts } : {}), ...(deps.rootRecord ? { rootRecord: deps.rootRecord } : {}) });
+    this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, ...(deps.slotsHeldElsewhere ? { slotsHeldElsewhere: deps.slotsHeldElsewhere } : {}), warn: deps.warn , personas: deps.personas, ...(deps.artifacts ? { artifacts: deps.artifacts } : {}), ...(deps.rootRecord ? { rootRecord: deps.rootRecord } : {}) });
     this.endedInEarlierRun = new Set(this.ledger.all().filter((c) => isTerminalChildState(c.state)).map((c) => c.task_id));
     this.scheduler = new Scheduler({ ledger: this.ledger, runChild: (row) => this.track(this.executeSettling(row)), warn: deps.warn, hasConversation: (taskId) => (deps.record?.load(taskId).length ?? 0) > 0 });
     this.scheduler.onTerminal((row) => { const w = this.resumeWaiters.get(row.parent_id); if (w) { this.resumeWaiters.delete(row.parent_id); w(); } });
@@ -234,6 +238,9 @@ export class IterationChildren implements DelegationOps {
     // query, so a child settled by a path that fires no listener (a stale sweep) holds nothing either; this only
     // keeps the map from growing with the run.
     this.scheduler.onTerminal((row) => { this.claims.release(row.task_id); this.disclosures.delete(row.task_id); });
+    // REQ-CONFIG-094 / REQ-MONITOR-020: a child ending here may free a slot another session's held child is waiting for.
+    const onSlotFreed = deps.onSlotFreed;
+    if (onSlotFreed) this.scheduler.onTerminal(() => { onSlotFreed(); });
   }
 
   children(): readonly ChildRow[] {

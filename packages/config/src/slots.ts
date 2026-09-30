@@ -106,21 +106,17 @@ export function resolveSlotsAndReasoning(draft: SlotDraft): SlotResolution {
 /**
  * REQ-CONFIG-094: the `models:` key a name counts against — a loader-owned synthetic copy (REQ-CONFIG-081) is the key
  * the loader recorded it was copied from; every other name is its own key. Never a guess by provider and model id.
+ * REQ-CONFIG-253/255: the same unwrap is what an editor reads back for a synthetic slot or role value.
+ *
+ * A slot whose chain passes through an earlier slot's copy records that copy as its origin, so the walk follows the
+ * recorded origins to the end — as many hops as there are slots — and stops on a name it has already visited.
  */
 export function syntheticOriginOf(name: string, origins: Readonly<Record<string, string>>): string {
   let current = name;
-  for (let hops = 0; hops < 4 && origins[current] !== undefined && origins[current] !== current; hops++) current = origins[current]!;
-  return current;
-}
-
-/** REQ-CONFIG-253/255: a synthetic name unwrapped to the model it was copied from. */
-export function unwrapSynthetic(name: string, models: Readonly<Record<string, ModelEntry>>): string {
-  if (!name.startsWith(STARTUP_SLOT_PREFIX) && !name.startsWith(PERSONA_SYNTHETIC_PREFIX)) return name;
-  const entry = models[name];
-  if (!entry) return name;
-  for (const [candidate, other] of Object.entries(models)) {
-    if (candidate === name || candidate.startsWith(STARTUP_SLOT_PREFIX) || candidate.startsWith(PERSONA_SYNTHETIC_PREFIX)) continue;
-    if (other.provider === entry.provider && other.model_id === entry.model_id) return candidate;
+  const seen = new Set<string>([current]);
+  while (origins[current] !== undefined && !seen.has(origins[current]!)) {
+    current = origins[current]!;
+    seen.add(current);
   }
-  return name;
+  return current;
 }

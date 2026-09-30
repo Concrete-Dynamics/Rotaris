@@ -6,7 +6,7 @@ import { canonicaliseRoles, mergeLayers, overlaySection, PLAIN_OPS } from './mer
 import { loadConfiguration, readDelegationStrategy, type LoadedConfiguration } from './load.js';
 import { parseConfig } from './document.js';
 import { referentialMessages, renderFatal, renderProblems } from './validate.js';
-import { resolveSlotsAndReasoning, registeredAliases, resolveSlotBase, syntheticOriginOf, unwrapSynthetic } from './slots.js';
+import { resolveSlotsAndReasoning, registeredAliases, resolveSlotBase, syntheticOriginOf } from './slots.js';
 import { readRuntimeSection, validateRuntimeField, RUNTIME_DEFAULTS } from './sections/runtime.js';
 import { effectivePricing, readModelEntry, providerEffort } from './sections/models.js';
 import { readCircuitBreakerSection, CIRCUIT_BREAKER_DEFAULTS } from './circuit-breaker-section.js';
@@ -157,7 +157,7 @@ describe('REQ-CONFIG-051 the end-to-end two-scope fixture', () => {
     // The stated thinking synthesises the reserved model name (REQ-CONFIG-079); the underlying
     // model is the entry's own default, the small slot's base.
     expect(entry).toMatchObject({ name: 'intent-classifier', mcp_servers: [] });
-    expect(unwrapSynthetic(entry!.model, c.models)).toBe('gpt-4o-mini');
+    expect(syntheticOriginOf(entry!.model, c.syntheticOrigins)).toBe('gpt-4o-mini');
     expect(c.warnings).toEqual([]);
   });
 });
@@ -204,6 +204,15 @@ describe('REQ-CONFIG-063..081 tier aliases and reasoning synthesis', () => {
     expect(syntheticOriginOf('__persona__:verifier', c.syntheticOrigins)).toBe('openai-compatible--beta/qwen');
     // A name the loader did not synthesise is its own key.
     expect(syntheticOriginOf('openai-compatible--alpha/qwen', c.syntheticOrigins)).toBe('openai-compatible--alpha/qwen');
+  });
+  it('REQ-CONFIG-094/253: a slot chained through five earlier slots\' copies still unwraps to the key at the end of the chain', () => {
+    // Each slot names the one before it and states a level, so each copy's recorded origin is the previous slot's copy.
+    const c = loaded(null, 'models:\n  openai-compatible--alpha/qwen: { provider: openai-compatible, model_id: qwen }\n  openai-compatible--beta/qwen: { provider: openai-compatible, model_id: qwen }\ndefault_summary_model: openai-compatible--beta/qwen\ndefault_summary_model_thinking: low\nimprovement_collector_model: default_summary_model\nimprovement_collector_model_thinking: low\nretrospective_model: improvement_collector_model\nretrospective_model_thinking: low\ngatekeeper_model: retrospective_model\ngatekeeper_model_thinking: low\nsmall_model: gatekeeper_model\nsmall_model_thinking: low\nmedium_model: small_model\nmedium_model_thinking: high\n');
+    expect(c.slots.medium_model).toBe('__startup_slot__:medium_model');
+    expect(c.syntheticOrigins['__startup_slot__:medium_model']).toBe('__startup_slot__:small_model');
+    expect(syntheticOriginOf('__startup_slot__:medium_model', c.syntheticOrigins)).toBe('openai-compatible--beta/qwen');
+    // A recorded cycle (never produced by the loader) ends the walk instead of spinning.
+    expect(syntheticOriginOf('a', { a: 'b', b: 'a' })).toBe('b');
   });
   it('the transform is pure over a draft', () => {
     const draft = { slots: { small_model: 'a', medium_model: 'a', large_model: 'a', default_summary_model: 'small_model', improvement_collector_model: null, retrospective_model: null, gatekeeper_model: null, fallback_model: null }, slotThinking: { small_model: null, medium_model: null, large_model: null, default_summary_model: null, improvement_collector_model: null, retrospective_model: null, gatekeeper_model: null, fallback_model: null }, models: { a: readModelEntry('a', { provider: 'p', model_id: 'a' }, sink())! }, personas: {}, compressorModel: 'small_model', circuitBreakerModel: 'x' };

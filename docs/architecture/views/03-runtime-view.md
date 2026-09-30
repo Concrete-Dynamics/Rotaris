@@ -677,6 +677,22 @@ facts — edited files, commands and exit codes (OQ-111; OQ-119 and OQ-120 ask i
 the parent resumes with the report. Every exit from an iteration leaves every child record terminal — except a rest
 (PD-ORCH-005), which leaves every unfinished child `paused`.
 
+**The per-model count is the process's (REQ-CONFIG-094, acceptance A13, 2026-09-30).** A ledger sees one iteration of one
+session, and the run host runs every live session at once, so the cap a spawn and a promotion are judged against is
+`ChildLedger.slotsInUse` — this iteration's children that hold a slot (`slotsInUseHere`) plus the slots every other
+session holds on that key (`slotsHeldElsewhere`). A child holds a slot from `starting` through `running` and
+`summarizing`, and while it is `paused` out of `running` or `summarizing`: PD-ORCH-005 clause 4's resumed agent "keeps the
+place in every child limit it already held" (`holdsModelSlot`, **OQ-149**). `Sessions` holds one `ModelSlots`
+(`children/model-slots.ts`, in memory) that a **session** joins when a run of it starts or continues and stays in while
+the run is under way or while it rests with a paused child keeping its place; it answers from its store (every child of
+the session that holds a slot), and it leaves when neither is true, or when it is evicted or deleted. A child's terminal
+state, a run's end, a decline (clause 6) and a cancel at rest (clause 16) wake every other session's run for one scheduler
+pass (`Run.wakeForFreedSlot`), so a child another session holds `waiting_on_model_slot` is promoted when the slot frees
+rather than when its own run next changes. The held-child queue stays each session's (`model_slot_queue`); the release
+order across sessions is **OQ-148**, and the key is the string alone whichever workspace defines it (**OQ-150**). Each
+`slotFree` check reads every other joined session's children from its store — one query per session per scheduling
+decision.
+
 **The eleventh state (PD-ORCH-005).** `CHILD_TRANSITIONS` admits `paused` from every non-terminal state and leaves it
 for exactly the state the child resumes into (`RESUME_STATES`, `resumeStateFor`: where it waited, `queued` again for a
 child claimed but not started, `running`, `summarizing`); either settling path still ends it. It presents as `paused`,

@@ -10,7 +10,7 @@ all: the run host answers it with a finished status whose outcome is `unavailabl
 REQ-WORKSPACE-094's words. So the refusal branch reports a transient condition as a permanent configuration fault, and
 for a background run raises "Project setup did not finish" with the "was skipped" summary.
 
-Seen in the built app on 2026-09-29 by `workspace-proof`'s scenario 8b on the build without the switch-time
+Seen in the built app on 2026-09-30 by `workspace-proof`'s scenario 8b on the build without the switch-time
 cancellation: the replacement's background run was refused as already running while the outgoing workspace's setup
 still ran, and the log read `code-intelligence-setup → failure — This workspace's `code_intelligence` entry is not a
 local launch, …` for an entry that is a local launch. The repair of

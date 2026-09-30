@@ -431,7 +431,7 @@ discarded after a veto, one of several windows — `MainWindows` says so (`works
 `initialization.close`: the run under way is cancelled (`mcp.setup {action: cancel}`, so the run host ends what the step
 launched; one that no window can address or that the run host refuses is logged as not delivered), its recordings are refused, nothing of it is published or bannered, and the entry is dropped, so a return to
 the root is a new open with its own automatic resolution (REQ-WORKSPACE-013/092/102/109, OQ-141 for a close that is
-not a switch's; 2026-09-29, R-067). The run
+not a switch's; 2026-09-30, R-067). The run
 host holds one setup and pushes `mcp.setupStatus` with no workspace on it, so the coordinator runs its setups one at a
 time (`setupTurn`): a run's `code-intelligence-setup` starts once the setup before it has ended — after a switch, the
 outgoing one, still ending — the one step sink is cleared only by the follow that set it, and a run's abort reaches the

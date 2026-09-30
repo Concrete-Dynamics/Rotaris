@@ -37,7 +37,7 @@ fix-proofs-b5 did not introduce it.
 
 ## Outcome
 
-Repaired 2026-09-29 under R-067. `MainWindows` gained a `workspaceClosed` dependency, called from `#forget` once the
+Repaired 2026-09-30 under R-067. `MainWindows` gained a `workspaceClosed` dependency, called from `#forget` once the
 last live main window holding a workspace has closed — a switch's outgoing window, a replacement discarded after a
 vetoed close, or one of several windows (`apps/desktop/src/main/main-windows.ts`); main answers it with
 `initialization.close` (`apps/desktop/src/main/index.ts`). `InitializationCoordinator.close` now marks the entry

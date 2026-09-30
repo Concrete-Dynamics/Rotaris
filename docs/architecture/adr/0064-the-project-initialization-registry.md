@@ -312,7 +312,7 @@ two runs in a row (171 s and 172 s), all five scenarios, each ending with the sk
 passed twice (523 s and 525 s). Another agent's Electron processes (8 to 11) were on the host through all four runs.
 **Not shown:** a built-app run with two workspaces' marker writes in flight together; only the unit case holds it.
 
-**Sixth round (2026-09-29, R-067): the switch-time cancellation, executed for the first time.** REQ-WORKSPACE-013
+**Sixth round (2026-09-30, R-067): the switch-time cancellation, executed for the first time.** REQ-WORKSPACE-013
 cancels a background run still under way in a switch's outgoing window, on REQ-WORKSPACE-109's terms, and records
 nothing for it. The coordinator had `close` for it from the start, and nothing called it: main's workspace-open path
 called only `open` and `resolve(true)`, so a switch left the outgoing run going, its outcome was still recorded, and a

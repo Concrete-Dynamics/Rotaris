@@ -6292,7 +6292,7 @@ window?** *(REQ-WORKSPACE-013, which cancels "a background initialization run st
 of a switch on REQ-WORKSPACE-109's terms and records nothing for it; REQ-WORKSPACE-109, whose cancellation lets "a task
 already under way … reach its own conclusion", and which says of closing only "the application"; REQ-WORKSPACE-084,
 every attempted task given exactly one recorded outcome; PD-SHELL-001, under which "closing the added window changes
-nothing else". Raised 2026-09-29 by the verification of the repair of
+nothing else". Raised 2026-09-30 by the verification of the repair of
 [`a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`](../defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md)
 under [R-067](../product/requests.md#r-067). Open.)*
 

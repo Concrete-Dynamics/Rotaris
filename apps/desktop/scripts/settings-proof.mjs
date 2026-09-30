@@ -155,8 +155,10 @@ const openCategory = (label, atMs = 900) => ({ ROTARIS_CAPTURE_VIEW: '7', ROTARI
 // ── 1. No workspace: About, Tools and the empty Instructions ────────────────────────────────────────────────
 // The About page's two files are the proof's from here until launch 1′ ends: whatever a build left is moved aside, so
 // this launch measures the absent branch of each. `finally` gives them back when a launch fails or its Electron dies.
-// A signal to this process is not caught: Node would run a handler only once `spawnSync` returned, so a handler would
-// hold a SIGTERM until the launch ended and then swallow it. The process goes, and the next run's `restore` repairs it.
+// A signal to this process is not caught here. Under `spawnSync` (until 2026-09-29) Node would have run a handler only
+// once the launch returned, holding a SIGTERM until then. The launch is `spawnBounded`'s now, whose own handler runs at
+// once during a launch: it SIGKILLs the application's process group and raises the signal again, so the proof still
+// dies of it without reaching `finally`. The process goes, and the next run's `restore` repairs it.
 // In a clone that has never built, the directory itself is the proof's: `pnpm build-id` makes it during 1′.
 const hadResources = existsSync(resources);
 const emptyAndNew = () => !hadResources && existsSync(resources) && readdirSync(resources).length === 0;

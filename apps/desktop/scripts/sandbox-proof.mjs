@@ -276,8 +276,10 @@ async function effects(name, allowNetwork, preGit) {
   mkdirSync(outside, { recursive: true });
   const secret = `readable outside the roots ${Date.now()}`;
   writeFileSync(join(outside, 'readable.txt'), `${secret}\n`);
-  // The listener is the host's, in a process of its own: `launch` blocks this one for the whole run, so a
-  // listener here could not answer while the confined command waited on it. It counts what it accepted into
+  // The listener is the host's, in a process of its own. It was put there because `launch` blocked this one for the
+  // whole run under `spawnSync` (until 2026-09-29), so a listener here could not have answered while the confined
+  // command waited on it; the launch is `spawnBounded`'s now and does not block, and the listener stayed where it
+  // was. It counts what it accepted into
   // a file the proof reads afterwards. A confined process in its own network namespace cannot reach the
   // host's loopback at all; one granted the network reaches it like any other process on the host.
   const acceptedFile = join(outside, 'accepted.log');

@@ -1,6 +1,8 @@
 import { useState, type KeyboardEvent } from 'react';
 import type { AgentRecord } from '@rotaris/contracts';
 import { markMotionStart } from './motion.js';
+import { stalledText } from './agents.js';
+import { Tag as DesignTag } from './design-system/index.js';
 
 /**
  * REQ-MONITOR-036..047, REQ-MONITOR-304: the delegation tree — a depth-first list of rows with box-drawing
@@ -129,7 +131,8 @@ export function AgentTree({ agents, selected, onSelect, nowIso = null }: AgentTr
               <span className="agent-row__persona">{a.persona}</span>
               <span className="agent-row__task">{a.givenName}</span>
             </span>
-            <span className="agent-row__meta mono">{a.presentationState}{elapsedShown(a) ? ` · ${elapsedLabel(a, nowIso)}` : ''}</span>
+            {/* REQ-ORCH-089's badge: the stall watch's figure closes the meta label, as the mockup's agents panel closes a waiting row with a `tag-wait` qualifier. */}
+            <span className="agent-row__meta mono">{a.presentationState}{elapsedShown(a) ? ` · ${elapsedLabel(a, nowIso)}` : ''}{a.stalledSeconds !== null && <>{' '}<DesignTag className="tag tag-wait agent-row__stalled" data-testid="agent-stalled">{stalledText(a.stalledSeconds)}</DesignTag></>}</span>
           </div>
         );
       })}

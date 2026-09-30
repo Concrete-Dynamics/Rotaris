@@ -305,7 +305,8 @@ exactly 30 s and not at 29.999 s, and stayed unarmed when no fallback existed or
 bound. The re-prompt of REQ-ORCH-095 still follows a text-only implementer on the fallback (one more call, on
 the fallback still). Still not built from the list above: ADR-0041's artifacts, the verifier prefix,
 `REQ-CHAT-068/069`, `REQ-ORCH-030`; the stall watchdog's badge (REQ-ORCH-089) is not built either. *(2026-09-29: the
-watchdog itself is built, and its badge still is not. See "First execution of the stall watchdog" below.)*
+watchdog itself is built, and its badge still is not. See "First execution of the stall watchdog" below.)* *(2026-09-30:
+the badge is built. See "The stall callback reaches a host" below.)*
 
 ## Read back from a live run — 2026-09-12: the report's commands and edited files
 
@@ -600,3 +601,43 @@ the three entries for every settle. The reading, that a child that never started
 cancel paths outside the scheduler and the execution still write no teardown, and are a note
 ([`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../../defects/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md)).
 The row is in [`../first-executions.md`](../first-executions.md).
+
+## The stall callback reaches a host — 2026-09-30: the watchdog's badge, the root's watch and the steer
+
+*The first execution of the stall watchdog above left three things unbuilt: its callback reached no host, so no badge drew;
+the root was not watched; and REQ-MONITOR-135's stall-evaluation leg (ADR-0010 reading (d)) had nothing to hang on.
+Acceptance round 1 found them together (finding A6,
+[`a-stalled-child-is-never-shown-stalled.md`](../../defects/fixed/a-stalled-child-is-never-shown-stalled.md)), and their
+first execution reports here, under R-067.*
+
+**What was built.** Every evaluation hands the host the agent's silence while it is stalled, else null; it is kept beside
+the agent's tool activity and carried as `AgentRecord.stalledSeconds`, the root's as `SessionRecord.entryStalledSeconds`,
+and the record is republished whenever it changes (`ProjectionOwner.refreshRecord`). The agent trees, the Mission table,
+the persona window and the inspector draw it. `Run.turn` arms a watch for the root over its whole execution. An evaluation
+that finds a steer pending for an agent waiting on its own children wakes it to take a step. The readings are **OQ-153**.
+
+**What the execution found.** The decision held: the callback needed only a place to put the figure and a way to publish
+it, both of which the activity tracker and the projection owner already had. Three things the record did not anticipate:
+- **The root's wait on its children is not silence.** A root watched over its whole execution reads every wait on its
+  children as a stall. The watch counts nothing between the root's turns (`betweenTurns`, the mechanism another branch of
+  this round builds for a child's own wait).
+- **Within a turn, an evaluation has nothing to inject.** The step boundary already delivers a steer at the next step, and
+  nothing may join a conversation between a call and its result. What the evaluation leg adds is the agent with no next step
+  coming: one waiting on its children.
+- **A stall can end with the watch.** The live run's root answered on the retry and its turn ended before the next
+  evaluation, so its stall was never logged recovered. `StallWatch.stop` now reports a stall under way as recovered.
+
+**What was measured.** Four end-to-end cases through `Sessions` in `children.test.ts`: a child's figure published at 90, 95
+and 100 s and cleared; the root's warning, `stall` issue, figure and recovery; a root waiting on a working child writes no
+`stall` issue; a steer to the waiting root lands at the next evaluation, before its child ends. Three fail on the
+unrepaired engine, and the fourth fails with `betweenTurns` removed from the root. `stall.test.ts` pins the refresh a
+delivered steer makes and the recovery at `stop`; `agent-clock.test.ts` and `agents.test.ts` the badge on each surface. The
+live run's `faults` scenario against `katalyst` (packs `2026-09-30T21-36-48-442Z` and `2026-09-30T21-42-06-872Z`) stalls
+the root's stream: the root's watch wrote its `stall` issues from 94 s, inside the product's 120 s idle bound, where before
+nothing was written until the bound fired. The second pack, built after the `stop` repair, logs the recovery 30 s later, and
+its photograph at 115 s shows the inspector following the root with `running · 1m 53s · 0 tool calls · stalled 104s`. The
+line broke between `stalled` and its figure, so the badge's text now joins them with a no-break space; that change came
+after the pack and is pinned by `agent-clock.test.ts` only.
+
+**What was not measured.** No live scenario stalls a child's stream, so a child's badge is shown by the cases alone. No live
+scenario steers an agent waiting on its children. The row is in [`../first-executions.md`](../first-executions.md).

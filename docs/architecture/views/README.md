@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**A stalled agent is shown stalled; the root is watched; a stall evaluation lands a steer (REQ-ORCH-089, REQ-MONITOR-117..122,
+REQ-MONITOR-135, R-067).** `AgentRecord.stalledSeconds` and `SessionRecord.entryStalledSeconds` carry each stall watch's
+figure, kept in `AgentActivity` and republished by `ProjectionOwner.refreshRecord` when it changes; the agent trees, the
+Mission table, the persona window and the inspector draw it. `Run.turn` arms a `StallWatch` for the root. An evaluation wakes
+an agent waiting on its own children for a pending steer (`IterationChildren.wakeForSteering`, `ChildrenDeps.steeringPending`).
+This repairs `a-stalled-child-is-never-shown-stalled.md` (acceptance A6; OQ-153). The **runtime view**'s stall-watch
+paragraph and its `entryTools` paragraph say so. No package, edge, process, message kind, channel, command or store column
+changed; the snapshot channel's `SessionRecord` gained the two fields.
+
 **A child the scheduler settles is torn down (REQ-ORCH-098, REQ-ORCH-048, REQ-ORCH-052, R-067).** `Scheduler.cascadeBlocked`
 and `Scheduler.finalizeIncomplete` call `SchedulerDeps.teardown`, which `IterationChildren` answers with `writeTeardown`
 (`children/orchestration.ts`), so a blocked child and one the finalize sweep cancels get `child_end`, `child_result` and

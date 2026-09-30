@@ -157,3 +157,49 @@ describe('REQ-NOTIFY-111/112: the corrective message', () => {
     expect(hadCorrectiveMessage([user(`TASK: explain what a ${composed}`)])).toBe(false);
   });
 });
+
+describe('REQ-MONITOR-135: "each successful injection refreshes the agent\'s last-activity timestamp"', () => {
+  it('a steering drain that delivers refreshes once; one that delivers nothing does not', async () => {
+    const { refreshing } = await import('./orchestration.js');
+    let pending = [{ id: 'p1', text: 'look again' }];
+    let refreshed = 0;
+    const drain = refreshing(() => { const out = pending; pending = []; return out; }, () => { refreshed += 1; });
+    expect(drain()).toEqual([{ id: 'p1', text: 'look again' }]);
+    expect(refreshed).toBe(1);
+    expect(drain()).toEqual([]);
+    expect(refreshed).toBe(1);
+  });
+
+  it('a refresh restarts the silence the watch evaluates: a stall under way is recovered at the next evaluation', () => {
+    const clock = new FakeClock();
+    const seen: string[] = [];
+    const watch = new StallWatch(clock, millis(30_000), { stalled: () => seen.push('stalled'), waiting: () => undefined, recovered: () => seen.push('recovered'), evaluated: () => undefined });
+    watch.start();
+    clock.advance(30_000);
+    expect(seen).toEqual(['stalled']);
+    expect(watch.silentSeconds).toBe(30);
+    watch.activity();
+    expect(watch.silentSeconds).toBe(0);
+    clock.advance(5_000);
+    expect(seen).toEqual(['stalled', 'recovered']);
+    watch.stop();
+  });
+});
+
+describe('REQ-MONITOR-120 with OQ-153: a stall under way when the watch is disarmed is reported recovered', () => {
+  it('stop() after a stall reports the recovery once; stop() with no stall reports nothing', () => {
+    const clock = new FakeClock();
+    let recovered = 0;
+    const watch = new StallWatch(clock, millis(30_000), { stalled: () => undefined, waiting: () => undefined, recovered: () => { recovered += 1; }, evaluated: () => undefined });
+    watch.start();
+    watch.stop();
+    expect(recovered).toBe(0);
+    watch.start();
+    clock.advance(30_000);
+    expect(watch.stalled).toBe(true);
+    watch.stop();
+    expect([recovered, watch.stalled]).toEqual([1, false]);
+    watch.stop();
+    expect(recovered).toBe(1);
+  });
+});

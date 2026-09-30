@@ -10,7 +10,11 @@ import type { ChatMessage, ModelError } from '@rotaris/model';
  * - with a tool call in flight, it reports that the child is waiting on its calls (REQ-MONITOR-118);
  * - with none, it reports a stall at every evaluation, and marks the warning due only at entry and then no more often
  *   than the throttle (REQ-MONITOR-119/120);
- * - when activity resumes, it reports the recovery.
+ * - when activity resumes, it reports the recovery;
+ * - between the child's turns — its turn has ended and the run asks nothing of it until it starts the next, which is a
+ *   wait on its own children or the end of its execution — there is no model step to be silent, so it reports neither
+ *   (OQ-152, the repair of `a-child-waiting-on-its-own-children-is-reported-stalled.md`). Each of those children has its
+ *   own watch, which reports its own silence.
  * The callback fires on every evaluation with the stalled state, so a host can draw a badge.
  *
  * The recovery is separate from the watch. A child whose turn ends `failed`, having produced no output for the whole
@@ -71,6 +75,8 @@ export class StallWatch {
   private stalledNow = false;
   private lastWarnAt: Millis | null = null;
   private lastWaitingAt: Millis | null = null;
+  /** OQ-152: the child's turn has ended and the run has not started its next. */
+  private between = false;
 
   constructor(private readonly clocks: Clocks, readonly thresholdMs: Millis, private readonly sinks: StallSinks) {
     this.lastEventAt = clocks.monotonic.now();
@@ -88,15 +94,20 @@ export class StallWatch {
   stop(): void {
     this.timer?.cancel();
     this.timer = null;
+    // REQ-MONITOR-120 (OQ-153): a stall under way when the watch is disarmed — the agent's turn or execution has ended — is
+    // over, and is reported recovered, as at an evaluation; found by the live run, whose root answered on the retry and
+    // ended before the next evaluation, so its stall was never logged recovered.
+    if (this.stalledNow) { this.stalledNow = false; this.lastWarnAt = null; this.sinks.recovered(); }
   }
 
   /**
    * The run gave the child something to answer — its payload, its record at a resume, its children's reports, a re-prompt
    * or the corrective message: the silence starts again, so a wait on its own children before it is not counted in the
-   * silence REQ-NOTIFY-112's recovery reads (`quietFor`); the watch's own evaluation still reports the child stalled
-   * while such a wait lasts (OQ-127).
+   * silence REQ-NOTIFY-112's recovery reads (`quietFor`, OQ-127), and the watch's evaluation, which read no silence during
+   * the wait (`betweenTurns`, OQ-152), counts from here.
    */
   activity(): void {
+    this.between = false;
     const now = this.clocks.monotonic.now();
     this.lastEventAt = now;
     this.lastOutputAt = now;
@@ -108,6 +119,14 @@ export class StallWatch {
     this.lastEventAt = now;
     this.lastModelEvent = kind;
     if (OUTPUT_EVENTS.has(kind)) this.lastOutputAt = now;
+  }
+
+  /**
+   * OQ-152: the child's turn has ended. Until the run starts its next (`activity`), the child is waiting on its own
+   * children, or its execution is ending: the run asks it for no output, so no silence is counted against it.
+   */
+  betweenTurns(): void {
+    this.between = true;
   }
 
   toolStarted(callId: string, name: string): void {
@@ -134,11 +153,19 @@ export class StallWatch {
     return millis(this.clocks.monotonic.now() - this.lastOutputAt);
   }
 
+  /**
+   * REQ-MONITOR-119's host countdown: the whole seconds since the last model event or token, as an evaluation reads them.
+   * The host's stall callback reads it when an evaluation finds the agent stalled.
+   */
+  get silentSeconds(): number {
+    return Math.floor((this.clocks.monotonic.now() - this.lastEventAt) / 1000);
+  }
+
   private evaluate(): void {
     const now = this.clocks.monotonic.now();
     const silent = now - this.lastEventAt;
     const silentS = Math.floor(silent / 1000);
-    if (silent < this.thresholdMs) {
+    if (this.between || silent < this.thresholdMs) {
       this.lastWaitingAt = null;
       if (this.stalledNow) { this.stalledNow = false; this.lastWarnAt = null; this.sinks.recovered(); }
       this.sinks.evaluated(false);
@@ -164,9 +191,15 @@ export class StallWatch {
   }
 }
 
+/**
+ * Whom a stall line is about: a delegated `child`, in REQ-ORCH-089's words, or the entry `agent`, the run's root, which
+ * REQ-MONITOR-117 ("each agent") watches too and REQ-MONITOR-119 calls "the agent".
+ */
+export type StallSubject = 'child' | 'agent';
+
 /** REQ-ORCH-089's warning, in its own words, with the agent it is about and REQ-MONITOR-119's "still waiting on it". */
-export function stallWarning(agentName: string, taskId: string, silentS: number): string {
-  return `child appears stalled: no model event or token for ${silentS} seconds (${agentName}, ${taskId}); the run is still waiting on it.`;
+export function stallWarning(agentName: string, taskId: string, silentS: number, subject: StallSubject = 'child'): string {
+  return `${subject} appears stalled: no model event or token for ${silentS} seconds (${agentName}, ${taskId}); the run is still waiting on it.`;
 }
 
 /*
@@ -176,13 +209,13 @@ export function stallWarning(agentName: string, taskId: string, silentS: number)
  */
 
 /** REQ-MONITOR-118's informational message: the silence with tool calls in flight, which is a wait and not a stall. */
-export function stallWaitingLine(agentName: string, taskId: string, activeCalls: number, silentS: number): string {
-  return `child waiting on tools: ${agentName} (${taskId}) has ${countNoun(activeCalls, 'active tool call')} and no model event or token for ${silentS} seconds; the run is still waiting on it (REQ-MONITOR-118)`;
+export function stallWaitingLine(agentName: string, taskId: string, activeCalls: number, silentS: number, subject: StallSubject = 'child'): string {
+  return `${subject} waiting on tools: ${agentName} (${taskId}) has ${countNoun(activeCalls, 'active tool call')} and no model event or token for ${silentS} seconds; the run is still waiting on it (REQ-MONITOR-118)`;
 }
 
 /** REQ-MONITOR-120's recovery: activity resumed after a stall. */
-export function stallRecoveredLine(agentName: string, taskId: string): string {
-  return `child stall recovered: ${agentName} (${taskId}) is active again after a stall (REQ-MONITOR-120)`;
+export function stallRecoveredLine(agentName: string, taskId: string, subject: StallSubject = 'child'): string {
+  return `${subject} stall recovered: ${agentName} (${taskId}) is active again after a stall (REQ-MONITOR-120)`;
 }
 
 /** REQ-NOTIFY-111: that the child was given its one corrective message, and why. */

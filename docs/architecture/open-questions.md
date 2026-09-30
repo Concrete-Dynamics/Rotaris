@@ -5836,10 +5836,12 @@ None of them says what ends a silent child's step so that there is an outcome to
   ("MUST NOT use any name outside those vocabularies"). The same closure is already crossed
   elsewhere in the engine
   ([`the-run-writes-timeline-events-outside-its-closed-vocabulary.md`](../defects/the-run-writes-timeline-events-outside-its-closed-vocabulary.md)).
-- **The stall callback fires on every evaluation, and no host listens.** No badge, activity text or countdown is drawn
-  ([`a-stalled-child-is-never-shown-stalled.md`](../defects/a-stalled-child-is-never-shown-stalled.md)). The run's own root agent is not watched: REQ-MONITOR-117
+- ~~**The stall callback fires on every evaluation, and no host listens.** No badge, activity text or countdown is drawn
+  ([`a-stalled-child-is-never-shown-stalled.md`](../defects/fixed/a-stalled-child-is-never-shown-stalled.md)). The run's own root agent is not watched: REQ-MONITOR-117
   says "each agent", and REQ-ORCH-089's threshold is a child's. Whether the root is watched, and against which
-  threshold, is left open in the same note.
+  threshold, is left open in the same note.~~ *Corrected in place, 2026-09-30 (R-067, acceptance finding A6): the callback
+  reaches the agent's record and every agent surface draws the stall, the root is watched, and a stall evaluation wakes an
+  agent waiting on its children for a pending steer. The readings are **OQ-153**.*
 - **A child waiting on its own children reads as stalled.** It has no model step and no call in flight while it waits,
   and the requirements tell a wait from a stall only by active tool calls. The build reports it stalled; whether the
   wait pauses the watch or counts as waiting on N children is recorded in
@@ -6737,6 +6739,52 @@ that never started, `child_conversation_closed` records that it will have none; 
 **What a ruling decides.** Whether a child that never started is torn down as built, or is excepted from the clause (its
 `child_end` and `child_result` kept, its `child_conversation_closed` dropped, or all three dropped), and whether the words
 of its `child_conversation_closed` should then say it never had one.
+
+**OQ-153 — What does a host do with the stall callback, which agent is watched, and what does a stall evaluation inject?**
+*(REQ-ORCH-089, "a stall callback fires on each evaluation with stalled/recovered so a UI badge can update";
+REQ-MONITOR-117, "each agent is evaluated for a stall"; REQ-MONITOR-118 to REQ-MONITOR-122; REQ-MONITOR-135, injection
+"opportunistically from stall evaluations … while a conversation is running"; REQ-MONITOR-047; ADR-0010 reading (d);
+OQ-127. Raised 2026-09-30 by the repair of acceptance finding A6,
+[`a-stalled-child-is-never-shown-stalled.md`](../defects/fixed/a-stalled-child-is-never-shown-stalled.md), under
+[R-067](../product/requests.md#r-067). Open.)*
+
+The requirements name a callback, a badge, a host countdown and a recovery that is "notified", and say nothing of what
+this product's surfaces draw (REQ-SHELL-023's surfaces have no stall clause; REQ-TUI-139's activity text belongs to the
+retired terminal domain). They say each agent is watched, and fix the threshold only as "the stall timeout (default 90
+seconds, overridable per persona)". And they place an injection in the stall evaluation without saying what can be
+injected into a conversation whose model step or tool call is in flight.
+
+**What the build proceeds under.**
+- **The callback reaches the record.** Every evaluation hands the host the agent's silence while it finds it stalled, and
+  null otherwise. The figure is kept beside the agent's tool activity (`AgentActivity.stalled`) and carried as
+  `AgentRecord.stalledSeconds`, and the entry agent's as `SessionRecord.entryStalledSeconds`. The record is republished
+  whenever the figure changes (`ProjectionOwner.refreshRecord`, coalesced with the child and tool events of the interval):
+  at every evaluation of a stall, since the figure advances, so the countdown advances at the watch's cadence and not on a
+  surface's clock (REQ-MONITOR-119); and once at the recovery, when it clears.
+- **The badge.** The Workspace and Mission agent trees, the Mission table and the persona window draw `stalled Ns` in the
+  design system's `tag-wait`, as the mockup's agents panel qualifies a waiting row; the inspector's meta line ends with the
+  same words. The activity text is left as REQ-MONITOR-047 fixes it.
+- **"Notified".** The recovery is logged as OQ-127 reads it, and notified by the republished record, whose badge is gone.
+  No notice and no timeline word is minted for it (REQ-ORCH-139; OQ-127 asks the owner for the words). A stall still
+  under way when the watch is disarmed — the agent's attempt or execution has ended — is over, and is logged recovered and
+  cleared then (`StallWatch.stop`). The live run found the case: its root answered on the retry and ended before the next
+  evaluation, and the first form left that stall with no recovery line.
+- **The root is watched**, over its whole execution, against its role's `stall_timeout`, else `runtime.child_stall_timeout`,
+  else 90 s — the one stall timeout the configuration has. It writes a child's warning and `stall` issue in REQ-MONITOR-119's
+  words for "the agent" (`agent appears stalled: …`), and the two session-log lines likewise. It gets no corrective message:
+  REQ-NOTIFY-112's is a child task's. Between its turns, while it waits on its own children, no silence is counted against
+  it (`StallWatch.betweenTurns`), since the run asks it for nothing then — the reading another branch of this round
+  records for a child waiting on its own children, and whose mechanism this build shares.
+- **The injection.** Within a turn, a steer already joins the conversation at the agent's next step, and nothing may join
+  a conversation between a call and its result or under a step in flight, so an evaluation injects nothing there. What an
+  evaluation adds is the agent that has no next step coming: one waiting between its turns on its own children. An
+  evaluation that finds a steer pending for such an agent wakes it, and the step it takes injects the steer, before any of
+  its children ends; it then waits again. Every delivered steer restarts the watch's silence ("each successful injection
+  refreshes the agent's last-activity timestamp"), wherever it was delivered.
+
+**What a ruling decides.** Which surfaces draw the stall and in what words; whether the recovery is also a notice or a
+timeline entry; whether the root is watched against the child threshold or one of its own; and whether REQ-MONITOR-135's
+evaluation leg means waking a waiting agent, as built, or something a step in flight could receive.
 
 ## Design-reference dependencies
 

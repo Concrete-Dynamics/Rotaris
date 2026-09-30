@@ -607,7 +607,8 @@ REQ-MONITOR-061), `called`
 and `active` the tracker's under the name the root dispatches as (`Run.entryTools`, `rootName`: a root resumed as the
 entry role keeps the persona its iteration was opened with, OQ-97); with no run live nothing is
 resolved, the history is read under the latest iteration's `root_persona` (`entryToolsOf`), and the surface lets the
-role's declared tools stand in (REQ-MONITOR-060; the snapshot's `declaredTools`). A LIVE run-level agent whose root port
+role's declared tools stand in (REQ-MONITOR-060; the snapshot's `declaredTools`). **`SessionRecord.entryStalledSeconds`**
+(2026-09-30, OQ-153) is the same route for the root's stall watch's figure. A LIVE run-level agent whose root port
 has not resolved yet — the pre-flight, before `Run.iterate` sets the port — lists nothing (`runLevelGrant`), never the
 declared set (REQ-MONITOR-061). **`SessionRecord.artifacts`** is the
 session's artifacts not superseded, with producer, ready flag and consumers (`artifactLinksOf`, one body-free read through
@@ -774,7 +775,20 @@ What it writes:
 Those lines, and the `child corrective message: …` line below, go to the session log through the run's `warn`, as
 OQ-76's do: REQ-ORCH-139's closed timeline vocabulary has no word for them and none is minted (OQ-127).
 
-Its per-evaluation callback has no listener yet. A child's turn can end `failed` after no output for the whole window,
+Its per-evaluation callback reaches the host (REQ-ORCH-089, REQ-MONITOR-119/120/122; OQ-153; the repair of
+[`a-stalled-child-is-never-shown-stalled.md`](../../defects/fixed/a-stalled-child-is-never-shown-stalled.md), 2026-09-30):
+`IterationChildren.stallEvaluated` keeps the silence of a stalled evaluation, else null, beside the agent's tool activity
+(`AgentActivity.stalled`), and `ProjectionOwner.refreshRecord` republishes the record whenever the figure changes — at every
+evaluation of a stall, and once at its recovery. The figure is `AgentRecord.stalledSeconds`, which the agent trees, the
+Mission table and the persona window draw as a `tag-wait` badge (`stalled Ns`) and the inspector's meta line ends with. The
+same evaluation serves REQ-MONITOR-135: an agent waiting between its turns on its own children with a steer pending
+(`ChildrenDeps.steeringPending`, a read that takes nothing) is woken (`wakeForSteering`), and the step `runWithChildren` then
+starts for it injects the steer; every delivered steer restarts the watch's silence (`refreshing`). **The root is watched
+too**: `Run.turn` arms a `StallWatch` over the root's whole execution, against its role's `stall_timeout`, else
+`runtime.child_stall_timeout`, else 90 s, fed as a child's is, with no silence counted between its turns
+(`betweenTurns`). It writes the same warning, `stall` issue and log lines naming `agent`, and its figure is
+`SessionRecord.entryStalledSeconds` (`Run.entryStalledSeconds`), which the run-level agent carries. It gets no corrective
+message. A child's turn can end `failed` after no output for the whole window,
 with no call in flight. Unless the outcome is one REQ-NOTIFY-112 excludes, that child is given one corrective message:
 the next user message of the conversation the failed turn left, run through the resume loop. It is given once per
 child task: across the fallback retry, and across PD-ORCH-005's resume, whose execution reads the task's whole

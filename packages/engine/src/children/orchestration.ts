@@ -123,6 +123,11 @@ export interface ChildrenDeps {
   readonly personas?: PersonaResolver | undefined;
   /** REQ-MONITOR-133: the pending steering prompts per child conversation. */
   readonly steeringFor?: ((conversationId: string) => () => readonly SteeringPrompt[]) | undefined;
+  /**
+   * REQ-MONITOR-135: whether a steering prompt is pending for the agent `agentId` (a child's task id, or the root's), read
+   * without taking it — a stall evaluation asks, and only the step it wakes delivers. Absent means none ever is.
+   */
+  readonly steeringPending?: ((agentId: string) => boolean) | undefined;
   readonly shouldPause?: (() => boolean) | undefined;
   /**
    * PD-ORCH-005: the interruption the run is coming to rest by — a pause, a stop or a quit — or null when it is not, or
@@ -716,6 +721,33 @@ export class IterationChildren implements DelegationOps {
     return true;
   }
 
+  // ---- REQ-ORCH-089 / REQ-MONITOR-117..122 / REQ-MONITOR-135: what a stall evaluation tells the host ----------------
+
+  /**
+   * The host's stall callback for one agent — a child's watch in `execute`, and the root's in `Run.turn` — at every
+   * evaluation: `seconds` is its silence while the evaluation finds it stalled, else null. The figure is kept beside its tool
+   * activity (`AgentActivity.stalled`), and the whole-session record is republished when it changed, so a surface's stalled
+   * figure advances at the watch's cadence and clears at the recovery (REQ-MONITOR-119/120/122). Then REQ-MONITOR-135's
+   * opportunistic injection: an agent waiting between its turns on its own children, with a steer pending, is woken to take
+   * its next step, whose start injects the steer (`runWithChildren`). Neither may block or fail the run (REQ-MONITOR-122).
+   */
+  stallEvaluated(agentId: string, agentName: string, seconds: number | null): void {
+    try {
+      if (this.deps.writer.activity.stalled(agentName, seconds)) this.deps.owner.refreshRecord();
+      if (this.deps.steeringPending?.(agentId) === true) this.wakeForSteering(agentId);
+    } catch (cause) {
+      this.deps.warn(`the stall evaluation of ${agentName} could not reach its host: ${String(cause instanceof Error ? cause.message : cause)}`);
+    }
+  }
+
+  /** REQ-MONITOR-135: `agentId`, waiting on its own children in the resume loop, is woken to take a step for its steer. */
+  wakeForSteering(agentId: string): void {
+    const wake = this.resumeWaiters.get(agentId);
+    if (wake === undefined) return;
+    this.resumeWaiters.delete(agentId);
+    wake();
+  }
+
   // ---- the resume loop ---------------------------------------------------------------------
 
   /** Resolves when a direct child of `parentId` reaches a terminal state the parent has not observed, or when none remains. */
@@ -752,7 +784,19 @@ export class IterationChildren implements DelegationOps {
       if (settling) await settling;
       if (signal.aborted || this.resting) break;
       const newly = this.ledger.takeNewlyTerminal(agentId);
-      if (newly.length === 0) continue;
+      if (newly.length === 0) {
+        /*
+         * REQ-MONITOR-135: a stall evaluation woke this agent for a steer pending while it waited on its children, so it
+         * takes its next step now, before any child ends: the step's start injects the steer (REQ-MONITOR-134), and the
+         * agent then waits on its children again.
+         */
+        if (this.deps.steeringPending?.(agentId) === true) {
+          outcome = await turn(null, history);
+          history = outcome.messages;
+          toolCalls += outcome.toolCallCount;
+        }
+        continue;
+      }
       const stillRunning = this.ledger.childrenOf(agentId).filter((c) => !isTerminalChildState(c.state)).length;
       const notices = newly.filter((c) => c.background === 1).map((c) => completionNotification(c, stillRunning, this.durationS(c)));
       const message = [...notices, resumeMessage(newly, stillRunning)].join('\n\n');
@@ -908,8 +952,11 @@ export class IterationChildren implements DelegationOps {
       },
       waiting: (w) => { if (!this.detached) deps.warn(stallWaitingLine(row.canonical_name, row.task_id, w.activeCalls, w.silentS)); },
       recovered: () => { if (!this.detached) deps.warn(stallRecoveredLine(row.canonical_name, row.task_id)); },
-      // REQ-ORCH-089's stall callback: no host listens yet, so no badge draws (`a-stalled-child-is-never-shown-stalled.md`).
-      evaluated: () => undefined,
+      // REQ-ORCH-089's stall callback, at every evaluation: the child's stalled figure reaches its `AgentRecord`, republished
+      // when it changes (REQ-MONITOR-119's countdown, REQ-MONITOR-120's recovery notified; REQ-MONITOR-122), and a steer
+      // pending for a child waiting on its own children wakes it (REQ-MONITOR-135). The repair of
+      // `a-stalled-child-is-never-shown-stalled.md`.
+      evaluated: (stalled) => { if (!this.detached) this.stallEvaluated(row.task_id, row.canonical_name, stalled ? stallWatch.silentSeconds : null); },
     });
     /**
      * REQ-NOTIFY-112: the one corrective message about its lack of progress, per child task, however often the outcome
@@ -1002,7 +1049,8 @@ export class IterationChildren implements DelegationOps {
         systemPrompt: withContextUnits(withPlaybook(persona?.systemPrompt ?? '', deps.playbookFor?.(row.persona) ?? ''), deps.contextUnits?.() ?? []), model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking, modelTimeoutMs: deps.modelTimeoutMs, modelRetries: deps.modelRetries,
         credentialFor: deps.credentialFor, maxStepsPerTurn: deps.maxStepsPerTurn, warn: deps.warn, dispatched,
         ...(deps.supervisorFor ? { supervisor: deps.supervisorFor(row.task_id) } : {}),
-        ...(deps.steeringFor ? { steering: deps.steeringFor(row.task_id) } : {}),
+        // REQ-MONITOR-135: "each successful injection refreshes the agent's last-activity timestamp" — its stall watch's.
+        ...(deps.steeringFor ? { steering: refreshing(deps.steeringFor(row.task_id), () => stallWatch.activity()) } : {}),
         // REQ-MONITOR-123's pause and REQ-ORCH-088's landing are the same act, so they are the same flag here — and so is
         // PD-ORCH-005's rest, whatever brought it: every agent stops before its next model step.
         shouldPause: () => landing || this.resting || (deps.shouldPause?.() ?? false),
@@ -1070,6 +1118,8 @@ export class IterationChildren implements DelegationOps {
         deps.writer.recordIssue({ kind: 'child_exception', severity: 'error', actor: row.canonical_name, message: `Child ${row.canonical_name} raised: ${error.message}` });
       } finally {
         stallWatch.stop();
+        // The watch is disarmed: whatever the child's figure said, it is no longer stalled on this attempt's account.
+        if (!this.detached) this.stallEvaluated(row.task_id, row.canonical_name, null);
         timer.cancel();
         backstop.handle?.cancel();
         deps.runSignal.removeEventListener('abort', onRunAbort);
@@ -1307,6 +1357,14 @@ function writeTeardown(deps: Pick<ChildrenDeps, 'writer' | 'clocks'>, row: Pick<
   deps.writer.appendTimeline('child_end', 'rotaris', `Child ${row.canonical_name} (${row.task_id}) ended ${terminal}.`, { task_id: row.task_id, state: terminal, at: toIsoUtc(deps.clocks.wall.instant()) });
   deps.writer.appendTimeline('child_result', 'rotaris', `Child ${row.canonical_name} reported ${status}: ${summary.slice(0, 120)}`, { task_id: row.task_id, status });
   deps.writer.appendTimeline('child_conversation_closed', 'rotaris', `Child ${row.canonical_name}'s conversation closed.`, { task_id: row.task_id });
+}
+
+/**
+ * REQ-MONITOR-135: a steering port whose every delivery refreshes the agent's last activity (`refresh`), so a steer that
+ * reaches the conversation starts the stall watch's silence again. A drain that delivers nothing refreshes nothing.
+ */
+export function refreshing<T>(drain: () => readonly T[], refresh: () => void): () => readonly T[] {
+  return () => { const delivered = drain(); if (delivered.length > 0) refresh(); return delivered; };
 }
 
 /** PD-TOOLS-006 revision 2: the write scope a child's record stores, as the patterns it declared; none when unreadable. */

@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**The post-run improvement capture never rejects (REQ-ORCH-137, REQ-LIBRARY-032, R-067).** `onRunResult`'s detached
+closure moved into `captureAfterRun` (`run-host/improvement-capture.ts`): a skip-list stop reason yields no job before main
+is asked for the history, the store is re-read after that ask, and a store closed meanwhile or a throwing capture yields
+no job with a log line rather than an unhandled rejection. This repairs
+`an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md`. The **process view**'s
+improvement-analyst paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A session delete cascades to nineteen tables, and `sessions-proof` reads that from the schema (REQ-SESSION-166, PD-ORCH-005,
 R-067).** The **runtime view**'s §6a delete said "the fifteen dependent tables"; v20's `plan_cycles` and v23–v24's
 `iterations`, `agent_messages`, `agent_terminals` and `agent_fingerprints` make every table whose `session_id` references

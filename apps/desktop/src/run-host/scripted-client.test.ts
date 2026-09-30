@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeClock } from '@rotaris/kernel';
 import type { ChatMessage, ModelRequest, ToolSpec } from '@rotaris/model';
+import { rebuild } from '@rotaris/engine';
 import { scriptedClient } from './scripted-client.js';
 
 /*
@@ -91,4 +92,100 @@ describe('scriptedClient — the step a call takes', () => {
     expect(await taken(clock, client, firstRoot)).toBe('read_file');
     expect(await taken(clock, client, [text('system', ORCHESTRATOR_SYSTEM), text('user', 'second task')])).toBe('glob');
   });
+
+  /*
+   * The repair of fixed/the-scripted-client-counts-only-the-steps-a-resumed-record-still-shows.md: the record a resumed agent
+   * carries need not hold every step it took. Each client below plays the run up to the pause the way the product would
+   * record it (`answered` turns a call into the assistant message `turn.ts` pushes), and a new client — what a continue
+   * builds — is handed the record.
+   */
+  it('PD-ORCH-005: a root resumed in a later iteration of its run carries on from every iteration\'s steps, not only that iteration\'s', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'read,glob,readnotes,write,git');
+    const unbroken = scriptedClient(clock, () => {});
+    // Iteration 1: the root reads and globs, and the iteration closes.
+    const firstRoot = [text('system', ORCHESTRATOR_SYSTEM), text('user', 'first task')];
+    const one = await answered(clock, unbroken, firstRoot);
+    const two = await answered(clock, unbroken, [...firstRoot, one, result(one)]);
+    expect([nameOf(one), nameOf(two)]).toEqual(['read_file', 'glob']);
+    // Iteration 2: a fresh root, whose one step before the quit is the script's third.
+    const secondRoot = [text('system', ORCHESTRATOR_SYSTEM), text('user', 'second task')];
+    const three = await answered(clock, unbroken, secondRoot);
+    expect(nameOf(three)).toBe('read_file');
+    // The continue resumes iteration 2's root: its record holds one step, and the root has taken three.
+    const resumed = scriptedClient(clock, () => {});
+    expect(await taken(clock, resumed, [...secondRoot, three, result(three)])).toBe('write_file');
+  });
+
+  it('PD-ORCH-005: a root whose later iteration holds only a streamed answer carries on after it too', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'read,answer,git');
+    const unbroken = scriptedClient(clock, () => {});
+    const firstRoot = [text('system', ORCHESTRATOR_SYSTEM), text('user', 'first task')];
+    expect(nameOf(await answered(clock, unbroken, firstRoot))).toBe('read_file');
+    const secondRoot = [text('system', ORCHESTRATOR_SYSTEM), text('user', 'second task')];
+    const reply = await answered(clock, unbroken, secondRoot);
+    expect(nameOf(reply)).toBe('answer');
+    const resumed = scriptedClient(clock, () => {});
+    expect(await taken(clock, resumed, [...secondRoot, reply, text('user', 'carry on')])).toBe('terminal');
+  });
+
+  it('PD-ORCH-005: a child whose record the compressing pass rewrote carries on from the steps it took, and keeps its key', async () => {
+    vi.stubEnv('ROTARIS_CHILD_SCRIPT', 'glob,read,readnotes,write,git');
+    const unbroken = scriptedClient(clock, () => {});
+    const task = text('user', 'TASK: writer\nEXPECTED OUTCOME: done');
+    let record: ChatMessage[] = [text('system', CHILD_SYSTEM), task];
+    for (let i = 0; i < 3; i += 1) { const m = await answered(clock, unbroken, record); record = [...record, m, result(m)]; }
+    // The compressing pass condenses all three steps and keeps no turn (`preserve_recent_turns: 0`); the summary is the
+    // scripted compressor's own answer, and `rebuild` is the product's reconstruction around it.
+    const summary = await answered(clock, unbroken, [text('system', COMPRESSOR_SYSTEM), text('user', 'Condense the agent activity below.')]);
+    const summaryText = summary.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
+    const compressed = [text('system', CHILD_SYSTEM), ...rebuild(task, summaryText, [], [])];
+    // The rebuilt record still opens with the TASK line, so the child is keyed as it was.
+    expect(compressed[1]).toBe(task);
+    const resumed = scriptedClient(clock, () => {});
+    expect(await taken(clock, resumed, compressed)).toBe('write_file');
+  });
+
+  it('PD-ORCH-005: a compressed record that kept its latest turns reads them after the summary', async () => {
+    vi.stubEnv('ROTARIS_CHILD_SCRIPT', 'glob,read,readnotes,write,git');
+    const unbroken = scriptedClient(clock, () => {});
+    const task = text('user', 'TASK: writer\nEXPECTED OUTCOME: done');
+    let record: ChatMessage[] = [text('system', CHILD_SYSTEM), task];
+    for (let i = 0; i < 3; i += 1) { const m = await answered(clock, unbroken, record); record = [...record, m, result(m)]; }
+    const summary = await answered(clock, unbroken, [text('system', COMPRESSOR_SYSTEM), text('user', 'Condense the agent activity below.')]);
+    const summaryText = summary.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
+    // The last step and its result are the one preserved turn; the summary stood for three steps and the turn is the third.
+    const compressed = [text('system', CHILD_SYSTEM), ...rebuild(task, summaryText, [], record.slice(-2))];
+    const resumed = scriptedClient(clock, () => {});
+    expect(await taken(clock, resumed, compressed)).toBe('write_file');
+  });
 });
+
+const COMPRESSOR_SYSTEM = 'You condense an agent conversation so the agent can carry on with a shorter history.';
+
+/** The tool a message called, or `answer`. */
+function nameOf(message: ChatMessage): string {
+  return message.content.find((p) => p.kind === 'tool-call')?.name ?? 'answer';
+}
+/** The tool result `turn.ts` pushes after a step that called a tool. */
+function result(message: ChatMessage): ChatMessage {
+  const call = message.content.find((p) => p.kind === 'tool-call');
+  if (call?.kind !== 'tool-call') throw new Error('the step called no tool');
+  return { role: 'tool', content: [{ kind: 'tool-result', callId: call.callId, name: call.name, result: 'ok', isError: false }] };
+}
+/** The whole call, as the assistant message `turn.ts` pushes for it: its text, then its tool calls. */
+async function answered(clock: FakeClock, client: ReturnType<typeof scriptedClient>, messages: readonly ChatMessage[]): Promise<ChatMessage> {
+  const parts = client.stream(request(messages))[Symbol.asyncIterator]();
+  let said = '';
+  const calls: { kind: 'tool-call'; callId: string; name: string; args: string }[] = [];
+  for (;;) {
+    const next = parts.next();
+    let r = await Promise.race([next, settled()]);
+    while (r === undefined) { clock.advance(200); r = await Promise.race([next, settled()]); }
+    if (r.done === true) break;
+    const part = r.value;
+    if (!part.ok) throw new Error(part.error.headline);
+    if (part.value.kind === 'text') said += part.value.delta;
+    if (part.value.kind === 'tool-call') calls.push({ kind: 'tool-call', callId: part.value.callId, name: part.value.name, args: part.value.argsDelta });
+  }
+  return { role: 'assistant', content: [...(said ? [{ kind: 'text' as const, text: said }] : []), ...calls] };
+}

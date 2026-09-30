@@ -32,17 +32,45 @@ export interface TypedEvent {
  * A `\r` is dropped, so a CRLF prompt breaks its lines once. The one unmodified Enter at the end submits (REQ-CHAT-001).
  */
 export function promptEvents(prompt: string): TypedEvent[] {
+  return [...textEvents(prompt, 'char'), ...enterEvents()];
+}
+
+/** One Enter — `keyDown`, `char` and `keyUp` — unmodified (REQ-CHAT-001's submit) or carrying `shift` (its newline). */
+function enterEvents(modifiers?: readonly ('shift' | 'control')[]): TypedEvent[] {
+  return (['keyDown', 'char', 'keyUp'] as const).map((type) => (modifiers === undefined ? { type, keyCode: 'Return' } : { type, keyCode: 'Return', modifiers }));
+}
+
+/**
+ * The events that type `text` into whatever holds focus, submitting nothing — the ONE place a typed line break is decided,
+ * shared by the prompt above, the driver's `type` and the scriptable seams' TYPE and TYPE_AT steps (named here without their
+ * variables, which a packaged build must not carry).
+ *
+ * `per` keeps each site's own shape for an ordinary character: `char` is one `char` event (the prompt and the TYPE seam),
+ * `key` is `keyDown`, `char`, `keyUp` (the driver and TYPE_AT). A `\n` is never sent as a character at any site: it is
+ * Shift+Enter, which a textarea takes as a newline and REQ-CHAT-001 makes the composer's newline, never its submit. A `\r`
+ * is dropped. Until 2026-09-29 the three other sites sent a `\n` as a `char` (or as a `keyDown` whose key code was
+ * `\n`), which is the shape that dropped the duress prompt's line breaks (live-run finding H-e;
+ * `docs/defects/fixed/the-driver-and-the-type-seams-type-a-newline-as-a-character.md`).
+ */
+export function textEvents(text: string, per: 'char' | 'key'): TypedEvent[] {
   const events: TypedEvent[] = [];
-  const enter = (modifiers?: readonly ('shift' | 'control')[]) => {
-    for (const type of ['keyDown', 'char', 'keyUp'] as const) events.push(modifiers === undefined ? { type, keyCode: 'Return' } : { type, keyCode: 'Return', modifiers });
-  };
-  for (const ch of prompt) {
+  for (const ch of text) {
     if (ch === '\r') continue;
-    if (ch === '\n') enter(['shift']);
-    else events.push({ type: 'char', keyCode: ch });
+    if (ch === '\n') events.push(...enterEvents(['shift']));
+    else if (per === 'char') events.push({ type: 'char', keyCode: ch });
+    else events.push({ type: 'keyDown', keyCode: ch }, { type: 'char', keyCode: ch }, { type: 'keyUp', keyCode: ch });
   }
-  enter();
   return events;
+}
+
+/** A `TypedEvent` in the shape `webContents.sendInputEvent` takes (its `modifiers` a mutable array). */
+export function inputEvent(event: TypedEvent): { type: TypedEvent['type']; keyCode: string; modifiers?: ('shift' | 'control')[] } {
+  return event.modifiers === undefined ? { type: event.type, keyCode: event.keyCode } : { type: event.type, keyCode: event.keyCode, modifiers: [...event.modifiers] };
+}
+
+/** `textEvents` followed by one unmodified Enter — what a typed step that submits sends. */
+export function submitEvents(text: string, per: 'char' | 'key'): TypedEvent[] {
+  return [...textEvents(text, per), ...enterEvents()];
 }
 
 /**
@@ -61,7 +89,7 @@ export function installPromptSeam(host: CaptureHost, prompt: string, resuming: b
     host.clocks.timers.after(millis(200), () => {
       wc.sendInputEvent({ type: 'keyDown', keyCode: 'L', modifiers: ['control'] });
       wc.sendInputEvent({ type: 'keyUp', keyCode: 'L', modifiers: ['control'] });
-      for (const event of promptEvents(prompt)) wc.sendInputEvent(event.modifiers === undefined ? { type: event.type, keyCode: event.keyCode } : { type: event.type, keyCode: event.keyCode, modifiers: [...event.modifiers] });
+      for (const event of promptEvents(prompt)) wc.sendInputEvent(inputEvent(event));
     });
   });
 }

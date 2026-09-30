@@ -16,10 +16,12 @@ interface FakeWindow {
   readonly calls: string[];
   /** Settles the paint the window was asked to confirm; `null` until one is asked. */
   paint: (() => void) | null;
+  /** Every input event the window was sent, in order. */
+  readonly inputs: { type: string; keyCode?: string; modifiers?: string[] }[];
 }
 
 function fakeWindow(paints: 'at-once' | 'never', id = 7): { win: BrowserWindow; state: FakeWindow } {
-  const state: FakeWindow = { calls: [], paint: null };
+  const state: FakeWindow = { calls: [], paint: null, inputs: [] };
   const webContents = {
     id,
     executeJavaScript: (script: string): Promise<unknown> => {
@@ -28,6 +30,7 @@ function fakeWindow(paints: 'at-once' | 'never', id = 7): { win: BrowserWindow; 
       if (paints === 'at-once') return Promise.resolve(true);
       return new Promise((resolve) => { state.paint = () => resolve(true); });
     },
+    sendInputEvent: (event: { type: string; keyCode?: string; modifiers?: string[] }) => { state.inputs.push(event); },
     capturePage: (): Promise<{ toPNG: () => Buffer }> => {
       state.calls.push('capture');
       return Promise.resolve({ toPNG: () => Buffer.from('png') });
@@ -218,5 +221,25 @@ describe('the driver addresses persona, approval and terminal windows (docs/defe
     expect(h.deferred).toEqual([]);
     expect(await h.send('deferProjectOffer')).toMatchObject({ ok: true });
     expect(h.deferred).toEqual([7]);
+  });
+});
+
+describe("the driver's type (REQ-CHAT-001; docs/defects/fixed/the-driver-and-the-type-seams-type-a-newline-as-a-character.md)", () => {
+  const key = (ch: string) => [{ type: 'keyDown', keyCode: ch }, { type: 'char', keyCode: ch }, { type: 'keyUp', keyCode: ch }];
+  const shiftEnter = ['keyDown', 'char', 'keyUp'].map((type) => ({ type, keyCode: 'Return', modifiers: ['shift'] }));
+  const enter = ['keyDown', 'char', 'keyUp'].map((type) => ({ type, keyCode: 'Return' }));
+
+  it('REQ-CHAT-001: types a line break as Shift+Enter and never as a `\\n` key, so a multi-line text keeps its breaks and does not submit', async () => {
+    const h = await harness();
+    const reply = await h.send('type', { text: 'a\nb\r\nc' });
+    expect(reply).toMatchObject({ ok: true, value: { enter: false } });
+    expect(h.state.inputs).toEqual([...key('a'), ...shiftEnter, ...key('b'), ...shiftEnter, ...key('c')]);
+    expect(h.state.inputs.some((e) => e.keyCode === '\n' || e.keyCode === '\r')).toBe(false);
+  });
+
+  it('REQ-CHAT-001: with `enter`, the one unmodified Enter is the last thing sent', async () => {
+    const h = await harness();
+    await h.send('type', { text: 'one\ntwo', enter: true });
+    expect(h.state.inputs).toEqual([...'one'].flatMap(key).concat(shiftEnter, [...'two'].flatMap(key), enter));
   });
 });

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { FakeClock } from '@rotaris/kernel';
 import type { CaptureHost } from './host.js';
+import { submitEvents, textEvents } from './probe.js';
 import { installSeams } from './seams.js';
 
 /**
@@ -9,7 +10,7 @@ import { installSeams } from './seams.js';
  * layout says it lands and not where the seam hoped it would.
  */
 
-const VARIABLES = ['ROTARIS_CAPTURE_VIEW', 'ROTARIS_CAPTURE_VIEW_MS', 'ROTARIS_CAPTURE_SETTINGS'] as const;
+const VARIABLES = ['ROTARIS_CAPTURE_VIEW', 'ROTARIS_CAPTURE_VIEW_MS', 'ROTARIS_CAPTURE_SETTINGS', 'ROTARIS_CAPTURE_TYPE', 'ROTARIS_CAPTURE_TYPE_AT'] as const;
 const saved = Object.fromEntries(VARIABLES.map((v) => [v, process.env[v]]));
 afterEach(() => {
   for (const v of VARIABLES) { if (saved[v] === undefined) delete process.env[v]; else process.env[v] = saved[v]; }
@@ -109,5 +110,47 @@ describe('ROTARIS_CAPTURE_VIEW=7 selects the Settings category it names, and say
     const pressed = s.presses.length;
     await run(s.clock, 2_000);
     expect(s.presses).toHaveLength(pressed);
+  });
+});
+
+/** A window that records the input events it is sent, and nothing else. */
+function typing() {
+  const clock = new FakeClock();
+  const sent: { type: string; keyCode: string; modifiers?: string[] }[] = [];
+  const host = { win: { webContents: { sendInputEvent: (e: { type: string; keyCode: string; modifiers?: string[] }) => { sent.push(e); }, executeJavaScript: () => Promise.resolve(null) } }, clocks: clock, log: () => undefined, personaWindows: { list: () => [] } } as unknown as CaptureHost;
+  for (const v of VARIABLES) delete process.env[v];
+  return { host, clock, sent };
+}
+
+describe('the TYPE and TYPE_AT seams type a line break as Shift+Enter (REQ-CHAT-001; docs/defects/fixed/the-driver-and-the-type-seams-type-a-newline-as-a-character.md)', () => {
+  it('REQ-CHAT-001: ROTARIS_CAPTURE_TYPE sends no `\\n` character, keeps each break as Shift+Enter, and submits once at the end', () => {
+    const t = typing();
+    process.env['ROTARIS_CAPTURE_TYPE'] = 'one\ntwo@100';
+    installSeams(t.host, { prompt: undefined, resumeWanted: undefined });
+    t.clock.advance(100);
+    expect(t.sent).toEqual(submitEvents('one\ntwo', 'char'));
+    expect(t.sent.some((e) => e.keyCode === '\n')).toBe(false);
+    expect(t.sent.filter((e) => e.type === 'char' && e.keyCode === 'Return' && e.modifiers?.includes('shift'))).toHaveLength(1);
+  });
+
+  it('REQ-CHAT-001: `>>no-enter` leaves the multi-line text in the control, unsubmitted', () => {
+    const t = typing();
+    process.env['ROTARIS_CAPTURE_TYPE'] = 'one\ntwo>>no-enter@100';
+    installSeams(t.host, { prompt: undefined, resumeWanted: undefined });
+    t.clock.advance(100);
+    expect(t.sent).toEqual(textEvents('one\ntwo', 'char'));
+    expect(t.sent.some((e) => e.keyCode === 'Return' && e.modifiers === undefined)).toBe(false);
+  });
+
+  it('REQ-CHAT-001: ROTARIS_CAPTURE_TYPE_AT keeps its keyDown/char/keyUp per character and sends a break as Shift+Enter', () => {
+    const t = typing();
+    process.env['ROTARIS_CAPTURE_TYPE_AT'] = 'a\r\nb@100';
+    installSeams(t.host, { prompt: undefined, resumeWanted: undefined });
+    t.clock.advance(100);
+    expect(t.sent).toEqual([
+      { type: 'keyDown', keyCode: 'a' }, { type: 'char', keyCode: 'a' }, { type: 'keyUp', keyCode: 'a' },
+      ...['keyDown', 'char', 'keyUp'].map((type) => ({ type, keyCode: 'Return', modifiers: ['shift'] })),
+      { type: 'keyDown', keyCode: 'b' }, { type: 'char', keyCode: 'b' }, { type: 'keyUp', keyCode: 'b' },
+    ]);
   });
 });

@@ -42,7 +42,10 @@ Repaired 2026-09-29 under R-067 (acceptance finding A4), under the reading raise
 - **One shape, REQ-CONFIG-103's.** The registry's `tool_restrictions` stage now takes those allowed-tool lists instead
   of a map from a tool to `false`. A tool survives only when every list names it (`restrictionsAllow` in
   `@rotaris/contracts`: an alias counts as its tool, and `delegate` carries its two companions). Every removal is logged
-  `by tool_restrictions` with the persona. A tool-server tool the list does not name is withheld.
+  `by tool_restrictions` with the persona. A tool-server tool the list does not name is withheld: it is taken off the
+  MCP surface before the executors and the prompt's MCP section are drawn from it, so the section never prints a name
+  the agent cannot call (REQ-MCP-062). The first form skipped it only in the executor loop and still printed it; the
+  verifier found that, and the MCP case now renders through the real `renderMcpSection` and asserts the section.
 - **The write-scope refusal reads the same lists.** `writesFiles` and `fileWriters` take the delegating persona, so a
   persona that persona's map restricts to reading cannot take a `write_scope`. The reason names only the writers that
   map lets write.

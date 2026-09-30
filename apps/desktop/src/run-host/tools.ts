@@ -417,12 +417,28 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       const mcp = deps.mcp;
       await mcp.prepare(run.cfg, ctx.workspaceRoot);
       const session = { sessionId: ctx.sessionId, writer: ctx.writer };
-      const surface = mcp.surfaceFor(run.cfg, ctx.workspaceRoot, ctx.persona, session, new Set(callable.keys()));
+      const offered = mcp.surfaceFor(run.cfg, ctx.workspaceRoot, ctx.persona, session, new Set(callable.keys()));
       if (withhold) {
-        if (surface.active.some((s) => s.tools.length > 0)) ctx.warn(`mcp: ${ctx.persona}'s MCP tools are withheld under ${mode === 'restricted' ? "the 'restricted' preset" : 'read_only'} (ADR-0016: a tool outside the registry declares no facet, so a withholding rule withholds it)`);
-        mcpSection = mcp.section({ ...surface, active: surface.active.map((s) => ({ ...s, tools: [] })) });
+        if (offered.active.some((s) => s.tools.length > 0)) ctx.warn(`mcp: ${ctx.persona}'s MCP tools are withheld under ${mode === 'restricted' ? "the 'restricted' preset" : 'read_only'} (ADR-0016: a tool outside the registry declares no facet, so a withholding rule withholds it)`);
+        mcpSection = mcp.section({ ...offered, active: offered.active.map((s) => ({ ...s, tools: [] })) });
         return;
       }
+      // REQ-TOOLS-006 (4), OQ-141: an allowed-tool list is closed — a server's tool it does not name is withheld, as a
+      // withholding rule withholds a tool outside the registry (ADR-0016), and logged with the control like a native one.
+      // It is taken off the SURFACE, so the executors and the prompt section both come from what is left and a printed
+      // name stays callable (REQ-MCP-062) — until 2026-09-29 it was skipped only in the executor loop, and the section
+      // still printed it.
+      const surface = {
+        ...offered,
+        active: offered.active.map((s) => ({
+          ...s,
+          tools: s.tools.filter((t) => {
+            if (restrictionsAllow(restrictions, t.callable)) return true;
+            logInfo(`tool '${t.callable}' removed from ${ctx.persona} by tool_restrictions (REQ-TOOLS-004/006)`);
+            return false;
+          }),
+        })),
+      };
       const remove = (name: string) => { callable.delete(name); };
       for (const e of mcp.executorsFor({ cfg: run.cfg, workspaceRoot: ctx.workspaceRoot, role: ctx.persona, surface, ctx: session, remove, log: (m) => ctx.warn(m) })) {
         // REQ-ORCH-153: an MCP tool carries no declaration, so the fail-closed predicate withholds it while the
@@ -432,9 +448,6 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
         // tool offered under a public read-only name (`read_file`, on a persona whose public set lacks one) through
         // the hold until 2026-09-28.
         if (planGateHeld() && withheldUnderPlanGate(e.name, false)) { withheldAtPlanGate.add(e.name); ctx.warn(`mcp: '${e.name}' is withheld while this run is held at the plan gate (REQ-ORCH-153)`); continue; }
-        // REQ-TOOLS-006 (4), OQ-141: an allowed-tool list is closed — a server's tool it does not name is withheld, as a
-        // withholding rule withholds a tool outside the registry (ADR-0016), and logged with the control like a native one.
-        if (!restrictionsAllow(restrictions, e.name)) { logInfo(`tool '${e.name}' removed from ${ctx.persona} by tool_restrictions (REQ-TOOLS-004/006)`); continue; }
         if (callable.has(e.name)) { ctx.warn(`mcp: the tool name '${e.name}' collides with a native tool of ${ctx.persona}; the MCP tool is not offered`); continue; }
         callable.set(e.name, e);
         specs.push(toolSpec(e));

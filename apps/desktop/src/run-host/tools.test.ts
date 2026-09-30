@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
 import { TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset } from '@rotaris/contracts';
-import { loadConfiguration } from '@rotaris/config';
+import { loadConfiguration, renderMcpSection, type PersonaMcpSurface } from '@rotaris/config';
 import { anySchema, gitReadTool, permissivePolicyRead, simpleExecutor, TodoList, todoTool, type ToolExecutor } from '@rotaris/agent-tools';
 import { SessionWriter, UserPresence, type ToolPortContext } from '@rotaris/engine';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
@@ -533,7 +533,14 @@ ${personas}runtime:
       presenter: { present: async () => ({ ok: true }), close: () => undefined }, nextSequence: () => 1, fileStates: new Map(), terminal: null,
       egress: () => permissivePolicyRead,
       ...(mcp.length > 0 ? {
-        mcp: { prepare: async () => undefined, surfaceFor: () => ({ persona, active: [], dropped: [] }), section: () => '', executorsFor: () => [...mcp] } as unknown as McpHost,
+        // One server `srv` offering the given executors; the section is the real REQ-MCP-101 renderer and the executors
+        // are the ones the surface handed in still holds, so a narrowing that skips the surface shows in the section.
+        mcp: {
+          prepare: async () => undefined,
+          surfaceFor: (): PersonaMcpSurface => ({ persona, dropped: [], active: [{ name: 'srv', entry: { type: 'stdio', command: 'srv', args: [] }, origin: 'workspace', discoveryFailed: false, tools: mcp.map((e) => ({ callable: e.name, reported: e.name, description: e.description, inputSchema: {} })) }] }) as unknown as PersonaMcpSurface,
+          section: (surface: PersonaMcpSurface) => renderMcpSection(surface),
+          executorsFor: ({ surface }: { surface: PersonaMcpSurface }) => mcp.filter((e) => surface.active.some((s) => s.tools.some((t) => t.callable === e.name))),
+        } as unknown as McpHost,
         configured: () => ({ cfg }) as unknown as ConfiguredRun,
       } : {}),
     };
@@ -598,15 +605,18 @@ ${coder('    tool_restrictions:\n      coding-agent: [read_file, grep, terminal]
     expect(child.resolvedTools?.()).toEqual(['read_file']);
   });
 
-  it('OQ-141: an MCP tool the list does not name is withheld from a restricted agent, as a withholding rule withholds a tool outside the registry (ADR-0016)', async () => {
+  it('OQ-141 / REQ-MCP-062: an MCP tool the list does not name is withheld from a restricted agent\'s listing and its prompt section, as a withholding rule withholds a tool outside the registry (ADR-0016)', async () => {
     const serverTool = simpleExecutor('lookup', 'a server tool', anySchema, async () => ({ text: 'ok', isError: false }));
     const restricted = port(coder('    tool_restrictions:\n      coding-agent: [read_file]\n'), 'coding-agent', {}, [serverTool]);
     await restricted.ready?.();
     expect(restricted.specs().map((s) => s.name)).toEqual(['read_file']);
     expect(infos).toContain("tool 'lookup' removed from coding-agent by tool_restrictions (REQ-TOOLS-004/006)");
+    // REQ-MCP-062: a printed name is callable — the withheld tool is not printed under its server.
+    expect(restricted.promptSection?.()).toBe('## MCP servers\n\n- `srv`');
     const named = port(coder('    tool_restrictions:\n      coding-agent: [read_file, lookup]\n'), 'coding-agent', {}, [serverTool]);
     await named.ready?.();
     expect(named.specs().map((s) => s.name)).toEqual(['read_file', 'lookup']);
+    expect(named.promptSection?.()).toBe('## MCP servers\n\n- **`srv`**\n  - `lookup` — a server tool');
   });
 });
 

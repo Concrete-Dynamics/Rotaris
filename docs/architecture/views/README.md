@@ -48,7 +48,8 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 **A persona's `tool_restrictions` narrow its grant (REQ-TOOLS-006 (4), REQ-CONFIG-103, OQ-141, R-067).** The engine
 `Persona` carries the map (`toolRestrictions`), and every child's `ToolPortContext` names its delegating persona
 (`parentPersona`, from `IterationChildren.parentPersonaOf`). The run host passes the lists `toolRestrictionsFor` reads to the
-registry's fourth stage, which now takes allowed-tool lists, and withholds an MCP tool no list names. `writesFiles`
+registry's fourth stage, which now takes allowed-tool lists, and takes an MCP tool no list names off the surface
+before its executors and its prompt section are drawn from it (REQ-MCP-062). `writesFiles`
 reads the same lists. The **seams view**'s §4 and the **runtime view**'s write-scopes paragraph say so. This repairs
 [`a-personas-tool-restrictions-never-narrow-its-grant.md`](../../defects/fixed/a-personas-tool-restrictions-never-narrow-its-grant.md).
 No package, edge, process, message kind, channel, command or store column changed.

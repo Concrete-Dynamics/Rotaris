@@ -204,8 +204,14 @@ every tool through because it was never given anything, and no reading of the re
 takes the allowed-tool lists that bind the agent (OQ-141's reading: the entry its own persona's map and its delegating
 persona's map give its persona's name). It keeps a tool only when every list names it, through `restrictionsAllow` in
 `@rotaris/contracts`, which the engine's write-scope refusal also reads. It still only removes, after the three earlier
-stages. The MCP loop in `run-host/tools.ts` withholds a server's tool the lists do not name, the same fail-closed
-reading the fourth execution took for `read_only`. Measured by unit tests over the stage (`policy.test.ts`) and five
+stages. ~~The MCP loop in `run-host/tools.ts` withholds a server's tool the lists do not name, the same fail-closed
+reading the fourth execution took for `read_only`.~~ *Falsified 2026-09-29 by the verifier of the same change, kept
+beside its replacement: the loop dropped the tool from the callable map and the listing, but the prompt's MCP section
+was still rendered from the unnarrowed surface, so it printed a name the agent could not call (REQ-MCP-062). The
+`read_only` withholding it claimed parity with empties the surface before rendering, and this did not.* The port now
+takes a server's tool the lists do not name off the **surface** itself, so the executors and the section both come
+from what is left, and a printed name stays callable (REQ-MCP-062); pinned by the MCP case in `run-host/tools.test.ts`,
+which renders through the real `renderMcpSection` and was red on the loop-only form. Measured by unit tests over the stage (`policy.test.ts`) and five
 cases through the loader and the real port (`run-host/tools.test.ts`), four of them red on the old code. The built app
 was not driven: no proof or live-run scenario configures `tool_restrictions`
 ([the note](../../defects/fixed/a-personas-tool-restrictions-never-narrow-its-grant.md)).

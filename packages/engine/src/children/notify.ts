@@ -1,3 +1,4 @@
+import { countNoun } from '@rotaris/kernel';
 import type { ChildRow } from '@rotaris/store';
 import { cutOffLines, type CutOff } from './cut-off.js';
 
@@ -62,7 +63,7 @@ export function completionNotification(done: ChildRow, stillRunning: number, dur
     `duration: ${durationS.toFixed(1)} s`,
     `state: ${done.state}`,
   ];
-  if (stillRunning > 0) lines.push(`${stillRunning} background task(s) still running; you will be notified when all complete — do not poll, continue productive work. Retrieve this result with background_output(task_id="${done.task_id}") (detail_level "summary" or "verbatim").`);
+  if (stillRunning > 0) lines.push(`${countNoun(stillRunning, 'background task')} still running; you will be notified when all complete — do not poll, continue productive work. Retrieve this result with background_output(task_id="${done.task_id}") (detail_level "summary" or "verbatim").`);
   else lines.push('All background tasks have completed.');
   return lines.join('\n');
 }
@@ -70,7 +71,7 @@ export function completionNotification(done: ChildRow, stillRunning: number, dur
 /** REQ-ORCH-057/055: the resume message — the newly terminal children's reports, and what still runs. */
 export function resumeMessage(newlyTerminal: readonly ChildRow[], stillRunning: number): string {
   const lines = ['Child task updates are available.', ...newlyTerminal.map(reportBlock)];
-  if (stillRunning > 0) lines.push(`${stillRunning} child task(s) are still running in the background.`);
+  if (stillRunning > 0) lines.push(`${countNoun(stillRunning, 'child task')} ${stillRunning === 1 ? 'is' : 'are'} still running in the background.`);
   else lines.push('All background tasks finished. Issue the next batch of delegations in parallel before ending the turn, or answer the user if the work is done.');
   return lines.join('\n\n');
 }

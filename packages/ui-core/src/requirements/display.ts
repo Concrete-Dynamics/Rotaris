@@ -1,3 +1,4 @@
+import { countNoun } from '@rotaris/kernel';
 import type { BlockerKind, BoardAction, BoardCard, ColumnToken, EpicCard, HealthToken, RelationToken, ReqId } from '@rotaris/contracts';
 import { BLOCKER_KINDS, COLUMN_TOKENS, DELIVERY_COLUMNS, HEALTH_TOKENS, compareReqIds } from '@rotaris/contracts';
 
@@ -199,7 +200,7 @@ export function relativeAge(iso: string | undefined, now: string | undefined): s
   if (Number.isNaN(t) || Number.isNaN(n)) return iso;
   const s = Math.floor((n - t) / 1000);
   if (s < 60) return 'just now';
-  const plural = (v: number, unit: string) => `${v} ${unit}${v === 1 ? '' : 's'} ago`;
+  const plural = (v: number, unit: string) => `${countNoun(v, unit)} ago`;
   if (s < 3600) return plural(Math.floor(s / 60), 'minute');
   if (s < 86_400) return plural(Math.floor(s / 3600), 'hour');
   return plural(Math.floor(s / 86_400), 'day');

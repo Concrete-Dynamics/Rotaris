@@ -150,7 +150,7 @@ if (/capture: wait for .* timed out/.test(log1) || (!replay('first-launch') && !
   process.exit(2);
 }
 results.keyPasted = true;
-const added = /providers: (Added OpenRouter; discovered (\d+) model\(s\)\.)/.exec(log1);
+const added = /providers: (Added OpenRouter; discovered (\d+) models?\.)/.exec(log1);
 if (!added) throw new Error(`the sign-in outcome was not logged:\n${log1}`);
 // After the sign-out scenario the file is gone; a replay reads the credential facts it recorded.
 const credentialFacts = join(output, 'credential-facts.json');

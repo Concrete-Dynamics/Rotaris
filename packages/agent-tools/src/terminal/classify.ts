@@ -1,3 +1,5 @@
+import { countNoun } from '@rotaris/kernel';
+
 /**
  * REQ-TOOLS-112/113: the six-test ordered classification and the three independent output checks plus
  * the pipeline check; REQ-TOOLS-098/100: the `[terminal_output]` section that is never omitted and the
@@ -84,7 +86,7 @@ export function outputWarnings(command: string, output: string, exitCode: number
     const marker = MARKERS.find((m) => containsMarker(output, m));
     if (marker) out.push(markerWarning(output, marker));
     const count = /(^|\n)[^\n]*\bfound (\d+) errors?\b/i.exec(output);
-    if (count && Number(count[2]) !== 0) out.push(`Output reports ${count[2]} error(s).`);
+    if (count && Number(count[2]) !== 0) out.push(`Output reports ${countNoun(Number(count[2]), 'error')}.`);
     if (/(^|\n)=+[^\n]*failed[^\n]*=+\s*(\n|$)/i.test(output)) out.push('A test-runner failure banner appears in the output.');
   }
   if (command.includes('|') && /(error:|failed|traceback|no tests ran)/i.test(output)) out.push('Pipeline command may have hidden an upstream failure exit code.');

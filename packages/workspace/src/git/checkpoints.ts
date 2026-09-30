@@ -1,6 +1,6 @@
 import { existsSync, lstatSync, mkdirSync, rmSync, unlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { millis, type Clocks, type Millis } from '@rotaris/kernel';
+import { type Clocks, countNoun, type Millis, millis } from '@rotaris/kernel';
 import { invokeGit, renderGitCommand, type GitResult } from './invoke.js';
 import { excludedPath } from './paths.js';
 
@@ -73,7 +73,7 @@ export function dirtyReason(dirty: readonly string[]): string {
   const sorted = sortPaths(dirty);
   const shown = sorted.slice(0, 5).join(', ');
   const more = sorted.length > 5 ? ` and ${sorted.length - 5} more` : '';
-  return `${sorted.length} uncommitted change(s) would be overwritten: ${shown}${more} Restore again with force to overwrite them.`;
+  return `${countNoun(sorted.length, 'uncommitted change')} would be overwritten: ${shown}${more} Restore again with force to overwrite them.`;
 }
 
 /** REQ-GIT-063: the letter is never shown; every unknown letter renders `change`. */
@@ -102,11 +102,11 @@ export function previewText(sequence: number, entries: readonly PreviewEntry[], 
   if (entries.length === 0 && blockedReason !== '') return blockedReason;
   if (entries.length === 0) lines.push(`Restoring checkpoint ${sequence} would change nothing.`);
   else {
-    lines.push(`Restoring checkpoint ${sequence} would change ${entries.length} file(s):`);
+    lines.push(`Restoring checkpoint ${sequence} would change ${countNoun(entries.length, 'file')}:`);
     for (const e of [...entries].sort((a, b) => byteOrder(a.path, b.path))) lines.push(`  ${verbFor(e.status).padEnd(9, ' ')} ${e.path}`);
   }
   if (dirty.length > 0) {
-    lines.push(`Warning: ${dirty.length} uncommitted change(s) would be overwritten:`);
+    lines.push(`Warning: ${countNoun(dirty.length, 'uncommitted change')} would be overwritten:`);
     for (const p of sortPaths(dirty)) lines.push(`  ${p}`);
   }
   return lines.join('\n');

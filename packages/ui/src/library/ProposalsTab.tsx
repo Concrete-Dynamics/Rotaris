@@ -1,3 +1,4 @@
+import { countNoun } from '@rotaris/kernel';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   PROPOSAL_STATUSES,
@@ -338,7 +339,7 @@ export function ProposalsTab(props: ProposalsTabProps) {
             <dl className="library-proposals__facts">
               <div><dt>Generated</dt><dd>{new Date(chosenRecord.artifact.generated_at).toLocaleString()}</dd></div>{/* PD-LIBRARY-002: a retrospective belongs to no session, so the cell says what it DOES belong to — an empty
                   cell would read as a session the record failed to name rather than as a pass that never had one. */}
-              <div><dt>Source</dt><dd className="mono" data-testid="library-proposal-source">{chosenRecord.artifact.source_kind === 'retrospective' ? `This workspace's history · ${chosenRecord.artifact.considered_session_ids.length} session(s)` : chosenRecord.artifact.source_session_id}</dd></div>
+              <div><dt>Source</dt><dd className="mono" data-testid="library-proposal-source">{chosenRecord.artifact.source_kind === 'retrospective' ? `This workspace's history · ${countNoun(chosenRecord.artifact.considered_session_ids.length, 'session')}` : chosenRecord.artifact.source_session_id}</dd></div>
               <div><dt>Proposals</dt><dd>{artifactCounts(chosenRecord)}</dd></div><div><dt>Rollback</dt><dd>{checkpoint ? `${checkpoint.ref} · ${checkpoint.commit.slice(0, 12)}` : 'No rollback point recorded.'}{chosenRecord.artifact.rolled_back_at ? ` Rolled back ${new Date(chosenRecord.artifact.rolled_back_at).toLocaleString()}.` : ''}</dd></div>
             </dl>
             <div className="library-proposals__detail-actions">

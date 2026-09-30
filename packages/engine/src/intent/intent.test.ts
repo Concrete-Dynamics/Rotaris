@@ -195,7 +195,7 @@ describe('REQ-ORCH-016/017/018/025 the intent gate', () => {
     expect(intentGrant('single_file_change', null, r.mapping)).toBe('direct-work');
     const bad = resolveIntentMapping({ kind: 'value', mapping: { nope: 'direct-work' } });
     expect(bad.source).toBe('built-in');
-    expect(bad.warning).toMatch(/unknown intent key\(s\) 'nope'/);
+    expect(bad.warning).toMatch(/unknown intent key 'nope'/);
     const inv = resolveIntentMapping({ kind: 'invalid', reason: 'garbage' });
     expect(inv.warning).toMatch(/not applied: garbage/);
     expect(resolveIntentMapping({ kind: 'absent' })).toMatchObject({ source: 'built-in', warning: '' });

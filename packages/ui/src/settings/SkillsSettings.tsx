@@ -60,8 +60,10 @@ export const RESCAN_LABEL = 'Rescan skills';
 export const RESCAN_DESCRIPTION = 'Re-reads skill files from disk for this workspace.';
 export const LOAD_FILE_LABEL = 'Load skill file…';
 export const LOAD_FILE_DESCRIPTION = 'Loads a skill file for this session only.';
-/** REQ-WORKSPACE-067: the Source cell's tooltip for a skill that shadowed duplicates. */
-export const SHADOW_TOOLTIP = 'Workspace skill wins. Ignored duplicate(s):';
+/** REQ-WORKSPACE-067: the Source cell's tooltip for a skill that shadowed duplicates, its noun agreeing with how many (REQ-SHELL-044). */
+export function shadowTooltip(shadowed: readonly string[]): string {
+  return `Workspace skill wins. Ignored ${shadowed.length === 1 ? 'duplicate' : 'duplicates'}:\n${shadowed.join('\n')}`;
+}
 
 /** REQ-WORKSPACE-149: home collapsed, middle-elided to a single `…`, with the full path in tooltip and description. */
 function pathLabel(path: string, home: string | undefined): string {
@@ -75,7 +77,7 @@ function pathLabel(path: string, home: string | undefined): string {
 function SkillRowView({ row, home, load, invocation, onLoadMode, onInvocationMode }: { row: SkillRow; home: string | undefined; load: SkillLoadModeName; invocation: SkillInvocationModeName } & Pick<SkillsSettingsProps, 'onLoadMode' | 'onInvocationMode'>) {
   const full = row.path;
   const shown = pathLabel(full, home);
-  const shadowTitle = row.shadowed.length === 0 ? undefined : `${SHADOW_TOOLTIP}\n${row.shadowed.join('\n')}`;
+  const shadowTitle = row.shadowed.length === 0 ? undefined : shadowTooltip(row.shadowed);
   const triggers = row.triggers.join(', ');
   return (
     <tr data-testid="skill-row" data-name={row.name} data-scope={row.scope} data-load={load} data-invocation={invocation} data-saved-load={row.loadMode} data-forced={row.forcedThisSession ? 'yes' : 'no'}>

@@ -114,7 +114,7 @@ describe('engine/session-writer — recordCheckpoint and recordRestore (ADR-0039
     // REQ-GIT-048: the timeline entry's fixed actor, message and metadata.
     const t = dal.timelineOf(sid).filter((e) => e.name === 'checkpoint_created');
     expect(t).toHaveLength(3);
-    expect(t[1]).toMatchObject({ actor: 'checkpoints', message: 'Recorded checkpoint 2 over 2 file(s).' });
+    expect(t[1]).toMatchObject({ actor: 'checkpoints', message: 'Recorded checkpoint 2 over 2 files.' });
     expect(JSON.parse(t[1]!.metadata)).toEqual({ sequence: 2, ref: 'refs/rotaris/checkpoints/W1/2', commit: 'c2', iteration: 2, child_name: 'helper', kind: 'iteration', file_count: 2 });
     // REQ-GIT-067: exactly the five fields beside the envelope; changed_paths is a count.
     const ev = JSON.parse(dal.eventsOfKind(sid, 'checkpoint.created')[1]!.payload) as Record<string, unknown>;
@@ -141,7 +141,7 @@ describe('engine/session-writer — recordCheckpoint and recordRestore (ADR-0039
     expect(ok.ok).toBe(true);
     expect(dal.getSession(sid)!.last_restored_sequence).toBe(2);
     const t = dal.timelineOf(sid).find((e) => e.name === 'checkpoint_restored')!;
-    expect(t).toMatchObject({ actor: 'checkpoints', message: 'Restored the working tree to checkpoint 2 over 3 file(s).' });
+    expect(t).toMatchObject({ actor: 'checkpoints', message: 'Restored the working tree to checkpoint 2 over 3 files.' });
     expect(JSON.parse(t.metadata)).toEqual({ sequence: 2, ref: 'refs/rotaris/checkpoints/W2/2', commit: 'c2', safety_sequence: 5, changed_files: 3, dirty_paths: 2, forced: true, tree_root: 'C:/ws' });
     const events = dal.eventsOfKind(sid, 'checkpoint.restored').map((e) => JSON.parse(e.payload) as Record<string, unknown>);
     expect(events).toHaveLength(2);

@@ -343,7 +343,7 @@ describe('Part U — repair, delete and the exports', () => {
      * The refusals do not all land in the same place, and the test says which rather than pretending they do.
      * An open descriptor, and an immutable target, leave ADR-0004's STAGING write untouched and refuse only the
      * rename — the ladder's own condition, so the exhaustion is observable and the error is `document.replace`
-     * "after 5 attempt(s)". A write-denied parent refuses BOTH, and the staging write is the first to be refused
+     * "after 5 attempts". A write-denied parent refuses BOTH, and the staging write is the first to be refused
      * — `document.stage`, ADR-0004's own separate outcome, reached before any rename is attempted; no unprivileged
      * POSIX permission can deny the rename while allowing the staging write into the same directory, so that uid
      * takes the staging path (found on Linux, 2026-09-16). Root ignores those mode bits, so a `chmod 0o555`
@@ -380,7 +380,7 @@ describe('Part U — repair, delete and the exports', () => {
       expect(failed.ok).toBe(false);
       if (failed.ok) throw new Error('unreachable');
       expect(failed.error.code).toBe(refusal.code);
-      if (refusal.laddered) expect(failed.error.detail).toContain('after 5 attempt(s)');
+      if (refusal.laddered) expect(failed.error.detail).toContain('after 5 attempts');
       // The previous export is byte-identical and no staged leftover sits beside it.
       expect(readFileSync(target, 'utf8')).toBe(before);
       expect(readdirSync(join(dir, 'exports'))).toEqual(['previous.json']);

@@ -14,7 +14,7 @@ import {
   type ImprovementRunTask,
   type VerifierSection,
 } from '@rotaris/contracts';
-import { toIsoUtc, type Clocks } from '@rotaris/kernel';
+import { type Clocks, countNoun, toIsoUtc } from '@rotaris/kernel';
 import {
   CHECKPOINT_REF_TIMEOUT,
   capture,
@@ -211,7 +211,7 @@ interface RollbackState {
 function dirtyReason(artifactId: string, dirty: readonly string[]): string {
   const shown = sortPaths(dirty).slice(0, 5);
   const more = dirty.length > shown.length ? ` and ${dirty.length - shown.length} more` : '';
-  return `Rolling back improvement ${artifactId} would overwrite ${dirty.length} change(s) made since the run: ${shown.join(', ')}${more}. Turn on the explicit override and confirm again to overwrite them.`;
+  return `Rolling back improvement ${artifactId} would overwrite ${countNoun(dirty.length, 'change')} made since the run: ${shown.join(', ')}${more}. Turn on the explicit override and confirm again to overwrite them.`;
 }
 
 async function rollbackState(artifactId: string, deps: ImprovementExecutorDeps): Promise<RollbackState> {

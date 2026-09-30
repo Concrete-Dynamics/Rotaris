@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { err, maskArguments, ok, redactRowString, toIsoUtc, type Instant, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
+import { countNoun, err, type Instant, type MachineId, maskArguments, ok, redactRowString, type Result, type SessionId, toIsoUtc, type WallClock } from '@rotaris/kernel';
 import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type AgentTerminalRow, type CheckpointRow, type IterationInsert, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
 import { FOLLOW_UP_STATE, interruptionPhrase, isLegalChildMove, isLegalFollowUp, isResumeState, isTerminalChildState, type ChildState, type ImageAttachment, type Interruption, type ResumeState, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
@@ -660,7 +660,7 @@ export class SessionWriter {
         // PD-ORCH-005 revision 4 clause 14: the fingerprint is part of the agent's record, so it goes with it.
         const fingerprints = dal.clearClosedAgentFingerprints(sessionId);
         const ordinal = dal.nextTimelineOrdinal(sessionId);
-        dal.insertTimeline(sessionId, ordinal, at, 'transcript_cleared', 'user', `The transcript was cleared: ${removed} row(s) removed. Agent state, artifacts and Git changes were kept.`, JSON.stringify({ removed, next_index: this.nextIndex, records_removed: records, fingerprints_removed: fingerprints }), id, 'info');
+        dal.insertTimeline(sessionId, ordinal, at, 'transcript_cleared', 'user', `The transcript was cleared: ${countNoun(removed, 'row')} removed. Agent state, artifacts and Git changes were kept.`, JSON.stringify({ removed, next_index: this.nextIndex, records_removed: records, fingerprints_removed: fingerprints }), id, 'info');
         dal.touchSession(sessionId, this.status, at);
       });
     } catch (cause) {
@@ -1512,7 +1512,7 @@ export class SessionWriter {
       dal.transaction(() => {
         dal.insertCheckpoint({ session_id: sessionId, sequence: input.sequence, ref: input.ref, commit_id: input.commit, created_at: at, iteration: input.iteration, child_name: input.childName, files: JSON.stringify(input.files), kind: input.kind });
         trimmed = dal.trimCheckpoints(sessionId, keep);
-        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'checkpoint_created', 'checkpoints', `Recorded checkpoint ${input.sequence} over ${input.files.length} file(s).`, JSON.stringify({ sequence: input.sequence, ref: input.ref, commit: input.commit, iteration: input.iteration, child_name: input.childName, kind: input.kind, file_count: input.files.length }), timelineId(), 'info');
+        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'checkpoint_created', 'checkpoints', `Recorded checkpoint ${input.sequence} over ${countNoun(input.files.length, 'file')}.`, JSON.stringify({ sequence: input.sequence, ref: input.ref, commit: input.commit, iteration: input.iteration, child_name: input.childName, kind: input.kind, file_count: input.files.length }), timelineId(), 'info');
         if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'checkpoint.created', at, EVENT_SCHEMA_VERSION, input.iteration, line.value);
         dal.touchSession(sessionId, this.status, at);
       });
@@ -1549,7 +1549,7 @@ export class SessionWriter {
       dal.transaction(() => {
         if (input.restored) {
           dal.setLastRestored(sessionId, input.sequence, at);
-          dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'checkpoint_restored', 'checkpoints', `Restored the working tree to checkpoint ${input.sequence} over ${input.changedPaths} file(s).`, JSON.stringify({ sequence: input.sequence, ref: input.ref, commit: input.commit, safety_sequence: input.safetySequence, changed_files: input.changedPaths, dirty_paths: input.dirtyPaths.length, forced: input.forced, tree_root: input.treeRoot }), timelineId(), 'info');
+          dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'checkpoint_restored', 'checkpoints', `Restored the working tree to checkpoint ${input.sequence} over ${countNoun(input.changedPaths, 'file')}.`, JSON.stringify({ sequence: input.sequence, ref: input.ref, commit: input.commit, safety_sequence: input.safetySequence, changed_files: input.changedPaths, dirty_paths: input.dirtyPaths.length, forced: input.forced, tree_root: input.treeRoot }), timelineId(), 'info');
         } else {
           const id = issueId();
           const message = `Restore of checkpoint ${input.sequence} did not run: ${input.blockedReason}`;

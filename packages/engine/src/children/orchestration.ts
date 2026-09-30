@@ -1,4 +1,4 @@
-import { millis, toIsoUtc, type Clocks, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
+import { type Clocks, countNoun, millis, type Millis, type SessionId, type TimerHandle, toIsoUtc } from '@rotaris/kernel';
 import { interruptionPhrase, isTerminalChildState, reportStatusToState, resumeStateFor, TASK_ID_PATTERN, type ChildState, type Interruption, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
 import type { ChildRow, StoreDal } from '@rotaris/store';
@@ -499,7 +499,7 @@ export class IterationChildren implements DelegationOps {
     if (already) {
       const rows = set.map((id) => this.ledger.get(id)).filter((r): r is ChildRow => r !== undefined);
       for (const r of rows) this.ledger.markObserved(r.task_id);
-      return { immediate: true, requested: set.length, text: set.length === 0 ? 'There was nothing to wait for: no task ids were given and no background children are active.' : `All ${set.length} requested task(s) were already complete.\n\n${rows.map(reportBlock).join('\n\n')}` };
+      return { immediate: true, requested: set.length, text: set.length === 0 ? 'There was nothing to wait for: no task ids were given and no background children are active.' : `${set.length === 1 ? 'The 1 requested task was' : `All ${set.length} requested tasks were`} already complete.\n\n${rows.map(reportBlock).join('\n\n')}` };
     }
     await this.scheduler.waitFor(set);
     // REQ-HOOKS-080: the settle that released the wait may not be the last to finish — another task of the set can have
@@ -1172,7 +1172,7 @@ export class IterationChildren implements DelegationOps {
       if (full.text !== '') blocks.push(full.text);
     }
     if (blocks.length > 0) {
-      this.deps.writer.appendTimeline('context_selection', 'rotaris', `${row.canonical_name} was given ${index.included} sibling artifact(s)${full ? ` and ${full.included} attached artifact(s)` : ''}.`, {
+      this.deps.writer.appendTimeline('context_selection', 'rotaris', `${row.canonical_name} was given ${countNoun(index.included, 'sibling artifact')}${full ? ` and ${countNoun(full.included, 'attached artifact')}` : ''}.`, {
         task_id: row.task_id, canonical_name: row.canonical_name,
         sibling_index_included: index.included, sibling_index_elided: index.elided, sibling_index_suppressed: suppressed,
         attached_included: full?.included ?? 0, attached_elided: full?.elided ?? [], attached_unresolved: full?.unresolved ?? [],

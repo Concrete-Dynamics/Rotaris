@@ -1300,7 +1300,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       await settle(() => dal.timelineOf(sid).length > 0 && child(sid)?.state === 'running');
       await new Promise((r) => setTimeout(r, 20));
       clock.advance(90_000);
-      expect(warnings.filter((m) => m.startsWith('child waiting on tools:'))).toEqual([`child waiting on tools: quiet (${child(sid).task_id}) has 1 active tool call(s) and no model event or token for 90 seconds; the run is still waiting on it (REQ-MONITOR-118)`]);
+      expect(warnings.filter((m) => m.startsWith('child waiting on tools:'))).toEqual([`child waiting on tools: quiet (${child(sid).task_id}) has 1 active tool call and no model event or token for 90 seconds; the run is still waiting on it (REQ-MONITOR-118)`]);
       expect(dal.issuesOf(sid).filter((i) => i.kind === 'stall')).toEqual([]);
       releaseTool();
       await new Promise((r) => setTimeout(r, 20));

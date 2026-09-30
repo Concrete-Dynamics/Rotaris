@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
 import type { CaptureHost } from './host.js';
-import { installFinish, installPromptSeam, promptEvents } from './probe.js';
+import { installFinish, installPromptSeam, promptEvents, submitEvents, textEvents } from './probe.js';
 
 /**
  * How a capture ends (`installFinish`): the immediate exit once what it waited for has happened, the application's quit
@@ -126,5 +126,32 @@ describe('the capture seam types a multi-line prompt as a person types it (REQ-C
       { type: 'keyDown', keyCode: 'L', modifiers: ['control'] }, { type: 'keyUp', keyCode: 'L', modifiers: ['control'] },
     ]);
     expect(sent.slice(4)).toEqual(promptEvents('first line\nsecond line'));
+  });
+});
+
+/**
+ * The one decision about a typed line break, shared by the driver's `type` and the TYPE / TYPE_AT seams
+ * (`docs/defects/fixed/the-driver-and-the-type-seams-type-a-newline-as-a-character.md`): each site keeps its own shape
+ * for an ordinary character, and none of them sends a `\n` as one.
+ */
+describe('typed text carries its line breaks as Shift+Enter at every site (REQ-CHAT-001, probe.ts textEvents)', () => {
+  const shiftEnter = ['keyDown', 'char', 'keyUp'].map((type) => ({ type, keyCode: 'Return', modifiers: ['shift'] }));
+
+  it('REQ-CHAT-001: `char` sends one char per character, `key` a keyDown/char/keyUp, and a break is Shift+Enter in both', () => {
+    expect(textEvents('a\nb', 'char')).toEqual([{ type: 'char', keyCode: 'a' }, ...shiftEnter, { type: 'char', keyCode: 'b' }]);
+    expect(textEvents('a\r\nb', 'key')).toEqual([
+      { type: 'keyDown', keyCode: 'a' }, { type: 'char', keyCode: 'a' }, { type: 'keyUp', keyCode: 'a' },
+      ...shiftEnter,
+      { type: 'keyDown', keyCode: 'b' }, { type: 'char', keyCode: 'b' }, { type: 'keyUp', keyCode: 'b' },
+    ]);
+  });
+
+  it('REQ-CHAT-001: submits nothing by itself; `submitEvents` adds one unmodified Enter, last', () => {
+    expect(textEvents('x\ny', 'key').some((e) => e.keyCode === 'Return' && e.modifiers === undefined)).toBe(false);
+    const events = submitEvents('x\ny', 'char');
+    expect(events.slice(-3)).toEqual([{ type: 'keyDown', keyCode: 'Return' }, { type: 'char', keyCode: 'Return' }, { type: 'keyUp', keyCode: 'Return' }]);
+    expect(events.filter((e) => e.keyCode === 'Return' && e.modifiers === undefined)).toHaveLength(3);
+    // The prompt seam is this shape exactly.
+    expect(promptEvents('x\ny')).toEqual(events);
   });
 });

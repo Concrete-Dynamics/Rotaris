@@ -48,3 +48,13 @@ covers the helper. `CheckpointDialogs.test.ts` and `settings/SkillsSettings.test
 two drawn sites. The unit tests and proofs that asserted the old wording now assert the agreeing one: `signin.test.ts`,
 the checkpoint, compression and report tests, `checkpoint-proof` and `chat-controls-proof`. The live run's sign-in
 check now also fails on a literal "(s)" in the sign-in outcome. Repaired 2026-09-29 under R-067.
+
+Shown live by `pnpm live-run --confirm --only=frictions` on the built app of `fix-file-tools-plurals`. The pack is
+`.live-run/runs/2026-09-30T04-29-02-452Z` of that worktree (git-ignored). The sign-in notice in `sign-in/sign-in.png`
+reads "Added Katalyst; discovered 1 model.", and the new check "the sign-in notice words its model count without a
+literal "(s)"" passed. In the same run, frictions' `write_file` create read "Created friction-probe.txt: 1 line
+created." `checkpoint-proof` and `chat-controls-proof` pass on the same build, with their assertions moved to the
+agreeing wording. `chat-controls-proof` needed the code-intelligence bundle built in the checkout first, the
+precondition recorded in
+[`chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`](../chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md).
+`slice-proof`'s sign-in regex was moved too, but it signs in to OpenRouter with the owner's key, so it was not run.

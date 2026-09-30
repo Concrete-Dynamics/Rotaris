@@ -6,6 +6,7 @@ import type { ArtifactStore } from '../artifacts/store.js';
 import { canonicaliseName, mintTaskId, takenTaskIds, uniqueUnderParent } from './naming.js';
 import { EMPTY_MCP_EVIDENCE, knownRolesMessage, resolveRole, type Persona, type PersonaResolver } from './personas.js';
 import type { RanCommand } from '../artifacts/record.js';
+import { inheritedContextBlock } from './notify.js';
 
 /**
  * PD-LIBRARY-001: the report's `commands` as the artifact record wants them. The report carries `exit_code`
@@ -118,6 +119,8 @@ export interface SpawnInput {
   readonly writeScope?: readonly string[] | undefined;
   /** REQ-TOOLS-152: the call's `suppress_auto_context`, stored with its record; absent means the index is given. */
   readonly suppressAutoContext?: boolean | undefined;
+  /** REQ-LIBRARY-098: the call's `attach_artifacts`, as given, stored with its record; absent means none. */
+  readonly attachArtifacts?: readonly string[] | undefined;
 }
 
 export type SpawnRejection = { readonly reason: string };
@@ -316,6 +319,12 @@ export class ChildLedger {
       write_scope: JSON.stringify(input.writeScope ?? []),
       // REQ-TOOLS-152: the call's `suppress_auto_context`, so every assembly of the payload — a retry's included — omits the index.
       suppress_auto_context: input.suppressAutoContext === true ? 1 : 0,
+      // REQ-LIBRARY-098 / REQ-TOOLS-154 (4) and (5): what the payload carries beside the task, stored with the record so an
+      // assembly in a later run — a resumed child's REQ-ORCH-088 retry, a follow-up of a child that never started — carries
+      // it too. The inherited block is rendered now, from the reports as they stand at the call: a sibling ignored here as
+      // unfinished may have completed by then, so the ids alone would not say which counted.
+      attach_artifacts: JSON.stringify(input.attachArtifacts ?? []),
+      inherited_context_block: inheritedContextBlock(inherited),
     };
     const r = this.deps.writer.spawnChild(row);
     if (!r.ok) return { ok: false, error: { reason: `The child could not be recorded: ${r.error.code}` } };

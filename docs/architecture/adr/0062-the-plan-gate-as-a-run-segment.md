@@ -300,3 +300,28 @@ applicability is REQ-MCP-037's availability and that rule does not read `enabled
 **What it could not show:** launches 3 to 6 keep their fixed offsets (the revise at 6,000 and 6,600 ms, the approve
 at 6,000, the chip at 10,000 and 11,000, the prompts at 10,000 and 15,000). They were green on every run here and
 were not moved. Windows and macOS were not run (IC-3).
+
+## The admission refusal meets an alias on the built-in table's path — 2026-09-30 (R-067)
+
+*Decision (3) above refuses at admission a role that declares a withheld tool. It read the role through
+`orchestration.ts`'s `personaOf`, whose path for a run with no configured persona catalogue looked the name up in
+`BUILT_IN_PERSONAS` alone and never in `ROLE_ALIASES`, while `ChildLedger.spawn` resolves the same name through
+`resolveRole`, which honours the aliases (REQ-ORCH-034). Recorded as
+[`delegate-reads-no-alias-on-the-built-in-table.md`](../../defects/fixed/delegate-reads-no-alias-on-the-built-in-table.md),
+acceptance finding A27.*
+
+**What the execution found.** A case in `children/children.test.ts` builds `IterationChildren` with no `personas` and a held
+gate that withholds `write_file`, `haet_edit`, `haet` and `terminal`. On the unrepaired code `delegate({persona: 'coder'})`
+was accepted, `queued`: the alias read as no persona, so `persona?.tools ?? []` held nothing withheld, and the ledger then
+recorded a `coding-agent`. The same missing persona recorded the row's `granted_tools` as `[]`. The note also named the
+model key; on this path it was not observably wrong, since a built-in persona names no model and `childModelKey` gives the
+run's key either way.
+
+**What was changed.** `personaOf` resolves through `resolveRole` on the built-in path, as the ledger does, so admission
+reads the role the ledger will spawn: `coder` and `playwright` are refused while the gate holds, naming the withheld tools,
+with no record; once released, `coder` is accepted as `coding-agent` with that role's tools. The write-scope refusal's own
+alias lookup (PD-TOOLS-006 revision 3) collapses into the same call. The decision is unchanged.
+
+**What was not measured.** The built app: the run host always supplies a configured persona resolver, which resolved
+aliases already, so no proof or live-run scenario reaches this path. The row is in
+[`../first-executions.md`](../first-executions.md).

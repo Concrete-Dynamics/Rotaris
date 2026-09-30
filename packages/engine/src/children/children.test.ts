@@ -3468,6 +3468,44 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       w.value.release(1, HOST);
     });
 
+    it('REQ-ORCH-034 / REQ-ORCH-153 (the repair of delegate-reads-no-alias-on-the-built-in-table): with no configured persona catalogue an alias is admitted as its target — refused while the plan gate holds, and granted its target\'s tools', async () => {
+      const sid = 'S-alias-built-in' as SessionId;
+      const w = SessionWriter.create({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { workspaceRoot: 'C:/ws', pid: 1, host: HOST });
+      if (!w.ok) throw new Error('writer');
+      const { IterationChildren } = await import('./orchestration.js');
+      let held = true;
+      // No `personas`: the engine's built-in table is the catalogue. The gate withholds what writes files or runs commands.
+      const ops = new IterationChildren({
+        dal, writer: w.value, sessionId: sid, workspaceRoot: 'C:/ws', owner: null as unknown as ProjectionOwner,
+        backend: new DefaultAgentBackend(new ScriptedModelClient([])), clocks: clock, model: MODEL, thinking: 'unset', modelTimeoutMs: 1000, modelRetries: 0,
+        // A cap of 0 holds an accepted child on its model's slot, so nothing starts once the test's store is closed.
+        credentialFor: () => async () => '', maxStepsPerTurn: 10, budget: { maxDepth: 3, maxTotal: 20, maxActive: 6 }, modelCap: () => 0,
+        toolsFor: () => null, summariser: null, runSignal: new AbortController().signal, warn: () => undefined,
+        planGate: { held: () => held, withholds: (t) => ['write_file', 'haet_edit', 'haet', 'terminal'].includes(t) },
+      }, 1);
+      const root = ops.ledger.root.taskId;
+      const request = (persona: string, taskName: string) => ({ persona, taskName, task: 'TASK: t', dependsOn: [], inheritedContext: [], category: '', runInBackground: true });
+      // While the gate holds, `coder` and `playwright` are refused as the roles they name, before any record exists.
+      const coder = await ops.delegate(root, request('coder', 'write'));
+      expect(coder).toMatchObject({ status: 'rejected' });
+      expect(coder.message).toContain("The 'coder' role was not started");
+      expect(coder.message).toContain('write_file');
+      const playwright = await ops.delegate(root, request('playwright', 'look'));
+      expect(playwright).toMatchObject({ status: 'rejected' });
+      expect(playwright.message).toContain('terminal');
+      expect(dal.childrenOf(sid)).toHaveLength(0);
+      // Released, the alias is accepted as its target, granted the target's tools and recorded under the run's key.
+      held = false;
+      const accepted = await ops.delegate(root, request('coder', 'write'));
+      expect(accepted.status).toBe('waiting_on_model_slot');
+      expect(accepted.message).toContain("Alias 'coder' resolved to 'coding-agent'");
+      const row = dal.childrenOf(sid)[0]!;
+      expect(row.persona).toBe('coding-agent');
+      expect(JSON.parse(row.granted_tools)).toEqual([...BUILT_IN_PERSONAS['coding-agent'].tools]);
+      expect(row.model_key).toBe(MODEL.modelId);
+      w.value.release(1, HOST);
+    });
+
     it('end-to-end: delegated children carry the root task id as parent_id and steer/cancel resolve the root', async () => {
       let releaseChild!: () => void;
       const hold = new Promise<void>((r) => { releaseChild = r; });

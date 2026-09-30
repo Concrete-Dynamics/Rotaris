@@ -45,6 +45,21 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**`delegate`'s admission resolves an alias on the built-in table's path (REQ-ORCH-034, REQ-ORCH-153, PD-TOOLS-006,
+R-067).** `personaOf` (`children/orchestration.ts`) resolves through `resolveRole` where no persona catalogue is configured,
+as `ChildLedger.spawn` does, so the plan gate's admission refusal, the grant and the write-scope refusal read the role the
+ledger will spawn. This repairs `delegate-reads-no-alias-on-the-built-in-table.md` (acceptance A27). The **runtime view**'s
+plan-gate paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A child's attachments and inherited-context block are stored with its record (REQ-TOOLS-154, REQ-LIBRARY-098,
+REQ-TOOLS-152, PD-ORCH-005, R-067).** Store **v28** appends `children.attach_artifacts` and
+`children.inherited_context_block`, written by `ChildLedger.spawn`; `IterationChildren`'s two in-memory maps are gone, and
+`execute`'s and `startingPayload`'s payloads read the row, so a child resumed in a later run carries both into its
+REQ-ORCH-088 retry, with REQ-ORCH-047's prior-agent-context block rendered again. This repairs
+`a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md` (acceptance A25). The **runtime view**'s
+inherited-context paragraph and §7 `children` row, and the **state-ownership view**'s row, say so. No package, edge,
+process, message kind, channel or command changed.
+
 **The per-model cap counts every child in the process (REQ-CONFIG-094, REQ-MONITOR-020, REQ-ORCH-050, acceptance A13,
 R-067).** `ChildLedger.slotsInUse` counted one iteration's children, so two sessions under way in one run host could each
 fill a `max_parallel`. `Sessions` now holds a `ModelSlots` each session joins while a run of it is under way or while it

@@ -430,6 +430,9 @@ it does not decide what *exists*. The
 rendering reuses `reportBlock`, so a child inherits the same block its parent read on the resume, and the block is
 rendered at the call — a terminal child's report does not change — and remembered per task id on the same in-memory
 terms as the attachment list, so `execute` gained one argument and nothing else while `PD-ORCH-005` rewrites it.
+*(Falsified 2026-09-30 — see "First execution of a resumed child's retry payload" below: the in-memory terms held only
+while a child could not outlive the run that accepted it. `PD-ORCH-005` let it, and a resumed child's retry in a later
+run lost both the block and the attachment list. Both are now stored with the child's record, store v28.)*
 
 **What the first run showed.** Against the scripted model with the session artifact store in place, the `build`
 child's payload read (1) the workspace root, (3) the sibling-artifact index the `survey` report had become, (5) the
@@ -441,6 +444,42 @@ artifact store — the block it expected immediately after the workspace root st
 where the requirement puts it. **What it could not show:** the refusal under a real model, and an earlier iteration's
 *root* execution record, which is held in memory by the run and not in the store, so an id naming one finds no task
 and is refused as referring to nothing; an earlier iteration's children are in the store and are found.
+
+## First execution of a resumed child's retry payload — 2026-09-30: what the launch held in memory
+
+*`REQ-TOOLS-154` fixes the payload a child starts from; this record's inherited-context section above kept item (5)'s
+block, and the delegation kept item (4)'s attachment list, per task id in memory "for as long as the run lives". Since
+`PD-ORCH-005` a child outlives that run: a paused child is resumed by a later run, whose `IterationChildren` is new. The
+first execution of `REQ-ORCH-088`'s fallback retry for such a child reports here, under R-067
+(`docs/defects/fixed/a-resumed-childs-retry-payload-loses-its-attachments-and-inherited-context.md`, acceptance A25).*
+
+**What the execution found.** A case in `run/ladder.test.ts` drives it through `Sessions` over a real store and the
+session's artifact store: a `survey` child succeeds with its report stored; a `slow` child that depends on it, names it in
+`inherited_context` and attaches its report is paused mid-step; the Continue action resumes it; its hard timeout expires
+and the fallback retries it. The first payload carried REQ-ORCH-047's prior-agent context, the attached report's
+`PRIOR AGENT CONTEXT (FULL)` block and the inherited-context block. The retry's payload carried the workspace root, the
+sibling index and the task — **none of the three**, and nothing told the child or its parent. The inherited block and the
+attachments were in the old run's memory; the prior-agent context was guarded by `children.context_injected`, which the
+first run had set, so the retry's `execute` rendered none, where a retry within the first run reuses the block it
+rendered.
+
+**What was changed.** Store **v28** appends `children.attach_artifacts` (the call's references as given) and
+`children.inherited_context_block` (the block rendered at the call, since a sibling ignored then as unfinished may
+complete later and the ids alone would not say which counted). `ChildLedger.spawn` writes both; `IterationChildren`'s
+`attached` and `inherited` maps are removed, and `execute`'s `payload()` and `startingPayload` read the row. A resumed
+execution's retry renders the prior-agent context again from its dependencies' rows: the block is still given once in the
+conversation the payload starts, and never re-prefixed on a state hop (the reading is **OQ-151**). The same case, run
+against the unrepaired code,
+fails on all three blocks; repaired, the retry's payload equals the first payload exactly. `store.test.ts` pins the
+migration and the round trip.
+
+**What was not measured.** No live run: the live-run scenarios never pause a child that attached an artifact and then
+time it out on a fallback, and the case above is the whole of the evidence. The `resume` scenario, run against `katalyst`
+from this build, passed as regression evidence only: the built app migrated to v28 and resumed two paused children, which
+attached and inherited nothing and were not retried. A row written before v28 carries neither, and
+its retry in a later run carries none, as before. A dependency followed up (`PD-ORCH-005` clause 22) between the first
+payload and a later run's retry is rendered as it now reads. The row is in
+[`../first-executions.md`](../first-executions.md).
 
 ## First execution of the stall watchdog — 2026-09-29: consequence 5's watchdog, and the message it makes possible
 

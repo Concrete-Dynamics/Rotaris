@@ -1,8 +1,8 @@
-import { CONTRACT_SCHEMA_VERSION, type ImprovementArtifactRecord, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope } from '@rotaris/contracts';
+import { CONTRACT_SCHEMA_VERSION, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope } from '@rotaris/contracts';
 import { millis, toIsoUtc, type Millis } from '@rotaris/kernel';
 import { dataLayout, environmentWithout, installedProductVersion, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import type { PromptLists, StoreDal, StoreHandle } from '@rotaris/store';
-import { captureImprovementJob, meteredBackend, RefusalLease, RungMemory, Sessions, SUPERVISOR_DEFAULTS } from '@rotaris/engine';
+import { meteredBackend, RefusalLease, RungMemory, Sessions, SUPERVISOR_DEFAULTS } from '@rotaris/engine';
 import { ConfinementService, PresenterRegistry, renderUnavailability, spawnTrial, type AvailabilityVerdict, STREAM_SETTINGS_DEFAULTS, withheldUnderPlanGate, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, RunHostPresenter, terminalManagerFromHost } from './tools.js';
 import { createTerminalHost } from './terminal.js';
@@ -14,6 +14,7 @@ import { McpHost } from './mcp.js';
 import { CHECKPOINTS_DEFAULTS, INSTRUCTIONS_DEFAULTS, loadConfiguration, RUNTIME_DEFAULTS, SKILLS_DEFAULTS, type LiveState } from '@rotaris/config';
 import { codeIntelligenceLaunchFor } from './code-intelligence-launch.js';
 import { SkillHost } from './skills.js'; // ADR-0063
+import { captureAfterRun } from './improvement-capture.js';
 import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, type ConfiguredRun } from './configuration.js';
 import { leaseForContinuation, LeaseReportLog } from './launch.js';
 import { randomUUID } from 'node:crypto';
@@ -361,17 +362,19 @@ export function createRunHost() {
       const locatedStore = [...stores.entries()].find(([, candidate]) => candidate.root === run.cfg.workspaceRoot && candidate.dal !== null);
       if (!locatedStore?.[1].dal) return;
       const [workspaceId, store] = locatedStore;
-      void (async () => {
-        const historyReply = await ask({ kind: 'improvements.command', workspaceRoot: run.cfg.workspaceRoot, command: { action: 'list' } }, millis(10_000)).catch((cause: Error) => {
-          log(`improvements: history capture failed for ${sessionId}: ${cause.message}`, 'warn');
-          return null;
-        });
-        const prior = historyReply?.kind === 'improvements.result' ? (historyReply.value as ImprovementArtifactRecord[]).map((record) => record.artifact) : [];
-        const job = captureImprovementJob(store.dal!, { workspaceId, workspaceRoot: run.cfg.workspaceRoot, sessionId, generatedAt: toIsoUtc(clocks.wall.instant()), timeoutSeconds: run.cfg.runtime.improvement_collector_timeout, collectorModel: collector.key, priorArtifactsAvailable: historyReply?.kind === 'improvements.result', priorArtifacts: prior });
+      // REQ-ORCH-137 / REQ-LIBRARY-032: detached, and it never rejects — the store is read again after the history's
+      // await, which a quit may have closed it under (`improvement-capture.ts`).
+      void captureAfterRun({
+        stopReason: result.stop_reason,
+        input: { workspaceId, workspaceRoot: run.cfg.workspaceRoot, sessionId, generatedAt: toIsoUtc(clocks.wall.instant()), timeoutSeconds: run.cfg.runtime.improvement_collector_timeout, collectorModel: collector.key },
+        history: () => ask({ kind: 'improvements.command', workspaceRoot: run.cfg.workspaceRoot, command: { action: 'list' } }, millis(10_000)),
+        currentDal: () => (stores.get(workspaceId) === store && store.db !== null && store.db.open ? store.dal : null),
+        log,
+      }).then((job) => {
         if (job === null) return;
         improvementContexts.set(job.artifact_id, { run });
         send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'improvement.job', job } });
-      })();
+      });
     },
     // REQ-ORCH-085: the host told the run paused at the message limit.
     onRunPaused: (sessionId, info) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'run.paused', sessionId, count: info.count, limit: info.limit, tokens: info.tokens } }),

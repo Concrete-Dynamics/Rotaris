@@ -247,7 +247,10 @@ Verification seam: `ROTARIS_CAPTURE_PROMPTS="history>>text@ms;;stash>>{n}text @m
 **The post-run improvement analyst (REQ-LIBRARY-015..035/125..131/165).** The run host publishes `run.result` first,
 then captures a frozen, bounded job from the persisted task run: progress, todo, child reports, transcript, gate evidence
 and at most five prior artifacts, with unavailable sources represented explicitly. Skipped terminal reasons and
-`improvement_run` sessions produce no job. Main queues `improvement.job` in one application-wide FIFO and asks the run
+`improvement_run` sessions produce no job. The capture is detached and never rejects (`run-host/improvement-capture.ts`):
+a stop reason on REQ-ORCH-137's skip list ends it before main is asked for the history, the store is looked up again
+after that ask, and a store the quit or a workspace close has closed meanwhile, or a capture that throws, yields no job
+and a log line. Main queues `improvement.job` in one application-wide FIFO and asks the run
 host to execute `improvement.analyze`; the analyst receives no tools, retries malformed JSON once and has a hard configured
 timeout. Main then relays `save-collected` to the workspace service, rereads the canonical record, bumps
 `improvement-artifacts`, and publishes the ready notice. `improvement:activity` carries only workspace identity, active

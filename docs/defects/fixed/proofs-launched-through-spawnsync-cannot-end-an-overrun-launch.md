@@ -85,7 +85,7 @@ bound: SIGTERM ended it after 248 ms` and the log tail ending `quit: exiting wit
 hand-over at 300 ms failed with `the hand-over launch 1 overran its 300 ms bound: SIGTERM ended it after 80 ms` and its
 tail. `mcp-console-spike` needs a Windows package (IC-3) and was syntax-checked and scanned only. The `fetch-proof`
 scratch run's log also carried a run-host rejection after the quit, recorded as
-[`an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md`](../an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md).
+[`an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md`](an-improvement-capture-racing-the-quit-reads-a-closed-store-and-rejects-unhandled.md).
 
 **Measured on the built app of this branch**, as root under Xvfb on Linux with Node 24. Another workflow was running on
 the same host; no other Electron was running at the first launch, and the load average stayed between 0.7 and 2.3.

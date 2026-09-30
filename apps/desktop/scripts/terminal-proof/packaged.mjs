@@ -110,7 +110,9 @@ async function launch({ exe, scratchRoot, name, enabled, afterMs }) {
   const out = { enabled, exit: r.status ?? null, signal: r.signal ?? null, painted: existsSync(png), stores: stores.length, log: join(scratch, 'app.log') };
   // An overrun is this launch's failure, reported with its last words; the other launch's evidence is kept.
   if (r.overran) return { ...out, error: overrunMessage(name, r, log), probe: null, terminal: null };
-  if (stores.length !== 1) return { ...out, error: `expected one workspace store under this launch's own LOCALAPPDATA, found ${stores.length}` };
+  // The same two fields every other return carries, so the checks below read an absent store as absent evidence
+  // (`docs/defects/fixed/the-packaged-terminal-streaming-checks-throw-on-a-launch-that-found-no-store.md`).
+  if (stores.length !== 1) return { ...out, error: `expected one workspace store under this launch's own LOCALAPPDATA, found ${stores.length}`, probe: probeValue, terminal: null };
   // A read that throws is reported, never thrown: one bad query must not lose the other launch's evidence.
   let sessions = [];
   let calls = [];
@@ -134,8 +136,34 @@ async function launch({ exe, scratchRoot, name, enabled, afterMs }) {
 }
 
 /**
- * @returns a promise of `{ available, refusal?, enabled, disabled, checks }` — `checks` is the assertion set the proof folds into
- * its own results, each one a boolean with a name that says what it claims.
+ * The assertion set over the two launches, each a boolean with a name that says what it claims. A launch that stopped
+ * short — an overrun, no store, a read that threw — may carry `terminal` and `probe` as `null` or not at all; either
+ * is ABSENT evidence and reads false, never throws: a check that throws loses the other launch's evidence with it.
+ */
+export function packagedChecks(on, off) {
+  const onTerminal = on?.terminal ?? null;
+  const offTerminal = off?.terminal ?? null;
+  const onToolbar = on?.probe?.toolbar ?? null;
+  const offProbe = off?.probe ?? null;
+  const offToolbar = offProbe?.toolbar ?? null;
+  return {
+    // Both launches got as far as a painted window and a settled terminal call, or nothing below means anything.
+    bothPainted: on?.painted === true && off?.painted === true,
+    bothRanTheTerminalCall: onTerminal !== null && offTerminal !== null && onTerminal.status !== 'running' && offTerminal.status !== 'running',
+    // REQ-TOOLS-126/127: the command is untouched — same settled status, same error flag, same observation text.
+    agentSeesTheSameThing: onTerminal !== null && offTerminal !== null
+      && onTerminal.status === offTerminal.status && onTerminal.isError === offTerminal.isError
+      && onTerminal.observation != null && onTerminal.observation === offTerminal.observation,
+    // REQ-TOOLS-126: with the key on, the live view exists — the toolbar's session total counted the stream.
+    enabledSurfaceSawTheStream: onToolbar !== null && onToolbar.total >= 1,
+    // …and with it off, nothing was published: no stream was ever counted and no preview block was ever drawn.
+    disabledSurfaceSawNothing: offToolbar !== null && offToolbar.total === 0 && offProbe.previews === 0,
+  };
+}
+
+/**
+ * @returns a promise of `{ available, refusal?, enabled, disabled, checks }` — `checks` is `packagedChecks`' assertion
+ * set, which the proof folds into its own results.
  */
 export async function packagedTerminalStreaming({ repo, afterMs = 16_000 }) {
   const release = join(repo, 'apps', 'desktop', 'release');
@@ -149,20 +177,7 @@ export async function packagedTerminalStreaming({ repo, afterMs = 16_000 }) {
   const scratchRoot = join(release, 'terminal-stream-proof');
   const on = await launch({ exe, scratchRoot, name: 'streaming-on', enabled: true, afterMs });
   const off = await launch({ exe, scratchRoot, name: 'streaming-off', enabled: false, afterMs });
-  const checks = {
-    // Both launches got as far as a painted window and a settled terminal call, or nothing below means anything.
-    bothPainted: on.painted === true && off.painted === true,
-    bothRanTheTerminalCall: on.terminal !== null && off.terminal !== null && on.terminal.status !== 'running' && off.terminal.status !== 'running',
-    // REQ-TOOLS-126/127: the command is untouched — same settled status, same error flag, same observation text.
-    agentSeesTheSameThing: on.terminal !== null && off.terminal !== null
-      && on.terminal.status === off.terminal.status && on.terminal.isError === off.terminal.isError
-      && on.terminal.observation !== null && on.terminal.observation === off.terminal.observation,
-    // REQ-TOOLS-126: with the key on, the live view exists — the toolbar's session total counted the stream.
-    enabledSurfaceSawTheStream: on.probe !== null && on.probe.toolbar !== null && on.probe.toolbar.total >= 1,
-    // …and with it off, nothing was published: no stream was ever counted and no preview block was ever drawn.
-    disabledSurfaceSawNothing: off.probe !== null && off.probe.toolbar !== null && off.probe.toolbar.total === 0 && off.probe.previews === 0,
-  };
-  return { available: true, exe, afterMs, enabled: on, disabled: off, checks };
+  return { available: true, exe, afterMs, enabled: on, disabled: off, checks: packagedChecks(on, off) };
 }
 
 // Standalone: `node apps/desktop/scripts/terminal-proof/packaged.mjs`, for a reader who wants only this section.

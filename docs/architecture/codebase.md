@@ -1136,7 +1136,14 @@ capped history — every file parsed by a SEPARATE node process holding no produ
 and deleted; the backup disclosure panel. Evidence under `.proof/sessions-proof/`. The planted locks name this machine through the
 identifier where the product mints it on the running platform (`machineIdFileFor`), and a "dead" pid is chosen per platform
 (`plantedDeadPid`: one the script saw exit on Linux and macOS, `4242` on Windows, where a freed pid is soon reissued); until 2026-09-28 the Windows spelling made the proof crash at `repair-all` on Linux (R-062;
-[the note](../defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md)).
+[the note](../defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md)). The delete's
+premise — every reference to `sessions` is `session_id` → `session_id` `ON DELETE CASCADE`, and `delivery_runs` alone
+carries the column as a fact — is read from the schema by `scripts/lib/session-cascade.mjs`; the count pin of sixteen it
+replaced stopped the proof before the delete on every run once v23–v24 made the cascading tables twenty (R-067;
+[the note](../defects/fixed/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md)). The delete now
+also asserts that A's agent record (`iterations`, `agent_messages`, `agent_terminals`, `agent_fingerprints`) was there and
+leaves with it (PD-ORCH-005 clause 12); the scripted runs start no background terminal, so A's `agent_terminals` row is
+planted, as its `plan_cycles` row is.
 
 **What `pnpm code-intel-proof` does.** After `pnpm code-intel:bundle` (once per checkout; the tree is git-ignored), it
 launches the app seven times: the branch guard on the dev entry and, under `ROTARIS_CODE_INTEL_PACKAGED=1`, on
@@ -1264,7 +1271,10 @@ passed as a clean exit with no log tail. Every one of them is now
 `lib/bounded-launch.mjs`'s `spawnBounded` (SIGTERM with the pipes open and read, a grace, SIGKILL to the launch's process
 group), and an overrun is a failure named by `overrunMessage` with the launch's last thirty log lines — thrown by a
 `launch`, recorded as a failed check by `updater-proof`, `terminal-proof` and the packaged terminal launch, which report
-rather than throw. Each `launch` became `async` and each call site awaits it (`transcript-proof`'s `appendRun`,
+rather than throw. The packaged section's checks threw on its other early return — a launch that found no workspace store,
+which carried no `terminal` or `probe` field — and lost both launches' evidence until 2026-09-29; its checks are
+`packagedChecks`, which reads either field absent or `null` as absent evidence
+([note](../defects/fixed/the-packaged-terminal-streaming-checks-throw-on-a-launch-that-found-no-store.md)). Each `launch` became `async` and each call site awaits it (`transcript-proof`'s `appendRun`,
 `package.mjs`'s app step as `stepAsync`, and `terminal-proof/packaged.mjs`'s `packagedTerminalStreaming` with it).
 `lib/launch-sites.test.ts` fails a `spawnSync` launch of Electron anywhere under `scripts/` (its rule 4), and a launch
 with `ELECTRON_RUN_AS_NODE`, which starts no application, stays exempt

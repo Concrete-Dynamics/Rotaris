@@ -47,7 +47,8 @@ Both tests fail on the code before the repair. OQ-101's sentence "it gets no rep
 
 A blocked child still fires no `child_completed` hook. Neither do the other paths that settle a child outside its
 execution. That is recorded in
-[`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](../a-child-settled-outside-its-execution-fires-no-child-completed-hook.md).
+[`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](a-child-settled-outside-its-execution-fires-no-child-completed-hook.md)
+(repaired since, 2026-09-30).
 
 A blocked child gets no `child_end`, `child_result` or `child_conversation_closed` timeline entry either. It never
 started, so it never had a conversation to close, and REQ-ORCH-098's teardown is written where a child's execution

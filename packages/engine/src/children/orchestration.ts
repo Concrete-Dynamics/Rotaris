@@ -202,6 +202,13 @@ export class IterationChildren implements DelegationOps {
    * does, so the hook finishes before the parent goes on and before the iteration's own hooks.
    */
   private readonly settles = new Map<string, Promise<void>>();
+  /**
+   * REQ-HOOKS-003 / REQ-ORCH-048 / REQ-ORCH-052 / REQ-ORCH-133 (the repair of
+   * `a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`): the `child_completed` hooks of the children
+   * settled by a path other than their own settle — the cascade, the finalize sweep, the user's cancel of one child — one
+   * after another, in the order the children settled (`completedOutside`).
+   */
+  private completions: Promise<void> = Promise.resolve();
   /** PD-ORCH-005 clause 22: each child's execution in flight, by task id, so a follow-up of a settled child waits for its end. */
   private readonly executionOf = new Map<string, Promise<void>>();
   /** REQ-ORCH-133 / REQ-MONITOR-128: each executing child's own abort, so cancelling one child stops it (and only it). */
@@ -234,6 +241,9 @@ export class IterationChildren implements DelegationOps {
     // query, so a child settled by a path that fires no listener (a stale sweep) holds nothing either; this only
     // keeps the map from growing with the run.
     this.scheduler.onTerminal((row) => { this.claims.release(row.task_id); this.disclosures.delete(row.task_id); });
+    // REQ-HOOKS-003: a child settled by any path but its own settle fires `child_completed` too. A settle's own terminal
+    // move is told from inside `afterTerminal`, whose `settles` entry says it fires the hook itself.
+    this.scheduler.onTerminal((row) => { if (!this.settles.has(row.task_id)) this.completedOutside(row.task_id); });
   }
 
   children(): readonly ChildRow[] {
@@ -831,6 +841,40 @@ export class IterationChildren implements DelegationOps {
   }
 
   /**
+   * REQ-HOOKS-003 ("`child_completed` once a delegated child agent has finished, whatever its final state"), REQ-ORCH-048
+   * and REQ-ORCH-052 (terminal-state callbacks fire for a cascaded or swept record "exactly as for directly completed
+   * ones"): the hook of a child the cascade blocked, the finalize sweep cancelled or the user's cancel of one child ended —
+   * none of which runs the child's own settle. It runs in line as a settle's does (REQ-HOOKS-080): the child is settling
+   * until its hook is done (`beginSettle`), so its parent takes it as ended only then, and a rest waits for it as for an
+   * execution (`track`). These hooks run one after another, in the order the children settled; `completionsSettled` is
+   * the wait for all of them, which the run takes after the finalize sweep and before the iteration's own hooks. The
+   * fields are the child's record once it is terminal, its report's status and summary among them (REQ-HOOKS-075).
+   */
+  private completedOutside(taskId: string): void {
+    const hooks = this.deps.hooks;
+    if (!hooks) return;
+    const endSettle = this.beginSettle(taskId);
+    const fire = async (): Promise<void> => {
+      const row = this.ledger.get(taskId);
+      if (!row) return;
+      try { await hooks.fireLifecycle('child_completed', childCompletedFields(row)); }
+      catch (cause) { this.deps.warn(`the child_completed hooks raised for child ${row.canonical_name} (${row.task_id}): ${String(cause instanceof Error ? cause.message : cause)}`); }
+    };
+    const next = this.completions.then(fire).finally(endSettle);
+    this.completions = next;
+    void this.track(next);
+  }
+
+  /** REQ-HOOKS-076 / REQ-HOOKS-080: resolves once every `child_completed` hook `completedOutside` started has finished. */
+  async completionsSettled(): Promise<void> {
+    for (;;) {
+      const pending = this.completions;
+      await pending;
+      if (pending === this.completions) return;
+    }
+  }
+
+  /**
    * The end of a settle, once the child has made its terminal move: REQ-ORCH-098's `teardown`, then the `child_completed`
    * hook in line (REQ-HOOKS-080 — the parent takes the child as ended once the scheduler is told, `settles`), then the
    * scheduler told, which fires the terminal callbacks (REQ-ORCH-048) and releases every wait on the child (REQ-TOOLS-156).
@@ -1299,15 +1343,33 @@ function storedScope(row: ChildRow): string[] {
  * first iteration. Its report is materialised as every other terminal child's is (REQ-LIBRARY-092), given the session's
  * artifact store.
  */
-export function settleStaleChildren(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, warn: (m: string) => void, artifacts?: ArtifactStore): number {
+export function settleStaleChildren(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, warn: (m: string) => void, artifacts?: ArtifactStore, settled?: (fields: Readonly<Record<string, unknown>>) => void): number {
   let n = 0;
   for (const c of dal.childrenOf(sessionId)) {
     // PD-ORCH-005 (narrowing REQ-ORCH-053 / REQ-SESSION-065 / REQ-NOTIFY-121): a `paused` agent is left as it is; it is
     // resumed with its iteration, or ended by the user continuing without it.
     if (isTerminalChildState(c.state) || c.state === 'paused') continue;
     const r = writer.transitionChild(c.task_id, 'cancelled', 'cancellation');
-    if (r.ok) { n += 1; storeChildReport({ writer, artifacts, warn }, c.task_id, c, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: 'Cancelled: the run that owned this child ended (killed host or hard cancel) before it settled.', key_findings: [], last_response: '', final_response: '', errors: [{ type: 'cancelled', message: 'settled on continue (REQ-ORCH-053)' }] }); }
+    if (r.ok) {
+      n += 1;
+      storeChildReport({ writer, artifacts, warn }, c.task_id, c, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: 'Cancelled: the run that owned this child ended (killed host or hard cancel) before it settled.', key_findings: [], last_response: '', final_response: '', errors: [{ type: 'cancelled', message: 'settled on continue (REQ-ORCH-053)' }] });
+      // REQ-HOOKS-003: the settling run fires its `child_completed` once its own `session_start` has (`RunDeps.settledBeforeStart`).
+      settled?.(childCompletedFields(dal.getChild(sessionId, c.task_id) ?? r.value));
+    }
     else warn(r.error.code === 'illegal-move' ? r.error.reason : r.error.code);
   }
   return n;
+}
+
+/**
+ * REQ-HOOKS-075: `child_completed`'s fields for a child whose record is terminal — its terminal state beside its report's
+ * status and summary, read from the report stored on the record (`""` for either when none is, which a consumer reads as
+ * unknown). Every path that ends a child outside its own settle builds them here.
+ */
+export function childCompletedFields(row: ChildRow): Readonly<Record<string, unknown>> {
+  let report: Record<string, unknown> = {};
+  try { const v = JSON.parse(row.report ?? '{}') as unknown; if (v !== null && typeof v === 'object' && !Array.isArray(v)) report = v as Record<string, unknown>; }
+  catch { /* an unreadable report leaves both fields unknown */ }
+  const text = (v: unknown): string => (typeof v === 'string' ? v : '');
+  return { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: row.state, status: text(report['status']), summary: text(report['summary']) };
 }

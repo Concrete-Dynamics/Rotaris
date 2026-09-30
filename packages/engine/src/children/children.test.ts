@@ -4147,6 +4147,180 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     });
   });
 
+  /**
+   * REQ-HOOKS-003 ("`child_completed` once a delegated child agent has finished, whatever its final state"), REQ-HOOKS-075
+   * (its `state` is one of `succeeded`, `failed`, `cancelled` or `blocked`), REQ-ORCH-048 and REQ-ORCH-052 (terminal-state
+   * callbacks fire for cascaded and swept records "exactly as for directly completed ones"): the repair of
+   * `a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`. Only a child's own execution and
+   * `settleRaised` fired it; every other path that ends a child fired nothing.
+   */
+  describe('REQ-HOOKS-003 / REQ-ORCH-048 / REQ-ORCH-052 / REQ-ORCH-053 / REQ-ORCH-133 / PD-ORCH-005 clause 6: a child settled outside its execution fires `child_completed`', () => {
+    const settle = async (until: () => boolean, rounds = 400) => { for (let i = 0; i < rounds && !until(); i += 1) await new Promise((r) => setTimeout(r, 5)); };
+    const byName = (sid: SessionId, name: string): ChildRow => children(sid).find((c) => c.canonical_name === name)!;
+    const textOf = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('')).join('\n');
+    /**
+     * Every lifecycle occurrence in order, a `child_completed` labelled by its child, and each `child_completed`'s fields.
+     * `held`: the child whose `child_completed` is held until `release`, its end then recorded as `…:end`.
+     */
+    function recordingHooks(held?: string) {
+      const order: string[] = [];
+      const completed: Record<string, unknown>[] = [];
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event, fields) => {
+          if (event !== 'child_completed') { order.push(event); return []; }
+          const name = String(fields['child_name']);
+          completed.push({ ...fields });
+          order.push(`child_completed(${name})`);
+          if (name === held) { await hold; order.push(`child_completed(${name}):end`); }
+          return [];
+        },
+        advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      return { order, completed, hooks, release: () => release() };
+    }
+    const fieldsOf = (row: ChildRow, state: string, summary: string) => ({ child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state, status: state, summary });
+
+    it('REQ-ORCH-048: a child the cascade blocks fires it, `blocked`, with its report\'s summary, before the iteration ends', async () => {
+      const { order, completed, hooks } = recordingHooks();
+      let sid = '' as SessionId;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'a', task: 'TASK: a' } }]);
+          if (turn === 2) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'b', task: 'TASK: b', depends_on: [byName(sid, 'a').task_id] } }]);
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        // `a` says nothing and calls nothing, twice, so it ends failed and `b` is blocked.
+        return answer(textOf(req).includes('TASK: b') ? 'b ran.' : '');
+      }, { hooks });
+      sid = (sessions.start(dal, 'C:/ws', 'a then b') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const b = byName(sid, 'b');
+      expect(b.state).toBe('blocked');
+      expect(completed.filter((f) => f['child_name'] === 'b')).toEqual([fieldsOf(b, 'blocked', (JSON.parse(b.report!) as { summary: string }).summary)]);
+      expect(order.filter((e) => e.startsWith('child_completed(b)'))).toHaveLength(1);
+      expect(order.indexOf('child_completed(b)')).toBeGreaterThan(order.indexOf('child_completed(a)'));
+      expect(order.indexOf('child_completed(b)')).toBeLessThan(order.indexOf('iteration_end'));
+    });
+
+    it('REQ-ORCH-133: the user\'s cancel of one running child fires it once, `cancelled`, before the iteration ends', async () => {
+      const { order, completed, hooks } = recordingHooks();
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return { parts: [{ hold }, ...answer('late').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'work')?.state === 'running');
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'work').task_id } })).toEqual({ ok: true });
+      releaseChild();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const work = byName(sid, 'work');
+      expect(work.state).toBe('cancelled');
+      expect(completed).toEqual([fieldsOf(work, 'cancelled', 'The user cancelled this child.')]);
+      expect(order).toEqual(['session_start', 'child_completed(work)', 'iteration_end', 'session_end']);
+    });
+
+    it('REQ-ORCH-052: a child the finalize sweep cancels at the explicit cancel — one that never started — fires it once, `cancelled`, before the run ends', async () => {
+      // `second`'s hook is held: the run ends only after it (REQ-HOOKS-076 / REQ-HOOKS-080).
+      const { order, completed, hooks, release } = recordingHooks('second');
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      // One model slot (REQ-ORCH-050): `second` waits behind `first`, so no execution of its own ends it.
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'first', task: 'TASK: first' } }, { callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'second', task: 'TASK: second' } }]) : answer('never');
+        if (persona === 'summariser') return answer('{}');
+        return { parts: [{ hold }, ...answer('late').parts] };
+      }, { hooks, cap: 1 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'first')?.state === 'running' && byName(sid, 'second')?.state === 'waiting_on_model_slot');
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: RUN_AGENT_ID } })).toEqual({ ok: true });
+      releaseChild();
+      await settle(() => order.includes('child_completed(second)'));
+      await settle(() => order.includes('session_end'), 40);
+      expect(order).not.toContain('session_end');
+      release();
+      await sessions.running(sid)!;
+      const second = byName(sid, 'second');
+      expect(second.state).toBe('cancelled');
+      expect(completed.filter((f) => f['child_name'] === 'second')).toEqual([fieldsOf(second, 'cancelled', (JSON.parse(second.report!) as { summary: string }).summary)]);
+      expect(order.filter((e) => e.startsWith('child_completed') && !e.endsWith(':end')).sort()).toEqual(['child_completed(first)', 'child_completed(second)']);
+      expect(order.indexOf('child_completed(second):end')).toBeLessThan(order.indexOf('session_end'));
+    });
+
+    it('REQ-ORCH-052: a child the finalize sweep cancels at an ordinary exit — its root\'s turn failed — fires it, and the iteration ends only after it', async () => {
+      const { order, completed, hooks, release } = recordingHooks('work');
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : { parts: [{ error: modelError({ code: 'unknown', headline: 'the provider failed' }) }] };
+        if (persona === 'summariser') return answer('{}');
+        return { parts: [{ hold }, ...answer('late').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => order.includes('child_completed(work)'));
+      await settle(() => order.includes('iteration_end') || order.includes('session_end'), 40);
+      // The sweep's hook holds the run: neither the iteration's hook nor the session's has started (REQ-HOOKS-076/080).
+      expect(order).not.toContain('iteration_end');
+      expect(order).not.toContain('session_end');
+      release();
+      releaseChild();
+      await sessions.running(sid)!;
+      const work = byName(sid, 'work');
+      expect(work.state).toBe('cancelled');
+      expect(completed).toEqual([fieldsOf(work, 'cancelled', (JSON.parse(work.report!) as { summary: string }).summary)]);
+      const done = order.indexOf('child_completed(work):end');
+      expect(order.filter((e, i) => i < done && (e === 'iteration_end' || e === 'session_end'))).toEqual([]);
+      expect(order.at(-1)).toBe('session_end');
+    });
+
+    it('REQ-ORCH-053: a child a previous run left unfinished, settled by the next run, fires it after that run\'s `session_start`', async () => {
+      const { order, completed, hooks } = recordingHooks();
+      const { sessions } = sessionsWith((persona) => (persona === 'orchestrator' ? answer('hi') : answer('{}')), { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      // A child left `running` by a previous run, as a killed host would leave it.
+      dal.insertChild({ session_id: sid, task_id: 'bg_0000dead', canonical_name: 'ghost', given_name: 'ghost', persona: 'coding-agent', state: 'running', parent_id: dal.iterationsOf(sid)[0]!.root_task_id, depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: new Date(Number(clock.instant())).toISOString() });
+      order.length = 0;
+      expect(sessions.prompt(sid, 'again').ok).toBe(true);
+      await sessions.running(sid)!;
+      const ghost = byName(sid, 'ghost');
+      expect(ghost.state).toBe('cancelled');
+      expect(completed).toEqual([fieldsOf(ghost, 'cancelled', 'Cancelled: the run that owned this child ended (killed host or hard cancel) before it settled.')]);
+      expect(order.slice(0, 2)).toEqual(['session_start', 'child_completed(ghost)']);
+    });
+
+    it('PD-ORCH-005 clause 6: "continue without them" fires it for each paused agent it cancels, after the continuing run\'s `session_start`', async () => {
+      const { order, completed, hooks } = recordingHooks();
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return { parts: [{ hold }, ...answer('late').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'work')?.state === 'running');
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      releaseChild();
+      await sessions.running(sid)!;
+      expect(byName(sid, 'work').state).toBe('paused');
+      expect(completed).toEqual([]);
+      order.length = 0;
+      expect(sessions.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
+      await sessions.running(sid)!;
+      const work = byName(sid, 'work');
+      expect(work.state).toBe('cancelled');
+      expect(completed).toEqual([fieldsOf(work, 'cancelled', (JSON.parse(work.report!) as { summary: string }).summary)]);
+      expect(order.slice(0, 2)).toEqual(['session_start', 'child_completed(work)']);
+    });
+  });
+
   describe('PD-ORCH-005 clause 15: a forced stop is a stop, and a quit rests by quit', () => {
     const restsBy = async (sessions: Sessions, sid: SessionId, interruption: 'stop' | 'quit') => {
       const result = await sessions.running(sid)!;

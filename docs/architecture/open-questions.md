@@ -6686,6 +6686,39 @@ dedicated value. A poll made after the `C-c` but before any next call still read
 the stream says the line is done; that is recorded as a defect, not this question
 ([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).
 
+**OQ-151 — Does a child that ends where no run's lifecycle hooks are live fire `child_completed`, and when?**
+*(REQ-HOOKS-003, "`child_completed` once a delegated child agent has finished, whatever its final state"; REQ-HOOKS-076,
+whose order is `session_start`, `child_completed`, …, `session_end` "matching where each occurs"; REQ-HOOKS-080, which runs
+lifecycle hooks in line with the run loop; `PD-ORCH-005` clauses 3 and 16. Raised 2026-09-30 by the repair of acceptance
+finding A15,
+[`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](../defects/fixed/a-child-settled-outside-its-execution-fires-no-child-completed-hook.md),
+under [R-067](../product/requests.md#r-067). Open.)*
+
+A run's hooks are resolved at its start and live until its teardown (ADR-0015; `Sessions` builds one hook port per run),
+and every lifecycle event the specification orders falls between that run's `session_start` and its `session_end`. Three
+paths end a delegated child outside that window:
+
+- the cancel of one paused child while its session rests (`PD-ORCH-005` clause 16, `Sessions.cancelPausedAtRest`): no run
+  exists, and no hook port;
+- the explicit cancel that lands after its run has come to rest (`Run`'s teardown, `closeOpenIteration` after the run's
+  `session_end` has fired): the port is still held, but the run has announced its end;
+- the record of an accepted explicit cancel whose run host died (`recordCrash`'s `recordAcceptedCancel`), written from the
+  store by a repair, which has no run, or by the next continue before its run exists.
+
+REQ-HOOKS-003 says the event fires once a child has finished and names no exception; REQ-HOOKS-076 and REQ-HOOKS-080 place
+it inside a run. Firing at the moment would run hooks with no `session_start` before them or after the `session_end`
+they follow, and at rest would need a hook port resolved for no run. Firing at the next run would announce, possibly much
+later, a child a run that never saw it ended, and never if the session is not continued.
+
+**What the build proceeds under:** none of the three fires `child_completed`. The paths the specification places inside a
+run all do: the cascade (REQ-ORCH-048), the finalize sweep (REQ-ORCH-052), the user's cancel of one child in a live run
+(REQ-ORCH-133), the stale settle (REQ-ORCH-053, fired after the settling run's `session_start`), and the decline of a
+resumable iteration (`PD-ORCH-005` clause 6, after the continuing run's `session_start`).
+
+**What a ruling decides.** For each of the three paths: fire at the moment, through a port resolved for the purpose
+(and, after `session_end`, out of REQ-HOOKS-076's order); owe it to the next run of the session, after its
+`session_start`; or fire none, as built.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

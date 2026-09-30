@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**A child settled outside its execution fires `child_completed` (REQ-HOOKS-003, REQ-ORCH-048, REQ-ORCH-052,
+REQ-ORCH-053, REQ-ORCH-133, PD-ORCH-005 clause 6, R-067).** The cascade, the finalize sweep and the user's cancel of one
+child now fire it through `IterationChildren.completedOutside`, in line, and the run waits for them after the sweep
+(`completionsSettled`); the stale settle's and the decline's fire after the run's `session_start`
+(`RunDeps.settledBeforeStart`, `Run.childCompleted`). Three paths outside a run's hooks fire none, raised as OQ-151. This
+repairs `a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`. The **runtime view**'s §4 gains the
+paragraph after the one on a settle's hook. No package, edge, process, message kind, channel, command or store column
+changed.
+
 **A report's edited files are the writes that landed (REQ-ORCH-108, REQ-ORCH-109, PD-TOOLS-006, OQ-111, R-067).**
 `editedFilesFrom` now skips a write call the record answers with an error — a sibling's claim, the permission gate or a
 pre-tool hook refusing it, a `haet_edit` whose find text matched nothing — and the summariser's own list cannot bring such

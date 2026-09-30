@@ -723,6 +723,17 @@ settles as executions. So the hook finishes before the parent is given the repor
 found the child ended. The repair's first form waited only on the settles running when each wait began, so a second
 child that ended during the wait was taken while its hook ran (found by the verifier's fifth round). Both are recorded
 in [`a-child-completed-hook-can-finish-after-its-iteration-ends.md`](../../defects/fixed/a-child-completed-hook-can-finish-after-its-iteration-ends.md).
+
+**A child settled outside its execution fires the hook too (REQ-HOOKS-003 / REQ-ORCH-048 / REQ-ORCH-052 / REQ-ORCH-053 /
+REQ-ORCH-133 / PD-ORCH-005 clause 6; repaired 2026-09-30).** `IterationChildren` listens to every terminal move the
+scheduler is told of; one its own settle did not make — the cascade, the finalize sweep, the user's `cancel` of one
+child — fires `child_completed` through `completedOutside`, one hook after another in the order the children settled,
+each child held in `settles` until its hook is done, and tracked as an execution. The run waits for all of them after the
+finalize sweep (`completionsSettled`), before `iteration_end`. The stale settle's children are handed to the run
+(`RunDeps.settledBeforeStart`) and fired after its `session_start`; the decline fires one for each agent it cancels, after
+the continuing run's `session_start`. A child ended where no run's hooks are live — cancelled at rest (clause 16), by the
+explicit cancel's close after `session_end`, or by the record of an accepted cancel — fires none (OQ-151). The note is
+[`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](../../defects/fixed/a-child-settled-outside-its-execution-fires-no-child-completed-hook.md).
 Since 2026-09-30 both settles end through one tail, `IterationChildren.afterTerminal`, which tells the scheduler in a
 `finally`: a raise out of the teardown or the hook port no longer leaves a parent waiting on a child that has ended
 (REQ-ORCH-048, REQ-TOOLS-156). A raise out of the hook port reduces to a warning and the settle goes on (REQ-HOOKS-079);

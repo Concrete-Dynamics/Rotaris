@@ -74,7 +74,8 @@ So the same product in the same checkout turns red on one theme or another depen
 
 ### Repair
 
-Recorded, not repaired. Noticed while running `theme-proof` for the slash-colour repair (R-067). ~~There are two possible
+~~Recorded, not repaired.~~ *Repaired 2026-09-30 under R-067 (acceptance finding A53). The outcome is below.*
+Noticed while running `theme-proof` for the slash-colour repair (R-067). ~~There are two possible
 fixes, and the proof's owner should choose: the proof pins its scratch path's length (or measures the strip with a fixed
 path), or `textContrast` reads a glyph's colour so that it does not depend on the subpixel phase.~~ Pinning the scratch
 path is not a repair, because the path does not move the item.
@@ -107,3 +108,47 @@ has scrolled past the window's edge, and on how far the branch label and the the
   theme's label, the `svc:` processes, then the `applied · reset · refused` counters.
 - `packages/ui/src/shell.css`: `.status-strip`'s horizontal scroll, and `.status-strip__item[data-elide='1']`'s 48 px
   floor.
+
+## Outcome
+
+Repaired 2026-09-30 under R-067 (acceptance finding A53) by the first of the three repairs: **measure only what is on
+screen**. What `visible()` admits is unchanged.
+- The page's probe records each admitted text's on-screen part. That part is its box cut by the window and by every
+  ancestor that clips along an axis, up to a fixed-position ancestor, which only the window clips.
+- `textSample` (`apps/desktop/scripts/lib/text-sample.mjs`) decides what is read. If at least one em of the text is on
+  screen along each axis, or all of it where it is shorter than an em, only that part is read. A smaller fragment is
+  reported under `skipped`, with its size, and is not measured.
+- The page computes the cut with `clipRect`, whose source `theme-proof` injects into the page. The probe and the tests
+  therefore run the same code.
+
+Taking the hit test at the on-screen part's centre was tried and dropped. It admitted Settings rows half scrolled out of
+their pane, which the clamped centre had excluded. One of them, `grep` in the tools table, read 1.24:1 because its
+visible part was the cell's padding. That would have widened what the proof measures, and this repair only narrows
+where a text is read.
+
+**Pinned by** `apps/desktop/scripts/lib/text-sample.test.ts`, 14 cases. `clipRect` is checked against the window edge,
+a scroll container and a box wholly outside, and its injected source is checked too. `textSample` is checked with the
+note's figures: the whole item at x = 1006 is read, and the 1.2 px sliver at x = 1064.8 is skipped. Through
+`pixels.cjs`, the sliver read whole-box, as the proof did before, fails 4.5:1 on a synthetic capture, and `textSample`
+skips it. A text a scroll container cuts is no longer read against what is painted past the clip.
+
+**Shown by `theme-proof`**, as root under Xvfb on Linux, Node 24, on `fix-accept1-2` (`7ae8072` plus this repair),
+with another workflow's live run on the host:
+- **Reproduced before the change.** A scratch repository whose branch `theme-proof-sliver1` places the item at the
+  window edge was used as `--output`'s parent (`--theme=rotaris-dim --scale=1.5`). The item sat at x = 1064.83 with
+  1.17 CSS px on screen. The run **FAILED** its contrast section at **3.05:1**, on that item in 20 captures, with 1,077
+  texts tested and none skipped.
+- **The same setup after the change: PASS.** The minimum was 3.71:1, with 1,056 texts tested. The 20 skipped are all
+  that item, each skipped as "less than a glyph of it is on screen (1.2×15.0 of 48.0×17.8 CSS px)".
+- **The full matrix in the worktree: 14 of 15 PASS on the first run**, with contrast minimums of 3.68:1 on `rotaris-dim`,
+  4.62:1 on `nocturne` and 5.25:1 on `high-contrast`.
+  - `high-contrast` @ 1 failed its contrast section on one incoherent capture (`view-2`), with no ratio under its floor.
+    That is the harness's own "the metadata moved across the photograph" failure, and it was taken with the other
+    workflow's live run on the host. Re-run alone, it **PASSED** at 5.25:1.
+  - The fragments skipped across the matrix are:
+    - the strip items at the right edge on `high-contrast` at 1.5, 1.75 and 2 (5.8 to 7.8 CSS px on screen);
+    - Settings rows cut vertically by their pane at 1.25 and 1.75 (8.4 to 12.8 CSS px of a 16 to 22.7 px box).
+- **The text counterfactual still fails**: `--counterfactual=text` at `rotaris-dim` 1.5 **FAILED**, 1.52:1, 20
+  failures.
+
+Not shown: Windows or macOS (IC-3).

@@ -347,5 +347,33 @@ scrolls, and the failing item lies 1.2 px inside the window's right edge. The pr
 whole reads 6.74:1). Whether an item lands in that position depends on the widths the strip draws ahead of it: the
 branch label with its ahead count, which is the checkout's branch because the scratch workspace sits inside it, and the
 theme's name. The elided `svc:` path stays at its 48 px floor. Recorded as a proof defect
-(`../../defects/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`, corrected in place), and not
+(`../../defects/fixed/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`, corrected in place), and not
 absorbed here.
+
+## Sixth execution — 2026-09-30 (R-067), `theme-proof` reads a text only where it is on screen
+
+REQ-SHELL-160 (a) measures contrast from the pixels painted behind a rendered label. The proof had been reading pixels
+the label does not paint. It read a text's whole box even where the window or a scroll container cut the text off. The
+status strip scrolls past the window's right edge at 150 %, and its last item could be admitted with 1.2 px on screen
+and read as its first glyph's anti-aliased edge (the fifth execution's `theme-proof` paragraph). Acceptance finding A53
+reopened that note, and it is repaired in the proof, not in the palette:
+- The probe records each admitted text's on-screen part: its box cut by the window and by every ancestor that clips
+  it.
+- `apps/desktop/scripts/lib/text-sample.mjs` reads only that part.
+- A fragment under one em along either axis is reported as skipped, with its size, and is not measured.
+- `visible()`'s admission is unchanged. A hit test at the on-screen part's centre was tried and dropped, because it
+  admitted Settings rows half scrolled out of their pane and read one as its padding (1.24:1).
+
+**Measured**, as root under Xvfb on Linux, Node 24:
+- **Before the change: FAIL.** With the item placed at x = 1064.83 by a scratch repository's branch label, `rotaris-dim`
+  at 150 % read 3.05:1 on that item.
+- **After the change: PASS.** The same setup gave a minimum of 3.71:1, with that item skipped in each of its 20
+  captures.
+- **The full matrix: 15 of 15 PASS**, with minimums of 3.68:1 on `rotaris-dim`, 4.62:1 on `nocturne` and 5.25:1 on
+  `high-contrast`. `high-contrast` at 100 % had failed once on one incoherent capture under another workflow's live
+  run. Re-run alone, it passed.
+- **The text counterfactual stays red**, at 1.52:1.
+
+The palette is unchanged, and OQ-56's disabled-text question is untouched. The repaired note is
+`../../defects/fixed/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`. Not shown: Windows or macOS
+(IC-3).

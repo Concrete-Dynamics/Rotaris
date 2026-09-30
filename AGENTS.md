@@ -79,7 +79,7 @@ show it, which a check of the status passes as a clean exit. (Before the applica
 | | `terminal-proof` | the terminal grid, the pop-out window, the transcript preview (ADR-0047). Its live section spells the size probe, the motion command and the flood in the shell its harness reports (REQ-TOOLS-104). Before 2026-09-28 they were PowerShell everywhere, and off Windows four checks measured nothing (`docs/defects/fixed/terminal-proofs-live-section-drives-a-posix-shell-with-powershell.md`) |
 | | `improvements-proof` | the reviewed-improvement lifecycle end to end |
 | | `retrospective-proof` | the retrospective pass, driven from its surfaces against the built app (PD-LIBRARY-002) |
-| | `theme-proof` | the themes and scales, rendered — plus two counterfactuals that must stay red |
+| | `theme-proof` | the themes and scales, rendered — plus two counterfactuals that must stay red; since 2026-09-30 a text's contrast is read only from the part of it the window and its scroll containers leave on screen, and a fragment under one em is skipped with its size (`lib/text-sample.mjs`), so a status-strip item scrolled 1.2 px onto the screen no longer decides the verdict |
 | | `layout-proof` | the Workspace view's grid, **measured** at the sizes the specification names |
 | **Requirements** | `requirements-proof` | the delivery store and the board (ADR-0041) |
 | | `requirements-runs-proof` | runs started from the board, against a real scratch repository |

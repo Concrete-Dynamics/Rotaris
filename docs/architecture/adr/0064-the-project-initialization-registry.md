@@ -311,3 +311,65 @@ two runs in a row (171 s and 172 s), all five scenarios, each ending with the sk
 `completed: [code-intelligence-setup]` and a reopen reading "Not run yet: Verification consent task."; `code-intel-proof`
 passed twice (523 s and 525 s). Another agent's Electron processes (8 to 11) were on the host through all four runs.
 **Not shown:** a built-app run with two workspaces' marker writes in flight together; only the unit case holds it.
+
+**Sixth round (2026-09-30, R-067): the switch-time cancellation, executed for the first time.** REQ-WORKSPACE-013
+cancels a background run still under way in a switch's outgoing window, on REQ-WORKSPACE-109's terms, and records
+nothing for it. The coordinator had `close` for it from the start, and nothing called it: main's workspace-open path
+called only `open` and `resolve(true)`, so a switch left the outgoing run going, its outcome was still recorded, and a
+return to the same root found that entry's automatic resolution spent, against REQ-WORKSPACE-102
+(`../../defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`). `MainWindows` now reports a
+workspace once no live main window holds it (`workspaceClosed`), and main calls `close`. `close` marks the entry closed
+before it aborts the run: the run's recordings are refused inside their turn of the marker queue, so a task under way
+that ends in success after the switch records nothing either — REQ-WORKSPACE-013's "nothing SHALL be recorded for the
+cancelled run" is the stronger clause for a switch, where REQ-WORKSPACE-109 alone would record it. Nothing of the
+closed entry is published on channel 12, which reaches every window, and no banner is raised for it. **Measured** in
+the built app by `workspace-proof`'s scenario 8b, as root under Xvfb on Linux, Node 24, `--skip-build` after one
+`pnpm build`: two projects whose `code_intelligence` entry is a stand-in runtime holding `project create` for 90 s. On
+the build without the change, four of the scenario's five checks failed: no cancellation was asked, the step's process
+was still running 5 s after the switch, the replacement's setup was refused as already running — and reported as "not
+a local launch" — and a return to the first project started nothing. With the change all five passed, the step's
+process gone 201 ms after the switch answered, and the proof's 39 checks passed. **Found by the execution:** the
+replacement's refused start. The run host holds one setup at a time, and a replacement opened while the outgoing setup
+is still ending can be refused; the next round serialises the coordinator's setups
+(`../../defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`). **A reading, not a
+clause:** `workspaceClosed` fires whenever no live main window holds a workspace any more, which also covers a plain
+close of one of several windows (PD-SHELL-001), a replacement closed after a veto, and a run the user started;
+REQ-WORKSPACE-013 names none of the three, and the build applies its rule to all of them. That reading is raised as
+[OQ-141](../open-questions.md), not taken as settled. **Also corrected in verification:** main's setup port had
+dropped a cancellation it could not deliver — with no window holding a workspace it sent nothing, and a refusal from the
+run host was taken as delivered. The port now rejects in both cases (`deliverSetupCancel`), so the coordinator logs it.
+**Found by the second verification, and repaired in it:** a close — or a Cancel — that lands while the setup's start
+request is still in flight to the run host aborts the run before the follow listens for the abort, and an aborted signal
+fires no more: no cancellation was sent, the outgoing setup ran to the end of its stages (300 / 1800 / 120 s budgets)
+against REQ-WORKSPACE-092, and the seventh round's one-at-a-time order held the replacement's setup behind it for all of
+that time. The follow now sends the cancellation at once when it finds its signal already aborted and its setup not yet
+finished; two cases in `initialization.test.ts` ("cancels the setup of a workspace closed while its start request is in
+flight, …", and of a run the user cancels in the same interval) fail without it, each with no cancellation sent.
+**Not shown:** the Windows orders; a plain close of one of two windows with a run under way, which only the unit cases
+hold; a close landing while the start request is in flight, which only the unit cases hold.
+
+**Seventh round (2026-09-30, R-067): one setup at a time.** "Pushed, not polled" above holds, with a condition it left
+unstated: the run host holds **one** setup and pushes `mcp.setupStatus` with no workspace on it, and the coordinator held
+one step sink for all its runs, which a run's `finally` cleared unconditionally. Once `close` was called, two of the
+coordinator's runs could overlap across a switch: the replacement's start was refused while the outgoing setup was still
+ending, or its follow took the outgoing setup's cancelled finish as its own; and the outgoing run's end cleared the
+replacement's sink, so its steps were never reported and its run never ended (REQ-WORKSPACE-109, REQ-WORKSPACE-084;
+`../../defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`). The coordinator's
+setups are now one at a time (`setupTurn`): a run's `code-intelligence-setup` starts once the setup before it has ended,
+and a sink is cleared only by the follow that set it. The wait is the task's, inside the run, so the replacement's
+resolution still returns at once (REQ-WORKSPACE-013); a run cancelled while it waits starts nothing and fails
+retryably (REQ-WORKSPACE-093). **Measured** by `workspace-proof`'s scenario 8b, its stand-in now taking 2 s to end once
+asked to terminate: on the build with only the sixth round, the replacement's start was refused and its check failed;
+with this round the replacement logged that it waited, its setup started 2 ms after the outgoing one was cancelled, its
+outcome was recorded, and all 39 checks passed (as root under Xvfb on Linux, Node 24, `--skip-build` after one
+`pnpm build`). **Found by the round's verification, and repaired in it:** the one-at-a-time order lets the next run's
+setup start as soon as the setup before it has ended, while the run that owned that setup is still recording its outcome
+(a marker write can take up to its 30 s timeout). The follow's abort listener outlived the follow, and the run host's
+cancel is not a workspace's but its one setup's, so a `close` — or a Cancel — landing on the earlier run in that interval
+cancelled the **next** workspace's setup, against REQ-WORKSPACE-013's "independently of the outgoing one" and
+REQ-WORKSPACE-084/109. Reachable by PD-SHELL-001's two windows, or by a switch whose outgoing close lands after the
+replacement's 800 ms resolution. The follow now removes its abort listener when its setup finishes, so a run's abort
+reaches the run host only while that run's own setup is live; two cases in `initialization.test.ts` ("leaves the next
+workspace's setup running when …", on a close and on a Cancel) fail without it. **Not shown:** a setup the MCP settings category starts beside a background run, which is not one of the
+coordinator's and is still refused (`../../defects/a-refused-setup-start-is-reported-as-not-a-local-launch.md`); the
+Windows orders.

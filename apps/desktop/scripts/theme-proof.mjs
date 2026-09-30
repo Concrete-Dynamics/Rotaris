@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { buildDesktop, evidenceDirectory } from './lib/harness.mjs';
 import { startApp } from './lib/driver.mjs';
+import { clipRect, textSample } from './lib/text-sample.mjs';
 
 const require = createRequire(import.meta.url);
 const { decodePng, textContrast, focusContrast } = require('./pixels.cjs');
@@ -28,13 +29,22 @@ if (!skipBuild) buildDesktop(output);
 const METADATA = `(() => {
   const rect = (element) => { const r = element.getBoundingClientRect(); return { x:r.x, y:r.y, width:r.width, height:r.height }; };
   const visible = (element) => { const r=element.getBoundingClientRect(); const s=getComputedStyle(element); const x=Math.max(0,Math.min(innerWidth-1,r.x+r.width/2)); const y=Math.max(0,Math.min(innerHeight-1,r.y+r.height/2)); const hit=document.elementFromPoint(x,y); return r.width>0 && r.height>0 && r.right>0 && r.bottom>0 && r.left<innerWidth && r.top<innerHeight && s.visibility!=='hidden' && s.display!=='none' && (hit===element || element.contains(hit)); };
+  // REQ-SHELL-160 (a): a text is read only where it is painted. \`visible\` still decides which texts are admitted.
+  // What is read of an admitted text is its on-screen part: its box cut by the window and by every ancestor that clips
+  // along an axis, up to a fixed-position one, which only the window clips. \`visible\` clamps the box's centre into the
+  // window, so it admits a status-strip item scrolled 1.2 px onto the screen. Reading that item's whole box read a
+  // glyph's edge, and textSample now skips a fragment that small (lib/text-sample.mjs). A text admitted with no part on
+  // screen keeps its record, \`shown\` null, and textSample reports it skipped, so every admitted text is counted.
+  const clipRect = ${clipRect.toString()};
+  const clipsOf = (element) => { const clips=[{x:0,y:0,width:innerWidth,height:innerHeight}]; const far=1e7; if (getComputedStyle(element).position==='fixed') return clips; for (let node=element.parentElement; node && node!==document.body && node!==document.documentElement; node=node.parentElement) { const s=getComputedStyle(node); if (s.display!=='inline' && s.display!=='contents') { const r=node.getBoundingClientRect(); const cx=s.overflowX!=='visible', cy=s.overflowY!=='visible'; if (cx || cy) clips.push({ x:cx ? r.x+node.clientLeft : -far, y:cy ? r.y+node.clientTop : -far, width:cx ? node.clientWidth : 2*far, height:cy ? node.clientHeight : 2*far }); } if (s.position==='fixed') break; } return clips; };
+  const shownOf = (element) => clipRect(rect(element), clipsOf(element));
   const moving = new Set();
   for (const animation of document.getAnimations()) { const target = animation.effect && animation.effect.target; if (target && animation.playState === 'running') moving.add(target); }
   const animating = (element) => { for (let node=element; node; node=node.parentElement) if (moving.has(node)) return true; return false; };
   // A control disabled by aria-disabled is disabled to a reader and wears the disabled colour;
   // REQ-SHELL-145's floor follows the appearance, not the attribute that produced it.
   const OFF = ':disabled,[aria-disabled="true"]';
-  const texts = [...document.body.querySelectorAll('*')].filter((element) => element.children.length===0 && (element.textContent||'').trim() && visible(element)).map((element) => { const s=getComputedStyle(element); return { text:(element.textContent||'').trim(), rect:rect(element), color:s.color, background:s.backgroundColor, fontSize:parseFloat(s.fontSize), fontWeight:s.fontWeight, disabled:element.matches(OFF) || Boolean(element.closest(OFF)), animating:animating(element) }; });
+  const texts = [...document.body.querySelectorAll('*')].filter((element) => element.children.length===0 && (element.textContent||'').trim() && visible(element)).map((element) => { const s=getComputedStyle(element); return { text:(element.textContent||'').trim(), rect:rect(element), shown:shownOf(element), color:s.color, background:s.backgroundColor, fontSize:parseFloat(s.fontSize), fontWeight:s.fontWeight, disabled:element.matches(OFF) || Boolean(element.closest(OFF)), animating:animating(element) }; });
   const controls = [...document.querySelectorAll('button,input,select,textarea,[tabindex]')].filter(visible).map((element) => ({ name:element.getAttribute('aria-label') || (element.textContent||'').trim() || element.getAttribute('name') || element.tagName, rect:rect(element), focused:element===document.activeElement }));
   const icons = [...document.querySelectorAll('.nav-item i')].map((element) => ({ rect:rect(element), color:getComputedStyle(element).color }));
   const labels = [...document.querySelectorAll('.nav-item span')].map((element) => ({ text:(element.textContent||'').trim(), rect:rect(element), scrollWidth:element.scrollWidth, clientWidth:element.clientWidth }));
@@ -202,7 +212,11 @@ for (const theme of selectedThemes) {
         // violation. Diagnosed 2026-09-08 as five strings near 1.26:1 "on every theme at every scale";
         // repaired here, where the metadata carries whether the element was moving when it was shot.
         if (text.animating === true) { skippedText.push({ text: text.text.slice(0, 40), why: 'the element was animating when the frame was taken' }); continue; }
-        const measured = textContrast(png, text, metadata.dpr);
+        // REQ-SHELL-160 (a): read only the part of the text that is on screen, and skip a fragment smaller than a glyph.
+        // The status strip scrolls past the window's edge, and a sliver of its last item used to decide the verdict.
+        const sample = textSample(text);
+        if (sample.skip !== undefined) { skippedText.push({ text: text.text.slice(0, 40), why: sample.skip }); continue; }
+        const measured = textContrast(png, { ...text, rect: sample.rect }, metadata.dpr);
         const weight = Number.parseInt(text.fontWeight, 10) || 400;
         const floor = text.disabled ? 3 : (text.fontSize >= 18 || (text.fontSize >= 14 && weight >= 700)) ? 3 : 4.5;
         contrast.push({ text: text.text.slice(0, 80), ratio: measured.ratio, floor });

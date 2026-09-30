@@ -43,7 +43,7 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-29**
+## Last reconciled with the code: **2026-09-30**
 
 **The post-run improvement capture never rejects (REQ-ORCH-137, REQ-LIBRARY-032, R-067).** `onRunResult`'s detached
 closure moved into `captureAfterRun` (`run-host/improvement-capture.ts`): a skip-list stop reason yields no job before main
@@ -57,6 +57,24 @@ R-067).** The **runtime view**'s §6a delete said "the fifteen dependent tables"
 `iterations`, `agent_messages`, `agent_terminals` and `agent_fingerprints` make every table whose `session_id` references
 `sessions` nineteen, with `delivery_runs` the one kept as a fact. The proof's count pin gave way to the shape
 (`apps/desktop/scripts/lib/session-cascade.mjs`). This repairs [`sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md`](../../defects/fixed/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md).
+No package, edge, process, message kind, channel, command or store column changed.
+
+**The initialization coordinator runs its setups one at a time (REQ-WORKSPACE-109, REQ-WORKSPACE-084, R-067).** The run
+host holds one setup and its `mcp.setupStatus` carries no workspace, so `InitializationCoordinator` now starts a run's
+`code-intelligence-setup` only once the setup before it has ended (`setupTurn`), and the one step sink is cleared only by
+the follow that set it; a run's `finally` no longer clears it, and a follow drops its abort listener once its setup has
+ended, so an earlier run's close or Cancel never reaches the next run's setup. This repairs
+`a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`. The **process view**'s
+`initialization.*` paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A workspace switch cancels the outgoing workspace's initialization run (REQ-WORKSPACE-013, R-067).** `MainWindows`
+gained `workspaceClosed`, called once the last live main window holding a workspace has closed, and main answers it with
+`InitializationCoordinator.close`, which nothing called before: the run is cancelled, nothing is recorded or published
+for it, and a return to the root resolves again (REQ-WORKSPACE-102); a close landing while the setup's start request is
+in flight is sent to the run host once the start answers. This repairs
+`a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`. The **process view**'s `initialization.*`
+paragraph says so, and the **runtime view**'s `initialization:` bullet says a closed workspace's recordings are refused
+inside their turn of the marker queue. The same rule for a close that is not a switch's is a reading, raised as OQ-141.
 No package, edge, process, message kind, channel, command or store column changed.
 
 **The update shape answers `extend` (REQ-CHAT-053, R-067).** `updateShape` in `ui/transcript/pool.ts` reads the

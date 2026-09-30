@@ -83,6 +83,11 @@ export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWind
    * its construction, for every main window built here: the launch's, a replacement's, an added one's, a hand-over's.
    */
   readonly postShowActivation?: (window: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>) => void;
+  /**
+   * REQ-WORKSPACE-013: the last live main window holding `workspace` has closed — a switch's outgoing window, a vetoed
+   * replacement, or one of several windows. Main cancels that workspace's initialization run here; nothing else did.
+   */
+  readonly workspaceClosed?: (workspace: string) => void;
 }
 
 interface WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TDialog> {
@@ -546,6 +551,7 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     this.dependencies.adapter.disposeResources(record.win, record.wcId, record.personaWindows, record.terminalWindows);
     const unshown = record.approvals.splice(0);
     if (unshown.length > 0) this.dependencies.unshownApprovals?.(unshown);
+    if (record.workspace !== '(no workspace)' && this.#windowHolding(record.workspace) === undefined) this.dependencies.workspaceClosed?.(record.workspace);
   }
 }
 

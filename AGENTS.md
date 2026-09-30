@@ -62,7 +62,7 @@ show it, which a check of the status passes as a clean exit. (Before the applica
 | | `terminal-stream-proof` | the stream in the run host against a **real PTY** (ADR-0021), each command spelled in the host's shell: PowerShell on Windows, the POSIX shell elsewhere (REQ-TOOLS-104). Before 2026-09-28 it spoke PowerShell everywhere and measured nothing off Windows (`docs/defects/fixed/terminal-stream-proofs-real-pty-half-speaks-powershell-to-a-posix-shell.md`). Since 2026-09-29 the deltas carry what the command wrote and no marker (`deltasCarryOnlyTheCommand`, live-run L9), and a second command on the same stream starts on its own row of the renderer's display (`reopenedStreamStartsOnAFreshRow`) |
 | **Configuration and startup** | `config-proof` | hand-authored, commented files surviving every write (ADR-0036/0037) |
 | | `init-proof` | project initialization resolved once per workspace open (ADR-0064); scenario 3 reads the dialog **before** its Escape (the reading marks the document and the key waits for the mark), and asserts that the background task starts and completes beside the consent prompt. Before the repairs it failed on Linux in both orders: a skip landing ahead of the resolution swallowed the background task (`docs/defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`), and the background run drew itself in the dialog, which then refused Escape when the resolution came first (`docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`) |
-| | `workspace-proof` | reaching a project folder from inside the application: resolution, gates, switch |
+| | `workspace-proof` | reaching a project folder from inside the application: resolution, gates, switch; scenario 8b switches away from a workspace whose initialization run is under way — its two projects point `code_intelligence` at a stand-in runtime written into the evidence directory, whose `project create` holds for 90 s and takes 2 s to end once asked — and asserts the outgoing run is cancelled, its step's process ended within 5 s, nothing recorded for it, the replacement's own setup followed to its recorded outcome once the outgoing one has ended, and a return to it resolved again (REQ-WORKSPACE-013/084/092/102/109; `docs/defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`, `docs/defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`) |
 | | `settings-proof` | the Settings categories and the save bar; the About page's two files (`build-id.txt`, `THIRD-PARTY-LICENSES.txt`), absent and present (it stages them in `apps/desktop/resources/` and gives back what was there); the Runtime category's run-start mode hint, with no session followed and over a released session (PD-ORCH-003) |
 | | `updater-proof` | the updater on the one path a development host can execute: a launch that is not a released artifact performs no check and issues no request (REQ-STARTUP-106/114/150) — the log's one `info` line, and a proxy sink every request of Chromium's stack would reach that records none for the feed and **none at all** from launch to first paint and quit (REQ-STARTUP-160, REQ-SHELL-005 — the spellchecker's dictionary download it once caught), with a net-log naming the URL of any connection it does record; and a second launch, started with both artifact variables set, whose one scripted `terminal` call finds neither in its shell's environment (REQ-STARTUP-147); the check, the download, the apply and the restart are unit-tested over fakes and their run against a real artifact is owed to the next Windows package (IC-3) |
 | **Surfaces** | `overview-proof` | the Overview painted from the run and the store |
@@ -79,7 +79,7 @@ show it, which a check of the status passes as a clean exit. (Before the applica
 | | `terminal-proof` | the terminal grid, the pop-out window, the transcript preview (ADR-0047). Its live section spells the size probe, the motion command and the flood in the shell its harness reports (REQ-TOOLS-104). Before 2026-09-28 they were PowerShell everywhere, and off Windows four checks measured nothing (`docs/defects/fixed/terminal-proofs-live-section-drives-a-posix-shell-with-powershell.md`) |
 | | `improvements-proof` | the reviewed-improvement lifecycle end to end |
 | | `retrospective-proof` | the retrospective pass, driven from its surfaces against the built app (PD-LIBRARY-002) |
-| | `theme-proof` | the themes and scales, rendered — plus two counterfactuals that must stay red |
+| | `theme-proof` | the themes and scales, rendered — plus two counterfactuals that must stay red; since 2026-09-30 a text's contrast is read only from the part of it left on screen by the window and by every ancestor whose `overflow` is not `visible` (scroll, `hidden` and `clip` alike), and a fragment under one em is skipped with its size (`lib/text-sample.mjs`), so a status-strip item scrolled 1.2 px onto the screen no longer decides the verdict |
 | | `layout-proof` | the Workspace view's grid, **measured** at the sizes the specification names |
 | **Requirements** | `requirements-proof` | the delivery store and the board (ADR-0041) |
 | | `requirements-runs-proof` | runs started from the board, against a real scratch repository |
@@ -165,6 +165,16 @@ not replace the part's own proof, it follows it.
 It is **never** automatic. It is not in `pnpm check`, `pnpm test` collects nothing from it, and no hook or CI
 step may call it. It runs when the owner asks for it, or when an agent asks the owner and is told yes.
 An agent must not run it on its own initiative: it costs money the owner pays.
+
+An owner's yes is not always enough in an agent session. On the Linux agent host, the harness's automatic permission
+classifier has refused some `live-run.mjs --confirm` launches as a real-world transaction even where the owner authorised
+the run (R-066, R-067; `docs/defects/no-live-run-has-executed-on-merged-main.md`). On 2026-09-30 it refused the launch
+over the default scenarios and the long `duress` launch, while it admitted targeted `--only=ask` and `--only=ask,edit`
+runs on repair branches the same day. Which launches it admits is not established, so an agent does not predict it. An
+agent that meets that refusal stops, and it does not reach the run by another route, such as splitting the refused
+launch into admitted `--only=` pieces. It records the refusal where its task lives and says so in its report. Only the
+owner can close the gap: by allowing `node apps/desktop/scripts/live-run.mjs --confirm` for agent sessions in the
+harness's permission rules, or by running the command by hand.
 
 ### Registering an endpoint, and storing its key
 

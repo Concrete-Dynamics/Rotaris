@@ -12,7 +12,7 @@ window's workspace is opened. Two consequences follow.
   where REQ-WORKSPACE-102 requires exactly one automatic resolution per workspace open.
 
 It also makes the overlap described in
-[a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md](../a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md)
+[a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md](a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md)
 reachable without `close`: the incoming root's run installs its own `setupListener` over the outgoing run's.
 
 Found by reading, as an optional finding of the fix-proofs-b5 verification round of 2026-09-29, and confirmed on
@@ -60,4 +60,4 @@ the replacement's setup was refused as already running and reported as "not a lo
 project started nothing; with it, all five passed, the step's process ending 201 ms after the switch answered (as root
 under Xvfb, Node 24, `--skip-build` after one `pnpm build`).
 
-The overlap the second note describes stays open with this repair alone; it is repaired separately.
+The overlap the second note describes stayed open with this repair alone; it was repaired next, on the same branch.

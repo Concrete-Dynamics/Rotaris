@@ -85,8 +85,9 @@ const MARKUP = project(MARKUP_NAME);
  * and the bundled runtime's `project create` on a documentation tree ends in well under a second. So these two projects
  * name a stand-in runtime as their `code_intelligence` entry: a local launch of this Node with the launch subcommand,
  * from which REQ-MCP-036 derives the setup invocation `node <stand-in> project create <root>` and the rest. The stand-in
- * writes its pid beside the project, holds `create` for 90 s in a project carrying `SLOW`, and ends every other step at
- * once; anything else (a server launch) exits 1. Nothing about the product is changed by it: the entry is an ordinary
+ * writes its pid beside the project, holds `create` for 90 s in a project carrying `SLOW` — and, asked to terminate
+ * there, takes 2 s to go, inside REQ-WORKSPACE-092's 5 s, so the outgoing setup is still ending when the replacement
+ * resolves — and ends every other step at once; anything else (a server launch) exits 1. Nothing about the product is changed by it: the entry is an ordinary
  * workspace configuration, read through the ordinary resolution.
  */
 const STAND_IN = join(output, 'code-intelligence-stand-in.mjs');
@@ -96,7 +97,10 @@ writeFileSync(STAND_IN, [
   'const [group, verb, root] = process.argv.slice(2);',
   "if (group === 'project' && verb === 'create') {",
   "  writeFileSync(join(root, '.stand-in-create.pid'), String(process.pid));",
-  "  if (existsSync(join(root, 'SLOW'))) setTimeout(() => process.exit(0), 90_000); else process.exit(0);",
+  "  if (!existsSync(join(root, 'SLOW'))) process.exit(0);",
+  '  // Asked to terminate, it takes 2 s to go: the outgoing setup is still ending when the replacement resolves.',
+  "  process.on('SIGTERM', () => setTimeout(() => process.exit(143), 2_000));",
+  '  setTimeout(() => process.exit(0), 90_000);',
   "} else if ((group === 'project' && verb === 'index') || (group === 'memories' && verb === 'initialize')) {",
   '  process.exit(0);',
   '} else {',
@@ -638,7 +642,9 @@ try {
     /*
      * Before the repair nothing in main cancelled the outgoing workspace's run: its setup went on for its whole 90 s, the
      * replacement's own setup was refused as already running, and a return to the first project resolved nothing
-     * (`docs/defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`).
+     * (`docs/defects/fixed/a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`). And with the
+     * cancellation alone, the replacement's setup could still meet the outgoing one ending in the run host's one slot,
+     * whose statuses carry no workspace (`docs/defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`).
      */
     const s = await launch('init-switch', { workspace: INIT_SLOW, folders: [INIT_QUICK, INIT_SLOW] });
     const startedFor = (name) => (logOf(s).match(new RegExp(`mcp setup: started for [^\\n]*${name}`, 'g')) ?? []).length;
@@ -677,7 +683,7 @@ try {
       log = logOf(s);
       check('REQ-WORKSPACE-013 / REQ-WORKSPACE-084 / REQ-WORKSPACE-109: the replacement resolves its own workspace, and its run is followed to its own recorded outcome',
         quickRecorded && startedFor('init-quick') === 1 && /code-intelligence-setup → success/.test(log.slice(log.search(/mcp setup: started for [^\n]*init-quick/))),
-        `the replacement's setup ${startedFor('init-quick') === 1 ? 'started' : `started ${startedFor('init-quick')} time(s)`}; its outcome is ${quickRecorded ? 'recorded' : 'NOT recorded'}${/already running/.test(log) ? '; a start was refused as already running' : ''}`);
+        `the replacement's setup ${startedFor('init-quick') === 1 ? 'started' : `started ${startedFor('init-quick')} time(s)`}${/init-quick waits for the setup under way to end/.test(log) ? ', once the outgoing setup had ended' : ''}; its outcome is ${quickRecorded ? 'recorded' : 'NOT recorded'}${/not a local launch/.test(log) ? '; a start was refused and reported as "not a local launch"' : ''}`);
       await s.driver.command({ kind: 'workspace.choose' });
       const resolvedAgain = await waitUntil(() => startedFor('init-slow') === 2, 30_000);
       check('REQ-WORKSPACE-102: a return to the first project is a new open, with its own automatic resolution',

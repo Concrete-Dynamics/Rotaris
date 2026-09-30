@@ -331,5 +331,23 @@ a local launch" — and a return to the first project started nothing. With the 
 process gone 201 ms after the switch answered, and the proof's 39 checks passed. **Found by the execution:** the
 replacement's refused start. The run host holds one setup at a time, and a replacement opened while the outgoing setup
 is still ending can be refused; the next round serialises the coordinator's setups
-(`../../defects/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`). **Not shown:** the Windows
+(`../../defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`). **Not shown:** the Windows
 orders; a plain close of one of two windows with a run under way, which only the unit cases hold.
+
+**Seventh round (2026-09-29, R-067): one setup at a time.** "Pushed, not polled" above holds, with a condition it left
+unstated: the run host holds **one** setup and pushes `mcp.setupStatus` with no workspace on it, and the coordinator held
+one step sink for all its runs, which a run's `finally` cleared unconditionally. Once `close` was called, two of the
+coordinator's runs could overlap across a switch: the replacement's start was refused while the outgoing setup was still
+ending, or its follow took the outgoing setup's cancelled finish as its own; and the outgoing run's end cleared the
+replacement's sink, so its steps were never reported and its run never ended (REQ-WORKSPACE-109, REQ-WORKSPACE-084;
+`../../defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`). The coordinator's
+setups are now one at a time (`setupTurn`): a run's `code-intelligence-setup` starts once the setup before it has ended,
+and a sink is cleared only by the follow that set it. The wait is the task's, inside the run, so the replacement's
+resolution still returns at once (REQ-WORKSPACE-013); a run cancelled while it waits starts nothing and fails
+retryably (REQ-WORKSPACE-093). **Measured** by `workspace-proof`'s scenario 8b, its stand-in now taking 2 s to end once
+asked to terminate: on the build with only the sixth round, the replacement's start was refused and its check failed;
+with this round the replacement logged that it waited, its setup started 2 ms after the outgoing one was cancelled, its
+outcome was recorded, and all 39 checks passed (as root under Xvfb on Linux, Node 24, `--skip-build` after one
+`pnpm build`). **Not shown:** a setup the MCP settings category starts beside a background run, which is not one of the
+coordinator's and is still refused (`../../defects/a-refused-setup-start-is-reported-as-not-a-local-launch.md`); the
+Windows orders.

@@ -6,7 +6,7 @@ import { FakeClock } from '@rotaris/kernel';
 import type { InitializationStateView, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
 import { readInitializationState, writeConfigFields, type PlainMap } from '@rotaris/config';
 import {
-  CODE_INTELLIGENCE_FAILED_SUMMARY, CODE_INTELLIGENCE_SUCCESS_CODE, CODE_INTELLIGENCE_SUCCESS_NON_CODE,
+  CANCELLED_BEFORE_SETUP_ERROR, CODE_INTELLIGENCE_FAILED_SUMMARY, CODE_INTELLIGENCE_SUCCESS_CODE, CODE_INTELLIGENCE_SUCCESS_NON_CODE,
   CODE_INTELLIGENCE_TASK_ID, InitializationCoordinator, NOT_A_LOCAL_LAUNCH_ERROR,
 } from './initialization.js';
 
@@ -612,5 +612,104 @@ describe('closing a workspace', () => {
     expect(state.view.neverInitialized).toBe(false);
     expect(readInitializationState(h.agents).lastRun).toBe('2026-09-15T12:00:00.000Z');
     expect(readInitializationState(other.agents).lastRun).toBeNull();
+  });
+});
+
+/**
+ * REQ-WORKSPACE-109/084: the run host holds one setup, and its status reaches the coordinator on one channel with no
+ * workspace on it. A closed workspace's run that is still ending must neither take the replacement run's statuses nor
+ * clear the step sink the replacement installed; the replacement's setup starts once the outgoing one has ended.
+ * `docs/defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`.
+ */
+describe('one setup at a time across a workspace switch', () => {
+  it('follows the replacement\'s run to its own recorded outcome while the closed workspace\'s setup is still ending (REQ-WORKSPACE-109, REQ-WORKSPACE-084, REQ-WORKSPACE-013)', async () => {
+    let starts = 0;
+    const h = harness({ onStart: () => { starts += 1; } });
+    await h.coordinator.resolve(true);
+    await settle();
+    expect(starts).toBe(1);
+    // The switch: the replacement opens and the outgoing workspace closes; its setup is asked to cancel and is still ending.
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents);
+    h.coordinator.close(h.root);
+    const replacement = await h.coordinator.resolve(true);
+    // The replacement's resolution does not wait on the cancellation (REQ-WORKSPACE-013) …
+    expect(replacement.view.pending).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    await settle();
+    // … but its setup does not start while the run host's one setup is still the outgoing workspace's.
+    expect(starts).toBe(1);
+    // The outgoing setup ends, cancelled; that finish is the outgoing run's, not the replacement's.
+    h.push(cancelledSetup());
+    await settle();
+    expect(starts).toBe(2);
+    expect(h.published.at(-1)?.view.running).toBe(true);
+    // The replacement's own steps are reported as they finish, and its outcome recorded.
+    h.push(status({ steps: [step('create', 'succeeded', 'made'), step('index', 'pending'), step('memory', 'pending')] }));
+    await settle();
+    expect(h.published.at(-1)?.report.currentSteps.map((s) => s.name)).toEqual(['Project configuration']);
+    h.push(completedSetup());
+    await settle();
+    expect(readInitializationState(other.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    expect(h.published.at(-1)?.view.running).toBe(false);
+    expect(h.published.at(-1)?.report.tasks[0]?.status).toBe('success');
+    expect(readInitializationState(h.agents).completed).toEqual([]);
+  });
+
+  it('keeps the replacement\'s step sink when the previous workspace\'s run ends after the replacement\'s setup has started (REQ-WORKSPACE-109, REQ-WORKSPACE-084)', async () => {
+    // The outgoing run's setup had already ended when the switch landed; its run is still recording (held here) when the
+    // replacement's setup starts, and its end must not clear the replacement's sink.
+    const writeHold: StatusHold = { current: null };
+    const h = harness({ writeHold });
+    await h.coordinator.resolve(true);
+    await settle();
+    let release: () => void = () => undefined;
+    writeHold.current = new Promise<void>((r) => { release = r; });
+    h.push(completedSetup());
+    await settle();
+    writeHold.current = null;
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents);
+    await h.coordinator.resolve(true);
+    await settle();
+    expect(h.published.at(-1)?.view.running).toBe(true);
+    // The first workspace's recording lands and its run ends, after the replacement's setup has started.
+    release();
+    await settle();
+    h.push(completedSetup());
+    await settle();
+    expect(readInitializationState(other.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    expect(h.published.at(-1)?.view.running).toBe(false);
+  });
+
+  it('ends a run cancelled while its setup waits for another as a retryable failure, starting nothing, and keeps the order for the next (REQ-WORKSPACE-109, REQ-WORKSPACE-093)', async () => {
+    let starts = 0;
+    const h = harness({ onStart: () => { starts += 1; } });
+    await h.coordinator.resolve(true);
+    await settle();
+    expect(starts).toBe(1);
+    // A second window's workspace: its background run waits behind the first workspace's setup.
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents);
+    await h.coordinator.resolve(true);
+    await settle();
+    expect(starts).toBe(1);
+    await h.coordinator.cancel();
+    await settle();
+    const cancelled = h.published.at(-1)!;
+    expect(cancelled.view.running).toBe(false);
+    expect(cancelled.report.outcome).toBe('cancelled');
+    expect(cancelled.report.tasks[0]).toMatchObject({ status: 'failure', retryable: true, error: CANCELLED_BEFORE_SETUP_ERROR, summary: CODE_INTELLIGENCE_FAILED_SUMMARY });
+    expect(starts).toBe(1);
+    // Started again, it still waits for the first workspace's setup, and starts once that has ended.
+    expect(await h.coordinator.start()).toEqual({ ok: true });
+    await settle();
+    expect(starts).toBe(1);
+    h.push(completedSetup());
+    await settle();
+    expect(readInitializationState(h.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    expect(starts).toBe(2);
+    h.push(completedSetup());
+    await settle();
+    expect(readInitializationState(other.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
   });
 });

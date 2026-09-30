@@ -38,6 +38,8 @@ const STAGE_REASON: Readonly<Record<string, string>> = {
   memory: "Code intelligence could not seed this project's memory layout",
 };
 export const CODE_INTELLIGENCE_FAILED_SUMMARY = 'Code intelligence setup did not complete for this project. It runs again the next time this workspace is opened.';
+/** REQ-WORKSPACE-093/109: a run cancelled while its setup waited for another to end — "{reason}: {detail}", no stage begun. */
+export const CANCELLED_BEFORE_SETUP_ERROR = "Code intelligence could not complete this project's setup: the setup was cancelled before it started.";
 
 /** REQ-WORKSPACE-095: the two success summaries, by classification. */
 export const CODE_INTELLIGENCE_SUCCESS_CODE = 'Code intelligence is set up for this project and its symbols are indexed.';
@@ -115,8 +117,25 @@ export class InitializationCoordinator {
   readonly registry = new TaskRegistry();
   private readonly workspaces = new Map<string, WorkspaceEntry>();
   private active: string | null = null;
-  /** The live setup's step sink, set for as long as `code-intelligence-setup` is running. */
+  /**
+   * The live setup's step sink, set for as long as `code-intelligence-setup` is following a setup, and cleared only by the
+   * follow that set it. The run host pushes `mcp.setupStatus` with no workspace on it, because it holds one setup at a
+   * time; `setupTurn` makes the coordinator's setups one at a time too, so the one sink always belongs to the setup the
+   * statuses describe.
+   */
   private setupListener: ((status: McpSetupStatus) => void) | null = null;
+  /**
+   * REQ-WORKSPACE-109/084/013: the tail of the coordinator's setups, one at a time. A run's `code-intelligence-setup`
+   * starts only once the setup before it has ended — after a workspace switch, the outgoing workspace's, still ending
+   * under its cancellation. Before this, the replacement's start was refused as already running, or its follow took the
+   * outgoing setup's cancelled finish as its own; and the outgoing run's end cleared the replacement's sink, so its steps
+   * were never reported and its run never ended
+   * (`docs/defects/fixed/a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`). The wait is the
+   * task's, inside the run: the replacement's resolution returns at once and never waits on the cancellation.
+   */
+  private setupTurn: Promise<void> = Promise.resolve();
+  /** How many runs hold or wait for a turn of `setupTurn` — read only to say in the log that a setup waits. */
+  private setupTurns = 0;
   /**
    * REQ-WORKSPACE-084/085/086: every marker write this coordinator makes to one workspace's file, one at a time, in the
    * order asked, keyed by the workspace root. Each patch replaces both lists whole (REQ-CONFIG-050), so a patch is built
@@ -148,11 +167,33 @@ export class InitializationCoordinator {
       requiresConsent: false,
       applicable: async () => (await this.deps.setup.status())?.applicable === true,
       run: async (ctx) => {
-        const started = await this.deps.setup.start();
-        if (!started.ok) return this.failure(NOT_A_LOCAL_LAUNCH_ERROR, NOT_A_LOCAL_LAUNCH_SUMMARY, false, []);
-        return await this.followSetup(started.status, ctx.signal, ctx.onStep);
+        const previous = this.setupTurn;
+        let release: () => void = () => undefined;
+        this.setupTurn = new Promise<void>((r) => { release = r; });
+        if (this.setupTurns > 0) this.deps.log(`initialization: ${CODE_INTELLIGENCE_TASK_ID} for ${ctx.workspaceRoot} waits for the setup under way to end`);
+        this.setupTurns += 1;
+        try {
+          // REQ-WORKSPACE-109: cancelled while it waited, the task never starts its setup and fails as REQ-WORKSPACE-093 says.
+          if (!await this.turnReached(previous, ctx.signal)) return this.failure(CANCELLED_BEFORE_SETUP_ERROR, CODE_INTELLIGENCE_FAILED_SUMMARY, true, []);
+          const started = await this.deps.setup.start();
+          if (!started.ok) return this.failure(NOT_A_LOCAL_LAUNCH_ERROR, NOT_A_LOCAL_LAUNCH_SUMMARY, false, []);
+          return await this.followSetup(started.status, ctx.signal, ctx.onStep);
+        } finally {
+          // The turn passes on only once the setup before this one has ended as well, however this one ended.
+          void previous.then(() => { this.setupTurns -= 1; release(); });
+        }
       },
     };
+  }
+
+  /** Whether the setup before this one ended before `signal` was aborted; an abort ends the wait at once. */
+  private turnReached(previous: Promise<void>, signal: AbortSignal): Promise<boolean> {
+    if (signal.aborted) return Promise.resolve(false);
+    return new Promise<boolean>((resolve) => {
+      const onAbort = (): void => resolve(false);
+      signal.addEventListener('abort', onAbort, { once: true });
+      void previous.then(() => { signal.removeEventListener('abort', onAbort); resolve(!signal.aborted); });
+    });
   }
 
   private failure(error: string, summary: string, retryable: boolean, steps: TaskResult['steps']): TaskResult {
@@ -174,7 +215,8 @@ export class InitializationCoordinator {
           onStep({ name: STEP_LABEL[step.id] ?? step.label, status: step.status, detail: step.detail });
         }
         if (status.state !== 'finished') return;
-        this.setupListener = null;
+        // Only this follow's own sink is cleared: another may have been installed since (see `setupTurn`).
+        if (this.setupListener === drain) this.setupListener = null;
         resolve(this.resultOf(status));
       };
       this.setupListener = drain;
@@ -431,7 +473,6 @@ export class InitializationCoordinator {
     } finally {
       e.running = null;
       e.attempting = new Set();
-      this.setupListener = null;
       // The state on disk is authoritative: a skip answered while this ran wrote its own ids there.
       e.state = readInitializationState(e.agentsFile);
       await this.publish(e);

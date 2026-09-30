@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**The initialization coordinator runs its setups one at a time (REQ-WORKSPACE-109, REQ-WORKSPACE-084, R-067).** The run
+host holds one setup and its `mcp.setupStatus` carries no workspace, so `InitializationCoordinator` now starts a run's
+`code-intelligence-setup` only once the setup before it has ended (`setupTurn`), and the one step sink is cleared only by
+the follow that set it; a run's `finally` no longer clears it. This repairs
+`a-closed-workspaces-run-can-clear-the-reopened-workspaces-setup-listener.md`. The **process view**'s
+`initialization.*` paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A workspace switch cancels the outgoing workspace's initialization run (REQ-WORKSPACE-013, R-067).** `MainWindows`
 gained `workspaceClosed`, called once the last live main window holding a workspace has closed, and main answers it with
 `InitializationCoordinator.close`, which nothing called before: the run is cancelled, nothing is recorded or published

@@ -430,7 +430,11 @@ tasks. The window reads it twice. A background run neither withdraws the setup p
 discarded after a veto, one of several windows — `MainWindows` says so (`workspaceClosed`) and main calls
 `initialization.close`: the run under way is cancelled (`mcp.setup {action: cancel}`, so the run host ends what the step
 launched), its recordings are refused, nothing of it is published or bannered, and the entry is dropped, so a return to
-the root is a new open with its own automatic resolution (REQ-WORKSPACE-013/092/102/109; 2026-09-29, R-067). Main is the coordinator because REQ-WORKSPACE-085 gives the marker **one writer** and that file
+the root is a new open with its own automatic resolution (REQ-WORKSPACE-013/092/102/109; 2026-09-29, R-067). The run
+host holds one setup and pushes `mcp.setupStatus` with no workspace on it, so the coordinator runs its setups one at a
+time (`setupTurn`): a run's `code-intelligence-setup` starts once the setup before it has ended — after a switch, the
+outgoing one, still ending — and the one step sink is cleared only by the follow that set it (REQ-WORKSPACE-084/109;
+2026-09-29, R-067). Main is the coordinator because REQ-WORKSPACE-085 gives the marker **one writer** and that file
 is the workspace service's (`config.setField`, Tier A) while the one shipped task's work is the run host's
 (`mcp.setup`) — and the matrix gives neither of those two an edge to the other. The run host gained one event,
 `mcp.setupStatus`, pushed on every change of the setup's status: the task follows a live setup through it rather

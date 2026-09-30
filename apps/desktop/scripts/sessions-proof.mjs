@@ -35,6 +35,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, machineIdFileFor, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { describeLingeringHolder, lockHolderAfterExit, pidExists, plantedDeadPid } from './lib/lock-holder.mjs';
+import { sessionCascade } from './lib/session-cascade.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -130,7 +131,6 @@ const sessionRow = (sid) => withDb((db) => db.prepare('SELECT * FROM sessions WH
 const latestSession = () => withDb((db) => db.prepare('SELECT * FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get());
 const countIn = (table, sid) => withDb((db) => db.prepare(`SELECT count(*) AS c FROM ${table} WHERE session_id = ?`).get(sid).c);
 const tablesWithSession = () => withDb((db) => db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND EXISTS (SELECT 1 FROM pragma_table_info(m.name) WHERE name = 'session_id')").all().map((t) => t.name));
-const tablesReferencingSessions = () => withDb((db) => db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND EXISTS (SELECT 1 FROM pragma_foreign_key_list(m.name) WHERE \"table\" = 'sessions')").all().map((t) => t.name));
 // The identifier where the product mints it on THIS platform (`dataLayout().machineId`), not the Windows spelling alone
 // (`docs/defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`).
 const machineId = () => readFileSync(machineIdFileFor(local), 'utf8').split(/\r?\n/).map((s) => s.trim()).find((s) => s.length > 0 && !s.startsWith('#'));
@@ -418,14 +418,19 @@ const tables = tablesWithSession();
 // too and `delivery_runs` stands alone as the one deliberate exception. The cascade premise is therefore "the tables
 // whose session_id REFERENCES sessions", read from the schema rather than pinned by count. The count pin that stood
 // here was the sixtieth defect: the ruling narrowed the premise in the store's own suite, and nothing carried it to
-// this proof until the merge-1 proof pass ran it.
-const cascaded = ['sessions', ...tablesReferencingSessions()];
-const facts = tables.filter((t) => !cascaded.includes(t));
-expect(cascaded.length === 16, `tables whose session_id references sessions: ${cascaded.join(', ')}`);
-expect(JSON.stringify(facts) === '["delivery_runs"]', `tables carrying session_id as a fact: ${facts.join(', ')}`);
+// this proof until the merge-1 proof pass ran it. A second count pin, sixteen, stood here after v20 and broke the same way
+// when v23-v24 (PD-ORCH-005) added `iterations`, `agent_messages`, `agent_terminals` and `agent_fingerprints`
+// (`docs/defects/fixed/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md`). The premise is now
+// the cascade's SHAPE, whatever the count: every reference to `sessions` is session_id → session_id ON DELETE CASCADE,
+// and `delivery_runs` is the one table carrying session_id as a fact (`lib/session-cascade.mjs`, pinned beside it).
+const { cascaded, facts, problems: cascadeProblems } = withDb((db) => sessionCascade(db));
+expect(cascadeProblems.length === 0, `the cascade premise: ${cascadeProblems.join('; ')} (tables whose session_id references sessions: ${cascaded.join(', ')}; as a fact: ${facts.join(', ')})`);
 withDb((db) => db.prepare("INSERT INTO delivery_runs (req_id, unit, session_id, worktree_ref, permissions, status, stage, outcome, started_at, ended_at) VALUES ('REQ-PROOF-001', 'u1', ?, NULL, '', 'running', NULL, NULL, '2026-09-05T09:00:00.000Z', NULL)").run(A));
 // v20 (REQ-SESSION-166): A's VERBATIM plan text is planted so the built-app delete below measures the cascade taking it.
 withDb((db) => db.prepare("INSERT INTO plan_cycles (session_id, cycle, opened_at, plan, intent, todo) VALUES (?, 1, 't', 'proof plan, verbatim', 'small_feature', '')").run(A));
+// PD-ORCH-005 clause 12 (v23): the scripted runs start no background terminal, so A's `agent_terminals` row is planted —
+// one ended terminal, as plan_cycles' is — and the delete below measures the cascade taking that table too.
+withDb((db) => db.prepare("INSERT INTO agent_terminals (session_id, terminal_id, task_id, command, started_at, state, exit_code, output_tail, updated_at) VALUES (?, 'proof-terminal', 'root', 'echo proof', 't', 'completed', 0, 'proof', 't')").run(A));
 const plantedBefore = Object.fromEntries(tables.map((t) => [t, countIn(t, A)]));
 expect(refsOf(workspace, A).length === 2, `A's refs before: ${JSON.stringify(refsOf(workspace, A))}`);
 const del = await launch('delete', {
@@ -447,6 +452,10 @@ const del = await launch('delete', {
   expect(plantedBefore.delivery_runs === 1 && after.delivery_runs === 1, `A's delivery run: ${plantedBefore.delivery_runs} before, ${after.delivery_runs} after`);
   // REQ-SESSION-166 (v20): A's VERBATIM plan text leaves with the session; it is not a second `delivery_runs`.
   expect(plantedBefore.plan_cycles === 1 && after.plan_cycles === 0, `A's plan cycles: ${plantedBefore.plan_cycles} before, ${after.plan_cycles} after`);
+  // PD-ORCH-005 clause 12: the conversation record A's two runs wrote (v23-v24), with the terminal planted above,
+  // belongs to A and leaves with it.
+  const record = ['iterations', 'agent_messages', 'agent_terminals', 'agent_fingerprints'];
+  expect(record.every((t) => plantedBefore[t] > 0 && after[t] === 0), `A's agent record: ${record.map((t) => `${t} ${plantedBefore[t]} before, ${after[t]} after`).join('; ')}`);
   expect(refsOf(workspace, A).length === 0, `A's refs after: ${JSON.stringify(refsOf(workspace, A))}`);
   expect(!existsSync(filesA), `A's files remain at ${filesA}`);
   expect(refsOf(workspace, 'B-nolock').length === 0 && sessionRow('B-nolock') !== undefined && countIn('permission_audit', 'B-nolock') === CAP, 'another session was touched');

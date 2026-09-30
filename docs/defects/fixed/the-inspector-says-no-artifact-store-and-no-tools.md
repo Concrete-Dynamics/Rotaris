@@ -89,4 +89,4 @@ Evidence:
   `ask.png`): the completed run's inspector lists the root port's resolution (`read_file used`, `background_output`,
   `wait_for_tasks`, no write, terminal or commit tool) and the new artifacts sentence. It was started only after another
   workflow's live run had ended, since the sweep would otherwise have deleted that run's sandbox
-  ([`a-live-run-sweeps-a-concurrent-live-runs-sandbox`](../a-live-run-sweeps-a-concurrent-live-runs-sandbox.md)).
+  ([`a-live-run-sweeps-a-concurrent-live-runs-sandbox`](a-live-run-sweeps-a-concurrent-live-runs-sandbox.md)).

@@ -37,6 +37,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-marker.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -101,7 +102,11 @@ function scenario(name) {
     'default_persona: orchestrator',
     'runtime:', '  permission_mode: autonomous', '  max_depth: 3', '  max_active_children: 4',
     'compressor:', '  threshold_percentage: 60', '  preserve_recent_turns: 0',
-    'mcp_servers:', '  code_intelligence: { enabled: false }', '',
+    'mcp_servers:', '  code_intelligence: { enabled: false }',
+    // The project-setup task answered (REQ-WORKSPACE-081/111): `enabled: false` above does not make it inapplicable
+    // (REQ-WORKSPACE-090), and without the bundled runtime its background run fails and publishes "Project setup did not
+    // finish" into the ONE notice slot this proof reads (REQ-NOTIFY-024) — read by compress-two as its own pass's notice.
+    ...SETUP_ANSWERED, '',
   ].join('\n'));
   return { root, workspace, local, preferences };
 }
@@ -120,6 +125,8 @@ async function launch(name, s, extra, timeoutMs = 150_000) {
   writeFileSync(join(output, `${name}.log`), log);
   if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}\n${log.split('\n').slice(-40).join('\n')}`);
+  // The precondition the marker establishes, checked rather than assumed: a background setup's notice is not this proof's subject.
+  if (backgroundSetupStarted(log)) throw new Error(`${name}: the workspace's initialization started code-intelligence-setup in the background, so its notice may stand in the slot this proof reads; see ${name}.log`);
   const inspects = {};
   for (const line of log.split('\n')) {
     const m = /capture: inspect-at (\d+) (.+?) → (\{.*\})\s*$/.exec(line);

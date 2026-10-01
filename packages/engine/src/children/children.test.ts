@@ -2124,6 +2124,30 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     void sessions;
   });
 
+  it('REQ-MONITOR-102 / REQ-SESSION-129 (the repair of a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running): the stale settle answers the phantom child\'s open calls as cut by no rest, settles its row, and counts its calls once', async () => {
+    const sid0 = 'S-prev-calls' as SessionId;
+    const w = SessionWriter.create({ dal, sessionId: sid0, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { workspaceRoot: 'C:/ws', pid: 1, host: HOST });
+    if (!w.ok) throw new Error('writer');
+    w.value.spawnChild({ task_id: 'bg_0000dead', canonical_name: 'ghost', given_name: 'ghost', persona: 'coding-agent', state: 'running', parent_id: 'root:1', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}' });
+    // A call that completed, and one the dead run cut while its row was `running`.
+    w.value.recordAgentMessage('bg_0000dead', 1, 'message', { role: 'user', content: [{ kind: 'text', text: 'TASK' }] });
+    w.value.recordAgentMessage('bg_0000dead', 1, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'a', name: 'grep', args: '{}' }, { kind: 'tool-call', callId: 'b', name: 'glob', args: '{}' }] });
+    w.value.appendRow('tool', 'grep', true, { name: 'ghost', toolName: 'grep', toolStatus: 'ok', callKey: 'a', output: 'a.ts:1' });
+    w.value.appendRow('tool', 'glob', false, { name: 'ghost', toolName: 'glob', toolStatus: 'running', callKey: 'b', output: 'partial' });
+    const { settleStaleChildren } = await import('./orchestration.js');
+    expect(settleStaleChildren(dal, w.value, sid0, () => undefined)).toBe(1);
+    expect(dal.getChild(sid0, 'bg_0000dead')).toMatchObject({ state: 'cancelled', tool_calls: 2 });
+    expect(dal.getSession(sid0)!.tool_calls).toBe(2);
+    expect(conversationOf(dal.agentConversation(sid0, 'bg_0000dead')).at(-1)).toEqual({ role: 'tool', content: [
+      { kind: 'tool-result', callId: 'a', name: 'grep', isError: false, result: 'a.ts:1' },
+      { kind: 'tool-result', callId: 'b', name: 'glob', isError: true, result: interruptedResult(null, true, 'partial') },
+    ] });
+    expect(dal.residentRows(sid0).map((r) => [r.call_key, r.tool_status])).toEqual([['a', 'ok'], ['b', 'failed']]);
+    // A second settle finds the child terminal and changes nothing.
+    expect(settleStaleChildren(dal, w.value, sid0, () => undefined)).toBe(0);
+    expect(dal.getSession(sid0)!.tool_calls).toBe(2);
+  });
+
   it('REQ-ORCH-050: with a cap of 1 the second child parks waiting_on_model_slot and is promoted when the first ends', async () => {
     let releaseFirst!: () => void;
     const hold = new Promise<void>((r) => { releaseFirst = r; });

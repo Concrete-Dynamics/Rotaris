@@ -85,7 +85,8 @@ export interface CrashRecord {
  *   (`answerOpenCalls`): a call whose row settled keeps what it returned, and every other gains the result that it was
  *   interrupted before it completed and was not re-run, its row left `running` settling with the same (clauses 3 and 4);
  * - a plan cycle's root the session still records as under way (REQ-ORCH-153; a plan cycle has no iteration row) has its
- *   open calls answered the same way and the calls its record holds join the session total (`recordPlanRootCrash`);
+ *   open calls answered the same way and the calls its record holds join the session total (`recordPlanRootCrash`), and so
+ *   does each of its unfinished children (`recordCutChild`), which the next continue's stale-child settle ends `cancelled`;
  * - every call's row in the `tool_calls` ring still `running` settles `failed` with the crash's statement, as its
  *   transcript row does (`settleDeadToolCalls`, REQ-SESSION-129 with ADR-0024) — unless `ownCallsMayRun`: a continue
  *   after a run of this process that parked without closing its tool ports, whose call may still be under way;
@@ -224,9 +225,34 @@ function recordPlanRootCrash(dal: StoreDal, writer: SessionWriter, sessionId: Se
   const row = dal.getSession(sessionId);
   const taskId = row?.plan_root_task_id ?? null;
   if (taskId === null) return;
+  // Its unfinished children too (the repair of
+  // `a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running.md`): no record pauses them, and
+  // the stale-child settle that ends them runs only at a continue, so a repair alone would leave their cut rows `running`.
+  for (const c of treeOf(dal.childrenOfIteration(sessionId, 0), (id) => id === taskId)) {
+    if (!isTerminalChildState(c.state) && c.state !== 'paused') recordCutChild(dal, writer, sessionId, c, 'crash', warn);
+  }
   answerOpenCalls(dal, writer, sessionId, { taskId, name: row?.plan_root_persona ?? '' }, 0, 'crash');
   const r = writer.countToolCalls({ planRoot: { taskId, add: callsRun(conversationOf(dal.agentConversation(sessionId, taskId))) } });
   if (!r.ok) warn(`the calls of the plan cycle's root ${taskId} a crash left uncounted in ${sessionId} were not counted: ${r.error.code}`);
+}
+
+/**
+ * REQ-MONITOR-102 / REQ-SESSION-129 (the repair of
+ * `a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running.md`): what the crash record does
+ * for an open iteration's unfinished agent (`answerOpenCalls`, `countCrashedCalls`), for a child a dead run left that no
+ * iteration's record reaches — a plan cycle's (a plan cycle has no `iterations` row, OQ-96) or another root's orphan. Its
+ * open calls are answered, so a row the death cut settles `failed` and a call it asked for and never started is not one;
+ * then the calls its record holds beyond its `children.tool_calls` join the session's total, in one transaction with its
+ * count. Both are idempotent — an answered call is not answered again and a count already held adds nothing — so the crash
+ * record and the stale-child settle after it (`settleStaleChildren`) may both run it, and a death between it and the
+ * child's terminal move leaves nothing for the next to do twice. `cause` is the crash's for a plan cycle's child, and null
+ * (cut by no rest, OQ-96) where the settle cannot say what ended the run. A record a compression replaced holds fewer calls
+ * than were made, so what it adds may fall short; it never exceeds.
+ */
+export function recordCutChild(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, child: Pick<ChildRow, 'task_id' | 'canonical_name' | 'iteration'>, cause: Interruption | null, warn: (m: string) => void): void {
+  answerOpenCalls(dal, writer, sessionId, { taskId: child.task_id, name: child.canonical_name }, child.iteration, cause);
+  const r = writer.countToolCalls({ children: [{ taskId: child.task_id, calls: callsRun(conversationOf(dal.agentConversation(sessionId, child.task_id))) }] });
+  if (!r.ok) warn(`the calls of child ${child.task_id} a dead run left uncounted in ${sessionId} were not counted: ${r.error.code}`);
 }
 
 /**

@@ -5,7 +5,7 @@ import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
 import { isSteeringMessage, runTurn, type SteeringPrompt, type ToolPort, type TurnOutcome } from '../run/turn.js';
-import { answerOpenCalls } from '../run/crash.js';
+import { answerOpenCalls, recordCutChild } from '../run/crash.js';
 import { callsRun } from '../run/interruption.js';
 import type { AttachmentOutcome, BackgroundOutput, DelegateOutcome, DelegateRequest, DelegationOps, WaitOutcome } from './delegation.js';
 import { fullContextBlock, siblingIndexBlock, type AttachedResolution } from '../artifacts/context.js';
@@ -1479,7 +1479,8 @@ function storedScope(row: ChildRow): string[] {
 /**
  * REQ-ORCH-053: on a later run of the same session, settle every non-terminal child of any previous iteration before the
  * first iteration. Its report is materialised as every other terminal child's is (REQ-LIBRARY-092), given the session's
- * artifact store.
+ * artifact store. Before it ends, its open calls are answered as cut by no rest and the calls its record holds join the
+ * session's total (`recordCutChild`, REQ-MONITOR-102 / REQ-SESSION-129); after, it is torn down (REQ-ORCH-098).
  */
 export function settleStaleChildren(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, warn: (m: string) => void, artifacts?: ArtifactStore, settled?: (fields: Readonly<Record<string, unknown>>) => void): number {
   let n = 0;
@@ -1487,6 +1488,10 @@ export function settleStaleChildren(dal: StoreDal, writer: SessionWriter, sessio
     // PD-ORCH-005 (narrowing REQ-ORCH-053 / REQ-SESSION-065 / REQ-NOTIFY-121): a `paused` agent is left as it is; it is
     // resumed with its iteration, or ended by the user continuing without it.
     if (isTerminalChildState(c.state) || c.state === 'paused') continue;
+    // REQ-MONITOR-102 / REQ-SESSION-129: before it ends, its open calls are answered and the calls its record holds are
+    // counted (the repair of `a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running.md`).
+    // Idempotent, so a plan cycle's child the crash record already reached adds nothing here.
+    recordCutChild(dal, writer, sessionId, c, null, warn);
     const r = writer.transitionChild(c.task_id, 'cancelled', 'cancellation');
     if (r.ok) {
       n += 1;

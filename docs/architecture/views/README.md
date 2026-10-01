@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A child the stale settle ends, or a plan cycle's child a crash ends, is counted and its cut rows settle (REQ-MONITOR-102,
+REQ-SESSION-129, REQ-ORCH-053, OQ-96, R-067).** `recordCutChild` (`run/crash.ts`) answers one child's open calls and adds
+the calls its record holds to the session total. `recordPlanRootCrash` runs it for the plan cycle's unfinished children,
+and `settleStaleChildren` runs it for each child before the `cancelled` move. This repairs
+`a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running.md`. The **runtime view**'s crash
+paragraph and its launch sequence say so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A child cancelled outside its execution is torn down (REQ-ORCH-098, REQ-ORCH-133, REQ-ORCH-053, PD-ORCH-005 clauses 6
 and 16, OQ-152, R-067).** The user's cancel of one child and its live descendants, the cancel of a paused child at rest,
 "continue without them", the crash record of an accepted cancel and the stale-child settle each write `child_end`,

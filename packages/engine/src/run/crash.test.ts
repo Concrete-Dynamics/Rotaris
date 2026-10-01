@@ -1532,6 +1532,92 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       recordCrash(dal, writerAs(sid), sid, new Set(), () => undefined);
       expect(dal.getSession(sid)!.tool_calls).toBe(2);
     });
+
+    /*
+     * REQ-MONITOR-102 / REQ-SESSION-129 with REQ-ORCH-053 and OQ-96 (the repair of
+     * a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running.md): a plan cycle's child a
+     * crash ended mid-call. A plan cycle has no iteration row, so the crash record pauses none of its agents, and the next
+     * continue's stale-child settle ends the child `cancelled`.
+     */
+    describe('a plan cycle\'s child a crash ended mid-call', () => {
+      /** The root delegates `look`, then waits; `look` makes one call that completes (`c1`), then one that never returns (`c2`). */
+      function planWithChild() {
+        const client = new ScriptedModelClient([]);
+        const original = client.stream.bind(client);
+        const turns = { root: 0, child: 0 };
+        client.stream = (req) => {
+          const root = /^You are the orchestrator/.test(req.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '');
+          const n = root ? ++turns.root : ++turns.child;
+          if (root) client.push(n === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'look', task: 'TASK: look' } }], 'Delegating.') : { parts: [{ hold: new Promise<void>(() => undefined) }, ...answer('never').parts] });
+          else client.push(n === 1 ? toolCalls([{ callId: 'c1', name: 'grep', args: {} }], 'Reading.') : toolCalls([{ callId: 'c2', name: 'grep', args: {} }], 'Reading more.'));
+          return original(req);
+        };
+        const port = (ctx: ToolPortContext): ToolPort => ({
+          specs: () => (ctx.delegation ? [{ name: 'delegate', description: 'delegate', parameters: { type: 'object' } }] : [{ name: 'grep', description: 'search', parameters: { type: 'object' } }]),
+          dispatch: async (c) => {
+            if (c.name === 'delegate' && ctx.delegation) {
+              const a = JSON.parse(c.rawArgs) as Record<string, string>;
+              const r = await ctx.delegation.delegate(ctx.parentId ?? 'root', { persona: a['persona']!, taskName: a['task_name']!, task: a['task']!, dependsOn: [], inheritedContext: [], category: '', runInBackground: true, writeScope: [] });
+              return { text: `Task '${r.canonicalName}': ${r.status}`, isError: r.status === 'rejected', status: r.status === 'rejected' ? 'failed' as const : 'ok' as const, durationMs: 1, label: 'delegate', args: a };
+            }
+            return c.callId === 'c1' ? { text: 'a.ts:1', isError: false, status: 'ok' as const, durationMs: 1, label: 'grep', args: {} } : new Promise(() => undefined);
+          },
+          cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+        });
+        const sessions = new Sessions({
+          clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-plan', isProcessAlive: () => true,
+          model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s), tools: port,
+          runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', runStartMode: 'plan' },
+        });
+        const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+        return { sessions, sid };
+      }
+      const look = (sid: SessionId) => dal.childrenOf(sid).find((c) => c.canonical_name === 'look');
+      const childCut = (sid: SessionId) => dal.residentRows(sid).find((r) => r.call_key === 'c2');
+      const toolRows = (sid: SessionId) => dal.residentRows(sid).filter((r) => r.kind === 'tool');
+      /** The next process, which answers every request at once. */
+      const continuing = () => new Sessions({
+        clocks: clock, publisher: NONE, pid: 88, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-plan', isProcessAlive: () => false,
+        model: { backend: new DefaultAgentBackend((() => { const c = new ScriptedModelClient([]); const o = c.stream.bind(c); c.stream = (req) => { c.push(answer('Planned.')); return o(req); }; return c; })()), config },
+        sessionFilesDir: (_d, s) => join(dir, 'sessions', s),
+      });
+
+      it('the repair answers its cut call and settles the row, and counts its calls; the continue\'s settle ends it cancelled and counts none twice', async () => {
+        const { sessions, sid } = planWithChild();
+        await settle(() => childCut(sid)?.tool_status === 'running');
+        expect(sessions.run(sid)!.isPlanGateHeld).toBe(true);
+        expect(look(sid)).toMatchObject({ iteration: 0, state: 'running', tool_calls: 0 });
+        expect(next().repair(dal, 'C:/ws', { sessionId: sid }).repaired).toHaveLength(1);
+        // REQ-SESSION-129: a repair alone leaves no transcript row `running`; the cut call is answered as a crash's.
+        expect(toolRows(sid).filter((r) => r.tool_status === 'running')).toEqual([]);
+        expect(childCut(sid)).toMatchObject({ tool_status: 'failed', output: interruptedResult('crash', true, '') });
+        expect(conversationOf(dal.agentConversation(sid, look(sid)!.task_id)).at(-1)).toEqual({ role: 'tool', content: [{ kind: 'tool-result', callId: 'c2', name: 'grep', isError: true, result: interruptedResult('crash', true, '') }] });
+        // REQ-MONITOR-102: the root's delegate and the child's two calls are in the total, and the child's count is its record's.
+        expect(look(sid)!.tool_calls).toBe(2);
+        expect(dal.getSession(sid)!.tool_calls).toBe(toolRows(sid).length);
+        expect(toolRows(sid)).toHaveLength(3);
+        // The continue: the stale-child settle ends it `cancelled`, and nothing is counted twice.
+        const next2 = continuing();
+        expect(next2.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        expect(next2.prompt(sid, 'again').ok).toBe(true);
+        await next2.running(sid);
+        expect(look(sid)).toMatchObject({ state: 'cancelled', tool_calls: 2 });
+        expect(toolRows(sid).filter((r) => r.tool_status === 'running')).toEqual([]);
+        expect(dal.getSession(sid)!.tool_calls).toBe(toolRows(sid).length);
+      });
+
+      it('a continue with no repair before it does the same: no row left `running`, the child counted once from its record', async () => {
+        const { sid } = planWithChild();
+        await settle(() => childCut(sid)?.tool_status === 'running');
+        const next2 = continuing();
+        expect(next2.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        expect(next2.prompt(sid, 'again').ok).toBe(true);
+        await next2.running(sid);
+        expect(look(sid)).toMatchObject({ state: 'cancelled', tool_calls: 2 });
+        expect(toolRows(sid).filter((r) => r.tool_status === 'running')).toEqual([]);
+        expect(dal.getSession(sid)!.tool_calls).toBe(toolRows(sid).length);
+      });
+    });
   });
 
   describe('REQ-MONITOR-105 with ADR-0024: the crash record\'s ring settle at a continue', () => {

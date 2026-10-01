@@ -55,7 +55,7 @@ sequenceDiagram
     end
     RH->>WR: SessionWriter.create — session row (with the worktree binding as JSON and the sandbox mode, v8) + lock row (INSERT OR IGNORE) in one transaction; the run's EFFECTIVE root (the tool fence, the terminal's and the hooks' cwd, the child payload's root) is the worktree path, the record stays anchored to the base (REQ-GIT-019)
     RH->>WR: appendRow('user', prompt) — row 0 and its transcript.row event
-    RH->>RH: settleStaleChildren (REQ-ORCH-053; each report materialised as an artifact, REQ-LIBRARY-092), SupervisorRegistry, hooks resolved once (ADR-0015)
+    RH->>RH: settleStaleChildren (REQ-ORCH-053; each child's open calls answered and its calls counted first, recordCutChild, REQ-MONITOR-102 / REQ-SESSION-129; each report materialised as an artifact, REQ-LIBRARY-092; each torn down, REQ-ORCH-098), SupervisorRegistry, hooks resolved once (ADR-0015)
     RH->>RH: new Run(...) then run.start()
     RH-->>M: session.started {sessionId}
     M-->>W: {ok:true}; the window subscribes → attach → snapshot then the resident rows (REQ-MONITOR-214)
@@ -291,7 +291,9 @@ root whose count is NULL — an iteration opened before v26 — adds nothing), t
 records as under way (`sessions.plan_root_task_id`, **v29**: a plan cycle has no iteration row, REQ-ORCH-153) answered the
 same way under the plan cycle's 0 and its calls joined to the total in the transaction that releases it
 (`recordPlanRootCrash`; `Run.turn` records the root when a plan cycle starts and releases it as its calls join the total —
-its turn's return, or the stop's grace giving up on it — or with none counted when its turn raises), every `tool_calls` ring
+its turn's return, or the stop's grace giving up on it — or with none counted when its turn raises), and each unfinished
+child of that plan cycle answered and counted the same way (`recordCutChild`, since 2026-10-01: no record pauses it, and
+the stale-child settle that ends it runs only at a continue), every `tool_calls` ring
 row still `running` settled `failed` with the crash's statement and a NULL duration, its `tool.finish` with it
 (`settleDeadToolCalls`, REQ-SESSION-129 with ADR-0024: an orderly end settles them when the run's ports close, and a crash
 closes none — except at a continue after a run of this process that parked without closing its ports, the message-limit

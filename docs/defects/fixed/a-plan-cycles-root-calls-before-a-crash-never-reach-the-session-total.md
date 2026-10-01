@@ -52,7 +52,9 @@ What it does not do: a record a compression replaced holds fewer calls than were
 it may fall short (never over), as for an execution root. A **child** of a plan cycle that a crash leaves running is
 settled `cancelled` by the stale-child settle at the continue (REQ-ORCH-053) and its calls are not counted there either,
 which is recorded apart:
-[`a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running.md`](../a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running.md).
+[`a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running.md`](a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running.md). That note was repaired on 2026-10-01: the crash record now answers and counts the plan
+cycle's unfinished children beside its root (`recordCutChild`), and the stale-child settle does the same for any child it
+ends.
 
 Pinned by: `packages/engine/src/run/crash.test.ts`, describe "REQ-MONITOR-102 with REQ-ORCH-153: a plan cycle's root calls
 before a crash reach the session total" — "the repair adds the calls the plan cycle's root made …" (**0** where **2** is due

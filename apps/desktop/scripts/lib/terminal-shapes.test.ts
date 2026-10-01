@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
 // @ts-expect-error — the shapes are plain ESM beside the script that replays them.
-import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, replacedShellReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
 
 interface Shape { readonly id: string; readonly match: RegExp; readonly command: string; readonly prompt?: string }
 
@@ -35,9 +35,11 @@ describe('the terminal shapes the live run replays', () => {
         // `replaces-shell` (PowerShell has no `exec`), and it comes first so `unexpandable` shows which shell followed it.
         // Live-run L2's `poll` follows the wedge on both.
         // The interrupt (OQ-147) follows the poll on both, and its prompt asks for the poll after it.
+        // `ends-shell` (OQ-144's sibling case) is POSIX only here, and the wedge after it is the call that must report the
+        // respawn. `wedge-again` and the command issued behind it (OQ-164) follow the interrupt on both.
         expect(shapes.map((s) => s.id)).toEqual(platform === 'win32'
-          ? ['here-string', 'long-output', 'wedge', 'poll', 'interrupt', 'failed-word', 'diff-exit-1', 'pipe-to-shell']
-          : ['here-string', 'long-output', 'replaces-shell', 'unexpandable', 'wedge', 'poll', 'interrupt', 'failed-word', 'diff-exit-1', 'pipe-to-shell']);
+          ? ['here-string', 'long-output', 'wedge', 'poll', 'interrupt', 'wedge-again', 'behind-paused', 'failed-word', 'diff-exit-1', 'pipe-to-shell']
+          : ['here-string', 'long-output', 'replaces-shell', 'unexpandable', 'ends-shell', 'wedge', 'poll', 'interrupt', 'wedge-again', 'behind-paused', 'failed-word', 'diff-exit-1', 'pipe-to-shell']);
       });
 
       it('matches its own command — the round trip the scenario depends on', () => {
@@ -70,6 +72,9 @@ describe('the terminal shapes the live run replays', () => {
         const wedge = shapes.find((s) => s.id === 'wedge');
         const ms = Number(/,\s*(\d+)\s*\)/.exec(wedge?.command ?? '')?.[1] ?? 0);
         expect(ms).toBeGreaterThan(30_000);
+        // OQ-164: the second wedge soft-pauses at 30 s and is still running when the next command is issued.
+        const again = Number(/(\d+)/.exec(shapes.find((s) => s.id === 'wedge-again')?.command ?? '')?.[1] ?? 0);
+        expect(again * 1000).toBeGreaterThan(30_000);
       });
     });
   }
@@ -235,6 +240,48 @@ describe('the shell replacement the replaces-shell shape replays (acceptance A9,
     expect(replacedShellReading(restarted, 30_000).kind).toBe('paused');
     expect(replacedShellReading(notFound, 12)).toMatchObject({ kind: 'not-replaced', exit: 127 });
     expect(replacedShellReading(`[terminal_output]\n(no output)\n${diagnostic({ failure_kind: 'execution_error', outcome_kind: 'execution_error' })}`, 5).kind).toBe('other');
+  });
+});
+
+describe('the shell exit the ends-shell shape replays (OQ-144\'s sibling case)', () => {
+  /*
+   * `docs/defects/fixed/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md`: `exit 3` read as a soft pause after
+   * the whole no-output window (3,007 ms against a 3 s window, measured when it was recorded). The repaired product ends
+   * such a call at once as an `execution_error` with no exit code, and respawns the shell.
+   */
+  const diagnostic = (fields: Record<string, unknown>) => `[terminal_diagnostic] ${JSON.stringify({ backend: 'single-session', command: 'exit 3', timeout: false, timeout_seconds: 100, warnings: [], ...fields })}`;
+  const detail = "Terminal execution failed before completion: the command ended the session's shell (as `exit` or a signal to the shell does), so the command never returned and has no exit code. The terminal session was restarted with `/bin/sh`.";
+  const restarted = `${detail}\n[terminal_output]\n(no output)\n${diagnostic({ detail, error_class: 'ExecutionError', failure_kind: 'execution_error', kill_status: 'session_reset', outcome_kind: 'execution_error', outcome_severity: 'error' })}`;
+  const softPaused = `No output for 30 seconds …\n[terminal_output]\n(no output)\n${diagnostic({ detail: 'No output for 30 seconds in the merged terminal stream.', exit_code: -1, outcome_kind: 'soft_pause', outcome_severity: 'warning' })}`;
+  const ownExit = `The command exited with code 3.\n[terminal_output]\n(no output)\n${diagnostic({ detail: 'The command exited with code 3.', exit_code: 3, outcome_kind: 'shell_failure', outcome_severity: 'error' })}`;
+  it('credits the repair only for an at-once execution_error that says the shell ended; the defect\'s soft pause is a failure', () => {
+    expect(endedShellReading(restarted, 31)).toMatchObject({ kind: 'restarted', exit: null, killStatus: 'session_reset' });
+    expect(endedShellReading(softPaused, 30_007)).toMatchObject({ kind: 'paused', exit: -1 });
+    expect(endedShellReading(restarted, 30_000).kind).toBe('paused');
+    expect(endedShellReading(ownExit, 12)).toMatchObject({ kind: 'other', exit: 3 });
+    // The replaced shell's words are not this shape's.
+    expect(endedShellReading(restarted.replaceAll('ended the session', 'replaced the session'), 31).kind).toBe('other');
+  });
+});
+
+describe('the command issued behind a soft-paused one (OQ-164)', () => {
+  /*
+   * `docs/defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`: in the autopsy's run the
+   * command issued behind the wedge said only "The command exited with code 0." The repaired product names the paused
+   * command and its end in the detail.
+   */
+  const diagnostic = (fields: Record<string, unknown>) => `[terminal_diagnostic] ${JSON.stringify({ backend: 'single-session', command: "printf '%s\\n' behind-the-wedge", exit_code: 0, outcome_kind: 'success', outcome_severity: 'info', timeout: false, timeout_seconds: 100, warnings: [], ...fields })}`;
+  const observation = (detail: string) => `${detail}\n[terminal_output]\nbehind-the-wedge\n${diagnostic({ detail })}`;
+  const waited = observation("This command was submitted while the soft-paused command `sleep 45; printf '%s\\n' slept` was still running, and waited behind it: that command ended 5.9 seconds after this command was submitted, with exit code 0. The command exited with code 0.");
+  const before = observation("The soft-paused command `sleep 45; printf '%s\\n' slept` had ended 2.0 seconds before this command was submitted, with exit code 0, and no poll had reported it. The command exited with code 0.");
+  const running = observation("This command was submitted while the soft-paused command `sleep 45; printf '%s\\n' slept` was still running, and that command is still running: the shell has not started this command yet, and runs it once that command ends. No output for 30 seconds …");
+  const silent = observation('The command exited with code 0.');
+  it('credits only a report of the paused command\'s end; the autopsy\'s silence is a failure', () => {
+    expect(pausedBehindReading(waited)).toMatchObject({ kind: 'reported', waited: true, exit: 0 });
+    expect(pausedBehindReading(before)).toMatchObject({ kind: 'reported', waited: false });
+    expect(pausedBehindReading(running).kind).toBe('still-running');
+    expect(pausedBehindReading(silent).kind).toBe('silent');
+    expect(pausedBehindReading('the tool was blocked before it ran').kind).toBe('other');
   });
 });
 

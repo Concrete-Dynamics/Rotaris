@@ -87,3 +87,47 @@ of that round did not launch it again. A fourth attempt at the same command on t
 evidence, and a refusal is not something an agent retries until it passes. The note stays open until the owner closes
 the gap in one of the two ways above. `AGENTS.md`'s live-run section now says that an agent session on this host can
 be refused this way, and what closes it.
+
+## Outcome — closed 2026-10-01: both refused launches ran on merged `main` `71ad8e8` and passed
+
+*The note's claim "the merged whole has never run live" was true when written on 2026-09-30, and is falsified as of
+2026-10-01. The text above is kept as it was; this section records what replaced it.*
+
+On 2026-10-01 the two launches this note says were refused both ran to the end on merged `main` `71ad8e8`. Their
+worktree, `/home/user/Rotaris-crw-wt-accept`, was checked out at `71ad8e8` from 02:42:36 to 06:35:52 by its reflog, and
+`pnpm build` ran there before the first launch. Both ran against the registered `katalyst` endpoint (vLLM,
+`qwen3.8-flash-next`, registered unmetered, so no money ceiling applied) and both printed `live-run PASSED`:
+
+- **Every scenario** (no `--only=`): pack `.live-run/runs/2026-10-01T02-42-49-120Z`. Sign-in, `ask`, `edit`, `resume`,
+  `requirements`, `shell`, `frictions`, `faults` (ladder and stall) and `terminal` ran: 112 `PASS`, 9 `NOTE`, no
+  `FAIL`, and 1,863,150 input and 47,457 output tokens. The `resume` scenario's checks of PD-ORCH-005's pause and
+  continue passed (clauses 1 to 4, 6, 13 and 19). Two children were paused and resumed under their own task ids, and
+  each one's next request carried what it had recorded before the pause.
+- **Duress**, `LIVE_RUN_DURESS_MS=5400000`: pack `.live-run/runs/2026-10-01T03-15-27-194Z`. The long run reached its
+  result in 5,078 s of the 5,400 s window, with 15 `PASS`, 4 `NOTE` and no `FAIL`. It made 397 tool calls through 9
+  children, using 10,385,578 input and 441,753 output tokens. Three children reached their 1,200 s limit and ended
+  `failed`, each with PD-ORCH-004's continuation offer. The parent took two of the offers, and one of those continuations
+  succeeded. This is PD-ORCH-004's path as the owner ruled it (R-048).
+
+An earlier `duress` launch at 02:58 received SIGTERM before it produced a pack. Its leftover directory,
+`2026-10-01T02-58-14-306Z`, holds no store.
+
+The orchestrating agent session ran both launches after the owner authorised live runs in that conversation (R-066).
+That is neither of the two ways the section "Seen again 2026-09-30" names. Since 03:23 that day, the owner's allow rule
+for the `--confirm --skip-build` launch forms has also stood in the host's git-ignored `.claude/settings.local.json`.
+That is the first of the two ways. `.agents/skills/orchestrated-build/references/live-runs.md` lists the forms. No
+launch was split into `--only=` pieces to get around a refusal.
+
+A read-only autopsy of every session in both packs re-checked the repaired live-run findings: D1 to D7, and those of
+L1 to L14 that the evidence reaches. None of them recurred. Its new findings were recorded on 2026-10-01 as ten notes
+and OQ-161 to OQ-164 (merge `c34fa70`). WF1 was never repaired, and its open note
+`write-files-first-use-refusal-recurred-under-duress.md` was hit again: 2 of 5 first uses were refused. That evidence is
+added to the note and to OQ-139.
+
+**What this does not close.** `main` has since moved past `71ad8e8`: `fix-accept1-18`, `-19`, `-20` and `-21` merged
+after it, and so did every later merge of 2026-10-01. No live run has executed on the head that would be released. That
+run is still owed. As `AGENTS.md` says, it runs when the owner asks for it, or when an agent asks the owner and is told
+yes. R-066 is the owner's standing yes for the unmetered `katalyst` endpoint, and the acceptance plan after this round
+is where that run is scheduled. This note's defect was the gap on the round it names, the merged whole of acceptance
+round 1's repairs at `7ae8072`. `71ad8e8` carries all of those repairs, and they have now run live. The note is moved
+to `fixed/`. The row is in `docs/architecture/first-executions.md`.

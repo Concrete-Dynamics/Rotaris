@@ -60,7 +60,9 @@ first click, so the 60 s wait ran out and the run completed), and `fatal` **pass
   and the scenario asserts what a 401's notice is today, not that recovery.
 - Pinned in `apps/desktop/scripts/lib/initialization-marker.test.ts`: `resilience-proof` joins `SLOT_READERS` (the section
   in `scenario()`, the guard in `launch()`), and a case of its own holds the driven launch's guard. Without the repair
-  the three cases fail; with it the file's eleven pass.
+  the three cases fail; with it the file's eleven pass. A later case (repair round 1) holds `fatal`'s positive
+  assertion — the result's `HTTP 401` and the slot's notice carrying that failure text with Dismiss — so it cannot
+  quietly fall back to "not a limit": it fails on that weaker form, and the file's twelve pass.
 - Shown: after the repair, `pnpm resilience-proof --skip-build` passed all eleven scenarios on each of three runs in the
   same bundle-less worktree, no launch log holding `initialization: running`, `cancel.notice` REQ-NOTIFY-063's ("The
   provider limit was reached; the session is preserved … Open Models settings") and `fatal.notice` the 401's ("The run

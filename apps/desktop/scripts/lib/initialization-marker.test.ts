@@ -106,3 +106,15 @@ describe('resilience-proof guards its driven launch as well (REQ-NOTIFY-024)', (
     expect(driven).toMatch(/if \(backgroundSetupStarted\(log\)\) problems\.push/);
   });
 });
+
+describe('resilience-proof reads its fatal scenario\'s notice as the 401\'s own (REQ-NOTIFY-024)', () => {
+  const text = readFileSync(resolve(import.meta.dirname, '..', 'resilience-proof.mjs'), 'utf8');
+
+  it('the fatal scenario asserts the 401\'s OWN notice, not merely one that is not a limit (REQ-NOTIFY-064, REQ-NOTIFY-065)', () => {
+    // "Not a provider limit" alone passed on the failed project setup's notice standing in the one slot.
+    const start = text.indexOf("await scenarioRun('fatal'");
+    const fatal = text.slice(start, text.indexOf('results.fatal =', start));
+    expect(fatal).toMatch(/\/HTTP 401\/\.test\(error\)/);
+    expect(fatal).toMatch(/notice\.text\.includes\(error\) && \/Dismiss\/\.test\(notice\.text\)/);
+  });
+});

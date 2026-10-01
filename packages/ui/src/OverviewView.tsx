@@ -212,7 +212,7 @@ export function OverviewView(props: OverviewProps) {
                 <div className="ov-kpi"><span className="kpi-value" data-testid="overview-tool-calls">{session?.toolCalls.total ?? 0}</span></div>
                 <div className="card-meta">across {session?.toolCalls.agents ?? 0} agent{(session?.toolCalls.agents ?? 0) === 1 ? '' : 's'}</div>
                 <div className="ov-chips" data-testid="overview-tool-chips">
-                  {(session?.toolCalls.byTool ?? []).slice(0, 5).map((t) => <DesignTag key={t.tool} className="tag tag-neutral mono">{t.tool} {t.count}</DesignTag>)}
+                  {(session?.toolCalls.byTool ?? []).slice(0, 5).map((t) => <DesignTag key={t.tool} kind="neutral" className="mono">{t.tool} {t.count}</DesignTag>)}
                 </div>
               </Card>
               <Card kicker="Repository">
@@ -245,9 +245,9 @@ export function OverviewView(props: OverviewProps) {
                               <span className={`status-dot ov-dot ov-dot--${dot.tone}${dot.pulse && !reducedMotion ? ' is-pulsing' : ''}`} aria-hidden="true" />
                               <span className="visually-hidden">{dot.text}</span>
                               <DesignButton type="button" className="btn btn-link ov-session__name" title={`${row.sessionId}${row.requirementId ? ` · ${row.requirementId}` : ''}`} onClick={() => props.onOpenSession(row.sessionId)}>{row.label}</DesignButton>
-                              {row.requirementId && <DesignTag className="tag tag-outline">{row.requirementId}</DesignTag>}
-                              {attached && <DesignTag className="tag tag-accent" data-testid="overview-focused">focused</DesignTag>}
-                              {row.status === 'waiting' && <DesignTag className="tag tag-outline tag-wait" data-testid="overview-waiting">waiting on a provider limit</DesignTag>}
+                              {row.requirementId && <DesignTag kind="outline">{row.requirementId}</DesignTag>}
+                              {attached && <DesignTag kind="accent" data-testid="overview-focused">focused</DesignTag>}
+                              {row.status === 'waiting' && <DesignTag kind="wait" data-testid="overview-waiting">waiting on a provider limit</DesignTag>}
                               <span className="ov-session__detail text-secondary">{row.detail}</span>
                               {!row.busy && <DesignButton type="button" className="btn btn-link" onClick={() => props.onContinueSession(row.sessionId)}>Continue run</DesignButton>}
                               <span className="ov-session__meta mono">{row.branch} · {formatTokens(row.tokens)} · {row.durationLabel || '—'}</span>
@@ -271,7 +271,7 @@ export function OverviewView(props: OverviewProps) {
             <Card kicker="Agents" className="ov-card--tree" actions={<DesignButton type="button" className="btn btn-link" onClick={() => props.onGoTo('mission')}>Open Mission</DesignButton>}>
               <AgentTree agents={session?.agents ?? []} selected={selectedAgent} onSelect={setSelectedAgent} nowIso={nowIso} />
             </Card>
-            <Card kicker="Improvement proposals" className="ov-card--proposals" actions={<><DesignTag className="tag tag-accent">{pendingProposals} new</DesignTag>
+            <Card kicker="Improvement proposals" className="ov-card--proposals" actions={<><DesignTag kind="accent">{pendingProposals} new</DesignTag>
               {/* PD-LIBRARY-002's gesture, on the second of its three surfaces — the same opener the Library tab and the palette raise. */}
               <DesignButton type="button" className="btn btn-link" data-testid="overview-retrospective" disabled={analysisRunning} aria-disabled={analysisRunning}
                 title={analysisRunning ? RETROSPECTIVE_BUSY_REASON : RETROSPECTIVE_DESCRIPTION} onClick={() => { startRetrospective(); }}>{RETROSPECTIVE_LABEL}</DesignButton>
@@ -279,7 +279,7 @@ export function OverviewView(props: OverviewProps) {
               {proposalRows.length === 0 ? <DesignEmptyState className="empty-state library__empty"><span className="empty-state-title">No proposals</span><span className="empty-state-hint">Run improvement analysis, or a retrospective over this workspace&rsquo;s history, to produce reviewable suggestions.</span></DesignEmptyState>
                 : <ul className="ov-proposals">{proposalRows.slice(0, 4).map((row) => <li key={`${row.artifactId}:${row.proposal.id}`} className="ov-proposal">
                   <DesignButton type="button" className="btn btn-link ov-proposal__summary" title="Open in Library → Improvement proposals" onClick={() => props.onOpenProposal(row.proposal.id)}>{row.proposal.summary}</DesignButton>
-                  <DesignTag className={`tag ${row.proposal.status === 'approved' ? 'tag-accent' : row.proposal.status === 'pending_review' ? 'tag-outline' : 'tag-neutral'}`}>{statusLabel(row.proposal.status)}</DesignTag>
+                  <DesignTag kind={row.proposal.status === 'approved' ? 'accent' : row.proposal.status === 'pending_review' ? 'outline' : 'neutral'}>{statusLabel(row.proposal.status)}</DesignTag>
                   <span className="card-meta ov-proposal__category">{categoryLabel(row.proposal.category)}</span>
                   <span className="ov-proposal__actions">{PROPOSAL_STATUSES.filter((status) => status !== row.proposal.status).map((status) => <DesignButton key={status} type="button" className="btn btn-link btn-compact" onClick={() => setProposalDecision({ ...row, status })}>{status === 'approved' ? 'Approve' : status === 'rejected' ? 'Reject' : status === 'deferred' ? 'Defer' : 'Reset to pending'}</DesignButton>)}</span>
                 </li>)}</ul>}

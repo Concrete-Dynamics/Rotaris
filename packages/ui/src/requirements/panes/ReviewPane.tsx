@@ -64,7 +64,7 @@ export function ReviewPane(p: ReviewPaneProps) {
       <header className="req-pane__header">
         <span className="req-pane__id">{p.id}</span>
         <h2 id={titleId} className="req-pane__title">{payload?.title ?? 'Review'} — review delivery</h2>
-        {payload !== null && <DesignTag className="tag tag-wait req-pane__state">{payload.column}</DesignTag>}
+        {payload !== null && <DesignTag kind="wait" className="req-pane__state">{payload.column}</DesignTag>}
         <DesignButton type="button" className="btn btn-secondary req-pane__close" onClick={p.onClose} aria-label="Close the review">Close</DesignButton>
       </header>
       {p.payload === 'reading' && <p className="req-pane__status" role="status">{REVIEW_READING}</p>}

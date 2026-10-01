@@ -16,6 +16,22 @@ const baselinePath = join(import.meta.dirname, 'ui-language-baseline.json');
 const writing = process.argv.includes('--write-baseline');
 const forbiddenTags = new Set(['button', 'input', 'textarea', 'select', 'table']);
 const raw = [];
+/**
+ * A design Tag whose class spells its foundation or a tone (`tag`, `tag-run`). The Tag joins a caller's class to `tag
+ * tag-<kind>` and names the tone by `kind` alone, so a tone spelled in the class sits beside the one `kind` gives — the
+ * default `neutral` included — and which one paints is the stylesheet's order, not the caller's choice. Until 2026-10-01
+ * a class REPLACED the foundation, every caller spelled it by hand, and one spelled `tag-failure`, which the language does
+ * not define (docs/defects/fixed/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md).
+ */
+const tagTones = [];
+const TAG_COMPONENTS = new Set(['Tag', 'DesignTag']);
+/** Every literal piece of an attribute's value: string literals and the static parts of templates, at any depth. */
+function literalPieces(node, out = []) {
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) out.push(node.text);
+  else if (ts.isTemplateExpression(node)) { out.push(node.head.text); for (const span of node.templateSpans) { literalPieces(span.expression, out); out.push(span.literal.text); } }
+  else ts.forEachChild(node, (child) => { literalPieces(child, out); });
+  return out;
+}
 /** A `data-ui-contract` written anywhere but `layoutContractAttributes` — the design system included. */
 const contracts = [];
 const debt = {};
@@ -51,6 +67,16 @@ for (const path of drawingRoots.flatMap((drawingRoot) => walk(drawingRoot))) {
         const at = source.getLineAndCharacterOfPosition(tagName.getStart(source));
         raw.push(`${relative(root, path).split(sep).join('/')}:${at.line + 1} <${tagName.text}>`);
       }
+      if (tagName && ts.isIdentifier(tagName) && TAG_COMPONENTS.has(tagName.text)) {
+        const attributes = ts.isJsxElement(node) ? node.openingElement.attributes : node.attributes;
+        for (const attribute of attributes.properties) {
+          if (!ts.isJsxAttribute(attribute) || attribute.name.getText(source) !== 'className' || attribute.initializer === undefined) continue;
+          const spelled = literalPieces(attribute.initializer).flatMap((piece) => piece.split(/\s+/)).filter((token) => token === 'tag' || token.startsWith('tag-'));
+          if (spelled.length === 0) continue;
+          const at = source.getLineAndCharacterOfPosition(attribute.getStart(source));
+          tagTones.push(`${rel}:${at.line + 1} <${tagName.text} className> spells ${spelled.join(', ')}`);
+        }
+      }
       ts.forEachChild(node, visit);
     };
     visit(source);
@@ -84,7 +110,8 @@ const baseline = JSON.parse(readFileSync(baselinePath, 'utf8')).debt ?? {};
 // Burn-down only: a reduction lowers the baseline, so the allowance can never be re-spent
 // elsewhere. Paying debt therefore ends in one command, never in a silently loose ceiling.
 const { growth, stale } = compareDebt(normalized, baseline);
-if (raw.length > 0 || contracts.length > 0 || growth.length > 0 || stale.length > 0) {
+if (raw.length > 0 || contracts.length > 0 || tagTones.length > 0 || growth.length > 0 || stale.length > 0) {
+  if (tagTones.length > 0) process.stderr.write(`A design Tag names its tone by \`kind\`; its class joins \`tag tag-<kind>\` and never spells either (packages/ui/src/design-system/core.tsx):\n${tagTones.join('\n')}\n`);
   if (contracts.length > 0) process.stderr.write(`A layout contract is published only by layoutContractAttributes (packages/ui/src/design-system/layout-contract.ts):\n${contracts.join('\n')}\n`);
   if (raw.length > 0) process.stderr.write(`Raw design-equivalent JSX belongs in packages/ui/src/design-system:\n${raw.join('\n')}\n`);
   if (growth.length > 0) process.stderr.write(`UI-language literal debt grew:\n${growth.map(({ key, count, allowed }) => `${key}: ${count} > ${allowed}`).join('\n')}\n`);

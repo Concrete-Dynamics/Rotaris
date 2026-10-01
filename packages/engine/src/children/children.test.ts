@@ -115,6 +115,36 @@ describe('the ledger and the scheduler against a real store (ADR-0012)', () => {
     expect(dal.eventsOfKind(sid, 'child.spawn')).toHaveLength(4);
   });
 
+  it('REQ-ORCH-044 with REQ-MONITOR-071/044 and REQ-CHAT-069 (OQ-158): no child at any depth takes a name a root of the session carries — the current root\'s persona and canonical name, and each earlier root\'s — so no child is presented as the run-level agent too', () => {
+    const nameOf = (r: ReturnType<typeof spawn>): string => (r.ok ? r.value.row.canonical_name : `rejected: ${r.error.reason}`);
+    // An earlier iteration's root, of a persona the canonicaliser rewrites: its rows carry `Lead Planner`, its publishes `Lead-Planner`.
+    expect(writer.openIteration({ iteration: 7, root_task_id: 'bg_0000e1a1', root_canonical_name: 'Lead-Planner', root_persona: 'Lead Planner', todo_task_id: '', task: 'earlier' })).toMatchObject({ ok: true, value: true });
+    const l = ledger();
+    expect(l.root).toMatchObject({ canonicalName: 'orchestrator', persona: 'orchestrator' });
+    const someone = spawn(l, 'someone');
+    const someoneId = someone.ok ? someone.value.row.task_id : '';
+    // A grandchild named like the current root: the ledger kept only the root's direct children off its name.
+    expect(nameOf(spawn(l, 'orchestrator', { parentId: someoneId, parentDepth: 1 }))).toBe('orchestrator_1');
+    // A direct child named like the current root, as before.
+    expect(nameOf(spawn(l, 'orchestrator'))).toBe('orchestrator_1');
+    // A child named like an earlier root, directly under the root and deeper.
+    expect(nameOf(spawn(l, 'Lead Planner'))).toBe('Lead-Planner_1');
+    expect(nameOf(spawn(l, 'Lead Planner', { parentId: someoneId, parentDepth: 1 }))).toBe('Lead-Planner_1');
+    // A name no root carries is the model's own, and a reused one still counts up under its parent alone (REQ-ORCH-044).
+    expect(nameOf(spawn(l, 'survey', { parentId: someoneId, parentDepth: 1 }))).toBe('survey');
+    expect(nameOf(spawn(l, 'survey'))).toBe('survey');
+    expect(nameOf(spawn(l, 'orchestrator', { parentId: someoneId, parentDepth: 1 }))).toBe('orchestrator_2');
+  });
+
+  it('REQ-ORCH-044 (OQ-158): a resumed root\'s canonical name and the entry persona it runs as are kept off its grandchildren too', () => {
+    const nameOf = (r: ReturnType<typeof spawn>): string => (r.ok ? r.value.row.canonical_name : `rejected: ${r.error.reason}`);
+    const l = new ChildLedger({ dal, writer, sessionId: sid, iteration: 1, budget: { maxDepth: 3, maxTotal: 20, maxActive: 6 }, modelCap: () => null, warn: (m) => warnings.push(m), rootRecord: { taskId: 'bg_0000e1a2', canonicalName: 'Lead-Planner', persona: 'orchestrator', task: '', iteration: 1, depth: 0, state: 'running' } });
+    const a = spawn(l, 'a');
+    const aId = a.ok ? a.value.row.task_id : '';
+    expect(nameOf(spawn(l, 'Lead Planner', { parentId: aId, parentDepth: 1 }))).toBe('Lead-Planner_1');
+    expect(nameOf(spawn(l, 'orchestrator', { parentId: aId, parentDepth: 1 }))).toBe('orchestrator_1');
+  });
+
   it('REQ-TOOLS-152: an inherited-context id naming no task at all refuses the call with no record; one naming a failed or unfinished task is ignored; a completed sibling with its report is carried once', () => {
     const l = ledger();
     const done = spawn(l, 'done'); const idDone = done.ok ? done.value.row.task_id : '';

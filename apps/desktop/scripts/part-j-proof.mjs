@@ -14,7 +14,8 @@ import { STEER_REST_CLICKS, STEER_REST_TYPE, STEER_REST_WHATS, steerPendingAtPau
  * pending at a pause, delivered into the root's record and read by the resumed root, which carries on with its next
  * scripted step; the
  * message-limit pause with its dialog answered "double", then the relaunch finding a session paused at the
- * limit and its dialog answered "cancel"; a user-initiated quit during a run. Every assertion reads the store.
+ * limit and its dialog answered "cancel"; a user-initiated quit during a run; a root the quit cut before its first reply
+ * in a later iteration, resumed by the relaunch's Continue at the step after the one cut. Every assertion reads the store.
  */
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -286,6 +287,43 @@ await launch('quit', s6, { ROTARIS_SCRIPT: 'read,read,read,read,read,read', ROTA
   if (!events.includes('session.end') || !events.includes('result')) throw new Error(`the terminal pair was not written before exit: ${events.join(',')}`);
   if (locks !== 0) throw new Error('the quit left a lock behind');
   results.quit = { session, events };
+}
+
+// 6. A root resumed before its first reply in a later iteration (the repair of
+// the-scripted-client-places-a-root-resumed-before-its-first-reply-as-a-fresh-agent.md, PD-ORCH-005 clause 4). The first
+// iteration's root reads and answers; the message queued meanwhile opens a second iteration, whose root's first call is
+// held 60 s by `wait:` and is cut by the application's quit, so that iteration rests open and its root's record holds only
+// its task — nothing the scripted client wrote. The relaunch's Continue resumes that root in a new client, which reads
+// where it stood from the ledger the first launch's client left (`StandingLedger`): it takes the step after the wait, the
+// `glob`. Before the repair it was placed as a fresh agent and took the script's first step, the `read`, again.
+const s7 = scenario('quit-before-reply', []);
+const BEFORE_REPLY_SCRIPT = 'read,answer,wait:60000,glob,answer';
+await launch('quit-before-reply', s7, { ROTARIS_SCRIPT: BEFORE_REPLY_SCRIPT, ROTARIS_CAPTURE_PROMPT: 'first task', ROTARIS_CAPTURE_TYPE: 'and then this>>composer@2200', ROTARIS_CAPTURE_QUIT_MS: '22000', ROTARIS_CAPTURE_AFTER_MS: '40000' }, { expectPng: false });
+const laterRoot = (s) => {
+  const db = open(s);
+  const sid = db.prepare('SELECT session_id FROM sessions').get().session_id;
+  const session = db.prepare('SELECT execution_status, stop_reason FROM sessions').get();
+  const iterations = db.prepare('SELECT iteration, root_task_id, state, interruption FROM iterations WHERE session_id = ? ORDER BY iteration').all(sid);
+  const second = iterations.find((i) => i.iteration === 2);
+  const record = db.prepare("SELECT body FROM agent_messages WHERE session_id = ? AND task_id = ? AND kind = 'message' ORDER BY seq").all(sid, second?.root_task_id ?? '').map((r) => JSON.parse(r.body));
+  db.close();
+  const calls = record.filter((m) => m.role === 'assistant').flatMap((m) => m.content).filter((c) => c.kind === 'tool-call').map((c) => c.name);
+  return { session, iterations, second, record, calls };
+};
+const ledgerFile = (s) => { const out = []; const walk = (d) => { if (!existsSync(d)) return; for (const e of readdirSync(d, { withFileTypes: true })) { const p = join(d, e.name); if (e.isDirectory()) walk(p); else if (e.name === 'scripted-standing.json') out.push(p); } }; walk(s.local); return out[0] ?? null; };
+const atQuit = laterRoot(s7);
+{
+  if (atQuit.session.stop_reason !== 'application_shutdown') throw new Error(`the quit did not stop the run for shutdown: ${JSON.stringify(atQuit.session)}`);
+  if (atQuit.second === undefined || atQuit.second.state !== 'open') throw new Error(`the quit did not leave a second iteration open, so nothing was resumed before its first reply: ${JSON.stringify(atQuit.iterations)}`);
+  if (atQuit.record.some((m) => m.role === 'assistant')) throw new Error(`the second iteration's root replied before the quit, so the launch exercised a resume after a reply: ${JSON.stringify(atQuit.record.map((m) => m.role))}`);
+  if (ledgerFile(s7) === null) throw new Error('the scripted client left no standing ledger in the data directory');
+}
+await launch('resume-before-reply', s7, { ROTARIS_SCRIPT: BEFORE_REPLY_SCRIPT, ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_CLICKS: '.composer__strip .btn-primary[aria-label="Continue run"]@~14000', ROTARIS_CAPTURE_AFTER_MS: '26000' });
+{
+  const resumed = laterRoot(s7);
+  if (resumed.second?.root_task_id !== atQuit.second.root_task_id) throw new Error(`the continue did not resume the second iteration's root: ${JSON.stringify(resumed.iterations)}`);
+  if (resumed.calls[0] !== 'glob' || resumed.calls.includes('read_file')) throw new Error(`the resumed root did not carry on from the step after the one the quit cut: its calls are ${JSON.stringify(resumed.calls)}, where the script's next is glob`);
+  results.resumeBeforeReply = { atQuit: { session: atQuit.session, iterations: atQuit.iterations, roles: atQuit.record.map((m) => m.role) }, resumed: { session: resumed.session, iterations: resumed.iterations, calls: resumed.calls } };
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

@@ -49,7 +49,7 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 it as the session's total less the children's, and a root's calls join the total only when its turn returns, so the meta
 line read `0 tool calls` beside the root's used chips. `SessionRecord.entryToolCalls` now carries it: the roots' share of
 the persisted total plus the live root's calls not yet counted (`entryToolCallsOf`, `Run.entryUncountedToolCalls`) — the
-agent's own count, where REQ-MONITOR-101 gives the synthetic root the run's aggregate; **OQ-158** asks which, open. This
+agent's own count, where REQ-MONITOR-101 gives the synthetic root the run's aggregate; **OQ-159** asks which, open. This
 repairs `the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md` (acceptance A20). The **runtime view**'s §3
 entry-record paragraph and the **state-ownership view**'s tool-call row say so. One `SessionRecord` field was added on the
 existing snapshot channel; no package, edge, process, message kind, channel, command or store column changed.
@@ -63,6 +63,39 @@ carry — in `SessionWriter.openPlanRoot`'s transaction, never released, and `en
 §3 `entryRoots` paragraph, its §7 heading (the store is now v30) and a new §7 `plan_roots` row, and the **state-ownership
 view**'s new plan-root row, say so. One table was added (store v30); no package, edge, process, message kind, channel or
 command changed.
+
+**The design Tag's kinds are the language's tones, and StatusDot paints its state (acceptance A40, R-067).** `Tag`
+takes the design Tag's seven kinds (`TAG_KINDS`: `accent`, `neutral`, `outline`, `run`, `wait`, `done`, `fail`) and joins a
+caller's class to `tag tag-<kind>` instead of letting it replace them; every caller names its tone by `kind`, and
+`tools/check-ui-language.mjs` refuses a Tag class that spells `tag` or a tone. `StatusDot` takes the design StatusDot's
+states (`STATUS_DOT_STATES`) and writes `data-state`, which `shell.css` paints at `.status-dot`'s own specificity. This
+repairs `the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md`. The **component view**'s
+`ui/design-system` section says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A child's name is never a root's (REQ-ORCH-044, OQ-158, acceptance A23, R-067).** `ChildLedger.spawn` keeps every child,
+at every depth, off its root's canonical name and entry persona and off every recorded root's two names
+(`recordedRootNames`), which the surfaces give the run-level agent; only the root's direct children were kept off its
+canonical name before. This repairs `a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`. The **runtime
+view**'s §4 says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A queued prompt's task is named "Queued Prompt: <id>" (REQ-CHAT-040, REQ-ORCH-071, OQ-117, R-067).** A planner todo
+task carries an optional `name` beside its text (`run/todo.ts`), and `consumeQueued` names a queued prompt's task
+`Queued Prompt: <first 8 characters of the prompt id>` with the prompt as its text. The pane and the handoff's todo list
+(REQ-SESSION-115's display titles) draw the name (`taskTitle`), and so does the plan gate's implied-task list
+(`planTodoLines` in `packages/ui/src/PlanGate.tsx`, which reads the stored todo itself), the compression's todo lines carry the name and then the
+content (`taskLine`), and a rename renames the name. This repairs
+`a-queued-prompts-task-is-not-named-queued-prompt.md` (acceptance A28). The **runtime view**'s iteration-boundary diagram
+says so. No package, edge, process, message kind, channel, command or store column changed; the todo document gains an
+optional field inside its existing column.
+
+**The fallbacks are named by REQ-ORCH-139's vocabulary, and the vocabulary is checked (REQ-ORCH-139, REQ-NOTIFY-090,
+OQ-157, R-067).** The ladder's same-tier change writes `quota_fallback_model` and the `quota_fallback` issue, its
+unresponsive-model fallback `llm_unresponsive` (entry and issue), and the children's hard-timeout retry `fallback_model`
+and the `timeout_fallback` issue, where they wrote `model_fallback`, `unresponsive_model_fallback`/`unresponsive_model`
+and `child_timeout_fallback`. `tools/check-timeline-vocabulary.mjs`, in `pnpm lint`, fails on a timeline name in no
+vocabulary; the names the product writes that no list has are held there by OQ-157. This partly repairs
+`the-run-writes-timeline-events-outside-its-closed-vocabulary.md` (acceptance A29). The **runtime view**'s ladder paragraph
+and its `timeline` row say so. No package, edge, process, message kind, channel, command or store column changed.
 
 **A crash settles its cut call's ring row (REQ-SESSION-129, REQ-MONITOR-105, ADR-0024, R-067).** An orderly end settles
 every open `tool_calls` row when the run's ports close; a crash closes none, so after the crash record settled a call's
@@ -84,6 +117,21 @@ recorded and adds its record's calls (`recordPlanRootCrash`). This repairs
 paragraph, its §7 `sessions` row and its §7 heading (the store is now v29), and the **state-ownership view**'s tool-call
 row, say so. Two `sessions` columns were added (store v29); no package, edge, process, message kind, channel or command
 changed.
+
+**The run-level agent's tool history at a plan gate no iteration precedes (REQ-MONITOR-060, REQ-MONITOR-069,
+REQ-ORCH-153, acceptance A21, R-067).** With no run live and no iteration recorded, `entryToolsOf` reads the run-level
+agent's history under every name the tracker holds that is no child's (`AgentActivity.calledToolsWhere`): only a root or
+a child dispatches a call, and before any iteration every root was a plan cycle's, which no row names. This repairs
+`the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md`. The **runtime view**'s
+`entryTools` paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A write through a loaded session from outside a run holds the lock (ADR-0005, REQ-EVENTS-098, REQ-SESSION-060,
+REQ-GIT-094, acceptance A14, R-067).** `Sessions.withWriter`'s live branch — the repair, the safety checkpoint and the
+restore's outcome for a session loaded here — writes under the lock `claimHold` gives (kept, or taken with the one reap
+and given back) and answers `lock-held` with nothing written while another live process holds it. This repairs
+`a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`. The **runtime view**'s §6 lock paragraphs, §6a
+and the `session_locks` row, and the **state-ownership view**'s session-lock row say so. No package, edge, process,
+message kind, channel, command or store column changed.
 
 **A root steer is announced under the root that will take it (REQ-MONITOR-133/134, PD-ORCH-005 clause 4, OQ-97, acceptance
 A24, R-067).** `Run.steer` names a root steer by `Run.rootSteerName`: `rootName` while the current root can still step, the

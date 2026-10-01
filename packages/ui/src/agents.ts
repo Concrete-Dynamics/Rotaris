@@ -95,7 +95,7 @@ export function runLevelGrant(resolved: readonly string[], declared: readonly st
  * before that it drew "No tools resolved." beside a run that had made fifteen calls. Its tool-call count is the session's
  * `entryToolCalls` (REQ-MONITOR-044/052, acceptance A20, R-067): the roots' share of the persisted total plus the live root's
  * calls not counted yet — else, for a record with no projection, the total less the children's. The agent's own count, not
- * REQ-MONITOR-101's aggregate run count for the synthetic root: which of the two it shows is OQ-158's. The total alone read
+ * REQ-MONITOR-101's aggregate run count for the synthetic root: which of the two it shows is OQ-159's. The total alone read
  * `0 tool calls` while the root's turn ran, since a root's calls join it only when its turn returns.
  */
 export function runLevelAgent(session: SessionRecord | null, entry: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }, recovery: boolean): AgentRecord | null {

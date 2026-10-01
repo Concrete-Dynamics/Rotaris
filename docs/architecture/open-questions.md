@@ -2540,7 +2540,8 @@ Shipped meanwhile (ADR-0060 decision 7): a `context_compressed` **timeline entry
 `trigger`, `count_source`, `counted_tokens`, `before_tokens`, `after_tokens`, `before_messages`, `after_messages`
 and `latency_ms`; one `system` transcript row rendered from those fields; and the log line. What the requirement
 asks to be carried is carried, in a venue it did not name. If the second reading is ruled, the entry stays and an
-event joins it — the interim is not repaired quietly.
+event joins it — the interim is not repaired quietly. *(Added 2026-10-01: `context_compressed` is also a name
+REQ-ORCH-139's vocabulary does not have; it is held, with every other such name, by OQ-157.)*
 
 **OQ-54 — The user-terminal audit entry's `decision` and `source` fall outside the closed permission vocabularies.** *(spec 12 Data & Formats, "Permission audit entries for user terminal actions"; REQ-TOOLS-012/028. Raised by the terminal stream's first execution, Part AL, 2026-09-09.)*
 
@@ -3301,7 +3302,9 @@ cannot read from the store is the instant the user returned.
 
 **What a ruling decides.** Whether the timeline gains two names for the transitions, and in which domain's list, or
 whether the log line is the record. Recommendation: two names in domain 05's list, because the timeline is what an
-autopsy reads first and is among the records the export reaches (REQ-SESSION-199), and the session log is neither.
+autopsy reads first and is among the records the export reaches (REQ-SESSION-199), and the session log is neither. *(Added
+2026-10-01: OQ-157 asks the same question of every timeline name the product writes that no list has, and recommends one
+ruling for all of them and for this one.)*
 
 **OQ-77 — Does the away state resolve the approval an `ask_questions` call itself needs under the `ask` preset?**
 *(`PD-TOOLS-005`, REQ-TOOLS-007, REQ-TOOLS-158, REQ-TOOLS-178. Raised 2026-09-28 by building `PD-TOOLS-005` under
@@ -5441,7 +5444,7 @@ the total is as of the last completed pass.
 wait for it: a child's count already read the tracker's live count beside its persisted one, and the run-level agent's now
 reads the roots' persisted share plus the live root's calls not yet counted (`SessionRecord.entryToolCalls`). So during a
 pass the per-agent figures may sum to more than the displayed total; a ruling that accumulates per call would close that
-gap as well. Whether the run-level agent's figure is its own at all, or REQ-MONITOR-101's aggregate run count, is OQ-158.
+gap as well. Whether the run-level agent's figure is its own at all, or REQ-MONITOR-101's aggregate run count, is OQ-159.
 
 **OQ-117 — What is an iteration told of a task it takes up that is not the run's own, and with what?** *(REQ-CHAT-040, whose queued prompt becomes a task "carrying the prompt text as its content"; REQ-ORCH-004 and REQ-ORCH-135, whose task a resumed session carries on and "stays anchored"; REQ-ORCH-072, which gives the root execution record "the task's execution payload"; REQ-CHAT-090 and REQ-CHAT-091, which let the user rename a task; and `PD-ORCH-005` clause 17 with OQ-102, whose message is told in words of its own. Raised 2026-09-29 by the repair of [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md) under [R-067](../product/requests.md#r-067). Open.)*
 
@@ -5474,6 +5477,26 @@ task was marked done without ever reaching a model.
 REQ-CHAT-040's "Queued Prompt: <id>"; whether a task that repeats the launch content's request should still be told it;
 whether a renamed own task should be sent its new text; and whether a task taken up by a later run should carry the
 images its prompt was sent with, which needs a task to hold them.
+
+*Added 2026-10-01 by the repair of
+[`a-queued-prompts-task-is-not-named-queued-prompt.md`](../defects/fixed/a-queued-prompts-task-is-not-named-queued-prompt.md)
+(acceptance A28, R-067).* The task a queued prompt becomes is now named as REQ-CHAT-040 and REQ-ORCH-071 state: a todo task
+carries an optional `name` beside its text, and `Run.consumeQueued` names it "Queued Prompt: <first 8 characters of the
+prompt id>" with the prompt text as its content. The Todo pane draws the name, and so does the handoff's todo list,
+whose lines REQ-SESSION-115 states as "task display titles cut to 80 characters" (as OQ-104 reads them), and so does the
+plan gate's list of implied tasks (REQ-ORCH-153, PD-ORCH-002), which lists each task as the pane draws it; the entry
+agent's todo lines across a compression (REQ-MONITOR-084 (4), "todo items carried across one for one", which states no
+display title) carry the name and then the content, as an agent task's line carries its name and then its description.
+A rename renames the name and keeps the content, as an agent task's rename keeps its description (REQ-CHAT-091). The
+iteration that takes the task up is still sent its content alone, as the first bullet above reads: what the model is to
+do is the prompt, and the name is the plan's; the `task` field of the iteration's records (`iteration.start`, and the
+iteration's end record and `iteration_end` message) carries the content too, and is part of what stays open here. That a queued prompt's task is *named* is REQ-CHAT-040's and REQ-ORCH-071's
+own words; which of name and content the compression's lines and the iteration's task part carry is the built reading
+above, not something the requirements state, and whether the task part should also state the name stays open with the
+rest. *Corrected 2026-10-01 at verification:* this note first read the handoff's lines as carrying the name and then the
+content; REQ-SESSION-115 names them display titles, so they now carry the name alone. *Corrected 2026-10-01 at the
+second verification:* this note first left the plan gate out of the readers; its implied-task list still showed a queued
+prompt's task by its prompt text, and now lists the name.
 
 **OQ-118 — May the end-of-run summary say which rest a person asked for, and what a continue will resume?** *(REQ-ORCH-082
 rule 1, "not asserting which of the two person-stops it was" and "no rule of this list may distinguish the two";
@@ -5836,7 +5859,8 @@ None of them says what ends a silent child's step so that there is an outcome to
   minting no word, and a ruling removes it. *What a ruling decides.* Whether domain 01's list gains three words for
   these facts (they would then be timeline entries), or whether the session log is their record, and at which level.
   Recommendation: three words in domain 01's list, since the timeline is what an autopsy reads first and the export
-  reaches it (REQ-SESSION-199); the log is neither.
+  reaches it (REQ-SESSION-199); the log is neither. *(Added 2026-10-01: OQ-157 asks the same of every timeline name the product
+  writes that no list has, and recommends one ruling for all of them and for these three.)*
 
   *Corrected in place, 2026-09-29, by the verifier's second round.* The first round wrote them as the timeline entries
   `child_waiting_on_tools`, `child_stall_recovered` and `child_corrective_message`, for this reason, kept here as the
@@ -7749,7 +7773,113 @@ configuration). It is the reading that can only err towards waiting.
 **What a ruling decides.** Whether the count is by key or by resolved entry, and if by entry, what makes two workspaces'
 entries one.
 
-**OQ-158 — Is the run-level agent's tool-call count its own, or the run's aggregate?** *(REQ-MONITOR-101, "Each agent node
+**OQ-157 — Which word, or which other record, takes each fact the product writes to the timeline under a name no
+vocabulary has?** *(REQ-ORCH-139, "MUST NOT use any name outside those vocabularies", for the timeline and the issue
+record alike; REQ-SESSION-134, REQ-SESSION-142, REQ-SESSION-199; REQ-ORCH-091 (a) and (d); REQ-MONITOR-086; REQ-NOTIFY-268;
+`PD-ORCH-005`; ADR-0027 and ADR-0060, which decided three of the names; OQ-53, OQ-76 and OQ-127, which raised the same gap for
+one mechanism each. Raised 2026-10-01 under [R-067](../product/requests.md#r-067) by the repair of
+[`the-run-writes-timeline-events-outside-its-closed-vocabulary.md`](../defects/the-run-writes-timeline-events-outside-its-closed-vocabulary.md),
+acceptance finding A29. Open.)*
+
+REQ-ORCH-139 closes the names of timeline events and of issues to the vocabularies of domain 01's Data & Formats and the
+words other domains fix (domain 07's `run_start`, `run_end`, `session.interrupted_recovered` and `issue`; domain 05's
+`permission_approved` and domain 10's `permission_mode_changed`; domain 06's two checkpoint entries; domain 09's
+`hook_run`; domain 14's `artifact_published`). Domain 10's other permission entry, REQ-SANDBOX-104's `permission_mode_downgraded`, is not a
+word: `PD-TOOLS-002` withdrew it ("no `permission_mode_downgraded` timeline event"), so the gate holds it in `FORBIDDEN`,
+citing the directive, and fails a write of it. *(Corrected 2026-10-01 at verification: this paragraph first counted
+"domain 05's and domain 10's permission entries" as words, and the gate's `VOCABULARY` accepted the withdrawn one, citing
+the requirement the directive displaced.)*
+
+**Where a vocabulary has the word for the fact, the repair used it:** the ladder's same-tier change writes `quota_fallback_model` and the `quota_fallback` issue (REQ-NOTIFY-090's "timeline entry for a quota-driven model
+change"; REQ-NOTIFY-082's "usage limit" covers a rate limit too, and the metadata's `condition` still says which), its
+unresponsive-model fallback writes `llm_unresponsive` as both entry and issue (REQ-ORCH-090's "a timeline event and an
+issue"), and the children's hard-timeout retry writes `fallback_model` and the `timeout_fallback` issue (REQ-ORCH-088 —
+the role's `fallback_model`, REQ-CONFIG-110). Those three were `model_fallback`, `unresponsive_model_fallback` /
+`unresponsive_model` and `child_timeout_fallback`. The pairing — one mechanism, one entry word and one issue word, read
+from the two lists' order — is this build's reading, and a ruling may pair them otherwise.
+
+**Where no vocabulary has the word, nothing was renamed or moved.** Twenty-eight names remain, each listed with the fact
+it records in `AWAITING` in [`tools/check-timeline-vocabulary.mjs`](../../tools/check-timeline-vocabulary.mjs):
+- **durable memory the product reads back** — `model_exhausted` and `model_override` (REQ-ORCH-091 (a) and (d), rehydrated
+  on resume; ADR-0027), and `context_compressed` (REQ-MONITOR-086's count is seeded from them; ADR-0060 decisions 6 and 7,
+  OQ-53);
+- **`PD-ORCH-005`'s rest and resume** — `iteration_paused`, `iteration_resumed`, `child_paused`, `child_resumed`,
+  `approval_withdrawn`, `question_withdrawn`, `run_pause_requested`, `run_pause_refused`; the live run's clause checks read
+  their metadata;
+- **the user's chat controls** — `steering_submitted`, `steering_injected`, `steering_not_delivered`, `prompt_queued`,
+  `prompt_edited`, `prompt_removed`, `prompt_triggered`, `todo_edited`, `entry_model_switched`, `entry_reasoning_switched`,
+  `transcript_cleared`, `pause_resolved`, `run_paused_message_limit`;
+- **the rest** — `run_continuation_intent` (a continuation's audit payload, which the launch audit takes only once per
+  session, REQ-SESSION-138), `loop_supervisor_activation` (an activation short of `circuit_breaker_escalation`),
+  `context_selection` (what a child was given; REQ-SESSION-133's context-selection record is one the store does not keep,
+  ADR-0024), and `notice` (REQ-NOTIFY-268 requires the entry and names no type for it).
+
+Three issue kinds are outside the issue-kind vocabulary on the same terms and are left as they are: `model_wait`
+(REQ-NOTIFY-090's wait issue), `validation_llm_error` (REQ-ORCH-092's validation retry) and `compression_failed`.
+
+Two readings were weighed for the twenty-eight:
+- **The specification gains the words.** Each fact keeps its entry, its metadata and its place in the export
+  (REQ-SESSION-199); the names become a vocabulary's, in domain 01's list or the owning domain's. Nothing in the product
+  changes but the record.
+- **The facts move to another record.** OQ-76 and OQ-127 chose the session log (REQ-SESSION-142) for their own facts, at
+  `WARNING`. Done for these, the log's default level would carry routine facts — a todo edited, a prompt queued — as
+  warnings, or drop them at `INFO`; the three durable-memory names would need a home the product reads back (REQ-ORCH-091
+  (d) says the override is persisted "in session state", which is a store change), against two accepted ADRs; and the live
+  run's `PD-ORCH-005` checks would lose the metadata they read. The export would no longer reach any of them.
+
+**What the build proceeds under:** the names stay as they are written, and the list is closed.
+`tools/check-timeline-vocabulary.mjs`, in `pnpm lint`, reads every timeline write in the product's source and fails on a
+name that is neither a vocabulary's word nor in `AWAITING`, and on a `FORBIDDEN` name; an `AWAITING` entry nothing writes
+fails it too, and its test pins the list's names, so the list shrinks as rulings land and grows only by a deliberate test
+edit, and domain 01's list is read from the specification so the two cannot drift. Until a
+ruling, the twenty-eight are a recorded departure from REQ-ORCH-139's "MUST NOT", kept open in the note this question was
+raised by.
+
+**What a ruling decides.** For each group, whether the specification gains its words (and in which domain's list) or the
+facts move to another record (and which); with them, OQ-76's two transitions and OQ-127's three records, which are the
+same question, and the three issue kinds. Recommendation: one ruling that adds the twenty-eight to the vocabularies — the
+chat controls to the chat domain's Data & Formats, the rest to domain 01's list — with OQ-76's and OQ-127's words beside
+them, and names REQ-NOTIFY-268's entry type, because the timeline is what an autopsy reads first and the export reaches
+it, and the session log is neither.
+
+**OQ-158 — May a child be renamed off a root's name when no sibling under its parent holds that name?**
+*(REQ-ORCH-044, "Child task names MUST be scoped per parent. A reused name is deterministically renamed `<name>_<n>` … and
+the canonical name is used everywhere the task is referenced (transcripts, dependency resolution, artifacts)";
+REQ-MONITOR-071, REQ-CHAT-069 and REQ-MONITOR-044, which the surfaces meet by name; PD-ORCH-005 clause 4 with OQ-97, under
+which a root keeps its own persona's name; REQ-LIBRARY-093. Raised 2026-10-01 under [R-067](../product/requests.md#r-067)
+by the repair of
+[`a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`](../defects/fixed/a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md),
+acceptance finding A23. Open.)*
+
+A transcript row, a tool call and an artifact know their agent by a name alone. The surfaces give the run-level agent every
+row and artifact carrying the entry persona or a name one of the session's roots carries (`ownRow`, `artifactNames`,
+`SessionRecord.entryRoots`), and a child every row carrying its canonical name. A child whose canonical name is a root's is
+therefore drawn as both agents, and a name-only rule cannot tell them apart: the root's own rows carry the same name.
+REQ-ORCH-044 makes a name unique under its parent and renames only a name "reused" there. The ledger already read the
+root's own canonical name as in use under the root, so a direct child was never named after it; it did not for a deeper
+child, nor for the names of an earlier root (a resumed root's persona, a root of a persona the canonicaliser rewrites).
+Two readings were weighed:
+- **A root's names are in use under every parent.** No child at any depth takes the canonical name or the persona of any
+  root the session has recorded, or of the root it works under; it is renamed `<name>_<n>` by REQ-ORCH-044's own rule.
+  A child the model names `orchestrator` two levels down is `orchestrator_1`, which the specification renames only when a
+  sibling holds the name.
+- **Only siblings' names are in use.** A child keeps the model's name unless a sibling holds it, and the rows carry an
+  identity the ledger keeps unique across the session — a task id on every transcript row and tool call — which the surfaces
+  match instead of the name. This widens the transcript row's envelope, and every row recorded before carries none.
+
+**What the build proceeds under:** the first. `ChildLedger.spawn` (`packages/engine/src/children/ledger.ts`) counts as
+taken, beside the parent's children's names, its root's canonical name and the entry persona it runs as, and every
+recorded root's two names (`recordedRootNames` in `children/naming.ts`: each iteration's `root_persona` and
+`root_canonical_name`, and each publishing root no iteration records, by its publish — the sources `entryRootsOf` reads).
+Two edges are left as they are. A child named before this repair keeps its name. And a **root named like an earlier child**
+— the entry persona changed to one an earlier child's canonical name already spells — is drawn as both, since the root's
+name is its persona and no ledger names it
+([`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../defects/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md)).
+
+**What a ruling decides.** Whether a root's names count as in use under every parent, or the surfaces must tell a child
+from a root by an identity the rows carry; with the second, whether rows recorded before keep the name-only rule.
+
+**OQ-159 — Is the run-level agent's tool-call count its own, or the run's aggregate?** *(REQ-MONITOR-101, "Each agent node
 exposes its live tool-call count and the set of tool names it has called; the synthetic root node exposes the aggregate run
 count and the aggregate called-tool history"; REQ-MONITOR-044, under which each agent as presented carries its tool-call
 count; REQ-MONITOR-052's meta line, `{state} · {elapsed or em-dash} · {N} tool calls`; REQ-MONITOR-043 and REQ-MONITOR-089,
@@ -7757,7 +7887,7 @@ which call the run's own agent its synthetic root, as ADR-0012 does; REQ-MONITOR
 with REQ-ORCH-097's cadence (OQ-116). Raised 2026-10-01 under [R-067](../product/requests.md#r-067) by the verification of
 the repair of
 [`the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`](../defects/fixed/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md),
-acceptance finding A20. Open.)*
+acceptance finding A20. Raised on its branch as OQ-158 and renumbered OQ-159 at the merge, origin/main's OQ-158 keeping its number. Open.)*
 
 The inspector, the Mission view and the persona windows present the run's own agent as the run-level agent
 (`runLevelAgent`, `packages/ui/src/agents.ts`), and the record calls that agent the run's synthetic root (REQ-MONITOR-043,

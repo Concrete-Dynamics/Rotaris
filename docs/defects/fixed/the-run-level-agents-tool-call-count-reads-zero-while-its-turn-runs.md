@@ -57,7 +57,7 @@ surface change and passed with it (`running · 8s · 3 tool calls`: the root's `
 
 What the figure means is open: it is the run-level agent's own count, as REQ-MONITOR-044/052 present an agent's and as
 the figure was before the repair, while REQ-MONITOR-101 gives the run's synthetic root "the aggregate run count and the
-aggregate called-tool history". **OQ-158** asks which the run-level agent shows; the figure stays its own until it is
+aggregate called-tool history". **OQ-159** asks which the run-level agent shows; the figure stays its own until it is
 ruled. *(Added 2026-10-01 at verification: the repair first wrote the roots'-share reading into the contract and the views
 without citing REQ-MONITOR-101.)*
 

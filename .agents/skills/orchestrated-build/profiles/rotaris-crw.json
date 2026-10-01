@@ -1,0 +1,40 @@
+{
+  "name": "rotaris-crw",
+  "about": "This repository's commands and places. {repo} is the primary checkout (git toplevel at render time); {id} is the plan id; agents read this skill from the orchestration's own detached reference worktree {repo}-wt-skillref-{id}; {node24} becomes the PATH export a host needs for Node 24, or a no-op where Node 24 is already the default. Session-specific values (trailers, extra push targets, model) come from the plan.",
+  "run": {
+    "repo": "{repo}",
+    "skillDir": "{repo}-wt-skillref-{id}/.agents/skills/orchestrated-build",
+    "mainBranch": "main",
+    "worktreePrefix": "{repo}-wt-",
+    "integ": "{repo}-wt-integ",
+    "acceptTree": "{repo}-wt-accept",
+    "shellPrefix": "{node24}",
+    "setup": "pnpm install --prefer-offline && node node_modules/electron/install.js && pnpm symbols",
+    "gate": "pnpm check",
+    "build": "pnpm symbols && pnpm build",
+    "afterMerge": "pnpm install --prefer-offline (only if pnpm-lock.yaml changed) && pnpm symbols",
+    "defectsDir": "docs/defects/",
+    "model": "opus",
+    "maxFixRounds": 3,
+    "repairPool": 3,
+    "proofs": {
+      "list": "ls apps/desktop/scripts/*-proof.mjs | sort",
+      "run": "timeout 1500 xvfb-run -a -s \"-screen 0 1600x1000x24\" node apps/desktop/scripts/<name>.mjs --skip-build (drop --skip-build only where the script's header says it takes none; AGENTS.md's proof index says what each needs)"
+    },
+    "live": {
+      "runs": [
+        {
+          "what": "the default live run, every scenario",
+          "command": "timeout 5400 xvfb-run -a -s \"-screen 0 1600x1000x24\" node apps/desktop/scripts/live-run.mjs --confirm --skip-build"
+        },
+        {
+          "what": "duress, with the window the endpoint needs",
+          "command": "LIVE_RUN_DURESS_MS=5400000 timeout 7200 xvfb-run -a -s \"-screen 0 1600x1000x24\" node apps/desktop/scripts/live-run.mjs --confirm --skip-build --only=duress"
+        }
+      ]
+    },
+    "autopsy": {
+      "method": "For the live-run packs (`.live-run/runs/<stamp>/`, the newest named in `.live-run/latest.txt`), follow .agents/skills/run-autopsy/SKILL.md for EVERY session; the product reader is apps/desktop/scripts/autopsy.mjs."
+    }
+  }
+}

@@ -177,6 +177,19 @@
 .run-header__state .status-dot { background: currentColor; }
 @media (prefers-reduced-motion: reduce) { .status-dot.is-pulsing { animation: none; } }
 .status-dot.is-pulsing[data-motion='reduced'] { animation: none; }
+/* The design StatusDot's states (`system/components/core/StatusDot.jsx` paints each from these tokens, `idle` excepted:
+   `docs/design/README.md` §4.1 resolves it to `--rt-info-500`, not a neutral grey, so REQ-SHELL-036's fifth group keeps
+   its colour). The adopted `components.css` gives `.status-dot` no colour, so the product's `StatusDot` writes its
+   state and this paints it.
+   `:where` holds the rule at `.status-dot`'s own specificity, so a surface that paints its dot otherwise — the tag's
+   ink in the run header and the improvement indicator — still does (A40, 2026-10-01). */
+.status-dot:where([data-state='run']) { background: var(--rt-run); }
+.status-dot:where([data-state='wait']) { background: var(--rt-wait); }
+.status-dot:where([data-state='done']) { background: var(--rt-done); }
+.status-dot:where([data-state='fail']) { background: var(--rt-fail); }
+.status-dot:where([data-state='ok']) { background: var(--rt-ok); }
+.status-dot:where([data-state='warn']) { background: var(--rt-warn); }
+.status-dot:where([data-state='idle']) { background: var(--rt-info-500); }
 .run-header__timing { font-size: var(--rt-text-xs, 12px); color: var(--rt-text-tertiary); min-width: 48px; }
 .run-header .run-controls { margin-left: auto; }
 /* REQ-CHAT-010: the divider is a real control — a pointer target with a keyboard tab stop, not a decorative rule. */

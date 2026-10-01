@@ -12,7 +12,7 @@ Live-run finding: L10 (live runs of 2026-09-29)
 text node in an inline-flex box, which `text-overflow` never reaches. Second, the indicator was never the Tag its
 stylesheet said it was: a `className` given to the design `Tag` replaces its `tag tag-<kind>` foundation, so the
 indicator drew as an unstyled span in the body type with an unpainted dot, wider than the tag it claimed to be
-(recorded separately: `../the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md`).
+(recorded separately: `the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md`, repaired 2026-10-01).
 
 - `ImprovementActivity.tsx`: the label is its own element (`improvement-activity__label`), and the Tag spells
   `tag tag-run`, the tone the run header draws a live run with.

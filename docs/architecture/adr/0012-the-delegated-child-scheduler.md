@@ -283,11 +283,12 @@ one **resilience cell** (`run/ladder.ts`): its model choice, its role's fallback
 by the two routes REQ-ORCH-144 names. **The hard timeout** (`children/orchestration.ts`, `execute`): on expiry,
 when the role has a fallback not yet attempted for this child, the child is run once more on it — a fresh
 controller, a fresh timer, the same task payload — with the `child_timeout_fallback` timeline entry and warning
-issue; a second expiry, or no fallback, fails the child with the `timeout` issue and the report
+issue *(renamed 2026-10-01 to REQ-ORCH-139's words, the `fallback_model` entry and the `timeout_fallback` issue — acceptance
+A29, OQ-157)*; a second expiry, or no fallback, fails the child with the `timeout` issue and the report
 `Child timed out after <N>s`, as before. **The unresponsive model** (`run/turn.ts` `step`): while the fallback is
 untried and `llm_response_timeout` (floored at 30 s) is below the child timeout, a timer on the clock port aborts
 a call that produced no part of any kind — the backend now reports the first part through `TurnSink.started`,
-so a tool-call-only step counts as an event — and the step re-runs on the fallback (`unresponsive_model_fallback`);
+so a tool-call-only step counts as an event — and the step re-runs on the fallback (`unresponsive_model_fallback`; *`llm_unresponsive` since 2026-10-01, A29*);
 the child keeps running. **The role's fallback** is `personas.<role>.fallback_model` when stated (REQ-CONFIG-110),
 else the run-level `fallback_model` slot (REQ-CONFIG-065/067 name that slot as the retry "when a child's model
 fails to answer within the configured limits"), and never the child's own model — a slot that resolves to the

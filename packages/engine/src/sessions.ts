@@ -40,7 +40,7 @@ import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentS
 import type { PlanDecision, PlanGatePayload, ResumablePayload } from '@rotaris/contracts';
 import { SupervisorRegistry, type LoopClassifier, type SupervisorConfig } from './run/supervisor.js';
 import { meteredBackend, type CountUsage } from './run/metered.js';
-import { Todo, type TodoDocument } from './run/todo.js';
+import { taskTitle, Todo, type TodoDocument } from './run/todo.js';
 import type { PersonaResolver } from './children/personas.js';
 import type { AgentActivity } from './children/activity.js';
 import type { ModelRef, ThinkingLevel } from '@rotaris/model';
@@ -533,7 +533,9 @@ export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt:
   const perEvent = Math.min(700, Math.floor((3_200 - Math.max(0, recentRows.length - 1)) / Math.max(1, recentRows.length)));
   const recent = recentRows.map((event) => `${event.kind}: ${cut(event.body, Math.max(3, perEvent - event.kind.length - 2))}`);
   const history = recent.join('\n');
-  const tasks = (todo?.phases ?? []).flatMap((phase) => phase.tasks.map((task) => `- [${task.state}] ${cut(task.text, 80)}`));
+  // REQ-SESSION-115: "task display titles cut to 80 characters" — the title the Todo pane draws (`taskTitle`), so a queued
+  // prompt's task is its name "Queued Prompt: <id>" (REQ-CHAT-040), not its name and its content.
+  const tasks = (todo?.phases ?? []).flatMap((phase) => phase.tasks.map((task) => `- [${task.state}] ${cut(taskTitle(task), 80)}`));
   const shownTasks = tasks.slice(0, 20);
   if (tasks.length > 20) shownTasks.push('- [... additional todo tasks elided]');
   const iterations = dal.timelineOf(row.session_id as SessionId).filter((entry) => entry.name === 'iteration_end').slice(-5).map((entry) => cut(entry.message, 700));
@@ -717,11 +719,20 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
  * and the tracker's history (`Run.entryTools`). With none, nothing is resolved — the persona's declared tools stand in on the
  * surface (REQ-MONITOR-060) — and the history is the tracker's, seeded from the tool-call ring when the session was opened,
  * under the persona the latest iteration's root ran as (the name the root dispatches under).
+ *
+ * With no iteration recorded, every root the session has run was a plan cycle's (REQ-ORCH-153: a plan cycle is not an
+ * iteration), and no row names it. Only a root or a child dispatches a call, and a child under its canonical name, so the
+ * tracker's names that are no child's are those roots', and their calls are the run-level agent's history. Before this the
+ * history was read under no name, and in a session whose first run parked at the gate every chip read `not used` while the
+ * user reviewed the plan (the repair of
+ * `the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md`, acceptance A21, R-067).
  */
 export function entryToolsOf(dal: StoreDal, sessionId: SessionId, run: { readonly entryTools: EntryToolsPayload } | null | undefined, activity: AgentActivity): EntryToolsPayload {
   if (run) return run.entryTools;
   const persona = dal.iterationsOf(sessionId).at(-1)?.root_persona;
-  return { resolved: [], called: persona ? activity.calledTools(persona) : [], active: [] };
+  if (persona) return { resolved: [], called: activity.calledTools(persona), active: [] };
+  const children = new Set(dal.childrenOf(sessionId).map((c) => c.canonical_name));
+  return { resolved: [], called: activity.calledToolsWhere((agent) => !children.has(agent)), active: [] };
 }
 
 /**
@@ -2428,11 +2439,20 @@ export class Sessions {
    * A write against a session's record from outside a run: the live session's writer when this registry holds one,
    * else a writer opened for the call (taking the lock with ADR-0005's one reap) and released after it. Anything
    * `fn` throws is the refusal's reason.
+   *
+   * ADR-0005, REQ-EVENTS-098: a run's teardown releases the lock while the session stays live here, so the live writer is
+   * written through only under the lock `claimHold` gives — kept when this process holds it (a loaded session, a run
+   * under way), taken with the one reap and given back after the write otherwise, and refused with nothing written while
+   * another live process holds it (the repair of `a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`,
+   * R-067).
    */
   private withWriter<T>(dal: StoreDal, sessionId: SessionId, fn: (writer: SessionWriter) => T): Result<T, { readonly code: string; readonly reason: string }> {
     const live = this.live.get(sessionId);
     if (live) {
-      try { return ok(fn(live.writer)); } catch (cause) { return err({ code: 'write', reason: String(cause instanceof Error ? cause.message : cause) }); }
+      const hold = this.claimHold(live.dal, sessionId, (m) => { live.log?.warn(m); this.deps.warn(m); });
+      if ('holder' in hold) return err({ code: 'lock-held', reason: `Session ${sessionId} is held by pid ${hold.holder.pid} on ${hold.holder.host}.` });
+      if ('failure' in hold) return err({ code: 'store', reason: hold.failure });
+      try { return ok(fn(live.writer)); } catch (cause) { return err({ code: 'write', reason: String(cause instanceof Error ? cause.message : cause) }); } finally { hold.release(); }
     }
     const opened = SessionWriter.open({ dal, sessionId, wall: this.deps.clocks.wall, retentionCap: this.deps.retentionCap, warn: this.deps.warn, onCommitted: () => undefined }, { pid: this.deps.pid, host: this.deps.host, isProcessAlive: this.deps.isProcessAlive ?? (() => true) });
     if (!opened.ok) {

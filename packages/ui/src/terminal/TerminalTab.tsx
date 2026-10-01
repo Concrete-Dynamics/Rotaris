@@ -74,7 +74,7 @@ export function TerminalTab(props: TerminalTabProps) {
         />
         <span className="term-tab__command mono" aria-label={HEADER.commandName} title={label.full} data-testid="term-command">{label.text}</span>
         {meta.truncated && (
-          <DesignTag className="tag tag-outline term-tab__truncated" aria-label={HEADER.truncationName} title={HEADER.truncationTooltip} data-testid="term-truncated">{HEADER.truncationLabel}</DesignTag>
+          <DesignTag kind="outline" className="term-tab__truncated" aria-label={HEADER.truncationName} title={HEADER.truncationTooltip} data-testid="term-truncated">{HEADER.truncationLabel}</DesignTag>
         )}
         <span className={`tag ${running ? 'tag-run' : 'tag-neutral'} term-tab__outcome mono`} aria-label={HEADER.outcomeName} data-testid="term-outcome">{outcome}</span>
       </header>

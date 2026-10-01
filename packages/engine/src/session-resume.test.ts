@@ -1,11 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type Result, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
-import { buildContinuationPayload, entryRootsOf, offersToldIn, RUN_CONFIG_DEFAULTS, Sessions, type ArtifactOps, type Preflight, type PreflightContext, type RunSetup, type TodoDocument, type ToolPort } from './index.js';
+import { buildContinuationPayload, entryRootsOf, offersToldIn, RUN_CONFIG_DEFAULTS, Sessions, type ArtifactOps, type Preflight, type PreflightContext, type RunSetup, type SessionWriter, type TodoDocument, type ToolPort } from './index.js';
+import { recordedRootNames } from './children/naming.js';
 import type { SessionRecord } from '@rotaris/contracts';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
@@ -139,6 +140,14 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     expect(payload).toContain('...');
     const context = payload.split('Recent session context:\n')[1]!;
     expect(context.length).toBeLessThanOrEqual(3_200);
+  });
+
+  it('REQ-SESSION-115 / REQ-CHAT-040: a named task\'s line in the handoff is its display title, the name, not its content', () => {
+    const sid = asSessionId('S-named');
+    dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: new Date(clock.instant()).toISOString(), updated_at: new Date(clock.instant()).toISOString() });
+    const todo: TodoDocument = { schema_version: 1, phases: [{ name: 'Queued Prompts', tasks: [{ id: '0123abcd-x', name: 'Queued Prompt: 0123abcd', text: `then do this ${'q'.repeat(100)}`, state: 'pending' as const, consecutiveRetries: 0 }] }] };
+    const lines = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', todo).split('\n').filter((l) => l.startsWith('- [pending] '));
+    expect(lines).toEqual(['- [pending] Queued Prompt: 0123abcd']);
   });
 
   it('REQ-SESSION-115\'s artifact is the latest one the session holds, never a line saying none is recorded (the repair of the-continuation-payload-says-no-artifact-is-recorded)', () => {
@@ -351,6 +360,76 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
       expect(resumed.prompt(sid, 'keep going').ok).toBe(true);
       expect(dal.getLock(sid)).toMatchObject({ pid: 88, host: HOST });
       await resumed.running(sid);
+      expect(dal.getLock(sid)).toBeUndefined();
+    });
+  });
+
+  /*
+   * ADR-0005, REQ-EVENTS-098, REQ-SESSION-060, REQ-GIT-094/058/062 (the repair of
+   * `a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`, R-067): a run's teardown releases the
+   * lock while the session stays live here, so a write from outside a run through that live writer — the repair, the
+   * safety checkpoint, the restore's outcome — claims the lock first: kept when this process holds it, taken (a dead
+   * local holder reaped once) and given back otherwise, and refused with nothing written while another live process holds it.
+   */
+  describe('a write through a loaded session outside a run holds the lock (ADR-0005, REQ-EVENTS-098)', () => {
+    const ranHere = async (isProcessAlive: (pid: number) => boolean = () => true) => {
+      const sessions = makeSessions(77, new DefaultAgentBackend(new ScriptedModelClient([answer('one')])), { isProcessAlive });
+      const started = sessions.start(dal, 'C:/ws', 'build it');
+      if (!started.ok) throw new Error(started.error.reason);
+      const sid = started.value;
+      await sessions.running(sid);
+      expect(dal.getLock(sid)).toBeUndefined();
+      return { sessions, sid };
+    };
+    const refusedRestore = { sequence: 4, restored: false, safetySequence: null, changedPaths: 0, blockedReason: 'No checkpoint 4 is recorded.', forced: false, treeRoot: 'C:/ws', dirtyPaths: [], ref: null, commit: null };
+    const safety = { sequence: 1, ref: 'refs/rotaris/checkpoints/S-resume/1', commit: 'c1', iteration: 0, childName: '', files: ['a.txt'], kind: 'pre_restore' as const };
+
+    it('REQ-GIT-058/062: the safety checkpoint and the restore outcome are written under this process\'s lock, which is given back after', async () => {
+      const { sessions, sid } = await ranHere();
+      const writer = sessions.writer(sid)!;
+      const seen: unknown[] = [];
+      const recordCheckpoint = writer.recordCheckpoint.bind(writer);
+      vi.spyOn(writer, 'recordCheckpoint').mockImplementation((input, keep) => { seen.push(dal.getLock(sid)); return recordCheckpoint(input, keep); });
+      const recordRestore = writer.recordRestore.bind(writer);
+      vi.spyOn(writer, 'recordRestore').mockImplementation((input) => { seen.push(dal.getLock(sid)); return recordRestore(input); });
+      const recorded = sessions.recordSafetyCheckpoint(dal, sid, safety, 10);
+      expect(recorded.ok).toBe(true);
+      expect(sessions.recordRestore(dal, sid, refusedRestore).ok).toBe(true);
+      expect(seen).toEqual([expect.objectContaining({ pid: 77, host: HOST }), expect.objectContaining({ pid: 77, host: HOST })]);
+      expect(dal.getLock(sid)).toBeUndefined();
+    });
+
+    it('REQ-EVENTS-098: a live holder in another process refuses the safety checkpoint and the restore outcome, and nothing is written', async () => {
+      const { sessions, sid } = await ranHere();
+      const before = { rows: dal.residentRows(sid).length, checkpoints: dal.checkpointCount(sid), session: { ...dal.getSession(sid)! } };
+      // A second instance on this machine loaded the session after this process's run released it.
+      dal.claimLock(sid, 902, HOST, '2026-09-04T00:00:00.000Z');
+      const checkpoint = sessions.recordSafetyCheckpoint(dal, sid, safety, 10);
+      expect(checkpoint).toMatchObject({ ok: false, error: { code: 'lock-held' } });
+      expect(!checkpoint.ok && checkpoint.error.reason).toContain('pid 902');
+      expect(sessions.recordRestore(dal, sid, refusedRestore)).toMatchObject({ ok: false, error: { code: 'lock-held' } });
+      dal.releaseLock(sid, 902, HOST);
+      dal.claimLock(sid, 903, OTHER, '2026-09-04T01:02:03.000Z');
+      expect(sessions.recordRestore(dal, sid, refusedRestore)).toMatchObject({ ok: false, error: { code: 'lock-held' } });
+      expect(dal.getLock(sid)).toMatchObject({ pid: 903, host: OTHER });
+      expect(dal.residentRows(sid).length).toBe(before.rows);
+      expect(dal.checkpointCount(sid)).toBe(before.checkpoints);
+      expect(dal.getSession(sid)).toEqual(before.session);
+    });
+
+    it('REQ-SESSION-060/047: the repair of a session loaded here reaps a dead local holder once, writes under its own lock and gives it back', async () => {
+      const { sessions, sid } = await ranHere((pid) => pid !== 901);
+      // A process that loaded the session after this one's run ended died mid-run, leaving it persisted busy.
+      dal.upsertSession({ ...dal.getSession(sid)!, execution_status: 'running' });
+      dal.claimLock(sid, 901, HOST, '2026-09-04T00:00:00.000Z');
+      const writer = sessions.writer(sid)!;
+      const seen: unknown[] = [];
+      const save = writer.save.bind(writer);
+      vi.spyOn(writer, 'save').mockImplementation((...args) => { seen.push(dal.getLock(sid)); return save(...args); });
+      const report = sessions.repair(dal, 'C:/ws', { sessionId: sid });
+      expect(report.repaired).toEqual([expect.objectContaining({ sessionId: sid, from: 'running', to: 'interrupted' })]);
+      expect(seen).toEqual([expect.objectContaining({ pid: 77, host: HOST })]);
+      expect(dal.getSession(sid)!.execution_status).toBe('interrupted');
       expect(dal.getLock(sid)).toBeUndefined();
     });
   });
@@ -664,6 +743,57 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
     });
   });
 
+  /*
+   * REQ-MONITOR-060/069 with REQ-ORCH-153 (the repair of
+   * `the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md`, acceptance A21, R-067): with no run
+   * live the run-level agent's history was read under the latest iteration root's persona alone, and a plan cycle's root has
+   * no iteration row, so in a session whose first run parked at the gate every chip read `not used` while the user reviewed
+   * the plan — although the ring and the tracker held the root's calls under the name it dispatched under.
+   */
+  describe('REQ-MONITOR-060 with REQ-ORCH-153: the run-level agent\'s tool history at a plan gate no iteration precedes', () => {
+    // Each call is recorded through the writer as the run host's gate records it (`openToolCall`, `settleToolCall`).
+    const grepping = (writer: SessionWriter): ToolPort => ({
+      specs: () => [{ name: 'grep', description: 'search', parameters: { type: 'object' } }],
+      dispatch: async (c) => {
+        const open = { call_id: c.callId, agent_name: c.agentName, tool_name: c.name, args: {} };
+        const ordinal = writer.openToolCall(open);
+        if (ordinal.ok) writer.settleToolCall(ordinal.value, open, { status: 'ok', elapsed_ms: 1, is_error: false, result: 'a.ts:1: match' });
+        return { text: 'a.ts:1: match', isError: false, status: 'ok' as const, durationMs: 1, label: 'grep', args: {} };
+      },
+      cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+    });
+    const planSessions = (pid: number, backend: AgentBackend, snapshots: SessionRecord[]) => new Sessions({
+      clocks: clock, publisher: { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } }, pid, host: HOST,
+      retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-plan-tools',
+      model: null, sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid), attended: () => true,
+      tools: (ctx) => grepping(ctx.writer),
+      configure: () => ({ ok: true, value: {
+        model: { backend, config: { ...RUN_CONFIG_DEFAULTS, persona: 'Lead Planner', model: MODEL, credentialFor: () => async () => '' } },
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, runStartMode: 'plan' },
+      } }),
+    });
+
+    it('parked at the gate: the plan cycle root\'s calls are the run-level agent\'s history, in the process that parked it and in a fresh one', async () => {
+      const backend = new DefaultAgentBackend(new ScriptedModelClient([toolCalls([{ callId: 'g1', name: 'grep', args: { pattern: 'x' } }], 'Searching.'), answer('Step 1: the plan.')]));
+      const live: SessionRecord[] = [];
+      const first = planSessions(82, backend, live);
+      const sid = (first.start(dal, 'C:/ws', 'plan it') as { value: SessionId }).value;
+      expect((await first.running(sid)!).execution_status).toBe('awaiting_plan_decision');
+      expect(dal.iterationsOf(sid)).toEqual([]);
+      expect(dal.toolCallCounts(sid).map((t) => t.tool_name)).toEqual(['grep']);
+      first.owner(sid)!.reconcile();
+      expect(live.at(-1)!.entryTools).toEqual({ resolved: [], called: ['grep'], active: [] });
+      // The application quits and a fresh process opens the parked session: the tracker is seeded from the ring.
+      await first.closeAll();
+      const reopened: SessionRecord[] = [];
+      const second = planSessions(83, backend, reopened);
+      expect(second.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      second.owner(sid)!.reconcile();
+      expect(reopened.at(-1)!.planGate?.cycle).toBe(1);
+      expect(reopened.at(-1)!.entryTools).toEqual({ resolved: [], called: ['grep'], active: [] });
+    });
+  });
+
   it('entryRootsOf (REQ-MONITOR-071, REQ-LIBRARY-093, OQ-97, OQ-106): each iteration\'s root, then each root no iteration records that published, and no child — read from the store alone', () => {
     const sid = asSessionId('S-entry-roots');
     seed(sid);
@@ -694,6 +824,8 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
     const planner = { name: 'Lead Planner', canonical: 'Lead-Planner' };
     const reviewer = { name: 'Lead Reviewer', canonical: 'Lead-Reviewer' };
     expect(entryRootsOf(dal, sid, undefined)).toEqual([orchestrator, planner, reviewer]);
+    // OQ-158: the ledger keeps every child off exactly the names these roots carry, read from the same sources.
+    expect(recordedRootNames(dal, sid)).toEqual(new Set(entryRootsOf(dal, sid, undefined).flatMap((r) => [r.name, r.canonical])));
     // A live run's current root comes last, and once.
     expect(entryRootsOf(dal, sid, { currentRoot: planner })).toEqual([orchestrator, planner, reviewer]);
     expect(entryRootsOf(dal, sid, { currentRoot: { name: 'coding-agent', canonical: 'coding-agent' } })).toEqual([orchestrator, planner, reviewer, { name: 'coding-agent', canonical: 'coding-agent' }]);

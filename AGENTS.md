@@ -44,10 +44,10 @@ show it, which a check of the status passes as a clean exit. (Before the applica
 |---|---|---|
 | **The run** | `part-h-proof` | the loop supervisor and `continue` (ADR-0059) |
 | | `part-j-proof` | the control channel: a queued message at the iteration boundary, a steer, a graceful pause (its rest's summary, and the session lock the Continue holds for its run, sampled while the app runs), a steer still pending at a pause reaching the resumed root, which carries on with its next scripted step rather than its first (the scripted client reads where a resumed agent stood from its record), the message-limit pause |
-| | `plan-gate-proof` | the plan gate held, edited, answered (ADR-0062) |
+| | `plan-gate-proof` | the plan gate held, edited, answered (ADR-0062); since 2026-09-29 a fresh session whose plan cycle root called a tool is reopened at its gate, and the inspector's run-level agent must mark that tool `used` (`docs/defects/fixed/the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md`) |
 | | `resilience-proof` | the model ladder, the waits, the fallbacks, against scripted faults; the `override` launch is driven (the chooser the wait header draws), every launch is bounded (`lib/bounded-launch.mjs`: an overrun is ended by SIGTERM, a grace, then SIGKILL and reported with its log tail), and every scenario runs to its end with failures listed in `results.json` |
 | | `compression-proof` | context compression and its timeline entries (ADR-0060) |
-| | `checkpoint-proof` | the capture at iteration close through to the desktop restore (ADR-0039); the `live` launch's lock is probed dead the moment it returns (`lib/lock-holder.mjs`), so a lock that outlives the application fails there and is not blamed on the `repaired` step (`docs/defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`) |
+| | `checkpoint-proof` | the capture at iteration close through to the desktop restore (ADR-0039); the `live` launch's lock is probed dead the moment it returns (`lib/lock-holder.mjs`), so a lock that outlives the application fails there and is not blamed on the `repaired` step (`docs/defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`); since 2026-09-29 the `loaded-restore` launch restores a session still loaded after its run, once a second holder has taken its lock, and fails on a restore that writes under that holder (`docs/defects/fixed/a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`) |
 | | `sessions-proof` | the session browser's actions: repair, delete with ref cleanup, the exports; its planted locks read the machine identifier where the product mints it on the running platform (`machineIdFileFor`; `docs/defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`); the delete's cascade premise is the schema's shape, never a count of tables (`lib/session-cascade.mjs`; `docs/defects/fixed/sessions-proof-pins-sixteen-cascading-tables-where-the-store-has-twenty.md`) |
 | **Tools** | `fetch-proof` | `fetch` and its egress policy, read from saved configuration at **every** call |
 | | `questions-proof` | `ask_questions`, the trailer row, the stepper, the two control operations |
@@ -96,6 +96,11 @@ Three portable workflows live under `.agents/skills/`, where REQ-WORKSPACE-051 m
 this repository: **`build-ui`** for creating or substantially restyling a surface, **`debug-ui`** for a bounded
 rendered defect, and **`review-ui`** for a report-only external critique. Their `.claude/skills/` entries are thin
 compatibility routers; the portable files are canonical.
+
+A fourth, **`orchestrated-build`**, drives a large body of work (a release backlog, every open defect) through a
+multi-agent workflow: independent verification per bundle, repair rounds, serialized merges, acceptance with the
+proof sweep and live runs, and recovery from container restarts out of the workflow journals. It improves itself
+under the guardrails its `SKILL.md` states; `pnpm check` runs its self-test.
 
 `build-ui` and `debug-ui` may change source within the authority of the current task. `review-ui` writes only
 evidence under `.ui-review/`. Its critique is proposed evidence and reaches implementation through a separate,

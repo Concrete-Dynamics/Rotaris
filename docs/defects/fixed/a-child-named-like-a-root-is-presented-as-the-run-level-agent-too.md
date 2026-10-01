@@ -13,7 +13,7 @@ root that differs from the current one, as a root resumed as the entry role does
 earlier root when its model-chosen task name canonicalises to it.
 
 For the entry persona this was already so before the repair of
-[`the-run-level-agent-is-known-by-its-entry-persona-alone.md`](fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md),
+[`the-run-level-agent-is-known-by-its-entry-persona-alone.md`](the-run-level-agent-is-known-by-its-entry-persona-alone.md),
 which widened it to every root's names. Preferring the child's own match is not a plain repair. When a grandchild takes
 the entry persona's name, the root's own rows carry that name too, so a name-only rule gives one agent's rows to the
 other either way. Only a row's `persona` column tells the two apart, and only when their personas differ. A repair needs
@@ -29,7 +29,30 @@ the repair of A20, the calls its live root has not yet counted (`Run.entryUncoun
 `SessionRecord.entryToolCalls`). A grandchild whose canonical name equals the root's persona has its calls entered under
 the same key, so while the root's execution runs they are counted in the run-level agent's live figure and its chips too.
 The persisted half is not affected: it subtracts every child's own `children.tool_calls`. Found by the verification of the
-A20 repair as a lesser finding, and confirmed by reading the code. Not driven.
+A20 repair as a lesser finding, and confirmed by reading the code. Not driven. It was recorded on its branch while the ledger repair below was built on another, and the two met at the merge: that repair covers it, since `ChildLedger.spawn` now keeps every child off its root's persona, the name (`Run.rootName`) the tracker reads the run-level agent's live figures under, so no child's calls enter under that key.
+
+**Outcome.** Repaired 2026-10-01 under R-067 (acceptance finding A23), by the note's second route: the ledger keeps every
+child off every root's names. Confirmed first on the branch by two failing cases: a grandchild the model named
+`orchestrator` under a root of that name was recorded `orchestrator`, and a grandchild named `Lead Planner` under a root
+resumed with that canonical name was recorded `Lead-Planner`. `ChildLedger.spawn` now counts as taken, beside the parent's
+children's names, its root's canonical name and the entry persona it runs as, and every recorded root's persona and
+canonical name, at every depth (`recordedRootNames` in `packages/engine/src/children/naming.ts`, read from the sources
+`entryRootsOf` reads). A colliding name is renamed `<name>_<n>` by REQ-ORCH-044's own rule. That renames a child no
+sibling shares a name with, which REQ-ORCH-044 does not say. The reading is
+[OQ-158](../../architecture/open-questions.md), raised and built, open. The surfaces' rules (`ownRow`, `artifactNames`,
+`followedAgent`) are unchanged: no child the ledger names now carries a name they give the run-level agent.
+
+Pinned by two cases in `packages/engine/src/children/children.test.ts` ("REQ-ORCH-044 … (OQ-158)"), both red before the
+repair: one has a grandchild named after the current root, direct and deep children named after an earlier iteration's
+root, and names no root carries left as the model gave them. The other has a resumed root's canonical name and its entry
+persona. One assertion in `packages/engine/src/session-resume.test.ts` ("entryRootsOf …") holds `recordedRootNames` equal to
+the names `entryRootsOf` gives a stored session, so a source added to one and not the other fails. No proof or live-run
+scenario found this defect. None can show it, since it needs the model to give a child a root's name; the unit cases are the
+evidence.
+
+Two edges remain. A child named before the repair keeps its name. And a root named like an earlier child, after the entry
+persona is changed to a persona an earlier child's name already spells, is recorded as its own defect:
+[`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md).
 
 ## Specs
 

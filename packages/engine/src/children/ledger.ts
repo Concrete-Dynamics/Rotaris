@@ -3,7 +3,7 @@ import { isTerminalChildState, type ChildState, type Interruption, type ResumeSt
 import type { ChildInsert, ChildRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
 import type { ArtifactStore } from '../artifacts/store.js';
-import { canonicaliseName, mintTaskId, takenTaskIds, uniqueUnderParent } from './naming.js';
+import { canonicaliseName, mintTaskId, recordedRootNames, takenTaskIds, uniqueUnderParent } from './naming.js';
 import { EMPTY_MCP_EVIDENCE, knownRolesMessage, resolveRole, type Persona, type PersonaResolver } from './personas.js';
 import type { RanCommand } from '../artifacts/record.js';
 import { inheritedContextBlock } from './notify.js';
@@ -299,10 +299,15 @@ export class ChildLedger {
     taken.add(this.root.taskId);
     const taskId = mintTaskId(taken);
     for (const dep of input.dependsOn) if (reaches(dep, taskId)) return { ok: false, error: { reason: 'Dependency cycle detected' } };
-    const siblingNames = new Set(siblings.map((c) => c.canonical_name));
-    if (this.isRoot(input.parentId)) {
-      siblingNames.add(this.root.canonicalName);
-    }
+    /*
+     * REQ-ORCH-044 with OQ-158: a name is unique under its parent, and no child at any depth takes a name a root of the
+     * session carries — this root's canonical name and the entry persona it runs as, and every recorded root's
+     * (`recordedRootNames`). The surfaces know the run-level agent by those names (REQ-MONITOR-071, REQ-CHAT-069,
+     * REQ-MONITOR-044), so a child carrying one was presented as the run-level agent too. Until 2026-10-01 only the
+     * root's direct children were kept off its canonical name
+     * (`docs/defects/fixed/a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`).
+     */
+    const siblingNames = new Set([...siblings.map((c) => c.canonical_name), ...recordedRootNames(this.deps.dal, this.deps.sessionId), this.root.canonicalName, this.root.persona]);
     const canonical = uniqueUnderParent(canonicaliseName(input.taskName), siblingNames);
     const held = input.dependsOn.length === 0 && !this.slotFree(input.modelKey);
     const state: ChildState = input.dependsOn.length > 0 ? 'waiting_on_dependencies' : held ? 'waiting_on_model_slot' : 'queued';

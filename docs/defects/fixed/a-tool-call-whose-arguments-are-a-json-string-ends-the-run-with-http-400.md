@@ -68,4 +68,6 @@ Live run, 2026-10-01 (`katalyst`, `qwen3.8-flash-next`, `--only=terminal`, pack
 `.live-run/runs/2026-10-01T16-52-47-210Z/terminal/` in the `fin3-liverunreadi` worktree, git-ignored): the run completed
 (`tasks_complete`) after 14 terminal calls, every shape attempted, and the new check passed. The model encoded no call
 twice this time (no `_raw` in `model-traffic.jsonl`), so the live run shows the new check on a healthy run and the
-scenario green, not the repair meeting the shape; the repair's evidence is the run-level test above.
+scenario green, not the repair meeting the shape; the repair's evidence is the run-level test above. A second run on the
+branch merged with `origin/main` (pack `.live-run/runs/2026-10-01T17-04-24-814Z/terminal/`) read the same: completed after
+14 terminal calls, the check green, no call encoded twice.

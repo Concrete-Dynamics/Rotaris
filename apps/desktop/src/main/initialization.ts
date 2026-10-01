@@ -421,6 +421,12 @@ export class InitializationCoordinator {
 
   // ---- per workspace -----------------------------------------------------------------------------
 
+  /**
+   * The entry for `root`, made on its first open. A later open of a root that still has an entry keeps the entry's first
+   * `workspaceId`: that holds while the workspace service hands one root one identifier (it reads it from the root's own
+   * identifier file), and every setup start, cancel and status is addressed by it. A change that lets a root's identifier
+   * change while a window still holds it must refresh `workspaceId` here, or the setup port is addressed by a stale id.
+   */
   private entry(root: string, agentsFile: string, workspaceId: string): WorkspaceEntry {
     let e = this.workspaces.get(root);
     if (!e) {

@@ -13,6 +13,8 @@
  *                  that entry linked back onto the record. While that run is still active the inspector follows
  *                  the run-level agent: its chips are the live root port's resolution, and following its produced
  *                  artifact link opens that artifact in the Library (live-run finding K1, REQ-MONITOR-052/060/061).
+ *                  Its ring caption states its own context window and never denies the reading (acceptance A36,
+ *                  REQ-MONITOR-065/089).
  *   3. bad tag   — an invalid tag refuses the publish WHOLE: the observation is REQ-LIBRARY-089's wording, and
  *                  no row, no file and no partial state are left behind.
  *   4. inspector — the inspector opens on the selected row, the Markdown tab is edited and saved, the table's
@@ -141,6 +143,8 @@ const INSPECTOR_NAME = '[data-testid="inspector-name"]';
 const INSPECTOR_CHIPS = '[data-testid="inspector-chips"] .chip';
 const INSPECTOR_ARTIFACTS = '[data-testid="inspector-artifacts"]';
 const INSPECTOR_PRODUCED = '[data-testid="inspector-artifacts-produced"]';
+// Acceptance A36: the ring caption, which denied the run-level agent's prompt reading one line under the figure.
+const INSPECTOR_RING_CAPTION = '.inspector__ring-caption';
 const PROBES = [PROBE_ROWS, '[data-testid="library-artifacts"]', '[data-testid="library-artifacts-empty"]', '[data-testid="library-artifacts-inspect"]', '[data-testid="artifact-inspector"]', '[data-testid="artifact-inspector-meta"]', '[data-testid="artifact-inspector-status"]', '[data-testid="artifact-preview"]', '[data-testid="artifact-save"]'];
 const results = {};
 
@@ -242,7 +246,7 @@ const results = {};
     // declared tools standing in, is launch 5's, in a freshly opened process.
     // (This comment first said "with the run over … its declared tools stand in" — false: the verifier found the 10 s
     // probes and the 11 s click land before the run ends, and the PNG reads "Run active".)
-    ROTARIS_CAPTURE_PROBE_AT: [INSPECTOR_NAME, INSPECTOR_CHIPS, INSPECTOR_ARTIFACTS, INSPECTOR_PRODUCED].map((s) => `${s}@10000`).concat(['.app-shell@12500', '[data-testid="artifact-inspector"]@12500', '[data-testid="library"]@12500']).join(';;'),
+    ROTARIS_CAPTURE_PROBE_AT: [INSPECTOR_NAME, INSPECTOR_CHIPS, INSPECTOR_ARTIFACTS, INSPECTOR_PRODUCED, INSPECTOR_RING_CAPTION].map((s) => `${s}@10000`).concat(['.app-shell@12500', '[data-testid="artifact-inspector"]@12500', '[data-testid="library"]@12500']).join(';;'),
     ROTARIS_CAPTURE_CLICKS: [`${INSPECTOR_PRODUCED} .artifact-link__open@11000`, `${ARTIFACTS_TAB}@16400`].join(';;'),
     ROTARIS_CAPTURE_PNG_AT: `${join(output, 'children-inspector.png')}@10200`,
     ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
@@ -285,13 +289,18 @@ const results = {};
   if (!chipNames.includes('background_output') || !chipNames.includes('wait_for_tasks')) throw new Error(`the running run-level agent's chips are not its root port's resolution (REQ-MONITOR-060/061): ${JSON.stringify(chips)}`);
   if (!chips.includes('delegate:used') || !chips.includes('artifact_write:used')) throw new Error(`the run-level agent's chips are not marked from its history (REQ-MONITOR-060): ${JSON.stringify(chips)}`);
   if (/no artifact store/.test(panel?.text ?? '')) throw new Error(`the inspector still says there is no artifact store: "${panel?.text}"`);
+  // Acceptance A36 (REQ-MONITOR-089/065): the caption states the run-level agent's own reading and never denies that the
+  // record carries it.
+  const caption = probe(r.log, INSPECTOR_RING_CAPTION, 10000)[0]?.text ?? '';
+  if (!/This agent's own context window: [\d,.\s]+ of [\d,.\s]+ tokens\./.test(caption)) throw new Error(`the run-level agent's ring caption does not state its context window: "${caption}" (REQ-MONITOR-065)`);
+  if (/does not carry/.test(caption)) throw new Error(`the run-level agent's ring caption still denies the prompt reading it shows: "${caption}" (REQ-MONITOR-089)`);
   if (!published || panel?.data?.['data-produced'] !== '1' || !produced.includes(published.slug)) throw new Error(`the inspector does not link what the run-level agent published: ${JSON.stringify(panel)} / "${produced}" (REQ-MONITOR-052)`);
   const view = probe(r.log, '.app-shell', 12500)[0]?.data?.['data-view'];
   const opened = probe(r.log, '[data-testid="artifact-inspector"]', 12500).map((d) => d.data['data-artifact-id']);
   const library = probe(r.log, '[data-testid="library"]', 12500)[0]?.data?.['data-tab'];
   if (view !== 'library' || library !== 'artifacts' || opened.length !== 1 || opened[0] !== published.id) throw new Error(`following the link did not open the artifact in the Library: view ${view}, tab ${library}, inspectors ${JSON.stringify(opened)} (REQ-LIBRARY-102/131)`);
   results.children = {
-    inspector: { runActive: true, shown: shownName, chips, produced, openedFromLink: { view, tab: library, artifact: opened[0] }, png: join(output, 'children-inspector.png') },
+    inspector: { runActive: true, shown: shownName, chips, produced, ringCaption: caption, openedFromLink: { view, tab: library, artifact: opened[0] }, png: join(output, 'children-inspector.png') },
     children: children.map((c) => `${c.canonical_name}:${c.state}`),
     artifacts: reports.map((x) => ({ id: x.id, slug: x.slug, status: x.status, importance: x.importance, task: x.source_task_id, persona: x.source_persona, timelineEventId: x.timeline_event_id })),
     publishedEntries: timeline.length,

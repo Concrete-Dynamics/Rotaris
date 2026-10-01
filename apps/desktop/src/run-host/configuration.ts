@@ -5,7 +5,7 @@ import { countNoun, err, ok } from '@rotaris/kernel';
 import { declaredToolsOf, resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName } from '@rotaris/contracts';
 import { compressionTrigger, effectivePricing, isPlainMap, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import { renderUnavailability, type AvailabilityVerdict, type PolicyRead } from '@rotaris/agent-tools';
-import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type McpGrantEvidence, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
+import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
 
 /**
@@ -208,7 +208,7 @@ export function entryTierOf(cfg: LoadedConfiguration): ModelTier | null {
 }
 
 /** Decision 3 of the plan: `personas:` overlaid on the built-in table — stated fields win, the prompt is the file's when it supplies one. */
-export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, warn: (m: string) => void, mcpEvidence?: (role: string) => McpGrantEvidence): PersonaResolver {
+export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, warn: (m: string) => void): PersonaResolver {
   const stated = (role: string, field: string): boolean => {
     const personas = cfg.merged['personas'];
     const entry = personas && typeof personas === 'object' ? (personas as Record<string, unknown>)[role] : undefined;
@@ -251,8 +251,6 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
       // REQ-CONFIG-107 / REQ-TOOLS-152: the role's `skip_auto_sibling_context` forces the omission `suppress_auto_context`
       // asks for; the engine reads it at each assembly of a child's payload. False or absent gives the index.
       ...(entry?.skip_auto_sibling_context === true ? { skipAutoSiblingContext: true } : {}),
-      // REQ-MCP-065 (Part S): the grant evidence the ledger records at spawn, read from the run host's memoised surface at that moment.
-      ...(mcpEvidence ? { mcpEvidence: () => mcpEvidence(role) } : {}),
       // REQ-CONFIG-103 / REQ-TOOLS-006 (4): the role's `tool_restrictions`, its keys already canonical (REQ-CONFIG-062). The
       // tool port and the write-scope refusal read it through `toolRestrictionsFor` (OQ-145); until acceptance finding A4
       // (R-067) the loader parsed it and nothing carried it here, so it narrowed no grant.
@@ -448,8 +446,6 @@ export interface ConfigureDeps {
   readonly liveState: () => LiveState;
   /** ADR-0030: the bearers main leased for this workspace's current run, read per request. */
   readonly bearers: (workspaceRoot: string) => Readonly<Record<string, string>>;
-  /** ADR-0034 (Part S): the spawn-time MCP evidence per role, from the run host's memoised surface. */
-  readonly mcpEvidence?: ((cfg: LoadedConfiguration, workspaceRoot: string, role: string) => McpGrantEvidence) | undefined;
   /**
    * ADR-0022 / REQ-SANDBOX-067: the CACHED availability verdict, owned at application lifetime by the
    * run host's one `ConfinementService`. Read synchronously and never probed from here — the launch
@@ -548,7 +544,7 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
     warnings.push(...lines);
   }
   const scripted = deps.env['ROTARIS_MODEL_DIALECT'] === 'scripted';
-  const personas = personaResolverFor(moded, scripted, (m) => warnings.push(m), deps.mcpEvidence ? (role) => deps.mcpEvidence!(moded, workspaceRoot, role) : undefined);
+  const personas = personaResolverFor(moded, scripted, (m) => warnings.push(m));
   /*
    * PD-ORCH-005 clause 4: a continue that resumes an open iteration sets the run up as the persona its root ran as,
    * folded into the captured configuration so the entry role, its model tier and the log read one persona. A persona the

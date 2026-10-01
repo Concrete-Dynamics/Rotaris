@@ -997,6 +997,9 @@ async function main(): Promise<void> {
     modelReachable: () => providers.list().some((row) => row.authenticated),
   });
   runHost.onEvent((e) => { if (e.kind === 'mcp.setupStatus') initialization.onSetupStatus(e.status); });
+  // REQ-WORKSPACE-084/109: the run host is never forked again, so a setup it held can never send its finished status; the
+  // coordinator ends that follow as a failure, or every later setup would wait behind it for the life of the process.
+  runHostChild.on('exit', (code) => { initialization.onRunHostExit(code ?? -1); });
   /**
    * Verification only — `ROTARIS_INIT_TEST_TASK=consent|fail`. REQ-WORKSPACE-080's last sentence is what
    * this exercises and it is the only way to exercise it: "a setup task added after the fact SHALL

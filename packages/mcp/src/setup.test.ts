@@ -28,6 +28,18 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
     expect(seen).toEqual(['create:running', 'create:succeeded', 'index:running', 'index:succeeded', 'memory:running', 'memory:succeeded']);
   });
 
+  it('PD-MONITOR-002, live-run finding a71-9: a step\'s outcome is the caller\'s to log (its onStep), never the runner\'s as well', async () => {
+    // The run host's step reporter writes "mcp setup: <id> succeeded (<n> ms)"; the runner wrote "succeeded in <n> ms"
+    // beside it, so every step that succeeded reached the application log twice.
+    const lines: string[] = [];
+    const recording = { info: (m: string) => { lines.push(m); }, warn: (m: string) => { lines.push(m); }, debug: (m: string) => { lines.push(m); } };
+    const r = await runSetupSteps({ invocation, workspaceRoot: process.cwd(), steps: [step('create', 'ok'), step('index', 'ok')], creationStepId: 'create', markerPresent: false, containsCode: true, env: process.env as Record<string, string>, clocks: realClocks(), log: recording, signal: new AbortController().signal, onStep: () => undefined, pollMs: millis(50) });
+    expect(r.outcome).toBe('completed');
+    expect(lines.filter((l) => /succeeded|failed|skipped/.test(l))).toEqual([]);
+    // The spawn line stays: it says which command ran, which no step report carries.
+    expect(lines.filter((l) => / → /.test(l))).toHaveLength(2);
+  });
+
   it('skips creation on the marker, skips the gated steps without code, and never overwrites', async () => {
     const r = await runSetupSteps({ invocation, workspaceRoot: process.cwd(), steps: [step('create', 'fail'), step('index', 'fail', { needsCode: true }), step('memory', 'fail', { needsCode: true })], creationStepId: 'create', markerPresent: true, containsCode: false, env: process.env as Record<string, string>, clocks: realClocks(), log, signal: new AbortController().signal, onStep: () => undefined, pollMs: millis(50) });
     expect(r.outcome).toBe('completed');

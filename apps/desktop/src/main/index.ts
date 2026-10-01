@@ -252,7 +252,6 @@ async function main(): Promise<void> {
   // Watched from the fork so the quit can race its `shutdown` against it and never miss the event (`exit.ts`).
   const runHostExit = watchChildExit(runHostChild);
   const runHost = new ProcessLink<RunHostRequest>(portOf(runHostChild), clocks.timers);
-  let lastLeaseLine = '';
   // ADR-0030: the run host's one ask — the bearers for the providers a run names. Never logged.
   // ADR-0039 / ADR-0002 c.4: the run host's three checkpoint asks are relayed to the workspace service of that root and answered back.
   runHost.onAsk(async (a) => {
@@ -265,12 +264,10 @@ async function main(): Promise<void> {
     if (a.kind !== 'credentials.lease') return { kind: 'refused', code: 'ask.unhandled', headline: `main does not answer ${a.kind} from the run host` };
     const { bearers, report } = providers.lease(a.providerIds);
     /**
-     * REQ-PROVIDER-068: an unresolved credential is reported once, not at every check. Every continuation
-     * re-leases (ADR-0030, the standing substitute for the keep-fresh timer), so this answered three times a
-     * prompt and said the same sentence each time. The same sentence twice running is one fact, not two.
+     * REQ-PROVIDER-068: the lease's report is the run host's to write — `LeaseReportLog` (`run-host/launch.ts`) says
+     * the opening report whole per workspace root, then only what changed. Main wrote its own "credentials leased: …"
+     * beside it, so every lease reached the application log twice (PD-MONITOR-002, live-run finding a71-9).
      */
-    const line = `credentials leased: ${report.authenticated.join(', ') || 'none'}${Object.keys(report.unresolved).length > 0 ? `; unresolved ${Object.entries(report.unresolved).map(([id, why]) => `${id} (${why})`).join(', ')}` : ''}`;
-    if (line !== lastLeaseLine) { lastLeaseLine = line; log(line); }
     return { kind: 'credentials.leased', bearers, report: { authenticated: [...report.authenticated], renewed: [...report.renewed], unresolved: { ...report.unresolved } } };
   });
   // PD-MONITOR-002: 0 is an orderly end — main's own `shutdown` (`dispatch.ts`), or Electron tearing the process down at

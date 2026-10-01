@@ -115,6 +115,7 @@ import { createInterface } from 'node:readline/promises';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
 import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
+import { restatedFacts } from './lib/restated-facts.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
 import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, replacedShellReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
@@ -777,6 +778,10 @@ async function launch(name, extra, timeoutMs = 180_000) {
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${join(dir, 'app.log')}`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   assertNoCredential(`${name}/app.log`, log);
+  // PD-MONITOR-002, live-run finding a71-9: no launch's log carries one of the four restatements `restated-facts.mjs`
+  // knows (main's repository, Git view and lease lines, `runSetupSteps`' success). A duplicate of another fact passes.
+  const restated = restatedFacts(log);
+  check(restated.length === 0, `${name}: none of the four known restatements reaches the application log`, restated.map((r) => `app.log line ${r.line}, ${r.fact} restated (its owner is the ${r.owner}): ${r.text}`).join(' | ') || undefined);
   return log;
 }
 /** The store as the run left it: the newest session, its rows, its events, and the totals across every session. */
@@ -1087,7 +1092,8 @@ if (wanted.includes('ask')) {
     ROTARIS_CAPTURE_PROBE: '.inspector__ring-caption',
   }, RUN_WAIT_MS + 90_000);
   const requests = [...new Set((log.match(/model request POST (\S+)/g) ?? []).map((line) => line.replace('model request POST ', '')))];
-  check(log.includes(`credentials leased: ${PROVIDER_ID}`), 'main leased the bearer to the run host');
+  // The lease's report is the run host's (REQ-PROVIDER-068, `LeaseReportLog`); main no longer restates it (a71-9).
+  check(log.includes(`credentials: leased for ${PROVIDER_ID}`), 'main leased the bearer to the run host');
   // `appBaseUrl`, not the endpoint: the assertion is about what the PRODUCT did, and when the proxy is recording
   // the product was given the proxy. The traffic file below is what says the call reached the endpoint itself.
   check(requests.some((url) => url.startsWith(`${appBaseUrl}/chat/completions`)), 'a request reached the endpoint', requests.join(', '));

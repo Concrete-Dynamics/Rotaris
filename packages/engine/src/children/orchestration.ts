@@ -1072,13 +1072,17 @@ export class IterationChildren implements DelegationOps {
      * port, and its grant is recorded again. Until 2026-10-01 the spawn recorded the declared set instead.
      */
     let grantRecorded = false;
-    const recordGrant = async (): Promise<void> => {
-      if (grantRecorded || !tools) return;
+    /** The wait the first turn takes for the grant, or null when there is nothing to wait for (no step is delayed then). */
+    const recordGrant = (): Promise<void> | null => {
+      if (grantRecorded || !tools) return null;
       grantRecorded = true;
+      const record = (): void => {
+        const grant = tools.grant?.() ?? null;
+        if (grant !== null && !this.detached) this.ledger.recordGrant(row.task_id, grant);
+      };
+      if (!tools.ready) { record(); return null; }
       // A readiness that fails records nothing here; the turn awaits the same promise and meets the failure as it always did.
-      if (tools.ready) { try { await tools.ready(); } catch { return; } }
-      const grant = tools.grant?.() ?? null;
-      if (grant !== null && !this.detached) this.ledger.recordGrant(row.task_id, grant);
+      return tools.ready().then(record, () => undefined);
     };
     const dispatched = new Map<string, string>();
     // REQ-ORCH-047 / REQ-TOOLS-154: the prior-agent-context block, exactly once, ahead of everything.
@@ -1148,14 +1152,14 @@ export class IterationChildren implements DelegationOps {
         backstop.handle = deps.clocks.timers.after(CHILD_LANDING_GRACE, () => { controller.abort(); });
       });
       let firstCall = true;
-      const turn = async (task: string | null, history: readonly ChatMessage[]) => {
+      const turn = (task: string | null, history: readonly ChatMessage[]): Promise<TurnOutcome> => {
         const wasFirst = firstCall; firstCall = false;
         // REQ-NOTIFY-112: the run hands the child something to answer — its payload, its record, its children's reports, a
         // re-prompt or the corrective message — so the silence it could be blamed for starts now. A wait on its own children
         // before this asked it for no output.
         stallWatch.activity();
-        await recordGrant();
-        return runTurn({
+        const granting = recordGrant();
+        const run = (): Promise<TurnOutcome> => runTurn({
         writer: deps.writer, owner: deps.owner, backend: deps.backend, tools, clocks: deps.clocks, persona: row.persona, agentName: row.canonical_name,
         // REQ-WORKSPACE-060 (ADR-0063): the session's context units follow the role's instructions and its playbook,
         // read at THIS construction so a skill force-loaded since the last child reaches this one.
@@ -1182,7 +1186,9 @@ export class IterationChildren implements DelegationOps {
         // REQ-ORCH-093: the resume limb — a child's turn after its first is a parent being resumed with reports.
         parentResume: !wasFirst,
         // OQ-155: once the turn ends the child waits on its own children, or ends; neither is a silence of its own.
-      }, task, history, controller.signal).finally(() => stallWatch.betweenTurns()); };
+      }, task, history, controller.signal).finally(() => stallWatch.betweenTurns());
+        return granting === null ? run() : granting.then(run);
+      };
       // A resumed child's first attempt carries on from its record; REQ-ORCH-088's retry starts again from its payload.
       const fromRecord = start !== null;
       try {

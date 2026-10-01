@@ -43,7 +43,7 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-30**
+## Last reconciled with the code: **2026-10-01**
 
 **A crash settles its cut call's ring row (REQ-SESSION-129, REQ-MONITOR-105, ADR-0024, R-067).** An orderly end settles
 every open `tool_calls` row when the run's ports close; a crash closes none, so after the crash record settled a call's
@@ -61,8 +61,9 @@ the plan cycle starts (`SessionWriter.openPlanRoot`) and releases it in the tran
 (`countToolCalls`'s `planRoot`), or with none counted when its turn raises. `recordCrash` answers the open calls of one still
 recorded and adds its record's calls (`recordPlanRootCrash`). This repairs
 `a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md` (acceptance A19). The **runtime view**'s §2 crash
-paragraph and its §7 `sessions` row, and the **state-ownership view**'s tool-call row, say so. No package, edge, process,
-message kind, channel or command changed.
+paragraph, its §7 `sessions` row and its §7 heading (the store is now v29), and the **state-ownership view**'s tool-call
+row, say so. Two `sessions` columns were added (store v29); no package, edge, process, message kind, channel or command
+changed.
 
 **A stalled agent is shown stalled; the root is watched; a stall evaluation lands a steer (REQ-ORCH-089, REQ-MONITOR-117..122,
 REQ-MONITOR-135, R-067).** `AgentRecord.stalledSeconds` and `SessionRecord.entryStalledSeconds` carry each stall watch's

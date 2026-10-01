@@ -2407,11 +2407,20 @@ export class Sessions {
    * A write against a session's record from outside a run: the live session's writer when this registry holds one,
    * else a writer opened for the call (taking the lock with ADR-0005's one reap) and released after it. Anything
    * `fn` throws is the refusal's reason.
+   *
+   * ADR-0005, REQ-EVENTS-098: a run's teardown releases the lock while the session stays live here, so the live writer is
+   * written through only under the lock `claimHold` gives — kept when this process holds it (a loaded session, a run
+   * under way), taken with the one reap and given back after the write otherwise, and refused with nothing written while
+   * another live process holds it (the repair of `a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`,
+   * R-067).
    */
   private withWriter<T>(dal: StoreDal, sessionId: SessionId, fn: (writer: SessionWriter) => T): Result<T, { readonly code: string; readonly reason: string }> {
     const live = this.live.get(sessionId);
     if (live) {
-      try { return ok(fn(live.writer)); } catch (cause) { return err({ code: 'write', reason: String(cause instanceof Error ? cause.message : cause) }); }
+      const hold = this.claimHold(live.dal, sessionId, (m) => { live.log?.warn(m); this.deps.warn(m); });
+      if ('holder' in hold) return err({ code: 'lock-held', reason: `Session ${sessionId} is held by pid ${hold.holder.pid} on ${hold.holder.host}.` });
+      if ('failure' in hold) return err({ code: 'store', reason: hold.failure });
+      try { return ok(fn(live.writer)); } catch (cause) { return err({ code: 'write', reason: String(cause instanceof Error ? cause.message : cause) }); } finally { hold.release(); }
     }
     const opened = SessionWriter.open({ dal, sessionId, wall: this.deps.clocks.wall, retentionCap: this.deps.retentionCap, warn: this.deps.warn, onCommitted: () => undefined }, { pid: this.deps.pid, host: this.deps.host, isProcessAlive: this.deps.isProcessAlive ?? (() => true) });
     if (!opened.ok) {

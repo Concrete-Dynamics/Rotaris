@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -351,6 +351,76 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
       expect(resumed.prompt(sid, 'keep going').ok).toBe(true);
       expect(dal.getLock(sid)).toMatchObject({ pid: 88, host: HOST });
       await resumed.running(sid);
+      expect(dal.getLock(sid)).toBeUndefined();
+    });
+  });
+
+  /*
+   * ADR-0005, REQ-EVENTS-098, REQ-SESSION-060, REQ-GIT-094/058/062 (the repair of
+   * `a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`, R-067): a run's teardown releases the
+   * lock while the session stays live here, so a write from outside a run through that live writer — the repair, the
+   * safety checkpoint, the restore's outcome — claims the lock first: kept when this process holds it, taken (a dead
+   * local holder reaped once) and given back otherwise, and refused with nothing written while another live process holds it.
+   */
+  describe('a write through a loaded session outside a run holds the lock (ADR-0005, REQ-EVENTS-098)', () => {
+    const ranHere = async (isProcessAlive: (pid: number) => boolean = () => true) => {
+      const sessions = makeSessions(77, new DefaultAgentBackend(new ScriptedModelClient([answer('one')])), { isProcessAlive });
+      const started = sessions.start(dal, 'C:/ws', 'build it');
+      if (!started.ok) throw new Error(started.error.reason);
+      const sid = started.value;
+      await sessions.running(sid);
+      expect(dal.getLock(sid)).toBeUndefined();
+      return { sessions, sid };
+    };
+    const refusedRestore = { sequence: 4, restored: false, safetySequence: null, changedPaths: 0, blockedReason: 'No checkpoint 4 is recorded.', forced: false, treeRoot: 'C:/ws', dirtyPaths: [], ref: null, commit: null };
+    const safety = { sequence: 1, ref: 'refs/rotaris/checkpoints/S-resume/1', commit: 'c1', iteration: 0, childName: '', files: ['a.txt'], kind: 'pre_restore' as const };
+
+    it('REQ-GIT-058/062: the safety checkpoint and the restore outcome are written under this process\'s lock, which is given back after', async () => {
+      const { sessions, sid } = await ranHere();
+      const writer = sessions.writer(sid)!;
+      const seen: unknown[] = [];
+      const recordCheckpoint = writer.recordCheckpoint.bind(writer);
+      vi.spyOn(writer, 'recordCheckpoint').mockImplementation((input, keep) => { seen.push(dal.getLock(sid)); return recordCheckpoint(input, keep); });
+      const recordRestore = writer.recordRestore.bind(writer);
+      vi.spyOn(writer, 'recordRestore').mockImplementation((input) => { seen.push(dal.getLock(sid)); return recordRestore(input); });
+      const recorded = sessions.recordSafetyCheckpoint(dal, sid, safety, 10);
+      expect(recorded.ok).toBe(true);
+      expect(sessions.recordRestore(dal, sid, refusedRestore).ok).toBe(true);
+      expect(seen).toEqual([expect.objectContaining({ pid: 77, host: HOST }), expect.objectContaining({ pid: 77, host: HOST })]);
+      expect(dal.getLock(sid)).toBeUndefined();
+    });
+
+    it('REQ-EVENTS-098: a live holder in another process refuses the safety checkpoint and the restore outcome, and nothing is written', async () => {
+      const { sessions, sid } = await ranHere();
+      const before = { rows: dal.residentRows(sid).length, checkpoints: dal.checkpointCount(sid), session: { ...dal.getSession(sid)! } };
+      // A second instance on this machine loaded the session after this process's run released it.
+      dal.claimLock(sid, 902, HOST, '2026-09-04T00:00:00.000Z');
+      const checkpoint = sessions.recordSafetyCheckpoint(dal, sid, safety, 10);
+      expect(checkpoint).toMatchObject({ ok: false, error: { code: 'lock-held' } });
+      expect(!checkpoint.ok && checkpoint.error.reason).toContain('pid 902');
+      expect(sessions.recordRestore(dal, sid, refusedRestore)).toMatchObject({ ok: false, error: { code: 'lock-held' } });
+      dal.releaseLock(sid, 902, HOST);
+      dal.claimLock(sid, 903, OTHER, '2026-09-04T01:02:03.000Z');
+      expect(sessions.recordRestore(dal, sid, refusedRestore)).toMatchObject({ ok: false, error: { code: 'lock-held' } });
+      expect(dal.getLock(sid)).toMatchObject({ pid: 903, host: OTHER });
+      expect(dal.residentRows(sid).length).toBe(before.rows);
+      expect(dal.checkpointCount(sid)).toBe(before.checkpoints);
+      expect(dal.getSession(sid)).toEqual(before.session);
+    });
+
+    it('REQ-SESSION-060/047: the repair of a session loaded here reaps a dead local holder once, writes under its own lock and gives it back', async () => {
+      const { sessions, sid } = await ranHere((pid) => pid !== 901);
+      // A process that loaded the session after this one's run ended died mid-run, leaving it persisted busy.
+      dal.upsertSession({ ...dal.getSession(sid)!, execution_status: 'running' });
+      dal.claimLock(sid, 901, HOST, '2026-09-04T00:00:00.000Z');
+      const writer = sessions.writer(sid)!;
+      const seen: unknown[] = [];
+      const save = writer.save.bind(writer);
+      vi.spyOn(writer, 'save').mockImplementation((...args) => { seen.push(dal.getLock(sid)); return save(...args); });
+      const report = sessions.repair(dal, 'C:/ws', { sessionId: sid });
+      expect(report.repaired).toEqual([expect.objectContaining({ sessionId: sid, from: 'running', to: 'interrupted' })]);
+      expect(seen).toEqual([expect.objectContaining({ pid: 77, host: HOST })]);
+      expect(dal.getSession(sid)!.execution_status).toBe('interrupted');
       expect(dal.getLock(sid)).toBeUndefined();
     });
   });

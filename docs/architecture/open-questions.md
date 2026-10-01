@@ -8091,8 +8091,21 @@ warning followed, and the header went on showing the launch's intent. The classi
 or on the message for a continue by message. The launch's category, fallback or not, is REQ-ORCH-013's prior intent. The
 result is in effect for the resumed iteration and every iteration after it, grant included (`Sessions.launchContinuation`,
 `Run.start`). The resumed root is offered the tools of the new grant, and clause 14's warning is raised when they differ
-from its fingerprint (OQ-105). The intent status the surfaces read is the launch audit's (`intentStatusOf`); a
-continuation's intent is recorded as a `run_continuation_intent` timeline entry and a transcript row.
+from its fingerprint (OQ-105). ~~The intent status the surfaces read is the launch audit's (`intentStatusOf`); a
+continuation's intent is recorded as a `run_continuation_intent` timeline entry and a transcript row.~~ A continuation's
+intent is recorded as a `run_continuation_intent` timeline entry and a transcript row, and since 2026-10-01 the intent
+status the surfaces read is the intent in effect: the newest continuation's, else the launch audit's (`intentPayloadOf`,
+`preflight.test.ts`, "REQ-ORCH-014 (OQ-162, live-run finding a71-3) …"). *Changed in place 2026-10-01 by the repair of
+the header half of the note:* REQ-ORCH-014 asks the status to convey the classified intent, and whatever the ruling below
+decides about classifying again, the intent the resumed run is using is the one in effect; the first form showed the
+launch's after a continue that had replaced it. Should the ruling keep the launch's intent across a continue, the
+continuation records that intent and the status still reads it. While a continuation's pre-flight classification is in
+flight the status reads `classifying` (REQ-ORCH-014's transient status), not the previous run's intent, and the result
+replaces it in place (`Run.intentClassifying`; `preflight.test.ts`, "REQ-ORCH-014 (OQ-162): while a continue classifies
+…"; added 2026-10-01 at the verifier's finding). REQ-ORCH-013's prior intent is still the launch audit's alone
+(`previousIntent`, `sessions.ts`), so a second continue whose classification is unusable carries the launch's category
+over, not a first continue's, while the status before it showed the first continue's; which intent is "prior" after a
+continue that classified is part of this ruling.
 
 **What a ruling decides.** Whether the Continue action, which brings no message, classifies at all or carries the
 launch's intent and grant. Whether a resumed iteration keeps the grant it started with, so that a new classification
@@ -8577,3 +8590,45 @@ host's exit inside 5000 ms (measured: a step and a descendant that both ignore S
 whether REQ-WORKSPACE-109's 5000 ms and REQ-WORKSPACE-092's 5 s give way, or the grace is counted inside them); or the
 close's own, bounded by REQ-WORKSPACE-109 and REQ-WORKSPACE-092 alone; and, if the latter, what grace the step is given
 before the force-kill.
+
+**OQ-173 — Is a wait the run imposes on an agent, or a compression's own model call, silence for the stall watchdog?**
+*(REQ-MONITOR-117, "each agent is evaluated for a stall"; REQ-MONITOR-118, which excepts only "active tool calls",
+reported "at informational level as waiting on N active tool calls instead of as a stall"; REQ-MONITOR-119, "no model
+event or token"; REQ-ORCH-089; REQ-ORCH-091 (c) and REQ-ORCH-092, the suspended wait on a provider limit and the retry
+backoffs; REQ-NOTIFY-083 to REQ-NOTIFY-087, the suspended wait's own notice; REQ-MONITOR-076 and REQ-ORCH-093 with
+ADR-0060, the automatic compression and the condensation on a rejection; OQ-153; OQ-155; REQ-NOTIFY-112 and OQ-127,
+whose no-output window the wait's end also restarts. Raised 2026-10-01 by the
+repair of
+[`a-provider-wait-or-a-compression-is-counted-as-a-stall.md`](../defects/fixed/a-provider-wait-or-a-compression-is-counted-as-a-stall.md).
+Open.)*
+
+An agent's stall watch counts the silence since its last model event or token. Between two of its model steps the run
+can hold an agent where it has no step in flight and no tool call either: `resilientStep`'s backoff before a transient or
+validation retry (at most 2 s), its suspended wait on a provider limit — the provider's retry-after, the local backoff
+doubling from 60 s, or indefinitely for an exhausted provider — and a context compression, whose own model call runs
+before the agent's next step (automatic) or inside it (on a rejection), up to REQ-MONITOR-080's 120 s. Read literally,
+REQ-MONITOR-119 makes each of those, past the threshold (90 s by default), a stall: an `… appears stalled` warning, a
+`stall` issue at every evaluation, and the `stalled Ns` badge, beside the wait's own notice (REQ-NOTIFY-083 to
+REQ-NOTIFY-087), which already says the agent is waiting and why. REQ-MONITOR-118 tells a stall from a wait only by tool
+calls in flight, and no requirement says whether a wait the run itself imposes, or a compression's model call, is the
+agent's silence.
+
+**What the build proceeds under.** As OQ-155 reads for a child waiting on its own children: the watch measures the
+silence of the agent's own model steps, and a wait the run holds it in is not that silence. While the ladder backs off or
+waits on a provider limit, and while a compression runs, the watch is told so (`StallWatch.imposedWait`, released when
+the wait ends however it ends); an evaluation past the threshold then reports no stall, its callback reads *not stalled*,
+so no `stall` issue is written and no stalled seconds reach the record. The silence is logged at REQ-MONITOR-118's
+informational level, in its manner, as `… waiting on a provider limit: …` (or `a retry backoff`, `a context
+compression`), at entry and at each repeat the throttle allows, to the session log through the run's `warn`, as OQ-127
+reads for the wait on tools; no timeline word is minted. A stall under way when such a wait begins is over, and not
+recovered (OQ-153). The wait's end restarts the silence, as a tool call's result does, so the next step is counted from
+it, and so is REQ-NOTIFY-112's window. The root's watch and each child's are wired alike (`Run.turn`, `execute`; tests
+in `stall.test.ts`, `ladder.test.ts` and `compression.test.ts`; `resilience-proof`'s `quota-wait` scenario).
+
+**What the reading does not cover.** The dispatch layer's own retries inside one model step (REQ-CONFIG-086's
+`num_retries`, before the ladder; OQ-110) send no event while they wait either, and stay counted as the step's silence; a
+manual compression (Part AO) runs beside the step in flight and is not a wait of the agent's.
+
+**What a ruling decides.** Whether a wait the run imposes, and a compression's model call, are outside the stall watch
+(as built), are stalls as REQ-MONITOR-119 reads literally, or are reported in words of their own — which REQ-ORCH-139's
+vocabulary does not have — and whether the dispatch layer's retry delays are such a wait too.

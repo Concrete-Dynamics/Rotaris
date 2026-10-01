@@ -506,6 +506,7 @@ export class StoreDal {
       insertTimeline: db.prepare('INSERT INTO timeline (session_id, ordinal, at, name, actor, message, metadata, id, severity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'),
       maxTimelineOrdinal: db.prepare('SELECT max(ordinal) AS m FROM timeline WHERE session_id = ?'),
       timelineOf: db.prepare('SELECT * FROM timeline WHERE session_id = ? ORDER BY ordinal'),
+      latestTimelineEntry: db.prepare('SELECT * FROM timeline WHERE session_id = ? AND name = ? ORDER BY ordinal DESC LIMIT 1'),
       listLocks: db.prepare('SELECT * FROM session_locks'),
       getLock: db.prepare('SELECT * FROM session_locks WHERE session_id = ?'),
       // REQ-SESSION-046: claimed by an operation that either succeeds or reports the existing holder.
@@ -1070,6 +1071,13 @@ export class StoreDal {
   }
   timelineOf(id: SessionId): TimelineRow[] {
     return this.stmts['timelineOf']!.all(id) as TimelineRow[];
+  }
+  /**
+   * The session's newest timeline entry of `name`, or undefined — read under the primary key, newest first, so a surface
+   * that reads one fact from the timeline (REQ-ORCH-014's intent in effect after a continuation) reads one row.
+   */
+  latestTimelineEntry(id: SessionId, name: string): TimelineRow | undefined {
+    return this.stmts['latestTimelineEntry']!.get(id, name) as TimelineRow | undefined;
   }
 
   listLocks(): LockRow[] {

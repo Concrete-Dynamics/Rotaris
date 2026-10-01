@@ -429,6 +429,32 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
     expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
   });
 
+  it('REQ-MONITOR-117..119 (OQ-173): a compression\'s own model call, automatic or on a rejection, is a wait the run imposes — 100 s of it raises no `stall` issue and no stalled seconds', async () => {
+    for (const trigger of ['automatic', 'rejection'] as const) {
+      warnings.length = 0;
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const { sessions, counts, pub } = sessionsWith((persona, turn) => {
+        if (persona === 'compressor') return { parts: [{ hold: held }, ...answer('Work performed: a lot. Findings reached: some. Questions left open: none.').parts] };
+        if (turn === 1) return toolCalls([{ callId: 'c1', name: 'glob', args: {} }], 'looking', { input: 20, output: 10 });
+        if (turn === 2) return toolCalls([{ callId: 'c2', name: 'glob', args: {} }], 'looking again', { input: trigger === 'automatic' ? 900 : 20, output: 10 });
+        if (turn === 3 && trigger === 'rejection') return contextRejection();
+        return answer('done on the compressed context');
+      }, trigger === 'automatic' ? { triggerTokens: 600, preserveRecentTurns: 1 } : {});
+      const sid = (sessions.start(dal, 'C:/ws', 'do the thing') as { value: SessionId }).value;
+      for (let i = 0; i < 60 && counts.get('compressor') !== 1; i++) await tick();
+      expect(counts.get('compressor')).toBe(1);
+      for (let t = 0; t < 100_000; t += 5_000) { clock.advance(5_000); await tick(); }
+      release();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(JSON.parse(timeline(sid).find((t) => t.name === 'context_compressed')!.metadata)).toMatchObject({ trigger });
+      expect(issues(sid)).not.toContain('stall');
+      expect(warnings.filter((m) => /appears stalled/.test(m))).toEqual([]);
+      expect((pub.snapshots as { entryStalledSeconds: number | null }[]).every((s) => s.entryStalledSeconds === null)).toBe(true);
+      expect(warnings.filter((m) => m.startsWith('agent waiting on a context compression:'))).toHaveLength(1);
+    }
+  });
+
   it('PD-ORCH-005 clause 4 (found by phase 4\'s review): a context rejection of a resumed root\'s first call is an ordinary one — the resume carries on from its record, and is not REQ-ORCH-093\'s parent resume', async () => {
     let release!: () => void;
     const held = new Promise<void>((r) => { release = r; });

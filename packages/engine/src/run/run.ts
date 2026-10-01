@@ -38,7 +38,7 @@ import { callsRun, interruptedResult } from './interruption.js';
 import { firstTurn, resumedStart, resumeNoticeOf, type TurnStart } from './resume.js';
 import { offersForFirstMessage } from './offers.js';
 import { randomUUID } from 'node:crypto';
-import { StallWatch, stallRecoveredLine, stallWaitingLine, stallWarning } from '../children/stall.js';
+import { StallWatch, stallImposedWaitLine, stallRecoveredLine, stallWaitingLine, stallWarning } from '../children/stall.js';
 import { CHILD_STALL_TIMEOUT_MS } from '../children/cut-off.js';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, type AgentTodoDocument } from '../todo-view.js';
 
@@ -425,6 +425,14 @@ export class Run {
   /** REQ-HOOKS-087: the session's hook attachment, removed at the end of the run. */
   private hooks: HookPort | null;
   private preflight: Preflight | null = null;
+  /**
+   * REQ-ORCH-014: true while this run's pre-flight classification is in flight, so the status reads `classifying` before
+   * the call and is replaced in place by its result. Derived from the live run, as `currentWait` is: a continuation's
+   * pre-flight runs with the previous run's intent already on the record (OQ-162), which the status must not go on
+   * showing as the intent in effect while the new one is decided.
+   */
+  private classifying = false;
+  get intentClassifying(): boolean { return this.classifying; }
   /** REQ-MONITOR-123: a graceful pause requested; honoured at the next model step and at the iteration boundary. */
   private pauseRequested = false;
   /**
@@ -779,11 +787,14 @@ export class Run {
 
       // REQ-SESSION-087, in order and observably. PD-ORCH-005 clause 17: the todo with it, so a continue's message task
       // survives a process that dies during the pre-flight, as the message itself does in the resumed root's record.
+      // REQ-ORCH-014: set before the save that publishes `starting`, so that snapshot already reads `classifying`.
+      this.classifying = this.deps.preflight !== undefined;
       writer.save('starting', { todo: this.todoJson() });
       this.startedAt = clocks.monotonic.now();
       // REQ-ORCH-005: the intent is in effect before the first iteration; while it is being decided the session reads `classifying`.
       if (this.deps.preflight) {
         try { this.preflight = await this.deps.preflight(this.abort.signal); } catch (cause) { this.deps.warn(`the pre-flight raised and the run continues on the fallback intent: ${String(cause)}`); }
+        finally { this.classifying = false; }
       }
       if (this.deps.continuation) {
         const intent = this.preflight?.intent ?? NO_PREFLIGHT_INTENT;
@@ -1388,6 +1399,8 @@ export class Run {
         writer.recordIssue({ kind: 'stall', severity: 'warning', actor: rootName, message, metadata: { task_id: rootTaskId, silent_seconds: r.silentS, active_tools: r.activeTools, recent_tool_calls: r.recentCalls, last_model_event: r.lastModelEvent } });
       },
       waiting: (w) => { if (!rootDetached) this.deps.warn(stallWaitingLine(rootName, rootTaskId, w.activeCalls, w.silentS, 'agent')); },
+      // OQ-173: a backoff, a provider-limit wait or a compression the run holds the root in is a wait, not a stall.
+      imposed: (w) => { if (!rootDetached) this.deps.warn(stallImposedWaitLine(rootName, rootTaskId, w.wait, w.silentS, 'agent')); },
       recovered: () => { if (!rootDetached) this.deps.warn(stallRecoveredLine(rootName, rootTaskId, 'agent')); },
       evaluated: (stalled) => { if (!rootDetached) this.rootStallEvaluated(rootName, stalled ? rootWatch.silentSeconds : null); },
     });
@@ -1433,6 +1446,8 @@ export class Run {
       onModelEvent: (kind) => rootWatch.modelEvent(kind),
       onToolStarted: (call) => rootWatch.toolStarted(call.callId, call.name),
       onToolCompleted: (call) => rootWatch.toolCompleted(call.callId),
+      // OQ-173: and told of each wait the run holds it in between its steps, which is not its silence.
+      onImposedWait: (wait) => rootWatch.imposedWait(wait),
       }, text, history, this.abort.signal, content).finally(() => rootWatch.betweenTurns());
     };
     let outcome: TurnOutcome | null = null;

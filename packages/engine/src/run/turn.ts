@@ -15,6 +15,7 @@ import { Conversation, type ConversationRecorder } from './conversation.js';
 import { interruptedResult } from './interruption.js';
 import type { FingerprintCheck } from './record.js';
 import type { AgentGrant } from '../children/personas.js';
+import { duringImposedWait, type ImposedWaitPort } from '../children/stall.js';
 
 /**
  * The tool loop inside one iteration (REQ-TOOLS-180, REQ-ORCH-146's non-native case): step the model;
@@ -183,6 +184,12 @@ export interface TurnDeps {
   readonly onToolStarted?: ((call: PortToolCall) => void) | undefined;
   /** REQ-ORCH-089: every part each model step streams, by its kind (`TurnSink.event`) — the stall watch's "model event or token". */
   readonly onModelEvent?: ((kind: string) => void) | undefined;
+  /**
+   * OQ-173: told of each wait the run holds this agent in between its model steps — the ladder's backoff and suspended
+   * wait, and a context compression's own model call, automatic or on a rejection — so the stall watch reports a wait and
+   * not a stall; the returned release ends it. Absent means nobody is watching.
+   */
+  readonly onImposedWait?: ImposedWaitPort | undefined;
   /** PD-ORCH-005 clause 1: observes every message as it joins this agent's conversation — the conversation record. */
   readonly recorder?: ConversationRecorder | undefined;
   /**
@@ -271,6 +278,8 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
    */
   const compression = deps.compression ? new CompressionRunner(deps.compression, { writer, clocks, warn: deps.warn, agent: deps.agentName }) : null;
   let condensed = false;
+  /** OQ-173: a compression's own model call is a wait the run imposes on this agent, not its silence. */
+  const compressing = (pass: () => Promise<boolean>): Promise<boolean> => duringImposedWait(deps.onImposedWait, 'compression', pass);
   // Part AO
   /**
    * Part AO (ADR-0060 decision 1, its second reader): this conversation is LIVE for the span of the turn, and the
@@ -313,7 +322,7 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
     const afterSupervision = stopsHere();
     if (afterSupervision) return afterSupervision;
     if (compression && !signal.aborted && compression.due(conv, condensed)) {
-      if (await compression.run(conv, 'automatic', condensed, signal)) condensed = true;
+      if (await compressing(() => compression.run(conv, 'automatic', condensed, signal))) condensed = true;
       const afterCompression = stopsHere();
       if (afterCompression) return afterCompression;
     }
@@ -330,12 +339,12 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
      * turn's first call is the one that carries it.
      */
     const resilience: TurnResilience | undefined = deps.resilience && compression
-      ? { ...deps.resilience, condense: async () => { const ok = await compression.run(conv, 'rejection', condensed, signal); if (ok) condensed = true; return ok; }, resumeIssue: deps.parentResume === true && steps === 1 }
+      ? { ...deps.resilience, condense: async () => { const ok = await compressing(() => compression.run(conv, 'rejection', condensed, signal)); if (ok) condensed = true; return ok; }, resumeIssue: deps.parentResume === true && steps === 1 }
       : deps.resilience;
     // PD-MONITOR-001 revision 2: the ladder prices each request at its cell's model. The bare path has no catalogue to read
     // rates from — it runs only where no resilience was configured — so it keeps a reported figure and prices nothing itself.
     const report = resilience
-      ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName, onRequestUsage: observeRequestUsage }, resilience, (choice, unresponsiveMs) => step(stepDeps, choice, conv.snapshot(), specs, signal, unresponsiveMs, segment), signal)
+      ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName, onRequestUsage: observeRequestUsage, imposedWait: deps.onImposedWait }, resilience, (choice, unresponsiveMs) => step(stepDeps, choice, conv.snapshot(), specs, signal, unresponsiveMs, segment), signal)
       : await (async () => { const o = await step(stepDeps, { model: deps.model, thinking: deps.thinking }, conv.snapshot(), specs, signal, null, segment); observeRequestUsage(priceRequest(o.report.usage, null)); return o.report; })();
     lastReport = report;
     if (deps.detached?.() === true) return { report: { ...report, usage }, messages: conv.snapshot(), toolCallCount, paused: true };

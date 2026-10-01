@@ -1524,6 +1524,37 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     expect(diag(killed.text)).toMatchObject({ session_status: 'killed', exit_code: -1, outcome_severity: 'warning' });
     expect((await t.execute(args({ session_id: 'ts_0badf00d' }), ctx())).text).toContain("Unknown background session: 'ts_0badf00d'");
   }, 30_000);
+  it('REQ-TOOLS-109/110: a kill of a session that has already ended says so, kills nothing, and agrees with its status — after completion and after failure', async () => {
+    const t = await tool();
+    const ended = async (command: string, glyph: string): Promise<string> => {
+      const id = /ts_[0-9a-f]{8}/.exec((await t.execute(args({ command, background: true }), ctx())).text)![0];
+      const endedBy = (clocks.monotonic.now() as number) + 15_000;
+      while (!(await t.execute(args({ session_action: 'list' }), ctx())).text.includes(`${glyph} ${id}`)) {
+        expect(clocks.monotonic.now() as number).toBeLessThan(endedBy);
+        await new Promise((res) => setTimeout(res, 50));
+      }
+      return id;
+    };
+    // Before the repair both answered `Session ts_… was killed.` beside a block reporting `completed` or `failed`.
+    const done = await ended(SH.echo('finished'), '✓');
+    const k1 = await t.execute(args({ session_id: done, session_action: 'kill' }), ctx());
+    expect(k1.text).not.toContain(`Session ${done} was killed`);
+    expect(k1.text).toContain(`Session ${done} had already ended; nothing was killed. It is completed (exit 0).`);
+    // REQ-TOOLS-110: the final output all the same.
+    expect(output(k1.text)).toContain('finished');
+    expect(diag(k1.text)).toMatchObject({ session_status: 'completed', exit_code: 0, outcome_kind: 'background_terminal', outcome_severity: 'info' });
+    expect(diag(k1.text)['detail']).toBe(`Session ${done} had already ended; nothing was killed. It is completed (exit 0).`);
+    const failed = await ended('exit 3', '✗');
+    const k2 = await t.execute(args({ session_id: failed, session_action: 'kill' }), ctx());
+    expect(k2.text).toContain(`Session ${failed} had already ended; nothing was killed. It is failed (exit 3).`);
+    expect(diag(k2.text)).toMatchObject({ session_status: 'failed', exit_code: 3, outcome_kind: 'background_terminal', outcome_severity: 'error' });
+    // A kill of a session a kill already ended says the same: the second kill ended nothing.
+    const long = /ts_[0-9a-f]{8}/.exec((await t.execute(args({ command: SH.sleep(30), background: true }), ctx())).text)![0];
+    expect((await t.execute(args({ session_id: long, session_action: 'kill' }), ctx())).text).toContain(`Session ${long} was killed.`);
+    const again = await t.execute(args({ session_id: long, session_action: 'kill' }), ctx());
+    expect(again.text).toContain(`Session ${long} had already ended; nothing was killed. It is killed (exit -1).`);
+    expect(diag(again.text)).toMatchObject({ session_status: 'killed', exit_code: -1, outcome_severity: 'warning' });
+  }, 40_000);
   it('OQ-10 (R-044): send_signal SIGINT stops a background session instead of refusing it', async () => {
     const t = await tool();
     // The command prints a marker and THEN becomes the long-lived process. On POSIX `exec sleep`
@@ -1653,6 +1684,14 @@ describe('terminal — a background command whose process could not be started (
       // The list's structured entry carries no exit code either.
       const list = await t.execute(args({ session_action: 'list' }), ctx());
       expect((diag(list.text)['sessions'] as { session_id: string; exit_code: unknown }[]).find((e) => e.session_id === id)).toMatchObject({ status: 'failed', exit_code: null });
+      // A kill of it kills nothing, says the session had already ended, and keeps OQ-143's execution_error detail.
+      // Before the repair: `Session ts_… was killed. Terminal execution failed before completion: …`.
+      const k = await t.execute(args({ session_id: id, session_action: 'kill' }), ctx());
+      expect(k.text).not.toContain(`Session ${id} was killed`);
+      expect(k.text).toContain(`Session ${id} had already ended; nothing was killed. It is failed. Terminal execution failed before completion: the background command could not be started:`);
+      const kd = diag(k.text);
+      expect(kd).toMatchObject({ session_status: 'failed', failure_kind: 'execution_error', outcome_kind: 'execution_error', outcome_severity: 'error', error_class: 'ExecutionError' });
+      expect(kd).not.toHaveProperty('exit_code');
     } finally { await m.dispose(); }
   }, 20_000);
 });

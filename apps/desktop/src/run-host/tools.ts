@@ -6,10 +6,10 @@ import {
   askQuestionsTool, buildPolicy, directWorkBundle, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
   resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type BackgroundAttribution, type BackgroundSession, type ConfinementPort, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
-import { BUILT_IN_PERSONAS, toolRestrictionsFor, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
+import { BUILT_IN_PERSONAS, EMPTY_MCP_EVIDENCE, toolRestrictionsFor, type AgentGrant, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import { CODE_INTELLIGENCE_MEMORY_GATE } from '@rotaris/config';
 import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
-import type { McpHost } from './mcp.js';
+import { grantEvidence, type McpHost } from './mcp.js';
 import { artifactListTool, artifactReadTool, artifactWriteTool, backgroundOutputTool, delegateTool, waitForTasksTool } from '@rotaris/agent-tools';
 import { z } from 'zod';
 
@@ -409,11 +409,17 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const run = deps.configured?.(ctx.workspaceRoot) ?? null;
   const withhold = mode === 'restricted' || persona.readOnly;
   let mcpSection = '';
+  /*
+   * REQ-MCP-065 with REQ-TOOLS-006: the grant this port puts in force, set once `ready()` has resolved its surface — the
+   * native tools the one resolution kept and, per carried server, the tools that joined the callable map. A child's row
+   * records it (`ChildLedger.recordGrant`); the persona's declared set was recorded at spawn until 2026-10-01.
+   */
+  let grant: AgentGrant | null = null;
   let readiness: Promise<void> | null = null;
   const ready = (): Promise<void> => {
     if (readiness) return readiness;
     readiness = (async () => {
-      if (!deps.mcp || !run) return;
+      if (!deps.mcp || !run) { grant = { tools: nativeResolved, mcp: EMPTY_MCP_EVIDENCE }; return; }
       const mcp = deps.mcp;
       await mcp.prepare(run.cfg, ctx.workspaceRoot);
       const session = { sessionId: ctx.sessionId, writer: ctx.writer };
@@ -421,6 +427,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       if (withhold) {
         if (offered.active.some((s) => s.tools.length > 0)) ctx.warn(`mcp: ${ctx.persona}'s MCP tools are withheld under ${mode === 'restricted' ? "the 'restricted' preset" : 'read_only'} (ADR-0016: a tool outside the registry declares no facet, so a withholding rule withholds it)`);
         mcpSection = mcp.section({ ...offered, active: offered.active.map((s) => ({ ...s, tools: [] })) });
+        // Every carried server is listed with its fate, and none grants a tool (REQ-MCP-114).
+        grant = { tools: nativeResolved, mcp: grantEvidence(offered, () => false) };
         return;
       }
       // REQ-TOOLS-006 (4), OQ-145: an allowed-tool list is closed — a server's tool it does not name is withheld, as a
@@ -440,6 +448,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
         })),
       };
       const remove = (name: string) => { callable.delete(name); };
+      const joined = new Set<string>();
       for (const e of mcp.executorsFor({ cfg: run.cfg, workspaceRoot: ctx.workspaceRoot, role: ctx.persona, surface, ctx: session, remove, log: (m) => ctx.warn(m) })) {
         // REQ-ORCH-153: an MCP tool carries no declaration, so the fail-closed predicate withholds it while the
         // gate is held (ADR-0016's reading, the same one `restricted` and `read_only` already take above). The
@@ -450,9 +459,21 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
         if (planGateHeld() && withheldUnderPlanGate(e.name, false)) { withheldAtPlanGate.add(e.name); ctx.warn(`mcp: '${e.name}' is withheld while this run is held at the plan gate (REQ-ORCH-153)`); continue; }
         if (callable.has(e.name)) { ctx.warn(`mcp: the tool name '${e.name}' collides with a native tool of ${ctx.persona}; the MCP tool is not offered`); continue; }
         callable.set(e.name, e);
+        joined.add(e.name);
         specs.push(toolSpec(e));
       }
-      mcpSection = mcp.section(surface);
+      /*
+       * REQ-MCP-062: "a printed name SHALL be callable". The section and the grant are drawn from the surface narrowed to the
+       * tools that joined the callable map, so what the loop above withheld — at the plan gate (REQ-ORCH-153), for a
+       * collision with a native name — is neither printed nor granted. Until 2026-10-01 the section was rendered from
+       * `surface`, which still held them, and printed names the agent could not call
+       * (`docs/defects/fixed/an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md`). The hold is read when the
+       * port is built and its readiness resolved once; approval launches a new run, whose ports are built with the gate
+       * released, so the approved segment prints and calls the tool (traced in `run/plan-gate.test.ts`).
+       */
+      const callableSurface = { ...surface, active: surface.active.map((s) => ({ ...s, tools: s.tools.filter((t) => joined.has(t.callable)) })) };
+      mcpSection = mcp.section(callableSurface);
+      grant = { tools: nativeResolved, mcp: grantEvidence(callableSurface) };
     })();
     return readiness;
   };
@@ -461,6 +482,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     specs: () => specs,
     // REQ-MONITOR-060/061 (live-run finding K1): the native callable set — what the inspector shows.
     resolvedTools: () => nativeResolved,
+    // REQ-MCP-065 / REQ-TOOLS-006: the grant in force, null until `ready()` has resolved.
+    grant: () => grant,
     ready,
     promptSection: () => mcpSection,
     dispatch: async (call: PortToolCall, signal): Promise<PortToolResult> => {

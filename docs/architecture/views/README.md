@@ -45,6 +45,25 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**The MCP section prints only what the agent can call (REQ-MCP-062, REQ-ORCH-153).** While the plan gate held, the port's MCP
+loop withheld every server tool from the callable map and the listing, and the section, rendered from the surface the loop
+was given, still printed it; a tool dropped for colliding with a native name was printed the same way. `ready()` now renders
+the section, and draws the grant, from the surface narrowed to the tools that joined the callable map. Approval launches a
+new run whose ports are built with the gate released (pinned in `run/plan-gate.test.ts`). This repairs
+`an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md`; the **runtime view**'s MCP surface says so. No
+package, edge, process, message kind, channel, command or store column changed.
+
+**A child's row records the grant its port put in force, not its persona's declared tools (REQ-MCP-065, REQ-TOOLS-006,
+REQ-MCP-114).** The spawn wrote `children.granted_tools` from the persona's declared tools and `granted_mcp` from its MCP
+surface before any control, so a tool `coordinator_only`, `read_only`, `tool_restrictions`, the `restricted` preset or the
+plan gate removed was recorded as granted. The spawn now writes neither, and the child's execution records the port's
+`ToolPort.grant` once the port is ready (`ChildLedger.recordGrant` → `SessionWriter.recordChildGrant`, a `save`
+republished; `McpHost.evidenceFor` and `Persona.mcpEvidence` removed for the run host's `grantEvidence`). The recording is
+started beside the child's first turn, not ahead of it, so the payload is in the conversation record while readiness is
+pending. This repairs `a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`; the **runtime view**'s MCP
+surface and its `children` row say so, and ADR-0034's evidence passages are corrected in place. No package, edge, process,
+message kind, channel, command or store column changed.
+
 **A stopped setup step reads in REQ-WORKSPACE-092's words (ADR-0064, R-067).** `McpSetupStep` gained an optional `stopped`
 (`cancelled` or `budget`) set by the run host's `runSetupSteps`; the initialization coordinator writes the requirement's two
 sentences from it and the MCP category keeps the run host's `detail` (process view, `mcp.setup`).

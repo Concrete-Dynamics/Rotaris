@@ -65,7 +65,9 @@ Write `plan.json` in the scratchpad:
 - **A bundle is two tasks that touch the same area**, built on one branch by one builder.
 - **Lanes are dependency chains.** Bundles editing the same functions share a lane, ordered with `after`.
   `render` sorts each lane by its dependencies, moves a bundle waiting on another lane (and what waits on it) to the
-  end of its lane, and balances lanes. A `pins` set (bundles editing the same file) must sit in one lane.
+  end of its lane, and balances lanes. A `pins` set (bundles editing the same file) must sit in one lane. A run
+  executes at most min(16, CPUs − 2) agents at a time (two on four CPUs), so lanes past that queue; to go faster,
+  split the bundles over two plans (`references/workflow-tool.md`, Concurrency).
 - **A task body is self-contained**: the note or requirement to read, the evidence (file:line, proof output, pack),
   the proof or live scenario that shows the repair, and the rulings that apply. A task only the owner can close is
   no task: record it and report it. A builder that meets one inside a bundle lists it in `ownerBlocked` with the
@@ -79,7 +81,7 @@ Write `plan.json` in the scratchpad:
 git -C <repo> fetch origin main
 git -C <repo> worktree add --detach <repo>-wt-skillref-<id> origin/main 2>/dev/null || git -C <repo>-wt-skillref-<id> checkout -q --detach origin/main
 K=<repo>-wt-skillref-<id>/.agents/skills/orchestrated-build
-S=<scratchpad>/orchestration; mkdir -p $S
+S=<scratchpad>/orchestration-<id>; mkdir -p $S
 node $K/scripts/orchestration.mjs render --plan $S/plan.json --profile $K/profiles/<repo>.json --out $S/run-1.js
 ```
 
@@ -87,7 +89,7 @@ node $K/scripts/orchestration.mjs render --plan $S/plan.json --profile $K/profil
 authorization), checks that the reference worktree's copy of this skill matches the one rendering, embeds the plan
 in the template, and dry-runs the result against stub agents; it refuses to write a script
 that leaves a bundle unsettled. Launch with `Workflow({ scriptPath: "$S/run-1.js" })` and write the run id as the
-first line of `$S/RUNS.txt`. The first merge agent creates the integration worktree.
+first line of `$S/RUNS.txt`. The first merge agent creates the plan's integration worktree.
 
 Schedule a fallback check-in (`send_later`, ~120 minutes) whose message says: read the last run of `RUNS.txt`, run
 `status`, recover if it stopped, else re-arm silently. Re-arm at every check-in. It survives restarts; background

@@ -32,7 +32,9 @@ check", and three restatements a prompt are what that sentence exists to prevent
 - `apps/desktop/src/run-host/index.ts` — both lease paths, the launch and the continuation, now go
   through it instead of each logging their own way.
 - `apps/desktop/src/main/index.ts` — main's own `credentials leased:` line is not repeated when it is
-  the same sentence as the last one.
+  the same sentence as the last one. Superseded 2026-10-01, kept beside its replacement: main no longer writes that
+  line at all, because it restated the run host's `LeaseReportLog` report of the same lease (PD-MONITOR-002,
+  [the-repository-git-view-and-setup-step-lines-are-each-logged-twice.md](the-repository-git-view-and-setup-step-lines-are-each-logged-twice.md)).
 
 ## Examined and found innocent — the reasoning that was wrong before it was written
 

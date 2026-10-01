@@ -5,6 +5,8 @@ import { spawnSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { unpressedClicks } from './lib/capture-clicks.mjs';
+import { STEER_REST_CLICKS, STEER_REST_TYPE, STEER_REST_WHATS, steerPendingAtPause } from './lib/steer-rest.mjs';
 
 /**
  * The control channel's first execution in the built app (Part J step 3): a queued message consumed at the
@@ -206,12 +208,18 @@ await launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_
 // R-067, REQ-MONITOR-134 with PD-ORCH-005 clause 4). The entry role's second step is held 7 s and then asks for a read
 // (`wait:` prefixes the step after it), so the steer submitted meanwhile and the pause that follows it both land inside
 // that step: the pause lets the read finish and stops the root before the step that would have injected the steer. The
+// schedule is `lib/steer-rest.mjs`'s: the Steer waits for its control, and the Pause waits, from after the dialog's Steer,
+// for the steer dialog to close on the steer's acceptance, so the pause follows the steer (it raced it before 2026-10-01,
+// docs/defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md), and the store must say the
+// steer was pending when the pause was asked for, or the launch exercised a plain pause and is read as such. The
 // rest delivers it into the root's record, marked injected once by the pause, and the Continue's resumed root reads it
 // as the last message of its first request, whose answer follows it in the record. That answer is the script's third
 // read: the resumed root carries on with its next step rather than its first.
 const s3b = scenario('steer-rest', []);
-await launch('steer-rest', s3b, { ROTARIS_SCRIPT: 'read,wait:7000,read,read', ROTARIS_CAPTURE_PROMPT: 'steer then pause', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Steer the run"]@1900;;.dialog-actions .btn-primary>>Steer@2600;;[data-testid="composer-strip"] [aria-label="Pause the run"]@~3400;;.composer__strip .btn-primary[aria-label="Continue run"]@~24000', ROTARIS_CAPTURE_TYPE: 'go left>>no-enter@2300', ROTARIS_CAPTURE_AFTER_MS: '27000' });
+const steerRestLog = await launch('steer-rest', s3b, { ROTARIS_SCRIPT: 'read,wait:7000,read,read', ROTARIS_CAPTURE_PROMPT: 'steer then pause', ROTARIS_CAPTURE_CLICKS: STEER_REST_CLICKS, ROTARIS_CAPTURE_TYPE: STEER_REST_TYPE, ROTARIS_CAPTURE_AFTER_MS: '27000' });
 {
+  const unpressed = unpressedClicks(steerRestLog, Object.values(STEER_REST_WHATS));
+  if (unpressed.length > 0) throw new Error(`the steer-rest launch did not press every step on its own control: ${JSON.stringify(unpressed)} (see steer-rest.log)`);
   const db = open(s3b);
   const session = db.prepare('SELECT session_id, execution_status FROM sessions').get();
   const sid = session.session_id;
@@ -228,6 +236,8 @@ await launch('steer-rest', s3b, { ROTARIS_SCRIPT: 'read,wait:7000,read,read', RO
   // reads before the rest and all three again after it.
   const reads = record.filter((m) => m.role === 'assistant').flatMap((m) => m.content).filter((c) => c.kind === 'tool-call' && c.name === 'read_file').length;
   if (!list.includes('run_pause_requested') || list.filter((n) => n === 'run_start').length < 2) throw new Error(`the pause and the continuation are not both recorded: ${list.join(',')}`);
+  const notPending = steerPendingAtPause(list);
+  if (notPending !== null) throw new Error(`the steer was not pending when the pause was asked for: ${notPending} (${list.join(',')})`);
   if (at < 0) throw new Error(`the steer never reached the root's record: ${JSON.stringify(record.map((m) => [m.role, text(m).slice(0, 60)]))}`);
   if (record[at - 1]?.role !== 'tool' || record[at + 1]?.role !== 'assistant') throw new Error(`the steer is not where the rest delivers it, after the read's result and before the resumed step: ${JSON.stringify(record.map((m) => m.role))}`);
   if (reads !== 3) throw new Error(`the resumed root did not carry on from its record: it holds ${reads} reads where the script names 3`);

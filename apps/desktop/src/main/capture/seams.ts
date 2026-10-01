@@ -181,7 +181,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
    */
   for (const step of steps(process.env['ROTARIS_CAPTURE_KEYS'])) {
     void (async () => {
-      if (step.until) await settleAt(host, { selector: step.arg ?? '*', arg: null, at: step.at, until: true });
+      if (step.until) await settleAt(host, { selector: step.arg ?? '*', arg: null, at: step.at, until: true, ...(step.from === undefined ? {} : { from: step.from }) });
       else await pause(host, step.at);
       win.webContents.sendInputEvent({ type: 'keyDown', keyCode: step.selector });
       win.webContents.sendInputEvent({ type: 'keyUp', keyCode: step.selector });
@@ -195,7 +195,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
     void (async () => {
       // The keys loop waits for its target; a chord does the same when `~` is used, so a press lands on a
       // state the run reaches when it reaches it rather than at an appointment the run can miss.
-      if (step.until) await settleAt(host, { selector: step.selector, arg: null, at: step.at, until: true });
+      if (step.until) await settleAt(host, { selector: step.selector, arg: null, at: step.at, until: true, ...(step.from === undefined ? {} : { from: step.from }) });
       else await pause(host, step.at);
       const { keyCode, modifiers } = chordEvent(step.selector);
       win.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
@@ -221,7 +221,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
     void (async () => {
       // The click loops wait for their element; the inspector follows the same `~` rule so a waited-for
       // measurement lands when the element exists rather than at an appointment the run may miss.
-      if (step.until) await settleAt(host, { selector: step.selector, arg: null, at: step.at, until: true });
+      if (step.until) await settleAt(host, { selector: step.selector, arg: null, at: step.at, until: true, ...(step.from === undefined ? {} : { from: step.from }) });
       else await pause(host, step.at);
       const found = await win.webContents.executeJavaScript(inspectScript(step.selector)).catch((cause: unknown) => ({ error: String(cause) })) as unknown;
       log(`capture: inspect-at ${step.at} ${step.selector} → ${JSON.stringify(found)}`);
@@ -464,7 +464,7 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
    */
   for (const step of steps(process.env['ROTARIS_CAPTURE_EVAL_AT'])) {
     void (async () => {
-      if (step.until) await settleAt(host, { selector: step.arg ?? '*', arg: null, at: step.at, until: true });
+      if (step.until) await settleAt(host, { selector: step.arg ?? '*', arg: null, at: step.at, until: true, ...(step.from === undefined ? {} : { from: step.from }) });
       else await pause(host, step.at);
       const found = await win.webContents.executeJavaScript(`(async () => { try { return await (${step.selector}); } catch (cause) { return { error: String(cause) }; } })()`).catch((cause: unknown) => ({ error: String(cause) })) as unknown;
       log(`capture: eval-at ${step.at} ${step.selector} → ${JSON.stringify(found)}`);

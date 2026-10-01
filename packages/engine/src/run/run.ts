@@ -385,6 +385,12 @@ export class Run {
    * `a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record.md`). It is the run's persona otherwise.
    */
   private rootName: string;
+  /**
+   * Whether the current root's execution is over — its turn returned, raised or was given up on, and no rest left it
+   * `paused` to be resumed — so it takes no other step. Set as each root's turn settles and cleared as the next begins;
+   * false before the run's first root.
+   */
+  private rootDone = false;
 
   /** REQ-ORCH-072: the current iteration's root execution record. */
   get rootExecutionRecord(): RootExecutionRecord | null {
@@ -436,8 +442,11 @@ export class Run {
    * launching the next segment (ADR-0062) rather than by flipping a flag under a running turn.
    */
   private planHeld = false;
-  /** REQ-MONITOR-133/134: pending steering per conversation (`root` for the entry role, the task id for a child). */
-  private readonly steering = new Map<string, { id: string; text: string }[]>();
+  /**
+   * REQ-MONITOR-133/134: pending steering per conversation (`root` for the entry role, the task id for a child), each with
+   * the name it was announced under, which the not-delivered line repeats (`reportUndeliveredSteering`).
+   */
+  private readonly steering = new Map<string, { id: string; text: string; name: string }[]>();
   /**
    * REQ-MONITOR-133 with OQ-128: set once no agent of this run will take another step — when the iteration's rest is
    * recorded (after `deliverSteeringAtRest`), or when the run stops stepping (`closeSteering`: teardown, the pause at the
@@ -1254,6 +1263,7 @@ export class Run {
     // Clause 4 with OQ-97: a resumed root keeps the name its rows carry, even when it runs as the entry role now.
     const rootName = resume?.root_persona ?? config.persona;
     this.rootName = rootName;
+    this.rootDone = false;
     const rootRecord: RootExecutionRecord = {
       taskId: rootTaskId,
       canonicalName: rootCanonical,
@@ -1390,7 +1400,8 @@ export class Run {
     let outcome: TurnOutcome | null = null;
     /**
      * REQ-MONITOR-102: the calls the root's record held when this execution began — every one of them already counted, when
-     * its earlier execution returned or by the crash record — so a root given up on counts only what its record gained.
+     * its earlier execution returned, raised or was given up on, or by the crash record — so a root given up on, or whose
+     * turn raises, counts only what its record gained.
      */
     const recordedAtStart = resume ? callsRun(this.record.load(rootTaskId)) : 0;
     /** An execution iteration's root has a count on its row (`iterations.root_tool_calls`); a plan cycle's has no row. */
@@ -1442,7 +1453,11 @@ export class Run {
       const rootFinished = outcome !== null && outcome.paused !== true && !this.abort.signal.aborted && outcome.report.status !== 'failed';
       /** Whether the root's open calls were answered as interrupted by a rest. */
       let answered = false;
-      if (rest !== null && (!rootFinished || (children?.scheduler.hasNonTerminal ?? false))) {
+      const resting = rest !== null && (!rootFinished || (children?.scheduler.hasNonTerminal ?? false));
+      // A root the rest leaves `paused` is the root a continue resumes, and a root steer pending at the rest is delivered to
+      // it (`deliverSteeringAtRest`): it can still step. Every other root's execution is over (`rootSteerName`).
+      this.rootDone = !resting;
+      if (resting) {
         // Every child's execution had the stop's grace beside the root's, counted from the same first request: the rest
         // is given what is left of it — none after a root given up on, and never a fresh 30 s after a root that returned
         // late — so the stop stays bounded at the one 30 s (REQ-SESSION-092).
@@ -1483,17 +1498,19 @@ export class Run {
          */
         if (this.stop.requested && await children.outlast(this.stopGraceLeft())) this.deps.warn(`iteration ${iteration}: child executions still running at the stop's 30 s grace were given up on (REQ-SESSION-092)`);
       }
-      // A root given up on that no rest paused — the explicit cancel — still leaves no call row running (REQ-SESSION-129):
-      // its open call is recorded cut off, naming no rest (OQ-96, "A call cut by no rest").
-      if (rootDetached && !answered && this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: rootName }, iteration, null);
+      // A root given up on, or whose turn raised, that no rest paused — the explicit cancel, an iteration that closes
+      // failed — still leaves no call row running (REQ-SESSION-129): its open call is recorded cut off, naming no rest
+      // (OQ-96, "A call cut by no rest").
+      if ((rootDetached || outcome === null) && !answered && this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: rootName }, iteration, null);
       /*
-       * REQ-MONITOR-102 (the repair of `a-roots-calls-before-a-crash-never-reach-the-session-total.md`): a root given up on
-       * never returns its count, so its calls are counted from its record — once its open calls are answered, so a call it
-       * asked for and never started is not one — less what the record held when this execution began. Only a root that
-       * never returned: the grace's timer still sets `rootDetached` when it runs out after the root returned — while the
-       * rest waits for its children — and that root's calls were counted with its outcome above.
+       * REQ-MONITOR-102 (the repairs of `a-roots-calls-before-a-crash-never-reach-the-session-total.md` and
+       * `a-root-whose-turn-raises-never-counts-its-calls.md`): a root given up on, or whose turn raised, never returns its
+       * count, so its calls are counted from its record — once its open calls are answered, so a call it asked for and
+       * never started is not one — less what the record held when this execution began. Only a root that never returned:
+       * the grace's timer still sets `rootDetached` when it runs out after the root returned — while the rest waits for its
+       * children — and that root's calls were counted with its outcome above.
        */
-      if (rootDetached && outcome === null && this.deps.dal) {
+      if (outcome === null && this.deps.dal) {
         const gained = Math.max(0, callsRun(this.record.load(rootTaskId)) - recordedAtStart);
         this.aggregates.addToolCalls(gained);
         this.persistToolCalls(rootCount === null ? {} : { root: { iteration: rootCount, add: gained } });
@@ -1564,14 +1581,26 @@ export class Run {
     const key = this.isRootAgent(agentId) ? 'root' : agentId;
     if (key !== 'root' && !this.children?.ledger.get(key)) return null;
     const id = randomUUID();
+    // Named as its injection names it: the root by the name of the root that will take it (`rootSteerName`), a child by its
+    // instance name (the metadata keeps the key).
+    const who = key === 'root' ? this.rootSteerName() : this.children?.ledger.get(key)?.canonical_name ?? key;
     const list = this.steering.get(key) ?? [];
-    list.push({ id, text });
+    list.push({ id, text, name: who });
     this.steering.set(key, list);
-    // Named as its injection names it: the root by `rootName`, a child by its instance name (the metadata keeps the key).
-    const who = key === 'root' ? this.rootName : this.children?.ledger.get(key)?.canonical_name ?? key;
     this.deps.writer.appendTimeline('steering_submitted', 'user', `A steering prompt was submitted for ${who} (${id.slice(0, 8)}).`, { prompt_id: id, agent: key });
     return id;
   }
+  /**
+   * The name a root steer is announced under: the root that will take it (the repair of
+   * `a-root-steer-after-a-resumed-iteration-closes-is-announced-under-the-resumed-roots-name.md`). While the current root
+   * can still step — its turn running, or a resumed root before its first turn — that is `rootName`, which for a root
+   * resumed as the entry role is the persona its iteration was opened with (PD-ORCH-005 clause 4, OQ-97). Once its
+   * execution is over, the next root is a fresh one and runs as the run's persona, so the steer is named for that.
+   */
+  private rootSteerName(): string {
+    return this.rootDone ? this.deps.config.persona : this.rootName;
+  }
+
   /**
    * The host's stall callback for the entry agent (REQ-MONITOR-119/120/122): its figure beside its tools, the record
    * republished when it changed; then REQ-MONITOR-135's injection — a root waiting on its children with a steer pending is
@@ -1640,8 +1669,9 @@ export class Run {
   private reportUndeliveredSteering(ending = 'the run ended'): void {
     this.steeringClosed = true;
     for (const [key, pending] of this.steering) {
-      const who = key === 'root' ? this.rootName : this.children?.ledger.get(key)?.canonical_name ?? key;
       for (const s of pending) {
+        // Under the name it was announced with: a root steer announced while a resumed root ran keeps that root's name.
+        const who = s.name;
         const message = `The steering prompt for ${who} (${s.id.slice(0, 8)}) was not delivered: ${ending} before ${who} took another step.`;
         this.deps.writer.appendTimeline('steering_not_delivered', 'rotaris', message, { prompt_id: s.id, agent: key });
         this.deps.writer.appendRow('system', message, true);

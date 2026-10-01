@@ -495,6 +495,101 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       expect(dal.timelineOf(sid).filter((t) => t.name === 'steering_injected').map((t) => t.message)).toEqual([expect.stringMatching(/orchestrator/)]);
     });
 
+    describe('REQ-MONITOR-133/134 with clause 4 and OQ-97 (the repair of a-root-steer-after-a-resumed-iteration-closes-is-announced-under-the-resumed-roots-name.md): a root steer submitted after the resumed iteration closes is announced under the root that will take it', () => {
+      /**
+       * The continue's run is set up as the entry role, `coding-agent` (OQ-97); the resumed root, `orchestrator`, answers and
+       * its iteration closes. Its `iteration_end` hook is held: `during` runs in that window, after the resumed root finished
+       * and before any next iteration's turn begins.
+       */
+      async function steerAfterTheResumedIterationCloses(during: (next: Sessions, sid: SessionId) => void): Promise<SessionId> {
+        const sid = await crashed();
+        let releaseHook!: () => void;
+        const hookHold = new Promise<void>((r) => { releaseHook = r; });
+        let closing = false;
+        const hooks: HookPort = {
+          auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+          fireLifecycle: async (event, fields) => { if (event === 'iteration_end' && fields['iteration'] === 2) { closing = true; await hookHold; } return []; }, advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+        };
+        const client = new ScriptedModelClient([]);
+        const original = client.stream.bind(client);
+        client.stream = (req) => { client.push(answer('Answered.')); return original(req); };
+        const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, persona: 'coding-agent', model: MODEL, credentialFor: () => async () => 'k' };
+        const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' as const };
+        const next = new Sessions({
+          clocks: clock, publisher: NONE, pid: 88, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
+          model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s),
+          hooks: () => hooks,
+          configure: () => ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }),
+        });
+        expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        expect(next.prompt(sid, 'second').ok).toBe(true);
+        for (let i = 0; i < 400 && !closing; i++) await new Promise((r) => setTimeout(r, 5));
+        expect(closing).toBe(true);
+        during(next, sid);
+        releaseHook();
+        await next.running(sid);
+        return sid;
+      }
+      const messages = (sid: SessionId, name: string) => dal.timelineOf(sid).filter((t) => t.name === name).map((t) => t.message);
+
+      it('an iteration follows: announced and injected under the fresh root\'s name, the entry role', async () => {
+        const sid = await steerAfterTheResumedIterationCloses((next, s) => {
+          // A queued prompt gives the run another iteration, whose root is fresh and runs as the entry role.
+          expect(next.control({ op: 'createQueuedPrompt', sessionId: s, args: { text: 'then this' } }).ok).toBe(true);
+          expect(next.control({ op: 'submitSteeringPrompt', sessionId: s, args: { agentId: RUN_AGENT_ID, text: 'mind the tests' } }).ok).toBe(true);
+        });
+        expect(dal.iterationsOf(sid).filter((r) => r.iteration >= 2).map((r) => [r.iteration, r.root_persona])).toEqual([[2, 'orchestrator'], [3, 'coding-agent']]);
+        expect(messages(sid, 'steering_submitted')).toEqual([expect.stringMatching(/^A steering prompt was submitted for coding-agent \(/)]);
+        expect(messages(sid, 'steering_injected')).toEqual([expect.stringMatching(/^A steering prompt reached coding-agent \(/)]);
+      });
+
+      it('no iteration follows: announced, and reported not delivered, under the same name', async () => {
+        const sid = await steerAfterTheResumedIterationCloses((next, s) => {
+          expect(next.control({ op: 'submitSteeringPrompt', sessionId: s, args: { agentId: RUN_AGENT_ID, text: 'mind the tests' } }).ok).toBe(true);
+        });
+        expect(dal.iterationsOf(sid).map((r) => r.iteration)).toEqual([1, 2]);
+        expect(messages(sid, 'steering_submitted')).toEqual([expect.stringMatching(/^A steering prompt was submitted for coding-agent \(/)]);
+        expect(messages(sid, 'steering_not_delivered')).toEqual([expect.stringMatching(/^The steering prompt for coding-agent \(.*before coding-agent took another step\.$/)]);
+      });
+
+      it('a stop rests the resumed root: a steer after its turn ended, while the rest waits on a child, is announced and delivered under its name', async () => {
+        const sid = await crashed();
+        // The resumed root answers at once; every child's step is held and ignores its abort, so the stop's rest waits on
+        // the children for the grace — after the root's turn has ended, before the rest leaves it `paused`.
+        const client = new ScriptedModelClient([]);
+        const original = client.stream.bind(client);
+        let childAsked = false;
+        client.stream = (req) => {
+          const root = req.messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text === 'second'));
+          if (root) { client.push(answer('Answered.')); return original(req); }
+          childAsked = true;
+          client.push({ parts: [{ hold: new Promise<void>(() => undefined) }, ...answer('late').parts] });
+          return original({ ...req, signal: new AbortController().signal });
+        };
+        const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, persona: 'coding-agent', model: MODEL, credentialFor: () => async () => 'k' };
+        const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' as const };
+        const next = new Sessions({
+          clocks: clock, publisher: NONE, pid: 88, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
+          model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s),
+          tools: () => ({ specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed' as const, durationMs: 0, label: '', args: {} }), cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false }),
+          configure: () => ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }),
+        });
+        expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        expect(next.prompt(sid, 'second').ok).toBe(true);
+        for (let i = 0; i < 400 && !childAsked; i++) await new Promise((r) => setTimeout(r, 5));
+        expect(childAsked).toBe(true);
+        expect(next.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+        // The root's turn ends on the stop's abort; its children hold the rest until the grace runs out.
+        await new Promise((r) => setTimeout(r, 50));
+        expect(next.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: RUN_AGENT_ID, text: 'mind the tests' } }).ok).toBe(true);
+        clock.advance(30_000);
+        await next.running(sid);
+        expect(dal.iterationsOf(sid).find((r) => r.iteration === 2)).toMatchObject({ state: 'open', interruption: 'stop' });
+        expect(messages(sid, 'steering_submitted')).toEqual([expect.stringMatching(/^A steering prompt was submitted for orchestrator \(/)]);
+        expect(messages(sid, 'steering_injected')).toEqual([expect.stringMatching(/^A steering prompt reached orchestrator \(/)]);
+      });
+    });
+
     /*
      * Found by the fourth review of the repair of a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record
      * (docs/defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md): the root's rows and calls carry the

@@ -18,7 +18,9 @@ agent's ring caption in the built app and fails when it lacks "This agent's own 
 The live run that found it shows it too: the `ask` scenario now probes the caption at the end and checks the same two
 things, and `pnpm live-run --confirm --skip-build --only=ask` against `katalyst` passed on 2026-10-01 (pack
 `.live-run/runs/2026-10-01T03-23-52-396Z`, git-ignored): "This agent's own context window: 4,562 of 262,144 tokens.
-Compression at 60% of the limit. Not a session-wide figure.", with no sentence after it.
+Compression at 60% of the limit. Not a session-wide figure.", with no sentence after it. It passed again at each
+verification round of the same day, on the branch as it then stood: packs `2026-10-01T04-05-45-797Z` (4,562 tokens) and
+`2026-10-01T05-03-02-273Z` (4,612 tokens), the same caption and nothing after it.
 
 ## Specs
 

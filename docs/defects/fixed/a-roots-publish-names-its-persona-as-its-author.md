@@ -64,5 +64,6 @@ conversation, the publisher's task id, is no child's and no iteration root's (OQ
 `created_by` (`StoreDal.rootPublishersOf` in `entryRootsOf`). The regression is pinned by the "a plan cycle's root is
 named by its publishes …" cases in `packages/engine/src/session-resume.test.ts`. A plan cycle's root that published
 nothing is still named only while its run is live. For a persona the canonicaliser rewrites, an artifact it only read is
-then not the run-level agent's received link, where on `main` its read carried the persona. That residual is open in
-[`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`](../a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md).
+then not the run-level agent's received link, where on `main` its read carried the persona. That residual was recorded in
+[`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`](a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md),
+repaired 2026-10-01 under R-067: every plan cycle's root is recorded when it starts (`plan_roots`, store v30).

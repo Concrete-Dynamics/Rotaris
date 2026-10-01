@@ -45,6 +45,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A plan cycle's root is recorded for good when it starts (REQ-MONITOR-044/052/069, REQ-LIBRARY-093/099, REQ-ORCH-153,
+R-067).** A plan cycle has no `iterations` row, so the session named its root through its live run and, after a park or an
+end, through its publishes alone; one that only read an artifact was no agent's, and the run-level agent lost that received
+link at the gate. `plan_roots` (store **v30**) records each plan cycle's root — task id, canonical name, the name its rows
+carry — in `SessionWriter.openPlanRoot`'s transaction, never released, and `entryRootsOf` names it from there. This repairs
+`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md` (acceptance A22). The **runtime view**'s
+§3 `entryRoots` paragraph, its §7 heading (the store is now v30) and a new §7 `plan_roots` row, and the **state-ownership
+view**'s new plan-root row, say so. One table was added (store v30); no package, edge, process, message kind, channel or
+command changed.
+
 **A crash settles its cut call's ring row (REQ-SESSION-129, REQ-MONITOR-105, ADR-0024, R-067).** An orderly end settles
 every open `tool_calls` row when the run's ports close; a crash closes none, so after the crash record settled a call's
 transcript row its ring row stayed `running` for good. `recordCrash` now settles every ring row still `running`

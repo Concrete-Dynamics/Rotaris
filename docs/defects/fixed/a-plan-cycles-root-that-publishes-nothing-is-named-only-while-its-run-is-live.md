@@ -12,10 +12,10 @@ What that loses is the artifacts it read. A read marks the reader a consumer und
 match the run-level agent's received links against the entry persona and each named root's two names. So an artifact
 the root read is not the run-level agent's received link whenever the root's persona id is one the canonicaliser rewrites
 (`Lead Planner` reads as `Lead-Planner`). Before the repair of
-[`a-roots-publish-names-its-persona-as-its-author.md`](fixed/a-roots-publish-names-its-persona-as-its-author.md), a
+[`a-roots-publish-names-its-persona-as-its-author.md`](a-roots-publish-names-its-persona-as-its-author.md), a
 root's read recorded its persona, which the surfaces know the run-level agent by. So this is a narrowing that repair
 left, which the repair of
-[`the-run-level-agent-is-known-by-its-entry-persona-alone.md`](fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md)
+[`the-run-level-agent-is-known-by-its-entry-persona-alone.md`](the-run-level-agent-is-known-by-its-entry-persona-alone.md)
 closed only for a root that also published.
 
 It needs all of the following:
@@ -50,3 +50,28 @@ is not affected.
   parks leaves no row (OQ-106, "A plan cycle that ended before its gate leaves no mark").
 - `packages/engine/src/artifacts/port.ts` — `artifactOps`' `read`, which marks the consumer by its canonical name.
 - `packages/ui/src/agents.ts` — `agentArtifacts` and `personaArtifacts`, which match the run-level agent's links.
+
+## Outcome — repaired 2026-10-01 under R-067
+
+Acceptance finding A22. Confirmed on `fix-accept1-20` (from `origin/main` 71ad8e8) before any change: a plan cycle's root of
+`Lead Planner` that read an artifact of the session and published nothing parked at the gate with the artifact's
+`consumed_by` reading `["Lead-Planner"]` and the session's `entryRoots` reading `[]` — in the process that parked it and
+after a stop before its gate alike (two driven cases, both red).
+
+What changed: a plan cycle's root is now recorded for good when its turn starts. Store **v30** appends `plan_roots` (task
+id, canonical instance name, the name its rows carry, the instant), written by `SessionWriter.openPlanRoot` in the
+transaction that records the root under way (v29) — `Run.turn` hands it the root's canonical name — and never released or
+rewritten (`INSERT OR IGNORE`). `entryRootsOf` names every plan cycle's root from it, after the iterations' roots and before
+the publishes, which still name the roots of plan cycles run before v30. So such a root is named at the gate, after a stop
+and in a fresh process, and what it read — recorded under its canonical name (REQ-LIBRARY-099, REQ-LIBRARY-093) — is the
+run-level agent's received link (`agentArtifacts` already matches each named root's canonical name).
+
+Pinned by: `packages/engine/src/session-resume.test.ts`, describe "REQ-LIBRARY-093 with REQ-MONITOR-044 and OQ-106 …" —
+"… parked at the gate, a plan cycle's root that only read is named — live, and reopened in a fresh process …" and
+"stopped before its gate opened: a plan cycle's root that only read is still named …", both red before the repair
+(`entryRoots` `[]`); `packages/store/src/store.test.ts` — the v29 → v30 migration case (a record kept once, in start order,
+and surviving the v29 release) and the cascade listing that now includes `plan_roots`.
+
+Not shown live: the note was established with a throwaway engine case, not a proof or a live run. No live-run scenario runs
+in `plan` mode with a persona id the canonicaliser rewrites (`katalyst`'s scenarios run as built-in roles, each its own
+canonical name, where the defect cannot show), so the repair is shown by the driven engine cases above.

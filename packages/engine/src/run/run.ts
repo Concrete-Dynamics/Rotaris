@@ -717,7 +717,8 @@ export class Run {
    * PD-ORCH-005 clause 4 with OQ-97, and REQ-LIBRARY-093: the root this run executes, or executed last, by the name its rows
    * and calls carry (`rootName`) and its canonical instance name — what `SessionRecord.entryRoots` adds, while the run is
    * live, for a root with no iteration row, a plan cycle's. The session lets go of the run once it parks or ends, and such
-   * a root is then named by its publishes alone (`entryRootsOf`). Null before the run's first turn.
+   * a root is then named by the record its turn's start wrote (`plan_roots`, store v30) — before v30 by its publishes alone,
+   * so one that only read was no agent's at the gate (`entryRootsOf`). Null before the run's first turn.
    */
   get currentRoot(): EntryRoot | null {
     return this.rootRecord === null ? null : { name: this.rootName, canonical: this.rootRecord.canonicalName };
@@ -1297,7 +1298,7 @@ export class Run {
      */
     const planRoot = iterationOverride !== undefined && resume === undefined ? rootTaskId : null;
     if (planRoot !== null) {
-      const r = writer.openPlanRoot(planRoot, rootName);
+      const r = writer.openPlanRoot(planRoot, rootName, rootCanonical);
       if (!r.ok) this.deps.warn(`the plan cycle's root ${rootName} (${planRoot}) of ${this.sessionId} was not recorded under way: ${r.error.code}`);
     }
     const children = this.deps.toolsFor && this.deps.dal

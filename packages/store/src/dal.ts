@@ -306,6 +306,19 @@ export interface IterationRow {
 export type IterationInsert = Pick<IterationRow, 'session_id' | 'iteration' | 'root_task_id' | 'root_canonical_name' | 'root_persona' | 'todo_task_id' | 'task' | 'opened_at'>;
 
 /**
+ * v30 — REQ-MONITOR-044 with REQ-ORCH-153 and REQ-LIBRARY-093: a plan cycle's root, recorded when its turn starts. A plan
+ * cycle is not an iteration, so this is the record that names its root once its run is gone: the canonical instance name
+ * its reads and publishes record, and the name its rows carry.
+ */
+export interface PlanRootRow {
+  readonly session_id: string;
+  readonly root_task_id: string;
+  readonly root_canonical_name: string;
+  readonly root_persona: string;
+  readonly opened_at: string;
+}
+
+/**
  * v23 — PD-ORCH-005 clauses 1 and 12: one entry of an agent's recorded conversation. `message` is one message as the
  * model saw it; `replacement` is a compression, whose body is the whole conversation that replaced the one before.
  */
@@ -465,6 +478,10 @@ export class StoreDal {
       // v29 — REQ-MONITOR-102 with REQ-ORCH-153: the plan cycle's root under way, and its release once its calls are counted.
       setPlanRoot: db.prepare('UPDATE sessions SET plan_root_task_id = ?, plan_root_persona = ? WHERE session_id = ?'),
       clearPlanRoot: db.prepare('UPDATE sessions SET plan_root_task_id = NULL, plan_root_persona = NULL WHERE session_id = ? AND plan_root_task_id = ?'),
+      // v30: a plan cycle's root is recorded once and never changed; a second write of the same root changes nothing.
+      insertPlanRoot: db.prepare(`INSERT OR IGNORE INTO plan_roots (session_id, root_task_id, root_canonical_name, root_persona, opened_at)
+        VALUES (@session_id, @root_task_id, @root_canonical_name, @root_persona, @opened_at)`),
+      planRootsOf: db.prepare('SELECT * FROM plan_roots WHERE session_id = ? ORDER BY opened_at, root_task_id'),
       // REQ-ORCH-087 / REQ-SESSION-110: the pause recorded with its count; the resolution clears it in the same act that writes the status.
       setPause: db.prepare('UPDATE sessions SET execution_status = ?, paused_at_count = ?, message_limit = ?, updated_at = ? WHERE session_id = ?'),
       // REQ-ORCH-153/154 (v17): the plan cycle record, and the two session columns that hold a gate open across a restart.
@@ -950,6 +967,14 @@ export class StoreDal {
   /** v29 — REQ-MONITOR-102 with REQ-ORCH-153: records `taskId` as the plan cycle's root under way, its rows under `persona`. */
   setPlanRoot(id: SessionId, taskId: string, persona: string): void {
     this.stmts['setPlanRoot']!.run(taskId, persona, id);
+  }
+  /** v30 — REQ-ORCH-153: records a plan cycle's root; false when it is recorded already. */
+  insertPlanRoot(row: PlanRootRow): boolean {
+    return this.stmts['insertPlanRoot']!.run(row).changes === 1;
+  }
+  /** v30: the session's plan cycles' roots, in the order they started. */
+  planRootsOf(id: SessionId): PlanRootRow[] {
+    return this.stmts['planRootsOf']!.all(id) as PlanRootRow[];
   }
   /** v29: releases the plan cycle's root `taskId`; false when the session does not name it (never, or released already). */
   clearPlanRoot(id: SessionId, taskId: string): boolean {

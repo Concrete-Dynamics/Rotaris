@@ -738,18 +738,22 @@ export function artifactLinksOf(dal: StoreDal, sessionId: SessionId): SessionArt
  * the entry role's root agents of the session, each (name, canonical name) pair once — what the run-level agent owns rows and
  * artifacts under (REQ-MONITOR-071, REQ-CHAT-069, REQ-MONITOR-044). First every iteration's root, by the persona it was
  * opened with (`root_persona`, the name its rows and calls carry, which a root resumed as the entry role keeps) and its
- * `root_canonical_name` (which its publishes and reads record). Then each root no iteration row records — a plan cycle's
- * (REQ-ORCH-153) — that published, by its publish (`StoreDal.rootPublishersOf`): a root publishes under its task id as its
- * conversation (OQ-106), always as a fresh root, so the publish's persona is the name its rows carry and `created_by` its
- * canonical name. Its run is gone once it parks at the gate or ends, and with it `Run.currentRoot`, so without this a
- * session at the gate named no root and the plan cycle root's publish was no agent's (found by the fifth review of that
- * repair). Last the live run's current root. A plan cycle's root that published nothing is named only while its run is
- * live (`docs/defects/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`).
+ * `root_canonical_name` (which its publishes and reads record). Then every plan cycle's root (REQ-ORCH-153: a plan cycle is
+ * not an iteration and has no row there), recorded when its turn started (`StoreDal.planRootsOf`, store v30) by the same
+ * pair, so it is named once its run has parked at the gate or ended whether or not it published — before v30 a plan
+ * cycle's root that only READ an artifact was named only while its run was live, and what it read, which records it by
+ * its canonical name (REQ-LIBRARY-099), was no agent's received link at the gate (the repair of
+ * `a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`, acceptance A22, R-067). Then each root
+ * no row records that published, by its publish (`StoreDal.rootPublishersOf`) — a plan cycle's from before v30: a root
+ * publishes under its task id as its conversation (OQ-106), always as a fresh root, so the publish's persona is the name
+ * its rows carry and `created_by` its canonical name (found by the fifth review of that repair). Last the live run's
+ * current root.
  */
 export function entryRootsOf(dal: StoreDal, sessionId: SessionId, run: { readonly currentRoot: EntryRoot | null } | null | undefined): EntryRoot[] {
   const out: EntryRoot[] = [];
   const add = (root: EntryRoot): void => { if (!out.some((r) => r.name === root.name && r.canonical === root.canonical)) out.push(root); };
   for (const r of dal.iterationsOf(sessionId)) add({ name: r.root_persona, canonical: r.root_canonical_name });
+  for (const r of dal.planRootsOf(sessionId)) add({ name: r.root_persona, canonical: r.root_canonical_name });
   for (const p of dal.rootPublishersOf(sessionId)) if (p.source_persona && p.created_by) add({ name: p.source_persona, canonical: p.created_by });
   if (run?.currentRoot) add(run.currentRoot);
   return out;

@@ -5680,8 +5680,10 @@ root publishes under". The repair of
 [`the-run-level-agent-is-known-by-its-entry-persona-alone.md`](../defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
 A plan cycle's root, which no iteration row records, is named by its publishes; one that published nothing is named only
 while its run is live
-([`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`](../defects/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md),
-open).* A superseded artifact is listed nowhere, as the Library's table lists it nowhere. The ready flag is stated in
+([`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`](../defects/fixed/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md),
+open). Reported back 2026-10-01, at the repair's first execution (acceptance A22, R-067): no longer true — every plan
+cycle's root is recorded when its turn starts (`plan_roots`, store v30) and named from there, whether or not it
+published, so what such a root read is the run-level agent's received link at the gate and after it.* A superseded artifact is listed nowhere, as the Library's table lists it nowhere. The ready flag is stated in
 words: "ready" (REQ-LIBRARY-136), else the status.
 
 **What a ruling decides.** Whether a link should open the Library (as built in the main window), an inspector in place

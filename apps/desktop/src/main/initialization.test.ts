@@ -8,7 +8,7 @@ import { readInitializationState, writeConfigFields, type InitializationTask, ty
 import {
   CANCELLED_BEFORE_SETUP_ERROR, CODE_INTELLIGENCE_FAILED_SUMMARY, CODE_INTELLIGENCE_SUCCESS_CODE, CODE_INTELLIGENCE_SUCCESS_NON_CODE,
   CODE_INTELLIGENCE_TASK_ID, deliverSetupCancel, InitializationCoordinator, NOT_A_LOCAL_LAUNCH_ERROR, NOT_A_LOCAL_LAUNCH_SUMMARY,
-  SETUP_FOLLOW_BOUND_MS, SETUP_OVERDUE_DETAIL, SETUP_RUN_HOST_EXITED_DETAIL,
+  SETUP_FOLLOW_BOUND_MS, SETUP_OVERDUE_DETAIL, SETUP_RUN_HOST_EXITED_DETAIL, SETUP_START_UNANSWERED_DETAIL,
 } from './initialization.js';
 
 function workspace(): { root: string; agents: string } {
@@ -55,7 +55,7 @@ interface Harness {
 /** A hold a test can set at any moment: every setup status read taken while it is set waits on it. */
 interface StatusHold { current: Promise<void> | null }
 
-function harness(options: { applicable?: boolean; startRefusal?: { code: string; reason: string }; startStatus?: McpSetupStatus; writeFails?: string | null; modelReachable?: boolean; statusGate?: Promise<void>; hold?: StatusHold; onStart?: () => void; onCancel?: () => void; writeHold?: StatusHold; startHold?: StatusHold; quitting?: { current: boolean } } = {}): Harness {
+function harness(options: { applicable?: boolean; startRefusal?: { code: string; reason: string }; startStatus?: McpSetupStatus; writeFails?: string | null; modelReachable?: boolean; statusGate?: Promise<void>; hold?: StatusHold; onStart?: () => void; onCancel?: () => void; writeHold?: StatusHold; startHold?: StatusHold; quitting?: { current: boolean }; startRejects?: Error; statusRejects?: Error } = {}): Harness {
   const { root, agents } = workspace();
   const published: InitializationStateView[] = [];
   /** The root each entry of `published` was sent for, index for index. */
@@ -86,9 +86,9 @@ function harness(options: { applicable?: boolean; startRefusal?: { code: string;
       return landed;
     },
     setup: {
-      start: async (workspaceId) => { addressed.push({ call: 'start', workspaceId }); options.onStart?.(); await options.startHold?.current; return options.startRefusal ? { ok: false, ...options.startRefusal } : { ok: true, status: options.startStatus ?? status() }; },
+      start: async (workspaceId) => { addressed.push({ call: 'start', workspaceId }); options.onStart?.(); await options.startHold?.current; if (options.startRejects) throw options.startRejects; return options.startRefusal ? { ok: false, ...options.startRefusal } : { ok: true, status: options.startStatus ?? status() }; },
       cancel: async (workspaceId) => { addressed.push({ call: 'cancel', workspaceId }); options.onCancel?.(); },
-      status: async (workspaceId) => { addressed.push({ call: 'status', workspaceId }); await options.statusGate; await options.hold?.current; return status({ applicable: options.applicable !== false }); },
+      status: async (workspaceId) => { addressed.push({ call: 'status', workspaceId }); await options.statusGate; await options.hold?.current; if (options.statusRejects) throw options.statusRejects; return status({ applicable: options.applicable !== false }); },
     },
     publish: (publishedRoot, s) => { publishedTo.push(publishedRoot); published.push(s); },
     banner: (headline, detail) => banners.push({ headline, detail }),
@@ -1015,6 +1015,57 @@ describe('one setup at a time across a workspace switch', () => {
  * is lost, the follow must still end, as a retryable failure, and release its turn
  * (`docs/defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`).
  */
+/**
+ * REQ-WORKSPACE-084/093/103: main's `mcp.setup` requests reject when the run host gives no reply within their 15 s bound —
+ * as when it has exited and is never forked again (`workspace-proof`'s scenario 8d)
+ * (`docs/defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`).
+ */
+describe('a setup request the run host never answers', () => {
+  const NO_REPLY = new Error('no reply to mcp.setup within 15000 ms');
+
+  it('fails a start that rejects retryably, in REQ-WORKSPACE-093\'s summary, not as a task with no outcome (REQ-WORKSPACE-084, REQ-WORKSPACE-093, REQ-WORKSPACE-103, OQ-169)', async () => {
+    const h = harness({ startRejects: NO_REPLY });
+    await h.coordinator.resolve(h.root, true);
+    await settle();
+    const task = h.published.at(-1)!.report.tasks[0]!;
+    expect(task.status).toBe('failure');
+    expect(task.retryable).toBe(true);
+    expect(task.error).toBe(`Code intelligence could not complete this project's setup: ${SETUP_START_UNANSWERED_DETAIL} (${NO_REPLY.message})`);
+    expect(task.summary).toBe(CODE_INTELLIGENCE_FAILED_SUMMARY);
+    expect(task.error).not.toContain('ended without reporting an outcome');
+    expect(h.banners).toEqual([{ headline: 'Project setup did not finish', detail: CODE_INTELLIGENCE_FAILED_SUMMARY }]);
+    expect(h.logs.some((l) => l.level === 'warn' && l.message.includes('did not answer') && l.message.includes(NO_REPLY.message))).toBe(true);
+    // REQ-WORKSPACE-084: a failure records nothing, so the task stays pending for the next open.
+    expect(readInitializationState(h.agents).completed).toEqual([]);
+  });
+
+  it('passes the setup turn on after a start that rejects, so the setup queued behind it starts (REQ-WORKSPACE-109)', async () => {
+    let starts = 0;
+    const h = harness({ startRejects: NO_REPLY, onStart: () => { starts += 1; } });
+    await h.coordinator.resolve(h.root, true);
+    await settle();
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents, 'ws-other');
+    await h.coordinator.resolve(other.root, true);
+    await settle();
+    expect(starts).toBe(2);
+  });
+
+  it('counts the task not applicable, logged, when the status read rejects — REQ-WORKSPACE-080\'s raising predicate — and fails no resolution (REQ-WORKSPACE-080, REQ-WORKSPACE-081, REQ-WORKSPACE-102)', async () => {
+    const h = harness({ statusRejects: NO_REPLY });
+    await expect(Promise.resolve(h.coordinator.registry.all()[0]!.applicable({ workspaceRoot: h.root }))).rejects.toBe(NO_REPLY);
+    const state = await h.coordinator.resolve(h.root, true);
+    expect(state.resolutionFailed).toBe(false);
+    expect(state.view.pending).toEqual([]);
+    expect(h.banners).toEqual([]);
+    expect(h.addressed.filter((a) => a.call === 'start')).toEqual([]);
+    expect(h.logs.some((l) => l.level === 'warn' && l.message.includes('treated as not applicable') && l.message.includes(NO_REPLY.message))).toBe(true);
+    // The task is recorded nowhere, so a later open whose read answers still owes it.
+    expect(readInitializationState(h.agents).completed).toEqual([]);
+    expect(readInitializationState(h.agents).skipped).toEqual([]);
+  });
+});
+
 describe('a setup whose finished status never arrives', () => {
   it('ends the follow as a retryable failure when the run host exits, and starts the setup queued behind it (REQ-WORKSPACE-109, REQ-WORKSPACE-084, REQ-WORKSPACE-093)', async () => {
     let starts = 0;

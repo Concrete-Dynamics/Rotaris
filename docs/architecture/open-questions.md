@@ -8403,6 +8403,7 @@ workspace; wait for it to finish or cancel it first.", "That workspace is not op
 could not be loaded") or, for a run cancelled before its setup started, "the setup was cancelled before it started."
 (`CANCELLED_BEFORE_SETUP_ERROR`, as built under R-067 on 2026-09-30). A refused start is not waited out: the task fails
 at once, as any other retryable failure does, and runs again at the next open or on Try again.
+*(2026-10-01: a start the run host never answers takes the same reason, with the build's detail recorded under OQ-169.)*
 
 **What a ruling decides.** Whether a setup that began no stage has a reason and a detail of the specification's own —
 for the refusal, and for the cancellation, where REQ-WORKSPACE-092's "Setup was stopped before this step finished." is
@@ -8503,6 +8504,19 @@ one that was running is not, since it never finished (REQ-WORKSPACE-109). Nothin
 On the bound, no cancellation is sent: the run host's one setup may by then be another's (the MCP category's), and its
 own budgets already end every stage. Nothing in main ends a step's processes when the run host that launched them is
 killed by signal; whether they outlive it was not measured, and `workspace-proof`'s scenario 8d ends its stand-in itself.
+
+*Extended 2026-10-01 by the repair of
+[`a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`](../defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md):*
+a setup whose **start** the run host never answers — main's `mcp.setup` request rejecting on its 15 s bound, as for a
+run queued behind a setup whose run host was lost (scenario 8d) — ends the same way, before any stage: a retryable failure
+with REQ-WORKSPACE-093's summary, under OQ-167's reason, its detail the build's "the run host did not answer the setup's
+start" with the request's own error in parentheses (`SETUP_START_UNANSWERED_DETAIL`), said in the log at `warn`. Before,
+it escaped the task and REQ-WORKSPACE-084's generic report named it a task that ended without an outcome. No
+cancellation follows it: a run host that did take the start late holds a setup the coordinator no longer follows, and the
+MCP category's Cancel or the stage budgets end it. The task's **status read** for applicability is not part of this
+reading: a read that rejects makes the predicate raise, which REQ-WORKSPACE-080 itself says is logged and counted not
+applicable, and the build does that. A ruling on this question also decides whether an unanswered start has words of the
+specification's own, and whether it should be followed by a cancellation.
 
 **What a ruling decides.** Whether these two cases have words of the specification's own; whether the bound is the right
 one (it adds nothing for the run host's own work around the stages, which the budgets do not cover); whether the

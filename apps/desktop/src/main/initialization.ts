@@ -57,6 +57,12 @@ export const CANCELLED_BEFORE_SETUP_ERROR = `${SETUP_REASON}: the setup was canc
  */
 export const SETUP_RUN_HOST_EXITED_DETAIL = 'the run host exited before the setup finished.';
 export const SETUP_OVERDUE_DETAIL = 'no outcome arrived within the setup\'s time budgets.';
+/**
+ * REQ-WORKSPACE-084/093: the third way, before any stage: the setup's start never answered — main's request rejected on its
+ * bound, as when the run host has exited. A retryable failure under `SETUP_REASON`, its detail this sentence and the
+ * request's own error; the build's, under OQ-167/OQ-169.
+ */
+export const SETUP_START_UNANSWERED_DETAIL = 'the run host did not answer the setup\'s start';
 /** REQ-WORKSPACE-092: once a step is stopped, nothing it launched is still running 5 s later. */
 const SETUP_STOP_GRACE_MS = 5_000;
 /**
@@ -265,7 +271,17 @@ export class InitializationCoordinator {
           // REQ-WORKSPACE-109: cancelled while it waited, the task never starts its setup and fails as REQ-WORKSPACE-093 says.
           // A workspace no window holds any more had its run aborted when it closed (`close`), so it fails the same way.
           if (workspaceId === null || !await this.turnReached(previous, ctx.signal)) return this.failure(CANCELLED_BEFORE_SETUP_ERROR, CODE_INTELLIGENCE_FAILED_SUMMARY, true, []);
-          const started = await this.deps.setup.start(workspaceId);
+          // REQ-WORKSPACE-084/093: a start the run host never answers — main's request rejects on its bound, as when the run
+          // host has exited — is this task's own retryable failure, not one that ended without an outcome
+          // (`docs/defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`).
+          let started: Awaited<ReturnType<SetupPort['start']>>;
+          try {
+            started = await this.deps.setup.start(workspaceId);
+          } catch (cause) {
+            const error = cause instanceof Error ? cause.message : String(cause);
+            this.deps.log(`initialization: the run host did not answer ${CODE_INTELLIGENCE_TASK_ID}'s setup start for ${ctx.workspaceRoot} (${error})`, 'warn');
+            return this.failure(`${SETUP_REASON}: ${SETUP_START_UNANSWERED_DETAIL} (${error})`, CODE_INTELLIGENCE_FAILED_SUMMARY, true, []);
+          }
           // REQ-WORKSPACE-093/094: a refused start is not REQ-WORKSPACE-094's "not a local launch" — that one arrives as an
           // `unavailable` status, which `resultOf` maps — but a condition that may not hold at the next open: retryable, in
           // this domain's summary, the refusal's own words as the detail

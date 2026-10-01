@@ -853,6 +853,18 @@ try {
           && lost.endsWith("→ failure — Code intelligence could not create this project's configuration: the run host exited before the setup finished.")
           && next.includes('→ failure'),
         `run host pid ${host} killed; the lost setup's run ${lostEnded ? `ended ${lostAfter} ms later: ${JSON.stringify(lost.slice(0, 260))}` : 'NEVER ended'}; the queued run ${queuedEnded ? `ended: ${JSON.stringify(next.slice(0, 260))}` : 'NEVER ended'}`);
+      // The queued run's start goes unanswered: REQ-WORKSPACE-093's retryable failure in this task's own words, its summary
+      // the banner's (REQ-WORKSPACE-103), never REQ-WORKSPACE-084's generic "ended without reporting an outcome"
+      // (`docs/defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`).
+      await s.driver.useWindow('init-queued');
+      const queuedRead = await s.driver.command({ kind: 'initialization.read' });
+      await s.driver.useWindow();
+      const queuedTask = queuedRead?.value?.report?.tasks?.find((t) => t.id === 'code-intelligence-setup');
+      check('REQ-WORKSPACE-084 / REQ-WORKSPACE-093 / REQ-WORKSPACE-103: a setup start the run host never answers fails retryably in REQ-WORKSPACE-093\'s summary, not as a task with no outcome',
+        queuedEnded && next.includes("→ failure — Code intelligence could not complete this project's setup: the run host did not answer the setup's start (")
+          && !/ended without reporting an outcome/.test(log) && queuedTask?.retryable === true
+          && queuedTask?.summary === 'Code intelligence setup did not complete for this project. It runs again the next time this workspace is opened.',
+        `the queued run ${queuedEnded ? `ended: ${JSON.stringify(next.slice(0, 260))}` : 'NEVER ended'}; its report reads retryable ${String(queuedTask?.retryable)}, summary ${JSON.stringify(queuedTask?.summary ?? null)}${/ended without reporting an outcome/.test(log) ? '; the log says "ended without reporting an outcome"' : ''}`);
     }
     // Nothing in main ends a step's processes when the run host that launched them is killed (OQ-169): end the stand-in here.
     if (createPid > 0) { try { process.kill(createPid, 'SIGKILL'); } catch { /* already gone */ } }

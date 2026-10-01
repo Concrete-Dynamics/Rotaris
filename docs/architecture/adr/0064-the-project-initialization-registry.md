@@ -431,8 +431,8 @@ with it the first ended 101 ms after it ("… could not create this project's co
 setup finished.") and the queued run was attempted (42 passed, 0 failed, 2 skipped; as root under Xvfb, Node 24,
 `--skip-build` after `pnpm build`). The bound is the unit cases' alone: no proof holds a setup for 37 minutes. **Found
 besides:** the queued run's start, sent to the run host that is gone, ends 15 s later as a task with no outcome rather
-than in REQ-WORKSPACE-093's words (`../../defects/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`,
-recorded, not repaired).
+than in REQ-WORKSPACE-093's words (`../../defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`,
+recorded, not repaired here; repaired in the fourteenth round).
 
 
 **Twelfth round (2026-10-01): one coordinator, a workspace per window.** "Why main owns it" put the coordinator where main
@@ -465,3 +465,19 @@ at `info`, because the shutdown ends the setup; otherwise it is said at `warn`, 
 addresses the cancellation by the run's own workspace rather than the focused window's. **Measured** by one unit case,
 red on the code before, which gives no warn line at a quit and still warns for a refusal while the application stays.
 The live-run check is reported in `first-executions.md`'s row of this date.
+
+**Fourteenth round (2026-10-01): a setup start the run host never answers.** The eighth round made a start the run host
+refuses this task's own retryable failure; a start it never answers was left to the runner's caller. Main's `mcp.setup`
+request rejects on its 15 s bound, as for a run queued behind a setup whose run host was lost (the eleventh round's
+scenario 8d), and the rejection escaped `run`, so `executeTasks` reported REQ-WORKSPACE-084's generic "Code intelligence
+project setup ended without reporting an outcome: Error: no reply to mcp.setup within 15000 ms" with its generic summary
+(`../../defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`). The runner now
+catches it: a retryable failure in REQ-WORKSPACE-093's summary, under the build's reason for a setup that began no stage
+(OQ-167), its detail the build's "the run host did not answer the setup's start" with the request's own error
+(`SETUP_START_UNANSWERED_DETAIL`; OQ-169 records the reading). The task's status read for applicability was not changed:
+one that rejects makes the predicate raise, which REQ-WORKSPACE-080 counts not applicable, and the resolution does not
+fail. **Measured** by three unit cases (the start's red on the code before) and by scenario 8d, which now reads the queued
+run's outcome and report: "… could not complete this project's setup: the run host did not answer the setup's start (no
+reply to mcp.setup within 15000 ms)", retryable, REQ-WORKSPACE-093's summary (47 passed, 0 failed, 2 skipped; as root
+under Xvfb, Node 24, `--skip-build` after `pnpm build`, load average about 7 to 8 from other agents). The scenario was
+not run on a build of the code before; the note records what it read there on the same day.

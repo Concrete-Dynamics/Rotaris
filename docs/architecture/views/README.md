@@ -144,6 +144,12 @@ pending. This repairs `a-childs-recorded-grant-is-its-declared-tools-not-the-nar
 surface and its `children` row say so, and ADR-0034's evidence passages are corrected in place. No package, edge, process,
 message kind, channel, command or store column changed.
 
+**A setup start the run host never answers fails in REQ-WORKSPACE-093's words (REQ-WORKSPACE-084/093/103, OQ-169, ADR-0064).**
+The initialization coordinator catches a `setup.start()` that rejects and reports it as a retryable failure in this
+domain's summary rather than as a task with no outcome (process view, `initialization.*`). This repairs
+`a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`. No package, edge, process, message
+kind, channel, command or store column changed.
+
 **A setup whose finished status never arrives still ends (REQ-WORKSPACE-084/109, OQ-169, ADR-0064).** Main tells the
 initialization coordinator when the run host exits (`onRunHostExit`), and a follow is bounded by the stage budgets plus
 REQ-WORKSPACE-092's 5 s each (`SETUP_FOLLOW_BOUND_MS`); either ends it as a retryable failure and the next setup's turn

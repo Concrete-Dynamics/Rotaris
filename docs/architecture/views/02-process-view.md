@@ -459,7 +459,7 @@ an abort that lands while the setup's start request is in flight is sent as soon
 2026-09-30, R-067). A follow whose finished status can never come still ends, as a retryable failure that releases the
 next setup's turn: main tells the coordinator when the run host exits (`onRunHostExit`, from the run host's `exit`; it is
 never forked again), and a follow with no finished status 2235 s after it began — every stage budget plus 5 s each —
-ends on its own (`SETUP_FOLLOW_BOUND_MS`; REQ-WORKSPACE-084/091/092/109, OQ-169; 2026-10-01). Main is the coordinator because REQ-WORKSPACE-085 gives the marker **one writer** and that file
+ends on its own (`SETUP_FOLLOW_BOUND_MS`; REQ-WORKSPACE-084/091/092/109, OQ-169; 2026-10-01). A setup start the run host never answers — main's request rejecting on its 15 s bound — is the task's own retryable failure in REQ-WORKSPACE-093's summary, not REQ-WORKSPACE-084's generic report, and the next setup's turn comes; a status read that rejects counts the task not applicable (REQ-WORKSPACE-080; OQ-169; 2026-10-01). Main is the coordinator because REQ-WORKSPACE-085 gives the marker **one writer** and that file
 is the workspace service's (`config.setField`, Tier A) while the one shipped task's work is the run host's
 (`mcp.setup`) — and the matrix gives neither of those two an edge to the other. The run host gained one event,
 `mcp.setupStatus`, pushed on every change of the setup's status: the task follows a live setup through it rather

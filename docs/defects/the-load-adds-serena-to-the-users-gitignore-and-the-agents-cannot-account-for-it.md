@@ -74,6 +74,12 @@ stays clean, and no file the user tracks changes, so there is nothing left for a
 idempotent; nothing is written for a workspace below a repository's top level or in none (OQ-161 states why). Pinned by
 five cases in `load.test.ts` (`OQ-161's reading: …`) and the amended REQ-CONFIG-013 case.
 
+**Shown in a live run.** `pnpm build`, then `live-run.mjs --confirm --skip-build --only=edit,frictions` against the
+registered `katalyst` endpoint (pack `.live-run/runs/2026-10-01T11-11-22-487Z/` of the `fin2-config-readings` worktree;
+git-ignored): both scenarios passed. In `edit`, a child's own `git status --porcelain` (transcript step 44) listed only
+`src/todos.js`, and the script's `git diff` counted the two files the task changed; neither transcript mentions
+`.gitignore`. The `duress` run, where the unrequested child appeared, was not run in this round (the acceptance plan's).
+
 **Left to the owner.** OQ-161's ruling: whether the load may write the marker's directory anywhere at all, and if so
 whether the exclude file is the place, or whether the runtime should be started so that it creates no marker in the
 workspace root. A `.gitignore` an earlier build amended keeps its `.serena/` line: the product never removes a line from

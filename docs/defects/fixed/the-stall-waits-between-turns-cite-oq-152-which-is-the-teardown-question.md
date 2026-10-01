@@ -19,7 +19,7 @@ the repair of A16 (the teardown) both reached `origin/main` in 8553bdb. `pnpm sy
 identifiers, not OQ numbers, so nothing failed.
 
 Noticed 2026-09-30 by the repair of
-[`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](fixed/a-child-settled-outside-its-execution-fires-no-child-completed-hook.md)
+[`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](a-child-settled-outside-its-execution-fires-no-child-completed-hook.md)
 while renumbering that repair's own question (OQ-154), and confirmed by its verifier with
 `git grep -n OQ-152 origin/main -- packages`. Established by reading the record and the code; nothing is driven.
 
@@ -39,3 +39,13 @@ None. This is a traceability defect in the record, not a behaviour the specifica
   correctly, for the teardown.
 - [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](a-child-waiting-on-its-own-children-is-reported-stalled.md):
   still open, although stall.ts names its repair.
+
+## Outcome — repaired 2026-10-01 under R-067
+
+Repaired by branch `fix-accept1-15`, which carried the between-turns reading as an OQ of its own and was merged after this
+note was written. The reading is now **OQ-155** in `docs/architecture/open-questions.md` ("Is a child waiting on its own
+children silent, for the stall watchdog?"), numbered OQ-152 when the branch raised it, then OQ-154, then OQ-155 once
+origin/main's OQ-154 (the `child_completed` question this note's finder renumbered) had landed. `stall.ts` cites OQ-155 at
+the four places this note names, and its correction of the recovery at a turn's end cites OQ-153 beside it.
+[`a-child-waiting-on-its-own-children-is-reported-stalled.md`](a-child-waiting-on-its-own-children-is-reported-stalled.md)
+has its outcome written and is in `fixed/`. Nothing in the code changed for this note beyond the citations.

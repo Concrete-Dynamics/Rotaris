@@ -417,7 +417,9 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   // logged as JSON (REQ-SHELL-072/076/078). ROTARIS_CAPTURE_PERSONA_PNG_AT="path@ms" and
   // ROTARIS_CAPTURE_PERSONA_PROBE_AT="selector@ms": a capture of, and a probe inside, the FIRST persona window.
   // ROTARIS_CAPTURE_PERSONA_CLOSE_AT="ms": the user's close of that window (hides it). ROTARIS_CAPTURE_PERSONA_STEER="text@ms":
-  // the steer card's text set and "Send steer" clicked inside it (REQ-MONITOR-070).
+  // the steer card's text set and "Send steer" clicked inside it (REQ-MONITOR-070). ROTARIS_CAPTURE_PERSONA_CLICKS="selector@ms;;…":
+  // the first element matching the selector clicked inside that window (its `click()`, so the handler has run when the
+  // line is logged) — a tab, the run instance's Cancel and its confirmation (acceptance A35, REQ-MONITOR-127/130).
   // ROTARIS_CAPTURE_VIEWS="n@ms;;n@ms": Ctrl+n at each time — a sequence of views in one launch (the parity probes of REQ-MONITOR-038).
   for (const step of steps(process.env['ROTARIS_CAPTURE_VIEWS'])) {
     clocks.timers.after(millis(step.at), () => {
@@ -532,6 +534,15 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       if (!e) { log(`capture: persona-steer-at ${step.at}: no persona window`); return; }
       const done = await e.win.webContents.executeJavaScript(`(() => { const el = document.querySelector('[data-testid="persona-steer"]'); if (!el) return 'no box'; const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; setter.call(el, ${JSON.stringify(step.selector)}); el.dispatchEvent(new Event('input', { bubbles: true })); const b = document.querySelector('[data-testid="persona-send"]'); if (!b) return 'no send'; b.click(); return 'sent'; })()`).catch((cause: unknown) => `error: ${String(cause)}`) as string;
       log(`capture: persona-steer-at ${step.at} → ${done}`);
+    });
+  }
+
+  for (const step of steps(process.env['ROTARIS_CAPTURE_PERSONA_CLICKS'])) {
+    clocks.timers.after(millis(step.at), async () => {
+      const e = firstPersona();
+      if (!e) { log(`capture: persona-click-at ${step.at} ${step.selector}: no persona window`); return; }
+      const done = await e.win.webContents.executeJavaScript(`(() => { const el = document.querySelector(${JSON.stringify(step.selector)}); if (!el) return 'absent'; el.click(); return 'clicked'; })()`).catch((cause: unknown) => `error: ${String(cause)}`) as string;
+      log(`capture: persona-click-at ${step.at} ${step.selector} → ${done}`);
     });
   }
 

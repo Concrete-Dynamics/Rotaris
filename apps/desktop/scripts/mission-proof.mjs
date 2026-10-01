@@ -22,6 +22,13 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *   4. cancel      — a child with a live descendant: the confirmation names it and the cascade; the child cancelled, the run on;
  *                    the rows sampled just after the confirm (REQ-MONITOR-128's optimistic cancel) and overwritten by the
  *                    engine's record at 9 s (REQ-MONITOR-296).
+ *   4b. cancel run — the run row selected, "Cancel selection" confirmed: every sample after the confirm reads the subtitle and
+ *                    the run row (and the status strip) `Cancelling` or the run at rest — never `Running` nor another active
+ *                    status; how many land inside the `Cancelling` window is host timing, recorded and not asserted
+ *                    (acceptance A35, REQ-MONITOR-127/130).
+ *   4c. persona    — the inspector pops out the run-level agent; the window's Cancel on the run's own instance confirmed: every
+ *                    snapshot after the confirmation was handled reads the instance's state `cancelling` or the run at rest,
+ *                    never `running` (acceptance A35, REQ-MONITOR-127/130, REQ-SHELL-075 (a)).
  *   5. open        — pop-out off: Open pins the agent in the Workspace inspector; on: one window per persona, 820×620,
  *                    reused for a second instance, hidden on close, shown again; a new session destroys it.
  *   6. inspector   — following the latest author, pinned on selection, chips in one order across a state change, Steer
@@ -288,6 +295,102 @@ const s4 = scenario('cancel', ['personas:', '  lead:', '    name: lead', '    mo
   const settled9 = probesAt(r.log, 9000, '.agent-table__row') ?? [];
   expect(settled9.length >= 2 && settled9.every((p) => p.data['data-state'] === 'cancelled' && !/which the user cancelled|The user cancelled this agent/.test(p.text)), `at 9 s the rows were not the engine's cancelled record: ${JSON.stringify(settled9.map((p) => `${p.text.slice(0, 60)}:${p.data['data-state']}`))} (REQ-MONITOR-296)`);
   results.cancel = { justAfterConfirm: justAfter, dialog, confirmLabel, alphaState: alpha?.state, descendants: kids.filter((k) => k.parent_id === alpha?.task_id).map((k) => `${k.canonical_name}:${k.state}`), rowsAfter: after9, runStatus: row.execution_status, cancelEntry: names.find((n) => n.name === 'child_user_cancelled')?.message ?? null };
+}
+
+// 4b. Cancel the run from the Mission view (acceptance A35, REQ-MONITOR-127/130/296): the run row selected, "Cancel selection",
+// confirmed. The session is shown `cancelling` from the confirmation — the engine writes no `cancelling` for the explicit
+// cancel, so its records read `running` until the run's end (OQ-165) — and no sample from the confirm to the run's end
+// reads `Running`, in the subtitle, the run row or the status strip. Before the repair only the Workspace set anything, and the Mission view read `Running` throughout.
+const s4b = scenario('cancel-run', ['personas:', '  lead:', '    name: lead', '    model: scripted', "    purpose: 'Delegates the work, then waits for it.'", "    system_prompt: 'You are a lead. Delegate the work, then wait for it.'", '    tools: [delegate, read_file, todo]']);
+{
+  const SAMPLES = [8210, 8220, 8230, 8240, 8250, 8270, 8300, 8500, 9000, 10000];
+  // One selector list, so each sample is ONE querySelectorAll — the dialog, the subtitle, the run row and the strip read in
+  // the same instant. The confirm click is an input event the renderer handles after the main process logs "clicked", and a
+  // separate probe can run before it (seen 2026-10-01: the click and a probe reading `Running` logged in the same
+  // millisecond, the next probe 6 ms later reading `Cancelling`). The dialog closes in the same commit that lays the
+  // overlay (`confirmCancel`: `setConfirming(null)`, then `cancelRun`'s `beginRun`, in one handler), so a snapshot without
+  // the dialog was read after the click was handled — on the base build as on the repair.
+  const SNAPSHOT = '[data-testid="mission-confirm"], [data-testid="mission-subtitle"], [data-testid="mission-run-row"], .status-strip__item';
+  const r = await launch('cancel-run', s4b, {
+    ROTARIS_SCRIPT: 'delegate:lead:alpha,answer', ROTARIS_CHILD_SCRIPT: 'delegate:coding-agent:sub,wait:16000,answer,wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'cancel the run',
+    ROTARIS_CAPTURE_VIEWS: '3@3500',
+    ROTARIS_CAPTURE_CLICKS: '[data-testid="mission-run-row"]@7000;;[data-testid="mission-cancel"]@7400;;.dialog-actions .btn-danger@8200',
+    ROTARIS_CAPTURE_PROBE_AT: ['[data-testid="mission-subtitle"]@6800', '[data-testid="mission-confirm"]@7900', ...SAMPLES.map((at) => `${SNAPSHOT}@${at}`)].join(';;'),
+    ROTARIS_CAPTURE_PNG_AT: `${join(output, 'cancel-run.png')}@8240`,
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '1000',
+  }, { timeout: 200_000 });
+  const db = open(s4b); const row = session(db); db.close();
+  const before = probesAt(r.log, 6800, '[data-testid="mission-subtitle"]')?.[0]?.text ?? '';
+  expect(/· Running$/.test(before), `the run was not running before the cancel: "${before}"`);
+  const dialog = probesAt(r.log, 7900, '[data-testid="mission-confirm"]')?.[0]?.text ?? '';
+  expect(/Cancel the run\?/.test(dialog), `the run's confirmation did not open: "${dialog}" (REQ-MONITOR-126)`);
+  // Only the snapshots the log records after the confirm click AND that no longer hold the dialog count: a click scheduled
+  // at 8.2 s can be logged after a probe scheduled at 8.215 s, and a probe logged after the click can still have run before
+  // the renderer handled it — both rightly read `Running`. "Logged after the click" alone went red that way on 2026-10-01.
+  const confirmed = r.log.indexOf('capture: clicked ".dialog-actions .btn-danger"');
+  expect(confirmed >= 0, 'the confirm click was not recorded');
+  const afterConfirm = r.log.slice(confirmed);
+  const byTestId = (snap, id) => snap.find((p) => p.data['data-testid'] === id)?.text ?? null;
+  const snapshots = SAMPLES.map((at) => ({ at, snap: probesAt(afterConfirm, at, SNAPSHOT) })).filter((x) => x.snap !== null);
+  const pending = snapshots.filter((x) => byTestId(x.snap, 'mission-confirm') !== null).map((x) => x.at);
+  const samples = snapshots.filter((x) => byTestId(x.snap, 'mission-confirm') === null).map(({ at, snap }) => ({ at, subtitle: byTestId(snap, 'mission-subtitle'), runRow: byTestId(snap, 'mission-run-row'), strip: snap.filter((p) => p.data['data-testid'] === undefined).map((p) => p.text).find((t) => t.startsWith('run ')) ?? null })).filter((x) => x.subtitle !== null);
+  expect(samples.length >= 3, `fewer than three samples landed after the confirm was handled: ${JSON.stringify(samples)} (still showing the dialog: ${JSON.stringify(pending)})`);
+  const status = (text) => (text === null ? null : text.split('·').pop().trim());
+  // REQ-MONITOR-127/130: from the confirmation on, the Mission view and the strip never read the run `Running` again — each
+  // sample reads `Cancelling` until the run's record at rest arrives (REQ-ORCH-082: `user_cancelled` rests `paused`).
+  const running = samples.filter((x) => status(x.subtitle) === 'Running' || /Running$/.test(x.runRow ?? '') || x.strip === 'run Running');
+  expect(running.length === 0, `the Mission view read the cancelled run Running after the confirm: ${JSON.stringify(running)} (REQ-MONITOR-127, acceptance A35)`);
+  // A sample that is not yet at rest is inside the cancel's window, so it reads `Cancelling` and no other active status.
+  const ACTIVE = ['Running', 'Waiting', 'Starting', 'Pausing', 'Background'];
+  const otherActive = samples.filter((x) => ACTIVE.includes(status(x.subtitle)));
+  expect(otherActive.length === 0, `a sample after the confirm read an active status other than Cancelling: ${JSON.stringify(otherActive)} (REQ-MONITOR-127)`);
+  // Whether a sample lands inside the cancel's window depends on the host's timing: recorded, not asserted.
+  const cancellingSamples = samples.filter((x) => status(x.subtitle) === 'Cancelling').length;
+  expect(!['running', 'waiting', 'starting', 'pausing', 'cancelling', 'background'].includes(row.execution_status), `the cancelled run ended ${row.execution_status} (${row.stop_reason})`);
+  results.cancelRun = { before, dialog, samples, stillShowingDialog: pending, cancellingSamples, finalStatus: row.execution_status, stopReason: row.stop_reason };
+}
+
+// 4c. Cancel the run from a persona window (acceptance A35's second half, the verifier's finding of 2026-10-01; REQ-MONITOR-127/130,
+// REQ-SHELL-075 (a)/(g)): the inspector following the run-level agent pops it out, the window's Cancel on the run's own
+// instance is confirmed, and every snapshot after the confirmation was handled reads the instance's state `cancelling` or
+// the run at rest — never `running`. Before the repair the window drew the run's instance through the agent vocabulary,
+// which has no `cancelling`, and read `running` until the record at rest arrived.
+const s4c = scenario('cancel-run-persona');
+{
+  const SAMPLES = [6610, 6620, 6630, 6640, 6660, 6700, 6800, 7000, 8000, 9000];
+  // One selector list per sample: the confirmation and the heading read in the same instant (see 4b).
+  const SNAPSHOT = '[data-testid="persona-cancel-confirm"], [data-testid="persona-agent-name"], [data-testid="persona-agent-state"]';
+  const r = await launch('cancel-run-persona', s4c, {
+    ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'wait:16000,answer', ROTARIS_CAPTURE_PROMPT: 'cancel the run from its window',
+    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="inspector-name"]@3000',
+    ROTARIS_CAPTURE_CLICKS: '.inspector__actions .btn>>Pop out@3200',
+    ROTARIS_CAPTURE_WINDOWS_AT: '5000',
+    ROTARIS_CAPTURE_PERSONA_CLICKS: '[data-testid="persona-cancel"]@6000;;[data-testid="persona-cancel-confirm"] .btn-danger@6600',
+    ROTARIS_CAPTURE_PERSONA_PROBE_AT: [`${SNAPSHOT}@5500`, '[data-testid="persona-cancel-confirm"]@6300', ...SAMPLES.map((at) => `${SNAPSHOT}@${at}`)].join(';;'),
+    ROTARIS_CAPTURE_PERSONA_PNG_AT: `${join(output, 'cancel-run-persona-window.png')}@6620`,
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '1000',
+  }, { timeout: 200_000 });
+  const db = open(s4c); const row = session(db); db.close();
+  const following = probesAt(r.log, 3000, '[data-testid="inspector-name"]')?.[0]?.text ?? null;
+  expect(following === 'orchestrator', `the inspector did not follow the run-level agent at 3 s: "${following}"`);
+  const windows = windowsAt(r.log, 5000) ?? [];
+  expect(windows.length === 1 && windows[0].title === 'Rotaris · orchestrator', `the run-level agent's window at 5 s: ${JSON.stringify(windows)} (REQ-SHELL-072)`);
+  const field = (snap, id) => snap?.find((p) => p.data['data-testid'] === id)?.text ?? null;
+  const before = personaProbesAt(r.log, 5500, SNAPSHOT);
+  expect(field(before, 'persona-agent-name') === 'orchestrator' && field(before, 'persona-agent-state') === 'running', `the run's instance before the cancel: ${JSON.stringify(before)}`);
+  const dialog = personaProbesAt(r.log, 6300, '[data-testid="persona-cancel-confirm"]')?.[0]?.text ?? '';
+  expect(/Cancel the run\?/.test(dialog), `the window's Cancel on the run's own instance did not ask "Cancel the run?": "${dialog}" (REQ-MONITOR-126)`);
+  expect(/persona-click-at 6600 \S.* → clicked/.test(r.log), 'the confirmation was not clicked in the persona window');
+  const snapshots = SAMPLES.map((at) => ({ at, snap: personaProbesAt(r.log, at, SNAPSHOT) })).filter((x) => x.snap !== null);
+  const pending = snapshots.filter((x) => field(x.snap, 'persona-cancel-confirm') !== null).map((x) => x.at);
+  const samples = snapshots.filter((x) => field(x.snap, 'persona-cancel-confirm') === null).map(({ at, snap }) => ({ at, name: field(snap, 'persona-agent-name'), state: field(snap, 'persona-agent-state') })).filter((x) => x.state !== null);
+  expect(samples.length >= 3, `fewer than three snapshots after the confirmation was handled: ${JSON.stringify(samples)} (still showing the dialog: ${JSON.stringify(pending)})`);
+  const running = samples.filter((x) => x.state === 'running');
+  expect(running.length === 0, `the persona window read the cancelled run's instance running after the confirm: ${JSON.stringify(running)} (REQ-MONITOR-127/130, acceptance A35)`);
+  // Whether a snapshot lands inside the cancel's window is host timing: recorded, not asserted.
+  const cancellingSamples = samples.filter((x) => x.state === 'cancelling').length;
+  expect(!['running', 'waiting', 'starting', 'pausing', 'cancelling', 'background'].includes(row.execution_status), `the cancelled run ended ${row.execution_status} (${row.stop_reason})`);
+  results.cancelRunPersona = { following, window: windows[0] ?? null, before: { name: field(before, 'persona-agent-name'), state: field(before, 'persona-agent-state') }, dialog, samples, stillShowingDialog: pending, cancellingSamples, finalStatus: row.execution_status, stopReason: row.stop_reason, png: join(output, 'cancel-run-persona-window.png') };
 }
 
 // 5. Open an agent under both preferences; the window's lifecycle; a new session destroys it.

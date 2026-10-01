@@ -221,7 +221,11 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * A child's move leaves the root where it is. One reading is knowingly coarse: a switch to a key resolving to the very
  * model already configured does not rebuild the root's cell in the run (`sameRef`), so a fallback in force then stands,
  * while this reads the switch as ending it; the snapshot records `provider|model` pairs, not the reference the run
- * compares.
+ * compares. A second is coarse the same way: a switch is held on its run alone (`entryOverride`; a continuation is a new
+ * `Run`), so a later continuation recording no snapshot starts on its configuration's model, while this keeps the
+ * switched key as the configured one. Only snapshot-less runs reach it. The children are keyed by canonical name, which
+ * is unique only per parent and iteration (REQ-ORCH-044); two children sharing one read as one
+ * (`docs/defects/the-autopsy-reader-puts-two-children-sharing-a-canonical-name-under-one-model-key.md`).
  */
 export function entryModelKeys(launchAuditPayload: string | undefined, timeline: readonly Pick<TimelineRow, 'name' | 'metadata'>[], childNames: Iterable<string>): string[] {
   const children = new Set(childNames);

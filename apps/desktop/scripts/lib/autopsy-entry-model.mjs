@@ -75,7 +75,9 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * REQ-NOTIFY-082) and `llm_unresponsive` to the one `models:` key resolving to its recorded pair, else the pair itself
  * (REQ-ORCH-090). A child's move leaves the root where it is; the next continuation ends a move (its snapshot's key, or
  * the configured key when it records none), and so does a switch — read so even onto the model already configured,
- * which the run does not rebuild the root's cell for (the engine's copy says why).
+ * which the run does not rebuild the root's cell for (the engine's copy says why). A continuation recording no snapshot
+ * returns the root to the last switched key, though a switch is held on its run alone and the new run starts on its
+ * configuration's model; and two children sharing one canonical name read as one (the engine's copy says both).
  */
 export function entryModelKeys(launchAuditPayload, timeline, childNames) {
   const children = new Set(childNames);

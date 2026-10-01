@@ -25,8 +25,11 @@ whose repair gave the refusal an example.
 
 ## Relevant files
 
-- `packages/agent-tools/src/tools/files.ts:333` — `write_file`'s description, which never names `operation`.
-- `packages/agent-tools/src/tools/files.ts:344-345` — the refusal.
+- `packages/agent-tools/src/tools/files.ts:345` — `write_file`'s description, which names `operation` since the partial
+  repair below. *(Updated 2026-10-01: this line first read "`files.ts:333` — `write_file`'s description, which never
+  names `operation`", true when the note was written.)*
+- `packages/agent-tools/src/tools/files.ts:355-356` — the refusal (first cited at `:344-345`).
+- `packages/agent-tools/src/tools/files.ts:323` — the schema's required `operation` enum (cited above at `:321`).
 
 ## Partly repaired — 2026-09-29 under R-067; still open
 

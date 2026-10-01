@@ -645,9 +645,7 @@ export class IterationChildren implements DelegationOps {
     // answered as cut off, naming no rest (OQ-96, "A call cut by no rest"); the caller then ends it `cancelled` (found by
     // the verifier of the repair of a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md).
     if ((this.deps.restCause?.() ?? null) === null) {
-      const givenUp = this.ledger.all().filter((c) => { const s = this.ledger.get(c.task_id)?.state; return this.givenUpOn.has(c.task_id) && s !== undefined && !isTerminalChildState(s); });
-      for (const c of givenUp) answerOpenCalls(this.deps.dal, this.deps.writer, this.deps.sessionId, { taskId: c.task_id, name: c.canonical_name }, c.iteration, null);
-      for (const c of givenUp) this.countGivenUpOn(c.task_id);
+      this.closeGivenUpOn();
       return 0;
     }
     for (const c of this.ledger.all()) {
@@ -664,7 +662,29 @@ export class IterationChildren implements DelegationOps {
     const paused = this.ledger.all().filter((c) => this.ledger.get(c.task_id)?.state === 'paused');
     for (const c of paused) answerOpenCalls(this.deps.dal, this.deps.writer, this.deps.sessionId, { taskId: c.task_id, name: c.canonical_name }, c.iteration, cause);
     for (const c of paused) if (this.givenUpOn.has(c.task_id)) this.countGivenUpOn(c.task_id);
+    // A child the grace gave up on that this rest did not pause — one the user's cancel of one child had already ended while
+    // its call ignored the abort — is counted all the same (the repair of
+    // `a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md`).
+    this.closeGivenUpOn();
     return paused.length;
+  }
+
+  /**
+   * REQ-MONITOR-102 / REQ-SESSION-129 with OQ-96 (the repair of `a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md`):
+   * every child whose execution a stop's grace gave up on (`givenUpOn`) and that no rest leaves `paused` — every one under
+   * the explicit cancel, which rests nothing (`rest`'s early return, and `Run.turn` after `finalize` and `outlast`), and at
+   * a rest one already terminal, ended by the user's cancel of one child while its call ignored the abort — has its open
+   * calls answered as cut off, naming no rest (OQ-96, "A call cut by no rest"), and is counted from its record
+   * (`countGivenUpOn`), terminal or not: its execution, if it ever returns, returns through `execute`'s detached return,
+   * before its count. A paused one is answered under its rest's cause and counted by the rest. Idempotent — an answered
+   * call is not answered again and a count already held adds nothing — so a second stop's give-up adds nothing twice.
+   */
+  closeGivenUpOn(): void {
+    for (const c of this.ledger.all()) {
+      if (!this.givenUpOn.has(c.task_id) || this.ledger.get(c.task_id)?.state === 'paused') continue;
+      answerOpenCalls(this.deps.dal, this.deps.writer, this.deps.sessionId, { taskId: c.task_id, name: c.canonical_name }, c.iteration, null);
+      this.countGivenUpOn(c.task_id);
+    }
   }
 
   /**

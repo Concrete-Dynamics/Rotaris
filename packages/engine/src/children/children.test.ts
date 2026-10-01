@@ -3033,6 +3033,69 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(hangRow(sid)!.output).toMatch(/^This call was cut off before it completed, and it was not re-run\./);
     });
 
+    describe('REQ-MONITOR-102 / REQ-SESSION-094 (the repair of a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md): a child execution a stop\'s grace gave up on, that no rest counts, is counted from its record', () => {
+      const probe: PortToolResult = { text: 'probed', isError: false, status: 'ok', durationMs: 1, label: 'probe', args: {} };
+      const hangOrProbe: TestTool = (name) => (name === 'hang' ? new Promise<PortToolResult>(() => undefined) : name === 'probe' ? Promise.resolve(probe) : undefined);
+      /** `stuck` makes one call that returns (p1), then one that ignores its abort (h2). */
+      const stuck = (turn: number): ScriptedCall => (turn === 1 ? toolCalls([{ callId: 'p1', name: 'probe', args: {} }]) : toolCalls([{ callId: `h${turn}`, name: 'hang', args: {} }]));
+      const hangRow = (sid: SessionId) => dal.residentRows(sid).find((r) => r.kind === 'tool' && r.tool_name === 'hang' && r.name === 'stuck');
+
+      it('the explicit cancel rests nothing: the child its grace gave up on is counted, its open call answered as cut off by no rest', async () => {
+        const { sessions } = sessionsWith((persona, turn) => {
+          if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'stuck', task: 'TASK: stuck' } }]) : answer('delegated');
+          return stuck(turn);
+        }, { tool: hangOrProbe });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await settle(() => hangRow(sid) !== undefined);
+        expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: RUN_AGENT_ID } })).toEqual({ ok: true });
+        await new Promise((r) => setTimeout(r, 20));
+        clock.advance(30_000);
+        await sessions.running(sid);
+        // p1 and the cut h2 with the child's own count; the total holds them with the root's d1.
+        expect(byName(sid, 'stuck')).toMatchObject({ state: 'cancelled', tool_calls: 2 });
+        expect(callsRun(conversationOf(dal.agentConversation(sid, byName(sid, 'stuck').task_id)))).toBe(2);
+        expect(dal.getSession(sid)!.tool_calls).toBe(3);
+        expect(hangRow(sid)).toMatchObject({ tool_status: 'failed', output: interruptedResult(null, true, '') });
+      });
+
+      /** A root that delegates `stuck` and hangs in the same step, so the run outlives the cancel of `stuck` alone. */
+      const rootHangsBeside = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'stuck', task: 'TASK: stuck' } }, { callId: 'h1', name: 'hang', args: {} }]) : answer('never');
+        return stuck(turn);
+      };
+
+      it('a child the user cancelled on its own, whose call ignores the abort, is counted when the explicit cancel\'s grace gives up on its execution', async () => {
+        const { sessions } = sessionsWith(rootHangsBeside, { tool: hangOrProbe });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await settle(() => hangRow(sid) !== undefined);
+        expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'stuck').task_id } })).toEqual({ ok: true });
+        expect(byName(sid, 'stuck')).toMatchObject({ state: 'cancelled' });
+        expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: RUN_AGENT_ID } })).toEqual({ ok: true });
+        await new Promise((r) => setTimeout(r, 20));
+        clock.advance(30_000);
+        await sessions.running(sid);
+        expect(byName(sid, 'stuck')).toMatchObject({ state: 'cancelled', tool_calls: 2 });
+        // d1 and the cut h1 (the root, given up on, counted from its record), with p1 and the cut h2.
+        expect(dal.getSession(sid)!.tool_calls).toBe(4);
+        expect(hangRow(sid)).toMatchObject({ tool_status: 'failed', output: interruptedResult(null, true, '') });
+      });
+
+      it('a child the user cancelled on its own, whose call ignores the abort, is counted when a stop\'s rest gives up on its execution', async () => {
+        const { sessions } = sessionsWith(rootHangsBeside, { tool: hangOrProbe });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await settle(() => hangRow(sid) !== undefined);
+        expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'stuck').task_id } })).toEqual({ ok: true });
+        expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+        await new Promise((r) => setTimeout(r, 20));
+        clock.advance(30_000);
+        await sessions.running(sid);
+        // The rest pauses the root and leaves the cancelled child as it is; its calls are counted all the same.
+        expect(byName(sid, 'stuck')).toMatchObject({ state: 'cancelled', tool_calls: 2 });
+        expect(dal.getSession(sid)!.tool_calls).toBe(4);
+        expect(hangRow(sid)).toMatchObject({ tool_status: 'failed', output: interruptedResult(null, true, '') });
+      });
+    });
+
     it('REQ-MONITOR-102 (the repair of a-roots-calls-before-a-crash-never-reach-the-session-total.md): a child\'s settle persists the total with its own count, so a crash right after it — the child terminal, never counted by the crash record — loses none of its calls', async () => {
       const probe: PortToolResult = { text: 'probed', isError: false, status: 'ok', durationMs: 1, label: 'probe', args: {} };
       const { sessions, counts } = sessionsWith((persona, turn) => {

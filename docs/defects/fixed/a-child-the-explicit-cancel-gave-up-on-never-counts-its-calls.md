@@ -13,7 +13,7 @@ with `cancelAgent` on the run id and the clock advanced past the grace. `stuck` 
 session's total is 1 (the root's `delegate`), and `callsRun` over its record is 2.
 
 The repair of
-[`a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`](fixed/a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md)
+[`a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`](a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md)
 counts such a child at a rest (`IterationChildren.countGivenUpOn`, reading `givenUpOn`, which `outlast` fills on this
 path too) — both the rest that pauses it and, since its verifier's finding, the rest the explicit cancel reaches while it
 waits (`rest`'s early return, which answers the child's open calls as cut off, naming no rest, per OQ-96, and counts it
@@ -41,3 +41,30 @@ persisted value), which a call never counted does not meet.
   counts skip a terminal child), `cancel` (the user's cancel of one child, which aborts its execution and does not await it).
 - `packages/engine/src/run/run.ts` — `turn()`, the explicit cancel's `finalize` and `outlast` after the iteration's turn.
 - `packages/engine/src/session-writer.ts` — `countToolCalls`, which a repair would write through.
+
+## Outcome — repaired 2026-10-01 under R-067
+
+Confirmed on `fin1-child-cancel-window` (from origin/main 576c2bc) before the repair, by the three cases below, each red
+at the child's count (`tool_calls` 0 where its record showed 2): the note's driven case (the explicit cancel alone, the
+grace run out), and both forms of its second path — `stuck` cancelled on its own while its `hang` ignored the abort, then
+the run's explicit cancel, or a stop that rests, giving up on its execution.
+
+`IterationChildren.closeGivenUpOn` (`packages/engine/src/children/orchestration.ts`) now handles every child whose
+execution a stop's grace gave up on (`givenUpOn`) and that no rest leaves `paused`, terminal or not: it answers the
+child's open calls as cut off, naming no rest (`answerOpenCalls` with a null cause — OQ-96, "A call cut by no rest"), so
+its cut row settles `failed` (REQ-SESSION-129), then counts it from its record (`countGivenUpOn` → the run's
+`countToolCalls` → `SessionWriter.countToolCalls`, REQ-MONITOR-102). Both writes are idempotent. Three callers:
+
+- `Run.turn` (`packages/engine/src/run/run.ts`), right after the explicit cancel's `outlast` gives up — the path this note
+  names, where `finalize` has already ended the child `cancelled`;
+- `rest`'s early return, which it replaces (the same handling, now reaching a terminal child too);
+- the end of `rest`, for a child this rest did not pause because the user had cancelled it on its own — the second path.
+
+A paused child is still answered under its rest's cause and counted by the rest, as before.
+
+Pinned by `packages/engine/src/children/children.test.ts`, the describe "REQ-MONITOR-102 / REQ-SESSION-094 (the repair of
+a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md) …": the explicit cancel alone (`stuck` `cancelled`,
+`tool_calls` 2, total 3, its `hang` row `failed` with the no-rest cut-off statement); the single-child cancel then the
+explicit cancel (`tool_calls` 2, total 4 with the root's two calls counted from its record); the single-child cancel then
+a stop that rests (the same). All three were red before the repair.
+

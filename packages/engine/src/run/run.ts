@@ -1541,7 +1541,13 @@ export class Run {
          * (none after a root given up on), and what still executes then is detached, so a child's step or call that
          * ignored the stop writes nothing into the finished session when it returns.
          */
-        if (this.stop.requested && await children.outlast(this.stopGraceLeft())) this.deps.warn(`iteration ${iteration}: child executions still running at the stop's 30 s grace were given up on (REQ-SESSION-092)`);
+        if (this.stop.requested && await children.outlast(this.stopGraceLeft())) {
+          this.deps.warn(`iteration ${iteration}: child executions still running at the stop's 30 s grace were given up on (REQ-SESSION-092)`);
+          // REQ-MONITOR-102 / REQ-SESSION-129: no rest counts them — each one's open calls are answered as cut off, naming
+          // no rest (OQ-96), and it is counted from its record (the repair of
+          // `a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md`).
+          children.closeGivenUpOn();
+        }
       }
       // A root given up on, or whose turn raised, that no rest paused — the explicit cancel, an iteration that closes
       // failed — still leaves no call row running (REQ-SESSION-129): its open call is recorded cut off, naming no rest

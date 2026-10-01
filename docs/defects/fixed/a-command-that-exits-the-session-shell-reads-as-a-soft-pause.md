@@ -54,7 +54,9 @@ on the poll of a paused `sleep 2; exit 4` after the shell had gone.
 18 ms (three runs each), and the next call reads `session_reinitialized` true with the directory and the exported variable
 restored. The call after that reads false. The second case also pins the poll's hand-over and the respawn of a shell
 ended by keystrokes between calls. The live run's `terminal` scenario carries the shape now (`ends-shell`, `exit 3`, in
-`lib/terminal-shapes.mjs`). It checks the call and the same agent's next call; see the
-[first-executions row](../../architecture/first-executions.md) for what the run read.
+`lib/terminal-shapes.mjs`). It checks the call and the same agent's next call. Its first run (2026-10-01, the self-hosted endpoint, pack
+`.live-run/runs/2026-10-01T11-09-06-837Z` of the `fin1-termshellend` worktree) passed both checks. The model's `exit 3`
+read `execution_error`, no exit code, `session_reset`, in 20 ms, and its next command reported `session_reinitialized`
+true.
 
 **Not reached:** Windows and macOS. Nothing here depends on `/proc`, but no such host has run it.

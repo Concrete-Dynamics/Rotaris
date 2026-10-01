@@ -120,7 +120,7 @@ import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
 import { restatedFacts } from './lib/restated-facts.mjs';
 import { refusalIssues } from './lib/refusal-issues.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
-import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalRunEndReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -1810,6 +1810,11 @@ if (wanted.includes('terminal')) {
   const terminals = calls.filter((call) => call.tool_name === 'terminal');
   const shapeOf = (id) => SHAPES.find((shape) => shape.id === id);
   const attempted = (id) => terminals.filter((call) => shapeOf(id).match.test(String(call.args.command ?? '')));
+  // Reaching a result is not reaching the terminal: a run that ended `failed` before any terminal call asked none of the
+  // questions below, and each would read as a NOTE over a green run (`terminalRunEndReading`).
+  const runEnd = terminalRunEndReading(read?.session ?? null, terminals.length);
+  check(runEnd.kind === 'ended' || runEnd.kind === 'failed-later', 'the terminal run did not end failed before any terminal call', runEnd.detail);
+  if (runEnd.kind === 'failed-later') noted('the terminal run ended failed after reaching the terminal', `${runEnd.detail}; the shapes it did not reach read as not attempted`);
   const seen = {};
   for (const shape of SHAPES) seen[shape.id] = attempted(shape.id).length;
   noted('what the model attempted', SHAPES.map((s) => `${s.id}×${seen[s.id]}`).join(', '));

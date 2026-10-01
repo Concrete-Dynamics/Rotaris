@@ -37,3 +37,35 @@ any terminal call.
 - `packages/model/src/ai-sdk-client.ts` — `parseArgs`, which hands a non-object parse result to the SDK as a call's input.
 - `packages/agent-tools/src/gate.ts` — `repairPayload` and the "could not be read as JSON even after repair" answer.
 - `apps/desktop/scripts/live-run.mjs` — the `terminal` scenario, whose pass did not notice that the run failed.
+
+## Repaired — 2026-10-01
+
+`parseArgs` (`packages/model/src/ai-sdk-client.ts`) now hands the SDK only a plain object as a replayed call's input. A
+parse that yields a string (the doubly encoded case), a number, a boolean, an array or null is wrapped exactly as an
+unparseable text always was, `{ "_raw": <the text> }`, so the replayed assistant message always carries a mapping and an
+endpoint whose chat template iterates the arguments accepts the request. What the gate judges is unchanged: it reads the
+call's own text (`call.rawArgs`), still refuses it under REQ-TOOLS-032 with "could not be read as JSON even after repair",
+and that answer now reaches the model in the next request. Unwrapping doubly encoded arguments as a fourth repair is
+still not done; REQ-TOOLS-032 names three repairs, and this note does not ask for a fourth.
+
+The live run's `terminal` scenario no longer passes over a run that died before it reached the terminal:
+`terminalRunEndReading` (`apps/desktop/scripts/lib/terminal-shapes.mjs`) reads the session row against the terminal-call
+count, and `live-run.mjs` fails "the terminal run did not end failed before any terminal call" when the run ended
+`failed` with no terminal call, or when no session was read. A run that failed after reaching the terminal is a NOTE.
+
+Pinned by:
+- `packages/model/src/ai-sdk-client.test.ts`, "a replayed tool call always carries a mapping": the arguments
+  `"{\"persona\":\"x\"}"`, `42`, `[1]`, `null` and `true` each leave as `{ "_raw": … }` in the request body (five fail
+  without the repair); an object's text leaves as that object and an unreadable text as before.
+- `packages/engine/src/run/turn.test.ts`, "REQ-TOOLS-032: a call whose arguments are a JSON string (encoded twice) …": a
+  run through the real AI-SDK client against an endpoint that answers HTTP 400 "Can only get item pairs from a mapping."
+  whenever a replayed call's arguments are not a mapping. The gate is handed the model's own text, the second request
+  carries the refusal beside a mapping, and the run completes; without the repair it ends `failed`, as on 2026-10-01.
+- `apps/desktop/scripts/lib/terminal-shapes.test.ts`, "how the terminal run ended": the 2026-10-01 shape (`failed`,
+  `agent_session_aborted`, no terminal call) reads `died-early`.
+
+Live run, 2026-10-01 (`katalyst`, `qwen3.8-flash-next`, `--only=terminal`, pack
+`.live-run/runs/2026-10-01T16-52-47-210Z/terminal/` in the `fin3-liverunreadi` worktree, git-ignored): the run completed
+(`tasks_complete`) after 14 terminal calls, every shape attempted, and the new check passed. The model encoded no call
+twice this time (no `_raw` in `model-traffic.jsonl`), so the live run shows the new check on a healthy run and the
+scenario green, not the repair meeting the shape; the repair's evidence is the run-level test above.

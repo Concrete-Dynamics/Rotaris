@@ -245,3 +245,23 @@ export function longOutputReading(result) {
   const doubled = text.split('\n').filter((line) => (line.match(/LINE-\d{3}/g) ?? []).length > 1);
   return { markers, distinct: new Set(markers).size, doubled, escaped: text.includes(`${String.fromCharCode(27)}[`) };
 }
+
+/**
+ * How the `terminal` run ended, read against the calls it made, from the session row and the terminal-call count.
+ *
+ * - `absent`: no session was read — a FAIL.
+ * - `died-early`: the run ended `failed` before any terminal call, so every shape reads "not attempted" — a FAIL. The
+ *   2026-10-01 pack printed `live-run PASSED` over exactly this: the endpoint refused a replayed tool call (HTTP 400)
+ *   and the run ended after two calls, none of them terminal, while the only run-level check asked whether the run
+ *   reached a result, which a failed run does
+ *   (`docs/defects/fixed/a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400.md`).
+ * - `failed-later`: the run ended `failed` after at least one terminal call — a NOTE: the shapes it reached are asserted.
+ * - `ended`: any other end.
+ */
+export function terminalRunEndReading(session, terminalCalls) {
+  if (session === null || session === undefined) return { kind: 'absent', detail: 'no session was read' };
+  const status = String(session.execution_status ?? 'unknown');
+  const detail = `${status} (${session.stop_reason ?? 'no stop reason'}) after ${terminalCalls} terminal call(s)`;
+  if (status !== 'failed') return { kind: 'ended', detail };
+  return { kind: terminalCalls === 0 ? 'died-early' : 'failed-later', detail };
+}

@@ -86,30 +86,36 @@ export const NOT_A_LOCAL_LAUNCH_SUMMARY = 'Code intelligence project setup was s
 /** REQ-WORKSPACE-013: why a closed workspace's run records nothing — the reason its refused recording carries in the log. */
 export const CLOSED_WORKSPACE_RECORDS_NOTHING = 'the workspace was closed while its run was under way, so nothing is recorded for the cancelled run';
 
+/**
+ * Main's way to the run host's one setup. Every call names the workspace it is made for — the run's own, by the identifier
+ * main was handed when that workspace opened (`open`) — never the focused window's: with two main windows open
+ * (PD-SHELL-001) the focused one may hold the other workspace, and at quit none may be left at all
+ * (`docs/defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
+ */
 export interface SetupPort {
   /**
    * Starts the run host's setup; the reply is the status as it stands. A start the run host refuses carries the refusal's
    * code and its own words: its one setup slot taken (`mcp.setup.running`), the workspace not open there
-   * (`workspace.unknown`), its configuration not loaded (`mcp.configuration`), or main's own (`workspace.none`, no window to
-   * address it through; otherwise the kind of an unexpected answer). An entry that is not a local launch is not refused:
-   * the run host answers it with a finished status whose outcome is `unavailable` (REQ-MCP-099).
+   * (`workspace.unknown`), its configuration not loaded (`mcp.configuration`), or otherwise the kind of an unexpected
+   * answer. An entry that is not a local launch is not refused: the run host answers it with a finished status whose
+   * outcome is `unavailable` (REQ-MCP-099).
    */
-  readonly start: () => Promise<{ readonly ok: true; readonly status: McpSetupStatus } | { readonly ok: false; readonly code: string; readonly reason: string }>;
-  /** Asks the run host to end its setup; rejects when the request is not delivered (no workspace to address, or refused). */
-  readonly cancel: () => Promise<void>;
-  readonly status: () => Promise<McpSetupStatus | null>;
+  readonly start: (workspaceId: string) => Promise<{ readonly ok: true; readonly status: McpSetupStatus } | { readonly ok: false; readonly code: string; readonly reason: string }>;
+  /** Asks the run host to end its setup; rejects when the request is not delivered (refused, or no answer). */
+  readonly cancel: (workspaceId: string) => Promise<void>;
+  /** The setup's status as the run host holds it, `applicable` judged against `workspaceId`'s own configuration. */
+  readonly status: (workspaceId: string) => Promise<McpSetupStatus | null>;
 }
 
 /**
  * REQ-WORKSPACE-092: main's `SetupPort.cancel`, over the run host's `mcp.setup` request. It rejects unless the run host
- * took the cancellation — with no window holding a workspace there is nothing to address it through, and a refusal is an
- * answer, not a delivery — so the coordinator says in the log that it was not delivered rather than dropping it.
+ * took the cancellation — a refusal is an answer, not a delivery — so the coordinator says in the log that it was not
+ * delivered rather than dropping it. It is addressed by the run's own workspace, which the run carries from its open.
  */
 export async function deliverSetupCancel(
-  workspaceId: string | undefined,
+  workspaceId: string,
   send: (workspaceId: string) => Promise<{ readonly kind: string; readonly headline?: string }>,
 ): Promise<void> {
-  if (workspaceId === undefined || workspaceId === '') throw new Error('no window holds a workspace to address the run host through');
   const r = await send(workspaceId);
   if (r.kind === 'mcp.setup') return;
   throw new Error(r.kind === 'refused' ? `the run host refused it: ${r.headline ?? ''}` : `the run host answered ${r.kind}`);
@@ -121,16 +127,28 @@ export interface InitializationDeps {
   /** The workspace `agents.yaml` write, routed to the service that owns it. */
   readonly writeMarker: (root: string, patch: PlainMap) => Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }>;
   readonly setup: SetupPort;
-  readonly publish: (state: InitializationStateView) => void;
+  /**
+   * Channel 12, to the windows holding `root` and to no other (REQ-WORKSPACE-105: the state a window works from is its own
+   * workspace's). With two main windows open (PD-SHELL-001) the other window holds another workspace.
+   */
+  readonly publish: (root: string, state: InitializationStateView) => void;
   /** REQ-WORKSPACE-103: a failed background run reaches a banner, never a dialog. */
   readonly banner: (headline: string, detail: string) => void;
   /** REQ-WORKSPACE-110: a consent task runs an agent, so it needs a reachable model. */
   readonly modelReachable: () => boolean;
+  /**
+   * PD-ORCH-005 clause 9's `QuitState`: whether the application is quitting. At a quit the run host's own shutdown ends the
+   * setup and everything its step launched (REQ-WORKSPACE-092/109, `McpHost.endSetup`), so a cancellation that cannot reach
+   * the run host then is expected and said at `info` (PD-MONITOR-002); otherwise it is lost, and said at `warn`.
+   */
+  readonly quitting: () => boolean;
 }
 
 interface WorkspaceEntry {
   readonly root: string;
   readonly agentsFile: string;
+  /** The identifier main was handed when this workspace opened; the setup port addresses the run host by it. */
+  readonly workspaceId: string;
   state: InitializationState;
   report: InitRunReport;
   running: AbortController | null;
@@ -171,8 +189,11 @@ const STEP_LABEL: Readonly<Record<string, string>> = { create: 'Project configur
 
 export class InitializationCoordinator {
   readonly registry = new TaskRegistry();
+  /**
+   * Every workspace a main window holds, by its canonical root. There is no "current" one: each surface asks about its own
+   * window's workspace, and every public method names the root it is asked for (REQ-WORKSPACE-013/102/105, PD-SHELL-001).
+   */
   private readonly workspaces = new Map<string, WorkspaceEntry>();
-  private active: string | null = null;
   /**
    * The live setup's step sink, set for as long as `code-intelligence-setup` is following a setup, and cleared only by the
    * follow that set it. The run host pushes `mcp.setupStatus` with no workspace on it, because it holds one setup at a
@@ -227,8 +248,14 @@ export class InitializationCoordinator {
       label: CODE_INTELLIGENCE_TASK_LABEL,
       description: CODE_INTELLIGENCE_TASK_DESCRIPTION,
       requiresConsent: false,
-      applicable: async () => (await this.deps.setup.status())?.applicable === true,
+      // REQ-WORKSPACE-090: judged against the asked workspace's own configuration; a workspace no window holds has none.
+      applicable: async ({ workspaceRoot }) => {
+        const e = this.workspaces.get(workspaceRoot);
+        return e !== undefined && (await this.deps.setup.status(e.workspaceId))?.applicable === true;
+      },
       run: async (ctx) => {
+        // The run's own workspace, taken as the run begins: the setup is started, followed and cancelled for it alone.
+        const workspaceId = this.workspaces.get(ctx.workspaceRoot)?.workspaceId ?? null;
         const previous = this.setupTurn;
         let release: () => void = () => undefined;
         this.setupTurn = new Promise<void>((r) => { release = r; });
@@ -236,8 +263,9 @@ export class InitializationCoordinator {
         this.setupTurns += 1;
         try {
           // REQ-WORKSPACE-109: cancelled while it waited, the task never starts its setup and fails as REQ-WORKSPACE-093 says.
-          if (!await this.turnReached(previous, ctx.signal)) return this.failure(CANCELLED_BEFORE_SETUP_ERROR, CODE_INTELLIGENCE_FAILED_SUMMARY, true, []);
-          const started = await this.deps.setup.start();
+          // A workspace no window holds any more had its run aborted when it closed (`close`), so it fails the same way.
+          if (workspaceId === null || !await this.turnReached(previous, ctx.signal)) return this.failure(CANCELLED_BEFORE_SETUP_ERROR, CODE_INTELLIGENCE_FAILED_SUMMARY, true, []);
+          const started = await this.deps.setup.start(workspaceId);
           // REQ-WORKSPACE-093/094: a refused start is not REQ-WORKSPACE-094's "not a local launch" — that one arrives as an
           // `unavailable` status, which `resultOf` maps — but a condition that may not hold at the next open: retryable, in
           // this domain's summary, the refusal's own words as the detail
@@ -246,7 +274,7 @@ export class InitializationCoordinator {
             this.deps.log(`initialization: the run host refused ${CODE_INTELLIGENCE_TASK_ID}'s setup start for ${ctx.workspaceRoot} (${started.code}: ${started.reason})`, 'warn');
             return this.failure(`${SETUP_REASON}: ${started.reason}`, CODE_INTELLIGENCE_FAILED_SUMMARY, true, []);
           }
-          return await this.followSetup(started.status, ctx.signal, ctx.onStep);
+          return await this.followSetup(workspaceId, started.status, ctx.signal, ctx.onStep);
         } finally {
           // The turn passes on only once the setup before this one has ended as well, however this one ended.
           void previous.then(() => { this.setupTurns -= 1; release(); });
@@ -273,7 +301,7 @@ export class InitializationCoordinator {
    * REQ-WORKSPACE-109: each step reported the moment it finishes. The status arrives on channel
    * `mcp.setupStatus`, which the run host pushes on every change — no cadence, SR-3.
    */
-  private followSetup(first: McpSetupStatus, signal: AbortSignal, onStep: (s: { name: string; status: string; detail: string }) => void): Promise<TaskResult> {
+  private followSetup(workspaceId: string, first: McpSetupStatus, signal: AbortSignal, onStep: (s: { name: string; status: string; detail: string }) => void): Promise<TaskResult> {
     return new Promise<TaskResult>((resolve) => {
       const seen = new Map<string, string>();
       let ended = false;
@@ -307,8 +335,16 @@ export class InitializationCoordinator {
         // close or a Cancel landing in that interval cancelled the next workspace's setup (ADR-0064's seventh round).
         end(this.resultOf(status));
       };
-      // REQ-WORKSPACE-092: the run host ends what the setup launched. A cancel whose request fails is said, not dropped.
-      const onAbort = (): void => { this.deps.setup.cancel().catch((cause: unknown) => this.deps.log(`initialization: the setup's cancellation could not be delivered (${String(cause)})`, 'warn')); };
+      // REQ-WORKSPACE-092: the run host ends what the setup launched. A cancel whose request fails is said, not dropped: at a
+      // quit as what is expected — the run host's shutdown ends the setup itself, and may have exited or closed its stores
+      // before the request reached it — and otherwise as a fault (PD-MONITOR-002;
+      // `docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+      const onAbort = (): void => {
+        this.deps.setup.cancel(workspaceId).catch((cause: unknown) => {
+          if (this.deps.quitting()) this.deps.log(`initialization: the setup's cancellation did not reach the run host at the quit, whose shutdown ends the setup itself (${String(cause)})`);
+          else this.deps.log(`initialization: the setup's cancellation could not be delivered (${String(cause)})`, 'warn');
+        });
+      };
       this.setupListener = drain;
       this.setupAbandon = abandon;
       signal.addEventListener('abort', onAbort, { once: true });
@@ -385,19 +421,27 @@ export class InitializationCoordinator {
 
   // ---- per workspace -----------------------------------------------------------------------------
 
-  private entry(root: string, agentsFile: string): WorkspaceEntry {
+  /**
+   * The entry for `root`, made on its first open. A later open of a root that still has an entry keeps the entry's first
+   * `workspaceId`: that holds while the workspace service hands one root one identifier (it reads it from the root's own
+   * identifier file), and every setup start, cancel and status is addressed by it. A change that lets a root's identifier
+   * change while a window still holds it must refresh `workspaceId` here, or the setup port is addressed by a stale id.
+   */
+  private entry(root: string, agentsFile: string, workspaceId: string): WorkspaceEntry {
     let e = this.workspaces.get(root);
     if (!e) {
-      e = { root, agentsFile, state: readInitializationState(agentsFile), report: EMPTY_RUN_REPORT, running: null, attempting: new Set(), lastError: null, resolutionFailed: false, background: false, automatic: null, closed: false };
+      e = { root, agentsFile, workspaceId, state: readInitializationState(agentsFile), report: EMPTY_RUN_REPORT, running: null, attempting: new Set(), lastError: null, resolutionFailed: false, background: false, automatic: null, closed: false };
       this.workspaces.set(root, e);
     }
     return e;
   }
 
-  /** Which workspace the surfaces are asking about. Main sets it when a window opens one. */
-  open(root: string, agentsFile: string): void {
-    this.active = root;
-    this.entry(root, agentsFile);
+  /**
+   * A main window has opened `root`, which the run host knows as `workspaceId`. Each window's surfaces then ask about their
+   * own window's root (REQ-WORKSPACE-013/105); opening another root in another window changes nothing about this one.
+   */
+  open(root: string, agentsFile: string, workspaceId: string): void {
+    this.entry(root, agentsFile, workspaceId);
   }
 
   /**
@@ -405,8 +449,8 @@ export class InitializationCoordinator {
    * windows closed (main calls this from `MainWindows`' `workspaceClosed`). A run still under way is cancelled on
    * REQ-WORKSPACE-109's terms: no task that has not started begins, the task under way reaches its own conclusion and the
    * run host ends every process it launched (REQ-WORKSPACE-092). Nothing is recorded for that run (see `commit`), so its
-   * tasks stay pending for the next open, and nothing of it is published or bannered: channel 12 reaches every live
-   * window, and none of them is this workspace's. The entry is dropped at once, without waiting for the run, so a later
+   * tasks stay pending for the next open, and nothing of it is published or bannered: no live window is this workspace's,
+   * and a banner reaches every window. The entry is dropped at once, without waiting for the run, so a later
    * open of the same root is a new open with its own automatic resolution (REQ-WORKSPACE-102) and the replacement
    * window's resolution never waits on the cancellation. Before this was called, a switch left the outgoing run going,
    * recorded its outcome, and a return to the root found its automatic resolution already spent
@@ -427,14 +471,11 @@ export class InitializationCoordinator {
       }
     }
     this.workspaces.delete(root);
-    // The surfaces then ask about the entry inserted last among those still open. `open` of an entry that already exists
-    // does not reorder the map, so this is not strictly "most recently opened", and neither is the asking window's
-    // (`docs/defects/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
-    if (this.active === root) this.active = [...this.workspaces.keys()].at(-1) ?? null;
   }
 
-  private current(): WorkspaceEntry | null {
-    return this.active === null ? null : this.workspaces.get(this.active) ?? null;
+  /** The entry of the workspace a window holds; `null` for a window that holds none, or one whose open has not landed. */
+  private held(root: string): WorkspaceEntry | null {
+    return this.workspaces.get(root) ?? null;
   }
 
   private write(root: string): (patch: PlainMap) => Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }> {
@@ -466,7 +507,7 @@ export class InitializationCoordinator {
   private nowIso = (): string => toIsoUtc(this.deps.clocks.wall.instant());
 
   private async sets(e: WorkspaceEntry): Promise<TaskSets> {
-    return await deriveSets(this.registry, e.state, (m) => this.deps.log(m, 'warn'));
+    return await deriveSets(this.registry, e.state, (m) => this.deps.log(m, 'warn'), { workspaceRoot: e.root });
   }
 
   /** The nine values plus the labels and the live report, as one message. */
@@ -483,30 +524,30 @@ export class InitializationCoordinator {
   }
 
   private async publish(e: WorkspaceEntry): Promise<void> {
-    // REQ-WORKSPACE-013: a closed workspace is no window's, and channel 12 reaches every window.
+    // REQ-WORKSPACE-013: a closed workspace is no window's.
     if (e.closed) return;
     const view = await this.viewFor(e);
-    if (!e.closed) this.deps.publish(view);
+    if (!e.closed) this.deps.publish(e.root, view);
   }
 
-  /** REQ-WORKSPACE-115: the persisted section as it is on disk right now, and nothing else disturbed. */
-  async read(): Promise<InitializationStateView> {
-    const e = this.current();
+  /** REQ-WORKSPACE-115: the persisted section of `root` as it is on disk right now, and nothing else disturbed. */
+  async read(root: string): Promise<InitializationStateView> {
+    const e = this.held(root);
     if (!e) return { view: EMPTY_INITIALIZATION_VIEW, labels: {}, descriptions: {}, report: EMPTY_RUN_REPORT, resolutionFailed: false, backgroundRun: false };
     // In-progress and last-error describe this session only and are NOT taken from disk.
     e.state = readInitializationState(e.agentsFile);
     const state = await this.viewFor(e);
-    this.deps.publish(state);
+    if (!e.closed) this.deps.publish(e.root, state);
     return state;
   }
 
   /**
    * REQ-WORKSPACE-083: the one resolution. A never-initialized workspace with no applicable task is
    * marked silently; pending background work starts at once; pending consent work raises the prompt.
-   * REQ-WORKSPACE-102: automatic exactly once per open, and a user-requested check is additional.
+   * REQ-WORKSPACE-102: automatic exactly once per open of `root`, and a user-requested check is additional.
    */
-  async resolve(automatic: boolean): Promise<InitializationStateView> {
-    const e = this.current();
+  async resolve(root: string, automatic: boolean): Promise<InitializationStateView> {
+    const e = this.held(root);
     if (!e) return { view: EMPTY_INITIALIZATION_VIEW, labels: {}, descriptions: {}, report: EMPTY_RUN_REPORT, resolutionFailed: false, backgroundRun: false };
     if (!automatic) return await this.resolution(e);
     if (e.automatic === null) {
@@ -525,7 +566,9 @@ export class InitializationCoordinator {
       e.resolutionFailed = false;
       if (sets.applicable.length === 0 && sets.pending.length === 0) {
         // REQ-WORKSPACE-083: nothing shown, nothing started — and the never-initialized state is left behind.
-        if (e.state.lastRun === null) {
+        // A workspace closed while its sets were derived is no window's: the predicates read no configuration for it, so
+        // "nothing applicable" is not a finding about it, and nothing is written for it (REQ-WORKSPACE-013, OQ-141).
+        if (e.state.lastRun === null && !e.closed) {
           e.state = await this.marker(e, async (current) => await stampOnly(current, null, { nowIso: this.nowIso, write: this.write(e.root), log: this.deps.log }));
           this.deps.log(`initialization: ${e.root} has no applicable task; marked initialized`);
         }
@@ -563,8 +606,8 @@ export class InitializationCoordinator {
    * offers only what is outstanding, and refuses up front when a listed task needs a model and none is
    * reachable — failing fast instead of starting and surfacing a raw authentication error.
    */
-  async start(): Promise<{ readonly ok: true } | { readonly ok: false; readonly headline: string; readonly detail: string }> {
-    const e = this.current();
+  async start(root: string): Promise<{ readonly ok: true } | { readonly ok: false; readonly headline: string; readonly detail: string }> {
+    const e = this.held(root);
     if (!e) return { ok: false, headline: 'No workspace is open', detail: 'Open a workspace before running its setup.' };
     // REQ-WORKSPACE-110: pressing Initialize while a run is already live starts nothing.
     if (e.running !== null) return { ok: true };
@@ -625,8 +668,8 @@ export class InitializationCoordinator {
    * REQ-WORKSPACE-086/111: every listed id recorded as skipped, and the marker stamped even for an empty list — except an id
    * the live run is attempting or one already recorded completed, neither of which is pending.
    */
-  async skip(ids: readonly string[]): Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }> {
-    const e = this.current();
+  async skip(root: string, ids: readonly string[]): Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }> {
+    const e = this.held(root);
     if (!e) return { ok: false, reason: 'no workspace is open' };
     // REQ-WORKSPACE-083: the prompt a skip answers is a product of the open's resolution, and the same resolution starts
     // the background tasks. The window's mount read can open the dialog before main's 800 ms slot (OQ-122), so a skip
@@ -638,7 +681,7 @@ export class InitializationCoordinator {
     // would cost a run-host status read, and a background run could end inside it.
     if (e.automatic === null) {
       this.deps.log(`initialization: a skip arrived before ${e.root} was resolved, so the open's resolution runs first`);
-      await this.resolve(true);
+      await this.resolve(e.root, true);
     } else {
       await e.automatic;
     }
@@ -665,9 +708,9 @@ export class InitializationCoordinator {
     return { ok: true };
   }
 
-  /** REQ-WORKSPACE-109: a task already under way still reaches its own conclusion. */
-  async cancel(): Promise<void> {
-    const e = this.current();
+  /** REQ-WORKSPACE-109: `root`'s run is cancelled; a task already under way still reaches its own conclusion. */
+  async cancel(root: string): Promise<void> {
+    const e = this.held(root);
     e?.running?.abort();
     if (e) await this.publish(e);
   }

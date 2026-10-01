@@ -375,9 +375,10 @@ async function main(): Promise<void> {
     if (ack.kind === 'workspace.ack') {
       // REQ-WORKSPACE-141: initialization resolution takes the same slot as the hook-review notice — once
       // the window is interactive, never during its construction and never as a dialog opened unbidden.
-      initialization.open(key, scopeFiles(resolveUserDirs().config, key).workspace.agents);
+      // REQ-WORKSPACE-013/102: this workspace's own automatic resolution, whichever window is focused when the slot comes.
+      initialization.open(key, scopeFiles(resolveUserDirs().config, key).workspace.agents, opened.workspaceId);
       clocks.timers.after(millis(process.env['ROTARIS_CAPTURE_RESUME'] ? 1_800 : 800), () => {
-        void initialization.resolve(true).catch((cause: unknown) => log(`initialization: resolve failed (${String(cause)})`));
+        void initialization.resolve(key, true).catch((cause: unknown) => log(`initialization: resolve failed (${String(cause)})`));
         void runHost.request({ kind: 'hooks.summary', workspaceId: opened.workspaceId }, millis(10_000)).then((r) => {
           if (r.kind === 'hooks.summary' && r.summary.status === 'review') { raiseNoticeKeyed(`hooks.review:${r.summary.workspace}:${r.summary.fingerprint}`, 'warning', 'Workspace hooks need review', r.summary.notice, recoveryFor('hooks.review', r.summary.workspace)); return; }
           // REQ-WORKSPACE-152 (3): once the window is interactive, never as a dialog; the only run-time consequence is REQ-WORKSPACE-137's refusal.
@@ -957,8 +958,10 @@ async function main(): Promise<void> {
   /**
    * Part AS — ADR-0064's project-initialization coordinator. It lives here because the marker's one
    * writer is the workspace service and the one task's work runs in the run host, and neither may
-   * import the other (REQ-WORKSPACE-085; `eslint.config.js`). Channel 12 carries the nine values of
-   * REQ-WORKSPACE-105 to every live window, whichever view it is showing.
+   * import the other (REQ-WORKSPACE-085; `eslint.config.js`). Channel 12 carries a workspace's nine values of
+   * REQ-WORKSPACE-105 to the main windows holding that workspace, whichever view each is showing, and to no other.
+   * The setup port addresses the run host by the run's own workspace, never by the focused window's (PD-SHELL-001;
+   * `docs/defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
    */
   const initialization = new InitializationCoordinator({
     clocks,
@@ -970,28 +973,25 @@ async function main(): Promise<void> {
       return r.kind === 'config.snapshot' ? { ok: true } : { ok: false, reason: r.kind === 'refused' ? r.headline : `the service answered ${r.kind}` };
     },
     setup: {
-      start: async () => {
-        const id = activeWindow()?.workspaceId;
-        if (!id) return { ok: false, code: 'workspace.none', reason: 'no workspace is open' };
+      start: async (id) => {
         const r = await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'start' }, millis(15_000));
         // The refusal's code travels with its words, so the coordinator can tell a busy slot from REQ-WORKSPACE-094's case.
         if (r.kind === 'mcp.setup') return { ok: true, status: r.status };
         return r.kind === 'refused' ? { ok: false, code: r.code, reason: r.headline } : { ok: false, code: r.kind, reason: `the run host answered ${r.kind}` };
       },
       // Rejects unless the run host took it, so an undelivered cancellation reaches the log (REQ-WORKSPACE-092).
-      cancel: async () => await deliverSetupCancel(activeWindow()?.workspaceId, async (id) => await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'cancel' }, millis(15_000))),
-      status: async () => {
-        const id = activeWindow()?.workspaceId;
-        if (!id) return null;
+      cancel: async (id) => await deliverSetupCancel(id, async (to) => await runHost.request({ kind: 'mcp.setup', workspaceId: to, action: 'cancel' }, millis(15_000))),
+      status: async (id) => {
         const r = await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'status' }, millis(15_000));
         return r.kind === 'mcp.setup' ? r.status : null;
       },
     },
-    publish: (state) => {
-      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.initializationState, { v: CONTRACT_SCHEMA_VERSION, ...state });
+    publish: (root, state) => {
+      for (const holder of mainWindows.holding(root)) holder.win.webContents.send(CHANNEL.initializationState, { v: CONTRACT_SCHEMA_VERSION, ...state });
     },
     banner: (headline, detail) => raiseNotice('error', headline, detail),
     modelReachable: () => providers.list().some((row) => row.authenticated),
+    quitting,
   });
   runHost.onEvent((e) => { if (e.kind === 'mcp.setupStatus') initialization.onSetupStatus(e.status); });
   // REQ-WORKSPACE-084/109: the run host is never forked again, so a setup it held can never send its finished status; the

@@ -631,6 +631,9 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     case 'terminal.audit':
       return terminalHost.handle(req);
     case 'shutdown': {
+      // REQ-WORKSPACE-092/109: the code-intelligence setup's step, and what it started, ended before the host exits — asked
+      // first, so its short grace runs beside the rest of the shutdown, and waited for before the exit below.
+      const setupEnded = mcp.endSetup();
       // ADR-0014 / REQ-MONITOR-255: every run asked to stop before any is waited on; the reply follows their h.terminal results.
       for (const controller of improvementControllers.values()) controller.abort();
       improvementControllers.clear();
@@ -643,6 +646,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       await mcp.closeAll();
       // REQ-TOOLS-111: every background session ended and every h.terminal resource closed before the host goes.
       await h.terminal?.dispose();
+      await setupEnded;
       for (const s of stores.values()) { try { s.db?.close(); } catch { /* */ } }
       stores.clear();
       clocks.timers.after(millis(0), () => process.exit(0));

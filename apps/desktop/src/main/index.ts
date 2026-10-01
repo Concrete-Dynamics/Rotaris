@@ -994,6 +994,7 @@ async function main(): Promise<void> {
     },
     banner: (headline, detail) => raiseNotice('error', headline, detail),
     modelReachable: () => providers.list().some((row) => row.authenticated),
+    quitting,
   });
   runHost.onEvent((e) => { if (e.kind === 'mcp.setupStatus') initialization.onSetupStatus(e.status); });
   // REQ-WORKSPACE-084/109: the run host is never forked again, so a setup it held can never send its finished status; the

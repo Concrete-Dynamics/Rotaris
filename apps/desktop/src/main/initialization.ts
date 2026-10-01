@@ -136,6 +136,12 @@ export interface InitializationDeps {
   readonly banner: (headline: string, detail: string) => void;
   /** REQ-WORKSPACE-110: a consent task runs an agent, so it needs a reachable model. */
   readonly modelReachable: () => boolean;
+  /**
+   * PD-ORCH-005 clause 9's `QuitState`: whether the application is quitting. At a quit the run host's own shutdown ends the
+   * setup and everything its step launched (REQ-WORKSPACE-092/109, `McpHost.endSetup`), so a cancellation that cannot reach
+   * the run host then is expected and said at `info` (PD-MONITOR-002); otherwise it is lost, and said at `warn`.
+   */
+  readonly quitting: () => boolean;
 }
 
 interface WorkspaceEntry {
@@ -329,8 +335,16 @@ export class InitializationCoordinator {
         // close or a Cancel landing in that interval cancelled the next workspace's setup (ADR-0064's seventh round).
         end(this.resultOf(status));
       };
-      // REQ-WORKSPACE-092: the run host ends what the setup launched. A cancel whose request fails is said, not dropped.
-      const onAbort = (): void => { this.deps.setup.cancel(workspaceId).catch((cause: unknown) => this.deps.log(`initialization: the setup's cancellation could not be delivered (${String(cause)})`, 'warn')); };
+      // REQ-WORKSPACE-092: the run host ends what the setup launched. A cancel whose request fails is said, not dropped: at a
+      // quit as what is expected — the run host's shutdown ends the setup itself, and may have exited or closed its stores
+      // before the request reached it — and otherwise as a fault (PD-MONITOR-002;
+      // `docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+      const onAbort = (): void => {
+        this.deps.setup.cancel(workspaceId).catch((cause: unknown) => {
+          if (this.deps.quitting()) this.deps.log(`initialization: the setup's cancellation did not reach the run host at the quit, whose shutdown ends the setup itself (${String(cause)})`);
+          else this.deps.log(`initialization: the setup's cancellation could not be delivered (${String(cause)})`, 'warn');
+        });
+      };
       this.setupListener = drain;
       this.setupAbandon = abandon;
       signal.addEventListener('abort', onAbort, { once: true });

@@ -55,7 +55,7 @@ interface Harness {
 /** A hold a test can set at any moment: every setup status read taken while it is set waits on it. */
 interface StatusHold { current: Promise<void> | null }
 
-function harness(options: { applicable?: boolean; startRefusal?: { code: string; reason: string }; startStatus?: McpSetupStatus; writeFails?: string | null; modelReachable?: boolean; statusGate?: Promise<void>; hold?: StatusHold; onStart?: () => void; onCancel?: () => void; writeHold?: StatusHold; startHold?: StatusHold } = {}): Harness {
+function harness(options: { applicable?: boolean; startRefusal?: { code: string; reason: string }; startStatus?: McpSetupStatus; writeFails?: string | null; modelReachable?: boolean; statusGate?: Promise<void>; hold?: StatusHold; onStart?: () => void; onCancel?: () => void; writeHold?: StatusHold; startHold?: StatusHold; quitting?: { current: boolean } } = {}): Harness {
   const { root, agents } = workspace();
   const published: InitializationStateView[] = [];
   /** The root each entry of `published` was sent for, index for index. */
@@ -93,6 +93,7 @@ function harness(options: { applicable?: boolean; startRefusal?: { code: string;
     publish: (publishedRoot, s) => { publishedTo.push(publishedRoot); published.push(s); },
     banner: (headline, detail) => banners.push({ headline, detail }),
     modelReachable: () => options.modelReachable !== false,
+    quitting: () => options.quitting?.current === true,
   });
   coordinator.open(root, agents, 'ws-h');
   return { coordinator, published, publishedTo, banners, writes, logs, root, agents, clock, addressed, push: (s) => coordinator.onSetupStatus(s) };
@@ -663,6 +664,31 @@ describe('closing a workspace', () => {
     h.coordinator.close(h.root);
     await settle();
     expect(h.logs).toContainEqual({ level: 'warn', message: "initialization: the setup's cancellation could not be delivered (Error: the run host refused it: That workspace is not open in the run host)" });
+  });
+
+  /**
+   * At an orderly quit the run host's own shutdown ends the setup (`McpHost.endSetup`), and the close's cancellation can
+   * arrive after the run host has closed its stores or exited. The live run at 71ad8e8 logged that as a warning — the only
+   * one in its sign-in launch
+   * (`docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+   */
+  it('says an undelivered cancellation at a quit at info, and keeps warn for one lost while the application stays (REQ-WORKSPACE-092, REQ-WORKSPACE-109, PD-MONITOR-002)', async () => {
+    const quitting = { current: true };
+    const refusal = 'the run host refused it: That workspace is not open in the run host';
+    const h = harness({ quitting, onCancel: () => { throw new Error(refusal); } });
+    await h.coordinator.resolve(h.root, true);
+    await settle();
+    h.coordinator.close(h.root);
+    await settle();
+    expect(h.logs.filter((l) => l.level === 'warn')).toEqual([]);
+    expect(h.logs).toContainEqual({ level: 'info', message: `initialization: the setup's cancellation did not reach the run host at the quit, whose shutdown ends the setup itself (Error: ${refusal})` });
+    // The same refusal while the application stays — one of two windows closed — is a cancellation lost, and warns.
+    const stays = harness({ quitting: { current: false }, onCancel: () => { throw new Error(refusal); } });
+    await stays.coordinator.resolve(stays.root, true);
+    await settle();
+    stays.coordinator.close(stays.root);
+    await settle();
+    expect(stays.logs).toContainEqual({ level: 'warn', message: `initialization: the setup's cancellation could not be delivered (Error: ${refusal})` });
   });
 
   it('treats a setup cancellation as delivered only when the run host took it (REQ-WORKSPACE-092)', async () => {

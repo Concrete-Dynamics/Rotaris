@@ -416,7 +416,11 @@ retryable failure and keeps REQ-WORKSPACE-094's "not a local launch" for the `un
 `detail`, from which the coordinator writes REQ-WORKSPACE-092's two fixed sentences (2026-10-01, R-067). REQ-MCP-099's three steps run in the
 run host as children of the derived invocation (`Rotaris.exe builtin:code-intelligence -- project create <root>`, then
 `project index`, then `memories initialize`), each polled at 0.25 s on the clock port under 300 / 1800 / 120 s, asked to
-terminate then tree-killed after 5 s on cancel or timeout; the category polls the status every 500 ms while it runs.
+terminate then tree-killed after 5 s on cancel or timeout — on POSIX each step leads a process group of its own and the
+signals go to the group, so what the step started is ended with it (REQ-WORKSPACE-092; 2026-10-01) — and the run host's
+`shutdown` ends a setup under way the same way after 2 s (`McpHost.endSetup`, `SETUP_SHUTDOWN_GRACE_MS`), shortening a
+cancellation's grace already running, and exits only once the step has gone (REQ-WORKSPACE-092/109; 2026-10-01); the
+category polls the status every 500 ms while it runs.
 `ROTARIS_SCRIPT_MCP_ARGS` (verification only) hands the scripted client the arguments of an MCP step.
 
 **`initialization.*` (Part AS, ADR-0064).** Five commands, renderer → main and no further: `initialization.read`
@@ -442,7 +446,8 @@ tasks. The window reads it twice. A background run neither withdraws the setup p
 2026-09-29, R-062). When the last main window holding a workspace closes — a switch's outgoing window, a replacement
 discarded after a veto, one of several windows — `MainWindows` says so (`workspaceClosed`) and main calls
 `initialization.close`: the run under way is cancelled (`mcp.setup {action: cancel}`, so the run host ends what the step
-launched; one that no window can address or that the run host refuses is logged as not delivered), its recordings are refused, nothing of it is published or bannered — nor of a resolution still under way for it, whose failure is said in the log only (2026-10-01) — and the entry is dropped, so a return to
+launched; one the run host refuses or does not answer is logged as not delivered — at `info` while the application is
+quitting, whose run host `shutdown` ends the setup itself, and at `warn` otherwise; 2026-10-01), its recordings are refused, nothing of it is published or bannered — nor of a resolution still under way for it, whose failure is said in the log only (2026-10-01) — and the entry is dropped, so a return to
 the root is a new open with its own automatic resolution (REQ-WORKSPACE-013/092/102/109, OQ-141 for a close that is
 not a switch's; 2026-09-30, R-067). The run
 host holds one setup and pushes `mcp.setupStatus` with no workspace on it, so the coordinator runs its setups one at a

@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**The run host's shutdown ends the setup, and a step's termination reaches what it started (REQ-WORKSPACE-092/109,
+ADR-0035, ADR-0064).** On POSIX each code-intelligence setup step now leads a process group, and its ask and force-kill
+go to the group. The run host's `shutdown` ends a setup under way with a 2 s grace (`McpHost.endSetup`) before it exits.
+The initialization coordinator says a cancellation undelivered at a quit at `info`, reading `QuitState`. See the process
+view, `mcp.setup` and `initialization.*`. This repairs
+`an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`. No package, edge,
+process, message kind, channel, command or store column changed.
+
 **Initialization is each window's own workspace's (REQ-WORKSPACE-013/102/105, PD-SHELL-001, ADR-0064).** The
 `initialization.*` commands answer for the sending window's workspace. The coordinator keys every method by root and
 publishes channel 12 to the windows holding that root (`MainWindows.holding`). Its setup port addresses the run host by

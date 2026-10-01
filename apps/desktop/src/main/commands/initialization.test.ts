@@ -43,6 +43,7 @@ function twoWindows(): { a: { root: string; agents: string }; b: { root: string;
     publish: (root, state) => { published.push({ root, state }); },
     banner: () => undefined,
     modelReachable: () => true,
+    quitting: () => false,
   });
   coordinator.registry.register({
     id: 'asks', label: 'Asks', description: 'runs an agent', requiresConsent: true, applicable: () => true,

@@ -12,7 +12,7 @@ import {
 } from '@rotaris/config';
 import { errorObservation, observation, type ToolExecutor } from '@rotaris/agent-tools';
 import type { McpGrantEvidence, SessionWriter } from '@rotaris/engine';
-import { CALL_TIMEOUT_DEFAULT_MS, HealthProbe, runSetupSteps, SessionConnections, ToolDiscovery, type Connected, type McpLog, type ServerDescription } from '@rotaris/mcp';
+import { CALL_TIMEOUT_DEFAULT_MS, HealthProbe, runSetupSteps, SETUP_SHUTDOWN_GRACE_MS, SessionConnections, ToolDiscovery, type Connected, type McpLog, type ServerDescription } from '@rotaris/mcp';
 
 /**
  * The run host's MCP holder — ADR-0034's placement as READ on first execution: every path lives here, in the one
@@ -381,6 +381,11 @@ export class McpHost {
   // ---- REQ-MCP-099 / REQ-MCP-112: the code-intelligence project setup (ADR-0035, Part T) ---------------------------
 
   private setup: { status: McpSetupStatus; abort: AbortController | null } = { status: idleSetup(), abort: null };
+  /**
+   * The setup under way, from its start until its finished status is set, with the signal its host's shutdown fires
+   * (`endSetup`). Null while no setup runs.
+   */
+  private setupRun: { readonly ended: Promise<void>; readonly shutdown: AbortController } | null = null;
 
   /** Part AS: the ONE place `setup` is assigned, so every change reaches the push of ADR-0064 and none can be forgotten. */
   private setSetup(next: { status: McpSetupStatus; abort: AbortController | null }): void {
@@ -406,6 +411,23 @@ export class McpHost {
   cancelSetup(): McpSetupStatus {
     if (this.setup.abort && this.setup.status.state === 'running') { this.setup.abort.abort(); this.deps.log('mcp setup: cancellation requested'); }
     return this.setup.status;
+  }
+
+  /**
+   * REQ-WORKSPACE-092/109: the run host's shutdown ends the setup under way, and returns once its step — and everything
+   * the step started — has gone. Before, `shutdown` never reached the setup: the host exited with the step still running,
+   * and at an orderly quit the step and what it had launched outlived the application (measured 2026-10-01 on the built
+   * app: both still running 5 s after it exited;
+   * `docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+   * The step is asked to terminate and force-killed after `SETUP_SHUTDOWN_GRACE_MS`, a cancellation already under way
+   * included.
+   */
+  async endSetup(): Promise<void> {
+    const run = this.setupRun;
+    if (run === null) return;
+    this.deps.log('mcp setup: ended by the run host\'s shutdown');
+    run.shutdown.abort();
+    await run.ended;
   }
 
   /**
@@ -438,9 +460,11 @@ export class McpHost {
     this.deps.log(`mcp setup: started for ${workspaceRoot} — invocation '${line}', contains code ${containsCode}, marker ${markerPresent ? 'present' : 'absent'}`);
     const description = server.description as ServerDescription;
     const env = { ...this.deps.parentEnv, ...(description.transport === 'stdio' ? description.env : {}) };
-    void runSetupSteps({
+    const shutdown = new AbortController();
+    const ended = runSetupSteps({
       invocation, workspaceRoot, steps: CODE_INTELLIGENCE_SETUP_STEPS, creationStepId: 'create', markerPresent, containsCode, env,
       clocks: this.deps.clocks, log: this.mcpLog, signal: abort.signal,
+      shutdown: { signal: shutdown.signal, graceMs: SETUP_SHUTDOWN_GRACE_MS },
       onStep: (step, all) => {
         this.setSetup({ ...this.setup, status: { ...this.setup.status, steps: all.map((s) => ({ id: s.id as McpSetupStep['id'], label: s.label, status: s.status, detail: s.detail, elapsedMs: s.elapsedMs, ...(s.stopped === undefined ? {} : { stopped: s.stopped }) })) } });
         this.deps.log(`mcp setup: ${step.id} ${step.status}${step.detail ? ` — ${step.detail.slice(0, 200)}` : ''}${step.elapsedMs === null ? '' : ` (${step.elapsedMs.toFixed(0)} ms)`}`);
@@ -454,6 +478,9 @@ export class McpHost {
     }, (cause: unknown) => {
       this.setSetup({ status: { ...this.setup.status, state: 'finished', outcome: 'failed', message: `The setup stopped unexpectedly: ${String(cause instanceof Error ? cause.message : cause)}` }, abort: null });
     });
+    const run = { ended, shutdown };
+    this.setupRun = run;
+    void ended.then(() => { if (this.setupRun === run) this.setupRun = null; });
     return { ok: true, status: this.setup.status };
   }
 

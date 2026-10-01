@@ -696,7 +696,7 @@ on the way and recorded, not repaired: the capacity rule's 30 px unit is larger 
 block — a one-line system notice drew 23.8 px (`docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`, repaired 2026-10-01 below);
 and a row that GROWS is positioned by the height its identity drew last until it is measured again, which drew the
 planted activity line 21.8 px through the row beneath it for a frame in one run of six when it turned live again
-(`docs/defects/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md`) — the proof's new-row
+(`docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md`, repaired 2026-10-01 below) — the proof's new-row
 watch records such a pair of rows already drawn and holds only the pairs with a new row to 1 px.
 
 **The capacity unit, 2026-10-01 (R-067, acceptance finding A38) — the capacity rule's 30 px reason falsified, kept beside its
@@ -715,3 +715,22 @@ is green — 226 slots, the bound rows covering the viewport with no gap at the 
 empty containers allocated at construction, which the memory tripwire subtracts away; nothing else this record decided
 moved (`docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`; OQ-160 asks whether
 PD-CHAT-003's cost paragraph, which describes the capacity arithmetic as keeping 30 px, needs a revision).
+
+**A row that grows, 2026-10-01 (R-067, acceptance finding A37).** "Heights are measured" held for every row the observer had
+reached, and a row whose content changed was placed by the height its identity drew last until the observer's delivery
+rendered, a frame after the commit: a row that GREW was painted through the row beneath it for that frame. The note saw
+21.8 px in one run of six; `transcript-proof`'s geometry stage now asks deterministically, expanding the planted activity
+line by a click, and on the build before the repair the first frame after the click placed the row beneath 1,146 px inside
+it. **The measurement now also happens at the commit**: after every commit and before the browser paints it, the pane reads
+the drawn height of each bound slot whose measurement key has none yet, files it as the observer would, and renders again
+inside the commit when it differs from what placed the row (`measureAtCommit`). The observer stays, for a size that changes
+under an unchanged key. The identity's last height still places the row for the render that binds it, so a streaming row
+is never placed by an estimate; what changed is that the render is not the one painted. The read forces layout of the slots
+the update bound or changed, before a paint that would have laid them out anyway, and walks the pool's slots rather than the
+rows held (REQ-CHAT-055); what it costs is that a new row's first painted frame carries the second render the delivery used
+to cause a frame later, and the append comparison passed in four runs of five on the repair, red in the one taken at a host
+load of 4.5 to 5.5. On the repair the stage reads 0 px on all twelve frames after the click and holds the pairs of
+rows already drawn, which it had recorded and not held, to 1 px: 0 in three runs of three
+(`docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md`). Nothing else this
+record decided moved.
+

@@ -1344,7 +1344,10 @@ the parts of its box the stylesheet draws — the 4 px row gap or 12 px block ga
 from `places` at its position, `readHeight`), the border, a user row's padding, a Markdown body's block margins, one
 19.5 px line per drawn line — so that for every row kind measured it is not short of what the row draws, because a row
 appended at the tail while the pane follows is inside the viewport for the frames before its first measurement. A slot
-a scroll rebinds is observed again (`observeAgain`), since an observer reports only a size that changed. A span wider
+a scroll rebinds is observed again (`observeAgain`), since an observer reports only a size that changed. And a bound
+slot whose key has no measurement yet — a row first bound, or one whose content changed — is read at the commit, before
+the paint (`measureAtCommit`), the pane rendering again inside the commit when it draws other than what placed it; until
+2026-10-01 a row that grew was painted through the row beneath it for the frame before the observer's delivery rendered. A span wider
 than the pool sheds its overscan, below and then above, before it cuts a visible row (`visibleRange`). The anchor is
 the identity and viewport offset
 of the top visible row, restored by finding that row again, never by re-applying a stored pixel offset. A retained

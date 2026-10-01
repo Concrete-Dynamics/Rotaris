@@ -491,14 +491,22 @@ if (wanted('geometry')) {
   // of this watch, from the reasoning row alone, caught a one-line agent message inside a block doing the same in some
   // runs and not others
   // (docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
-  // Every overlapping pair on those frames is recorded; the ones with a NEW row on either side are what this reading
-  // holds to 1 px. A pair of two rows already drawn is another mechanism — a row that changes shape is positioned by the
-  // height its identity drew last until it is measured again — and is recorded as `otherOverlaps`, not held here
-  // (docs/defects/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md).
+  // Every overlapping pair on those frames is recorded and held to 1 px: the ones with a NEW row on either side, and —
+  // since 2026-10-01 — `otherOverlaps`, a pair of two rows already drawn, which is a row that changed shape positioned by
+  // the height its identity drew last. That pair was recorded and not held while it was a known defect (21.8 px on the
+  // planted activity line turning live again, one run in six); the pane now measures such a row at the commit, before
+  // the frame is painted
+  // (docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md).
   const NEW_ROWS_WATCH_FROM = 2;
   const NEW_ROWS_FRAMES = 12;
   const NEW_ROWS = `(async () => { const until = performance.now() + 9000; const frame = () => new Promise((resolve) => requestAnimationFrame(resolve)); const bound = () => [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound); let seen = null; const fresh = []; const frames = []; let n = 0; let watchTo = -1; while (performance.now() < until) { const slots = bound(); if (slots.length > 0) { const keys = slots.map((x) => x.dataset.bound); if (seen === null) seen = new Set(keys); else { const added = keys.filter((k) => !seen.has(k)); if (added.length > 0) { for (const k of added) { seen.add(k); fresh.push(k); } watchTo = n + ${NEW_ROWS_FRAMES}; } if (n <= watchTo) { const boxes = slots.map((x) => { const r = x.getBoundingClientRect(); return { key: x.dataset.bound, top: r.top, bottom: r.bottom }; }).sort((a, b) => a.top - b.top); const pairs = []; for (let i = 1; i < boxes.length; i += 1) { const o = Math.round((boxes[i - 1].bottom - boxes[i].top) * 10) / 10; if (o > 0) pairs.push({ frame: n, px: o, pair: [boxes[i - 1].key, boxes[i].key] }); } frames.push(pairs); } } } n += 1; await frame(); } const all = frames.flat(); const isNew = (p) => fresh.includes(p.pair[0]) || fresh.includes(p.pair[1]); const mine = all.filter(isNew); const worst = mine.reduce((a, b) => (b.px > a.px ? b : a), { px: 0, pair: null }); return { fresh, frames: frames.length, overlapping: mine, worstOverlapPx: worst.px, pair: worst.pair, otherOverlaps: all.filter((p) => !isNew(p)) }; })()`;
   const OVERLAP = `(() => { const boxes = [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound).map((n) => { const r = n.getBoundingClientRect(); return { key: n.dataset.bound, top: r.top, bottom: r.bottom, keyed: n.dataset.measure !== '' }; }).sort((a, b) => a.top - b.top); let worst = 0; let pair = null; for (let i = 1; i < boxes.length; i += 1) { const o = boxes[i - 1].bottom - boxes[i].top; if (o > worst) { worst = o; pair = [boxes[i - 1].key, boxes[i].key]; } } const seg = document.querySelector('[data-shape="group"] .activity__segments'); const segmentLines = seg ? new Set([...seg.querySelectorAll('.activity__segment')].map((e) => Math.round(e.getBoundingClientRect().top))).size : 0; const roles = [...document.querySelectorAll('.row__role')].map((e) => Math.round(e.getBoundingClientRect().height)); const g = document.querySelector('[data-shape="group"]'); return { bound: boxes.length, unkeyed: boxes.filter((b) => !b.keyed).length, worstOverlapPx: Math.round(worst * 10) / 10, pair, segmentLines, tallestRolePx: Math.max(0, ...roles), live: document.querySelectorAll('.activity__now').length, summaryTail: g ? g.innerText.replace(/\\s+/g, ' ').trim().slice(-90) : null }; })()`;
+  // The same mechanism, asked deterministically: the activity line is EXPANDED by a click once the run has settled, so
+  // the same identity draws its members beneath its header under a measurement key never measured, and the boxes are
+  // read on each of the twelve frames after the click. Before the repair the first of them placed the row beneath by the
+  // collapsed height, the line drawn through it until the observer's delivery rendered a frame later.
+  const GROW_AT = 11_000;
+  const GROW = `(async () => { const frame = () => new Promise((resolve) => requestAnimationFrame(resolve)); const slot = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound && n.dataset.bound.startsWith('group:')); if (!slot) return null; const key = slot.dataset.bound; const beforePx = Math.round(slot.getBoundingClientRect().height * 10) / 10; slot.querySelector('button').click(); const frames = []; for (let n = 0; n < 12; n += 1) { await frame(); const boxes = [...document.querySelectorAll('.transcript__slot')].filter((x) => x.dataset.bound).map((x) => { const r = x.getBoundingClientRect(); return { key: x.dataset.bound, top: r.top, bottom: r.bottom }; }).sort((a, b) => a.top - b.top); let worst = 0; let pair = null; for (let i = 1; i < boxes.length; i += 1) { const o = boxes[i - 1].bottom - boxes[i].top; if (o > worst) { worst = o; pair = [boxes[i - 1].key, boxes[i].key]; } } frames.push({ frame: n, px: Math.round(worst * 10) / 10, pair }); } const grown = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound === key); return { key, beforePx, afterPx: grown ? Math.round(grown.getBoundingClientRect().height * 10) / 10 : null, expanded: grown ? grown.querySelector('button').getAttribute('aria-expanded') : null, frames }; })()`;
   const geometry = await launch('geometry', {
     // A PLANTED running tool cannot stay running: a resumed session settles its in-flight calls through stale
     // detection (ADR-0002), which is correct and is why the fixture alone cannot produce a live line. The wrap
@@ -506,8 +514,8 @@ if (wanted('geometry')) {
     ROTARIS_CAPTURE_RESUME: 'SLIVE',
     ROTARIS_SCRIPT: 'think,read,answer',
     ROTARIS_CAPTURE_PROMPT: 'Say something about the notes.',
-    ROTARIS_CAPTURE_EVAL_AT: [`${LIVE_FIRST.replace('OVERLAP_READ', () => OVERLAP)}@${LIVE_WATCH_FROM}`, `${NEW_ROWS}@${NEW_ROWS_WATCH_FROM}`, ...SAMPLE_AT.map((ms) => `${OVERLAP}@${ms}`)].join(';;'),
-    ROTARIS_CAPTURE_AFTER_MS: '11000',
+    ROTARIS_CAPTURE_EVAL_AT: [`${LIVE_FIRST.replace('OVERLAP_READ', () => OVERLAP)}@${LIVE_WATCH_FROM}`, `${NEW_ROWS}@${NEW_ROWS_WATCH_FROM}`, ...SAMPLE_AT.map((ms) => `${OVERLAP}@${ms}`), `${GROW}@${GROW_AT}`].join(';;'),
+    ROTARIS_CAPTURE_AFTER_MS: '12500',
   }, 240_000);
   const samples = [{ ms: 'on the first live line', ...(evalAt(geometry, LIVE_WATCH_FROM) ?? {}) }, ...SAMPLE_AT.map((ms) => ({ ms, ...(evalAt(geometry, ms) ?? {}) }))].filter((s) => typeof s.bound === 'number');
   expect(samples.length >= 4, `the geometry stage took ${samples.length} readable samples, not enough to say anything`);
@@ -530,7 +538,16 @@ if (wanted('geometry')) {
   const newRows = evalAt(geometry, NEW_ROWS_WATCH_FROM);
   expect(newRows !== null && Array.isArray(newRows.fresh) && newRows.fresh.some((k) => k.startsWith('think:')) && newRows.frames >= NEW_ROWS_FRAMES, `the new-row watch never saw the run's rows drawn, so the frames before their measurement were never read: ${JSON.stringify(newRows)}`);
   expect(newRows.worstOverlapPx <= 1, `a newly appended row overlaps its neighbour by ${newRows.worstOverlapPx} px before its first measurement ${JSON.stringify(newRows.pair)}: ${JSON.stringify(newRows)}`);
-  results.geometry = { samples, wrappedToLines: wrapped, liveSamples: liveSamples.length, worstOverlapPx: worst.worstOverlapPx, newRows, tallestRolePx: Math.max(...samples.map((s) => s.tallestRolePx)), png: geometry.png };
+  // A pair of rows already drawn, on the same frames: a row that changed shape, positioned by its identity's last height.
+  const otherWorst = newRows.otherOverlaps.reduce((a, b) => (b.px > a.px ? b : a), { px: 0, pair: null });
+  expect(otherWorst.px <= 1, `a row that changed shape overlaps the row beneath it by ${otherWorst.px} px on a frame before its new measurement ${JSON.stringify(otherWorst.pair)}: ${JSON.stringify(newRows.otherOverlaps)}`);
+  // The deterministic form: the activity line expanded, read on each frame after the click. The guards first — the line
+  // was found, it opened, and it grew by more than the 1 px held — or the assertion is true of nothing.
+  const grow = evalAt(geometry, GROW_AT);
+  expect(grow !== null && grow.expanded === 'true' && grow.afterPx > grow.beforePx + 1 && grow.frames.length === 12, `the expanded activity line never grew, so the frames after it were never asked: ${JSON.stringify(grow)}`);
+  const growWorst = grow.frames.reduce((a, b) => (b.px > a.px ? b : a));
+  expect(growWorst.px <= 1, `the activity line, expanded from ${grow.beforePx} px to ${grow.afterPx} px, overlaps the row beneath it by ${growWorst.px} px on frame ${growWorst.frame} after the click ${JSON.stringify(growWorst.pair)}: ${JSON.stringify(grow.frames)}`);
+  results.geometry = { samples, wrappedToLines: wrapped, liveSamples: liveSamples.length, worstOverlapPx: worst.worstOverlapPx, newRows, grow, tallestRolePx: Math.max(...samples.map((s) => s.tallestRolePx)), png: geometry.png };
 }
 
 // ── 3c. capacity: every row on screen is bound, however short ───────────────────────────────────────────────

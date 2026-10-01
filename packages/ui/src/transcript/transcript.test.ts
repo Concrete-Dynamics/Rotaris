@@ -8,7 +8,7 @@ import {
 } from './project.js';
 import type { DisplayRow } from './types.js';
 import {
-  beginMeasuring, buildOffsets, captureAnchor, commitTable, createMeasureLedger, estimateHeight, forgetMeasured, indexAt, markMeasured,
+  beginMeasuring, buildOffsets, captureAnchor, commitTable, createMeasureLedger, estimateHeight, forgetMeasured, indexAt, markMeasured, measureAtCommit,
   newUpdatesLabel, observeAgain, readHeight, remeasuredSince, restoreAnchor, reuseOffsets, updateShape, visibleRange,
 } from './pool.js';
 import { countLabel, indexAll, indexSuffix, matchRow, step } from './search.js';
@@ -469,6 +469,53 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
     const key = measureKey(d, 800, false, null);
     const measured = { peek: (k: string): number | undefined => (k === key ? 55 : undefined) };
     expect(readHeight(d, 0, 800, new Set(), starts, measured, last)).toBe(55);
+  });
+
+  /*
+   * docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md: a row whose content
+   * changes has no measurement under its new key, so the table places it by the height its identity drew last — and a row
+   * that GROWS was drawn through the row beneath it until the observer's delivery rendered, a frame later. transcript-proof
+   * read 21.8 px on the planted activity line turning live again (52.9 px settled, 74.7 px live).
+   */
+  it('PD-CHAT-003 / ADR-0045: a row that grows is measured at the commit, so the row beneath it is placed below what it draws', () => {
+    const ledger = createMeasureLedger();
+    const measurements = new LruCache<number>(100, Number.MAX_SAFE_INTEGER);
+    const lastByIdentity = new LruCache<number>(100, Number.MAX_SAFE_INTEGER);
+    const places = [{ blockStart: true }, { blockStart: false }];
+    const heightOf = (d: DisplayRow, at: number): number => readHeight(d, at, 740, new Set(), places, measurements, lastByIdentity);
+    const remeasured = (identity: string, since: number): boolean => remeasuredSince(ledger, identity, since);
+    const build = (display: readonly DisplayRow[]) => reuseOffsets(ledger.committed, { display, width: 740, expanded: new Set(), stamp: ledger.stamp }, remeasured, heightOf);
+    // Drawn and measured once: the line settled at 52.9 px, the row beneath it at 30.
+    const settled = displayed(0, 'settled');
+    const beneath = displayed(1);
+    for (const [d, h] of [[settled, 52.9], [beneath, 30]] as const) { measurements.set(measureKey(d, 740, false, null), h, 0); lastByIdentity.set(d.key, h, 0); }
+    commitTable(ledger, build([settled, beneath]));
+    // The same identity carrying new content that draws 74.7 px: before any measurement of it, the table places the row
+    // beneath by the identity's last height — 21.8 px inside the row above. This is the defect, as the table reads it.
+    const grown = displayed(0, 'live again, with its preview line');
+    const before = build([grown, beneath]);
+    expect(before.offsets[1]).toBe(52.9);
+    commitTable(ledger, before);
+    // The commit's pass reads what the bound slots draw now, for exactly the keys with no measurement, and says so.
+    const reads: string[] = [];
+    const bound = [
+      { key: measureKey(grown, 740, false, null), read: () => { reads.push('grown'); return 74.7; } },
+      { key: measureKey(beneath, 740, false, null), read: () => { reads.push('beneath'); return 30; } },
+      { key: '', read: () => { reads.push('empty'); return 0; } },
+    ];
+    expect(measureAtCommit(ledger, bound, measurements, lastByIdentity)).toBe(true);
+    expect(reads).toEqual(['grown']);
+    // The table the pass's render builds places the row beneath at what the row above draws — before that frame is painted.
+    const after = build([grown, beneath]);
+    expect(after.offsets[1]).toBe(74.7);
+    commitTable(ledger, after);
+    // Measured, nothing is read again and nothing asks for another render; a row whose new content draws what its identity
+    // drew last is filed without asking for one either.
+    expect(measureAtCommit(ledger, bound, measurements, lastByIdentity)).toBe(false);
+    const same = displayed(0, 'live again, the same height');
+    expect(measureAtCommit(ledger, [{ key: measureKey(same, 740, false, null), read: () => 74.7 }], measurements, lastByIdentity)).toBe(false);
+    expect(measurements.peek(measureKey(same, 740, false, null))).toBe(74.7);
+    expect(reads).toEqual(['grown']);
   });
 
   it('the offset table hands a row\'s height reader its position, where the pane finds the row\'s block (PD-CHAT-003)', () => {

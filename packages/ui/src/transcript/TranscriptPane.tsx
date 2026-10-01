@@ -7,7 +7,7 @@ import { createMeasurementCache, createRenderCache, identityOf, measureKey, reus
 import { CAP_DEFAULTS, isLive, rowKey, type DisplayCaps } from './project.js';
 import { createProjector } from './projector.js';
 import {
-  beginMeasuring, buildOffsets, captureAnchor, commitTable, createMeasureLedger, markMeasured, newUpdatesLabel, remeasuredSince,
+  beginMeasuring, buildOffsets, captureAnchor, commitTable, createMeasureLedger, markMeasured, measureAtCommit, newUpdatesLabel, remeasuredSince,
   observeAgain, readHeight, restoreAnchor, reuseOffsets, updateShape, visibleRange, type Anchor,
 } from './pool.js';
 import { isOwnScroll } from './scroll.js';
@@ -407,6 +407,30 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
       observer.unobserve(node);
       observer.observe(node);
     }
+  });
+
+  // ADR-0045 (heights are measured) at the commit, before the browser paints it: a bound row with no measurement of what it
+  // draws now — first bound, or its content changed — is read here, and when it draws other than the height that placed
+  // it the pane renders again inside this commit (`measureAtCommit`). The observer's delivery comes after layout and its
+  // render a frame later, so a row that GREW was painted through the row beneath it for that frame
+  // (docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md). It reads layout
+  // only for slots whose key is unmeasured, and walks the pool's slots, not the transcript's rows (REQ-CHAT-055).
+  // The slot has no padding or border, so its border box is the content box the observer reports. It runs after EVERY
+  // commit, as the re-observing effect does, because any render may bind a slot to a row or change what a row draws; it
+  // renders again only when a bound row draws other than what placed it, so the chain ends once every bound key is measured.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- every commit, by design: see above
+  useLayoutEffect(() => {
+    let unmeasured = false;
+    for (const node of slotNodes.values()) {
+      const key = node.dataset['measure'] ?? '';
+      if (key !== '' && measurements.peek(key) === undefined) { unmeasured = true; break; }
+    }
+    if (!unmeasured) return;
+    const bound = [...slotNodes.values()].map((node) => ({ key: node.dataset['measure'] ?? '', read: () => node.getBoundingClientRect().height }));
+    // The render this asks for is the point: it is the measure-before-paint a layout effect exists for, and it happens
+    // only when a bound row was placed by a height it does not draw.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- measured layout, before the paint
+    if (measureAtCommit(ledger, bound, measurements, lastByIdentity)) setMeasuredVersion((v) => v + 1);
   });
 
   /** REQ-CHAT-053 / REQ-CHAT-071 / REQ-CHAT-072: what an update does to the reader's position. */

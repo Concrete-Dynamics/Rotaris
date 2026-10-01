@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A row that grows is measured at the commit, before it is painted (PD-CHAT-003, REQ-CHAT-058, ADR-0045, R-067).** A row whose
+content changed was placed by the height its identity drew last until the observer's delivery rendered a frame later, and a
+row that grew was painted through the row beneath it. The pane now reads every bound slot with no measurement of its present
+key after the commit and renders again inside it when the height differs (`measureAtCommit`). This repairs
+`a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md` (acceptance A37); the **runtime view**'s
+"What paints it" says so. No package, edge, process, message kind, channel, command or store column changed.
+
 **The transcript pool counts its capacity in the shortest row a slot holds (REQ-CHAT-165, PD-CHAT-003, ADR-0045, R-067).**
 The 30 px unit was taller than a one-line system notice inside a block (23.8 px), so a tall viewport of them inside `H_max`
 was blank below the 154th slot. `SHORTEST_ROW_HEIGHT` (20 px) makes the pool 226 slots, and `visibleRange` sheds its

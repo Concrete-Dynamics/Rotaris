@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
 // @ts-expect-error — the shapes are plain ESM beside the script that replays them.
-import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, replacedShellReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, replacedShellReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
 
 interface Shape { readonly id: string; readonly match: RegExp; readonly command: string; readonly prompt?: string }
 
@@ -34,9 +34,10 @@ describe('the terminal shapes the live run replays', () => {
         // Live-run L1's `unexpandable` is POSIX only: PowerShell has no such expansion. So is acceptance A9's
         // `replaces-shell` (PowerShell has no `exec`), and it comes first so `unexpandable` shows which shell followed it.
         // Live-run L2's `poll` follows the wedge on both.
+        // The interrupt (OQ-147) follows the poll on both, and its prompt asks for the poll after it.
         expect(shapes.map((s) => s.id)).toEqual(platform === 'win32'
-          ? ['here-string', 'long-output', 'wedge', 'poll', 'failed-word', 'diff-exit-1', 'pipe-to-shell']
-          : ['here-string', 'long-output', 'replaces-shell', 'unexpandable', 'wedge', 'poll', 'failed-word', 'diff-exit-1', 'pipe-to-shell']);
+          ? ['here-string', 'long-output', 'wedge', 'poll', 'interrupt', 'failed-word', 'diff-exit-1', 'pipe-to-shell']
+          : ['here-string', 'long-output', 'replaces-shell', 'unexpandable', 'wedge', 'poll', 'interrupt', 'failed-word', 'diff-exit-1', 'pipe-to-shell']);
       });
 
       it('matches its own command — the round trip the scenario depends on', () => {
@@ -234,6 +235,24 @@ describe('the shell replacement the replaces-shell shape replays (acceptance A9,
     expect(replacedShellReading(restarted, 30_000).kind).toBe('paused');
     expect(replacedShellReading(notFound, 12)).toMatchObject({ kind: 'not-replaced', exit: 127 });
     expect(replacedShellReading(`[terminal_output]\n(no output)\n${diagnostic({ failure_kind: 'execution_error', outcome_kind: 'execution_error' })}`, 5).kind).toBe('other');
+  });
+});
+
+describe('the poll after the interrupt shape (OQ-147)', () => {
+  /*
+   * `docs/defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md`: before the repair the poll
+   * after `C-c` read a soft pause over a process the interrupt had ended. The repaired product reports OQ-147's reading.
+   */
+  const diagnostic = (fields: Record<string, unknown>) => `[terminal_diagnostic] ${JSON.stringify({ backend: 'single-session', command: '', timeout: false, timeout_seconds: 100, warnings: [], ...fields })}`;
+  const detail = 'Terminal execution failed before completion: the paused command ended without an exit status of its own: the shell abandoned the rest of its line, as an interrupt (C-c) makes it do, before the next command ran';
+  const ended = `${detail}\n[terminal_output]\n^C\n${diagnostic({ detail, error_class: 'ExecutionError', exit_code: -1, failure_kind: 'execution_error', outcome_kind: 'execution_error', outcome_severity: 'error' })}`;
+  const stillRunning = `No new output …\n[terminal_output]\n^C\n#\n${diagnostic({ detail: 'The command is still running; this is the output so far. Poll again with an empty command.', exit_code: -1, outcome_kind: 'soft_pause', outcome_severity: 'warning' })}`;
+  const endedOwn = `The command exited with code 0.\n[terminal_output]\n(no output)\n${diagnostic({ detail: 'The command exited with code 0.', exit_code: 0, outcome_kind: 'success', outcome_severity: 'info' })}`;
+  it('credits only OQ-147\'s reading; the defect\'s soft pause is a failure, and a command that ended on its own is unasked', () => {
+    expect(interruptedPollReading(ended)).toMatchObject({ kind: 'ended', exit: -1 });
+    expect(interruptedPollReading(stillRunning)).toMatchObject({ kind: 'still-running', exit: -1 });
+    expect(interruptedPollReading(endedOwn)).toMatchObject({ kind: 'ended-own', exit: 0 });
+    expect(interruptedPollReading('the tool was blocked before it ran').kind).toBe('other');
   });
 });
 

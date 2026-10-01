@@ -64,7 +64,7 @@
  *   8. terminal  — the TERMINAL under duress, one run, the named shapes replayed from the record: a
  *                 multi-line here-string, forty lines of long output, off Windows an `exec bash` that replaces the
  *                 session's shell (acceptance A9) and a bash-ism `/bin/sh` cannot expand (live-run L1), a wedge
- *                 with no `timeout` supplied,
+ *                 with no `timeout` supplied, one poll of it and a `C-c` with a poll after it (OQ-147),
  *                 an exit-0 output carrying docker's lower-case `failed to connect` line, a `git diff` with
  *                 differences exiting 1, and a read-only git pipeline through a pipe. Asserted from
  *                 `tool_calls`, never from the model's prose; a shape the model never attempted is a NOTE,
@@ -116,7 +116,7 @@ import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsola
 import { startRecordingProxy } from './lib/model-traffic.mjs';
 import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
-import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, replacedShellReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, replacedShellReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -1749,6 +1749,7 @@ if (wanted.includes('faults')) {
  * | `unexpandable`  | live-run finding L1 — `a-posix-command-that-fails-to-expand-loses-its-end-marker.md`: a bash-ism dash cannot expand abandoned the wrapper's end frame, so a finished command read as a soft pause (POSIX only) |
  * | `wedge`         | `hardMs` passed and read nowhere: a call supplying no `timeout` had the soft pause and no hard cap (REQ-TOOLS-097) |
  * | `poll`          | live-run finding L2 — `an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md`: an empty poll returned at once and said thirty seconds had passed |
+ * | `interrupt`     | `a-poll-after-c-c-says-the-interrupted-command-is-still-running.md` (OQ-147): `C-c` with `is_input`, REQ-TOOLS-098's other advice, and the poll after it read "still running" over a process the interrupt had ended |
  * | `failed-word`   | `exit-0-output-flagged-on-the-word-failed-twice.md` — PD-TOOLS-003's capitals-only marker, and a real regression guard |
  * | `diff-exit-1`   | `git-diff-with-differences-read-as-a-failure.md` — ESC-41's carve-out, and a real regression guard |
  * | `pipe-to-shell` | `a-read-only-git-pipeline-was-withheld-by-the-pipe-to-shell-rule.md` — also cost, not contradiction |
@@ -1900,6 +1901,25 @@ if (wanted.includes('terminal')) {
     }
   }
 
+  // OQ-147: the interrupt and the first poll after it. The poll must hand the interrupted wedge over as ended — exit −1,
+  // an execution_error saying it ended without a status of its own — and never as still running.
+  const interrupt = wedge === undefined ? undefined
+    : terminals.find((call) => call.ordinal > wedge.ordinal && call.args.is_input === true && shapeOf('interrupt').match.test(String(call.args.command ?? '')));
+  const interruptPoll = interrupt === undefined ? undefined
+    : terminals.find((call) => call.ordinal > interrupt.ordinal && String(call.args.command ?? '') === '' && call.args.is_input !== true && call.args.session_action === undefined && call.args.background !== true);
+  if (interrupt === undefined) noted('the interrupt was not attempted', 'no C-c with is_input followed the wedge; what a poll after it reads is unasked');
+  else if (interruptPoll === undefined) noted('no poll followed the interrupt', 'no empty-command call after the C-c; what it reads is unasked');
+  else {
+    const reading = interruptedPollReading(interruptPoll.result);
+    const said = `outcome ${reading.outcome ?? 'none'}, exit ${reading.exit ?? 'none'}, ${interruptPoll.endedAt !== null && interrupt.endedAt !== null ? Math.round(interruptPoll.endedAt - interrupt.endedAt) : '?'} ms after the interrupt`;
+    if (reading.kind === 'ended-own') noted('the wedge had ended before the interrupt', `the interrupt reached nothing still running: ${said}`);
+    else if (reading.kind === 'other') noted('the poll after the interrupt met neither an end nor a pause', said);
+    else {
+      check(reading.kind !== 'still-running', 'a poll after C-c did not read the interrupted command as still running', said);
+      check(reading.kind === 'ended', 'it handed the command over as ended without an exit status of its own (OQ-147)', said);
+    }
+  }
+
   const failedWord = attempted('failed-word')[0];
   if (failedWord === undefined) noted('the docker line was not attempted', 'no terminal call carried it; PD-TOOLS-003 is unasked');
   else {
@@ -1940,7 +1960,7 @@ if (wanted.includes('terminal')) {
     platform: process.platform, status: read?.session.execution_status, stopReason: read?.session.stop_reason,
     attempted: seen, terminalCalls: terminals.length,
     diagnostics: SHAPES.map((shape) => {
-      const call = shape.id === 'poll' ? poll : attempted(shape.id)[0];
+      const call = shape.id === 'poll' ? poll : shape.id === 'interrupt' ? interruptPoll : attempted(shape.id)[0];
       return { id: shape.id, command: shape.command, ...(call === undefined ? { attempted: false } : { attempted: true, ordinal: call.ordinal, status: call.status, diagnostic: diagnosticOf(call.result) }) };
     }),
   };

@@ -53,7 +53,7 @@ export const CANCELLED_BEFORE_SETUP_ERROR = `${SETUP_REASON}: the setup was canc
  * REQ-WORKSPACE-109/084/093: the two ways a setup's follow ends without the run host's `finished` status — the run host
  * exited (main never forks another), or no outcome arrived within `SETUP_FOLLOW_BOUND_MS`. Each is a retryable failure in
  * REQ-WORKSPACE-093's summary, under the reason of the stage that was running (or `SETUP_REASON` when none was); the
- * details are the build's, under OQ-168.
+ * details are the build's, under OQ-169.
  */
 export const SETUP_RUN_HOST_EXITED_DETAIL = 'the run host exited before the setup finished.';
 export const SETUP_OVERDUE_DETAIL = 'no outcome arrived within the setup\'s time budgets.';
@@ -62,7 +62,7 @@ const SETUP_STOP_GRACE_MS = 5_000;
 /**
  * REQ-WORKSPACE-091/092: the longest a setup can take while its run host keeps the budgets — every stage's budget
  * (300 + 1800 + 120 s) and, for each, the 5 s in which what it launched is ended. A follow still open after it has lost
- * its finished status, and ends (OQ-168 records the reading).
+ * its finished status, and ends (OQ-169 records the reading).
  */
 export const SETUP_FOLLOW_BOUND_MS = CODE_INTELLIGENCE_SETUP_STEPS.reduce((sum, s) => sum + s.budgetMs + SETUP_STOP_GRACE_MS, 0);
 

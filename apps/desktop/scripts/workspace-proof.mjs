@@ -820,7 +820,7 @@ try {
           && next.includes('→ failure'),
         `run host pid ${host} killed; the lost setup's run ${lostEnded ? `ended ${lostAfter} ms later: ${JSON.stringify(lost.slice(0, 260))}` : 'NEVER ended'}; the queued run ${queuedEnded ? `ended: ${JSON.stringify(next.slice(0, 260))}` : 'NEVER ended'}`);
     }
-    // Nothing in main ends a step's processes when the run host that launched them is killed (OQ-168): end the stand-in here.
+    // Nothing in main ends a step's processes when the run host that launched them is killed (OQ-169): end the stand-in here.
     if (createPid > 0) { try { process.kill(createPid, 'SIGKILL'); } catch { /* already gone */ } }
   }
 

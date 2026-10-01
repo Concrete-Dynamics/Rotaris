@@ -3,7 +3,7 @@ import { CONTRACT_SCHEMA_VERSION, bytesFor, describeKey, encodeKey, isNavigation
 import { AuditBuffer } from './audit.js';
 import { applyFrame, createStreamDisplay } from './emulator.js';
 import type { DisplayFrame } from './frames.js';
-import { GeometryReporter, MIN_COLS, MIN_ROWS, proposeGeometry, TERM_GUTTER_PX } from './geometry.js';
+import { GeometryReporter, MIN_COLS, MIN_ROWS, proposeGeometry, RemeasureGate, TERM_GUTTER_PX, type GridFace, type GridGeometry } from './geometry.js';
 import { headlessEmulator, parsed } from './headless.js';
 import { decideKey } from './keys.js';
 import { BANNERS, backgroundDisplayName, commandLabel, elide, KILL_DIALOG, outcomeLabel, tabLabel, tabTooltip, terminalWindowTitle } from './labels.js';
@@ -202,6 +202,104 @@ describe('geometry — the 6 px gutter, the 20×4 floor, and never a placeholder
     expect(r.offer({ cols: 80, rows: 24 })).toBe(false);
     expect(r.offer({ cols: 100, rows: 30 })).toBe(true);
     expect(reports).toEqual([{ cols: 80, rows: 24 }, { cols: 100, rows: 30 }]);
+  });
+});
+
+// ── REQ-SHELL-100: the re-measure on a face change reports the settled shape alone ──────────────────────────
+describe('geometry — a face change re-measures against the new cell only (REQ-SHELL-100, ADR-0047 defect fifty-five)', () => {
+  /**
+   * The grid as `TerminalGrid` wires it: the root names a face, the library draws with the face it was last given, and
+   * its cell follows that face. The host is 118×26 cells of the 12 px face; growing the face to 16 px also grows the
+   * tab's header, so the host loses 12 px of height in the same frame (`118×25` against the old cell, `88×19` against
+   * the new one, the shapes the note measured in the built proof).
+   */
+  function world() {
+    const cellOf = (sizePx: number) => ({ width: sizePx / 2, height: sizePx });
+    const w = {
+      rootFace: { family: 'mono', sizePx: 12 },
+      libraryFace: null as GridFace | null,
+      hostWidth: 6 * 118 + 12,
+      hostHeight: 12 * 26 + 12 + 6,
+      frames: [] as (() => void)[],
+      reports: [] as GridGeometry[],
+    };
+    const reporter = new GeometryReporter((g) => { w.reports.push(g); });
+    const gate = new RemeasureGate({
+      face: () => w.rootFace,
+      apply: (face) => { w.libraryFace = face; },
+      measure: () => {
+        const cell = w.libraryFace ? cellOf(w.libraryFace.sizePx) : { width: 0, height: 0 };
+        reporter.offer(proposeGeometry({ hostWidth: w.hostWidth, hostHeight: w.hostHeight, cellWidth: cell.width, cellHeight: cell.height, visible: true }));
+      },
+      nextFrame: (run) => { w.frames.push(run); return () => { w.frames = w.frames.filter((f) => f !== run); }; },
+    });
+    const frame = () => { const due = w.frames; w.frames = []; for (const run of due) run(); };
+    /** The root's `--rt-text-sm` grows and the header with it, in one style change. */
+    const growFace = (sizePx: number) => { w.rootFace = { family: 'mono', sizePx }; w.hostHeight -= 12; };
+    return { w, gate, frame, growFace };
+  }
+
+  it('reports only the final shape when the resize observer runs before the theme change has rendered', () => {
+    const { w, gate, frame, growFace } = world();
+    gate.retheme();
+    frame();
+    expect(w.reports).toEqual([{ cols: 118, rows: 26 }]);
+    // The note's ordering: a frame falls between the root's style change and React's render of it, so the observer
+    // sees the shrunk host first. Measured against the 12 px cell the library still had, that was `118×25`.
+    growFace(16);
+    gate.observe();
+    expect(w.reports).toEqual([{ cols: 118, rows: 26 }]);
+    expect(w.libraryFace).toEqual({ family: 'mono', sizePx: 16 });
+    expect(gate.pending).toBe(true);
+    // Then React renders the theme change and its layout effect re-themes; the next frame measures once.
+    gate.retheme();
+    frame();
+    expect(w.reports).toEqual([{ cols: 118, rows: 26 }, { cols: 88, rows: 19 }]);
+  });
+
+  it('stays quiet while a re-measure waits for its frame (the order defect fifty-five repaired)', () => {
+    const { w, gate, frame, growFace } = world();
+    gate.retheme();
+    frame();
+    growFace(16);
+    gate.retheme();
+    gate.observe();
+    expect(w.reports).toHaveLength(1);
+    frame();
+    expect(w.reports).toEqual([{ cols: 118, rows: 26 }, { cols: 88, rows: 19 }]);
+  });
+
+  it('measures a resize at once while the face is the one the library has', () => {
+    const { w, gate, frame } = world();
+    gate.retheme();
+    frame();
+    w.hostHeight += 24;
+    gate.observe();
+    expect(w.reports).toEqual([{ cols: 118, rows: 26 }, { cols: 118, rows: 28 }]);
+    expect(w.frames).toHaveLength(0);
+  });
+
+  it('applies a face that changed again before the frame, and measures it alone a frame later', () => {
+    const { w, gate, frame, growFace } = world();
+    gate.retheme();
+    frame();
+    growFace(16);
+    gate.retheme();
+    w.rootFace = { family: 'mono', sizePx: 20 };
+    frame();
+    expect(w.reports).toHaveLength(1);
+    expect(w.libraryFace).toEqual({ family: 'mono', sizePx: 20 });
+    frame();
+    expect(w.reports).toEqual([{ cols: 118, rows: 26 }, { cols: 70, rows: 15 }]);
+  });
+
+  it('measures nothing after it is disposed', () => {
+    const { w, gate, frame } = world();
+    gate.retheme();
+    gate.dispose();
+    frame();
+    expect(w.reports).toEqual([]);
+    expect(gate.pending).toBe(false);
   });
 });
 

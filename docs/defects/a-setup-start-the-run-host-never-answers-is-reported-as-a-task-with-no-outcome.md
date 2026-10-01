@@ -19,7 +19,7 @@ Recorded, not repaired.
   retryable; the failure here is retryable but is in REQ-WORKSPACE-084's generic words for a task with no outcome.
 - REQ-WORKSPACE-084: the generic report is that requirement's for a task that ends without an outcome; this task can
   state its own.
-- OQ-167 holds the reason for a setup that began no stage; OQ-168 the reading for a run host lost mid-setup.
+- OQ-167 holds the reason for a setup that began no stage; OQ-169 the reading for a run host lost mid-setup.
 
 ## Relevant files
 

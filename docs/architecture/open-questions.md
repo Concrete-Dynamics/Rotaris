@@ -6727,9 +6727,12 @@ next call longer than …" and "REQ-TOOLS-127 (A10): the echo of a next call wid
 
 **What a ruling decides.** Which exit status and outcome that poll carries: −1 with the reason, as built; a status
 the product recovers from the shell (which would need the wrapper to carry the previous `$?`, on both backends); or a
-dedicated value. A poll made after the `C-c` but before any next call still reads "still running", because nothing in
-the stream says the line is done; that is recorded as a defect, not this question
-([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).
+dedicated value. ~~A poll made after the `C-c` but before any next call still reads "still running", because nothing in
+the stream says the line is done; that is recorded as a defect, not this question~~
+([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).
+*(Repaired 2026-10-01: a poll after an interrupt submits one no-op line once the shell holds its terminal again, and that
+line's printed start marker closes the paused call as a next call's does, so the poll hands it over with this reading;
+whether the product may write that line is OQ-168, raised with it built.)*
 
 **OQ-151 — Does a retry that restarts a child's conversation carry REQ-ORCH-047's prior-agent-context block again?**
 *(REQ-ORCH-047, "prepend exactly once (never re-prefixed on later state hops …)"; REQ-TOOLS-154, which places the block
@@ -8207,13 +8210,83 @@ for the refusal, and for the cancellation, where REQ-WORKSPACE-092's "Setup was 
 the nearest sentence but names a step that never ran; and whether a start refused because another setup holds the run
 host's one slot should instead wait for that setup to end, as the coordinator's own setups wait for one another.
 
-**OQ-168 — How does a code-intelligence setup end when its finished status never arrives — the run host lost, or a
+**OQ-168 — May a poll after an interrupt write a line of the product's own into the session, to find where the paused
+command's line ended?** *(REQ-TOOLS-096, under which keystroke input is written "as is"; REQ-TOOLS-098, whose advice is to
+poll a soft-paused command with an empty `command` or to interrupt it with `C-c` and `is_input=true`, and whose soft pause is
+"while its process keeps running"; REQ-TOOLS-179, −1 for a soft pause in the foreground; OQ-147, what the paused call reports
+once a poll hands it over; OQ-144, whose handshake already writes one no-op line of the product's own to a fresh shell.
+Raised 2026-10-01 by the repair of
+[`a-poll-after-c-c-says-the-interrupted-command-is-still-running.md`](../defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md),
+as OQ-167, and renumbered OQ-168 at its merge because `origin/main` had taken OQ-167 meanwhile. Open.)*
+
+An interactive shell that takes an interrupt abandons the rest of the wrapper's line, so the paused call's end frame never
+prints, and nothing else in the PTY's stream says the line is done. Before the repair every poll between the `C-c` and the
+agent's next command read −1, `soft_pause`, "The process may still be running", over a process that had died. The only
+way to learn from the stream that the shell has finished the line is to give it another line and watch it reach it. No
+requirement says whether the product may write a line the agent did not send, and REQ-TOOLS-096 writes the agent's input as
+is: a line written while a program other than the shell still reads the terminal becomes that program's input.
+
+**What the build proceeds under** (`ForegroundSession.poll`, `findInterruptedEnd`, `submitCloser`, `noteInterrupt`,
+`ActiveCall.onInterrupt` and `shellHoldsTerminal` in `packages/agent-tools/src/terminal/foreground.ts`):
+- **An interrupt marks the paused call.** Keystrokes carrying `C-c` (the byte 0x03) written while a command is soft-paused —
+  the agent's `is_input`, or the terminal window's interrupt or send-keys (REQ-SHELL-093) — mark it. No other keystroke
+  does, so a paused command waiting in `read` is never handed a line by a plain poll.
+- **An interrupt marks the running call too** *(added 2026-10-01 by the repair's first verification; "an interrupt marks
+  the paused call" alone was read as covering the window's interrupt, and covered only the one sent after the pause)*. The
+  window's interrupt or send-keys can arrive while the foreground call still runs (the agent's own calls are sequential, so
+  its `is_input` cannot). The shell abandons the line just the same, and the call used to wait out the no-output window
+  and soft-pause over a dead process, or wait out its hard cap and reset the session. The running call now looks every
+  100 ms (`INTERRUPT_WATCH_MS`) for its shell holding the terminal again, on Linux, and at that moment submits the same
+  no-op line. Its printed start marker ends the call with −1, `execution_error`, "the command ended without an exit status
+  of its own", with no reset and the shell's state kept. A call that soft-pauses first carries the mark, and any line
+  already submitted, into the paused call.
+- **A poll waits briefly for the shell.** A poll made at once after the `C-c` could meet a shell still waiting on the dying
+  program; it waits up to 500 ms (`INTERRUPT_SETTLE_MS`) for the shell to take its terminal back before it decides.
+- **A poll of a marked call submits one no-op line, once the shell holds its terminal again.** On Linux the poll reads
+  `/proc/<pid>/stat`: when the terminal's foreground process group is the shell's own, the interrupted program has gone,
+  and the poll submits `:` wrapped in fresh markers, as OQ-144's handshake does, and waits for it at most 2 s
+  (`INTERRUPTED_END_WAIT_MS`). The shell reaches that line only once the paused line is done, so its printed start marker
+  closes the paused call (`closer`), and the poll hands it over with OQ-147's reading: −1, `execution_error`, "the paused
+  command ended without an exit status of its own". A program that survived the interrupt and holds the terminal — a REPL
+  that caught it, a child that ignores SIGINT — is written nothing, and the poll answers "still running"; a later poll
+  looks again. The line is submitted once per paused call.
+- **What the line writes is the product's, and nobody reads it.** Its echo and its two frames are cut from the paused
+  call's capture (`until`, `withoutEchoedWrappers`) and withheld from the live stream (`CommandRegion.withholdRowsWith`,
+  live-run L9). A paused line still running when the line arrives — the shell between two of its commands — closes on its
+  own frame with its own status, and the no-op runs after it. That is harmless unless what the line runs next reads the
+  terminal (`a; cat`, or an INT trap in the session's shell that goes on to `read`), which takes the no-op as its input: a
+  narrow window this reading leaves open. A call issued after the line closes the paused call at the line's marker, which
+  the shell prints first.
+
+**What it does not reach.** `/proc` is Linux's: on Windows (ConPTY, PowerShell, where the no-op is `$null`) and macOS
+nothing says who holds the terminal, so a poll of a marked call submits the line whatever holds it, and a program that
+survived the interrupt and reads its input receives it; a REPL's partial-line prompts after it would also be withheld from
+the live stream, since they share a row with the line's echo. A RUNNING call there writes nothing: the window's interrupt
+is only carried into the soft pause, and a call given a `timeout` still runs out its hard cap and is reset. Neither host
+has run it (no Windows host here; no macOS artifact is built, IC-3), and whether PowerShell abandons the rest of its line
+on `C-c` as `sh` does is reasoned, not measured. Windows is the one release target IC-3 leaves, so this is where the
+reading's risk lies.
+
+The cases "REQ-TOOLS-098/179 (OQ-147): a poll after C-c reports …", "REQ-TOOLS-096/098 (OQ-147): a poll after C-c writes
+nothing into a program that survived …", "REQ-TOOLS-127 (OQ-147): the no-op line a poll after an interrupt submits …",
+"REQ-SHELL-093/REQ-TOOLS-098/179 (OQ-147): the terminal window's interrupt while the call still runs …",
+"REQ-SHELL-093/REQ-TOOLS-098 (OQ-147): an interrupt that reached the call before its soft pause is carried …" and
+"REQ-TOOLS-098/179 (OQ-147): a poll made at once after C-c …" in `terminal/terminal.test.ts` pin this reading.
+
+**What a ruling decides.** Whether the product may write a line of its own after an interrupt (as built), only on a poll or
+also while the interrupted call still runs (as built, on Linux), and on which hosts. Where nothing says who holds the
+terminal, the choices are: write it anyway (as built for a poll); write it only while the shell process has no live
+child process; or write nothing off Linux until a host has measured it. Or whether a poll that cannot see the line's end
+must say only that the command may have ended, the advice then naming a next command as the way to learn it. And whether
+the terminal window's interrupt marks the call as the agent's does.
+
+**OQ-169 — How does a code-intelligence setup end when its finished status never arrives — the run host lost, or a
 status push lost?** *(REQ-WORKSPACE-109, "A run SHALL end in exactly one of three ways"; REQ-WORKSPACE-084, "A task that
 ends without reporting any of those three outcomes SHALL be treated as a failure and SHALL be reported with an error
 message describing what went wrong"; REQ-WORKSPACE-091's three stage budgets, 300 / 1800 / 120 s; REQ-WORKSPACE-092's
 5 s; REQ-WORKSPACE-093. Raised 2026-10-01 under [R-067](../product/requests.md#r-067) by the repair of
-[`nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`](../defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md).
-Open.)*
+[`nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`](../defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md),
+as OQ-168, and renumbered OQ-169 at its merge because `origin/main` had taken OQ-168 meanwhile. Open.)*
 
 The initialization coordinator follows a setup through the run host's pushed `mcp.setupStatus` and ends the task on the
 status whose state is `finished`; its setups run one at a time, so every later workspace's setup waits for that end. The

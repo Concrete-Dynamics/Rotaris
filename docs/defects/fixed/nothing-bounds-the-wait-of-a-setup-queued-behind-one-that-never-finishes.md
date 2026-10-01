@@ -31,7 +31,7 @@ reads "{the running stage's reason}: the run host exited before the setup finish
 after it began — every stage's budget (REQ-WORKSPACE-091) plus REQ-WORKSPACE-092's 5 s for each, `SETUP_FOLLOW_BOUND_MS`
 — ends with "…: no outcome arrived within the setup's time budgets.", for a push that was lost. The details, the bound,
 and what is not done on it (no cancellation is sent) are the build's, raised as
-[OQ-168](../../architecture/open-questions.md); nothing is recorded, so the task stays pending.
+[OQ-169](../../architecture/open-questions.md); nothing is recorded, so the task stays pending.
 
 Pinned by `apps/desktop/src/main/initialization.test.ts`, "a setup whose finished status never arrives": the run host's
 exit ends the follow under the stage that was running and the queued workspace's setup then starts; the bound ends it

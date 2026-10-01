@@ -21,7 +21,7 @@ const PAD = 'x'.repeat(100);
 export const LONG_OUTPUT_LINES = 40;
 
 /**
- * The shapes, in the dialect of one platform: seven on Windows, nine elsewhere.
+ * The shapes, in the dialect of one platform: eight on Windows, ten elsewhere.
  *
  * `match` is a pattern rather than a substring because the question is whether the SHAPE was issued, not
  * whether the model reproduced this file's whitespace. Too strict and a call that happened reads as a call that
@@ -39,6 +39,12 @@ export function terminalShapes(platform = process.platform) {
     // output for 30 seconds", and the model counted thirty seconds a poll. `prompt` is how the list names it, since the
     // command itself is empty; the scenario reads the first empty-command call after the wedge.
     { id: 'poll', match: /^$/, command: '', prompt: 'an empty command (command "") — one poll of the command above, at once' },
+    // `docs/defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md` (OQ-147): REQ-TOOLS-098's
+    // other advice, the interrupt. An interactive shell that takes it abandons the rest of the wrapper's line, so the end
+    // frame never prints, and every poll before the agent's next command read "still running" over a process that had
+    // died. `prompt` asks for the poll after it too, which the scenario reads as the first empty-command call after the
+    // keystroke: a second empty-command shape would match the `poll` shape's command.
+    { id: 'interrupt', match: /^C-c$/, command: 'C-c', prompt: 'the keystroke C-c with is_input=true (command "C-c") — interrupt the command above; then one more empty command (command "") to poll it' },
     // Run `2e21e324`'s docker line, in the lower case it was recorded in, at exit 0. It warned as REQ-TOOLS-113's
     // `FAILED ` marker; PD-TOOLS-003 matches that marker in capitals only, so it must not warn now. A regression
     // guard, as `diff-exit-1` is for ESC-41.
@@ -158,6 +164,25 @@ export function replacedShellReading(result, elapsedMs) {
   const restarted = !paused && exit === null && d?.failure_kind === 'execution_error' && /replaced the session's shell/.test(String(d?.detail ?? ''));
   const notReplaced = !paused && !restarted && exit !== null;
   return { kind: paused ? 'paused' : restarted ? 'restarted' : notReplaced ? 'not-replaced' : 'other', exit, killStatus: d?.kill_status ?? null };
+}
+
+/**
+ * What the poll after the `interrupt` shape met (OQ-147), read from one recorded observation.
+ *
+ * - `ended`: exit −1 as an `execution_error` whose detail says the paused command ended without an exit status of its
+ *   own — the product found the end of the interrupted line, as OQ-147's reading reports it.
+ * - `still-running`: a soft pause, "still running" — the defect's signature, a FAIL.
+ * - `ended-own`: the command ended with an exit status of its own, so the interrupt reached nothing still running (the
+ *   wedge had ended first) — a NOTE.
+ * - `other`: none of those — a NOTE.
+ */
+export function interruptedPollReading(result) {
+  const d = diagnosticOf(result);
+  const exit = typeof d?.exit_code === 'number' ? d.exit_code : null;
+  const stillRunning = d?.outcome_kind === 'soft_pause';
+  const ended = !stillRunning && exit === -1 && d?.failure_kind === 'execution_error' && /without an exit status of its own/.test(String(d?.detail ?? ''));
+  const endedOwn = !stillRunning && !ended && exit !== null && exit >= 0;
+  return { kind: stillRunning ? 'still-running' : ended ? 'ended' : endedOwn ? 'ended-own' : 'other', exit, outcome: d?.outcome_kind ?? null };
 }
 
 /**

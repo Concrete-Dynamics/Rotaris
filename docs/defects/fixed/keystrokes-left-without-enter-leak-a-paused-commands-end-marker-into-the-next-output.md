@@ -60,7 +60,7 @@ branch: the case below, run against `/bin/sh` (dash) through a real PTY on the u
   raw stream. All three falsified readings are kept beside the replacement in `onData`. What a reset restores is
   unchanged: no snapshot is taken for a paused call's completion ([OQ-134](../../architecture/open-questions.md)). A
   poll made after the `C-c` but before any next call still reads −1; that is recorded, not repaired
-  ([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).
+  ([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).
 - **The echo of the next call's wrapper is dropped whole.** Found by the second verification (2026-09-30): the line
   discipline echoes the next call's wrapper onto the paused call's screen as it is written, and a wrapper wider than
   the screen (240 columns) wraps. `cleanLines` dropped only the row that begins the echo (`printf '%s`), so its

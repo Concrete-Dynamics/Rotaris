@@ -1,4 +1,4 @@
-import type { SessionId } from '@rotaris/kernel';
+import { toIsoUtc, type SessionId } from '@rotaris/kernel';
 import { isTerminalChildState, type ChildState, type Interruption, type ResumeState, type RootExecutionRecord, type SettlingPath } from '@rotaris/contracts';
 import type { ChildInsert, ChildRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
@@ -66,6 +66,29 @@ export function storeChildReport(deps: { readonly writer: SessionWriter; readonl
     highlightPaths: [], snippets: [], tags: list(report['tags']), conversationId: taskId,
   });
   if (!m.ok) deps.warn(`the report for child ${taskId} could not be materialised as an artifact: ${m.error.reason}`);
+}
+
+/**
+ * REQ-ORCH-098: a child's teardown entries, whatever terminal state it reached — `child_end`, `child_result` and
+ * `child_conversation_closed`, in that order, with its report's status and summary. Every path that ends a child writes
+ * them once, after its report is stored and before the terminal callbacks tell its parent: both settles of a child's
+ * execution; the scheduler, for a child it settles without one (blocked, or cancelled by the finalize sweep; OQ-152); and,
+ * since the repair of `a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`, every path that
+ * settles a child `cancelled` outside its execution — the user's cancel of one child and its live descendants, the
+ * cancel of a paused child at rest, "continue without them", the crash record of an accepted cancel, and the stale-child
+ * settle. A child that never started had no conversation, and its closing is recorded all the same, so every terminal
+ * child is torn down alike (OQ-152's reading). Lives beside `storeChildReport` because the last two run from the store
+ * alone, with no `IterationChildren`; the time is the writer's own clock (`SessionWriter.wall`).
+ */
+export function writeTeardown(writer: SessionWriter, row: Pick<ChildRow, 'task_id' | 'canonical_name'>, terminal: string, status: string, summary: string): void {
+  writer.appendTimeline('child_end', 'rotaris', `Child ${row.canonical_name} (${row.task_id}) ended ${terminal}.`, { task_id: row.task_id, state: terminal, at: toIsoUtc(writer.wall.instant()) });
+  writer.appendTimeline('child_result', 'rotaris', `Child ${row.canonical_name} reported ${status}: ${summary.slice(0, 120)}`, { task_id: row.task_id, status });
+  writer.appendTimeline('child_conversation_closed', 'rotaris', `Child ${row.canonical_name}'s conversation closed.`, { task_id: row.task_id });
+}
+
+/** `writeTeardown` for a child ended `cancelled` with `report`, in its report's status and summary. */
+export function writeCancelledTeardown(writer: SessionWriter, row: Pick<ChildRow, 'task_id' | 'canonical_name'>, report: Readonly<Record<string, unknown>>): void {
+  writeTeardown(writer, row, 'cancelled', typeof report['status'] === 'string' ? report['status'] : 'cancelled', typeof report['summary'] === 'string' ? report['summary'] : '');
 }
 
 /**

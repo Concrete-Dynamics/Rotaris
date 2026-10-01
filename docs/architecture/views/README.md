@@ -53,6 +53,37 @@ sentences from it and the MCP category keeps the run host's `detail` (process vi
 setup port carries the run host's refusal code with its words, and the initialization coordinator keeps REQ-WORKSPACE-094's
 non-retryable words for the `unavailable` status alone (process view, `mcp.setup`; runtime view, the project setup; OQ-167).
 
+**A child the stale settle ends, or a plan cycle's child a crash ends, is counted and its cut rows settle (REQ-MONITOR-102,
+REQ-SESSION-129, REQ-ORCH-053, OQ-96, R-067).** `recordCutChild` (`run/crash.ts`) answers one child's open calls and adds
+the calls its record holds to the session total. `recordPlanRootCrash` runs it for the plan cycle's unfinished children,
+and `settleStaleChildren` runs it for each child before the `cancelled` move. This repairs
+`a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running.md`. The **runtime view**'s crash
+paragraph and its launch sequence say so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A child cancelled outside its execution is torn down (REQ-ORCH-098, REQ-ORCH-133, REQ-ORCH-053, PD-ORCH-005 clauses 6
+and 16, OQ-152, R-067).** The user's cancel of one child and its live descendants, the cancel of a paused child at rest,
+"continue without them", the crash record of an accepted cancel and the stale-child settle each write `child_end`,
+`child_result` and `child_conversation_closed` after the report they store (`writeCancelledTeardown`). `writeTeardown`
+moved from `children/orchestration.ts` to `children/ledger.ts`, beside `storeChildReport`, and stamps its `child_end` with
+the writer's clock (`SessionWriter.wall`, a new read-only accessor). This repairs
+`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`. The **runtime view**'s "A child settled
+without its turn" paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A plan cycle's chips after an iteration read the plan cycle root's history (REQ-MONITOR-060, REQ-MONITOR-069,
+REQ-ORCH-153, PD-ORCH-003).** With no run live and an iteration recorded, `entryToolsOf` reads the tracker under the latest
+plan cycle root's persona when that root opened after the latest iteration (`plan_roots`, store v30), and under the
+iteration root's otherwise. This repairs `a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md`.
+The **runtime view**'s `entryTools` paragraph says so. No package, edge, process, message kind, channel, command or store
+column changed.
+
+**A todo edit at rest and the quit's terminal record hold the lock (ADR-0005, REQ-EVENTS-098, REQ-CHAT-090, PD-ORCH-005
+clause 10).** `editStoredTodo` claims through `claimHold` before it writes and is refused `session_locked` (REQ-SESSION-048's
+words) or `store_failed` with nothing written; `closeAll`'s quit record of a resting session's background sessions
+(`recordQuitTerminals`) claims the same way and records nothing of a session another live process holds. This repairs
+`a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md`. The **runtime view**'s §6 lock paragraph, the
+`announceShutdown` control row and the `session_locks` row, and the **state-ownership view**'s session-lock row say so. No
+package, edge, process, message kind, channel, command or store column changed.
+
 **A row that grows is measured at the commit, before it is painted (PD-CHAT-003, REQ-CHAT-058, ADR-0045, R-067).** A row whose
 content changed was placed by the height its identity drew last until the observer's delivery rendered a frame later, and a
 row that grew was painted through the row beneath it. The pane now reads every bound slot with no measurement of its present
@@ -235,7 +266,7 @@ changed; the snapshot channel's `SessionRecord` gained the two fields.
 
 **A child the scheduler settles is torn down (REQ-ORCH-098, REQ-ORCH-048, REQ-ORCH-052, R-067).** `Scheduler.cascadeBlocked`
 and `Scheduler.finalizeIncomplete` call `SchedulerDeps.teardown`, which `IterationChildren` answers with `writeTeardown`
-(`children/orchestration.ts`), so a blocked child and one the finalize sweep cancels get `child_end`, `child_result` and
+(`children/orchestration.ts`; in `children/ledger.ts` since 2026-10-01), so a blocked child and one the finalize sweep cancels get `child_end`, `child_result` and
 `child_conversation_closed` as a settled execution's child does (OQ-152). This repairs
 `a-child-that-never-started-gets-no-teardown-timeline-entries.md` (acceptance A16). The **runtime view**'s "A child settled
 without its turn" paragraph says so. No package, edge, process, message kind, channel, command or store column changed.

@@ -1,16 +1,16 @@
-import { type Clocks, countNoun, millis, type Millis, type SessionId, type TimerHandle, toIsoUtc } from '@rotaris/kernel';
+import { type Clocks, countNoun, millis, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
 import { interruptionPhrase, isTerminalChildState, reportStatusToState, resumeStateFor, TASK_ID_PATTERN, type ChildState, type Interruption, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
 import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
 import { isSteeringMessage, runTurn, type SteeringPrompt, type ToolPort, type TurnOutcome } from '../run/turn.js';
-import { answerOpenCalls } from '../run/crash.js';
+import { answerOpenCalls, recordCutChild } from '../run/crash.js';
 import { callsRun } from '../run/interruption.js';
 import type { AttachmentOutcome, BackgroundOutput, DelegateOutcome, DelegateRequest, DelegationOps, WaitOutcome } from './delegation.js';
 import { fullContextBlock, siblingIndexBlock, type AttachedResolution } from '../artifacts/context.js';
 import type { ArtifactStore } from '../artifacts/store.js';
-import { ChildLedger, storeChildReport, userCancellation, type Budget } from './ledger.js';
+import { ChildLedger, storeChildReport, userCancellation, writeCancelledTeardown, writeTeardown, type Budget } from './ledger.js';
 import { childPayload, completionNotification, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
 import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, type CutOff } from './cut-off.js';
 import { resolveRole, type Persona, type PersonaResolver } from './personas.js';
@@ -253,7 +253,7 @@ export class IterationChildren implements DelegationOps {
     this.scheduler = new Scheduler({
       ledger: this.ledger, runChild: (row) => this.track(this.executeSettling(row)), warn: deps.warn, hasConversation: (taskId) => (deps.record?.load(taskId).length ?? 0) > 0,
       // REQ-ORCH-098: a child the scheduler settles — blocked, or cancelled by the finalize sweep — is torn down as any (OQ-152).
-      teardown: (row, report) => { writeTeardown(deps, row, row.state, String(report['status'] ?? row.state), String(report['summary'] ?? '')); },
+      teardown: (row, report) => { writeTeardown(deps.writer, row, row.state, String(report['status'] ?? row.state), String(report['summary'] ?? '')); },
     });
     this.scheduler.onTerminal((row) => { const w = this.resumeWaiters.get(row.parent_id); if (w) { this.resumeWaiters.delete(row.parent_id); w(); } });
     // PD-TOOLS-006: a claim lapses at its child's terminal state. Liveness is also read from the ledger at every
@@ -752,6 +752,10 @@ export class IterationChildren implements DelegationOps {
       const written = userCancellation(t, row);
       this.ledger.storeReport(t.task_id, written.report);
       this.deps.writer.appendTimeline('child_user_cancelled', 'user', written.message, written.metadata);
+      // REQ-ORCH-098: torn down here, after the cancel's own entry and before the terminal callbacks; its execution, which
+      // finds its record terminal when it returns, writes none (the repair of
+      // `a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`).
+      writeCancelledTeardown(this.deps.writer, t, written.report);
       this.controllers.get(t.task_id)?.abort();
       this.scheduler.settled(r.row);
     }
@@ -911,7 +915,7 @@ export class IterationChildren implements DelegationOps {
     if (!t.ok) { deps.warn(t.reason); return; }
     await this.afterTerminal(row, t.row, () => {
       // REQ-ORCH-098: the same teardown the settle in `execute` writes, "whether or not its execution raised".
-      writeTeardown(deps, row, 'failed', 'failed', message);
+      writeTeardown(deps.writer, row, 'failed', 'failed', message);
     }, { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: 'failed', status: 'failed', summary: message });
   }
 
@@ -1364,7 +1368,7 @@ export class IterationChildren implements DelegationOps {
     // REQ-HOOKS-075: child_completed carries the child's terminal state and its report status side by side.
     await this.afterTerminal(row, t.ok ? t.row : null, () => {
       // REQ-ORCH-098: teardown, whatever the terminal state.
-      writeTeardown(deps, row, terminal, report.status, report.summary);
+      writeTeardown(deps.writer, row, terminal, report.status, report.summary);
     }, { child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state: terminal, status: report.status, summary: report.summary });
   }
 
@@ -1460,18 +1464,6 @@ export class IterationChildren implements DelegationOps {
 }
 
 /**
- * REQ-ORCH-098: a child's teardown entries, whatever terminal state it reached — `child_end`, `child_result` and
- * `child_conversation_closed`, in that order. Written by both settles of a child's execution and, for a child the scheduler
- * settles without one (blocked, or cancelled by the finalize sweep), by the scheduler (OQ-152): a child that never started
- * had no conversation, and its closing is recorded all the same, so every terminal child is torn down alike.
- */
-function writeTeardown(deps: Pick<ChildrenDeps, 'writer' | 'clocks'>, row: Pick<ChildRow, 'task_id' | 'canonical_name'>, terminal: string, status: string, summary: string): void {
-  deps.writer.appendTimeline('child_end', 'rotaris', `Child ${row.canonical_name} (${row.task_id}) ended ${terminal}.`, { task_id: row.task_id, state: terminal, at: toIsoUtc(deps.clocks.wall.instant()) });
-  deps.writer.appendTimeline('child_result', 'rotaris', `Child ${row.canonical_name} reported ${status}: ${summary.slice(0, 120)}`, { task_id: row.task_id, status });
-  deps.writer.appendTimeline('child_conversation_closed', 'rotaris', `Child ${row.canonical_name}'s conversation closed.`, { task_id: row.task_id });
-}
-
-/**
  * REQ-MONITOR-135: a steering port whose every delivery refreshes the agent's last activity (`refresh`), so a steer that
  * reaches the conversation starts the stall watch's silence again. A drain that delivers nothing refreshes nothing.
  */
@@ -1487,7 +1479,8 @@ function storedScope(row: ChildRow): string[] {
 /**
  * REQ-ORCH-053: on a later run of the same session, settle every non-terminal child of any previous iteration before the
  * first iteration. Its report is materialised as every other terminal child's is (REQ-LIBRARY-092), given the session's
- * artifact store.
+ * artifact store. Before it ends, its open calls are answered as cut by no rest and the calls its record holds join the
+ * session's total (`recordCutChild`, REQ-MONITOR-102 / REQ-SESSION-129); after, it is torn down (REQ-ORCH-098).
  */
 export function settleStaleChildren(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, warn: (m: string) => void, artifacts?: ArtifactStore, settled?: (fields: Readonly<Record<string, unknown>>) => void): number {
   let n = 0;
@@ -1495,10 +1488,17 @@ export function settleStaleChildren(dal: StoreDal, writer: SessionWriter, sessio
     // PD-ORCH-005 (narrowing REQ-ORCH-053 / REQ-SESSION-065 / REQ-NOTIFY-121): a `paused` agent is left as it is; it is
     // resumed with its iteration, or ended by the user continuing without it.
     if (isTerminalChildState(c.state) || c.state === 'paused') continue;
+    // REQ-MONITOR-102 / REQ-SESSION-129: before it ends, its open calls are answered and the calls its record holds are
+    // counted (the repair of `a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running.md`).
+    // Idempotent, so a plan cycle's child the crash record already reached adds nothing here.
+    recordCutChild(dal, writer, sessionId, c, null, warn);
     const r = writer.transitionChild(c.task_id, 'cancelled', 'cancellation');
     if (r.ok) {
       n += 1;
-      storeChildReport({ writer, artifacts, warn }, c.task_id, c, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: 'Cancelled: the run that owned this child ended (killed host or hard cancel) before it settled.', key_findings: [], last_response: '', final_response: '', errors: [{ type: 'cancelled', message: 'settled on continue (REQ-ORCH-053)' }] });
+      const report = { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: 'Cancelled: the run that owned this child ended (killed host or hard cancel) before it settled.', key_findings: [], last_response: '', final_response: '', errors: [{ type: 'cancelled', message: 'settled on continue (REQ-ORCH-053)' }] };
+      storeChildReport({ writer, artifacts, warn }, c.task_id, c, report);
+      // REQ-ORCH-098: torn down as every terminal child is (OQ-152).
+      writeCancelledTeardown(writer, c, report);
       // REQ-HOOKS-003: the settling run fires its `child_completed` once its own `session_start` has (`RunDeps.settledBeforeStart`).
       settled?.(childCompletedFields(dal.getChild(sessionId, c.task_id) ?? r.value));
     }

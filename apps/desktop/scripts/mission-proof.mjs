@@ -294,7 +294,15 @@ const s4 = scenario('cancel', ['personas:', '  lead:', '    name: lead', '    mo
   const justAfter = [8205, 8215, 8240].map((at) => ({ at, rows: (probesAt(r.log, at, '.agent-table__row') ?? []).map((p) => `${p.text.slice(0, 80)}:${p.data['data-state']}`) }));
   const settled9 = probesAt(r.log, 9000, '.agent-table__row') ?? [];
   expect(settled9.length >= 2 && settled9.every((p) => p.data['data-state'] === 'cancelled' && !/which the user cancelled|The user cancelled this agent/.test(p.text)), `at 9 s the rows were not the engine's cancelled record: ${JSON.stringify(settled9.map((p) => `${p.text.slice(0, 60)}:${p.data['data-state']}`))} (REQ-MONITOR-296)`);
-  results.cancel = { justAfterConfirm: justAfter, dialog, confirmLabel, alphaState: alpha?.state, descendants: kids.filter((k) => k.parent_id === alpha?.task_id).map((k) => `${k.canonical_name}:${k.state}`), rowsAfter: after9, runStatus: row.execution_status, cancelEntry: names.find((n) => n.name === 'child_user_cancelled')?.message ?? null };
+  // REQ-ORCH-098 (the repair of a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries): the cancel tears
+  // alpha and each live descendant it cancelled down, once each, after its `child_user_cancelled` — their executions, which
+  // return after the cancel, write no second teardown.
+  const TEARDOWN = ['child_end', 'child_result', 'child_conversation_closed'];
+  const ownEntries = (taskId) => names.filter((n) => { try { return JSON.parse(n.metadata).task_id === taskId; } catch { return false; } }).map((n) => n.name);
+  const cancelledKids = kids.filter((k) => k.state === 'cancelled' && (k.task_id === alpha?.task_id || k.parent_id === alpha?.task_id));
+  const teardowns = cancelledKids.map((k) => ({ child: k.canonical_name, entries: ownEntries(k.task_id).filter((n) => n === 'child_user_cancelled' || TEARDOWN.includes(n)) }));
+  for (const t of teardowns) expect(JSON.stringify(t.entries) === JSON.stringify(['child_user_cancelled', ...TEARDOWN]), `${t.child}'s cancel and teardown entries: ${JSON.stringify(t.entries)} (REQ-ORCH-098: once each, after the cancel's own entry)`);
+  results.cancel = { justAfterConfirm: justAfter, dialog, confirmLabel, alphaState: alpha?.state, descendants: kids.filter((k) => k.parent_id === alpha?.task_id).map((k) => `${k.canonical_name}:${k.state}`), rowsAfter: after9, runStatus: row.execution_status, cancelEntry: names.find((n) => n.name === 'child_user_cancelled')?.message ?? null, teardowns };
 }
 
 // 4b. Cancel the run from the Mission view (acceptance A35, REQ-MONITOR-127/130/296): the run row selected, "Cancel selection",

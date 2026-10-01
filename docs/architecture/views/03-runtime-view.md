@@ -55,7 +55,7 @@ sequenceDiagram
     end
     RH->>WR: SessionWriter.create — session row (with the worktree binding as JSON and the sandbox mode, v8) + lock row (INSERT OR IGNORE) in one transaction; the run's EFFECTIVE root (the tool fence, the terminal's and the hooks' cwd, the child payload's root) is the worktree path, the record stays anchored to the base (REQ-GIT-019)
     RH->>WR: appendRow('user', prompt) — row 0 and its transcript.row event
-    RH->>RH: settleStaleChildren (REQ-ORCH-053; each report materialised as an artifact, REQ-LIBRARY-092), SupervisorRegistry, hooks resolved once (ADR-0015)
+    RH->>RH: settleStaleChildren (REQ-ORCH-053; each child's open calls answered and its calls counted first, recordCutChild, REQ-MONITOR-102 / REQ-SESSION-129; each report materialised as an artifact, REQ-LIBRARY-092; each torn down, REQ-ORCH-098), SupervisorRegistry, hooks resolved once (ADR-0015)
     RH->>RH: new Run(...) then run.start()
     RH-->>M: session.started {sessionId}
     M-->>W: {ok:true}; the window subscribes → attach → snapshot then the resident rows (REQ-MONITOR-214)
@@ -291,7 +291,9 @@ root whose count is NULL — an iteration opened before v26 — adds nothing), t
 records as under way (`sessions.plan_root_task_id`, **v29**: a plan cycle has no iteration row, REQ-ORCH-153) answered the
 same way under the plan cycle's 0 and its calls joined to the total in the transaction that releases it
 (`recordPlanRootCrash`; `Run.turn` records the root when a plan cycle starts and releases it as its calls join the total —
-its turn's return, or the stop's grace giving up on it — or with none counted when its turn raises), every `tool_calls` ring
+its turn's return, or the stop's grace giving up on it — or with none counted when its turn raises), and each unfinished
+child of that plan cycle answered and counted the same way (`recordCutChild`, since 2026-10-01: no record pauses it, and
+the stale-child settle that ends it runs only at a continue), every `tool_calls` ring
 row still `running` settled `failed` with the crash's statement and a NULL duration, its `tool.finish` with it
 (`settleDeadToolCalls`, REQ-SESSION-129 with ADR-0024: an orderly end settles them when the run's ports close, and a crash
 closes none — except at a continue after a run of this process that parked without closing its ports, the message-limit
@@ -619,7 +621,10 @@ finding K1, 2026-09-29) is the same route for its tools: `resolved` is the nativ
 REQ-MONITOR-061), `called`
 and `active` the tracker's under the name the root dispatches as (`Run.entryTools`, `rootName`: a root resumed as the
 entry role keeps the persona its iteration was opened with, OQ-97); with no run live nothing is
-resolved, the history is read under the latest iteration's `root_persona` (`entryToolsOf`) — or, before any iteration,
+resolved, the history is read under the latest iteration's `root_persona` (`entryToolsOf`), or under the latest plan
+cycle root's `root_persona` when that root opened after it (`plan_roots.opened_at`, store v30: PD-ORCH-003 re-arms `plan`
+after an iteration, and the cycle's root runs fresh under a persona that may have been switched in between; the repair of
+`a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md`, 2026-10-01) — or, before any iteration,
 under every name the tracker holds that is no child's, which can only be a plan cycle's root's, since a plan cycle has no
 iteration row (REQ-ORCH-153; `AgentActivity.calledToolsWhere`, acceptance A21, 2026-09-29) — and the surface lets the
 role's declared tools stand in (REQ-MONITOR-060; the snapshot's `declaredTools`). **`SessionRecord.entryStalledSeconds`**
@@ -766,8 +771,14 @@ Since 2026-09-30 a child the scheduler settles without an execution — one the 
 cancels, started or not — is torn down too: `SchedulerDeps.teardown` writes the same three entries through
 `writeTeardown`, after its report and before the terminal callbacks (REQ-ORCH-098; OQ-152; the repair of
 [`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](../../defects/fixed/a-child-that-never-started-gets-no-teardown-timeline-entries.md)).
-A child cancelled by any other path still gets none
-([`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../../defects/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md)).
+Since 2026-10-01 so is a child every other path settles `cancelled` — the user's cancel of one child and its live
+descendants (`IterationChildren.cancel`, after each one's `child_user_cancelled`), the cancel of a paused child at rest
+(`Sessions.cancelPausedAtRest`), "continue without them" (`Run.cancelPausedAgents`), the crash record of an accepted
+cancel (`recordAcceptedCancel`) and the stale-child settle (`settleStaleChildren`) — each through `writeCancelledTeardown`
+with the report it stored. `writeTeardown` lives in `children/ledger.ts` beside `storeChildReport`, and takes its time from
+the writer's clock (`SessionWriter.wall`), because the last two run from the store alone. A cancelled child's execution
+that returns later finds its record terminal and writes none, so each end is torn down once (the repair of
+[`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../../defects/fixed/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md)).
 
 **A settle's hook runs in line (REQ-HOOKS-076 / REQ-HOOKS-080; repaired 2026-09-29).** Both settles, the one at the end
 of `execute` and `settleRaised`, make the terminal move and write the teardown. Then they run the `child_completed` hook
@@ -1005,7 +1016,7 @@ explicit cancel accepted and never carried out (OQ-103) — it presents `cancell
 | `answerApproval` | the agent's pending approvals | routed by request id across live sessions |
 | `answerQuestion` | the agent's pending question prompts (`PendingQuestions`, one registry per tool port, which is one conversation — REQ-CHAT-094) | routed by request id across live sessions; **the answers cross as two flat maps** keyed by step id (`selected`, `freeform`) because REQ-CHAT-095's `{step_id: {…}}` is a record of records and `ControlRequestSchema`'s value space is not (REQ-MONITOR-013), recombined in `Sessions.control`; a stale id answers `false`, which is what keeps REQ-CHAT-102's modal open instead of reporting success (Part AC) |
 | `cancelQuestions` | the same registry | releases the waiting call at once; the stepper emits it exactly once, whatever route dismissed it (REQ-CHAT-101). The explicit cancel and host teardown release every pending prompt on the existing `cancelPending` sweep beside the approvals (REQ-TOOLS-054/177, REQ-CHAT-096); a rest — a pause, a stop, a quit — and a stop or a quit during a plan cycle **withdraw** them instead (`withdrawPending`, PD-ORCH-005 clauses 9 and 15, OQ-108), and the calls are recorded as interrupted, never as cancelled or denied |
-| `announceShutdown` | `run.stop.request('application_shutdown')` | a quit comes to rest: every unfinished agent `paused` by `quit` (PD-ORCH-005 clause 3). `Sessions.closeAll` also records a paused session's background sessions this process holds as ended by the quit |
+| `announceShutdown` | `run.stop.request('application_shutdown')` | a quit comes to rest: every unfinished agent `paused` by `quit` (PD-ORCH-005 clause 3). `Sessions.closeAll` also records a paused session's background sessions this process holds as ended by the quit, under the session's lock (`claimHold`), and records nothing of a session another live process holds |
 | `forceCompression` | `run.forceCompression()` → the run's **`ConversationRegistry`** (`run/conversations.ts`, ADR-0060 decision 1's second reader) → each live turn's `CompressionRunner.manual` | **Part AO** (REQ-CHAT-078..081, REQ-MONITOR-090..096): every conversation live inside `runTurn` — the root's and each child's, registered for the span of the turn and unregistered on every exit — compresses CONCURRENTLY and the answer settles once ALL have; unconditional (neither the threshold nor the futility latch is read; the `context_compressed` entry carries `trigger: manual` and NO threshold field); one pass per conversation at a time, shared with the automatic trigger (a pass in flight is joined, `due()` answers false meanwhile); refused `no_run` ("No run is active.") or `no_active_conversations` ("No active agent contexts are available to compress."); the run host raises the count toast or the persistent "Context compression incomplete" with each failing agent and reason in the detail block. **The one asynchronous control:** `Sessions.controlAsync` is its entry and the run host awaits it; the synchronous `control` answers the `no_run` refusal |
 | `clearTranscript` | `SessionWriter.clearTranscript()` — the run's own writer, or the loaded idle session's | **Part AO** (REQ-CHAT-082..084, both routes): every transcript row, resident or released to a page, deleted in ONE transaction with the **`transcript_cleared`** timeline entry, so a reader sees the old rows or none; the writer's resident count and open response rows reset so the run's next write cannot resurrect a row, the row index counter NOT reset (the `events` history keeps REQ-EVENTS-052's contiguity, the next row takes the next index); the commit hand-off carries `clear` and the projection owner drops every held row, cancels a pending growth tick and republishes — an increment from 0 with no rows, then the record. Failures: the persistent "Could not clear transcript" with the store's reason as detail; "Transcript is busy and could not be cleared." is a toast whose condition the store's synchronous transactions make unreachable in this build (stated in `sessions.ts`) |
 | everything else in REQ-MONITOR-004 | — | answers `false` (no mechanism yet) |
@@ -1148,6 +1159,14 @@ branch's `SessionWriter.open` already gave. Before this the live branch wrote at
 on a session these writes had no lock row behind them
 (`docs/defects/fixed/a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`; `checkpoint-proof`'s
 `loaded-restore` launch plants a second holder after a loaded session's run and fails on a restore that writes under it).
+Two more writes from outside a run claim the same way (2026-10-01): a todo edit while the session rests (REQ-CHAT-090,
+`editStoredTodo`) takes or keeps the lock for its write and gives back what it took, refused `session_locked` in
+REQ-SESSION-048's words (`lockHeldRefusal`) while another live process holds it and `store_failed` when the store could
+not be read or written to take it, a malformed edit refused before the lock is touched; and the quit's record of a
+background session a resting session left running (`closeAll`, PD-ORCH-005 clause 10, `recordQuitTerminals`) is written
+under the same claim, and skipped with a warning for a session another live process holds
+(`docs/defects/fixed/a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md`; `control.test.ts` and
+`run/turn.test.ts` plant the second holder).
 
 ## 6a. The session browser's actions reaching a record no run holds (Part U)
 
@@ -1187,7 +1206,7 @@ rows carry; NULL otherwise — one still set after its process died is a crash d
 counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, `recordRestore`, **`openPlanGate`/`resolvePlanGate`**, **`openPlanRoot`** and `countToolCalls`'s `planRoot` release, **`endIteration`** (the todo only, in the transaction that records `iteration.end` and closes the iteration's row; no save generation, so the renderer sees it with the next save); the binding and the mode at `create` only |
 | `plan_cycles` (**v17**, REQ-ORCH-154; cascade **v20**) | one row per plan cycle: `opened_at`, the role's `plan` VERBATIM (never rewritten after the insert), the classified `intent`, the `todo` the plan implies, the `changes` the user stated when choosing revise into it, the user's `edited` text (NULL until they edit � which is what makes "editing alone never approves it" structural), and the `decision` with `decided_at`. Keyed `(session_id, cycle)`, so an answer is recorded once and a second answer for the same cycle changes nothing. `session_id` carries `REFERENCES sessions(session_id) ON DELETE CASCADE` since v20 (REQ-SESSION-166: the VERBATIM plan text leaves with the session; rows already orphaned are dropped by the migration, which is the delete the user asked for) | `openPlanGate` (one durable transaction with the status and the `plan_gate_opened` entry), `recordPlanEdit`, `resolvePlanGate` |
 | `checkpoints` (v9) | REQ-GIT-016's record, one row per checkpoint keyed `(session_id, sequence)` — ref, commit, created_at, iteration, child_name, `files` as one JSON list, `kind` from REQ-GIT-067's vocabulary; `checkpoint_count` is a count over these rows, never stored (ADR-0039); the listing is `ORDER BY sequence` under the primary key (a plan the store test asserts) | `recordCheckpoint` (insert + the trim to `max_per_session`, one transaction with the timeline entry and the event) |
-| `session_locks` | `(session_id, pid, host, acquired_at)` — the capability token (ADR-0005) | `create`/`open` (INSERT OR IGNORE), a continue's `holdForContinue`, the at-rest cancel's `lockForWrite` and a loaded session's write outside a run (`withWriter`) (all through `claimHold` → `claimLockReaping`), `endRun`, release |
+| `session_locks` | `(session_id, pid, host, acquired_at)` — the capability token (ADR-0005) | `create`/`open` (INSERT OR IGNORE), a continue's `holdForContinue`, the at-rest cancel's `lockForWrite`, a loaded session's write outside a run (`withWriter`), a todo edit at rest (`editStoredTodo`) and the quit's terminal record (`recordQuitTerminals`) (all through `claimHold` → `claimLockReaping`), `endRun`, release |
 | `transcript_rows` | the rows, resident or released to a page (REQ-SESSION-131/192). Part Z added derived `chars` and transient `streamId`. Part AE adds ordered image metadata in `attachments` (v14): original name, content-derived media type, size, session-relative path and SHA-256 digest; bytes remain under the session files directory and reopen verifies availability and digest (REQ-CHAT-046/153/173). **REQ-CHAT-162's `/skills` listing (2026-09-27) is one `system` row whose body is the listing** — the text `contracts/skills.ts` fixes and the row renderer reads back — appended outside any run through the loaded session's writer (`run-host/skills.ts`'s `writeSkillListing`), so it is saved, recorded as a `transcript.row` event and exported like any row; no column and no migration | `appendRow`, `settleRow`, `upsertMessageRow` |
 | `events` | the wire history: one line per event, ordinal per session, trimmed by the retention cap (ADR-0009) | every unit, in the same transaction as what it records |
 | `launch_audits` | one per session, the primary key the one-shot | `recordLaunchAudit` |

@@ -227,9 +227,12 @@ export function resolveProfile(profile, plan, repo) {
   return { ...profile, run }
 }
 
+// `<repo>-wt-skillref-<id>` and `<repo>-wt-integ-<id>` would read as bundle worktrees of a plan with these ids.
+const RESERVED_IDS = ['skillref', 'integ']
+
 export function buildArgs(plan, profile, state = { seed: {}, resume: {}, cache: {} }) {
   if (!PLAN_ID_RE.test(plan.id || '')) throw new UsageError('the plan needs an `id` of 1-8 lower-case letters or digits; it prefixes every branch and worktree, so pick one no earlier orchestration used')
-  if (plan.id === 'skillref') throw new UsageError('plan id skillref is reserved: it names the reference worktrees')
+  if (RESERVED_IDS.includes(plan.id)) throw new UsageError('plan id ' + plan.id + ' is reserved: it names the reference and integration worktrees')
   const bundles = {}
   const laneKeys = {}
   const branches = new Set()
@@ -368,7 +371,8 @@ export async function selfTest({ quiet = false } = {}) {
     const session = { id: 'st', trailers: 'Co-Authored-By: A <a@example.com>\nSession: S', extraPushTargets: ['session-branch'] }
     const profile = resolveProfile(rawProfile, session, '/srv/repo')
     const liveProfile = resolveProfile(rawProfile, { ...session, live: { authorized: true, ownerWords: 'run it as much as you want' } }, '/srv/repo')
-    assert.equal(profile.run.integ, '/srv/repo-wt-integ', 'the {repo} token resolves')
+    assert.equal(profile.run.integ, '/srv/repo-wt-integ-st', 'the {repo} and {id} tokens resolve')
+    assert.notEqual(resolveProfile(rawProfile, { ...session, id: 'st2' }, '/srv/repo').run.integ, profile.run.integ, 'two plans merge in two integration worktrees, so they can run at once')
     assert.equal(profile.run.skillDir, '/srv/repo-wt-skillref-st/.agents/skills/orchestrated-build', 'agents read this orchestration\'s own reference worktree, never the owner\'s checkout')
     assert.deepEqual(profile.run.pushTargets, ['main', 'session-branch'])
     assert.equal(profile.run.live, undefined, 'no live run renders without the owner\'s quoted authorization')
@@ -405,6 +409,7 @@ export async function selfTest({ quiet = false } = {}) {
     assert.throws(() => buildArgs({ id: 'st', bundles: [{ key: 'accept1-2', tasks: [task('t')] }] }, profile), /reserved/)
     assert.throws(() => buildArgs({ bundles: [] }, profile), /id/)
     assert.throws(() => buildArgs({ id: 'skillref', bundles: [] }, profile), /reserved/, 'the reference worktrees\' name is no plan id')
+    assert.throws(() => buildArgs({ id: 'integ', bundles: [] }, profile), /reserved/, 'the integration worktrees\' name is no plan id')
     const twins = buildArgs({ id: 'st', bundles: [{ key: 'record-hygiene', tasks: [task('t')] }, { key: 'record-hygiene+configdir', tasks: [task('t')] }] }, profile)
     assert.notEqual(twins.bundles['record-hygiene'].short, twins.bundles['record-hygiene+configdir'].short, 'two keys never share a worktree')
     const reordered = buildArgs({ id: 'st', bundles: [{ key: 'record-hygiene+configdir', tasks: [task('t')] }, { key: 'record-hygiene', tasks: [task('t')] }] }, profile)

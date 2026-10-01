@@ -39,7 +39,7 @@ REQ-SESSION-139/199/153/136/134/135, REQ-EVENTS-056). It emits the session
 row, per-tool breakdown (failed vs blocked partitioned, elapsed sums),
 failure detail grouped by cause, usage curve with largest jumps, coherence
 warnings, and per-model-key tool-call attribution (children from the children
-record, the entry agent from its own launch audit, switches, overrides and fallbacks), in one
+record by canonical name, the entry agent from its own launch audit, continuations, switches, overrides and fallbacks), in one
 read-only pass:
 
 ```bash
@@ -49,7 +49,8 @@ node apps/desktop/scripts/autopsy.mjs DB [SESSION_ID]
 
 Two facts the reader bakes in: the `usage.update` payload carries tokens and
 cost alone — no provider or model — so attribution reads `children.model_key`
-for a child and, for the entry agent, the key its launch audit's configuration
+for a child (matched by its `canonical_name`, the name its tool calls and the
+ladder's entries carry, never its `given_name`) and, for the entry agent, the key its launch audit's configuration
 snapshot, its continuations and its `entry_model_switched` entries record,
 carried through every `model_override` of the pair it runs on (`undetermined`
 where the snapshot cannot place the root's pair against a recorded override),

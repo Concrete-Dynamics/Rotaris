@@ -54,6 +54,15 @@ function snapshotEntry(snapshot) {
   return { models, label: modelLabel(models, model), pair: modelPair(models, model) };
 }
 
+/**
+ * Each child's model key, keyed by the name its own records carry: its canonical name (REQ-ORCH-044), which its turns
+ * run under, so its tool calls and the ladder's entries about it name it by that — never by `given_name`, which differs
+ * whenever the model's words hold a space, punctuation or a reused name (the live pack 2026-10-01T17-04-24-814Z).
+ */
+export function childModelKeys(children) {
+  return new Map(children.map((c) => [c.canonical_name, c.model_key]));
+}
+
 /** Printed where the record cannot say which key the entry agent ran on: an override may or may not have moved it. */
 export const ENTRY_KEY_UNDETERMINED = 'undetermined';
 
@@ -62,7 +71,7 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * key (launch audit, continuations, switches) carried through the session's `model_override` entries, each of which
  * moves the root exactly when it replaces the `provider|model` pair the root's key resolves to (REQ-MONITOR-303,
  * REQ-ORCH-091 d; the run resolves the root through every override of the session), and moved by the ladder's two
- * automatic moves of an agent no child is (`childNames`): `quota_fallback_model` to its `to_key` (REQ-ORCH-091 b,
+ * automatic moves of an agent no child is (`childNames`, the canonical names of `childModelKeys`): `quota_fallback_model` to its `to_key` (REQ-ORCH-091 b,
  * REQ-NOTIFY-082) and `llm_unresponsive` to the one `models:` key resolving to its recorded pair, else the pair itself
  * (REQ-ORCH-090). A child's move leaves the root where it is.
  */

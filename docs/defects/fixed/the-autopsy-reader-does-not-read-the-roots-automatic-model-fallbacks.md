@@ -30,8 +30,10 @@ from. In the 2026-10-01 stores no root made either move, so no printed line was 
 ## Repaired — 2026-10-01
 
 `entryModelKeys` (`packages/engine/src/autopsy.ts`, and its copy in `apps/desktop/scripts/lib/autopsy-entry-model.mjs`)
-now takes the children's names (`readAutopsy` and `autopsy.mjs` pass the children record's `given_name`s) and reads the
-ladder's two automatic moves of every other agent an entry names, which is the root:
+now takes the children's names and reads the ladder's two automatic moves of every other agent an entry names, which is
+the root. The names are the children's canonical names (`childModelKeys`, in both copies; `readAutopsy` and
+`autopsy.mjs` key each child's `model_key` by it), the name a child's turns run under (`agentName: row.canonical_name`)
+and so the name its tool calls and the ladder's entries carry:
 
 - `quota_fallback_model` (REQ-ORCH-091 b, REQ-NOTIFY-082) moves the root to its `to_key`, read as a label as every other
   key is (a loader-made copy reads as its one original);
@@ -54,3 +56,22 @@ other direction):
 
 No live run shows it: a pack's `autopsy.txt` prints a move only when a root falls back, and none did in the
 2026-10-01 runs; the tests are the evidence.
+
+### Repair round 1 — the children by their canonical names (2026-10-01)
+
+The first repair passed the children record's `given_name`s, but a child's records name it by its canonical name
+(REQ-ORCH-044: the model's words with spaces and punctuation made `-`, a reused name given `_<n>`), so a child's own
+fallback still read as the root's whenever the two names differed, which is the usual case. The verifier found it on the
+branch's own live pack (`.live-run/runs/2026-10-01T17-04-24-814Z`: `given_name` 'Run 13 shell commands verbatim',
+`canonical_name` and `tool_calls.agent_name` 'Run-13-shell-commands-verbatim'). The same `given_name` keying, older than
+this note, also put such a child's own tool calls under the root's key. Both readers now key the children by
+`canonical_name` (`childModelKeys` in `packages/engine/src/autopsy.ts` and `apps/desktop/scripts/lib/autopsy-entry-model.mjs`).
+On a copy of that pack's store with the child's `model_key` planted different from the root's, `autopsy.mjs` printed
+the child's 14 calls under the root's key with the root's 5 before the repair, and under the child's own key after it.
+
+Pinned by `packages/engine/src/autopsy.test.ts`, "a child is known by the name its own records carry …" (a child given
+'Run 13 shell commands verbatim' whose calls and two fallbacks name 'Run-13-shell-commands-verbatim': the root stays on
+`root-model` and the child's calls print under `child-model`; before the repair the root read `root-model → spare-model`
+with all five calls), and `apps/desktop/scripts/lib/autopsy-entry-model.test.ts`, "knows a child by its canonical name …"
+(both copies of `childModelKeys` key by `canonical_name`, and the child's moves leave the root on `root-model`). The
+first sizing test's fixture, which planted a child whose calls carried its given name, now carries the product's shape.

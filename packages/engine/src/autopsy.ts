@@ -32,7 +32,7 @@
  */
 
 import type { SessionId, WallClock } from '@rotaris/kernel';
-import { type AuditRow, type IssueRow, type SessionRow, type StoreDal, type TimelineRow } from '@rotaris/store';
+import { type AuditRow, type ChildRow, type IssueRow, type SessionRow, type StoreDal, type TimelineRow } from '@rotaris/store';
 import { metricsDocument } from './export.js';
 import type { JsonValue } from './export.js';
 
@@ -179,6 +179,18 @@ function snapshotEntry(snapshot: unknown): { readonly models: Record<string, unk
   return { models, label: modelLabel(models, model), pair: modelPair(models, model) };
 }
 
+/**
+ * Each child's model key (the children record's `model_key`), keyed by the name the child's own records carry: its
+ * canonical name (REQ-ORCH-044), which the child's turns run under (`agentName: row.canonical_name`), so its tool calls
+ * (`tool_calls.agent_name`) and the ladder's entries about it (`quota_fallback_model`, `llm_unresponsive`: `agent`)
+ * name it by that. Never by `given_name`: the model's own words differ from the canonical name whenever they hold a
+ * space, punctuation or a reused name, and keyed by those the child's calls and moves read as the root's (the live pack
+ * 2026-10-01T17-04-24-814Z, 'Run 13 shell commands verbatim' / 'Run-13-shell-commands-verbatim').
+ */
+export function childModelKeys(children: readonly Pick<ChildRow, 'canonical_name' | 'model_key'>[]): Map<string, string> {
+  return new Map(children.map((c) => [c.canonical_name, c.model_key]));
+}
+
 /** Printed where the record cannot say which key the entry agent ran on: an override may or may not have moved it. */
 export const ENTRY_KEY_UNDETERMINED = 'undetermined';
 
@@ -197,7 +209,8 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * the key from that point on is `ENTRY_KEY_UNDETERMINED`, never one key given as fact.
  *
  * The ladder's two automatic moves of the root are read as well, from the entries that name an agent no child is
- * (`childNames`: the children record names only the children, so every other agent an entry names is the root). The
+ * (`childNames`: the children record names only the children, by the canonical names their records carry —
+ * `childModelKeys` — so every other agent an entry names is the root). The
  * root's cell lives for the run (`rootResilience`), so after either move the root runs on the new model until the next
  * continuation's snapshot or its next switch:
  * - `quota_fallback_model` (REQ-ORCH-091 b, REQ-NOTIFY-082): the same-tier candidate, whose key the entry records
@@ -386,7 +399,8 @@ export function readAutopsy(dal: StoreDal, sessionId: SessionId, _wall: WallCloc
     // Per-model-key attribution: the store records no provider or model on
     // the usage.update payload (REQ-EVENTS-053's payload is tokens and cost
     // alone), so a child's tool calls go to the model_key the children record
-    // carries. The entry agent — the one no child names — is attributed to the
+    // carries, matched by the canonical name its calls carry (`childModelKeys`).
+    // The entry agent — the one no child names — is attributed to the
     // key(s) its own records name (`entryModelKeys`: its snapshots, its switches,
     // the overrides of the pair it runs on and the ladder's fallbacks of it), joined in order when it ran on
     // more than one, and to `session` when none is recorded. Its calls
@@ -394,9 +408,8 @@ export function readAutopsy(dal: StoreDal, sessionId: SessionId, _wall: WallCloc
     // its children (live-run finding a71-13: it had been, whenever they shared one).
     const callsByAgent = new Map<string, number>();
     for (const t of toolCalls) callsByAgent.set(t.agent_name, (callsByAgent.get(t.agent_name) ?? 0) + 1);
-    const childAgents = new Set(children.map((c) => c.given_name));
-    const keyByAgent = new Map<string, string>();
-    for (const c of children) keyByAgent.set(c.given_name, c.model_key);
+    const keyByAgent = childModelKeys(children);
+    const childAgents = new Set(keyByAgent.keys());
     const recordedEntryKeys = entryModelKeys(launchAudit?.payload, timeline, childAgents);
     const entryKey = recordedEntryKeys.length > 0 ? recordedEntryKeys.join(' → ') : 'session';
     const requests: AutopsyEndpointRow[] = [...callsByAgent.entries()]

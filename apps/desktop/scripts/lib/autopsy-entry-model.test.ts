@@ -6,9 +6,9 @@
  * (`docs/defects/fixed/the-autopsy-reader-does-not-read-the-roots-automatic-model-fallbacks.md`).
  */
 import { describe, expect, it } from 'vitest';
-import { ENTRY_KEY_UNDETERMINED, entryModelKeys as engineEntryModelKeys } from '@rotaris/engine';
+import { childModelKeys as engineChildModelKeys, ENTRY_KEY_UNDETERMINED, entryModelKeys as engineEntryModelKeys } from '@rotaris/engine';
 // @ts-expect-error — the reader's helpers are plain ESM beside the scripts that run them.
-import { ENTRY_KEY_UNDETERMINED as SCRIPT_UNDETERMINED, entryKeyLabel, entryModelKeys } from './autopsy-entry-model.mjs';
+import { childModelKeys, ENTRY_KEY_UNDETERMINED as SCRIPT_UNDETERMINED, entryKeyLabel, entryModelKeys } from './autopsy-entry-model.mjs';
 
 const snapshot = (model: string, models: Record<string, unknown> = {}) => ({ default_persona: 'orchestrator', personas: { orchestrator: { model } }, models });
 const audit = (model: string, models: Record<string, unknown> = {}) => JSON.stringify({ config_snapshot: snapshot(model, models) });
@@ -59,6 +59,18 @@ describe('the autopsy reader\'s entry-agent model key (live-run finding a71-13)'
   it.each(MOVES)('%s', (_name, payload, timeline, children, expected) => {
     expect(entryModelKeys(payload, timeline, children)).toEqual(expected);
     expect(engineEntryModelKeys(payload, timeline, children)).toEqual(expected);
+  });
+
+  // The live pack 2026-10-01T17-04-24-814Z: a child given 'Run 13 shell commands verbatim' runs, calls and falls back as
+  // 'Run-13-shell-commands-verbatim' (REQ-ORCH-044), so both readers know it by that name, never by the one it was given.
+  it('knows a child by its canonical name, so its move leaves the root where it is', () => {
+    const rows = [{ given_name: 'Run 13 shell commands verbatim', canonical_name: 'Run-13-shell-commands-verbatim', model_key: 'child-model' }];
+    for (const keys of [childModelKeys(rows) as Map<string, string>, engineChildModelKeys(rows)]) {
+      expect([...keys]).toEqual([['Run-13-shell-commands-verbatim', 'child-model']]);
+      const timeline = [sameTier('Run-13-shell-commands-verbatim', 'anthropic', 's', 'spare-model'), unresponsive('Run-13-shell-commands-verbatim', 'anthropic', 's')];
+      expect(entryModelKeys(audit('root-model', paired), timeline, keys.keys())).toEqual(['root-model']);
+      expect(engineEntryModelKeys(audit('root-model', paired), timeline, keys.keys())).toEqual(['root-model']);
+    }
   });
 
   it('prints the same word for an undetermined key', () => {

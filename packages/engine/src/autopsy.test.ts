@@ -46,7 +46,7 @@ describe('R-043 — the run-autopsy snapshot', () => {
       dal.ringInsert('tool_calls', sid, (o) => dal.insertToolCall({ session_id: sid, ordinal: o, call_id: 'c2', agent_name: 'a', tool_name: 'read_file', status: 'ok', started_at: 't', elapsed_ms: 9, is_error: 0, entry: toolEntry('a', 'read_file', 'ok') }));
       dal.ringInsert('tool_calls', sid, (o) => dal.insertToolCall({ session_id: sid, ordinal: o, call_id: 'c3', agent_name: 'a', tool_name: 'write_file', status: 'failed', started_at: 't', elapsed_ms: 2, is_error: 1, entry: toolEntry('a', 'write_file', 'failed', { failure_kind: 'invalid_request' }) }));
       dal.ringInsert('tool_calls', sid, (o) => dal.insertToolCall({ session_id: sid, ordinal: o, call_id: 'c4', agent_name: 'a', tool_name: 'terminal', status: 'blocked', started_at: 't', elapsed_ms: 1, is_error: 1, entry: toolEntry('a', 'terminal', 'blocked', { failure_kind: 'denied' }) }));
-      dal.insertChild({ session_id: sid, task_id: 'bg_00000001', canonical_name: 'c', given_name: 'a', persona: 'coding-agent', state: 'failed', parent_id: 'root', depth: 1, iteration: 1, model_key: 'qwen3.8-flash-next', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
+      dal.insertChild({ session_id: sid, task_id: 'bg_00000001', canonical_name: 'a', given_name: 'a child', persona: 'coding-agent', state: 'failed', parent_id: 'root', depth: 1, iteration: 1, model_key: 'qwen3.8-flash-next', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
       dal.insertEvent(sid, 1, 'session.start', 't1', 1, null, '{"event":"session.start"}');
       dal.insertEvent(sid, 2, 'usage.update', 't2', 1, null, '{"event":"usage.update","tokens":{"input":100,"output":5,"total":105}}');
       dal.insertEvent(sid, 3, 'usage.update', 't3', 1, null, '{"event":"usage.update","tokens":{"input":160,"output":9,"total":169}}');
@@ -70,13 +70,14 @@ describe('R-043 — the run-autopsy snapshot', () => {
     expect(s.coherence.duplicate_reads).toEqual([{ path: 'a.txt', reads: 2 }]);
     // Per-model-key attribution from the children record: the usage.update
     // payload carries tokens and cost alone, so the model_key the child
-    // carries is the identity the store keeps.
+    // carries is the identity the store keeps — matched by the canonical name
+    // its calls carry, not the name it was given.
     expect(s.requests).toEqual([{ endpoint: 'qwen3.8-flash-next', agents: ['a'], tool_calls: 4 }]);
     expect(s.counts).toMatchObject({ timeline: 1, children: 1, checkpoints: 0 });
   });
 
   describe('the entry agent\'s model key comes from what the store records of the entry agent, never from its children (live-run finding a71-13)', () => {
-    const child = (sid: SessionId, task: string, name: string, modelKey: string) => dal.insertChild({ session_id: sid, task_id: task, canonical_name: name, given_name: name, persona: 'coding-agent', state: 'succeeded', parent_id: 'root', depth: 1, iteration: 1, model_key: modelKey, category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
+    const child = (sid: SessionId, task: string, name: string, modelKey: string, given = name) => dal.insertChild({ session_id: sid, task_id: task, canonical_name: name, given_name: given, persona: 'coding-agent', state: 'succeeded', parent_id: 'root', depth: 1, iteration: 1, model_key: modelKey, category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
     const call = (sid: SessionId, id: string, agent: string) => dal.ringInsert('tool_calls', sid, (o) => dal.insertToolCall({ session_id: sid, ordinal: o, call_id: id, agent_name: agent, tool_name: 'read_file', status: 'ok', started_at: 't', elapsed_ms: 1, is_error: 0, entry: toolEntry(agent, 'read_file', 'ok') }));
     const snapshot = (model: string, models: Record<string, unknown> = {}) => ({ default_persona: 'orchestrator', personas: { orchestrator: { model } }, models });
     const audit = (sid: SessionId, model: string, models: Record<string, unknown> = {}) => dal.insertLaunchAudit(sid, 't0', JSON.stringify({ session_id: sid, config_snapshot: snapshot(model, models) }));
@@ -209,6 +210,32 @@ describe('R-043 — the run-autopsy snapshot', () => {
         });
         expect(readAutopsy(dal, later, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model → spare-model → root-model', agents: ['orchestrator'], tool_calls: 3 });
       });
+    });
+
+    it('a child is known by the name its own records carry (its canonical name), never by the name it was given', () => {
+      // The live pack 2026-10-01T17-04-24-814Z: the model named the task 'Run 13 shell commands verbatim'; the ledger made it
+      // 'Run-13-shell-commands-verbatim' (REQ-ORCH-044), and its tool calls and the ladder's entries carry that name
+      // (orchestration.ts `agentName: row.canonical_name`). Keyed by the given name, the child's calls went to the root's
+      // key and the child's fallback moved the root.
+      const models = {
+        'root-model': { provider: 'openai-compatible', auth_provider: 'katalyst', model_id: 'r', base_url: 'http://e' },
+        'child-model': { provider: 'openai', auth_provider: null, model_id: 'c' },
+        'spare-model': { provider: 'anthropic', auth_provider: null, model_id: 's' },
+      };
+      const sid = plant('S-canonical-child', 'completed');
+      const agent = 'Run-13-shell-commands-verbatim';
+      dal.transaction(() => {
+        audit(sid, 'root-model', models);
+        call(sid, 'r1', 'orchestrator'); call(sid, 'r2', 'orchestrator'); call(sid, 'r3', 'orchestrator');
+        child(sid, 'bg_00000001', agent, 'child-model', 'Run 13 shell commands verbatim');
+        call(sid, 'c1', agent); call(sid, 'c2', agent);
+        dal.insertTimeline(sid, 1, 't1', 'quota_fallback_model', 'rotaris', `${agent} moved to anthropic/s.`, JSON.stringify({ agent, from_provider: 'openai', from_model: 'c', to_provider: 'anthropic', to_model: 's', to_key: 'spare-model', condition: 'rate_limit', provider_exhausted: false }), 'aaaaaaaaaag1', 'warning');
+        dal.insertTimeline(sid, 2, 't2', 'llm_unresponsive', 'rotaris', `${agent} received no model event.`, JSON.stringify({ agent, from_provider: 'openai', from_model: 'c', to_provider: 'anthropic', to_model: 's', threshold_seconds: 60 }), 'aaaaaaaaaag2', 'warning');
+      });
+      expect(readAutopsy(dal, sid, clock.wall)!.requests).toEqual([
+        { endpoint: 'root-model', agents: ['orchestrator'], tool_calls: 3 },
+        { endpoint: 'child-model', agents: [agent], tool_calls: 2 },
+      ]);
     });
 
     it('a loader-made copy (a role\'s `thinking`) reads as the one key it copies, and as its own name when two keys match', () => {

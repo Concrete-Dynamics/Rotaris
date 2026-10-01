@@ -45,7 +45,7 @@ works for a user, and it can spend money. Proofs pass on a product a live run st
 - The default run takes about sixteen minutes. Duress needs a window the endpoint can fill
   (`LIVE_RUN_DURESS_MS=5400000` under `timeout 7200` here; one took 85 minutes): run it as a background task with
   the Bash tool's largest `timeout`, 7,200,000 ms (`references/environment.md`, Long jobs). That launch is one of
-  the allow-rule forms above, so an agent holding the rule can run it as well.
+  the allow-rule forms above, so an agent holding the rule can run it as well (not yet observed).
 - One acceptance live run at a time on this host: they compete for CPU and the endpoint. Two concurrent ones leave
   each other's sandboxes alone.
 - Evidence lands in `.live-run/runs/<stamp>/` of the tree that ran it, the newest named in `.live-run/latest.txt`.

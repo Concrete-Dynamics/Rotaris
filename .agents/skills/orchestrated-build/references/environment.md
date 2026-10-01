@@ -17,9 +17,10 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
 ## Long jobs
 
 - **A foreground command** may run at most ten minutes. **A background task** (`run_in_background`) given no
-  `timeout` is stopped after thirty minutes; one given `timeout: 5400000` ran 48 minutes and ended on its own
+  `timeout` is stopped after thirty minutes; one given `timeout: 5400000` ran 53 minutes and ended on its own
   condition. Give every long background job an explicit `timeout` (milliseconds; the tool accepts up to 7,200,000)
-  that covers its expected length. A Monitor is capped at thirty minutes.
+  that covers the longest it may run: its own `timeout` wrapper, where it has one. A Monitor is capped at thirty
+  minutes.
 - **Only if a long `timeout` is refused**, run the job detached and poll it (a detached launch never matches the
   live-run allow rules, so for a live run it is the orchestrator's):
   `setsid nohup bash -c '<command> > <log> 2>&1; echo "exit=$?" >> <log>' > /dev/null 2>&1 < /dev/null & disown`,

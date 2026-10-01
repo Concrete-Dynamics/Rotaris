@@ -7,16 +7,17 @@ verified. An entry that turns out wrong is corrected by a new entry, never edite
 
 **Prompted by** two background tasks of the same session. One given no `timeout` (task `by0p2inlx`, a waiter on the
 duress live run) was stopped thirty minutes after launch, at 03:45:34 UTC. One given `timeout: 5400000` (task
-`bw0152q7w`, the same waiter re-armed) ran from about 03:52 to 04:40:37 UTC and ended on its own condition; the
-duress run it waited on took 5078 s. The skill had said a job longer than thirty minutes must run detached, which
+`bw0152q7w`, the same waiter re-armed) ran from 03:47:06 to 04:40:37 UTC (53 minutes) and ended on its own
+condition; the duress run it waited on took 5078 s. The skill had said a job longer than thirty minutes must run detached, which
 also kept agents from launching duress under the live-run allow rules.
 
-**Changed** `references/environment.md` (Long jobs), `references/live-runs.md` (Running), SKILL.md §5 and the
-template's grounding line: a long background job carries an explicit `timeout` covering its expected length (the
-tool accepts up to 7,200,000 ms); detaching is the fallback when a long `timeout` is refused.
+**Changed** `references/environment.md` (Long jobs), `references/live-runs.md` (Running, and the permission
+section's pointer to the detached launch), SKILL.md §5 and the template's grounding line: a long background job
+sets the Bash tool's `timeout` parameter to cover the longest it may run (the tool documents a background maximum
+of 7,200,000 ms); detaching is the fallback when a long `timeout` is refused.
 
-**Verified** by the self-test and `pnpm check`, and reviewed with `references/skill-review.md`. Prompt text, so
-reviewed rather than pinned.
+**Verified** by the self-test, with a new assertion that the builder's prompt names the Bash tool's `timeout`
+parameter (it fails with the old grounding line), `pnpm check`, and a review with `references/skill-review.md`.
 
 ## 2026-10-01 — first version
 

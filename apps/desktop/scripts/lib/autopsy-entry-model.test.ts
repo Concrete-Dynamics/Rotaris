@@ -1,7 +1,9 @@
 /**
  * Live-run finding a71-13: the autopsy reader printed the entry agent under its children's model key whenever they shared
  * one. The script's reader and the engine's (`readAutopsy`) now both take the root's key from the root's own records;
- * this pins the script's copy against the engine's on the same inputs, so the two cannot drift apart.
+ * this pins the script's copy against the engine's on the same inputs, so the two cannot drift apart — including the
+ * ladder's automatic moves of the root
+ * (`docs/defects/fixed/the-autopsy-reader-does-not-read-the-roots-automatic-model-fallbacks.md`).
  */
 import { describe, expect, it } from 'vitest';
 import { ENTRY_KEY_UNDETERMINED, entryModelKeys as engineEntryModelKeys } from '@rotaris/engine';
@@ -37,8 +39,26 @@ const CASES: readonly [string, string | undefined, readonly { name: string; meta
 
 describe('the autopsy reader\'s entry-agent model key (live-run finding a71-13)', () => {
   it.each(CASES)('%s', (_name, payload, timeline, expected) => {
-    expect(entryModelKeys(payload, timeline)).toEqual(expected);
-    expect(engineEntryModelKeys(payload, timeline)).toEqual(expected);
+    expect(entryModelKeys(payload, timeline, [])).toEqual(expected);
+    expect(engineEntryModelKeys(payload, timeline, [])).toEqual(expected);
+  });
+
+  // The ladder's automatic moves (REQ-ORCH-090, REQ-ORCH-091 b): read for an agent no child is, never for a child.
+  const sameTier = (agent: string, toProvider: string, toModel: string, toKey: string) => entry('quota_fallback_model', { agent, from_provider: 'katalyst', from_model: 'r', to_provider: toProvider, to_model: toModel, to_key: toKey, condition: 'rate_limit' });
+  const unresponsive = (agent: string, toProvider: string, toModel: string) => entry('llm_unresponsive', { agent, from_provider: 'katalyst', from_model: 'r', to_provider: toProvider, to_model: toModel, threshold_seconds: 60 });
+  const MOVES: readonly [string, string | undefined, readonly { name: string; metadata: string }[], readonly string[], readonly string[]][] = [
+    ['the root\'s same-tier fallback moves it to the candidate\'s key', audit('root-model', paired), [sameTier('orchestrator', 'anthropic', 's', 'spare-model')], ['impl'], ['root-model', 'spare-model']],
+    ['the root\'s unresponsive fallback moves it to the key resolving to the pair', audit('root-model', paired), [unresponsive('orchestrator', 'anthropic', 's')], ['impl'], ['root-model', 'spare-model']],
+    ['an unresponsive fallback onto a pair no key resolves to reads as the pair', audit('root-model', paired), [unresponsive('orchestrator', 'mistral', 'x')], ['impl'], ['root-model', 'mistral/x']],
+    ['two keys resolving to the pair: the pair stands', audit('root-model', { ...paired, 'spare-two': { provider: 'anthropic', auth_provider: null, model_id: 's' } }), [unresponsive('orchestrator', 'anthropic', 's')], [], ['root-model', 'anthropic/s']],
+    ['a child\'s moves leave the root where it is', audit('root-model', paired), [sameTier('impl', 'anthropic', 's', 'spare-model'), unresponsive('impl', 'anthropic', 's')], ['impl'], ['root-model']],
+    ['an override of the pair the root fell back to follows it', audit('root-model', paired), [sameTier('orchestrator', 'openai', 'c', 'child-model'), override('openai', 'c', 'spare-model', 'anthropic', 's')], ['impl'], ['root-model', 'child-model', 'spare-model']],
+    ['a continuation\'s snapshot ends the root\'s move', audit('root-model', paired), [sameTier('orchestrator', 'anthropic', 's', 'spare-model'), entry('run_continuation_intent', { config_snapshot: snapshot('root-model', paired) })], ['impl'], ['root-model', 'spare-model', 'root-model']],
+    ['a move with no agent or no pair recorded is skipped', audit('root-model', paired), [entry('quota_fallback_model', { to_provider: 'anthropic', to_model: 's', to_key: 'spare-model' }), entry('llm_unresponsive', { agent: 'orchestrator' })], [], ['root-model']],
+  ];
+  it.each(MOVES)('%s', (_name, payload, timeline, children, expected) => {
+    expect(entryModelKeys(payload, timeline, children)).toEqual(expected);
+    expect(engineEntryModelKeys(payload, timeline, children)).toEqual(expected);
   });
 
   it('prints the same word for an undetermined key', () => {

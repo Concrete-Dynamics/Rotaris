@@ -165,6 +165,52 @@ describe('R-043 — the run-autopsy snapshot', () => {
       });
     });
 
+    describe('the ladder\'s automatic moves of the root (REQ-ORCH-090, REQ-ORCH-091 b, REQ-NOTIFY-082) move its key; a child\'s move does not', () => {
+      const models = {
+        'root-model': { provider: 'openai-compatible', auth_provider: 'katalyst', model_id: 'r', base_url: 'http://e' },
+        'child-model': { provider: 'openai', auth_provider: null, model_id: 'c' },
+        'spare-model': { provider: 'anthropic', auth_provider: null, model_id: 's' },
+      };
+      // ladder.ts writes these two entries with the agent the cell belongs to; the root's cell lives for the run.
+      const sameTier = (sid: SessionId, n: number, agent: string, to: readonly [string, string, string]) =>
+        dal.insertTimeline(sid, n, `t${n}`, 'quota_fallback_model', 'rotaris', `${agent} moved to ${to[0]}/${to[1]}.`, JSON.stringify({ agent, from_provider: 'katalyst', from_model: 'r', to_provider: to[0], to_model: to[1], to_key: to[2], condition: 'rate_limit', provider_exhausted: false }), `aaaaaaaaaad${n}`, 'warning');
+      const unresponsive = (sid: SessionId, n: number, agent: string, to: readonly [string, string]) =>
+        dal.insertTimeline(sid, n, `t${n}`, 'llm_unresponsive', 'rotaris', `${agent} received no model event; re-run on ${to[0]}/${to[1]}.`, JSON.stringify({ agent, from_provider: 'katalyst', from_model: 'r', to_provider: to[0], to_model: to[1], threshold_seconds: 60 }), `aaaaaaaaaae${n}`, 'warning');
+
+      it('the root\'s same-tier fallback: its calls read launch key → the candidate\'s key', () => {
+        const sid = plant('S-quota-root', 'completed');
+        dal.transaction(() => { run(sid); audit(sid, 'root-model', models); sameTier(sid, 1, 'orchestrator', ['anthropic', 's', 'spare-model']); });
+        expect(readAutopsy(dal, sid, clock.wall)!.requests).toEqual([
+          { endpoint: 'root-model → spare-model', agents: ['orchestrator'], tool_calls: 3 },
+          { endpoint: 'child-model', agents: ['impl', 'tests'], tool_calls: 2 },
+        ]);
+      });
+
+      it('the root\'s unresponsive fallback: the key is the one `models:` key resolving to the recorded pair', () => {
+        const sid = plant('S-unresponsive-root', 'completed');
+        dal.transaction(() => { run(sid); audit(sid, 'root-model', models); unresponsive(sid, 1, 'orchestrator', ['anthropic', 's']); });
+        expect(readAutopsy(dal, sid, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model → spare-model', agents: ['orchestrator'], tool_calls: 3 });
+      });
+
+      it('an unresponsive fallback onto a pair no `models:` key resolves to reads as the pair itself', () => {
+        const sid = plant('S-unresponsive-unknown', 'completed');
+        dal.transaction(() => { run(sid); audit(sid, 'root-model', models); unresponsive(sid, 1, 'orchestrator', ['mistral', 'x']); });
+        expect(readAutopsy(dal, sid, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model → mistral/x', agents: ['orchestrator'], tool_calls: 3 });
+      });
+
+      it('a child\'s move leaves the root on its own key, and the next continuation\'s snapshot ends the root\'s move', () => {
+        const child = plant('S-quota-child', 'completed');
+        dal.transaction(() => { run(child); audit(child, 'root-model', models); sameTier(child, 1, 'impl', ['anthropic', 's', 'spare-model']); unresponsive(child, 2, 'tests', ['anthropic', 's']); });
+        expect(readAutopsy(dal, child, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model', agents: ['orchestrator'], tool_calls: 3 });
+        const later = plant('S-quota-then-continue', 'completed');
+        dal.transaction(() => {
+          run(later); audit(later, 'root-model', models); sameTier(later, 1, 'orchestrator', ['anthropic', 's', 'spare-model']);
+          dal.insertTimeline(later, 2, 't2', 'run_continuation_intent', 'rotaris', 'Continuation intent: answer.', JSON.stringify({ config_snapshot: snapshot('root-model', models) }), 'aaaaaaaaaaf2', 'info');
+        });
+        expect(readAutopsy(dal, later, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model → spare-model → root-model', agents: ['orchestrator'], tool_calls: 3 });
+      });
+    });
+
     it('a loader-made copy (a role\'s `thinking`) reads as the one key it copies, and as its own name when two keys match', () => {
       const base = { provider: 'openai-compatible', model_id: 'm', base_url: 'http://e', thinking: null };
       const one = plant('S-synthetic', 'completed');

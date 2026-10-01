@@ -167,12 +167,13 @@ for (const t of toolCalls) {
 // usage.update payload (tokens and cost alone), so a child's tool calls go to
 // the model_key the children record carries, and the entry agent's to the
 // key(s) its own records name — the launch audit, its continuations, its
-// switches — or `session` when none does; never its children's (a71-13).
+// switches, the overrides of its pair and the ladder's fallbacks of it — or
+// `session` when none does; never its children's (a71-13).
 const callsByAgent = new Map();
 for (const t of toolCalls) callsByAgent.set(t.agent_name, (callsByAgent.get(t.agent_name) ?? 0) + 1);
 const keyByAgent = new Map(children.map((c) => [c.given_name, c.model_key]));
 const childAgents = new Set(keyByAgent.keys());
-const entryKey = entryKeyLabel(entryModelKeys(launchAudit?.payload, timeline));
+const entryKey = entryKeyLabel(entryModelKeys(launchAudit?.payload, timeline, childAgents));
 const endpoints = new Map();
 for (const [agent, n] of callsByAgent) {
   const key = childAgents.has(agent) ? keyByAgent.get(agent) : entryKey;

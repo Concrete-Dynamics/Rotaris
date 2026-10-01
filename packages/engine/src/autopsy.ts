@@ -26,8 +26,9 @@
  * - `requests`: per-model-key tool-call attribution — a child's calls under
  *   the model_key the children record carries (the usage.update payload
  *   carries tokens and cost alone), the entry agent's under the key the
- *   launch audit, its continuations, its switches and the session's
- *   overrides of its pair record for it (`entryModelKeys`), newest totals last.
+ *   launch audit, its continuations, its switches, the session's overrides
+ *   of its pair and the ladder's fallbacks of it record for it
+ *   (`entryModelKeys`), newest totals last.
  */
 
 import type { SessionId, WallClock } from '@rotaris/kernel';
@@ -194,8 +195,20 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * later run), whichever agent was waiting. So an override moves the root exactly when it replaces the pair the root's
  * key resolves to. Where the snapshot does not say which pair the root's key resolves to and an override is recorded,
  * the key from that point on is `ENTRY_KEY_UNDETERMINED`, never one key given as fact.
+ *
+ * The ladder's two automatic moves of the root are read as well, from the entries that name an agent no child is
+ * (`childNames`: the children record names only the children, so every other agent an entry names is the root). The
+ * root's cell lives for the run (`rootResilience`), so after either move the root runs on the new model until the next
+ * continuation's snapshot or its next switch:
+ * - `quota_fallback_model` (REQ-ORCH-091 b, REQ-NOTIFY-082): the same-tier candidate, whose key the entry records
+ *   (`to_key`);
+ * - `llm_unresponsive` (REQ-ORCH-090): the role's fallback, recorded as a `provider|model` pair with no key, so the key
+ *   is the one `models:` key of the snapshot in force that resolves to that pair, and the pair itself
+ *   (`provider/model`) when none does or more than one does.
+ * A child's move leaves the root where it is.
  */
-export function entryModelKeys(launchAuditPayload: string | undefined, timeline: readonly Pick<TimelineRow, 'name' | 'metadata'>[]): string[] {
+export function entryModelKeys(launchAuditPayload: string | undefined, timeline: readonly Pick<TimelineRow, 'name' | 'metadata'>[], childNames: Iterable<string>): string[] {
+  const children = new Set(childNames);
   const keys: string[] = [];
   let models: Record<string, unknown> = {};
   let base: { readonly label: string; readonly pair: string | null } | null = null;
@@ -240,6 +253,20 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
       const toModel = meta?.['to_model'];
       const to = typeof toProvider === 'string' && typeof toModel === 'string' ? `${toProvider}|${toModel}` : modelPair(models, key);
       overrides.set(`${provider}|${model}`, { key, to });
+      add(effective());
+    } else if (t.name === 'quota_fallback_model' || t.name === 'llm_unresponsive') {
+      const meta = parseJson(t.metadata);
+      const agent = meta?.['agent'];
+      const toProvider = meta?.['to_provider'];
+      const toModel = meta?.['to_model'];
+      if (typeof agent !== 'string' || children.has(agent) || typeof toProvider !== 'string' || typeof toModel !== 'string') continue;
+      const pair = `${toProvider}|${toModel}`;
+      const toKey = str(meta?.['to_key']);
+      if (t.name === 'quota_fallback_model' && toKey !== '') base = { label: modelLabel(models, toKey), pair };
+      else {
+        const labels = new Set(Object.keys(models).filter((k) => modelPair(models, k) === pair).map((k) => modelLabel(models, k)));
+        base = { label: labels.size === 1 ? [...labels][0]! : `${toProvider}/${toModel}`, pair };
+      }
       add(effective());
     }
   }
@@ -360,8 +387,8 @@ export function readAutopsy(dal: StoreDal, sessionId: SessionId, _wall: WallCloc
     // the usage.update payload (REQ-EVENTS-053's payload is tokens and cost
     // alone), so a child's tool calls go to the model_key the children record
     // carries. The entry agent — the one no child names — is attributed to the
-    // key(s) its own records name (`entryModelKeys`: its snapshots, its switches
-    // and the overrides of the pair it runs on), joined in order when it ran on
+    // key(s) its own records name (`entryModelKeys`: its snapshots, its switches,
+    // the overrides of the pair it runs on and the ladder's fallbacks of it), joined in order when it ran on
     // more than one, and to `session` when none is recorded. Its calls
     // are never split between keys by guess, and its key is never taken from
     // its children (live-run finding a71-13: it had been, whenever they shared one).
@@ -370,7 +397,7 @@ export function readAutopsy(dal: StoreDal, sessionId: SessionId, _wall: WallCloc
     const childAgents = new Set(children.map((c) => c.given_name));
     const keyByAgent = new Map<string, string>();
     for (const c of children) keyByAgent.set(c.given_name, c.model_key);
-    const recordedEntryKeys = entryModelKeys(launchAudit?.payload, timeline);
+    const recordedEntryKeys = entryModelKeys(launchAudit?.payload, timeline, childAgents);
     const entryKey = recordedEntryKeys.length > 0 ? recordedEntryKeys.join(' → ') : 'session';
     const requests: AutopsyEndpointRow[] = [...callsByAgent.entries()]
       .map(([agent, calls]) => ({

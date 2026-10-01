@@ -58,3 +58,38 @@ are neighbours, and neither describes this case. Recorded, not repaired.
 - `packages/agent-tools/src/terminal/foreground.ts:886-899` — a new soft pause disposes of `pausedDone` and of a
   still-running `pausedCommand` and replaces them.
 - `packages/agent-tools/src/terminal/foreground.ts:940-950` — `poll`, the only reader of `pausedDone`.
+
+## Partly repaired — 2026-10-01 (the silence and the loss); the rest is the owner's (OQ-164)
+
+**Confirmed first on the branch** (`fin1-term-shell-ends`, from `origin/main` e68f8f2), dash through a real PTY with a 1 s
+no-output window. A `sleep 3; …; (exit 5)` soft-paused, and an `echo behind` issued at once waited about 1.9 s behind it.
+Its observation said only "The command exited with code 0." A paused `sleep 2; (exit 6)` that ended unpolled was not
+mentioned by the next command either. All three cases below were red on that code.
+
+**Fixed, under the reading recorded in [OQ-164](../architecture/open-questions.md)** (the reading changed, the question
+not ruled):
+- A call issued while a command is soft-paused reports that command beside its own outcome (`ForegroundResult.earlier`,
+  `terminal/index.ts`'s `earlierSentence`). It says that it waited behind the command, when the command ended relative to
+  its own submission, and how: its own exit status, none of its own (OQ-147), by ending the shell, or by the session's
+  reset. What the paused command wrote since it was last observed follows the detail. The paused call is handed over
+  there, so nothing waits for a poll.
+- A paused command that ended before the next call and was never polled is reported by that call ("had ended … before
+  this command was submitted … and no poll had reported it").
+- **The case the code showed is closed.** A call that soft-pauses while the earlier paused command is still running no
+  longer disposes of it. The earlier call is kept ahead (`pausedAhead`), still fed its share of the stream, and the next
+  observation reports its end. The new call's own pause says that the shell has not started it yet, and carries none of
+  the earlier command's output as its own.
+- The tool description states the third move: "a new command issued meanwhile waits behind it, and its result reports
+  how the paused one ended".
+
+**Pinned by** `terminal.test.ts`: "REQ-TOOLS-098/179 (OQ-164): a command issued behind a still-running soft-paused one says
+it waited, and carries that command's end and output", and "… a paused command that ended unpolled is reported by the next
+command, and a second soft pause no longer loses the first one's end". The second covers the replaced-pause case: the poll
+after reads "ahead of the polled one ended … with exit code 7". Five A10 cases now read the paused command's end from the
+next call's report and keep their assertions. The live run's `terminal` scenario carries `wedge-again` and `behind-paused`
+(`lib/terminal-shapes.mjs`, `pausedBehindReading`). The
+[first-executions row](../architecture/first-executions.md) records what it read.
+
+**Left open, the owner's (OQ-164):** whether such a call is refused with REQ-TOOLS-098's remedy, waits as built, or
+interrupts the paused command; whether the wait counts against the new call's no-output window and timeout (it still
+does); and whether the report built here is the answer to the last point. This note stays open until that ruling.

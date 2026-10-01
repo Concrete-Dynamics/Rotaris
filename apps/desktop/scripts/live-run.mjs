@@ -65,7 +65,8 @@
  *                 multi-line here-string, forty lines of long output, off Windows an `exec bash` that replaces the
  *                 session's shell (acceptance A9), a bash-ism `/bin/sh` cannot expand (live-run L1) and an `exit 3`
  *                 that ends the session's shell (OQ-144's sibling case), a wedge
- *                 with no `timeout` supplied, one poll of it and a `C-c` with a poll after it (OQ-147),
+ *                 with no `timeout` supplied, one poll of it and a `C-c` with a poll after it (OQ-147), a second wedge
+ *                 and a command issued while it is soft-paused (OQ-164),
  *                 an exit-0 output carrying docker's lower-case `failed to connect` line, a `git diff` with
  *                 differences exiting 1, and a read-only git pipeline through a pipe. Asserted from
  *                 `tool_calls`, never from the model's prose; a shape the model never attempted is a NOTE,
@@ -117,7 +118,7 @@ import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsola
 import { startRecordingProxy } from './lib/model-traffic.mjs';
 import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
-import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, replacedShellReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -1752,6 +1753,7 @@ if (wanted.includes('faults')) {
  * | `wedge`         | `hardMs` passed and read nowhere: a call supplying no `timeout` had the soft pause and no hard cap (REQ-TOOLS-097) |
  * | `poll`          | live-run finding L2 — `an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md`: an empty poll returned at once and said thirty seconds had passed |
  * | `interrupt`     | `a-poll-after-c-c-says-the-interrupted-command-is-still-running.md` (OQ-147): `C-c` with `is_input`, REQ-TOOLS-098's other advice, and the poll after it read "still running" over a process the interrupt had ended |
+ * | `wedge-again`, `behind-paused` | `a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md` (live-run finding a71-8, OQ-164): a command issued while another is soft-paused waited behind it and said only its own exit, and the paused command's end was never reported |
  * | `failed-word`   | `exit-0-output-flagged-on-the-word-failed-twice.md` — PD-TOOLS-003's capitals-only marker, and a real regression guard |
  * | `diff-exit-1`   | `git-diff-with-differences-read-as-a-failure.md` — ESC-41's carve-out, and a real regression guard |
  * | `pipe-to-shell` | `a-read-only-git-pipeline-was-withheld-by-the-pipe-to-shell-rule.md` — also cost, not contradiction |
@@ -1944,6 +1946,25 @@ if (wanted.includes('terminal')) {
     else {
       check(reading.kind !== 'still-running', 'a poll after C-c did not read the interrupted command as still running', said);
       check(reading.kind === 'ended', 'it handed the command over as ended without an exit status of its own (OQ-147)', said);
+    }
+  }
+
+  // OQ-164: the command issued while `wedge-again` was soft-paused reports the paused command's end — never the autopsy's
+  // silence. Only when the second wedge did soft-pause first and the same agent issued the command behind it.
+  const again = attempted('wedge-again')[0];
+  const behindPaused = attempted('behind-paused')[0];
+  if (again === undefined || behindPaused === undefined) noted('the command behind a soft-paused one was not attempted', `wedge-again×${seen['wedge-again']}, behind-paused×${seen['behind-paused']}; OQ-164's report is unasked`);
+  else if (diagnosticOf(again.result)?.outcome_kind !== 'soft_pause') noted('the second wedge did not soft-pause', `outcome ${diagnosticOf(again.result)?.outcome_kind ?? 'none'}; nothing was paused when the next command came`);
+  else if (again.agent_name !== behindPaused.agent_name || behindPaused.ordinal < again.ordinal) noted('the command behind the second wedge ran elsewhere', `wedge-again in ${again.agent_name}, behind-paused in ${behindPaused.agent_name}; each agent's foreground session is its own (REQ-TOOLS-187)`);
+  else {
+    const reading = pausedBehindReading(behindPaused.result);
+    const said = `${reading.kind}, ${String(diagnosticOf(behindPaused.result)?.detail ?? '').slice(0, 240)}`;
+    if (reading.kind === 'still-running') noted('the command behind the second wedge soft-paused in turn', said);
+    else if (reading.kind === 'other') noted('the command behind the second wedge carried no diagnostic', said);
+    else {
+      check(reading.kind !== 'silent', 'a command issued behind a soft-paused one did not leave the paused command\'s end unreported (OQ-164)', said);
+      check(reading.kind === 'reported', 'its observation named the paused command and how it ended', said);
+      if (reading.kind === 'reported') check(/slept/.test(String(behindPaused.result)), 'what the paused command wrote came with its end', /slept/.test(String(behindPaused.result)) ? '`slept` present' : '`slept` absent');
     }
   }
 

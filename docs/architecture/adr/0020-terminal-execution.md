@@ -421,6 +421,22 @@ call is now opened in the same turn as the pause, before the listener goes and t
 "REQ-TOOLS-098/179: output and the end frame a command writes while its soft pause is handed over …" in
 `terminal.test.ts`, red on the old order in both its halves.*
 
+*Reported back 2026-10-01, the partial repair of
+[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced`](../../defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md)
+(live-run finding a71-8, [OQ-164](../open-questions.md)): **the queue of one held one paused call, and a second pause
+replaced it.** A call issued while a command is soft-paused is queued by the shell behind it. The session treated the
+paused call as the poll's alone: the new call reported only its own exit, and a soft pause of the new call disposed of
+the paused one, whose end was then never reported. Measured with dash through a real PTY: an `echo` behind a paused
+`sleep 3` waited about 1.9 s and said only "The command exited with code 0.". The session now keeps every open paused
+call in line order (`pausedAhead`, then `pausedCommand`). Each is fed its share of the stream up to its own end frame or
+the next line's printed start marker (`pausedShare`, as A10 built it), and is closed there. Every observation hands
+over, beside its own subject, each paused call that ended unreported and each still running ahead of it
+(`drainEarlier`, `ForegroundResult.earlier`). A reset under them reports the one the shell was running as ended by the
+reset. The old line "a pause nobody ever polled is replaced here" is struck in `execute` and kept beside its
+replacement. Whether such a call should wait at all is OQ-164's, not ruled. Pinned by two "(OQ-164)" cases in
+`terminal.test.ts`, both red before the change. Five A10 cases now read the hand-over from the next call and keep their
+assertions.*
+
 *Reported back 2026-10-01, the repair of
 [`a-command-that-exits-the-session-shell-reads-as-a-soft-pause`](../../defects/fixed/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md)
 (OQ-144's sibling case): **the marker protocol also assumed that the shell outlives the command.** A command that ends

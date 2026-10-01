@@ -6752,7 +6752,10 @@ status of its own: the shell abandoned the rest of its line, as an interrupt (C-
 ran"), so its `failure_kind` is `execution_error`. Its output is what it wrote up to the next call's start marker:
 collection stops there, and the echo of that call's wrapper is dropped whole. `terminal.test.ts`'s cases
 "REQ-TOOLS-098/127/179 (A10): a soft-paused command interrupted with C-c …", "REQ-TOOLS-098/127 (A10): after C-c, a
-next call longer than …" and "REQ-TOOLS-127 (A10): the echo of a next call wider than the screen …" pin it.
+next call longer than …" and "REQ-TOOLS-127 (A10): the echo of a next call wider than the screen …" pin it. *(Since 2026-10-01 the next call that closes such
+a paused call hands it over itself, under OQ-164's reading. Its observation's detail says the paused command
+ended "with no exit status of its own", and what the command wrote follows the detail. The poll's reading above still
+holds for a poll that closes it. The A10 cases now read the hand-over from that call.)*
 
 **What a ruling decides.** Which exit status and outcome that poll carries: −1 with the reason, as built; a status
 the product recovers from the shell (which would need the wrapper to carry the previous `$?`, on both backends); or a
@@ -8106,19 +8109,54 @@ In the default live run's `terminal` scenario `node -e "setTimeout(…, 45000)"`
 and its observation said only "The command exited with code 0." The paused command's own end was held for a poll that
 never came.
 
-**What the build proceeds under.** The new call's line is submitted at once, and the shell queues it behind the paused
+~~**What the build proceeds under.** The new call's line is submitted at once, and the shell queues it behind the paused
 command (`ForegroundSession.execute`). Its no-output window and its timeout run from its own start, so they include the
 wait. Its observation states its own outcome and nothing of the paused command. The paused command's share of the stream
 ends at its own end frame or at the new call's start marker, and its end is kept for the next empty poll (`pausedDone`,
 `poll`). The code also shows a case the run did not reach. A later soft pause, including the new call's own when the
 paused command stays silent for its whole no-output window, replaces the kept call, and that call's end is never
-reported.
+reported.~~ *(Superseded 2026-10-01 by the reading below. That reading was built by the partial repair of
+[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`](../defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md),
+which fixes only the loss and the silence. The question stays open, and none of its four points is ruled.)*
+
+**What the build proceeds under** (since 2026-10-01). The new call is still neither refused nor made to interrupt the paused
+command. Its line is submitted at once and the shell queues it. Its no-output window and its timeout still run from its
+own start, so they include the wait. What changed is what it reports, so that no paused command's end is lost or left
+for a poll nobody is prompted to make:
+- **The new call's observation reports the paused command beside its own outcome** (`ForegroundResult.earlier`,
+  `earlierSentence` in `terminal/index.ts`). The detail opens with one sentence per paused command. A command the call
+  waited behind gets "This command was submitted while the soft-paused command `…` was still running, and waited behind
+  it: that command ended N seconds after this command was submitted, with exit code X". A command that had ended before
+  the call and was never polled gets "… had ended N seconds before this command was submitted, with exit code X, and no
+  poll had reported it". The end is the paused command's own status. It is OQ-147's "no exit status of its own" when an
+  interrupt made the shell abandon its line, "by ending the session's shell" for OQ-144's shell-exit case, and "when the
+  terminal session was reset" when the new call's own timeout, cancel or kill reset the session under it. What the paused
+  command wrote since it was last observed follows the detail, ahead of the call's own output section, which is
+  unchanged. The new call's exit code, outcome and classification are its own. The paused command is handed over there,
+  so a poll after finds nothing to poll.
+- **A second soft pause no longer disposes of the first** (`pausedAhead`, `pausedEnded` in `foreground.ts`). A new call
+  that soft-pauses while the paused command is still running has not started yet. Its observation says so ("… that
+  command is still running: the shell has not started this command yet, and runs it once that command ends"), and it
+  carries none of the earlier command's output as its own. The earlier call is kept ahead of it, still fed its share of
+  the stream, and the next observation reports its end: the poll ("… ahead of the polled one ended N seconds ago, with
+  exit code X") or a later call.
+- **An interrupt reaches the oldest open paused call**, the line the shell is running. That call is closed at the next
+  line's start marker, as OQ-147's reading already closes it.
+- **The tool description states the third move** beside REQ-TOOLS-098's two: "a new command issued meanwhile waits behind
+  it, and its result reports how the paused one ended".
+
+The cases "REQ-TOOLS-098/179 (OQ-164): a command issued behind a still-running soft-paused one …" and "… a paused command
+that ended unpolled is reported by the next command, and a second soft pause no longer loses the first one's end" in
+`terminal/terminal.test.ts` pin this reading. Both are red on the code before it. Five A10 cases that read the paused
+command's end from a poll after the next call now read it from the next call's report. Each keeps its assertion: the
+paused command's own status, nothing of the later calls, the echo or the end frames in what is carried of it, and no
+marker anywhere.
 
 **What a ruling decides.** Whether a call made while a command is soft-paused is refused with the remedy REQ-TOOLS-098
 names, waits as REQ-TOOLS-187 has a second call wait (and if so, whether the wait counts against the new call's window
 and timeout), or interrupts the paused command. And whether the new call's observation says that it waited behind the
 paused command and carries that command's end, meaning its output since the last poll and its exit status, rather than
-leaving it to a poll.
+leaving it to a poll. *(Unchanged by the 2026-10-01 build: the report it carries is the reading above, not a ruling on the last point.)*
 
 **OQ-165 — What is the optimistic `cancelling` of the run's cancel: where is it shown, and until when?** *(REQ-MONITOR-127,
 "On confirmation the session status is optimistically set to `cancelling` … Given a refusal, the status is restored to

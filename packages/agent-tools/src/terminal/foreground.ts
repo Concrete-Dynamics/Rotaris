@@ -59,15 +59,46 @@ export interface ForegroundResult {
   readonly replaced?: true;
   /**
    * OQ-144 (the shell-exit case): the command — or, on a poll, the paused command — ended the session's shell (`exit`, a
-   * signal to it); the shell was respawned with PD-TOOLS-001's snapshot re-applied, or, on a poll whose session had been
-   * respawned already by a later call, nothing more was done (`killStatus` null).
+   * signal to it), `'command'`; or the shell ended before the command ran, a soft-paused command ahead of it having ended
+   * it, `'before'` (OQ-164). The shell was respawned with PD-TOOLS-001's snapshot re-applied, or, on a poll whose session
+   * had been respawned already by a later call, nothing more was done (`killStatus` null).
    */
-  readonly shellEnded?: true;
+  readonly shellEnded?: 'command' | 'before';
+  /**
+   * OQ-164: the soft-paused commands this call's observation reports beside its own outcome, oldest first — each one still
+   * open, or ended and not yet reported, when the call returned. A call issued while a command is soft-paused is queued
+   * behind it by the shell; its observation says so and carries that command's end, so no paused command's end is left
+   * to a poll nobody makes, nor lost when a later soft pause takes the paused slot.
+   */
+  readonly earlier?: readonly PausedEnd[];
   /**
    * OQ-144 (the shell-exit case): the session's shell had ended between calls — no call was waiting on it — so this call
    * respawned it, re-applied PD-TOOLS-001's snapshot, and ran in the fresh shell; what the restore did.
    */
   readonly respawned?: RestoreOutcome;
+}
+
+/**
+ * OQ-164: what an observation reports of a soft-paused command other than its own subject. `end` says how it ended: its
+ * own exit status (`exit`); none of its own, the shell having abandoned its line (`no-status`, OQ-147); by ending the
+ * session's shell (`shell`); by the session's reset (`reset`); never having run, the shell being gone before its line
+ * (`never-ran`); or not yet (`running`).
+ */
+export interface PausedEnd {
+  /** The command as the agent issued it. */
+  readonly label: string;
+  readonly end: 'exit' | 'no-status' | 'shell' | 'reset' | 'never-ran' | 'running';
+  readonly exitCode: number | null;
+  /**
+   * Monotonic ms from the reporting call's submission to the paused command's end — negative when it had ended before the
+   * call was submitted. Null on a poll's report and while the command runs.
+   */
+  readonly endedAfterSubmitMs: number | null;
+  /** Monotonic ms from the paused command's end to this report; null while it runs. */
+  readonly endedAgoMs: number | null;
+  /** What it wrote since the previous observation of it. */
+  readonly output: string;
+  readonly truncated: boolean;
 }
 
 /**
@@ -123,6 +154,8 @@ const CANCELLED_ERROR = 'the call was cancelled';
 export const SHELL_ENDED_ERROR = 'the command ended the session\'s shell';
 /** OQ-144 (the shell-exit case): the error a poll carries when the soft-paused command ended the session's shell. */
 export const PAUSED_SHELL_ENDED_ERROR = 'the paused command ended the session\'s shell';
+/** OQ-164: the error a call carries when the session's shell ended before its line ran — a paused command ahead of it ended it. */
+export const SHELL_ENDED_BEFORE_ERROR = 'the session\'s shell ended before the command ran';
 
 export const FOREGROUND_CAP = 100_000;
 /**
@@ -236,8 +269,12 @@ interface ActiveCall {
    */
   closer: string | null;
   readonly onCloser?: () => void;
-  /** OQ-144 (the shell-exit case): the session's shell ended while this call ran — `exit`, a signal to the shell. */
-  readonly onShellExit?: () => void;
+  /**
+   * OQ-144 (the shell-exit case): the session's shell ended while this call was waiting on it — `exit`, a signal to the
+   * shell. `ran` is false when a soft-paused command ahead of this call's line was still running (OQ-164): it ended the shell,
+   * and this call's line never ran.
+   */
+  readonly onShellExit?: (ran: boolean) => void;
 }
 
 /** A call that soft-paused (REQ-TOOLS-098): its screen keeps filling and a later poll reads what is new. */
@@ -279,8 +316,16 @@ interface PausedCall {
   lastOutputAt: number;
   /** Monotonic time of the previous observation of the command: its soft pause, then each poll (live-run L2). */
   observedAt: number;
-  /** OQ-144 (the shell-exit case): the session's shell ended while the command was paused, so it has no status of its own. */
-  endedShell: boolean;
+  /**
+   * How the call closed when not by its own end frame (OQ-164): the session's shell ended while its command ran (`shell`,
+   * OQ-144's shell-exit case), or before its line ran (`never-ran`); or the session was reset under it (`reset`). Null while
+   * open, and when it closed on its own frame or at the next line's start marker.
+   */
+  endedBy: 'shell' | 'never-ran' | 'reset' | null;
+  /** OQ-164: the command as the agent issued it, for the observation that reports its end. */
+  readonly label: string;
+  /** OQ-164: monotonic time the call closed; null while open. */
+  endedAt: number | null;
 }
 
 /**
@@ -701,6 +746,19 @@ export class ForegroundSession {
   /** A paused command that has since finished: its output and exit status wait for the next poll. */
   private pausedDone: PausedCall | null = null;
   /**
+   * OQ-164: soft-paused calls still open AHEAD of `pausedCommand`, oldest first. A call issued while a command is
+   * soft-paused is queued behind it by the shell, and when that call soft-pauses too it takes the paused slot; the call it
+   * waited behind is kept here, still fed its share of the stream, instead of being disposed with its end unreported. The
+   * first is the line the shell is running.
+   */
+  private pausedAhead: PausedCall[] = [];
+  /**
+   * OQ-164: paused calls that have closed and have not been reported, oldest first — those that were ahead of
+   * `pausedCommand`, and any the session's reset or the shell's end closed. The next observation reports them
+   * (`drainEarlier`).
+   */
+  private pausedEnded: PausedCall[] = [];
+  /**
    * PD-TOOLS-001's last-known shell state: the cwd and exported variables of the most recent
    * COMPLETED command, refreshed after every exit. The reset path re-applies it to the respawned
    * shell; a snapshot that cannot be parsed keeps the previous capture rather than clearing it.
@@ -810,21 +868,34 @@ export class ForegroundSession {
     this.shellIdentity = null;
     this.shellEnded = true;
     this.pendingText = '';
-    const paused = this.pausedCommand;
-    if (paused) {
+    // OQ-164: the shell runs paused lines in order, so the first open one is the command that ended it; any queued behind
+    // it, and the running call itself, never ran.
+    const chain = this.openPaused();
+    const now = this.deps.monotonic.now();
+    chain.forEach((paused, i) => {
       if (paused.undecided !== '') paused.hold.push(paused.undecided);
       paused.undecided = '';
       paused.code = null;
-      paused.endedShell = true;
-      this.pausedDone = paused;
-      this.pausedCommand = null;
+      paused.endedBy = i === 0 ? 'shell' : 'never-ran';
+      paused.endedAt = now;
       paused.onClose?.();
+    });
+    this.pausedEnded.push(...this.pausedAhead);
+    this.pausedAhead = [];
+    if (this.pausedCommand) {
+      this.pausedDone = this.pausedCommand;
+      this.pausedCommand = null;
     }
     const a = this.active;
     if (a) {
       this.active = null;
-      a.onShellExit?.();
+      a.onShellExit?.(chain.length === 0);
     }
+  }
+
+  /** OQ-164: every soft-paused call still open, oldest first — the line the shell is running, then those queued behind it. */
+  private openPaused(): PausedCall[] {
+    return this.pausedCommand === null ? [...this.pausedAhead] : [...this.pausedAhead, this.pausedCommand];
   }
 
   /**
@@ -848,20 +919,26 @@ export class ForegroundSession {
     const shown = this.region?.push(chunk) ?? '';
     if (shown !== '') for (const t of this.taps) { try { t(shown); } catch (cause) { this.deps.warn(`terminal session ${this.id}: an output tap raised: ${String(cause)}`); } }
     for (const l of this.listeners) l(chunk);
-    const paused = this.pausedCommand;
+    // OQ-164: every open paused call, oldest first — the one the shell is running, then any whose lines are queued behind it.
+    const chain = this.openPaused();
     const active = this.active;
-    if (!active && !paused) return;
+    if (!active && chain.length === 0) return;
     // A soft-paused call and the call queued behind it share the stream, and the shell runs their lines in order. What the
     // paused call collects is its share of each chunk (`pausedShare`), which ends at its own end frame or at the next call's
-    // printed start marker, whichever the shell reaches (A10).
-    let share: ReturnType<typeof pausedShare> | null = null;
-    if (paused) {
+    // printed start marker, whichever the shell reaches (A10). A paused call queued behind another (OQ-164) collects the
+    // earlier one's bytes too until its own start marker prints, and its capture is cut at that marker as any call's is.
+    const next = (i: number): string | null => {
+      const later = chain[i + 1];
       // The no-op line a poll after an interrupt submitted (`closer`) was written before any later call's, so its marker
       // is the first the shell can print once the paused line is done.
-      share = pausedShare(paused.undecided, chunk, paused.end, paused.closer ?? active?.start ?? null);
+      return later !== undefined ? later.start : (chain[i]!.closer ?? active?.start ?? null);
+    };
+    const shares = chain.map((paused, i) => {
+      const share = pausedShare(paused.undecided, chunk, paused.end, next(i));
       if (share.take !== '') { paused.hold.push(share.take); paused.lastOutputAt = this.deps.monotonic.now(); }
       paused.undecided = share.undecided;
-    }
+      return share;
+    });
     this.pendingText += chunk;
     // The echoed wrapper carries the marker text too (`'__rot_x_e:' + $(...`), so the match is the marker
     // FOLLOWED BY DIGITS on the VT-stripped stream — only the shell's own Write-Output produces that.
@@ -891,19 +968,29 @@ export class ForegroundSession {
     // listener fed the paused screen until that end frame, so a next call longer than the screen keeps
     // (`FOREGROUND_SCREEN_LINES`) scrolled the start marker off, nothing was cut, and the poll read that call's output, its
     // end frame and a false truncation. The collection stops at the marker now, not the cut alone.
-    const pausedCode = paused ? frame(paused.end) : null;
     const activeCode = active ? frame(active.end) : null;
-    if (paused && (pausedCode !== null || share?.stop === 'next' || activeCode !== null)) {
+    // OQ-164: a later line's end frame — a paused call's queued behind it, or the running call's — closes an open paused
+    // call the same way, the shell having gone past its line.
+    const laterFrame = (i: number): boolean => activeCode !== null || chain.slice(i + 1).some((later) => frame(later.end) !== null);
+    chain.forEach((paused, i) => {
+      const pausedCode = frame(paused.end);
+      if (!(pausedCode !== null || shares[i]!.stop === 'next' || laterFrame(i))) return;
       // Closed without a decision on the raw stream: whatever it still held back was its own.
       if (paused.undecided !== '') paused.hold.push(paused.undecided);
       paused.undecided = '';
       paused.code = pausedCode;
-      const next = paused.closer ?? active?.start ?? null;
-      if (pausedCode === null && next !== null) paused.until = next;
-      this.pausedDone = paused;
-      this.pausedCommand = null;
+      const following = next(i);
+      if (pausedCode === null && following !== null) paused.until = following;
+      paused.endedAt = this.deps.monotonic.now();
+      if (paused === this.pausedCommand) {
+        this.pausedDone = paused;
+        this.pausedCommand = null;
+      } else {
+        this.pausedAhead = this.pausedAhead.filter((p) => p !== paused);
+        this.pausedEnded.push(paused);
+      }
       paused.onClose?.();
-    }
+    });
     if (active && activeCode !== null) {
       this.active = null;
       active.onEnd(activeCode);
@@ -914,7 +1001,7 @@ export class ForegroundSession {
       this.active = null;
       active.onCloser?.();
     }
-    if (!this.active && !this.pausedCommand) this.pendingText = '';
+    if (!this.active && !this.pausedCommand && this.pausedAhead.length === 0) this.pendingText = '';
   }
 
   /** The capture: the emulated screen with the echoed command line and both marker frames removed. */
@@ -957,13 +1044,56 @@ export class ForegroundSession {
   }
 
   /** REQ-TOOLS-187: a queue of one — a second foreground call waits for the first. */
-  run(command: string, opts: { timeoutMs: number | null; hardMs?: number; signal?: AbortSignal }): Promise<ForegroundResult> {
-    const next = this.chain.then(() => this.execute(command, opts));
+  run(command: string, opts: { timeoutMs: number | null; hardMs?: number; signal?: AbortSignal; label?: string }): Promise<ForegroundResult> {
+    const next = this.chain.then(() => this.executeReporting(command, opts));
     this.chain = next.catch(() => undefined);
     return next;
   }
 
-  private async execute(command: string, opts: { timeoutMs: number | null; hardMs?: number; signal?: AbortSignal }): Promise<ForegroundResult> {
+  /**
+   * OQ-164 (`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced`, live-run finding a71-8): a call issued
+   * while a command is soft-paused is queued behind it by the shell. Its observation said only its own outcome, and the paused
+   * command's end waited for a poll nobody made; a later soft pause disposed of the paused call and its end was never
+   * reported. Every call now reports, beside its own outcome, each paused command that ended and was not reported, and each
+   * still running ahead of it (`drainEarlier`).
+   */
+  private async executeReporting(command: string, opts: { timeoutMs: number | null; hardMs?: number; signal?: AbortSignal; label?: string }): Promise<ForegroundResult> {
+    const submittedAt = this.deps.monotonic.now();
+    const r = await this.execute(command, opts);
+    // A call that soft-paused may have closed during its own handover (`pausedDone` is then its own): it is no earlier one.
+    const earlier = await this.drainEarlier(submittedAt, !r.softPaused);
+    return earlier.length === 0 ? r : { ...r, earlier };
+  }
+
+  /**
+   * OQ-164: what the next observation reports of paused commands other than its subject, and their release. Every closed
+   * one not yet reported (and, for a call, a `pausedDone` a poll never took) is handed over with its output since it was
+   * last observed, and its screen disposed; every one still open ahead of `pausedCommand` is reported as running, with
+   * what it wrote since, and kept.
+   */
+  private async drainEarlier(submittedAt: number | null, includeDone: boolean): Promise<PausedEnd[]> {
+    const closed = [...this.pausedEnded, ...(includeDone && this.pausedDone !== null ? [this.pausedDone] : [])];
+    this.pausedEnded = [];
+    if (includeDone) this.pausedDone = null;
+    const now = this.deps.monotonic.now();
+    const out: PausedEnd[] = [];
+    for (const p of closed) {
+      const output = await ForegroundSession.sincePoll(p);
+      const truncated = p.screen.truncated || p.hold.dropped;
+      p.screen.dispose();
+      const endedAt = p.endedAt ?? now;
+      const end: PausedEnd['end'] = p.endedBy ?? (p.code === null ? 'no-status' : 'exit');
+      out.push({ label: p.label, end, exitCode: p.code, endedAfterSubmitMs: submittedAt === null ? null : endedAt - submittedAt, endedAgoMs: Math.max(0, now - endedAt), output, truncated });
+    }
+    for (const p of this.pausedAhead) {
+      const output = await ForegroundSession.sincePoll(p);
+      p.observedAt = now;
+      out.push({ label: p.label, end: 'running', exitCode: null, endedAfterSubmitMs: null, endedAgoMs: null, output, truncated: p.screen.truncated || p.hold.dropped });
+    }
+    return out;
+  }
+
+  private async execute(command: string, opts: { timeoutMs: number | null; hardMs?: number; signal?: AbortSignal; label?: string }): Promise<ForegroundResult> {
     const { timers, monotonic } = this.deps;
     // OQ-144 (the shell-exit case): a shell that ended between calls — no call was waiting on it — is respawned here, with
     // PD-TOOLS-001's snapshot re-applied, and this call says so (`respawned`, `session_reinitialized`).
@@ -1026,7 +1156,7 @@ export class ForegroundSession {
     // runs; the mark is carried into the soft pause, and a poll after it reads it as a C-c sent after the pause.
     let interrupted = false;
     let closer: string | null = null;
-    const done = new Promise<{ kind: 'exit'; code: number } | { kind: 'timeout' } | { kind: 'pause' } | { kind: 'abort' } | { kind: 'kill'; reset: boolean } | { kind: 'replaced' } | { kind: 'ended' } | { kind: 'shellEnded' }>((resolve) => {
+    const done = new Promise<{ kind: 'exit'; code: number } | { kind: 'timeout' } | { kind: 'pause' } | { kind: 'abort' } | { kind: 'kill'; reset: boolean } | { kind: 'replaced' } | { kind: 'ended' } | { kind: 'shellEnded'; ran: boolean }>((resolve) => {
       let hard: TimerHandle | null = null;
       let soft: TimerHandle | null = null;
       let watch: TimerHandle | null = null;
@@ -1051,7 +1181,7 @@ export class ForegroundSession {
           lookForEnd = timers.after(INTERRUPT_WATCH_MS as Millis, look);
         },
         onCloser: () => resolve({ kind: 'ended' }),
-        onShellExit: () => resolve({ kind: 'shellEnded' }),
+        onShellExit: (ran) => resolve({ kind: 'shellEnded', ran }),
       };
       this.active = active;
       // OQ-144 (acceptance A9): a command that replaces the shell — `exec bash` — keeps the pid and never returns to the
@@ -1108,16 +1238,22 @@ export class ForegroundSession {
     // returned it, and its end frame resolved the call already settled, so the paused call read "still running" until a
     // later call's marker closed it with no status (`output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll`).
     let paused: PausedCall | null = null;
+    // OQ-164: a soft pause while an earlier paused call is still open means this call's line has not started: the shell is
+    // still running the earlier one. It has written nothing of its own.
+    const queued = outcome.kind === 'pause' && this.pausedCommand !== null;
     if (outcome.kind === 'pause') {
-      this.pausedDone?.screen.dispose();
+      // FALSIFIED, kept beside its replacement (OQ-164, 2026-10-01): "a pause nobody ever polled is replaced here: release
+      // its screen rather than leave it". The replaced call was still running, or had ended with nothing yet reported, so
+      // its end was lost with its screen. A closed one now waits to be reported by this call's observation, and an open one
+      // is kept ahead of this call, still fed its share of the stream, until it ends and the next observation reports it.
+      if (this.pausedDone !== null) this.pausedEnded.push(this.pausedDone);
       this.pausedDone = null;
-      // A pause nobody ever polled is replaced here: release its screen rather than leave it.
-      this.pausedCommand?.screen.dispose();
+      if (this.pausedCommand !== null) this.pausedAhead.push(this.pausedCommand);
       // It is fed by `onData` from here, its share of each chunk only (`pausedShare`), until its own frame or the next
       // call's start marker closes it (A10). `delivered` is what this call returns, set once the screen has it.
       // An interrupt that reached it while it ran is carried (OQ-147), and so is the no-op line already submitted for it,
       // whose printed marker then closes the paused call as a poll's own would.
-      paused = { start, end, screen, hold, delivered: '', undecided: '', code: null, until: null, interrupted, closer, onClose: null, lastOutputAt, observedAt: monotonic.now(), endedShell: false };
+      paused = { start, end, screen, hold, delivered: '', undecided: '', code: null, until: null, interrupted, closer, onClose: null, lastOutputAt, observedAt: monotonic.now(), endedBy: null, label: opts.label ?? command, endedAt: null };
       this.pausedCommand = paused;
       this.active = null;
       this.state = 'idle';
@@ -1158,7 +1294,10 @@ export class ForegroundSession {
     if (paused !== null) {
       // REQ-TOOLS-098: return −1, the process keeps running; a later empty command polls what it produced since.
       // The call's screen is kept and keeps filling, so the poll reads the same emulated screen further along.
-      paused.delivered = lines.join('\n').replace(/\s+$/, '');
+      // A call queued behind a paused one (OQ-164) has written nothing: what its screen holds before its own start marker is
+      // the earlier command's, which that command's report carries.
+      paused.delivered = queued ? '' : lines.join('\n').replace(/\s+$/, '');
+      if (queued) lines.length = 0;
       return finish({ exitCode: -1, timedOut: false, softPaused: true, killStatus: null, error: null });
     }
     if (outcome.kind === 'kill') {
@@ -1176,7 +1315,7 @@ export class ForegroundSession {
       this.state = 'resetting';
       const { reset, restore } = await this.respawnAfterShellEnded();
       this.state = 'idle';
-      const r: ForegroundResult = { ...finish({ exitCode: null, timedOut: false, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: SHELL_ENDED_ERROR }), restore, shellEnded: true };
+      const r: ForegroundResult = { ...finish({ exitCode: null, timedOut: false, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: outcome.ran ? SHELL_ENDED_ERROR : SHELL_ENDED_BEFORE_ERROR }), restore, shellEnded: outcome.ran ? 'command' : 'before' };
       screen.dispose();
       return r;
     }
@@ -1227,18 +1366,28 @@ export class ForegroundSession {
       }
       if (holds !== false && this.pausedCommand === open && open.closer === null && this.active === null && this.pty === pty) await this.findInterruptedEnd(open, pty);
     }
+    // OQ-164: paused commands ahead of the polled one — ended and not reported, or still running — are reported beside it.
+    const earlier = await this.drainEarlier(null, false);
+    const withEarlier = (r: ForegroundResult): ForegroundResult => (earlier.length === 0 ? r : { ...r, earlier });
+    return withEarlier(await this.pollSubject());
+  }
+
+  /** REQ-TOOLS-098's poll of the paused command itself (`poll`). */
+  private async pollSubject(): Promise<ForegroundResult> {
     const done = this.pausedDone;
     if (done) {
       this.pausedDone = null;
       const out = await ForegroundSession.sincePoll(done);
       const truncated = done.screen.truncated || done.hold.dropped;
       done.screen.dispose();
-      if (done.endedShell) {
+      if (done.endedBy === 'shell' || done.endedBy === 'never-ran') {
         // OQ-144 (the shell-exit case): the paused command ended the session's shell. It has no exit status of its own, and
         // the poll that hands it over respawns the shell, as the call that was running would have; a later call that met
-        // the ended shell first has respawned it already, and the poll reports that nothing more was done.
+        // the ended shell first has respawned it already, and the poll reports that nothing more was done. One queued behind
+        // another paused command that ended the shell never ran (OQ-164).
         const respawn = this.shellEnded ? await this.respawnAfterShellEnded() : null;
-        return { output: out, exitCode: null, timedOut: false, softPaused: false, killStatus: respawn === null ? null : respawn.reset ? 'session_reset' : 'reset_failed', sessionReinitialized: false, truncated, error: PAUSED_SHELL_ENDED_ERROR, restore: respawn?.restore ?? { status: 'none' }, shellEnded: true };
+        const ran = done.endedBy === 'shell';
+        return { output: out, exitCode: null, timedOut: false, softPaused: false, killStatus: respawn === null ? null : respawn.reset ? 'session_reset' : 'reset_failed', sessionReinitialized: false, truncated, error: ran ? PAUSED_SHELL_ENDED_ERROR : SHELL_ENDED_BEFORE_ERROR, restore: respawn?.restore ?? { status: 'none' }, shellEnded: ran ? 'command' : 'before' };
       }
       // A paused call that ended with no frame of its own has no exit status to report (OQ-147): it is reported as the
       // terminal window's kill is, −1 with the reason, and never with a status another command produced (A10).
@@ -1313,9 +1462,18 @@ export class ForegroundSession {
     this.shellEnded = false;
     this.active = null;
     this.region = null;
-    this.pausedCommand?.screen.dispose();
+    // OQ-164: the paused calls go with the tree, and the next observation says so: the one the shell was running ended by
+    // the reset, any queued behind it never ran. Their screens are kept for that report (`drainEarlier`).
+    const now = this.deps.monotonic.now();
+    this.openPaused().forEach((paused, i) => {
+      paused.code = null;
+      paused.endedBy = i === 0 ? 'reset' : 'never-ran';
+      paused.endedAt = now;
+      paused.onClose?.();
+    });
+    this.pausedEnded.push(...this.openPaused(), ...(this.pausedDone === null ? [] : [this.pausedDone]));
+    this.pausedAhead = [];
     this.pausedCommand = null;
-    this.pausedDone?.screen.dispose();
     this.pausedDone = null;
     this.pendingText = '';
     let killed = true;
@@ -1358,7 +1516,9 @@ export class ForegroundSession {
    */
   private noteInterrupt(text: string): void {
     if (!text.includes('\x03')) return;
-    if (this.pausedCommand !== null) this.pausedCommand.interrupted = true;
+    // OQ-164: the interrupt reaches the line the shell is running — the oldest open paused call's.
+    const head = this.pausedAhead[0] ?? this.pausedCommand;
+    if (head !== null) head.interrupted = true;
     else this.active?.onInterrupt?.();
   }
 
@@ -1485,6 +1645,9 @@ export class ForegroundSession {
     this.pausedCommand = null;
     this.pausedDone?.screen.dispose();
     this.pausedDone = null;
+    for (const p of [...this.pausedAhead, ...this.pausedEnded]) p.screen.dispose();
+    this.pausedAhead = [];
+    this.pausedEnded = [];
     if (old) { killTree(old.pid, true); try { old.kill(); } catch { /* */ } }
   }
 }

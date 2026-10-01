@@ -29,9 +29,9 @@ for the owner's requests and rulings before a run, on a docs-only branch; agents
 ## Worktrees and branches — `docs/clean-room/agent-workflow.md`
 
 One temporary branch in one temporary worktree per bundle (`<repo>-wt-<short>`), cut from `origin/main`. The
-primary checkout is not a place to write; merges land through the integration worktree (`<repo>-wt-integ`,
-detached), and verification runs on the merged result. After the merge the worktree is removed and the branch
-deleted (`git branch -d`). Stage paths by name, never `git add -A`; LF line endings.
+primary checkout is not a place to write; merges land through the plan's integration worktree
+(`<repo>-wt-integ-<id>`, detached), and verification runs on the merged result. After the merge the worktree is
+removed and the branch deleted (`git branch -d`). Stage paths by name, never `git add -A`; LF line endings.
 
 ## Before and after an edit — `CLAUDE.md`
 

@@ -68,3 +68,9 @@ a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md) …": the expl
 explicit cancel (`tool_calls` 2, total 4 with the root's two calls counted from its record); the single-child cancel then
 a stop that rests (the same). All three were red before the repair.
 
+The live-run `duress` scenario (`--only=duress`, `LIVE_RUN_DURESS_MS=5400000`, the `katalyst` endpoint) ran on the built
+branch on 2026-10-01 and passed: one iteration, nine children, 425 calls, `sessions.tool_calls` 425 equal to the session's
+425 tool rows and to its children's 372 plus its root's 53. It shows the counts stay whole on a long run with this change;
+it does not exercise the repaired path — no cancel was sent and no call ignored its abort — so the cases above are the
+evidence for that path.
+

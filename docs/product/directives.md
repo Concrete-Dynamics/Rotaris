@@ -1946,6 +1946,18 @@ so a child that genuinely loops is still stopped at the same point.
 > **What was not measured.** An offer taken up by a later iteration's or a later run's root (revisions 3 and 4): this one
 > was taken within its iteration by the agent that delegated `d`. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **Second live execution, 2026-10-01 — the duress scenario on merged `main` `71ad8e8`, under [R-066](requests.md#r-066):**
+> pack `.live-run/runs/2026-10-01T03-15-27-194Z/` of the `accept` worktree, session `57095770`, the same endpoint and
+> model. It met a real model with the clause the first live execution could not reach: a continuation that itself times
+> out while making progress. `reconcile-docs` (`bg_71164543`) and `verify-result` (`bg_5d571a7a`) were cut off at
+> 1,200 s while making progress, each report carrying the offer, and the orchestrator took both.
+> `reconcile-docs-continue` (`continuation_of` `bg_71164543`) was cut off at 1,200 s too; its report carries the cut-off
+> statement and the changed paths (`docs/overview.md`), and its `continuation_offer` is `null`: "a piece of work is
+> continued once and never chained". `verify-result-continue` succeeded. Nothing in the text was wrong. **What was not measured,
+> still:** an offer taken up by a later iteration's or a later run's root. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md)
+> ([`fixed/no-live-run-has-executed-on-merged-main.md`](../defects/fixed/no-live-run-has-executed-on-merged-main.md)).
 
 ---
 

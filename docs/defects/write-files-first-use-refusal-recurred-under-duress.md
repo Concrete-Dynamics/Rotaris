@@ -25,8 +25,11 @@ whose repair gave the refusal an example.
 
 ## Relevant files
 
-- `packages/agent-tools/src/tools/files.ts:333` — `write_file`'s description, which never names `operation`.
-- `packages/agent-tools/src/tools/files.ts:344-345` — the refusal.
+- `packages/agent-tools/src/tools/files.ts:345` — `write_file`'s description, which names `operation` since the partial
+  repair below. *(Updated 2026-10-01: this line first read "`files.ts:333` — `write_file`'s description, which never
+  names `operation`", true when the note was written.)*
+- `packages/agent-tools/src/tools/files.ts:355-356` — the refusal (first cited at `:344-345`).
+- `packages/agent-tools/src/tools/files.ts:323` — the schema's required `operation` enum (cited above at `:321`).
 
 ## Partly repaired — 2026-09-29 under R-067; still open
 
@@ -51,3 +54,31 @@ found this. The schema the child was sent marked `operation` required.
 Only reading the missing selector from the call can make a first use succeed. That is a fourth repair beyond
 REQ-TOOLS-032's three, so it is raised as [OQ-139](../architecture/open-questions.md) and not built. The note stays open
 until that is ruled.
+
+## Seen again 2026-10-01, on merged `main` `71ad8e8`; still open
+
+The duress run on merged `main` `71ad8e8` hit this again. That run used `LIVE_RUN_DURESS_MS=5400000`, pack
+`.live-run/runs/2026-10-01T03-15-27-194Z/` of the `accept` worktree (git-ignored), session `57095770`. It carried the
+description that names `operation`.
+
+Five children each made a first `write_file` call, and 2 of the 5 were refused. On 2026-09-30 it was 1 of 4. Before
+the description named the field, it was 2 of 4.
+
+- **#126**, child `design-decisions`, `docs/decisions.md`, 03:23:41.766. The call sent `path` and `content` and no
+  `operation`, and was refused `invalid_request` "write_file requires an operation: one of create, edit, overwrite,
+  insert, undo. Example: …". The request that emitted it (traffic #73) ran 97.4 s. The child's next request (traffic
+  #75) ran 70.7 s and produced 6,398 output tokens, regenerating the file. #129 then created it with `operation: "create"`, 244 lines.
+- **#244**, child `verify-result`, `docs/verification.md`, 04:03:17.261. The same refusal. The next request (traffic
+  #185) ran 6.8 s and produced 586 output tokens. #246 then created the file with `operation: "create"`, 46 lines.
+- The three first uses that succeeded were #59 (`repo-overview`), #61 (`extra-tests`) and #62 (`api-docs`).
+
+Together the two refusals cost about 77.5 s and about 7.0k regenerated output tokens. The store's `tool_calls` and the
+pack's `model-traffic.jsonl` give these figures. The first was read from a copy of the store; the pack was never
+written.
+
+This adds evidence and changes no code. The reading the build proceeds under is still OQ-139's: no inference, and the
+call is refused as REQ-TOOLS-032 says. Only reading the missing selector from the call could make a first use succeed,
+and that waits on OQ-139's ruling, which is the owner's. Since `1303184` (merged at `33316bb`, after this run), such a
+refusal also files a `tool_error` issue
+([`fixed/a-call-refused-at-the-tool-gates-schema-check-files-no-tool-error-issue.md`](fixed/a-call-refused-at-the-tool-gates-schema-check-files-no-tool-error-issue.md)).
+The model still regenerates its file all the same.

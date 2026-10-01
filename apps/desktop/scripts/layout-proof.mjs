@@ -17,6 +17,10 @@
  *      surface, and the primary action in particular, lies wholly inside the viewport.
  *   4. THE BREAKPOINT ENGAGES ON A LIVE RESIZE. REQ-MONITOR-051's drawer layout below 1180 px, asserted after a
  *      resize rather than at startup, because the defect was precisely that it worked at mount and never again.
+ *   5. A MODAL IS THE TOPMOST ELEMENT AT ITS OWN CENTRE, and its confirmation reaches the product.
+ *   6. A TASK'S UNBROKEN TOKEN STAYS INSIDE THE PLAN COLUMN. REQ-SHELL-022's "no control requires horizontal
+ *      scrolling to reach": a task added through the pane, whose text is one 200-character token, measured against
+ *      the sidebar's content edge and the sidebar's scroll width.
  *
  * Evidence under `.proof/layout-proof/`: a PNG per size, `results.json`. `--skip-build` skips the build.
  */
@@ -83,7 +87,9 @@ const MEASURE = `JSON.stringify((() => {
   };
 })())`;
 
-const started = await startApp({ root: join(output, 'app'), workspace, timeoutMs: 90_000 });
+// Section 6 needs a task plan the user can add to while the run is live: the orchestrator's first step opens a phase
+// (`todo`, the scripted client's `add_phase`), and the second holds the run open long enough for the section to finish.
+const started = await startApp({ root: join(output, 'app'), workspace, timeoutMs: 90_000, extra: { ROTARIS_SCRIPT: 'todo,wait:90000' } });
 const d = started.driver;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const measure = async () => JSON.parse(await d.eval(MEASURE));
@@ -221,6 +227,42 @@ try {
   check('the modal’s confirmation reaches the product',
     cleared.user === 0 && !cleared.dialog && cleared.toast,
     `the user row is ${cleared.user === 0 ? 'gone' : 'still there'}, the dialog is ${cleared.dialog ? 'still open' : 'closed'}, the toast ${cleared.toast ? 'was shown' : 'was not shown'} (${cleared.rows} rows now, which a live run may legitimately have rewritten)`);
+
+  /**
+   * ── 6. A task's text with no break opportunity stays inside the plan column (REQ-SHELL-022).
+   *
+   * REQ-SHELL-022: "no control requires horizontal scrolling to reach", and a task's text is a control (it renames the
+   * task). Ordinary words wrap; a token with none (a path, a hash, the live run's `printf "LINE-%03d xxxx…"`) ran past
+   * the sidebar's edge and gave `.agents` a horizontal scrollbar
+   * (`docs/defects/fixed/a-long-unbroken-token-in-a-task-pushes-the-task-plan-into-horizontal-scroll.md`). The task is
+   * added through the pane's own "+ Add task" control, at the wide size the live run saw it.
+   */
+  const TOKEN = `LONG-${'x'.repeat(195)}`;
+  await d.click('.todo-phase__add', { timeoutMs: 30_000 });
+  await d.waitFor('input[aria-label="New task name"]', { timeoutMs: 10_000 });
+  await d.type(TOKEN, { enter: true });
+  await d.waitFor('.todo-task__text', { timeoutMs: 10_000 });
+  await sleep(600);
+  const plan = JSON.parse(await d.eval(`JSON.stringify((() => {
+    const agents = document.querySelector('.agents');
+    const text = [...document.querySelectorAll('.todo-task__text')].find((b) => (b.textContent || '').includes(${JSON.stringify(TOKEN)}));
+    if (!agents || !text) return { missing: !agents ? '.agents' : 'the task' };
+    const a = agents.getBoundingClientRect();
+    const t = text.getBoundingClientRect();
+    const cs = getComputedStyle(agents);
+    const inner = a.right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth);
+    return {
+      agents: { left: Math.round(a.left), right: Math.round(a.right), contentRight: Math.round(inner), scrollWidth: agents.scrollWidth, clientWidth: agents.clientWidth },
+      text: { left: Math.round(t.left), right: Math.round(t.right), w: Math.round(t.width), h: Math.round(t.height), scrollWidth: text.scrollWidth, clientWidth: text.clientWidth },
+    };
+  })())`));
+  await d.screenshot(join(output, 'task-plan-long-token.png'));
+  check('a task whose text is one 200-character token stays inside the plan column (REQ-SHELL-022)',
+    !plan.missing && plan.text.right <= plan.agents.contentRight + 1 && plan.text.scrollWidth <= plan.text.clientWidth + 1,
+    plan.missing ? `${plan.missing} was not found` : `text box [${plan.text.left}..${plan.text.right}] ${plan.text.w}×${plan.text.h}, its content ${plan.text.scrollWidth} in ${plan.text.clientWidth}; the column's content edge at ${plan.agents.contentRight}`);
+  check('the sidebar needs no horizontal scroll to show it (REQ-SHELL-022)',
+    !plan.missing && plan.agents.scrollWidth <= plan.agents.clientWidth,
+    plan.missing ? `${plan.missing} was not found` : `.agents scrollWidth ${plan.agents.scrollWidth} against clientWidth ${plan.agents.clientWidth}`);
 } finally {
   await d.quit().catch(() => undefined);
   d.close();

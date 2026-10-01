@@ -202,10 +202,10 @@ const log3 = replay('run') ? readFileSync(join(output, 'run.log'), 'utf8') : awa
 }, RUN_WAIT_MS + 60_000);
 assertNoCredential(log3, 'run');
 // The lease's report is the run host's (REQ-PROVIDER-068, `LeaseReportLog`); main no longer restates it (a71-9).
-if (!/credentials: leased for openai-compatible--openrouter/.test(log3)) throw new Error('main did not lease the bearer');
-// REQ-PROVIDER-067/068: the priming report is that same opening line — the provider among the authenticated, nothing
-// unresolved. No product code writes "credentials: 1 provider(s) authenticated", which this step asserted before
-// (`docs/defects/fixed/slice-proof-asserts-a-priming-line-the-product-does-not-write.md`).
+// REQ-PROVIDER-067/068: the priming report is its opening line — the provider among the authenticated, in whatever
+// place the sorted list puts it, and nothing unresolved. That one check is the lease check too: the bearer was leased
+// exactly when the provider is named authenticated. No product code writes "credentials: 1 provider(s) authenticated",
+// which this step asserted before (`docs/defects/fixed/slice-proof-asserts-a-priming-line-the-product-does-not-write.md`).
 const priming = primingProblem(log3, PROVIDER_ID);
 if (priming !== null) throw new Error(`the run host did not report the priming: ${priming}`);
 const requests = (log3.match(/model request POST (\S+)/g) ?? []).map((l) => l.replace('model request POST ', ''));

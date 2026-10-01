@@ -41,6 +41,8 @@ describe('the run host\'s opening credential report, as slice-proof reads it (RE
     const log = logOf({ authenticated: [PROVIDER], unresolved: { codex: 'Authentication expired; re-authentication required.' } });
     expect(openingReport(log)?.unresolved).toBe('codex (Authentication expired; re-authentication required.)');
     expect(primingProblem(log, PROVIDER)).toMatch(/not ok .*codex \(Authentication expired/);
+    // The proof's own provider IS primed; the error says so, so the owner does not read it as openrouter's failure.
+    expect(primingProblem(log, PROVIDER)).toContain(`${PROVIDER} is authenticated, but a provider the configuration names is unresolved`);
   });
 
   it('REQ-PROVIDER-067: a report that does not name the provider as authenticated is a problem', () => {
@@ -62,5 +64,7 @@ describe('the run host\'s opening credential report, as slice-proof reads it (RE
     const step = text.slice(text.indexOf('// 3. One real run'), text.indexOf('const requests ='));
     expect(step).toMatch(/primingProblem\(log3, PROVIDER_ID\)/);
     expect(step).not.toMatch(/provider\\\(s\\\) authenticated/);
+    // Nor a lease check that assumes the provider sorts first among the authenticated: the reader finds it anywhere.
+    expect(step).not.toMatch(/leased for openai-compatible--openrouter\//);
   });
 });

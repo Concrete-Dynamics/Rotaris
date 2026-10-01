@@ -35,11 +35,17 @@ export function openingReport(log) {
 /**
  * Why the opening report does not show `provider` primed, or null where it does: the report is present, names the
  * provider among the authenticated, and is ok — no provider left unresolved (REQ-PROVIDER-068).
+ *
+ * REQ-PROVIDER-068's report also names "the providers renewed". The wire carries them (`credentials.leased`'s
+ * `report.renewed`) but `LeaseReportLog`'s line does not, so that clause is not read here; for the API key this proof
+ * leases nothing is renewed in any case (a credential with no expiry is never renewed, REQ-PROVIDER-068).
  */
 export function primingProblem(log, provider) {
   const report = openingReport(log);
   if (report === null) return 'the run host wrote no opening credential report (REQ-PROVIDER-068)';
   if (!report.authenticated.includes(provider)) return `the run host's opening report does not name ${provider} as authenticated (REQ-PROVIDER-067): ${report.line}`;
-  if (report.unresolved !== null) return `the run host's opening report is not ok — providers unresolved (REQ-PROVIDER-068): ${report.unresolved}`;
+  // `provider` itself is authenticated here: the report is not ok because some OTHER provider the configuration names
+  // has no credential. Said so, so the reader does not take it for a failure to prime `provider`.
+  if (report.unresolved !== null) return `the run host's opening report is not ok (REQ-PROVIDER-068: ok exactly when no provider is unresolved) — ${provider} is authenticated, but a provider the configuration names is unresolved: ${report.unresolved}`;
   return null;
 }

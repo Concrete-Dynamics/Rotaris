@@ -33,6 +33,8 @@ export interface SetupStepReport {
   readonly status: SetupStepStatus;
   readonly detail: string;
   readonly elapsedMs: number | null;
+  /** Set only on a step stopped before it finished: by the setup's cancellation, or by its exhausted budget. */
+  readonly stopped?: 'cancelled' | 'budget';
 }
 
 export interface SetupReport {
@@ -146,8 +148,8 @@ export async function runSetupSteps(o: RunSetupOptions): Promise<SetupReport> {
     if (exceeded || cancelled) await terminateSetupChild(child, clocks, graceMs, env);
     const elapsedMs = clocks.monotonic.now() - started;
     const tail = output.trim().slice(-SETUP_OUTPUT_TAIL);
-    if (cancelled) { stopped = 'cancelled'; set(i, { status: 'failed', detail: `cancelled while running; the child was terminated${tail ? `; its last output: ${tail}` : ''}`, elapsedMs }); continue; }
-    if (exceeded) { stopped = 'failed'; set(i, { status: 'failed', detail: `exceeded its budget of ${Math.round(step.budgetMs / 1000)} s and was terminated${tail ? `; its last output: ${tail}` : ''}`, elapsedMs }); continue; }
+    if (cancelled) { stopped = 'cancelled'; set(i, { status: 'failed', detail: `cancelled while running; the child was terminated${tail ? `; its last output: ${tail}` : ''}`, elapsedMs, stopped: 'cancelled' }); continue; }
+    if (exceeded) { stopped = 'failed'; set(i, { status: 'failed', detail: `exceeded its budget of ${Math.round(step.budgetMs / 1000)} s and was terminated${tail ? `; its last output: ${tail}` : ''}`, elapsedMs, stopped: 'budget' }); continue; }
     if (spawnError !== null) { stopped = 'failed'; set(i, { status: 'failed', detail: `the setup command could not be started: ${spawnError}`, elapsedMs }); continue; }
     if (child.exitCode !== 0) { stopped = 'failed'; set(i, { status: 'failed', detail: `exited with ${child.signalCode ? `signal ${child.signalCode}` : `code ${child.exitCode}`}${tail ? `; its last output: ${tail}` : ''}`, elapsedMs }); continue; }
     set(i, { status: 'succeeded', detail: '', elapsedMs });

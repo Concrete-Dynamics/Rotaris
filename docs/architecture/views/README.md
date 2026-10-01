@@ -45,6 +45,10 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A stopped setup step reads in REQ-WORKSPACE-092's words (ADR-0064, R-067).** `McpSetupStep` gained an optional `stopped`
+(`cancelled` or `budget`) set by the run host's `runSetupSteps`; the initialization coordinator writes the requirement's two
+sentences from it and the MCP category keeps the run host's `detail` (process view, `mcp.setup`).
+
 **A refused setup start is a retryable failure, not "not a local launch" (REQ-WORKSPACE-093/094, ADR-0064, R-067).** Main's
 setup port carries the run host's refusal code with its words, and the initialization coordinator keeps REQ-WORKSPACE-094's
 non-retryable words for the `unavailable` status alone (process view, `mcp.setup`; runtime view, the project setup; OQ-167).

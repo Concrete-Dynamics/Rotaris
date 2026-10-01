@@ -707,6 +707,7 @@ try {
      * every refusal was reported as REQ-WORKSPACE-094's non-retryable "not a local launch", for an entry that is one
      * (`docs/defects/fixed/a-refused-setup-start-is-reported-as-not-a-local-launch.md`). The order: the open's background
      * run holds `create`; Cancel ends it; the category's setup starts and holds `create`; Initialize starts the task.
+     * The Cancel is read for REQ-WORKSPACE-092's words on the step it stopped.
      */
     const s = await launch('init-held', { workspace: INIT_HELD });
     const startedFor = () => (logOf(s).match(/mcp setup: started for [^\n]*init-held/g) ?? []).length;
@@ -725,6 +726,12 @@ try {
     } else {
       await s.driver.command({ kind: 'initialization.cancel' });
       const cancelled = await waitUntil(() => outcomes().length === 1, 15_000);
+      // The run host wrote its own sentence for the step it stopped; this domain reports REQ-WORKSPACE-092's
+      // (`docs/defects/fixed/a-stopped-setup-step-is-not-reported-in-req-workspace-092s-words.md`).
+      check('REQ-WORKSPACE-092 / REQ-WORKSPACE-093: a step stopped by Cancel is reported as "Setup was stopped before this step finished."',
+        (outcomes()[0] ?? '').endsWith("→ failure — Code intelligence could not create this project's configuration: Setup was stopped before this step finished.")
+          && /mcp setup: create failed — cancelled while running/.test(logOf(s)),
+        cancelled ? `the cancelled run ended: ${JSON.stringify((outcomes()[0] ?? '').slice(0, 320))}` : 'the background run never ended after Cancel');
       const categoryStart = await s.driver.command({ kind: 'mcp.setup', action: 'start' });
       const categoryHolds = await waitUntil(() => startedFor() === 2, 15_000);
       if (!cancelled || !categoryHolds) {

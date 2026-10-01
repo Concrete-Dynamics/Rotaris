@@ -388,3 +388,21 @@ run cancelled, the category's setup holding `create`, then Initialize): on a bui
 run host's `mcp.setup.running` named in a warning and the task's error reading "Code intelligence could not complete this
 project's setup: A code-intelligence setup is already running for this workspace; …", retryable (as root under Xvfb on
 Linux, Node 24, `--skip-build` after `pnpm build`; 40 passed, 0 failed, 2 skipped).
+
+**Ninth round (2026-10-01, R-067): a stopped step in REQ-WORKSPACE-092's words.** The words this domain states, listed in
+"Why the task delegates rather than reimplements", now include REQ-WORKSPACE-092's two fixed details for a step stopped
+before it finished: "Setup was stopped before this step finished." for a cancelled step and "This step did not finish
+within its time budget." for an exhausted budget. The runner passed every step's detail through, so a stopped step read in
+the run host's sentences ("cancelled while running; the child was terminated; …", "exceeded its budget of N s and was
+terminated; …"), which are the MCP category's. The run host's status now says what stopped a step (`McpSetupStep.stopped`,
+`cancelled` or `budget`, set by `runSetupSteps`) and the runner maps it (`stepDetail`) in the live rows, the step rows and
+the "{reason}: {detail}" error; `detail` itself stays the run host's, so the category reads as before. The fact is carried
+rather than read out of the prose because the budget case cannot be told from a non-zero exit by the outcome alone. A run
+cancelled before its setup started keeps the build's sentence, under OQ-167
+(`../../defects/fixed/a-stopped-setup-step-is-not-reported-in-req-workspace-092s-words.md`). **Measured** by
+`workspace-proof`'s scenario 8c, which now reads the outcome of its Cancel: on the build before this round, "… could not
+create this project's configuration: cancelled while running; the child was terminated"; with it, "… configuration: Setup
+was stopped before this step finished.", in 8b's outgoing run too (41 passed, 0 failed, 2 skipped; as root under Xvfb,
+Node 24, `--skip-build` after `pnpm build`). **Not shown in the built app:** the budget sentence, which needs a step held for
+its whole budget; the unit cases pin it. **Found besides:** the other step details are not this domain's words either
+(`../../defects/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`, recorded, not repaired).

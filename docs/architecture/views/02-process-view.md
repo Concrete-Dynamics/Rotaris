@@ -411,7 +411,8 @@ output at start. **`mcp.setup`** — renderer → main `{action: start | cancel 
 `mcp.configuration`; an entry that is not a local launch is not refused but answered with a finished `unavailable`
 status). Main's setup port carries a refusal's code and words to the initialization coordinator, which reports it as a
 retryable failure and keeps REQ-WORKSPACE-094's "not a local launch" for the `unavailable` status alone (OQ-167;
-2026-10-01, R-067). REQ-MCP-099's three steps run in the
+2026-10-01, R-067). A step stopped before it finished carries `stopped: cancelled | budget` beside the run host's own
+`detail`, from which the coordinator writes REQ-WORKSPACE-092's two fixed sentences (2026-10-01, R-067). REQ-MCP-099's three steps run in the
 run host as children of the derived invocation (`Rotaris.exe builtin:code-intelligence -- project create <root>`, then
 `project index`, then `memories initialize`), each polled at 0.25 s on the clock port under 300 / 1800 / 120 s, asked to
 terminate then tree-killed after 5 s on cancel or timeout; the category polls the status every 500 ms while it runs.

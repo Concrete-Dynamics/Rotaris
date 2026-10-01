@@ -185,6 +185,54 @@ describe('resolution on workspace open', () => {
   });
 
   /**
+   * REQ-WORKSPACE-092/093: a step stopped before it finished reads in this domain's fixed sentences — in its own row and in
+   * the "{reason}: {detail}" error — and not in the run host's, so it is told apart from a step that exited non-zero
+   * (`docs/defects/fixed/a-stopped-setup-step-is-not-reported-in-req-workspace-092s-words.md`).
+   */
+  it.each([
+    {
+      stop: 'cancelled' as const, outcome: 'cancelled' as const, sentence: 'Setup was stopped before this step finished.',
+      runHost: 'cancelled while running; the child was terminated; its last output: indexing 40%',
+    },
+    {
+      stop: 'budget' as const, outcome: 'failed' as const, sentence: 'This step did not finish within its time budget.',
+      runHost: 'exceeded its budget of 1800 s and was terminated; its last output: indexing 40%',
+    },
+  ])('reports a step stopped by $stop in REQ-WORKSPACE-092\'s words', async ({ stop, outcome, sentence, runHost }) => {
+    const h = harness();
+    const run = h.coordinator.resolve(true);
+    await new Promise((r) => setImmediate(r));
+    const steps = [step('create', 'succeeded', 'made'), { ...step('index', 'failed', runHost), stopped: stop }, step('memory', 'not-attempted', 'not attempted')];
+    // REQ-WORKSPACE-109: the stopped step is published live the moment the run host reports it, before the setup's finish.
+    h.push(status({ state: 'running', containsCode: true, steps }));
+    await settle();
+    expect(h.published.at(-1)!.report.currentSteps.find((s) => s.name === 'Symbol indexing')?.detail).toBe(sentence);
+    h.push(status({ state: 'finished', outcome, containsCode: true, message: 'stopped', steps }));
+    await run;
+    await new Promise((r) => setImmediate(r));
+    const task = h.published.at(-1)!.report.tasks[0]!;
+    expect(task.error).toBe(`Code intelligence could not index this project's symbols: ${sentence}`);
+    expect(task.steps.find((s) => s.name === 'Symbol indexing')?.detail).toBe(sentence);
+    expect(task.retryable).toBe(true);
+    expect(task.summary).toBe(CODE_INTELLIGENCE_FAILED_SUMMARY);
+    // Nor in the live report's step rows, published as each step finished (REQ-WORKSPACE-109).
+    expect(JSON.stringify(h.published)).not.toContain(runHost);
+  });
+
+  /** REQ-WORKSPACE-092: a step that ran to completion and exited non-zero keeps its own output, told apart from a stopped one. */
+  it('keeps a non-zero exit\'s own detail', async () => {
+    const h = harness();
+    const run = h.coordinator.resolve(true);
+    await new Promise((r) => setImmediate(r));
+    h.push(status({ state: 'finished', outcome: 'failed', containsCode: true, message: 'A step failed', steps: [step('create', 'failed', 'exited with code 1; its last output: boom'), step('index', 'not-attempted'), step('memory', 'not-attempted')] }));
+    await run;
+    await new Promise((r) => setImmediate(r));
+    const task = h.published.at(-1)!.report.tasks[0]!;
+    expect(task.error).toBe("Code intelligence could not create this project's configuration: exited with code 1; its last output: boom");
+    expect(task.steps[0]?.detail).toBe('exited with code 1; its last output: boom');
+  });
+
+  /**
    * REQ-WORKSPACE-094: a non-local launch is a non-retryable failure and no substitute is attempted. The run host does not
    * refuse such a start: it answers with a finished status whose outcome is `unavailable`, every step not attempted.
    */

@@ -442,7 +442,7 @@ export class McpHost {
       invocation, workspaceRoot, steps: CODE_INTELLIGENCE_SETUP_STEPS, creationStepId: 'create', markerPresent, containsCode, env,
       clocks: this.deps.clocks, log: this.mcpLog, signal: abort.signal,
       onStep: (step, all) => {
-        this.setSetup({ ...this.setup, status: { ...this.setup.status, steps: all.map((s) => ({ id: s.id as McpSetupStep['id'], label: s.label, status: s.status, detail: s.detail, elapsedMs: s.elapsedMs })) } });
+        this.setSetup({ ...this.setup, status: { ...this.setup.status, steps: all.map((s) => ({ id: s.id as McpSetupStep['id'], label: s.label, status: s.status, detail: s.detail, elapsedMs: s.elapsedMs, ...(s.stopped === undefined ? {} : { stopped: s.stopped }) })) } });
         this.deps.log(`mcp setup: ${step.id} ${step.status}${step.detail ? ` — ${step.detail.slice(0, 200)}` : ''}${step.elapsedMs === null ? '' : ` (${step.elapsedMs.toFixed(0)} ms)`}`);
       },
     }).then((report) => {

@@ -65,6 +65,12 @@ export interface SessionRow {
   readonly improvement_artifact_ids: string;
   // v21 — PD-MONITOR-001 revision 2 / REQ-MONITOR-166: the qualifier the run's cost total earned, recorded with it.
   readonly cost_qualifier: string;
+  /**
+   * v29 — REQ-MONITOR-102 with REQ-ORCH-153: the plan cycle's root while its turn runs and none of its calls is counted, and
+   * the name its rows carry; NULL when no plan cycle's root is under way. Still set after its process died: a crash during it.
+   */
+  readonly plan_root_task_id: string | null;
+  readonly plan_root_persona: string | null;
 }
 /** v17 — REQ-ORCH-154's durable record: one row per plan cycle, the decision taken and the text that was approved. */
 export interface PlanCycleRow {
@@ -456,6 +462,9 @@ export class StoreDal {
           message_limit = coalesce(@message_limit, message_limit),
           token_samples = coalesce(@token_samples, token_samples)
         WHERE session_id = @session_id`),
+      // v29 — REQ-MONITOR-102 with REQ-ORCH-153: the plan cycle's root under way, and its release once its calls are counted.
+      setPlanRoot: db.prepare('UPDATE sessions SET plan_root_task_id = ?, plan_root_persona = ? WHERE session_id = ?'),
+      clearPlanRoot: db.prepare('UPDATE sessions SET plan_root_task_id = NULL, plan_root_persona = NULL WHERE session_id = ? AND plan_root_task_id = ?'),
       // REQ-ORCH-087 / REQ-SESSION-110: the pause recorded with its count; the resolution clears it in the same act that writes the status.
       setPause: db.prepare('UPDATE sessions SET execution_status = ?, paused_at_count = ?, message_limit = ?, updated_at = ? WHERE session_id = ?'),
       // REQ-ORCH-153/154 (v17): the plan cycle record, and the two session columns that hold a gate open across a restart.
@@ -937,6 +946,14 @@ export class StoreDal {
       todo: patch.todo ?? null, progress: patch.progress ?? null, message_limit: patch.message_limit ?? null,
       token_samples: patch.token_samples ?? null,
     });
+  }
+  /** v29 — REQ-MONITOR-102 with REQ-ORCH-153: records `taskId` as the plan cycle's root under way, its rows under `persona`. */
+  setPlanRoot(id: SessionId, taskId: string, persona: string): void {
+    this.stmts['setPlanRoot']!.run(taskId, persona, id);
+  }
+  /** v29: releases the plan cycle's root `taskId`; false when the session does not name it (never, or released already). */
+  clearPlanRoot(id: SessionId, taskId: string): boolean {
+    return this.stmts['clearPlanRoot']!.run(id, taskId).changes === 1;
   }
   /** REQ-ORCH-087 / REQ-SESSION-110: status, the count reached (null clears the pause) and the limit in force, one statement. */
   setPause(id: SessionId, status: string, pausedAtCount: number | null, messageLimit: number | null, updatedAt: string): void {

@@ -9,7 +9,7 @@ import { RUN_AGENT_ID, type ApprovalPayload, type SessionRecord } from '@rotaris
 import { RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type CheckpointPort, type Publisher, type RunConfig, type ToolPort } from '../index.js';
 import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
 import { ACCEPTED_CANCEL_REPORT, recordCrash } from './crash.js';
-import { cancelLeftOf, crashLeftOf, resumableOf, toAgentRecord } from '../sessions.js';
+import { cancelLeftOf, crashLeftOf, resumableOf, toAgentRecord, type ToolPortContext } from '../sessions.js';
 import { conversationOf } from './record.js';
 import { interruptedResult } from './interruption.js';
 import type { HookPort } from '../hooks-port.js';
@@ -128,6 +128,40 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       ['orchestrator', 'grep', 'failed', interruptedResult('crash', true, 'a.ts:1')],
       ['c9', 'glob', 'running', null],
     ]);
+  });
+
+  it('REQ-SESSION-129 with ADR-0024 (the repair of a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md): the ring row of every call a dead run left running settles `failed` with the crash\'s statement, once; a settled one keeps what it returned', () => {
+    const sid = 'S-ring' as SessionId;
+    const writer = created(sid);
+    dal.insertIteration({ session_id: sid, iteration: 1, root_task_id: ROOT, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
+    writer.recordAgentMessage(ROOT, 1, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'a', name: 'write', args: '{}' }, { kind: 'tool-call', callId: 'b', name: 'grep', args: '{}' }] });
+    // Each call's two records, as the run host's gate and the turn write them: the ring row and the transcript row.
+    const call = (callId: string, agent: string, tool: string) => ({ call_id: callId, agent_name: agent, tool_name: tool, args: { pattern: callId } });
+    const a = writer.openToolCall(call('a', 'orchestrator', 'write'));
+    if (!a.ok) throw new Error('open');
+    writer.settleToolCall(a.value, call('a', 'orchestrator', 'write'), { status: 'ok', elapsed_ms: 3, is_error: false, result: 'wrote the file' });
+    writer.appendRow('tool', 'write', true, { name: 'orchestrator', toolName: 'write', toolStatus: 'ok', callKey: 'a', output: 'wrote the file' });
+    expect(writer.openToolCall(call('b', 'orchestrator', 'grep')).ok).toBe(true);
+    writer.appendRow('tool', 'grep', false, { name: 'orchestrator', toolName: 'grep', toolStatus: 'running', callKey: 'b', output: 'a.ts:1' });
+    // An agent the crash record pauses none of — another root's orphan, left to the stale-child settle — is dead as well.
+    expect(writer.openToolCall(call('b', 'c9', 'glob')).ok).toBe(true);
+    const finishes = () => dal.eventsOfKind(sid, 'tool.finish').length;
+    expect(finishes()).toBe(1);
+    recordCrash(dal, writer, sid, new Set(), () => undefined);
+    const ring = () => dal.toolCallsOf(sid).map((r) => { const e = JSON.parse(r.entry) as { result?: string; elapsed_ms: number | null }; return [r.agent_name, r.call_id, r.status, r.is_error, e.result, r.elapsed_ms]; });
+    const statement = interruptedResult('crash', true, '');
+    expect(ring()).toEqual([
+      ['orchestrator', 'a', 'ok', 0, 'wrote the file', 3],
+      // The end of a call a crash cut was observed by no process: its duration is not known.
+      ['orchestrator', 'b', 'failed', 1, statement, null],
+      ['c9', 'b', 'failed', 1, statement, null],
+    ]);
+    // Each settle is REQ-EVENTS-057's `tool.finish`, as every settled call's is; the transcript row settled as before.
+    expect(finishes()).toBe(3);
+    expect(dal.residentRows(sid).find((r) => r.call_key === 'b' && r.name === 'orchestrator')).toMatchObject({ tool_status: 'failed' });
+    // A second recording finds nothing running.
+    recordCrash(dal, writer, sid, new Set(), () => undefined);
+    expect(finishes()).toBe(3);
   });
 
   it('clause 6 with clauses 8 and 19: the Continue action counts what a crash left unfinished, the root included, before the crash is recorded, and the same after', () => {
@@ -1369,6 +1403,150 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
           });
         }
       }
+    });
+  });
+
+  /*
+   * REQ-MONITOR-102 with REQ-ORCH-153 (the repair of a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md):
+   * a plan cycle is not an iteration and has no `iterations` row, so the count the crash record reads for an execution root
+   * never reached a plan cycle's root, and a crash during one lost the calls its root had made.
+   */
+  describe('REQ-MONITOR-102 with REQ-ORCH-153: a plan cycle\'s root calls before a crash reach the session total', () => {
+    const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' };
+    const settle = async (until: () => boolean) => { for (let i = 0; i < 400 && !until(); i++) await new Promise((r) => setTimeout(r, 5)); };
+    /**
+     * A plan-mode session (REQ-ORCH-153) whose plan cycle's root makes one call that completes (`g1`), then one that never
+     * returns (`g2`) — or, `parks`, answers with its plan after `g1`. `alive` is the process probe the session's own
+     * process answers to.
+     */
+    function planSession(parks = false) {
+      const client = new ScriptedModelClient([
+        toolCalls([{ callId: 'g1', name: 'grep', args: {} }], 'Reading.'),
+        parks ? answer('Step 1: change it.') : toolCalls([{ callId: 'g2', name: 'grep', args: {} }], 'Reading more.'),
+      ]);
+      const port = (): ToolPort => ({
+        specs: () => [{ name: 'grep', description: 'search', parameters: { type: 'object' } }],
+        dispatch: (c) => (c.callId === 'g1' ? Promise.resolve({ text: 'a.ts:1', isError: false, status: 'ok' as const, durationMs: 1, label: 'grep', args: {} }) : new Promise(() => undefined)),
+        cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+      });
+      const sessions = new Sessions({
+        clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-plan', isProcessAlive: () => true,
+        model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s), tools: () => port(),
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', runStartMode: 'plan' },
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+      return { sessions, sid };
+    }
+    const cutRow = (sid: SessionId) => dal.residentRows(sid).find((r) => r.call_key === 'g2');
+    /** The plan cycle's root: the one agent whose record the session holds. */
+    const planRootOf = (sid: SessionId): string => (dal.db.prepare('SELECT DISTINCT task_id FROM agent_messages WHERE session_id = ?').all(sid) as { task_id: string }[]).map((r) => r.task_id)[0]!;
+    /** The next process: every other is dead, so the session's run is a crash's. */
+    const next = () => new Sessions({
+      clocks: clock, publisher: NONE, pid: 88, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-plan', isProcessAlive: () => false,
+      model: { backend: new DefaultAgentBackend(new ScriptedModelClient([])), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s),
+    });
+    const writerAs = (sid: SessionId): SessionWriter => {
+      const w = SessionWriter.open({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { pid: 99, host: HOST, isProcessAlive: () => false });
+      if (!w.ok) throw new Error('writer');
+      return w.value;
+    };
+
+    it('the repair adds the calls the plan cycle\'s root made — the one that completed and the one the crash cut — once, and settles the cut call\'s row', async () => {
+      const { sessions, sid } = planSession();
+      await settle(() => cutRow(sid)?.tool_status === 'running');
+      expect(sessions.run(sid)!.isPlanGateHeld).toBe(true);
+      // Nothing counted them: the root's turn never returned, and a plan cycle has no iteration row. The session names it.
+      expect(dal.getSession(sid)).toMatchObject({ tool_calls: 0, plan_root_task_id: planRootOf(sid), plan_root_persona: 'orchestrator' });
+      expect(dal.iterationsOf(sid)).toEqual([]);
+      expect(next().repair(dal, 'C:/ws', { sessionId: sid }).repaired).toHaveLength(1);
+      expect(dal.getSession(sid)).toMatchObject({ tool_calls: 2, plan_root_task_id: null, plan_root_persona: null });
+      // REQ-SESSION-129: the call the crash cut is answered as a crash's, and its row settles `failed`.
+      expect(conversationOf(dal.agentConversation(sid, planRootOf(sid))).at(-1)).toEqual({ role: 'tool', content: [{ kind: 'tool-result', callId: 'g2', name: 'grep', isError: true, result: interruptedResult('crash', true, '') }] });
+      expect(cutRow(sid)).toMatchObject({ tool_status: 'failed', output: interruptedResult('crash', true, '') });
+      // A second recording finds nothing more to count.
+      recordCrash(dal, writerAs(sid), sid, new Set(), () => undefined);
+      expect(dal.getSession(sid)!.tool_calls).toBe(2);
+    });
+
+    it('a plan cycle whose root returned — the run parked at the gate — counted its calls once and names no root, so a crash recorded after adds nothing', async () => {
+      const { sessions, sid } = planSession(true);
+      expect((await sessions.running(sid))!.execution_status).toBe('awaiting_plan_decision');
+      expect(dal.getSession(sid)).toMatchObject({ tool_calls: 1, plan_root_task_id: null });
+      recordCrash(dal, writerAs(sid), sid, new Set(), () => undefined);
+      expect(dal.getSession(sid)!.tool_calls).toBe(1);
+    });
+
+    it('a plan cycle\'s root the stop\'s grace gave up on is counted from its record and released, so a crash recorded after adds nothing', async () => {
+      const { sessions, sid } = planSession();
+      await settle(() => cutRow(sid)?.tool_status === 'running');
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(30_000);
+      expect(await Promise.race([sessions.running(sid)!.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 1_000))])).toBe(true);
+      expect(dal.getSession(sid)).toMatchObject({ tool_calls: 2, plan_root_task_id: null });
+      recordCrash(dal, writerAs(sid), sid, new Set(), () => undefined);
+      expect(dal.getSession(sid)!.tool_calls).toBe(2);
+    });
+
+    /*
+     * The give-up path's own release (the verifier's review of the repair): a root given up on is released in the transaction
+     * that adds its calls to the total, not by a later write apart from it. A store that drops every release written once the
+     * total already holds the calls stands in for a process death between two such writes: with the release made apart — the
+     * total first, the marker cleared after — the marker stays set, and a later crash record counts the calls a second time.
+     */
+    it('a plan cycle\'s root the stop\'s grace gave up on is released in the transaction that adds its calls, not by a write apart from it', async () => {
+      const { sessions, sid } = planSession();
+      dal.db.exec(`CREATE TEMP TRIGGER drop_release_apart BEFORE UPDATE OF plan_root_task_id ON sessions
+        WHEN OLD.plan_root_task_id IS NOT NULL AND NEW.plan_root_task_id IS NULL AND OLD.tool_calls > 0 BEGIN SELECT RAISE(IGNORE); END`);
+      await settle(() => cutRow(sid)?.tool_status === 'running');
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(30_000);
+      expect(await Promise.race([sessions.running(sid)!.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 1_000))])).toBe(true);
+      expect(dal.getSession(sid)).toMatchObject({ tool_calls: 2, plan_root_task_id: null });
+      dal.db.exec('DROP TRIGGER drop_release_apart');
+      recordCrash(dal, writerAs(sid), sid, new Set(), () => undefined);
+      expect(dal.getSession(sid)!.tool_calls).toBe(2);
+    });
+  });
+
+  describe('REQ-MONITOR-105 with ADR-0024: the crash record\'s ring settle at a continue', () => {
+    const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' };
+    /*
+     * REQ-MONITOR-105 with ADR-0024 (the review of the repair of a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md):
+     * a run of this process closes its tool ports only at its teardown, and one that parked at the plan gate closed none, so a
+     * call of its that ignored its abort may still be under way with its ring row `running`. The continue records a crash
+     * (clause 3) on every launch; it must not settle that row as a crash's, which would drop the call's real settle.
+     */
+    it('a continue after a run of this process parked at the plan gate leaves a ring row its call may still hold `running`', async () => {
+      const client = new ScriptedModelClient([toolCalls([{ callId: 'g1', name: 'grep', args: {} }], 'Reading.'), answer('Step 1: change it.'), answer('Done.')]);
+      const call = (callId: string, agent: string) => ({ call_id: callId, agent_name: agent, tool_name: 'grep', args: {} });
+      const port = (ctx: ToolPortContext): ToolPort => ({
+        specs: () => [{ name: 'grep', description: 'search', parameters: { type: 'object' } }],
+        dispatch: (c) => {
+          // The gate's sink: the call's ring row, settled when it returns — and, beside it, the ring row of another agent's
+          // call that ignored its abort and is still under way when the run parks.
+          const own = ctx.writer.openToolCall(call(c.callId, 'orchestrator'));
+          if (own.ok) ctx.writer.settleToolCall(own.value, call(c.callId, 'orchestrator'), { status: 'ok', elapsed_ms: 1, is_error: false, result: 'a.ts:1' });
+          if (c.callId === 'g1') ctx.writer.openToolCall(call('stray', 'c9'));
+          return Promise.resolve({ text: 'a.ts:1', isError: false, status: 'ok' as const, durationMs: 1, label: 'grep', args: {} });
+        },
+        cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+      });
+      const sessions = new Sessions({
+        clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-park', isProcessAlive: () => true,
+        model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s), tools: (ctx) => port(ctx),
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', runStartMode: 'plan' },
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+      expect((await sessions.running(sid))!.execution_status).toBe('awaiting_plan_decision');
+      const stray = () => dal.toolCallsOf(sid).find((r) => r.call_id === 'stray');
+      expect(stray()).toMatchObject({ status: 'running' });
+      // The approval launches the continuation, which records a crash before its run is built.
+      expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+      expect(stray()).toMatchObject({ status: 'running', is_error: 0 });
+      await sessions.running(sid);
+      expect(stray()).toMatchObject({ status: 'running' });
     });
   });
 });

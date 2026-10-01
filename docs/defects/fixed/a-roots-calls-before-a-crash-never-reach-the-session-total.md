@@ -64,7 +64,8 @@ case reads a total of **2** where **1** is due without that guard. The double co
 
 What it does not do: a record a compression replaced holds fewer calls than were made, so what the crash record adds from
 it may fall short (never over); a plan cycle has no `iterations` row, so a crash during one still loses its root's calls
-([`a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md`](../a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md));
+([`a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md`](a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md);
+repaired 2026-09-30: the session records the plan cycle's root under way, store v29, and the crash record counts it);
 a child the stop's grace gave up on and a continue then declined still counts nothing
 ([`a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`](a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md);
 repaired 2026-09-30: such a child is now counted from its record at the rest);
@@ -94,5 +95,5 @@ crash — and its store read as D4's did: `sessions.tool_calls` **178** against 
 throwaway harness not committed) recorded the crash and brought the total to **247**, equal to the rows, with
 `root_tool_calls` **36** and `d2`'s `tool_calls` **33**, `d2` paused. The built app itself never repaired the store: the
 live run ends at the crash and does not reopen the session. The same repair left the cut call's ring row `running`, a
-defect of its own: [`a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md`](../a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md).
+defect of its own: [`a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md`](a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md) (repaired 2026-09-30: the crash record settles every ring row still `running`).
 

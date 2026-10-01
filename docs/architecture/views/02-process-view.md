@@ -437,7 +437,7 @@ tasks. The window reads it twice. A background run neither withdraws the setup p
 2026-09-29, R-062). When the last main window holding a workspace closes — a switch's outgoing window, a replacement
 discarded after a veto, one of several windows — `MainWindows` says so (`workspaceClosed`) and main calls
 `initialization.close`: the run under way is cancelled (`mcp.setup {action: cancel}`, so the run host ends what the step
-launched; one that no window can address or that the run host refuses is logged as not delivered), its recordings are refused, nothing of it is published or bannered, and the entry is dropped, so a return to
+launched; one that no window can address or that the run host refuses is logged as not delivered), its recordings are refused, nothing of it is published or bannered — nor of a resolution still under way for it, whose failure is said in the log only (2026-10-01) — and the entry is dropped, so a return to
 the root is a new open with its own automatic resolution (REQ-WORKSPACE-013/092/102/109, OQ-141 for a close that is
 not a switch's; 2026-09-30, R-067). The run
 host holds one setup and pushes `mcp.setupStatus` with no workspace on it, so the coordinator runs its setups one at a

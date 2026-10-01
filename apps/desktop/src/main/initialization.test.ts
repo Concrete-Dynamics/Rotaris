@@ -714,6 +714,43 @@ describe('closing a workspace', () => {
     expect(readInitializationState(h.agents).lastRun).toBeNull();
   });
 
+  /**
+   * REQ-WORKSPACE-102's error surface is the failing window's; once its workspace is closed there is none, and channel 12's
+   * banner reaches every live window. The silent stamp of a workspace with nothing applicable is the resolution's one write,
+   * and main's marker request rejects when the service gives no reply within its bound; here the write is made to reject
+   * (`docs/defects/fixed/a-closed-workspaces-resolution-can-still-raise-the-resolution-failed-banner.md`).
+   */
+  it('raises the resolution-failed banner when an open workspace\'s silent stamp throws (REQ-WORKSPACE-102)', async () => {
+    const failing = Promise.reject(new Error('link closed'));
+    failing.catch(() => undefined);
+    const h = harness({ applicable: false, writeHold: { current: failing } });
+    const state = await h.coordinator.resolve(true);
+    expect(state.resolutionFailed).toBe(true);
+    expect(h.banners).toEqual([{ headline: 'Project setup could not be checked', detail: 'Rotaris could not work out whether this workspace still needs setting up. Runs are not blocked; you can check again.' }]);
+    expect(h.logs).toContainEqual({ level: 'warn', message: `initialization: resolution failed for ${h.root} (Error: link closed)` });
+  });
+
+  it('raises no resolution-failed banner when a workspace closed while its silent stamp was in flight then fails it, and says so in the log (REQ-WORKSPACE-013, REQ-WORKSPACE-102, OQ-141)', async () => {
+    let fail: (cause: Error) => void = () => undefined;
+    const writeHold: StatusHold = { current: new Promise<void>((_, reject) => { fail = reject; }) };
+    const h = harness({ applicable: false, writeHold });
+    const resolving = h.coordinator.resolve(true);
+    await settle();
+    // The stamp's write is in flight when the switch lands: the replacement opens and this workspace closes.
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents);
+    h.coordinator.close(h.root);
+    const publishedAtClose = h.published.length;
+    fail(new Error('link closed'));
+    await resolving;
+    await settle();
+    expect(h.banners).toEqual([]);
+    expect(h.published).toHaveLength(publishedAtClose);
+    expect(h.logs).toContainEqual({ level: 'info', message: `initialization: resolution failed for ${h.root}, which was closed while it was under way, so nothing is shown (Error: link closed)` });
+    expect(h.logs.filter((l) => l.level === 'warn')).toEqual([]);
+    expect(readInitializationState(h.agents).lastRun).toBeNull();
+  });
+
   it('keeps answering for the workspace still open in another window when one of two closes (REQ-WORKSPACE-013)', async () => {
     const h = harness({ applicable: false });
     const other = workspace();

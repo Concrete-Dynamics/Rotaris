@@ -476,6 +476,14 @@ export class InitializationCoordinator {
     } catch (cause) {
       // REQ-WORKSPACE-102: the window stays fully usable and the composer gate stays OFF.
       e.resolutionFailed = true;
+      // REQ-WORKSPACE-013 (OQ-141's reading): a workspace closed while its resolution was under way is no window's, and the
+      // banner reaches every live window — so it is said in the log only, as `publish` shows nothing of it. The silent stamp's
+      // write is one way there: main's marker request rejects when the service gives no reply within its bound
+      // (`docs/defects/fixed/a-closed-workspaces-resolution-can-still-raise-the-resolution-failed-banner.md`).
+      if (e.closed) {
+        this.deps.log(`initialization: resolution failed for ${e.root}, which was closed while it was under way, so nothing is shown (${String(cause)})`);
+        return await this.viewFor(e);
+      }
       this.deps.log(`initialization: resolution failed for ${e.root} (${String(cause)})`, 'warn');
       this.deps.banner(RESOLUTION_FAILED_HEADLINE, RESOLUTION_FAILED_DETAIL);
       await this.publish(e);

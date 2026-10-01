@@ -406,3 +406,14 @@ was stopped before this step finished.", in 8b's outgoing run too (41 passed, 0 
 Node 24, `--skip-build` after `pnpm build`). **Not shown in the built app:** the budget sentence, which needs a step held for
 its whole budget; the unit cases pin it. **Found besides:** the other step details are not this domain's words either
 (`../../defects/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`, recorded, not repaired).
+
+**Tenth round (2026-10-01, R-067): a closed workspace's failed resolution is no window's.** The sixth round's rule — nothing
+of a workspace no window holds is published or bannered (REQ-WORKSPACE-013, OQ-141) — was honoured by `publish` and by the
+run's two banners, but not by the resolution's own: `resolution()`'s `catch` raised REQ-WORKSPACE-102's "Project setup
+could not be checked" on channel 12, to every live window, for a resolution that failed after its workspace closed (the
+silent `last_run` stamp's write in flight, for one). It now says so in the log at info level and raises nothing
+(`../../defects/fixed/a-closed-workspaces-resolution-can-still-raise-the-resolution-failed-banner.md`). **Measured** by two
+unit cases only, the closed one red on the code before: no proof can hold the stamp's write across a switch.
+`workspace-proof` passed on the repair (41 passed, 0 failed, 2 skipped; as root under Xvfb, Node 24, `--skip-build` after
+`pnpm build`), no launch logging a resolution failure.
+

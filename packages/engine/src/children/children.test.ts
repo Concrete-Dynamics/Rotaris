@@ -368,7 +368,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
    * id-routed answer finds a holder. `closed` collects each port's close (REQ-SESSION-094): the agent, the statement its
    * open calls are settled with, and how many `session.end` events the session held at that moment.
    */
-  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; closed?: { agent: string; statement: string; ended: number }[]; personas?: PersonaResolver; capFor?: (modelKey: string) => number | null; modelKey?: string; raisingPort?: string; grant?: (ctx: ToolPortContext) => AgentGrant | null } = {}) {
+  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; closed?: { agent: string; statement: string; ended: number }[]; personas?: PersonaResolver; capFor?: (modelKey: string) => number | null; modelKey?: string; raisingPort?: string; grant?: (ctx: ToolPortContext) => AgentGrant | null; readiness?: (ctx: ToolPortContext) => Promise<void> | undefined } = {}) {
     // The scripted client answers by persona and by the number of calls that persona has made.
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
@@ -401,7 +401,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         contexts.set(ctx.agentName, ctx);
         let mode: PermissionPreset = selected;
         const held = (id: string): boolean => over.pending?.has(id) ?? false;
-        const base = { ...(over.grant ? { ready: async () => undefined, grant: () => over.grant!(ctx) } : {}), close: (statement: string) => { over.closed?.push({ agent: ctx.agentName, statement, ended: dal.eventsOfKind(ctx.sessionId, 'session.end').length }); }, cancelPending: () => 0, setMode: (m: string) => { const previous = mode; mode = m as PermissionPreset; return { requested: mode, effective: mode, downgraded: false, reason: '', previous }; }, currentMode: () => mode, answerApproval: held, answerQuestions: held, cancelQuestions: held };
+        const base = { ...(over.grant ? { ready: async () => { await over.readiness?.(ctx); }, grant: () => over.grant!(ctx) } : {}), close: (statement: string) => { over.closed?.push({ agent: ctx.agentName, statement, ended: dal.eventsOfKind(ctx.sessionId, 'session.end').length }); }, cancelPending: () => 0, setMode: (m: string) => { const previous = mode; mode = m as PermissionPreset; return { requested: mode, effective: mode, downgraded: false, reason: '', previous }; }, currentMode: () => mode, answerApproval: held, answerQuestions: held, cancelQuestions: held };
         return ctx.delegation
           ? { ...delegationPort(ctx.delegation, ctx.parentId ?? 'root', over.tool, ctx), ...base }
           : { specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }), ...base };
@@ -492,6 +492,41 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     const c2 = children(sid2)[0]!;
     expect(JSON.parse(c2.granted_tools)).toEqual([]);
     expect(JSON.parse(c2.granted_mcp)).toEqual({ granted: {}, servers: [] });
+  });
+
+  /*
+   * REQ-MCP-065 with REQ-ORCH-088 / PD-ORCH-005: recording the grant waits on the port's readiness, the turn does not wait
+   * on the recording. Until the 2026-10-01 repair round the whole first turn was chained behind it, so while an MCP
+   * discovery was pending the child was `running` with an empty record — a crash then resumed it from no history, without
+   * its task. The payload is recorded as it was before the grant was, and the grant still lands before the first request.
+   */
+  it('REQ-MCP-065 / PD-ORCH-005: a child\'s payload is in its record while its port\'s readiness is pending, and its grant is recorded before its first model request', async () => {
+    let release!: () => void;
+    const readiness = new Promise<void>((r) => { release = r; });
+    let sid = '' as SessionId;
+    let grantedAtFirstRequest: string | null = null;
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coder', task_name: 'implement', task: 'TASK: write it', run_in_background: false } }], 'Delegating.') : answer('All done.');
+      if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+      if (turn === 1) grantedAtFirstRequest = children(sid)[0]!.granted_tools;
+      return answer('I implemented it.');
+    };
+    const narrowed: AgentGrant = { tools: ['read_file'], mcp: { granted: { srv: ['echo'] }, servers: [{ name: 'srv', transport: 'stdio', origin: 'workspace', fate: 'connected' }] } };
+    const { sessions, contexts } = sessionsWith(script, { grant: (ctx) => (ctx.depth === 1 ? narrowed : null), readiness: (ctx) => (ctx.depth === 1 ? readiness : undefined) });
+    sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+    const until = async (cond: () => boolean): Promise<void> => { for (let i = 0; i < 400 && !cond(); i += 1) await new Promise((r) => setTimeout(r, 5)); };
+    const recorded = (): string[] => { const c = children(sid)[0]; return c ? dal.agentMessagesOf(sid, c.task_id).map((m) => m.body) : []; };
+    await until(() => contexts.has('implement') && recorded().length > 0);
+    // Read while readiness is still held, then released before asserting, so a failure leaves no run waiting on it.
+    const heldRecord = recorded();
+    const heldGrant = children(sid)[0]?.granted_tools ?? null;
+    release();
+    // The child's task is in its record, and no grant is (none is in force yet).
+    expect(heldRecord.some((b) => b.includes('TASK: write it'))).toBe(true);
+    expect(JSON.parse(heldGrant ?? 'null')).toEqual([]);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(JSON.parse(grantedAtFirstRequest ?? 'null')).toEqual(['read_file']);
+    expect(JSON.parse(children(sid)[0]!.granted_mcp)).toEqual(narrowed.mcp);
   });
 
   it('REQ-EVENTS-053 / PD-MONITOR-001: a delegated child\'s provider requests reach the run\'s tokens, cost and usage.update', async () => {

@@ -58,9 +58,12 @@ REQ-MCP-114).** The spawn wrote `children.granted_tools` from the persona's decl
 surface before any control, so a tool `coordinator_only`, `read_only`, `tool_restrictions`, the `restricted` preset or the
 plan gate removed was recorded as granted. The spawn now writes neither, and the child's execution records the port's
 `ToolPort.grant` once the port is ready (`ChildLedger.recordGrant` → `SessionWriter.recordChildGrant`, a `save`
-republished; `McpHost.evidenceFor` and `Persona.mcpEvidence` removed for the run host's `grantEvidence`). This repairs
-`a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`; the **runtime view**'s MCP surface and its
-`children` row say so. No package, edge, process, message kind, channel, command or store column changed.
+republished; `McpHost.evidenceFor` and `Persona.mcpEvidence` removed for the run host's `grantEvidence`). The recording is
+started beside the child's first turn, not ahead of it, so the payload is in the conversation record while readiness is
+pending. This repairs `a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`; the **runtime view**'s MCP
+surface and its `children` row say so, and ADR-0034's evidence passages are corrected in place. No package, edge, process,
+message kind, channel, command or store column changed.
+
 **A stopped setup step reads in REQ-WORKSPACE-092's words (ADR-0064, R-067).** `McpSetupStep` gained an optional `stopped`
 (`cancelled` or `budget`) set by the run host's `runSetupSteps`; the initialization coordinator writes the requirement's two
 sentences from it and the MCP category keeps the run host's `detail` (process view, `mcp.setup`).

@@ -6884,6 +6884,18 @@ resumable iteration (`PD-ORCH-005` clause 6, after the continuing run's `session
 (and, after `session_end`, out of REQ-HOOKS-076's order); owe it to the next run of the session, after its
 `session_start`; or fire none, as built.
 
+**A fifth path** *(added 2026-10-01 by the repair of
+[`a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`](../defects/a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md),
+under [R-067](../product/requests.md#r-067))*: the user's cancel of one paused child (REQ-ORCH-133) that lands while the
+run's own `session_end` hooks run, or after them and before the run has ended. `Run.cancelAgent` accepts it until then, the
+port is still held, and the run has announced its end; until this repair its `child_completed` fired after `session_end`.
+**What the build proceeds under** for it is this question's built reading: the cancel is accepted, the child ends
+`cancelled` with its report and teardown, and no `child_completed` fires (`IterationChildren.endLifecycle`, called by the
+teardown once it has awaited the outside hooks and before `session_end`). A ruling on this path chooses among the same
+answers, plus one the other four do not have: refuse the cancel of one child once the teardown has reached that point, as
+`steeringClosed` refuses a steer and `cancelWindowClosed` a late explicit cancel, so the child stays `paused` and is
+cancelled at rest (clause 16, the first path) instead.
+
 **OQ-155 — Is a child waiting on its own children silent, for the stall watchdog?** *(REQ-ORCH-089, "when active tool
 calls exist, the condition is reported at informational level as waiting on N active tool calls instead of as a stall";
 REQ-MONITOR-117 to REQ-MONITOR-120, "each agent is evaluated for a stall"; REQ-NOTIFY-112; OQ-127. Raised 2026-09-30 by

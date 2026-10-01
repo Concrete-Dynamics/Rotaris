@@ -38,8 +38,13 @@ const STAGE_REASON: Readonly<Record<string, string>> = {
   memory: "Code intelligence could not seed this project's memory layout",
 };
 export const CODE_INTELLIGENCE_FAILED_SUMMARY = 'Code intelligence setup did not complete for this project. It runs again the next time this workspace is opened.';
+/**
+ * REQ-WORKSPACE-093's "{reason}" for a setup in which no stage failed or began — a start the run host refused, a run
+ * cancelled before its setup started. The requirement names per-stage reasons only; this is the build's, under OQ-167.
+ */
+const SETUP_REASON = "Code intelligence could not complete this project's setup";
 /** REQ-WORKSPACE-093/109: a run cancelled while its setup waited for another to end — "{reason}: {detail}", no stage begun. */
-export const CANCELLED_BEFORE_SETUP_ERROR = "Code intelligence could not complete this project's setup: the setup was cancelled before it started.";
+export const CANCELLED_BEFORE_SETUP_ERROR = `${SETUP_REASON}: the setup was cancelled before it started.`;
 
 /** REQ-WORKSPACE-095: the two success summaries, by classification. */
 export const CODE_INTELLIGENCE_SUCCESS_CODE = 'Code intelligence is set up for this project and its symbols are indexed.';
@@ -53,8 +58,14 @@ export const NOT_A_LOCAL_LAUNCH_SUMMARY = 'Code intelligence project setup was s
 export const CLOSED_WORKSPACE_RECORDS_NOTHING = 'the workspace was closed while its run was under way, so nothing is recorded for the cancelled run';
 
 export interface SetupPort {
-  /** Starts the run host's setup; the reply is the status as it stands. */
-  readonly start: () => Promise<{ readonly ok: true; readonly status: McpSetupStatus } | { readonly ok: false; readonly reason: string }>;
+  /**
+   * Starts the run host's setup; the reply is the status as it stands. A start the run host refuses carries the refusal's
+   * code and its own words: its one setup slot taken (`mcp.setup.running`), the workspace not open there
+   * (`workspace.unknown`), its configuration not loaded (`mcp.configuration`), or main's own (`workspace.none`, no window to
+   * address it through; otherwise the kind of an unexpected answer). An entry that is not a local launch is not refused:
+   * the run host answers it with a finished status whose outcome is `unavailable` (REQ-MCP-099).
+   */
+  readonly start: () => Promise<{ readonly ok: true; readonly status: McpSetupStatus } | { readonly ok: false; readonly code: string; readonly reason: string }>;
   /** Asks the run host to end its setup; rejects when the request is not delivered (no workspace to address, or refused). */
   readonly cancel: () => Promise<void>;
   readonly status: () => Promise<McpSetupStatus | null>;
@@ -192,7 +203,14 @@ export class InitializationCoordinator {
           // REQ-WORKSPACE-109: cancelled while it waited, the task never starts its setup and fails as REQ-WORKSPACE-093 says.
           if (!await this.turnReached(previous, ctx.signal)) return this.failure(CANCELLED_BEFORE_SETUP_ERROR, CODE_INTELLIGENCE_FAILED_SUMMARY, true, []);
           const started = await this.deps.setup.start();
-          if (!started.ok) return this.failure(NOT_A_LOCAL_LAUNCH_ERROR, NOT_A_LOCAL_LAUNCH_SUMMARY, false, []);
+          // REQ-WORKSPACE-093/094: a refused start is not REQ-WORKSPACE-094's "not a local launch" — that one arrives as an
+          // `unavailable` status, which `resultOf` maps — but a condition that may not hold at the next open: retryable, in
+          // this domain's summary, the refusal's own words as the detail
+          // (`docs/defects/fixed/a-refused-setup-start-is-reported-as-not-a-local-launch.md`).
+          if (!started.ok) {
+            this.deps.log(`initialization: the run host refused ${CODE_INTELLIGENCE_TASK_ID}'s setup start for ${ctx.workspaceRoot} (${started.code}: ${started.reason})`, 'warn');
+            return this.failure(`${SETUP_REASON}: ${started.reason}`, CODE_INTELLIGENCE_FAILED_SUMMARY, true, []);
+          }
           return await this.followSetup(started.status, ctx.signal, ctx.onStep);
         } finally {
           // The turn passes on only once the setup before this one has ended as well, however this one ended.
@@ -276,7 +294,7 @@ export class InitializationCoordinator {
     }
     // REQ-WORKSPACE-093: cancelling leaves the task in exactly the same retryable condition a failure would.
     const bad = status.steps.find((s) => s.status === 'failed');
-    const reason = bad ? STAGE_REASON[bad.id] ?? `Code intelligence could not complete ${bad.label}` : "Code intelligence could not complete this project's setup";
+    const reason = bad ? STAGE_REASON[bad.id] ?? `Code intelligence could not complete ${bad.label}` : SETUP_REASON;
     const detail = bad?.detail !== undefined && bad.detail !== '' ? bad.detail : status.message;
     return this.failure(`${reason}: ${detail}`, CODE_INTELLIGENCE_FAILED_SUMMARY, true, steps);
   }

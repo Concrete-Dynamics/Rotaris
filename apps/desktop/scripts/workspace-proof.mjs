@@ -119,6 +119,7 @@ function initProject(name, { slow = false } = {}) {
 }
 const INIT_SLOW = initProject('init-slow', { slow: true });
 const INIT_QUICK = initProject('init-quick');
+const INIT_HELD = initProject('init-held', { slow: true });
 
 const launches = [];
 /** Quit every app still running, keeping its log as evidence. Idempotent, so `finally` may call it again. */
@@ -693,6 +694,55 @@ try {
       check('REQ-WORKSPACE-102: a return to the first project is a new open, with its own automatic resolution',
         resolvedAgain,
         resolvedAgain ? 'the pending task started again when the first project was opened again' : `the first project's setup started ${startedFor('init-slow')} time(s)`);
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 8c — a start the run host refuses, its one setup slot taken by the MCP category's setup (REQ-WORKSPACE-093/094).
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    /*
+     * The coordinator's own setups are one at a time (8b), but the MCP settings category's setup (REQ-MCP-112) takes the
+     * run host's one slot too, and a coordinator run starting beside it is refused `mcp.setup.running`. Before the repair
+     * every refusal was reported as REQ-WORKSPACE-094's non-retryable "not a local launch", for an entry that is one
+     * (`docs/defects/fixed/a-refused-setup-start-is-reported-as-not-a-local-launch.md`). The order: the open's background
+     * run holds `create`; Cancel ends it; the category's setup starts and holds `create`; Initialize starts the task.
+     */
+    const s = await launch('init-held', { workspace: INIT_HELD });
+    const startedFor = () => (logOf(s).match(/mcp setup: started for [^\n]*init-held/g) ?? []).length;
+    const outcomes = () => logOf(s).match(/initialization: code-intelligence-setup → [^\n]*/g) ?? [];
+    const waitUntil = async (predicate, timeoutMs) => {
+      const began = Date.now();
+      while (!predicate()) {
+        if (Date.now() - began > timeoutMs) return false;
+        await sleep(100);
+      }
+      return true;
+    };
+    const backgroundStarted = await waitUntil(() => startedFor() === 1 && existsSync(join(INIT_HELD, '.stand-in-create.pid')), 30_000);
+    if (!backgroundStarted) {
+      skip('REQ-WORKSPACE-093 / REQ-WORKSPACE-094: a refused setup start is a retryable failure', `the open's background setup never started within 30 s (log tail: ${JSON.stringify(logOf(s).slice(-600))})`);
+    } else {
+      await s.driver.command({ kind: 'initialization.cancel' });
+      const cancelled = await waitUntil(() => outcomes().length === 1, 15_000);
+      const categoryStart = await s.driver.command({ kind: 'mcp.setup', action: 'start' });
+      const categoryHolds = await waitUntil(() => startedFor() === 2, 15_000);
+      if (!cancelled || !categoryHolds) {
+        skip('REQ-WORKSPACE-093 / REQ-WORKSPACE-094: a refused setup start is a retryable failure', `the background run ${cancelled ? 'was cancelled' : 'never ended after Cancel'}, and the category's setup ${categoryHolds ? 'started' : `did not start (${JSON.stringify(categoryStart).slice(0, 300)})`}`);
+      } else {
+        const initialize = await s.driver.command({ kind: 'initialization.start' });
+        const ended = await waitUntil(() => outcomes().length === 2, 15_000);
+        const line = outcomes()[1] ?? '';
+        const read = await s.driver.command({ kind: 'initialization.read' });
+        const task = read?.value?.report?.tasks?.find((t) => t.id === 'code-intelligence-setup');
+        check('REQ-WORKSPACE-093 / REQ-WORKSPACE-094: a start refused because the MCP category\'s setup holds the slot fails retryably, in the refusal\'s own words, and not as "not a local launch"',
+          ended && /refused code-intelligence-setup's setup start [^\n]*\(mcp\.setup\.running: /.test(logOf(s))
+            && line.includes("→ failure — Code intelligence could not complete this project's setup: A code-intelligence setup is already running")
+            && !/not a local launch/.test(logOf(s)) && task?.retryable === true && task?.summary === 'Code intelligence setup did not complete for this project. It runs again the next time this workspace is opened.',
+          `Initialize answered ${JSON.stringify(initialize).slice(0, 120)}; the task ${ended ? `ended: ${JSON.stringify(line.slice(0, 320))}` : 'never ended'}; retryable ${String(task?.retryable)}; summary ${JSON.stringify(task?.summary ?? null)}${/not a local launch/.test(logOf(s)) ? '; the log says "not a local launch"' : ''}`);
+      }
+      await s.driver.command({ kind: 'mcp.setup', action: 'cancel' });
+      await waitUntil(() => (logOf(s).match(/mcp setup: cancelled /g) ?? []).length >= 2, 10_000);
     }
   }
 

@@ -407,7 +407,11 @@ like every other MCP child: one per session, one transient per discovery or prob
 `--` is Electron's, not ours: a scheme-looking positional followed by another positional exits the binary before any
 JavaScript (spike `code-intelligence-branch.md`). The transport tolerates the one CR LF Electron writes to standard
 output at start. **`mcp.setup`** — renderer → main `{action: start | cancel | status}`; main → run host
-`{workspaceId, action}` → `mcp.setup {status}` (or `refused mcp.setup.running`): REQ-MCP-099's three steps run in the
+`{workspaceId, action}` → `mcp.setup {status}` (or `refused` with `mcp.setup.running`, `workspace.unknown` or
+`mcp.configuration`; an entry that is not a local launch is not refused but answered with a finished `unavailable`
+status). Main's setup port carries a refusal's code and words to the initialization coordinator, which reports it as a
+retryable failure and keeps REQ-WORKSPACE-094's "not a local launch" for the `unavailable` status alone (OQ-167;
+2026-10-01, R-067). REQ-MCP-099's three steps run in the
 run host as children of the derived invocation (`Rotaris.exe builtin:code-intelligence -- project create <root>`, then
 `project index`, then `memories initialize`), each polled at 0.25 s on the clock port under 300 / 1800 / 120 s, asked to
 terminate then tree-killed after 5 s on cancel or timeout; the category polls the status every 500 ms while it runs.

@@ -45,6 +45,10 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A refused setup start is a retryable failure, not "not a local launch" (REQ-WORKSPACE-093/094, ADR-0064, R-067).** Main's
+setup port carries the run host's refusal code with its words, and the initialization coordinator keeps REQ-WORKSPACE-094's
+non-retryable words for the `unavailable` status alone (process view, `mcp.setup`; runtime view, the project setup; OQ-167).
+
 **A row that grows is measured at the commit, before it is painted (PD-CHAT-003, REQ-CHAT-058, ADR-0045, R-067).** A row whose
 content changed was placed by the height its identity drew last until the observer's delivery rendered a frame later, and a
 row that grew was painted through the row beneath it. The pane now reads every bound slot with no measurement of its present

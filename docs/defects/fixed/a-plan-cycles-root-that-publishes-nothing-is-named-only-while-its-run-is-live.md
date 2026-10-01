@@ -70,7 +70,10 @@ Pinned by: `packages/engine/src/session-resume.test.ts`, describe "REQ-LIBRARY-0
 "… parked at the gate, a plan cycle's root that only read is named — live, and reopened in a fresh process …" and
 "stopped before its gate opened: a plan cycle's root that only read is still named …", both red before the repair
 (`entryRoots` `[]`); `packages/store/src/store.test.ts` — the v29 → v30 migration case (a record kept once, in start order,
-and surviving the v29 release) and the cascade listing that now includes `plan_roots`.
+and surviving the v29 release) and the cascade listing that now includes `plan_roots`. On the surface,
+`packages/ui/src/inspector-links.test.ts` "REQ-MONITOR-044/052/069 (acceptance A22) …" renders the inspector at the gate
+from the record those cases pin — the root named by `entryRoots`, an artifact it only read — and finds the received link,
+which the same record without the root named does not have. *(Added 2026-10-01 at verification.)*
 
 Not shown live: the note was established with a throwaway engine case, not a proof or a live run. No live-run scenario runs
 in `plan` mode with a persona id the canonicaliser rewrites (`katalyst`'s scenarios run as built-in roles, each its own

@@ -71,3 +71,12 @@ twice this time (no `_raw` in `model-traffic.jsonl`), so the live run shows the 
 scenario green, not the repair meeting the shape; the repair's evidence is the run-level test above. A second run on the
 branch merged with `origin/main` (pack `.live-run/runs/2026-10-01T17-04-24-814Z/terminal/`) read the same: completed after
 14 terminal calls, the check green, no call encoded twice.
+Three more runs read the same, none meeting a call encoded twice (no `_raw` and no HTTP 400 in `model-traffic.jsonl`):
+the builder's third (`2026-10-01T17-33-25-804Z`, completed after 14 terminal calls), the verifier's
+(`2026-10-01T17-47-18-813Z`, completed after 11) and repair round 2's (`2026-10-01T17-54-04-481Z`, completed after 14),
+each with the check green and `live-run PASSED`.
+
+Repair round 2 (2026-10-01): a run that ended otherwise than `completed` or `failed` before any terminal call (stopped,
+interrupted) now reads `ended-early`, which live-run prints as a NOTE rather than passing in silence; pinned in
+`apps/desktop/scripts/lib/terminal-shapes.test.ts` ("a run stopped or interrupted before any terminal call is a NOTE …",
+which fails without it). The live-run header and the `terminal` row of `AGENTS.md` now name the dead-run FAIL.

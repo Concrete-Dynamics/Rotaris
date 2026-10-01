@@ -34,10 +34,19 @@ import { cancelCascade } from './agents.js';
  * its stop button's "Force stop" — and no surface showed `cancelling`, because the engine writes no `cancelling` for the
  * explicit cancel: the reserved run id's `cancelAgent` raises the final stop in memory, and the run's records keep reading
  * `running` (or `waiting`) through the graceful stop until the teardown writes the run's end. So a run overlay (`run` set,
- * no agent ids) covers every ACTIVE record of the run it was confirmed against (`runStartedAt`), unanswered or accepted,
- * and none at rest and none of a later run: the run's own final read overwrites it (REQ-MONITOR-296), and a lagging
- * reader's older record of that run is still covered. The session's status is shown `cancelling`; no agent is shown
- * cancelled by it, since the engine settles them in the teardown (OQ-158).
+ * no agent ids) covers every ACTIVE record of the run it was confirmed against, unanswered or accepted, and none at rest:
+ * the run's own final read overwrites it (REQ-MONITOR-296), and a lagging reader's older record of that run is still
+ * covered. The session's status is shown `cancelling`; no agent is shown cancelled by it, since the engine settles them in
+ * the teardown (OQ-158).
+ *
+ * "The run it was confirmed against" is an order too, not the `runStartedAt` alone. The engine saves a new run `starting`
+ * before it writes that run's `runStartedAt` (after the pre-flight), and the store keeps the column until then, so a
+ * follow-up's or a continue's pre-flight records carry the cancelled run's key and are active. Keyed on it alone, the
+ * overlay showed the next run `cancelling` through its whole pre-flight and the composer refused input (the verifier's
+ * finding on A35). So `witness` ends the overlay at the first record of its session at rest taken after the confirmation
+ * (`restedAt`): it covers active records taken before that one and none taken after. Before it, a record taken after the
+ * confirmation is the run being cancelled whatever key it carries (a session runs one run at a time), so a run confirmed
+ * during its pre-flight is still covered once it writes its own key.
  */
 export interface CancelOverlay {
   readonly token: number;
@@ -57,7 +66,13 @@ export interface CancelOverlay {
    * REQ-MONITOR-127: set on the run's own cancel — the `runStartedAt` of the run it was confirmed against. Such an overlay
    * names no agent (`agentIds` is empty) and shows the session's status `cancelling` (the note above).
    */
-  readonly run?: { readonly startedAt: string };
+  readonly run?: {
+    readonly startedAt: string;
+    /** The number of the record held at the confirmation: a record taken after it, before the rest, is of this run. */
+    readonly confirmedAt: number;
+    /** The number of the first record of the session at rest taken after the confirmation; nothing taken after it is covered. */
+    readonly restedAt?: number;
+  };
 }
 
 /** REQ-MONITOR-128's activity line: the user cancelled the agent, or the agent was cancelled with the one the user cancelled. */
@@ -69,6 +84,18 @@ const FINISHED: ReadonlySet<AgentRecord['presentationState']> = new Set(['done',
 export type RecordOrder = (session: SessionRecord) => number | undefined;
 
 /**
+ * REQ-MONITOR-127 / REQ-MONITOR-296: a run cancel covers an active record of the run it was confirmed against — one carrying
+ * that run's key or taken after the confirmation — and, once the run has rested, only a record taken before the rest. A
+ * record never witnessed is judged by its key until the rest, and is not covered after it (the authoritative read).
+ */
+function coversRun(run: NonNullable<CancelOverlay['run']>, session: SessionRecord, orderOf: RecordOrder): boolean {
+  if (!isBusy(session.executionStatus)) return false;
+  const n = orderOf(session);
+  if (run.restedAt !== undefined && (n === undefined || n >= run.restedAt)) return false;
+  return session.runStartedAt === run.startedAt || (n !== undefined && n > run.confirmedAt);
+}
+
+/**
  * Whether an overlay still covers `session`: the same session, and either unanswered or a record witnessed no later than
  * the engine's acceptance. A record the store never witnessed is not covered once the engine has answered — the
  * authoritative read is shown.
@@ -76,7 +103,7 @@ export type RecordOrder = (session: SessionRecord) => number | undefined;
 function covers(overlay: CancelOverlay, session: SessionRecord, orderOf: RecordOrder): boolean {
   if (overlay.sessionId !== session.id) return false;
   // REQ-MONITOR-127: the run's cancel covers its run's active records, answered or not, until the run's final read.
-  if (overlay.run !== undefined) return session.runStartedAt === overlay.run.startedAt && isBusy(session.executionStatus);
+  if (overlay.run !== undefined) return coversRun(overlay.run, session, orderOf);
   if (overlay.acceptedThrough === undefined) return true;
   const n = orderOf(session);
   return n !== undefined && n <= overlay.acceptedThrough;
@@ -118,7 +145,8 @@ export interface CancelOverlayState {
 export interface CancelOverlayActions {
   /**
    * The replica took `session`: it is numbered after every record taken before it (once — a record seen again keeps its
-   * number). Nothing is drawn again for it; the window's replica subscription calls it on every change.
+   * number). Nothing is drawn again for it, except that a record of a session at rest ends that session's open run cancels
+   * (`restedAt`); the window's replica subscription calls it on every change.
    */
   witness(session: SessionRecord | null): void;
   /**
@@ -145,11 +173,19 @@ export function createCancelOverlayStore(): CancelOverlayStore {
   let next = 1;
   const order = new WeakMap<SessionRecord, number>();
   let newest = 0;
+  const open = (o: CancelOverlay, sessionId: string): o is CancelOverlay & { readonly run: NonNullable<CancelOverlay['run']> } => o.sessionId === sessionId && o.run !== undefined && o.run.restedAt === undefined;
   const witness = (session: SessionRecord | null): void => {
-    if (session !== null && !order.has(session)) order.set(session, ++newest);
+    if (session === null || order.has(session)) return;
+    const n = ++newest;
+    order.set(session, n);
+    // REQ-MONITOR-296: the session at rest is the run's final read — it ends the session's run cancels still open, which is
+    // the one change drawn again for (the note above).
+    if (isBusy(session.executionStatus)) return;
+    const { overlays } = store.getState();
+    if (overlays.some((o) => open(o, session.id))) store.setState({ overlays: overlays.map((o) => (open(o, session.id) ? { ...o, run: { ...o.run, restedAt: n } } : o)) });
   };
   const orderOf: RecordOrder = (session) => order.get(session);
-  return createStore<CancelOverlayState & CancelOverlayActions>((set, get) => ({
+  const store = createStore<CancelOverlayState & CancelOverlayActions>((set, get) => ({
     overlays: [],
     orderOf,
     witness,
@@ -169,7 +205,8 @@ export function createCancelOverlayStore(): CancelOverlayStore {
       if (session === null || session.runStartedAt === null || !isBusy(session.executionStatus)) return null;
       witness(session);
       const token = next++;
-      set({ overlays: [...get().overlays, { token, sessionId: session.id, agentId: RUN_AGENT_ID, agentName: 'the run', agentIds: [], at: nowIso, run: { startedAt: session.runStartedAt } }] });
+      const run = { startedAt: session.runStartedAt, confirmedAt: order.get(session) ?? newest };
+      set({ overlays: [...get().overlays, { token, sessionId: session.id, agentId: RUN_AGENT_ID, agentName: 'the run', agentIds: [], at: nowIso, run }] });
       return token;
     },
     refuse(token) {
@@ -180,4 +217,5 @@ export function createCancelOverlayStore(): CancelOverlayStore {
       set({ overlays: get().overlays.map((o) => (o.token === token ? { ...o, acceptedThrough: newest } : o)) });
     },
   }));
+  return store;
 }

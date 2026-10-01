@@ -7856,10 +7856,22 @@ end. Only the stop (`op: 'cancel'`) writes `cancelling`, and a stop is not a can
   run header and the composer (`Cancelling…`), the status strip, the Mission view's subtitle and run row (`Cancelling`), and
   a persona window. As with OQ-129, only the window that sent the cancel shows it before the engine's record does; no agent
   is shown cancelled by it, since the engine settles them in the teardown.
-- **Until when.** From the confirmation, over every record of the run it was confirmed against (`runStartedAt`) whose status
-  is active, answered or not. A refusal removes it, and the record's own status shows again. An acceptance keeps it until
-  the run's final read — its first record at rest — and it never covers a later run of the session. "The authoritative
-  final read" is read as that final record, not the next record, because the next one is still `running`.
+- **Until when.** From the confirmation, over every active record of the run it was confirmed against, answered or not,
+  until the session's first record at rest taken after the confirmation; the overlay covers no record taken after that one,
+  so a later run of the session is never shown cancelling by it. A refusal removes it, and the record's own status shows
+  again. "The authoritative final read" is read as that final record, not the next record, because the next one is still
+  `running`.
+  *Corrected 2026-10-01, at the verification of the repair: the first build keyed the overlay on the run's `runStartedAt`
+  alone and claimed it "never covers a later run of the session". That was false. The engine saves a new run `starting`
+  (`packages/engine/src/run/run.ts`, `start`) before it writes that run's `run_started_at` after the pre-flight
+  (`saveRunning`), and the store keeps the column by `coalesce` (`packages/store/src/dal.ts`, `updateSessionRun`), so a
+  follow-up's or a continue's pre-flight records carry the cancelled run's key and are active: the next run read
+  `Cancelling` through its whole pre-flight and the composer refused input. The overlay now ends at the run's record at
+  rest, by the order the window took its records in (`witness`), and a record taken after the confirmation and before the
+  rest is covered whatever key it carries, since a session runs one run at a time.*
+- **The status a refusal restores.** REQ-MONITOR-127 says "restored to `running`". The build shows the record's own
+  status again, which is `running` unless the run is in a quota wait (`waiting`) or its pre-flight (`starting`); the
+  requirement's word is read as "the status before the confirmation", which those records are.
 
 **What a ruling decides.** Whether the engine should write `cancelling` when it accepts the explicit cancel, as the stop
 does, so the authoritative record agrees with the optimistic one and every window shows it, not only the one that sent it;

@@ -50,7 +50,9 @@ R-067).** The renderer's `cancelRun` lays a run overlay (`cancel-overlay.ts`, `b
 sends the reserved run id's `cancelAgent`: the session's status reads `cancelling` in the run header, the composer, the
 status strip, the Mission view's subtitle and run row, and a persona window. A refusal removes it; an acceptance keeps it
 over the run's active records until its first record at rest, because the engine writes no `cancelling` for the explicit
-cancel. Until then only the Workspace set anything — its stop button's "Force stop" — and no surface read `cancelling`. This
+cancel. That end is the first record of the session at rest the window takes after the confirmation (`witness`), not the
+run's `runStartedAt`, which the next run's pre-flight still carries until the engine writes its own (corrected at the
+verification: keyed on it alone, the next run read `Cancelling` through its pre-flight). Until then only the Workspace set anything — its stop button's "Force stop" — and no surface read `cancelling`. This
 repairs `the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md` (acceptance A35). The
 **runtime view**'s `cancelAgent` row and the **state ownership** view's optimistic-cancel row say so. No package, edge,
 process, message kind, channel, command or store column changed.

@@ -171,6 +171,55 @@ describe('REQ-MONITOR-127: a confirmed cancel of the run is shown cancelling at 
     expect(shownSession(record({ id: 's2', runStartedAt: RUN }), store.getState())!.executionStatus).toBe('running');
   });
 
+  it('once the run has rested, its next run is shown as the engine writes it, though it carries the same runStartedAt through its pre-flight', () => {
+    // The verifier's finding on A35: the engine saves a new run `starting` before it writes that run's runStartedAt
+    // (run.ts saves `starting`, then `saveRunning({ run_started_at })` after the pre-flight), and the store keeps the
+    // column by `coalesce`, so the next run's pre-flight records carry the cancelled run's key and are busy.
+    const store = createCancelOverlayStore();
+    const s = record({ runStartedAt: RUN });
+    const token = store.getState().beginRun(s, AT)!;
+    store.getState().accept(token, s);
+    // A lagging reader's record of the run, taken before it rested.
+    const lagging = record({ runStartedAt: RUN, updatedAt: '2026-09-29T10:00:04.000Z' });
+    store.getState().witness(lagging);
+    const rested = record({ runStartedAt: RUN, executionStatus: 'paused', stopReason: 'user_cancelled' });
+    store.getState().witness(rested);
+    expect(shownSession(rested, store.getState())).toBe(rested);
+    const followUp = record({ runStartedAt: RUN, executionStatus: 'starting', updatedAt: '2026-09-29T10:01:00.000Z' });
+    store.getState().witness(followUp);
+    expect(shownSession(followUp, store.getState())).toBe(followUp);
+    // What a lagging reader still draws of the cancelled run stays covered (REQ-SHELL-076's coalesced copy).
+    expect(shownSession(lagging, store.getState())!.executionStatus).toBe('cancelling');
+  });
+
+  it('a run that rests before the engine answers ends the overlay too, and the answer does not revive it', () => {
+    const store = createCancelOverlayStore();
+    const s = record({ runStartedAt: RUN });
+    const token = store.getState().beginRun(s, AT)!;
+    const rested = record({ runStartedAt: RUN, executionStatus: 'paused' });
+    store.getState().witness(rested);
+    store.getState().accept(token, rested);
+    const followUp = record({ runStartedAt: RUN, executionStatus: 'starting' });
+    store.getState().witness(followUp);
+    expect(shownSession(followUp, store.getState())).toBe(followUp);
+  });
+
+  it('covers the run it was confirmed against when that run writes its own runStartedAt after the confirmation', () => {
+    // Confirmed during a follow-up's pre-flight: the record held carries the previous run's key, and the run then writes
+    // its own before the stop lands. It is the same run, so it is still shown cancelling until it rests.
+    const store = createCancelOverlayStore();
+    const preflight = record({ runStartedAt: RUN, executionStatus: 'starting' });
+    store.getState().witness(preflight);
+    const token = store.getState().beginRun(preflight, AT)!;
+    store.getState().accept(token, preflight);
+    const running = record({ runStartedAt: '2026-09-29T10:00:02.000Z' });
+    store.getState().witness(running);
+    expect(shownSession(running, store.getState())!.executionStatus).toBe('cancelling');
+    const rested = record({ runStartedAt: '2026-09-29T10:00:02.000Z', executionStatus: 'paused' });
+    store.getState().witness(rested);
+    expect(shownSession(rested, store.getState())).toBe(rested);
+  });
+
   it('is begun only against a held session whose run is active', () => {
     const store = createCancelOverlayStore();
     expect(store.getState().beginRun(null, AT)).toBeNull();

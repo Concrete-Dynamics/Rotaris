@@ -25,6 +25,14 @@ below were red before the change (`beginRun` did not exist, and the renderer's `
   `runStartedAt`, and `shownSession` shows the session's status `cancelling` over every active record of that run,
   answered or not. A refusal removes it; an acceptance keeps it until the run's first record at rest, and it never covers
   a later run (OQ-158 — the engine gives the overlay no `cancelling` record to yield to).
+  *Corrected 2026-10-01, at the verification: "it never covers a later run" was false as first built. Keyed on
+  `runStartedAt` alone, the overlay covered the next run's pre-flight, whose records carry the cancelled run's key until
+  the engine writes the new one after the pre-flight, so a follow-up read `Cancelling` and the composer refused input.
+  The store now ends a run's overlay at the first record of its session at rest that it takes after the confirmation
+  (`witness`, `restedAt`), covers no record taken after that one, and covers a record taken between the two whatever key
+  it carries. Pinned by three further cases in `cancel-overlay.test.ts`, red before this correction ("once the run has
+  rested, its next run is shown as the engine writes it…", "a run that rests before the engine answers ends the overlay
+  too…", "covers the run it was confirmed against when that run writes its own runStartedAt…").*
 - `apps/desktop/src/renderer/session-actions.ts`: `cancelRun` begins the overlay before it sends the reserved run id's
   `cancelAgent`, refuses it on any refusal (the engine's, or an unreachable command) and accepts it on an acceptance.
   Every confirmed "Cancel the run?" comes here — the Workspace, the Mission view's "Cancel selection", a persona window's
@@ -32,7 +40,7 @@ below were red before the change (`beginRun` did not exist, and the renderer's `
   `useCancelOverlaid`), so no surface sets a state of its own. The status strip (`apps/desktop/src/renderer/main.tsx`)
   now reads the shown status too; it read the replica's record directly.
 - Pinned by `packages/ui/src/cancel-overlay.test.ts` ("REQ-MONITOR-127: a confirmed cancel of the run is shown cancelling
-  at once", five cases) and `apps/desktop/src/renderer/session-actions.test.ts` ("REQ-MONITOR-127: a confirmed cancel of
+  at once", five cases, eight with the correction above) and `apps/desktop/src/renderer/session-actions.test.ts` ("REQ-MONITOR-127: a confirmed cancel of
   the run is shown cancelling before the engine answers, and restored on its refusal"), and by `pnpm mission-proof` item
   4b, new: the run row selected, "Cancel selection" confirmed, and every sample the log records after the confirm click
   reads the subtitle, the run row and the strip `Cancelling` until the run's record at rest — never `Running`. Green on the

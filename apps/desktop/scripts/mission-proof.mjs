@@ -22,8 +22,10 @@ import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
  *   4. cancel      — a child with a live descendant: the confirmation names it and the cascade; the child cancelled, the run on;
  *                    the rows sampled just after the confirm (REQ-MONITOR-128's optimistic cancel) and overwritten by the
  *                    engine's record at 9 s (REQ-MONITOR-296).
- *   4b. cancel run — the run row selected, "Cancel selection" confirmed: from the confirm to the run's end the subtitle and
- *                    the run row (and the status strip) read `Cancelling`, never `Running` (acceptance A35, REQ-MONITOR-127/130).
+ *   4b. cancel run — the run row selected, "Cancel selection" confirmed: every sample after the confirm reads the subtitle and
+ *                    the run row (and the status strip) `Cancelling` or the run at rest — never `Running` nor another active
+ *                    status; how many land inside the `Cancelling` window is host timing, recorded and not asserted
+ *                    (acceptance A35, REQ-MONITOR-127/130).
  *   5. open        — pop-out off: Open pins the agent in the Workspace inspector; on: one window per persona, 820×620,
  *                    reused for a second instance, hidden on close, shown again; a new session destroys it.
  *   6. inspector   — following the latest author, pinned on selection, chips in one order across a state change, Steer
@@ -324,6 +326,10 @@ const s4b = scenario('cancel-run', ['personas:', '  lead:', '    name: lead', ' 
   // sample reads `Cancelling` until the run's record at rest arrives (REQ-ORCH-082: `user_cancelled` rests `paused`).
   const running = samples.filter((x) => status(x.subtitle) === 'Running' || /Running$/.test(x.runRow ?? '') || x.strip === 'run Running');
   expect(running.length === 0, `the Mission view read the cancelled run Running after the confirm: ${JSON.stringify(running)} (REQ-MONITOR-127, acceptance A35)`);
+  // A sample that is not yet at rest is inside the cancel's window, so it reads `Cancelling` and no other active status.
+  const ACTIVE = ['Running', 'Waiting', 'Starting', 'Pausing', 'Background'];
+  const otherActive = samples.filter((x) => ACTIVE.includes(status(x.subtitle)));
+  expect(otherActive.length === 0, `a sample after the confirm read an active status other than Cancelling: ${JSON.stringify(otherActive)} (REQ-MONITOR-127)`);
   // Whether a sample lands inside the cancel's window (about 80 ms on 2026-10-01) depends on the host: recorded, not asserted.
   const cancellingSamples = samples.filter((x) => status(x.subtitle) === 'Cancelling').length;
   expect(!['running', 'waiting', 'starting', 'pausing', 'cancelling', 'background'].includes(row.execution_status), `the cancelled run ended ${row.execution_status} (${row.stop_reason})`);

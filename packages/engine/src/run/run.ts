@@ -2226,6 +2226,11 @@ export class Run {
     // REQ-HOOKS-076 / REQ-HOOKS-080: a `child_completed` the user's cancel of one child queued once the iteration's own
     // waits were done — a paused child cancelled while the rest was being recorded — ends before `session_end`.
     await this.childCompletionsSettled();
+    // REQ-HOOKS-076 / REQ-HOOKS-081 with OQ-154 (the repair of
+    // `a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`): the user's cancel of one paused child is
+    // accepted until the run has ended (`cancelAgent`), but one accepted from here, while `session_end` runs or after it,
+    // ends the child and fires no `child_completed`, which would follow `session_end`.
+    this.children?.endLifecycle();
     // REQ-HOOKS-003/081: session_end on every exit path, after the status is decided and before shutdown; `classified.result`
     // is the one string the payload, the result and the session.end event below all carry.
     if (this.hooks) {

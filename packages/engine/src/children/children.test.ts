@@ -5314,6 +5314,43 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(completed).toEqual([fieldsOf(work, 'cancelled', 'The user cancelled this child.')]);
       expect(order).toEqual(['session_start', 'child_completed(work)', 'child_completed(work):end', 'session_end']);
     });
+
+    it('REQ-HOOKS-076 / REQ-HOOKS-081 with OQ-154 (the repair of a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md): a paused child the user cancels while `session_end` runs ends `cancelled` and fires no `child_completed` after it', async () => {
+      const order: string[] = [];
+      let releaseEnd!: () => void;
+      const endHold = new Promise<void>((r) => { releaseEnd = r; });
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event, fields) => {
+          order.push(event === 'child_completed' ? `child_completed(${String(fields['child_name'])})` : event);
+          if (event === 'session_end') await endHold;
+          return [];
+        },
+        advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : answer('never');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return { parts: [{ hold }, ...answer('late').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'work')?.state === 'running');
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      releaseChild();
+      await settle(() => order.includes('session_end'));
+      expect(byName(sid, 'work').state).toBe('paused');
+      // While the run's `session_end` hook runs, the user cancels the paused child: it ends `cancelled` (REQ-ORCH-133), and
+      // its `child_completed` is not fired after `session_end` (OQ-154's reading: none fires where the run has announced its end).
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'work').task_id } })).toEqual({ ok: true });
+      expect(byName(sid, 'work').state).toBe('cancelled');
+      releaseEnd();
+      await sessions.running(sid)!;
+      await new Promise((r) => setTimeout(r, 30));
+      expect(order).toEqual(['session_start', 'session_end']);
+      expect(dal.timelineOf(sid).map((t) => t.name)).toContain('child_user_cancelled');
+    });
   });
 
   describe('PD-ORCH-005 clause 15: a forced stop is a stop, and a quit rests by quit', () => {

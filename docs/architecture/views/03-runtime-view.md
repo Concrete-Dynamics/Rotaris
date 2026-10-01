@@ -827,7 +827,11 @@ again until none is left (`IterationChildren.drained`): a pause for as long as e
 a quit within what is left of the 30 s grace, after which they are given up on with the executions, as a settle's own
 hook is (REQ-SESSION-092). Before `session_end` the run waits again for every one the last iteration's children queued
 (`Run.childCompletionsSettled`) — within what is left of the grace after a stop — so a paused child cancelled once the
-rest is recorded has its hook end first. The explicit cancel's sweep is awaited (`completionsSettled`) before `outlast`,
+rest is recorded has its hook end first. From that wait on the run's `session_end` has begun
+(`IterationChildren.endLifecycle`): a paused child the user cancels after it — `cancelAgent` accepts one until the run has
+ended — ends `cancelled` and fires no `child_completed`, which would follow `session_end` (OQ-154's fifth path, under its
+built reading; the repair of `a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`, 2026-10-01).
+The explicit cancel's sweep is awaited (`completionsSettled`) before `outlast`,
 bounded only by each hook's timeout. The note is
 [`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](../../defects/fixed/a-child-settled-outside-its-execution-fires-no-child-completed-hook.md).
 Since 2026-09-30 both settles end through one tail, `IterationChildren.afterTerminal`, which tells the scheduler in a

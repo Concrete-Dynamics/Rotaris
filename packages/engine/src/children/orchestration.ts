@@ -242,6 +242,14 @@ export class IterationChildren implements DelegationOps {
    */
   private readonly givenUpOn = new Set<string>();
   /**
+   * REQ-HOOKS-076 / REQ-HOOKS-081 with OQ-154 (the repair of
+   * `a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`): the run's `session_end` has begun
+   * (`endLifecycle`). A child ended from outside its settle after that — the user's cancel of one paused child, accepted
+   * until the run has ended — fires no `child_completed`, which would follow `session_end`: OQ-154's reading, as for the
+   * explicit cancel that lands after `session_end`.
+   */
+  private lifecycleEnded = false;
+  /**
    * PD-ORCH-004 revision 3: this iteration's children that had ended before this run took the iteration up — a resumed
    * iteration's, left by an earlier run. Their offers are the root's to take up, as "a later run" of the session's.
    */
@@ -970,7 +978,7 @@ export class IterationChildren implements DelegationOps {
    */
   private completedOutside(row: ChildRow): void {
     const hooks = this.deps.hooks;
-    if (!hooks) return;
+    if (!hooks || this.lifecycleEnded) return;
     const fields = childCompletedFields(row);
     const endSettle = this.beginSettle(row.task_id);
     const fire = async (): Promise<void> => {
@@ -980,6 +988,14 @@ export class IterationChildren implements DelegationOps {
     const next = this.completions.then(fire).finally(endSettle);
     this.completions = next;
     void this.track(next);
+  }
+
+  /**
+   * REQ-HOOKS-076 / REQ-HOOKS-081 with OQ-154: the run is about to fire `session_end`, once every hook `completedOutside`
+   * queued has been awaited (`Run.childCompletionsSettled`); from here none is queued (`lifecycleEnded`).
+   */
+  endLifecycle(): void {
+    this.lifecycleEnded = true;
   }
 
   /** REQ-HOOKS-076 / REQ-HOOKS-080: resolves once every `child_completed` hook `completedOutside` started has finished. */

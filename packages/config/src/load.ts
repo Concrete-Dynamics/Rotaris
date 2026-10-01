@@ -1,6 +1,6 @@
-import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
 import { err, ok, type Result } from '@rotaris/kernel';
 import { parseConfig, plainOf, triOf, asMap, vocabularyText, type ParsedConfig } from './document.js';
@@ -154,27 +154,83 @@ function readConfigFile(path: string): ReadFile {
   return { state: 'read', parsed: parsed.value, plain: isPlainMap(plain) ? plain : null };
 }
 
+/** A line of an ignore file, trimmed and stripped of a trailing `/` — REQ-CONFIG-013's comparison. */
+const ignoreLinesOf = (text: string): readonly string[] => text.split(/\r?\n/).map((line) => line.trim().replace(/\/$/, ''));
+
+/** Append `<dir>/` lines to a text file, adding a missing trailing newline first; a missing file is created. */
+function appendIgnoreLines(file: string, existing: string, dirs: readonly string[]): void {
+  const block = dirs.map((dir) => `${dir}/\n`).join('');
+  if (existing === '') writeFileSync(file, block, 'utf8');
+  else appendFileSync(file, `${existing.endsWith('\n') ? '' : '\n'}${block}`, 'utf8');
+}
+
+/**
+ * The repository-local exclude file (`info/exclude` in the repository's common directory) of the repository that holds
+ * `workspaceRoot`, found as Git finds a repository: the nearest `.git` at or above the workspace — a directory, or a file
+ * naming the git directory (`gitdir: …`, a linked worktree or a submodule), whose `commondir` names the shared one.
+ * Null when no repository holds the workspace or the pointer cannot be read. Never spawns Git: the load is synchronous.
+ */
+export function repositoryExcludeFile(workspaceRoot: string): string | null {
+  let dir = resolve(workspaceRoot);
+  for (;;) {
+    const dotGit = join(dir, '.git');
+    let gitDir: string | null = null;
+    try {
+      const stat = statSync(dotGit);
+      if (stat.isDirectory()) gitDir = dotGit;
+      else if (stat.isFile()) {
+        const pointer = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotGit, 'utf8'));
+        if (!pointer) return null;
+        gitDir = resolve(dir, pointer[1]!);
+      }
+    } catch (cause) { if ((cause as NodeJS.ErrnoException).code !== 'ENOENT' && (cause as NodeJS.ErrnoException).code !== 'ENOTDIR') return null; }
+    if (gitDir !== null) {
+      let common = gitDir;
+      try { common = resolve(gitDir, readFileSync(join(gitDir, 'commondir'), 'utf8').trim()); } catch { /* no commondir: the git directory is the common one */ }
+      return join(common, 'info', 'exclude');
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
 /**
  * REQ-CONFIG-013 / REQ-MCP-089: best-effort, idempotent, atomic enough for its purpose; every failure swallowed.
- * Two directories, not one, since the merge of Parts T and U (2026-09-06): the bundled code-intelligence runtime
- * creates its per-project marker directory in the workspace root whenever it starts with a project (ADR-0035's
- * note, finding 5), and with the entry enabled by default every first run left an untracked directory in the
- * user's repository — the Git proof's isolated launch found the base tree dirty. The reading taken, flagged for the
- * owner: the marker's directory is ignored by the same amendment as the product's own scope directory; the name
- * comes from the generated manifest (REQ-MCP-116), never a literal.
+ *
+ * The workspace's `.gitignore` gains `.rotaris/` alone — the one line the two requirements name. The bundled
+ * code-intelligence runtime also creates its per-project marker directory in the workspace root whenever it starts with a
+ * project (ADR-0035's note, finding 5), which left an untracked directory in the user's repository on every first run.
+ * From 2026-09-06 that directory was appended to `.gitignore` beside `.rotaris/` ("a reading flagged for the owner"),
+ * and every agent that checked its work then found a `.gitignore` change nobody had told it of (OQ-161; the live runs of
+ * 2026-10-01). The reading taken under OQ-161 since 2026-10-01: the marker's directory goes to the repository-local
+ * exclude file instead, which Git honours and nobody tracks, so `git status` stays clean and no file the user tracks
+ * changes. Skipped when either file already names it; nothing is written where no repository holds the workspace. The
+ * name comes from the generated manifest (REQ-MCP-116), never a literal.
  */
 export function keepScopeDirIgnored(workspaceRoot: string): void {
   try {
     const file = join(workspaceRoot, '.gitignore');
     let existing = '';
     try { existing = readFileSync(file, 'utf8'); } catch (cause) { if ((cause as NodeJS.ErrnoException).code !== 'ENOENT') return; }
-    const lines = existing.split(/\r?\n/).map((line) => line.trim().replace(/\/$/, ''));
-    const missing = [WORKSPACE_SCOPE_DIR, CODE_INTELLIGENCE_MARKER_SEGMENTS[0]!].filter((dir) => !lines.includes(dir));
-    if (missing.length === 0) return;
-    const block = missing.map((dir) => `${dir}/\n`).join('');
-    if (existing === '') writeFileSync(file, block, 'utf8');
-    else appendFileSync(file, `${existing.endsWith('\n') ? '' : '\n'}${block}`, 'utf8');
+    const lines = ignoreLinesOf(existing);
+    if (!lines.includes(WORKSPACE_SCOPE_DIR)) appendIgnoreLines(file, existing, [WORKSPACE_SCOPE_DIR]);
+    const marker = CODE_INTELLIGENCE_MARKER_SEGMENTS[0]!;
+    if (!lines.includes(marker)) keepMarkerExcluded(workspaceRoot, marker);
   } catch { /* REQ-CONFIG-013: never fails the load */ }
+}
+
+/** OQ-161's reading: the marker's directory in the repository's own exclude file; best-effort, every failure swallowed. */
+function keepMarkerExcluded(workspaceRoot: string, marker: string): void {
+  try {
+    const file = repositoryExcludeFile(workspaceRoot);
+    if (file === null) return;
+    let existing = '';
+    try { existing = readFileSync(file, 'utf8'); } catch (cause) { if ((cause as NodeJS.ErrnoException).code !== 'ENOENT') return; }
+    if (ignoreLinesOf(existing).includes(marker)) return;
+    mkdirSync(dirname(file), { recursive: true });
+    appendIgnoreLines(file, existing, [marker]);
+  } catch { /* best-effort: never fails the load */ }
 }
 
 /** The separate parse of `rotaris.delegation_strategy`: workspace only, no merge, no schema; anything else leaves the default. */

@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -11,6 +12,7 @@ import { readRuntimeSection, validateRuntimeField, RUNTIME_DEFAULTS } from './se
 import { effectivePricing, readModelEntry, providerEffort } from './sections/models.js';
 import { readCircuitBreakerSection, CIRCUIT_BREAKER_DEFAULTS } from './circuit-breaker-section.js';
 import { checkpointsEnabledFor } from './sections/checkpoints.js';
+import { CODE_INTELLIGENCE_MARKER_SEGMENTS } from './mcp/code-intelligence.js';
 import type { ProblemSink } from './sections/field.js';
 
 const dirs: string[] = [];
@@ -381,11 +383,76 @@ describe('the rest of the load', () => {
     const s = scopes(null, null);
     writeFileSync(join(s.workspaceRoot, '.gitignore'), 'node_modules');
     loadConfiguration(s);
-    expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('node_modules\n.rotaris/\n.serena/\n');
+    expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('node_modules\n.rotaris/\n');
     loadConfiguration(s);
-    expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('node_modules\n.rotaris/\n.serena/\n');
+    expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('node_modules\n.rotaris/\n');
     const fresh = scopes(null, null);
     expect(loadConfiguration({ ...fresh, keepIgnored: false }).ok).toBe(true);
+  });
+
+  describe("OQ-161's reading: the code-intelligence marker's directory is kept out of version control without touching a tracked file", () => {
+    const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'init.defaultBranch=main', ...args], { cwd, encoding: 'utf8' });
+    const marker = CODE_INTELLIGENCE_MARKER_SEGMENTS[0]!;
+
+    it('a fresh repository gets `.rotaris/` in .gitignore and the marker in .git/info/exclude, once each', () => {
+      const s = scopes(null, null);
+      git(s.workspaceRoot, 'init', '-q');
+      loadConfiguration(s);
+      loadConfiguration(s);
+      expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('.rotaris/\n');
+      const exclude = readFileSync(join(s.workspaceRoot, '.git', 'info', 'exclude'), 'utf8');
+      expect(exclude.split('\n').filter((line) => line === `${marker}/`)).toHaveLength(1);
+      expect(exclude.endsWith(`\n${marker}/\n`)).toBe(true);
+    });
+
+    it("a repository whose committed .gitignore already names `.rotaris/` stays clean once the runtime's marker exists", () => {
+      const s = scopes(null, null);
+      git(s.workspaceRoot, 'init', '-q');
+      writeFileSync(join(s.workspaceRoot, '.gitignore'), 'node_modules/\n.rotaris/\n');
+      writeFileSync(join(s.workspaceRoot, 'README.md'), '# fixture\n');
+      git(s.workspaceRoot, 'add', '.gitignore', 'README.md');
+      git(s.workspaceRoot, 'commit', '-q', '-m', 'fixture');
+      loadConfiguration(s);
+      mkdirSync(join(s.workspaceRoot, ...CODE_INTELLIGENCE_MARKER_SEGMENTS.slice(0, -1)), { recursive: true });
+      writeFileSync(join(s.workspaceRoot, ...CODE_INTELLIGENCE_MARKER_SEGMENTS), 'project_name: fixture\n');
+      expect(git(s.workspaceRoot, 'status', '--porcelain', '--untracked-files=all')).toBe('');
+      expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('node_modules/\n.rotaris/\n');
+    });
+
+    it('a linked worktree, and a workspace below the repository root, write the repository\'s shared exclude file', () => {
+      const s = scopes(null, null);
+      git(s.workspaceRoot, 'init', '-q');
+      writeFileSync(join(s.workspaceRoot, '.gitignore'), '.rotaris/\n');
+      git(s.workspaceRoot, 'add', '.gitignore');
+      git(s.workspaceRoot, 'commit', '-q', '-m', 'fixture');
+      const linked = join(tmp(), 'linked');
+      git(s.workspaceRoot, 'worktree', 'add', '-q', linked);
+      mkdirSync(join(linked, '.rotaris'), { recursive: true });
+      loadConfiguration({ ...s, workspaceRoot: linked });
+      expect(readFileSync(join(s.workspaceRoot, '.git', 'info', 'exclude'), 'utf8')).toContain(`\n${marker}/\n`);
+      mkdirSync(join(linked, marker), { recursive: true });
+      writeFileSync(join(linked, ...CODE_INTELLIGENCE_MARKER_SEGMENTS), 'project_name: linked\n');
+      expect(git(linked, 'status', '--porcelain', '--untracked-files=all')).toBe('');
+
+      const nested = scopes(null, null);
+      git(nested.workspaceRoot, 'init', '-q');
+      const below = join(nested.workspaceRoot, 'packages', 'app');
+      mkdirSync(join(below, '.rotaris'), { recursive: true });
+      loadConfiguration({ ...nested, workspaceRoot: below });
+      expect(readFileSync(join(nested.workspaceRoot, '.git', 'info', 'exclude'), 'utf8')).toContain(`\n${marker}/\n`);
+    });
+
+    it('a workspace in no repository gets no exclude file, and a marker line .gitignore already holds is not repeated', () => {
+      const s = scopes(null, null);
+      loadConfiguration(s);
+      expect(existsSync(join(s.workspaceRoot, '.git'))).toBe(false);
+      const old = scopes(null, null);
+      git(old.workspaceRoot, 'init', '-q');
+      writeFileSync(join(old.workspaceRoot, '.gitignore'), `.rotaris/\n${marker}/\n`);
+      loadConfiguration(old);
+      expect(readFileSync(join(old.workspaceRoot, '.gitignore'), 'utf8')).toBe(`.rotaris/\n${marker}/\n`);
+      expect(readFileSync(join(old.workspaceRoot, '.git', 'info', 'exclude'), 'utf8')).not.toContain(`\n${marker}/\n`);
+    });
   });
   it('rotaris.delegation_strategy is a separate workspace-only lookup with no validation', () => {
     expect(loaded('rotaris:\n  delegation_strategy: single\n', null).delegationStrategy).toBe('orchestrator');

@@ -58,3 +58,23 @@ if it may, whether anyone is told. Recorded, not repaired.
 - `docs/architecture/codebase.md:456-460` — the same flag in the codebase map.
 - `apps/desktop/scripts/fixtures/todo-app/.gitignore` — the live run's fixture. It already carries `.rotaris/`, so
   `.serena/` is the only line the load appends to it.
+
+## Repaired in part — 2026-10-01; open for OQ-161's ruling
+
+**Found true on the branch** (`fin2-config-readings`, from `origin/main` at `f41dc2a`): a repository whose committed
+`.gitignore` already named `.rotaris/` read ` M .gitignore` in `git status --porcelain` after one configuration load
+(`packages/config/src/load.test.ts`, "a repository whose committed .gitignore already names `.rotaris/` stays clean
+once the runtime's marker exists", red on the code before, with two more of the four new cases).
+
+**The part repaired, under a reading recorded in [OQ-161](../architecture/open-questions.md) and not a ruling.** The
+load appends `.rotaris/` alone to the workspace's `.gitignore`, the one line REQ-CONFIG-013 and REQ-MCP-089 name. The
+marker's directory goes to the repository-local exclude file (`info/exclude` in the common directory of the repository
+that holds the workspace, found as Git finds it, a linked worktree's and a workspace below the root included), which
+Git honours and nobody tracks: `git status` stays clean, and no file the user tracks changes, so there is nothing left
+for an agent to account for. Best-effort and idempotent; nothing is written where no repository holds the workspace.
+Pinned by four cases in `load.test.ts` (`OQ-161's reading: …`) and the amended REQ-CONFIG-013 case.
+
+**Left to the owner.** OQ-161's ruling: whether the load may write the marker's directory anywhere at all, and if so
+whether the exclude file is the place, or whether the runtime should be started so that it creates no marker in the
+workspace root. A `.gitignore` an earlier build amended keeps its `.serena/` line: the product never removes a line from
+a file the user owns. The note stays open until the ruling.

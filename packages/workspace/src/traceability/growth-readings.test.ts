@@ -49,6 +49,29 @@ describe('interleavedMinima (REQ-TRACE-501, REQ-TRACE-088)', () => {
     expect(Math.abs(pair.ratio - WORK.full / WORK.half)).toBeLessThan(0.05);
   });
 
+  it('REQ-TRACE-501: when a pass leaves cost behind for the next, alternating which side goes first keeps the ratio at the work ratio', () => {
+    // A pass that runs right after a full-size pass pays for what that pass left behind (garbage still to collect).
+    // Read always full-then-half, the half side always pays and the full side never does, so the ratio reads low;
+    // alternated, each side has readings that follow its own side, and those carry no penalty.
+    const aftermath = () => {
+      let previous: 'full' | 'half' | undefined;
+      const pass = (side: 'full' | 'half') => {
+        const cost = WORK[side] * 40 * (previous === 'full' ? 1.5 : 1);
+        previous = side;
+        return cost;
+      };
+      return { full: () => pass('full'), half: () => pass('half') };
+    };
+    const fixedOrder = aftermath();
+    const fullFixed: number[] = [];
+    const halfFixed: number[] = [];
+    for (let i = 0; i < 8; i += 1) { fullFixed.push(fixedOrder.full()); halfFixed.push(fixedOrder.half()); }
+    expect(Math.min(...fullFixed) / Math.min(...halfFixed)).toBeLessThan(1.5);
+
+    const pair = growthPair(interleavedMinima(aftermath()), { full: 1501, half: 701 });
+    expect(pair.ratio).toBe(Math.round((WORK.full / WORK.half) * 100) / 100);
+  });
+
   it('REQ-TRACE-088: one stalled reading on either side does not move that side\'s minimum', () => {
     let fullCalls = 0;
     let halfCalls = 0;

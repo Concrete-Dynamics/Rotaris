@@ -51,9 +51,11 @@ ratio's range and each pair's lower bound are unchanged.
 keeps the same three rules and prints each side's readings as that side's. The script also prints every pair's verdict
 line under its summary, passed or not.
 
-**Pinned by.** `growth-readings.test.ts`, six cases: the alternating order and the unrecorded warm-ups; seven recorded
+**Pinned by.** `growth-readings.test.ts`, seven cases: the alternating order and the unrecorded warm-ups; seven recorded
 readings a side; under a modelled warming pass the order used before the repair reads 2.5 or more, while the
-interleaved order stays within 0.05 of the work ratio; a stalled reading on either side does not move that side's
+interleaved order stays within 0.05 of the work ratio; under a modelled pass that leaves cost behind for the next, an
+order that always reads full then half reads the ratio below 1.5, while the alternating order reads the work ratio
+exactly (this case, with the first, fails when the alternation is removed); a stalled reading on either side does not move that side's
 minimum; the pair keeps the full readings apart from the half readings; and a measurement with no round is refused.
 `growth-verdict.test.ts`, five cases, uses the readings of the red above: its message names
 `[140.7,138.8,148.5] full` and `[50.6,43.9,44.1] half`. The ceiling and the floor are 3.0 and 25 ms; below the floor

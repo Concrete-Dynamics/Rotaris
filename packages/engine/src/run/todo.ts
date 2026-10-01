@@ -13,6 +13,8 @@
  *
  * Serialised as a document carrying its own version (D-22).
  */
+import { randomBytes } from 'node:crypto';
+
 export type TaskState = 'pending' | 'in_progress' | 'complete' | 'abandoned';
 
 export interface Task {
@@ -46,12 +48,17 @@ export interface Task {
   message?: true;
 }
 export interface Phase {
+  /**
+   * REQ-CHAT-089: the phase's backend id — 8 lowercase hexadecimal characters, fixed when the phase is created. A phase
+   * an earlier build created carries none, and is known by its name, as it was then.
+   */
+  readonly id?: string;
   readonly name: string;
   readonly tasks: Task[];
 }
 export interface TodoDocument {
   readonly schema_version: 1;
-  readonly phases: readonly { readonly name: string; readonly tasks: readonly Task[] }[];
+  readonly phases: readonly { readonly id?: string; readonly name: string; readonly tasks: readonly Task[] }[];
 }
 
 export const CONSECUTIVE_RETRY_LIMIT_DEFAULT = 3;
@@ -72,6 +79,20 @@ export function taskLine(task: { readonly text: string; readonly name?: string |
   return task.name === undefined ? task.text : `${task.name}: ${task.text}`;
 }
 
+/** REQ-CHAT-089: the form of every task id the backend assigns — 8 lowercase hexadecimal characters. */
+export const BACKEND_TODO_ID = /^[0-9a-f]{8}$/;
+
+/**
+ * REQ-CHAT-089: a backend task id — 8 lowercase hexadecimal characters, fixed when the task is created — that no id in
+ * `taken` already is. `draw` is the source of candidates (random by default; a test may pass its own).
+ */
+export function mintTodoId(taken: ReadonlySet<string>, draw: () => string = () => randomBytes(4).toString('hex')): string {
+  for (;;) {
+    const id = draw().toLowerCase();
+    if (BACKEND_TODO_ID.test(id) && !taken.has(id)) return id;
+  }
+}
+
 export class Todo {
   private readonly phases: Phase[] = [];
 
@@ -80,13 +101,29 @@ export class Todo {
   /** REQ-ORCH-004: a fresh session — one phase `main` with the task. */
   static fresh(taskId: string, text: string, limit?: number): Todo {
     const t = new Todo(limit);
-    t.phases.push({ name: 'main', tasks: [{ id: taskId, text, state: 'pending', consecutiveRetries: 0 }] });
+    t.phases.push({ id: mintTodoId(new Set([taskId])), name: 'main', tasks: [{ id: taskId, text, state: 'pending', consecutiveRetries: 0 }] });
+    return t;
+  }
+
+  /**
+   * REQ-CHAT-089 with REQ-LIBRARY-060: a plan the backend built for a new session (an improvement run's approved-proposal
+   * tasks). The ids the request carried are the builder's own, not the session's — a proposal's `imp_…` id for each task,
+   * none for the phase — so every task and every phase is given a backend id here, when the todo is created: 8 lowercase
+   * hexadecimal characters, unique within the todo and apart from `taken`. The proposal stays named in the task's text
+   * (REQ-LIBRARY-061's `Proposal: <id> (<category>)`). A stored plan is read back with `fromDocument`, its ids kept. `draw`
+   * is `mintTodoId`'s source of candidates (a test may pass its own).
+   */
+  static seeded(doc: TodoDocument, limit?: number, taken: ReadonlySet<string> = new Set(), draw?: () => string): Todo {
+    const t = new Todo(limit);
+    const used = new Set(taken);
+    const mint = (): string => { const id = mintTodoId(used, draw); used.add(id); return id; };
+    for (const p of doc.phases) t.phases.push({ id: mint(), name: p.name, tasks: p.tasks.map((x) => ({ ...x, id: mint() })) });
     return t;
   }
 
   static fromDocument(doc: TodoDocument, limit?: number): Todo {
     const t = new Todo(limit);
-    for (const p of doc.phases) t.phases.push({ name: p.name, tasks: p.tasks.map((x) => ({ ...x })) });
+    for (const p of doc.phases) t.phases.push({ ...(p.id === undefined ? {} : { id: p.id }), name: p.name, tasks: p.tasks.map((x) => ({ ...x })) });
     return t;
   }
 
@@ -96,7 +133,13 @@ export class Todo {
    */
   appendTask(phaseName: string, taskId: string, text: string, name?: string): void {
     let phase = this.phases.find((p) => p.name === phaseName);
-    if (!phase) { phase = { name: phaseName, tasks: [] }; this.phases.push(phase); }
+    if (!phase) {
+      // REQ-CHAT-089: a phase the backend creates takes an id of its own, unique within the todo (the task's included).
+      const taken = this.ids();
+      taken.add(taskId);
+      phase = { id: mintTodoId(taken), name: phaseName, tasks: [] };
+      this.phases.push(phase);
+    }
     phase.tasks.push({ id: taskId, text, state: 'pending', consecutiveRetries: 0, ...(name === undefined ? {} : { name }) });
   }
 
@@ -208,8 +251,11 @@ export class Todo {
   editTask(op: 'add' | 'update' | 'remove', id: string, text: string, phaseName = 'main'): boolean {
     const body = text.trim();
     if (op === 'add') {
-      if (body === '' || this.all().some((t) => t.id === id) || !this.phases.some((p) => p.name === phaseName)) return false;
-      this.appendTask(phaseName, id, body);
+      // REQ-CHAT-089: the phase is named by its id, as the plan shows it — or by its name, for a phase an earlier build
+      // created with none (and for a caller that names none, `main`).
+      const phase = this.phases.find((p) => p.id === phaseName) ?? this.phases.find((p) => p.name === phaseName);
+      if (body === '' || this.all().some((t) => t.id === id) || !phase) return false;
+      this.appendTask(phase.name, id, body);
       return true;
     }
     for (const p of this.phases) {
@@ -230,7 +276,7 @@ export class Todo {
   }
 
   toDocument(): TodoDocument {
-    return { schema_version: 1, phases: this.phases.map((p) => ({ name: p.name, tasks: p.tasks.map((t) => ({ ...t })) })) };
+    return { schema_version: 1, phases: this.phases.map((p) => ({ ...(p.id === undefined ? {} : { id: p.id }), name: p.name, tasks: p.tasks.map((t) => ({ ...t })) })) };
   }
 
   /**
@@ -288,6 +334,13 @@ export class Todo {
   get allTasksComplete(): boolean {
     const live = this.all().filter((t) => t.state !== 'abandoned');
     return live.length > 0 && live.every((t) => t.state === 'complete');
+  }
+
+  /** Every id the todo holds, its tasks' and its phases' — what a new id must not repeat (REQ-CHAT-089). */
+  ids(): Set<string> {
+    const ids = new Set(this.all().map((t) => t.id));
+    for (const p of this.phases) if (p.id !== undefined) ids.add(p.id);
+    return ids;
   }
 
   private all(): Task[] {

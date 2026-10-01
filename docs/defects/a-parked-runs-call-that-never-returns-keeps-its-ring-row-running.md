@@ -24,6 +24,21 @@ each is reasoned from the code, none is measured in the built app:
 
 The transcript rows are not affected: the crash record answers those under REQ-SESSION-129 whatever the ring holds.
 
+**Residual 2 repaired 2026-10-01; residuals 1 and 3 wait on [OQ-170](../architecture/open-questions.md).** `Sessions` now
+keeps, per live session, every run of this process that parked without closing its tool ports (`Live.portsOpen`,
+`packages/engine/src/sessions.ts`), and a continue passes `ownCallsMayRun` while any of them still has its ports open
+(`ownCallsMayRunOf`); a run leaves the set once it has closed them. A later run's teardown no longer re-arms the settle over
+an earlier parked run's rows. Pinned by `packages/engine/src/run/crash.test.ts`, "a later run of this process that tore down
+does not re-arm the settle over an earlier parked run's ring row" (run 1 parks at the plan gate, run 2 is approved and tears
+down, run 3 continues: run 1's `stray` row stays `running`; without the repair run 3's continue settled it `failed`), and by
+"a continue after a run of this process that completed and tore down settles a ring row no live call holds" (a run leaves
+the set at its teardown, so the settle is not skipped for good). A parked run never reaches its teardown and so never
+leaves the set: once any run of a session parks, this process skips the ring settle for that session for as long as the
+session stays live in it. That widens residual 3 — another process's dead rows, which a later teardown used to re-arm the
+settle over, are no longer settled by this process after a park — and it waits on the same question. Whether
+a park closes its run's ports, a continue abandons them, or ring rows carry a process identity is OQ-170's, raised with the
+reading the build proceeds under; the note stays open for residuals 1 and 3 until it is ruled.
+
 ## Specs
 
 REQ-MONITOR-105 reads a `running` row as a call still under way, which residual 1's row is not once its run has moved on;
@@ -35,7 +50,8 @@ abandon them, may be an open question rather than a defect.
 ## Relevant files
 
 - `packages/engine/src/run/run.ts` — `closePorts` and `closedItsPorts`; a parked run never reaches its teardown.
-- `packages/engine/src/sessions.ts` — `launchContinuation`, which passes `s.run !== null && !s.run.closedItsPorts`.
+- `packages/engine/src/sessions.ts` — `launchContinuation`, which passed `s.run !== null && !s.run.closedItsPorts` and now
+  passes `ownCallsMayRunOf(s)` over `Live.portsOpen`.
 - `packages/engine/src/run/crash.ts` — `recordCrash`'s `ownCallsMayRun` and `settleDeadToolCalls`.
 - `apps/desktop/src/run-host/tools.ts` — the gate sink's `close`, the orderly-end settle a parked run never reaches.
 - `packages/engine/src/run/crash.test.ts` — the driven case whose `stray` row stays `running` (residual 1).

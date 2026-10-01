@@ -58,7 +58,9 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     expect(todo.phases.map((p) => p.name)).toEqual(['main', 'Queued Prompts']);
     // REQ-CHAT-040 / REQ-ORCH-071 (acceptance A28): the task is NAMED "Queued Prompt: <first 8 characters of the prompt id>"
     // and carries the prompt text as its content.
-    expect(todo.phases[1]!.tasks[0]).toMatchObject({ id: promptId, name: `Queued Prompt: ${promptId.slice(0, 8)}`, text: 'then do this instead', state: 'complete' });
+    expect(todo.phases[1]!.tasks[0]).toMatchObject({ name: `Queued Prompt: ${promptId.slice(0, 8)}`, text: 'then do this instead', state: 'complete' });
+    // REQ-CHAT-089: its id is the backend's, 8 lowercase hexadecimal characters — never the prompt's own UUID.
+    expect(todo.phases[1]!.tasks[0]!.id).toMatch(/^[0-9a-f]{8}$/);
     expect(dal.timelineOf(sid).map((t) => t.name)).toEqual(expect.arrayContaining(['prompt_queued', 'prompt_edited', 'prompt_triggered']));
     // A run that ended answers false; a triggered prompt cannot be edited or removed.
     expect(sessions.control({ op: 'removeQueuedPrompt', sessionId: sid, args: { promptId } })).toEqual({ ok: false });
@@ -278,8 +280,11 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     const rows = dal.residentRows(sid).filter((r) => r.kind === 'system').map((r) => r.body);
     expect(rows.some((b) => b.includes('reasoning level switched to high'))).toBe(true);
     expect(rows.some((b) => b.includes('Entry model switched to fast'))).toBe(true);
-    const todo = JSON.parse(dal.getSession(sid)!.todo!) as { phases: { name: string; tasks: { id: string }[] }[] };
-    expect(todo.phases[0]!.tasks.map((t) => t.id)).toContain('extra');
+    const todo = JSON.parse(dal.getSession(sid)!.todo!) as { phases: { name: string; tasks: { id: string; text: string }[] }[] };
+    // REQ-CHAT-089: the added task carries the backend's id, never the one the request sent.
+    const added = todo.phases[0]!.tasks.find((t) => t.text === 'one more thing');
+    expect(added?.id).toMatch(/^[0-9a-f]{8}$/);
+    expect(todo.phases[0]!.tasks.map((t) => t.id)).not.toContain('extra');
     expect(dal.timelineOf(sid).map((t) => t.name)).toContain('todo_edited');
     expect(sessions.control({ op: 'editTodo', sessionId: asSessionId('S-other'), args: { op: 'add', id: 'x', text: 'y' } })).toEqual({ ok: false });
   });

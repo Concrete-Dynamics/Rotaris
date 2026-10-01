@@ -6635,6 +6635,39 @@ REQ-TOOLS-101 does not list), answered as built, or adopted — the session carr
 description then no longer naming the shell the next command runs in; and whether the call's code is `execution_error`
 with no exit code, as built, or something REQ-TOOLS-179 names.
 
+**The sibling case, a command that ENDS the session's shell** *(added 2026-10-01 by the repair of
+[`a-command-that-exits-the-session-shell-reads-as-a-soft-pause`](../defects/fixed/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md);
+the same question by another road, raised with this reading built and not ruled)*. `exit`, `exit 3`, `logout` or a
+`kill -9 $$` loses the end frame as a replacement does, because the shell that would print it is gone; the call read as a
+soft pause after the whole no-output window, and the next call ran in a fresh shell with the directory and variables
+gone while it reported `session_reinitialized` false. The build now proceeds under the replacement's reading, extended:
+- **The running call ends when the PTY reports the shell's exit** (`ForegroundSession.shellExited`; node-pty emits it
+  once the PTY's output is drained, so what the command wrote first is in the capture). It is REQ-TOOLS-103's failure
+  before completion: `execution_error`, `ExecutionError`, no exit code, and a detail that says the command ended the
+  session's shell. Nothing is killed, since the shell has gone. The session is respawned on its shell with PD-TOOLS-001's
+  snapshot re-applied, `kill_status` `session_reset` (or `reset_failed` when no shell could be started), and the detail
+  names what was restored. The next call reports `session_reinitialized` true. Measured with dash through a real PTY, three runs
+  at a load average of about 3.4: `exit 3` ended the call in 16 to 37 ms and `kill -9 $$` in 12 to 18 ms. Before the
+  repair both took the case's whole 3 s no-output window.
+- **A soft-paused command that ends the shell** is closed with no status of its own. The poll that hands it over reports
+  it the same way, as `the paused command ended the session's shell`, and respawns the shell then. A later call that met
+  the ended shell first has respawned it already, and that poll reports `kill_status` null and says the session has been
+  restarted since.
+- **A shell that ended between calls**, with no call waiting on it (keystrokes the agent or the terminal window wrote,
+  an outside signal), is respawned by the next call before its command is written, with the snapshot re-applied. That
+  call reports `session_reinitialized` true, and its detail opens by saying that the shell had ended and what was restored.
+- **Nothing here depends on `/proc`.** The exit is the PTY's own event, so the reading holds on every host and both
+  backends. PowerShell's `exit` takes the same path, which is reasoned and not run on a Windows host.
+- **A background job the exiting command left behind keeps running** after the respawn (`sleep 8 & exit 2`, seen by
+  the repair's verification on 2026-10-01). Nothing kills it, because the shell that owned it has gone and nothing was
+  reset. The fresh shell does not know it, as PD-TOOLS-001 already says of background jobs. A ruling that the shell's end
+  should end its jobs too, as a hard-timeout reset ends the tree, is part of this question.
+
+The two cases "REQ-TOOLS-097/098/100/103 (OQ-144): a command that ends the session's shell …" and "REQ-TOOLS-098/100/103
+(OQ-144): a soft-paused command that ends the shell …" in `terminal/terminal.test.ts` pin it, and both are red on the
+unrepaired code (`soft_pause`). A ruling on this question rules this case too: whether ending the shell is refused,
+answered as built, or left to end the session; and which code the call carries.
+
 **OQ-145 — Whose grant does a persona's `tool_restrictions` map narrow, and what do its keys and lists mean?**
 *(REQ-TOOLS-006 (4), "the per-persona `tool_restrictions` map"; REQ-CONFIG-103, "map from name to allowed-tool list …
 restricts named entities; an entity absent from the map is unrestricted"; REQ-CONFIG-062, which canonicalises "every key
@@ -6723,7 +6756,17 @@ status of its own: the shell abandoned the rest of its line, as an interrupt (C-
 ran"), so its `failure_kind` is `execution_error`. Its output is what it wrote up to the next call's start marker:
 collection stops there, and the echo of that call's wrapper is dropped whole. `terminal.test.ts`'s cases
 "REQ-TOOLS-098/127/179 (A10): a soft-paused command interrupted with C-c …", "REQ-TOOLS-098/127 (A10): after C-c, a
-next call longer than …" and "REQ-TOOLS-127 (A10): the echo of a next call wider than the screen …" pin it.
+next call longer than …" and "REQ-TOOLS-127 (A10): the echo of a next call wider than the screen …" pin it. *(Since 2026-10-01 the next call that closes such
+a paused call hands it over itself, under OQ-164's reading. Its observation's detail says the paused command
+ended "with no exit status of its own", and what the command wrote follows the detail. The poll's reading above still
+holds for a poll that closes it. The A10 cases now read the hand-over from that call. A soft pause queued behind the
+interrupted one, OQ-164's arrangement, briefly re-opened this question's defect: the poll looked for the end only of the
+polled call, which is queued behind the interrupted one, and read "still running" over a dead command. It was corrected
+before its merge: the poll looks at every open paused call, its no-op line closes them all, and a line the interrupt
+discarded is reported as never run (OQ-164's reading). ~~Its no-op line closes them all~~ was still false while the
+interrupt marked the interrupted call alone: when that command survived the interrupt and ended on its own, the queued
+call, unmarked, read "still running" on every poll. Found by the second verification on 2026-10-01 and corrected before
+the merge: the interrupt marks every open paused call.)*
 
 **What a ruling decides.** Which exit status and outcome that poll carries: −1 with the reason, as built; a status
 the product recovers from the shell (which would need the wrapper to carry the previous `$?`, on both backends); or a
@@ -8112,19 +8155,119 @@ In the default live run's `terminal` scenario `node -e "setTimeout(…, 45000)"`
 and its observation said only "The command exited with code 0." The paused command's own end was held for a poll that
 never came.
 
-**What the build proceeds under.** The new call's line is submitted at once, and the shell queues it behind the paused
+~~**What the build proceeds under.** The new call's line is submitted at once, and the shell queues it behind the paused
 command (`ForegroundSession.execute`). Its no-output window and its timeout run from its own start, so they include the
 wait. Its observation states its own outcome and nothing of the paused command. The paused command's share of the stream
 ends at its own end frame or at the new call's start marker, and its end is kept for the next empty poll (`pausedDone`,
 `poll`). The code also shows a case the run did not reach. A later soft pause, including the new call's own when the
 paused command stays silent for its whole no-output window, replaces the kept call, and that call's end is never
-reported.
+reported.~~ *(Superseded 2026-10-01 by the reading below. That reading was built by the partial repair of
+[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`](../defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md),
+which fixes only the loss and the silence. The question stays open, and none of its four points is ruled.)*
+
+**What the build proceeds under** (since 2026-10-01). The new call is still neither refused nor made to interrupt the paused
+command. Its line is submitted at once and the shell queues it. Its no-output window and its timeout still run from its
+own start, so they include the wait. What changed is what it reports, so that no paused command's end is lost or left
+for a poll nobody is prompted to make:
+- **The new call's observation reports the paused command beside its own outcome** (`ForegroundResult.earlier`,
+  `earlierSentence` in `terminal/index.ts`). The detail opens with one sentence per paused command. A command the call
+  waited behind gets "This command was submitted while the soft-paused command `…` was still running, and waited behind
+  it: that command ended N seconds after this command was submitted, with exit code X". A command that had ended before
+  the call and was never polled gets "… had ended N seconds before this command was submitted, with exit code X, and no
+  poll had reported it". The end is the paused command's own status. It is OQ-147's "no exit status of its own" when an
+  interrupt made the shell abandon its line, "by ending the session's shell" for OQ-144's shell-exit case, and "when the
+  terminal session was reset" when the new call's own timeout, cancel or kill reset the session under it. What the paused
+  command wrote since it was last observed follows the detail, ahead of the call's own output section, which is
+  unchanged. The new call's exit code, outcome and classification are its own. The paused command is handed over there,
+  so a poll after finds nothing to poll.
+- **A second soft pause no longer disposes of the first** (`pausedAhead`, `pausedEnded` in `foreground.ts`). A new call
+  that soft-pauses while the paused command is still running has not started yet. Its observation says so ("… that
+  command is still running: the shell has not started this command yet, and runs it once that command ends"), and it
+  carries none of the earlier command's output as its own. The earlier call is kept ahead of it, still fed its share of
+  the stream, and the next observation reports its end: the poll ("… ahead of the polled one ended N seconds ago, with
+  exit code X") or a later call.
+  ~~It carries none of the earlier command's output as its own.~~ *(False of the first build, found by its verification
+  on 2026-10-01: true of the pause's own return only. A poll of the queued call before the shell had started it handed
+  the earlier command's output over as the queued command's own, beside the same text in the earlier command's report.)*
+  Nothing before the queued call's own printed start marker is its own now, on its pause, its polls, or any other outcome
+  (`unstartedShare` and `PausedCall.started` in `foreground.ts`; `CommandRegion.started` for a call still waiting). A
+  poll before the shell has started it hands over no output of its own, and its hold takes no byte before that marker.
+- ~~**An interrupt reaches the oldest open paused call**, the line the shell is running. That call is closed at the next
+  line's start marker, as OQ-147's reading already closes it.~~ *(False of the first build, found by its verification
+  on 2026-10-01. An interrupt makes the terminal discard every line the shell has not read yet, so a line queued
+  behind the interrupted one never runs and its start marker never prints. The interrupted call was closed only by the
+  next call's END frame, cut at a marker that never appeared, and the next call carried its own start marker, output and
+  end frame as the paused command's. The queued call read as abandoned by the shell, and both as having made the next
+  call wait. A poll after the interrupt looked for the end only of the polled call, which was queued behind the
+  interrupted one, so it wrote nothing and read "still running" over a dead command.)*
+  **An interrupt reaches the oldest open paused call**, the line the shell is running, and the terminal discards every
+  line queued behind it:
+  - A paused call closes at the printed start marker of ANY line written after it, whichever prints first
+    (`pausedShare`), and its capture is cut at that marker.
+  - A paused call whose own start marker never printed when a later line's did never ran, and is reported so, with no exit
+    code: "… never ran, so it has no exit code: its line was gone before the shell reached it (an interrupt (C-c)
+    discards a line the shell has not read yet, and a command that reads its input takes it)". Its poll is an
+    `execution_error` saying the same.
+  - ~~A poll after the interrupt looks at every open paused call. When any is interrupted, its no-op line (OQ-147) goes
+    after all of them, so its printed marker closes them all.~~ *(False of the second build, found by its verification
+    on 2026-10-01: the interrupt marked the oldest open paused call alone. A command that handles or ignores SIGINT
+    (`trap '' INT`, a graceful-shutdown handler) ends on its own frame after the interrupt, and its call closes with
+    its own status. The queued call, whose line the same interrupt discarded, was then the only open paused call and
+    was unmarked, so no poll wrote a no-op line, and every poll read it "still running" over an idle prompt until the
+    next command.)*
+    The interrupt marks every open paused call, since it discards every line queued behind the one the shell is running
+    (`noteInterrupt`). A poll after it looks at every open paused call; when any is marked, its no-op line (OQ-147) goes
+    after all of them, so its printed marker closes whichever are still open, whether the interrupted command died of
+    the interrupt or ended on its own.
+  - A call that was waiting behind the paused command when the terminal window's interrupt (REQ-SHELL-093) came is
+    discarded the same way. It looks for the end of the line ahead of it as a running call does (OQ-147), and ends at once
+    as never run, with no reset.
+  - A call submitted after the interrupt is not said to have waited. Its detail says that an interrupt had been sent
+    before it was submitted, how the paused command ended, and that the shell was past that line when it started this
+    command, N seconds after it was submitted.
+  - Without an interrupt, a line queued behind a paused command can still go unrun: a paused command that reads its
+    input takes the queued line, and ends on its own frame. Its call closes with its own status. The queued call's
+    start marker never prints, and nothing tells the product the shell is past that line until a later line's marker
+    prints, so it reads "still running" until the next command, which reports it as never run. The poll writes no
+    no-op line there, since with no interrupt sent it cannot tell a line the command took from one the shell is about to
+    read, and a no-op line written into a command still reading its input is OQ-168's hazard. This was so before the
+    repair too; it is stated here, not built.
+- **A queued call that the session's reset or the shell's end closes before its line ran** is reported in the never-ran
+  form: "… never ran, so it has no exit code: the terminal session was reset before its shell reached that line", or
+  "… the session's shell was gone before it reached that line" (`reset-before` and `never-ran` in `PausedEnd`).
+  ~~"This command was submitted while the soft-paused command `…` was still running, and waited behind it: that command
+  ended N seconds after …, without having run, the session's shell being gone before it".~~ *(False of the second build,
+  found by its verification on 2026-10-01: it called a command that never ran "still running", and blamed the shell
+  where the session's reset had ended it.)*
+- **What is carried of a paused command is not counted in REQ-TOOLS-097's 100,000-character cap** on the call's own
+  output. It is bounded by the paused call's own screen, `FOREGROUND_SCREEN_LINES` rows at the session's width, once per
+  paused command reported. The cap is applied to the call's own output section alone. Whether a call's whole observation
+  should share one cap is part of this question.
+- **The tool description states the third move** beside REQ-TOOLS-098's two: "a new command issued meanwhile waits behind
+  it, and its result reports how the paused one ended".
+
+The cases "REQ-TOOLS-098/179 (OQ-164): a command issued behind a still-running soft-paused one …" and "… a paused command
+that ended unpolled is reported by the next command, and a second soft pause no longer loses the first one's end" in
+`terminal/terminal.test.ts` pin this reading. Both are red on the code before it. The verification's three findings are
+pinned by four real-PTY cases, each red on the first build: "… after C-c, a soft pause queued behind the interrupted one
+never ran …", "… a poll after C-c with a soft pause queued behind the interrupted one reads both as ended …", "… a poll
+of a soft pause the shell has not started yet hands over nothing of the earlier command's as its own", and "… the
+window's interrupt while a call waits behind a soft-paused command ends that call as never run …". The pure case "…
+a paused call's share ends at the first later line's printed marker …" pins the cut over every two-chunk split. The case
+"… a soft-paused command that ends the shell ends a call waiting behind it as never run …" pins OQ-144's shell-exit case
+in this arrangement. The second verification's finding is pinned by "… after C-c, a command that survives the interrupt
+ends with its own status, and the soft pause queued behind it reads never run on the next poll", and the reset's sentence
+by "… a soft pause queued behind a running one that a reset closes is reported as never run, by the reset"; both are red
+on the code before them. Five A10 cases that read the paused
+command's end from a poll after the next call now read it from the next call's report. Each keeps its assertion: the
+paused command's own status, nothing of the later calls, the echo or the end frames in what is carried of it, and no
+marker anywhere.
 
 **What a ruling decides.** Whether a call made while a command is soft-paused is refused with the remedy REQ-TOOLS-098
 names, waits as REQ-TOOLS-187 has a second call wait (and if so, whether the wait counts against the new call's window
 and timeout), or interrupts the paused command. And whether the new call's observation says that it waited behind the
 paused command and carries that command's end, meaning its output since the last poll and its exit status, rather than
-leaving it to a poll.
+leaving it to a poll. *(Unchanged by the 2026-10-01 build: the report it carries is the reading above, not a ruling on the last point.)*
 
 **OQ-165 — What is the optimistic `cancelling` of the run's cancel: where is it shown, and until when?** *(REQ-MONITOR-127,
 "On confirmation the session status is optimistically set to `cancelling` … Given a refusal, the status is restored to
@@ -8345,12 +8488,49 @@ one (it adds nothing for the run host's own work around the stages, which the bu
 coordinator should instead ask the run host for the setup's status when the bound passes; and whether REQ-WORKSPACE-092's
 "nothing the step launched SHALL still be running 5 s later" binds a step whose run host was lost.
 
-**OQ-170 — With two main windows open, which window shows a workspace's initialization banners?** *(REQ-WORKSPACE-103,
+**OQ-170 — What becomes of a parked run's tool ports, and of the `tool_calls` ring row of a call that outlives its run's
+park?** *(REQ-MONITOR-105, "a running tool renders as a pulsing in-progress row"; REQ-MONITOR-228, "After a run has ended,
+no row may still render as in progress"; REQ-SESSION-129, a call that was under way and produced no result is a failure;
+REQ-ORCH-153 and REQ-ORCH-087, the plan gate and the message-limit pause, neither a termination; ADR-0024, the ring.
+Raised 2026-10-01 under [R-067](../product/requests.md#r-067) by the repair of residual 2 of
+[`a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md`](../defects/a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md).
+Open.)*
+
+A run that parks — at the plan gate or at the message-limit pause — does not tear down, so it never closes the tool ports
+it built (`Run.closePorts` runs only at the teardown), and the run host's gate sink never settles the ring rows its calls
+left open (`writerSink`'s `close`, `apps/desktop/src/run-host/tools.ts`). A call of that run that ignored its abort may
+still be under way, so the crash record a continue makes skips the ring settle while such a run of this process exists
+(`ownCallsMayRun`, `run/crash.ts`). No requirement names a parked run's ports, or the ring row of a call that outlives
+its run's park, and two cases follow that the specification does not settle:
+
+- **A call that never returns.** Nothing closes the parked run's ports, the continue leaves the row to the call, and the
+  call never settles it: the row reads `running` for good, a call still under way by REQ-MONITOR-105, long after its run
+  moved on (the driven `stray` rows of `packages/engine/src/run/crash.test.ts` read so).
+- **Two processes over one workspace.** Process A parks a run; process B continues the session and crashes; A continues
+  again and, holding its parked run, skips the settle, leaving B's dead ring rows `running`. A ring row carries no process
+  identity, so a crash record cannot tell a dead process's row from a live one's (a question that touches ESC-10's ground).
+
+**What the build proceeds under.** A parked run keeps its ports open; a continue closes none of them; the crash record a
+continue makes settles no ring row while any run of this process on the session parked with its ports open
+(`Live.portsOpen` in `packages/engine/src/sessions.ts`, every such run and not only the last — the part of the note
+repaired with this question); a ring row carries no process identity. Both cases above stand. A parked run never reaches
+its teardown, so it never leaves `Live.portsOpen`: once any run of a session parks, this process skips the ring settle for
+that session for as long as the session stays live in it. That widens the second case: before the repair a later run's
+teardown re-armed the settle, so another process's dead rows were settled at the next continue after it; under this
+reading they are not settled by this process at all after a park, and stay `running` until a repair or another process's
+continue records the crash.
+
+**What a ruling decides.** Whether a park closes its run's ports, settling their open calls through the gate sink's
+`close` as an orderly end does (so the call that later returns writes nothing); whether a continue abandons the ports of
+the parked run it replaces, settling their rows as cut off; or whether the ring rows are stamped with the process that
+opened them, through an appended store migration, so a crash record settles exactly the rows of a dead process.
+
+**OQ-171 — With two main windows open, which window shows a workspace's initialization banners?** *(REQ-WORKSPACE-103,
 "A failed background run SHALL reach an error banner \"Project setup did not finish\""; REQ-WORKSPACE-102's "Project setup
 could not be checked" error surface; REQ-WORKSPACE-013, "The replacement window SHALL resolve initialization for its own
 workspace independently"; PD-SHELL-001's two main windows, one per project. Raised 2026-10-01 by the repair of
-[`initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`](../defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md).
-Open.)*
+[`initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`](../defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md);
+raised as OQ-170 on its branch and renumbered at the merge, OQ-170 having been taken on `main` meanwhile. Open.)*
 
 Initialization now answers, records and publishes for each window's own workspace: channel 12 reaches only the windows
 holding the workspace the state is about. Its two banners do not travel on channel 12. They are notices, and the
@@ -8366,14 +8546,15 @@ for a workspace no window holds any more is not raised (OQ-141's reading).
 **What a ruling decides.** Whether these banners are the window's (shown only in the windows holding the workspace) or
 the application's; and, if the application's, whether they name the project they concern.
 
-**OQ-171 — At a close, which bounds a setup step's termination: REQ-MCP-099's 5 s grace, or the close's 5 s?**
+**OQ-172 — At a close, which bounds a setup step's termination: REQ-MCP-099's 5 s grace, or the close's 5 s?**
 *(REQ-MCP-099, "on cancellation or timeout the child SHALL be asked to terminate, given 5 seconds to exit and then
 force-killed"; REQ-WORKSPACE-109, "Closing the application while a run is under way SHALL raise no dialog and SHALL
 complete within 5000 ms, the run being stopped by force if it has not ended by then"; REQ-WORKSPACE-092, "when the
 application is closed while setup is running, nothing the step launched SHALL still be running 5 s later". Raised
 2026-10-01 by the repair of
 [`an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`](../defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md),
-on its verifier's finding. Open.)*
+on its verifier's finding; raised as OQ-171 on its branch and renumbered at the merge, OQ-170 having been taken on `main`
+meanwhile. Open.)*
 
 At an orderly quit the window's close cancels the initialization run, so the step in flight is asked to terminate under
 REQ-MCP-099's cancellation: 5 s, then the force-kill. The run host's `shutdown` follows within milliseconds (measured

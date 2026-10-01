@@ -50,7 +50,7 @@ ADR-0035, ADR-0064).** On POSIX each code-intelligence setup step now leads a pr
 go to the group. The run host's `shutdown` ends a setup under way with a 2 s grace (`McpHost.endSetup`) before it exits.
 The initialization coordinator says a cancellation undelivered at a quit at `info`, reading `QuitState`. See the process
 view, `mcp.setup` and `initialization.*`, and the runtime view's paragraph on the application's end; the 2 s grace
-overrides REQ-MCP-099's 5 s at a close, the build's reading of OQ-171. This repairs
+overrides REQ-MCP-099's 5 s at a close, the build's reading of OQ-172. This repairs
 `an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`. No package, edge,
 process, message kind, channel, command or store column changed.
 
@@ -61,6 +61,28 @@ the run's own workspace identifier, and `config`'s registry tells an applicabili
 judged for (`ApplicabilityContext`). See the process view, `mcp.setup`, `initialization.*` and channel 12. This repairs
 `initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`. No package, edge, process, message
 kind, channel, command or store column changed.
+
+**Every task and phase id the engine assigns is 8 lowercase hexadecimal characters (REQ-CHAT-089, REQ-CHAT-040).**
+`mintTodoId` (`run/todo.ts`) mints each, unique within the todo and, for a planner task, among the task ids the session's
+iterations recorded: the first run's task (was `<session>:main:1`), a continue's (`continuedTaskId`, was
+`<session>:continued:<n>`), a queued prompt's (`Run.consumeQueued`, was the prompt's UUID — the prompt is found by its
+task's name and the `prompt_triggered` entry), a planner todo edit's added task (the id a request sends is no longer
+recorded), an improvement run's tasks and phase (`Todo.seeded`, at the run's creation of its todo from main's plan; they were
+the proposals' `imp_…` ids and no phase id — the proposal stays named in each task's payload), and a user's add to an
+agent's or a child's todo (`editAgentTodo`, now minted against the document's ids). A planner phase gains an optional `id`
+(`Phase.id`), minted where `Todo` creates the phase; the plan shows it (`projectPlannerTodo`), and an edit names a phase by
+it or, for a phase an earlier build created with none, by its name. Records under the old forms read back unchanged.
+This repairs `a-queued-prompts-task-id-is-not-eight-hex-characters.md`; `part-j-proof`'s queue scenario asserts it. The
+**runtime view**'s loop diagram and §2 iteration paragraph say so. No package, edge, process, message kind, channel,
+command or store column changed (the todo column's JSON gains the phase's `id`).
+
+**A later run's teardown no longer re-arms the crash record's ring settle over an earlier parked run's rows
+(REQ-MONITOR-105, REQ-MONITOR-228, REQ-SESSION-129, REQ-ORCH-153, REQ-ORCH-087, ADR-0024, OQ-170).** `Sessions` keeps, per
+live session, every run of this process that parked without closing its tool ports (`Live.portsOpen`); a continue passes
+`ownCallsMayRun` while any of them has its ports open, and a run leaves the set once it has closed them. Before, only the
+session's current run was read. This repairs residual 2 of `a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md`,
+which stays open for residuals 1 and 3 (OQ-170). The **runtime view**'s §2 crash paragraph says so. No package, edge,
+process, message kind, channel, command or store column changed.
 
 **One fact, one emitter in the application log (PD-MONITOR-002, live-run finding a71-9).** Main's `repository.read` and
 `git.read` handlers no longer restate the workspace service's repository and Git-view lines, main's credentials ask no

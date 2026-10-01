@@ -75,7 +75,7 @@ export const SETUP_TERMINATE_GRACE_MS: Millis = millis(5_000);
  * step is asked to terminate and force-killed after this much, inside both bounds with the poll and the host's own exit
  * to spare. The figure is the build's: the specification bounds the close, not the step's share of it. It overrides
  * REQ-MCP-099's 5 s cancellation grace at every close with a step running, a cancellation already under way included —
- * the build's reading of a conflict between the requirements, raised as OQ-171 (`docs/architecture/open-questions.md`).
+ * the build's reading of a conflict between the requirements, raised as OQ-172 (`docs/architecture/open-questions.md`).
  */
 export const SETUP_SHUTDOWN_GRACE_MS: Millis = millis(2_000);
 /** How long the termination waits for a force-kill to be acted on, and how often it looks. */

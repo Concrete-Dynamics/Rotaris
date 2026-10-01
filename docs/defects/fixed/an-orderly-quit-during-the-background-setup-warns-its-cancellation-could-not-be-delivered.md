@@ -122,7 +122,7 @@ ran, as root under Xvfb, Node 24.
   answered, which cut the orderly end short and left 8b's stand-in running past the launch; it now waits for the exit
   first, and the second run left no stand-in behind.
 
-**Raised:** [OQ-171](../../architecture/open-questions.md), on the verifier's finding. At an orderly quit the window's
+**Raised:** [OQ-172](../../architecture/open-questions.md), on the verifier's finding. At an orderly quit the window's
 close cancels the run a few milliseconds before the run host's shutdown arrives, and the shutdown cuts the cancellation's
 grace to 2 s, so REQ-MCP-099's 5 s grace is never given at a close. The build reads REQ-WORKSPACE-109's 5000 ms and
 REQ-WORKSPACE-092's 5 s as binding there; a ruling decides which governs.

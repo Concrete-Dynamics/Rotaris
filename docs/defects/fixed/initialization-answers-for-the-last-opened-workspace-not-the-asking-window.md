@@ -58,4 +58,4 @@ then ran to its own recorded outcome. Result: 44 passed, 0 failed, 2 skipped, as
 `--skip-build` after `pnpm build`.
 
 **Left open:** which window shows a workspace's initialization banners, which are application notices shown in every
-window. Raised as OQ-170.
+window. Raised as OQ-171.

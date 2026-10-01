@@ -4,7 +4,7 @@ import type { ChildInsert, ChildRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
 import type { ArtifactStore } from '../artifacts/store.js';
 import { canonicaliseName, mintTaskId, recordedRootNames, takenTaskIds, uniqueUnderParent } from './naming.js';
-import { EMPTY_MCP_EVIDENCE, knownRolesMessage, resolveRole, type Persona, type PersonaResolver } from './personas.js';
+import { EMPTY_MCP_EVIDENCE, knownRolesMessage, resolveRole, type AgentGrant, type Persona, type PersonaResolver } from './personas.js';
 import type { RanCommand } from '../artifacts/record.js';
 import { inheritedContextBlock } from './notify.js';
 
@@ -135,7 +135,6 @@ export interface SpawnInput {
   readonly category: string;
   readonly background: boolean;
   readonly modelKey: string;
-  readonly grantedTools: readonly string[];
   /** PD-ORCH-004: the child this one continues, admitted by the caller before the spawn; absent for ordinary work. */
   readonly continuationOf?: string | undefined;
   /** PD-TOOLS-006 revision 2: the validated patterns the child declared, stored with its record; absent means none. */
@@ -338,9 +337,17 @@ export class ChildLedger {
     const row: Omit<ChildInsert, 'session_id' | 'spawned_at'> = {
       task_id: taskId, canonical_name: canonical, given_name: input.taskName, persona: role.persona.name, state, parent_id: effectiveParentId, depth,
       iteration: this.deps.iteration, model_key: input.modelKey, category: input.category, background: input.background ? 1 : 0, task: input.task,
-      depends_on: JSON.stringify(input.dependsOn), inherited_context: JSON.stringify(input.inheritedContext), granted_tools: JSON.stringify(input.grantedTools),
-      // REQ-MCP-065 / REQ-MCP-114 (Part S): the grant evidence at spawn — `{ granted: {server: [tool…]}, servers: [{name, transport, origin, fate, reason?}] }` — from the persona's resolver; `{}` was written until then.
-      granted_mcp: JSON.stringify(role.persona.mcpEvidence?.() ?? EMPTY_MCP_EVIDENCE),
+      depends_on: JSON.stringify(input.dependsOn), inherited_context: JSON.stringify(input.inheritedContext),
+      /*
+       * REQ-MCP-065 with REQ-TOOLS-006: no grant at spawn. A grant is what the child's tool port puts in force — the native
+       * tools REQ-TOOLS-006's controls leave and the MCP surface after them, `{ granted: {server: [tool…]}, servers: [{name,
+       * transport, origin, fate, reason?}] }` — and `recordGrant` writes it once that port is ready. Until 2026-10-01 the
+       * spawn wrote the persona's declared tools and its MCP surface before any control, so a tool a control removed was
+       * recorded as granted (`docs/defects/fixed/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
+       * Until a port reports, REQ-MONITOR-049's stand-in (the declared tools) is the surface's, not the record's.
+       */
+      granted_tools: '[]',
+      granted_mcp: JSON.stringify(EMPTY_MCP_EVIDENCE),
       // PD-ORCH-004: "A child delegated as a continuation carries that relationship in its record."
       continuation_of: input.continuationOf ?? null,
       // PD-TOOLS-006 revision 2: "the `write_scope` a child declared is stored with its record".
@@ -402,6 +409,11 @@ export class ChildLedger {
   }
   markObserved(taskId: string): void {
     this.deps.dal.setChildObserved(this.deps.sessionId, taskId);
+  }
+  /** REQ-MCP-065 / REQ-TOOLS-006: the grant the child's port put in force, recorded on its row once the port is ready. */
+  recordGrant(taskId: string, grant: AgentGrant): void {
+    const r = this.deps.writer.recordChildGrant(taskId, grant);
+    if (!r.ok) this.deps.warn(`the grant of child ${taskId} could not be recorded: ${r.error.code}`);
   }
   markContextInjected(taskId: string): void {
     this.deps.dal.setChildContextInjected(this.deps.sessionId, taskId);

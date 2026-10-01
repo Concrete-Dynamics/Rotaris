@@ -15,6 +15,10 @@ agent, and nothing denies it. Pinned by `packages/ui/src/inspector-links.test.ts
 (acceptance A36)"), red before the change, and by `pnpm artifacts-proof` item 2, which now reads the running run-level
 agent's ring caption in the built app and fails when it lacks "This agent's own context window: N of M tokens." or says
 "does not carry" — run green against the repair, and red against a build of the base's `Inspector.tsx`.
+The live run that found it shows it too: the `ask` scenario now probes the caption at the end and checks the same two
+things, and `pnpm live-run --confirm --skip-build --only=ask` against `katalyst` passed on 2026-10-01 (pack
+`.live-run/runs/2026-10-01T03-23-52-396Z`, git-ignored): "This agent's own context window: 4,562 of 262,144 tokens.
+Compression at 60% of the limit. Not a session-wide figure.", with no sentence after it.
 
 ## Specs
 

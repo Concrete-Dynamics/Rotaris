@@ -66,6 +66,21 @@ paragraph, its §7 `sessions` row and its §7 heading (the store is now v29), an
 row, say so. Two `sessions` columns were added (store v29); no package, edge, process, message kind, channel or command
 changed.
 
+**The run-level agent's tool history at a plan gate no iteration precedes (REQ-MONITOR-060, REQ-MONITOR-069,
+REQ-ORCH-153, acceptance A21, R-067).** With no run live and no iteration recorded, `entryToolsOf` reads the run-level
+agent's history under every name the tracker holds that is no child's (`AgentActivity.calledToolsWhere`): only a root or
+a child dispatches a call, and before any iteration every root was a plan cycle's, which no row names. This repairs
+`the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md`. The **runtime view**'s
+`entryTools` paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A write through a loaded session from outside a run holds the lock (ADR-0005, REQ-EVENTS-098, REQ-SESSION-060,
+REQ-GIT-094, acceptance A14, R-067).** `Sessions.withWriter`'s live branch — the repair, the safety checkpoint and the
+restore's outcome for a session loaded here — writes under the lock `claimHold` gives (kept, or taken with the one reap
+and given back) and answers `lock-held` with nothing written while another live process holds it. This repairs
+`a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`. The **runtime view**'s §6 lock paragraphs, §6a
+and the `session_locks` row, and the **state-ownership view**'s session-lock row say so. No package, edge, process,
+message kind, channel, command or store column changed.
+
 **A root steer is announced under the root that will take it (REQ-MONITOR-133/134, PD-ORCH-005 clause 4, OQ-97, acceptance
 A24, R-067).** `Run.steer` names a root steer by `Run.rootSteerName`: `rootName` while the current root can still step, the
 run's persona once its execution is over (`rootDone`, set as each root's turn settles unless a rest leaves it `paused`), so a steer submitted after a root

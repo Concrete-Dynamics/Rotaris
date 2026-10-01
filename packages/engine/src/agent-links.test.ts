@@ -37,7 +37,7 @@ describe('engine — the run-level agent\'s tools and the session\'s artifact li
     expect(toSessionRecord(row).artifacts).toEqual([]);
   });
 
-  it('REQ-MONITOR-060/061: a live run reports its own resolution and history; with none, nothing is resolved and the history is the tracker\'s under the latest root\'s persona', () => {
+  it('REQ-MONITOR-060/061 with REQ-ORCH-153: a live run reports its own resolution and history; with none, nothing is resolved and the history is the tracker\'s under the latest root\'s persona, or, before any iteration, under every name that is no child\'s', () => {
     const activity = new AgentActivity();
     activity.started('orchestrator', 'c1', 'delegate');
     activity.settled('orchestrator', 'c1');
@@ -45,8 +45,14 @@ describe('engine — the run-level agent\'s tools and the session\'s artifact li
     activity.started('planner-1', 'c3', 'grep');
     const live = { entryTools: { resolved: ['read_file', 'delegate', 'todo'], called: ['delegate', 'todo'], active: ['todo'] } };
     expect(entryToolsOf(dal, sid, live, activity)).toBe(live.entryTools);
-    // No iteration recorded: no persona to read a history under.
-    expect(entryToolsOf(dal, sid, null, activity)).toEqual({ resolved: [], called: [], active: [] });
+    // No iteration recorded: every root so far was a plan cycle's (REQ-ORCH-153), named by no row, so the history is every
+    // name the tracker holds that is no child's — here the root's, not the child `planner-1`'s (the repair of
+    // the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md; it read none before).
+    dal.insertChild({
+      session_id: sid, task_id: 'bg_00000001', canonical_name: 'planner-1', given_name: 'planner-1', persona: 'planner', state: 'completed', parent_id: 'root', depth: 1, iteration: 1,
+      model_key: 'm', category: '', background: 0, task: 'plan', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: '2026-09-29T00:00:00.000Z',
+    });
+    expect(entryToolsOf(dal, sid, null, activity)).toEqual({ resolved: [], called: ['delegate', 'todo'], active: [] });
     dal.insertIteration({ session_id: sid, iteration: 1, root_task_id: 'root:1', root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: '', task: 'the task', opened_at: '2026-09-29T00:00:01.000Z' });
     expect(entryToolsOf(dal, sid, undefined, activity)).toEqual({ resolved: [], called: ['delegate', 'todo'], active: [] });
   });

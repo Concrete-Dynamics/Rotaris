@@ -619,7 +619,9 @@ finding K1, 2026-09-29) is the same route for its tools: `resolved` is the nativ
 REQ-MONITOR-061), `called`
 and `active` the tracker's under the name the root dispatches as (`Run.entryTools`, `rootName`: a root resumed as the
 entry role keeps the persona its iteration was opened with, OQ-97); with no run live nothing is
-resolved, the history is read under the latest iteration's `root_persona` (`entryToolsOf`), and the surface lets the
+resolved, the history is read under the latest iteration's `root_persona` (`entryToolsOf`) — or, before any iteration,
+under every name the tracker holds that is no child's, which can only be a plan cycle's root's, since a plan cycle has no
+iteration row (REQ-ORCH-153; `AgentActivity.calledToolsWhere`, acceptance A21, 2026-09-29) — and the surface lets the
 role's declared tools stand in (REQ-MONITOR-060; the snapshot's `declaredTools`). **`SessionRecord.entryStalledSeconds`**
 (2026-09-30, OQ-153) is the same route for the root's stall watch's figure. A LIVE run-level agent whose root port
 has not resolved yet — the pre-flight, before `Run.iterate` sets the port — lists nothing (`runLevelGrant`), never the
@@ -1113,6 +1115,17 @@ and the other two claimed nothing at all, so every run after a process's first r
 (`docs/defects/fixed/a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md`; `part-j-proof` samples the
 store through a pause and its Continue and fails on a continued run with no holder).
 
+**A write through a loaded session from outside a run holds the lock too (ADR-0005, REQ-EVENTS-098, 2026-09-29, R-067).**
+`Sessions.withWriter` carries the writes §6a's repair and the restore make from outside a run — `repairOne`
+(REQ-SESSION-060, REQ-GIT-094), `recordSafetyCheckpoint` (REQ-GIT-058 gate 5) and `recordRestore` (REQ-GIT-062). For a
+session live in this process it writes through the live writer only under the lock `claimHold` gives — kept when this
+process holds it, taken with the one reap and given back after the write otherwise — and answers `lock-held` (naming
+the holder's pid and machine) with nothing written while another live process holds it, the refusal the not-loaded
+branch's `SessionWriter.open` already gave. Before this the live branch wrote at once, so after a process's first run
+on a session these writes had no lock row behind them
+(`docs/defects/fixed/a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`; `checkpoint-proof`'s
+`loaded-restore` launch plants a second holder after a loaded session's run and fails on a restore that writes under it).
+
 ## 6a. The session browser's actions reaching a record no run holds (Part U)
 
 Three actions of REQ-SESSION-182 reach a session's record from OUTSIDE a run, all in the run host, none a control operation
@@ -1124,7 +1137,7 @@ of §5 and none a channel: each is a request answered once.
   the crash record (PD-ORCH-005 clause 3, `run/crash.ts`; §2) →
   the lock released last (ADR-0005's note: the entry is written under the lock). `repair(all)` walks the listing rows of
   the workspace; `checkpointListing`'s REQ-GIT-094 repair is the same unit. A loaded, idle session repairs through its
-  own live writer and its projection republishes.
+  own live writer and its projection republishes — under the lock `withWriter` claims for it (below).
 - **Delete** (REQ-SESSION-166, REQ-GIT-069) in this order: (1) `prepareDelete` loads the row, refuses a live or
   unknowable session with its sentence, finds the tree (the binding's worktree, else the workspace root), notes an
   unreadable state; (2) the refs, best-effort — `checkpoint.deleteNamespace` through main to the service, skipped with a
@@ -1151,7 +1164,7 @@ rows carry; NULL otherwise — one still set after its process died is a crash d
 counts and clears) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, `recordRestore`, **`openPlanGate`/`resolvePlanGate`**, **`openPlanRoot`** and `countToolCalls`'s `planRoot` release, **`endIteration`** (the todo only, in the transaction that records `iteration.end` and closes the iteration's row; no save generation, so the renderer sees it with the next save); the binding and the mode at `create` only |
 | `plan_cycles` (**v17**, REQ-ORCH-154; cascade **v20**) | one row per plan cycle: `opened_at`, the role's `plan` VERBATIM (never rewritten after the insert), the classified `intent`, the `todo` the plan implies, the `changes` the user stated when choosing revise into it, the user's `edited` text (NULL until they edit � which is what makes "editing alone never approves it" structural), and the `decision` with `decided_at`. Keyed `(session_id, cycle)`, so an answer is recorded once and a second answer for the same cycle changes nothing. `session_id` carries `REFERENCES sessions(session_id) ON DELETE CASCADE` since v20 (REQ-SESSION-166: the VERBATIM plan text leaves with the session; rows already orphaned are dropped by the migration, which is the delete the user asked for) | `openPlanGate` (one durable transaction with the status and the `plan_gate_opened` entry), `recordPlanEdit`, `resolvePlanGate` |
 | `checkpoints` (v9) | REQ-GIT-016's record, one row per checkpoint keyed `(session_id, sequence)` — ref, commit, created_at, iteration, child_name, `files` as one JSON list, `kind` from REQ-GIT-067's vocabulary; `checkpoint_count` is a count over these rows, never stored (ADR-0039); the listing is `ORDER BY sequence` under the primary key (a plan the store test asserts) | `recordCheckpoint` (insert + the trim to `max_per_session`, one transaction with the timeline entry and the event) |
-| `session_locks` | `(session_id, pid, host, acquired_at)` — the capability token (ADR-0005) | `create`/`open` (INSERT OR IGNORE), a continue's `holdForContinue` and the at-rest cancel's `lockForWrite` (both through `claimHold` → `claimLockReaping`), `endRun`, release |
+| `session_locks` | `(session_id, pid, host, acquired_at)` — the capability token (ADR-0005) | `create`/`open` (INSERT OR IGNORE), a continue's `holdForContinue`, the at-rest cancel's `lockForWrite` and a loaded session's write outside a run (`withWriter`) (all through `claimHold` → `claimLockReaping`), `endRun`, release |
 | `transcript_rows` | the rows, resident or released to a page (REQ-SESSION-131/192). Part Z added derived `chars` and transient `streamId`. Part AE adds ordered image metadata in `attachments` (v14): original name, content-derived media type, size, session-relative path and SHA-256 digest; bytes remain under the session files directory and reopen verifies availability and digest (REQ-CHAT-046/153/173). **REQ-CHAT-162's `/skills` listing (2026-09-27) is one `system` row whose body is the listing** — the text `contracts/skills.ts` fixes and the row renderer reads back — appended outside any run through the loaded session's writer (`run-host/skills.ts`'s `writeSkillListing`), so it is saved, recorded as a `transcript.row` event and exported like any row; no column and no migration | `appendRow`, `settleRow`, `upsertMessageRow` |
 | `events` | the wire history: one line per event, ordinal per session, trimmed by the retention cap (ADR-0009) | every unit, in the same transaction as what it records |
 | `launch_audits` | one per session, the primary key the one-shot | `recordLaunchAudit` |

@@ -38,3 +38,25 @@ Three readings are possible, and choosing between them is a ruling:
 - `packages/engine/src/children/orchestration.ts`: `cancel` accepts a `paused` child. The terminal listener and
   `completedOutside` then fire its hook on `deps.hooks`, which the run does not clear.
 - `docs/architecture/open-questions.md`: OQ-154, the paths that end a child outside a run's hooks.
+
+## Repaired in part — 2026-10-01 under R-067; the reading is OQ-154's to rule
+
+Confirmed on `fin1-child-cancel-window` (from origin/main 576c2bc) by the note's scratch case, now kept: the order was
+`session_start`, `session_end`, `child_completed(work)`.
+
+The build now takes the second reading above, OQ-154's built one ("fire none"). `Run`'s teardown calls
+`IterationChildren.endLifecycle` once `childCompletionsSettled` has returned and before `session_end` fires; from then
+`completedOutside` queues no hook. The cancel of the paused child is still accepted (`{ ok: true }`), and the child ends
+`cancelled` with its report, its `child_user_cancelled` entry and its teardown, as before; nothing fires after
+`session_end`. A cancel that lands during `childCompletionsSettled`'s wait is still awaited before `session_end`, as before.
+
+Pinned by `packages/engine/src/children/children.test.ts`, the case "REQ-HOOKS-076 / REQ-HOOKS-081 with OQ-154 (the repair
+of a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md) …": `session_end` held, the paused child
+cancelled while it runs, the order `session_start`, `session_end` with nothing after it. Red before the repair (a third
+entry, `child_completed(work)`). Not shown by a proof or a live-run scenario: none cancels a child while `session_end` runs.
+
+**What stays open is the owner's:** the choice between the readings is a ruling. This path is recorded in OQ-154 as its
+fifth, with the reading the build proceeds under and the one answer this path adds (refuse the cancel once the teardown
+has reached that point). If the ruling takes another reading, the repair changes with it; the note closes when OQ-154
+is ruled for this path.
+

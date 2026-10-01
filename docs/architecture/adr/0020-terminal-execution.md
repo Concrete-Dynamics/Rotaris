@@ -373,9 +373,53 @@ in any form. Pinned by eight "(A10)" cases in `terminal.test.ts`: the first repa
 `onData` — the paused call's own status behind the next call, and the interrupted paused call closed by the next call
 with nothing of the later calls in its poll, which is red on the first repair too; and four for the second
 verification — `C-c` then `seq 1 20000`, a 300-character next call on both roads, and two pure cases over
-`pausedShare` and the echo's removal. A poll made after the `C-c` but before any next call still reads "still running"; that is
-recorded, not repaired
-([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../../defects/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).*
+`pausedShare` and the echo's removal. ~~A poll made after the `C-c` but before any next call still reads "still running"; that is
+recorded, not repaired~~ (repaired 2026-10-01, the report-back below)
+([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../../defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).*
+
+*Reported back 2026-10-01, the repair of
+[`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../../defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md):
+**the marker protocol has no frame for a line the shell abandoned, so a poll alone cannot see it end.** After `C-c` an
+interactive `sh` drops the rest of the paused line, and the next call's printed start marker was the only boundary the
+session could read; every poll before that call read −1, `soft_pause`, "The process may still be running", over a process
+that had died (dash through a real PTY, the note's scratch case: `^C`, `#`, −1, `soft_pause`). Keystrokes carrying `C-c`
+written while a command is soft-paused — the agent's `is_input`, the terminal window's interrupt or send-keys — now mark
+the paused call, and a poll of a marked call submits one no-op line of the product's own, OQ-144's handshake by another
+road, once the shell holds its terminal again (`/proc/<pid>/stat`'s `tpgid` against the shell's `pgrp`; measured under dash
+and bash: the job's group while `sleep` runs, the shell's own within 20 ms of the interrupt). Its printed start marker
+closes the paused call as a next call's does, and the poll hands it over with OQ-147's reading. A program that survived
+the interrupt and holds the terminal is written nothing. The line's echo and frames are cut from the capture and
+withheld from the live stream (`CommandRegion.withholdRowsWith`): with the withholding removed, the live tap carried
+`# printf '%s\n' '__rot_…'`. Whether the product may write that line is
+[OQ-168](../open-questions.md), raised with it built. Pinned by three "(OQ-147)" cases in `terminal.test.ts`; the first is
+red on the unrepaired code (a soft pause), and red again with the terminal window's interrupt left unmarked; the second
+is red with the terminal-holder check removed (the line went to the surviving `read`). Off Linux nothing says who holds
+the terminal and the line is submitted at the poll; PowerShell's `$null` no-op is reasoned, not measured. The live run's
+`terminal` scenario carries the interrupt now (`interrupt` in `lib/terminal-shapes.mjs`), and its first run (2026-10-01,
+the self-hosted endpoint) read the poll 1,346 ms after the model's `C-c` as −1, `execution_error`, OQ-147's reason.*
+
+*Reported back 2026-10-01, the same repair's first verification: **~~an interrupt written while a command is soft-paused —
+the agent's `is_input`, the terminal window's interrupt or send-keys — marks the paused call~~, read as covering the window's
+interrupt, covered one ordering only** (kept beside its replacement). The window's interrupt (REQ-SHELL-093) can arrive while
+the call still runs, and the shell abandons the line just the same. Unmarked, the call soft-paused over a dead process and
+every poll read "still running"; given `timeout: 8`, it waited 8,017 ms and reset the session for a process that died at
+1 s (the verifier, dash through a real PTY). Now a `C-c` written while a foreground call runs marks that call
+(`ActiveCall.onInterrupt`). The call watches for its shell holding the terminal again (`INTERRUPT_WATCH_MS`, Linux) and
+then submits the same no-op line (`submitCloser`), whose printed marker (`printsMarker`) ends it with −1, `execution_error`,
+no reset. A call that soft-pauses first carries the mark into the paused call. A poll made at once after the `C-c` waits up
+to `INTERRUPT_SETTLE_MS` for the shell before it decides. Pinned by three more "(OQ-147)" cases in `terminal.test.ts`, the
+three red before the change. Off Linux a running call writes nothing, and a timed call still runs out its cap
+([OQ-168](../open-questions.md)).*
+
+*Reported back 2026-10-01, the repair of
+[`output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll`](../../defects/fixed/output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md)
+(reasoned when it was recorded, measured now with a PTY double): **the soft pause handed its call over across an await.**
+`execute` removed the call's listener, awaited the emulator's write of what it held, and only then opened the paused call
+`onData` feeds, so a chunk delivered inside that write reached neither: no poll returned it, and its end frame resolved the
+call already settled, leaving the paused call "still running" until a later call closed it with no status. The paused
+call is now opened in the same turn as the pause, before the listener goes and the write is awaited. Pinned by
+"REQ-TOOLS-098/179: output and the end frame a command writes while its soft pause is handed over …" in
+`terminal.test.ts`, red on the old order in both its halves.*
 
 *Reported back 2026-09-30 (R-067), from the verifier's live run of the `fix-terminal-output` branch
 ([`a-command-that-replaces-the-shell-reads-as-a-soft-pause`](../../defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md),

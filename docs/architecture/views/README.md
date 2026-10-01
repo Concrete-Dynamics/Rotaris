@@ -45,6 +45,22 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A paused child cancelled while `session_end` runs fires no `child_completed` (REQ-HOOKS-076, REQ-HOOKS-081,
+REQ-HOOKS-003, REQ-ORCH-133, OQ-154, R-067).** `Run`'s teardown calls `IterationChildren.endLifecycle` once it has awaited
+the outside hooks (`childCompletionsSettled`) and before it fires `session_end`; from then `completedOutside` queues none,
+so the user's cancel of one paused child, still accepted until the run has ended, ends it `cancelled` with no hook after
+`session_end` — OQ-154's built reading, recorded there as its fifth path. The defect note
+`a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md` stays open for the ruling. The **runtime
+view**'s hooks paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A child the explicit cancel's grace gave up on is counted (REQ-MONITOR-102, REQ-SESSION-092, REQ-SESSION-094,
+REQ-SESSION-129, OQ-96, R-067).** `IterationChildren.closeGivenUpOn` answers the open calls of every child a stop's grace
+gave up on that no rest left `paused` as cut off, naming no rest, and counts it from its record (`countGivenUpOn`), terminal
+or not. `Run.turn` calls it after the explicit cancel's `outlast` gives up; `rest` calls it in its early return (which it
+replaces) and after it pauses, for a child the user had already cancelled on its own. This repairs
+`a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md`. The **runtime view**'s §4 rest paragraph and its
+`children` row say so. No package, edge, process, message kind, channel, command or store column changed.
+
 **The MCP section prints only what the agent can call (REQ-MCP-062, REQ-ORCH-153).** While the plan gate held, the port's MCP
 loop withheld every server tool from the callable map and the listing, and the section, rendered from the surface the loop
 was given, still printed it; a tool dropped for colliding with a native name was printed the same way. `ready()` now renders
@@ -334,8 +350,8 @@ that declines it therefore loses none of its calls. So does a rest that the expl
 pauses nothing, but first answers such a child's open calls as cut off, naming no rest (OQ-96), and counts it before the
 child ends `cancelled` (found by the repair's verifier). This repairs
 `a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`. A child given up on by the
-explicit cancel's own `outlast`, which no rest follows, or already terminal when given up on, is still not counted
-(`a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md`, open). The **runtime view**'s §4 rest
+explicit cancel's own `outlast`, which no rest follows, or already terminal when given up on, was still not counted
+(`a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md`, repaired 2026-10-01: see the entry above). The **runtime view**'s §4 rest
 paragraph and its `children` row say so. No package, edge, process, message kind, channel, command or store column changed.
 
 **A settle tells the scheduler whatever raised before it (REQ-ORCH-048, REQ-ORCH-052, REQ-TOOLS-156, REQ-HOOKS-079,

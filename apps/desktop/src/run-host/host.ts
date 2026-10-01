@@ -21,7 +21,7 @@ import { randomUUID } from 'node:crypto';
 import { appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 // The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network.
-import { scriptedClient, type ScriptedCallRecord } from './scripted-client.js';
+import { fileLedger, scriptedClient, type ScriptedCallRecord } from './scripted-client.js';
 
 /**
  * RUN HOST — one utilityProcess, forked after `app.ready`, living exactly as
@@ -190,8 +190,16 @@ export function createRunHost() {
   const recordModelCall = modelCallFile === undefined || modelCallFile === '' ? undefined : (call: ScriptedCallRecord): void => {
     try { appendFileSync(modelCallFile, `${JSON.stringify(call)}\n`); } catch (cause) { log(`capture: the model call could not be recorded (${String(cause)})`, 'warn'); }
   };
+  /*
+   * Verification only, and compiled out of a packaged build: where the scripted client keeps each agent's place between
+   * the client of one run and the next — a continue in this process, or after a relaunch — for the call that ends with
+   * no message and so leaves no mark in the record (`StandingLedger`; the repair of
+   * `docs/defects/fixed/the-scripted-client-places-a-root-resumed-before-its-first-reply-as-a-fresh-agent.md`). It sits in
+   * the data directory, which a proof's root isolates; a real provider's client never reads or writes it.
+   */
+  const standing = __ROTARIS_SEAMS__ ? fileLedger(join(resolveUserDirs().data, 'scripted-standing.json'), (m) => log(m, 'warn')) : undefined;
   const configurationDeps = {
-    clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks, log, recordModelCall), codeIntelligenceLaunch,
+    clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks, log, recordModelCall, standing), codeIntelligenceLaunch,
     onRequest: (i: { method: string; url: string; headers: Record<string, string> }) => log(`model request ${i.method} ${i.url}${i.headers['authorization'] ? '' : ' (no authorization header)'}`),
     log: (m: string) => log(m), liveState: () => liveState, bearers: (root: string) => leased.get(root) ?? {},
     confinement: () => confinement.peek(),

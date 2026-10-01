@@ -41,3 +41,32 @@ describe('the todo-app fixture names a test command that works (live-run finding
     expect(run.stdout).toMatch(/(#|ℹ) pass [1-9]/);
   }, 90_000);
 });
+
+/*
+ * Live-run finding a71-10 (fixed/the-todo-fixture-says-there-is-no-network-and-the-live-run-has-one.md): the fixture told
+ * agents there was no network, the live run's workspace had one, and `npm install` failed for another reason — a
+ * `devDependencies` pair whose peer ranges exclude each other. Agents that tested the claim found it false and spent 27
+ * calls of the duress run on npm finding out why the install still failed.
+ */
+describe('the todo-app fixture says only what is true of the live run (live-run finding a71-10)', () => {
+  it.each(WHERE)('%s makes no claim about the network', (file) => {
+    expect(readFileSync(join(fixture, file), 'utf8')).not.toMatch(/\bnetwork\b|\boffline\b/i);
+  });
+
+  /*
+   * The `vite` majors each `@vitejs/plugin-react` major declares as its peer, as the npm registry published them
+   * (read 2026-10-01: 5.0 to 5.1 `^4.2.0 || ^5 || ^6 || ^7`, 6.x `^8.0.0`). A plugin major this table does not name fails
+   * the case, so a change to the pair is checked against the registry once, by the person making it.
+   */
+  const VITE_MAJORS_BY_PLUGIN_MAJOR: Readonly<Record<number, readonly number[]>> = { 5: [4, 5, 6, 7], 6: [8] };
+  const major = (range: string): number => Number(/^\^?(\d+)\./.exec(range)?.[1] ?? Number.NaN);
+
+  it('pairs a vite whose major the react plugin declares as its peer, so an install would resolve', () => {
+    const pkg = JSON.parse(readFileSync(join(fixture, 'package.json'), 'utf8')) as { devDependencies: Record<string, string> };
+    const plugin = major(pkg.devDependencies['@vitejs/plugin-react'] ?? '');
+    const vite = major(pkg.devDependencies['vite'] ?? '');
+    const allowed = VITE_MAJORS_BY_PLUGIN_MAJOR[plugin];
+    expect(allowed, `@vitejs/plugin-react ${plugin}.x is not in the table; read its peer range from the registry`).toBeDefined();
+    expect(allowed).toContain(vite);
+  });
+});

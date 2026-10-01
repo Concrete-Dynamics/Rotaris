@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { FakeClock, millis } from '@rotaris/kernel';
 import { modelError } from '@rotaris/model';
-import { correctiveInstruction, FIXED_CORRECTIVE_INSTRUCTION, hadCorrectiveMessage, stallCadence, stallRecoveryDue, stallRepeat, StallWatch, stallWarning, type StallRecoveryInput, type StallReport } from './stall.js';
+import { correctiveInstruction, duringImposedWait, FIXED_CORRECTIVE_INSTRUCTION, hadCorrectiveMessage, stallCadence, stallImposedWaitLine, stallRecoveryDue, stallRepeat, StallWatch, stallWarning, type ImposedWait, type StallRecoveryInput, type StallReport } from './stall.js';
 
 function watched(thresholdMs: number) {
   const clock = new FakeClock();
   const stalled: StallReport[] = [];
   const waiting: { silentS: number; activeCalls: number }[] = [];
+  const imposed: { silentS: number; wait: ImposedWait }[] = [];
   const evaluated: boolean[] = [];
   let recovered = 0;
   const watch = new StallWatch(clock, millis(thresholdMs), {
-    stalled: (r) => stalled.push(r), waiting: (w) => waiting.push(w), recovered: () => { recovered += 1; }, evaluated: (s) => evaluated.push(s),
+    stalled: (r) => stalled.push(r), waiting: (w) => waiting.push(w), imposed: (w) => imposed.push(w), recovered: () => { recovered += 1; }, evaluated: (s) => evaluated.push(s),
   });
-  return { clock, watch, stalled, waiting, evaluated, recovered: () => recovered };
+  return { clock, watch, stalled, waiting, imposed, evaluated, recovered: () => recovered };
 }
 
 describe('REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch', () => {
@@ -150,6 +151,65 @@ describe('REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch', () => {
     expect([answered.recovered(), answered.watch.stalled]).toEqual([1, false]);
     answered.watch.stop();
     expect(answered.recovered()).toBe(1);
+  });
+
+  it('REQ-MONITOR-117..119 (OQ-173): a 120 s suspended wait on a provider limit is the run\'s wait, not a stall — no `stall` report, no stalled seconds, the wait reported at REQ-MONITOR-118\'s cadence', () => {
+    const w = watched(90_000);
+    w.watch.start();
+    // The step's error part, then the ladder's suspended wait.
+    w.watch.modelEvent('error');
+    const release = w.watch.imposedWait('provider_limit');
+    w.clock.advance(120_000);
+    expect(w.stalled).toEqual([]);
+    expect(w.watch.stalled).toBe(false);
+    expect(w.evaluated).toHaveLength(24);
+    expect(w.evaluated.every((s) => !s)).toBe(true);
+    expect(w.imposed).toEqual([{ silentS: 90, wait: 'provider_limit' }]);
+    // A longer wait repeats the line no sooner than the throttle, as the tool wait does.
+    w.clock.advance(60_000);
+    expect(w.imposed.map((x) => x.silentS)).toEqual([90, 180]);
+    // The release restarts the silence: the next step is counted from it, and REQ-NOTIFY-112's window too.
+    release();
+    expect(w.watch.quietFor()).toBe(0);
+    w.clock.advance(85_000);
+    expect(w.stalled).toEqual([]);
+    w.clock.advance(5_000);
+    expect(w.stalled.map((r) => [r.silentS, r.entry])).toEqual([[90, true]]);
+    // A second release changes nothing.
+    release();
+    expect(w.watch.stalled).toBe(true);
+  });
+
+  it('OQ-173: a stall under way when the run imposes a wait is over and not recovered; overlapping waits end with the last release; a backoff and a compression are reported by name', async () => {
+    const w = watched(12_000);
+    w.watch.start();
+    w.clock.advance(12_000);
+    expect(w.stalled).toHaveLength(1);
+    const compression = w.watch.imposedWait('compression');
+    w.clock.advance(2_000);
+    expect([w.watch.stalled, w.recovered(), w.evaluated.at(-1)]).toEqual([false, 0, false]);
+    expect(w.imposed.map((x) => x.wait)).toEqual(['compression']);
+    const backoff = w.watch.imposedWait('backoff');
+    compression();
+    w.clock.advance(30_000);
+    expect(w.stalled).toHaveLength(1);
+    expect(w.imposed.map((x) => x.wait)).toEqual(['compression', 'backoff']);
+    backoff();
+    w.clock.advance(10_000);
+    expect(w.stalled).toHaveLength(1);
+    w.clock.advance(2_000);
+    expect(w.stalled).toHaveLength(2);
+    // The helper releases however its body ends, and the release restarts the silence: the stall is over, not recovered.
+    await expect(duringImposedWait((wait) => w.watch.imposedWait(wait), 'provider_limit', () => Promise.reject(new Error('cancelled')))).rejects.toThrow('cancelled');
+    w.clock.advance(2_000);
+    expect([w.stalled.length, w.watch.stalled, w.recovered()]).toEqual([2, false, 0]);
+    w.clock.advance(10_000);
+    expect(w.stalled).toHaveLength(3);
+  });
+
+  it('OQ-173: the session-log line names the wait and says it is not a stall', () => {
+    expect(stallImposedWaitLine('build', 'bg_0000000a', 'provider_limit', 90)).toBe('child waiting on a provider limit: build (bg_0000000a) has no model event or token for 90 seconds; the wait is the run\'s own and not a stall (OQ-173)');
+    expect(stallImposedWaitLine('orchestrator', 'bg_0000000b', 'compression', 95, 'agent')).toBe('agent waiting on a context compression: orchestrator (bg_0000000b) has no model event or token for 95 seconds; the wait is the run\'s own and not a stall (OQ-173)');
   });
 
   it('the warning says what REQ-ORCH-089 and REQ-MONITOR-119 say', () => {

@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeClock } from '@rotaris/kernel';
 import type { ChatMessage, ModelRequest, ToolSpec } from '@rotaris/model';
 import { rebuild } from '@rotaris/engine';
-import { scriptedClient } from './scripted-client.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileLedger, memoryLedger, scriptedClient } from './scripted-client.js';
 
 /*
  * The scripted client is verification only; these tests pin the step it takes, which is what a driven proof scripts
@@ -18,8 +21,8 @@ const step = (callId: string, name: string): ChatMessage[] => [
   { role: 'assistant', content: [{ kind: 'text', text: `Calling ${name}. ` }, { kind: 'tool-call', callId, name, args: '{}' }] },
   { role: 'tool', content: [{ kind: 'tool-result', callId, name, result: 'ok', isError: false }] },
 ];
-const request = (messages: readonly ChatMessage[]): ModelRequest => ({
-  model: { providerId: 'scripted', modelId: 'scripted', dialect: 'chat' }, messages, thinking: 'unset', signal: new AbortController().signal,
+const request = (messages: readonly ChatMessage[], signal: AbortSignal = new AbortController().signal): ModelRequest => ({
+  model: { providerId: 'scripted', modelId: 'scripted', dialect: 'chat' }, messages, thinking: 'unset', signal,
   timeoutMs: 1_000, retries: 0, resolveCredential: async () => '', tools: TOOLS,
 });
 const settled = () => new Promise<undefined>((resolve) => { setImmediate(() => resolve(undefined)); });
@@ -158,6 +161,84 @@ describe('scriptedClient — the step a call takes', () => {
     const resumed = scriptedClient(clock, () => {});
     expect(await taken(clock, resumed, compressed)).toBe('write_file');
   });
+
+  /*
+   * The repair of fixed/the-scripted-client-places-a-root-resumed-before-its-first-reply-as-a-fresh-agent.md: a call that
+   * ends with no message leaves nothing in the record, so where the record is silent the client reads the ledger the
+   * client before it kept — the agent's place, written when each call starts and cleared when it answers. The ledger is
+   * shared between the two clients here as the file is between two launches in the run host.
+   */
+  it('PD-ORCH-005: a root resumed before its first reply in a later iteration carries on from the earlier iterations\' steps', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'read,glob,hang,write,git');
+    const ledger = memoryLedger();
+    const unbroken = scriptedClient(clock, () => {}, undefined, ledger);
+    const firstRoot = [text('system', ORCHESTRATOR_SYSTEM), text('user', 'first task')];
+    const one = await answered(clock, unbroken, firstRoot);
+    expect(nameOf(await answered(clock, unbroken, [...firstRoot, one, result(one)]))).toBe('glob');
+    // Iteration 2: the root's first call is the hang, and the quit lands while it is in flight — its record holds only its task.
+    const secondRoot = [text('system', ORCHESTRATOR_SYSTEM), text('user', 'second task')];
+    expect(await interrupted(clock, unbroken, secondRoot)).toBe('failed:aborted');
+    const resumed = scriptedClient(clock, () => {}, undefined, ledger);
+    expect(await taken(clock, resumed, secondRoot)).toBe('write_file');
+  });
+
+  it('PD-ORCH-005: a root resumed while a wait prefix held its first call carries on with the step after the wait', async () => {
+    // An unbroken client's aborted wait consumes only itself; the step after it is the next call's.
+    vi.stubEnv('ROTARIS_SCRIPT', 'read,wait:7000,glob,git');
+    const ledger = memoryLedger();
+    const unbroken = scriptedClient(clock, () => {}, undefined, ledger);
+    expect(nameOf(await answered(clock, unbroken, [text('system', ORCHESTRATOR_SYSTEM), text('user', 'first task')]))).toBe('read_file');
+    const secondRoot = [text('system', ORCHESTRATOR_SYSTEM), text('user', 'second task')];
+    expect(await interrupted(clock, unbroken, secondRoot)).toBe('failed:aborted');
+    const resumed = scriptedClient(clock, () => {}, undefined, ledger);
+    // The continue may deliver a message after the task; the record the entry was written over is still where it begins.
+    expect(await taken(clock, resumed, [...secondRoot, text('user', 'carry on')])).toBe('glob');
+  });
+
+  it('PD-ORCH-005: a record whose last step answered with no message carries on past that step, not into it again', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'read,fail:429,glob');
+    const ledger = memoryLedger();
+    const unbroken = scriptedClient(clock, () => {}, undefined, ledger);
+    const root = [text('system', ORCHESTRATOR_SYSTEM), text('user', 'rate limit me')];
+    const one = await answered(clock, unbroken, root);
+    const record = [...root, one, result(one)];
+    // The rate limit answers with no message; the quit lands in the wait before the retry.
+    expect(await taken(clock, unbroken, record)).toBe('failed:scripted rate limit (HTTP 429)');
+    const resumed = scriptedClient(clock, () => {}, undefined, ledger);
+    expect(await taken(clock, resumed, record)).toBe('glob');
+  });
+
+  it('PD-ORCH-005: a step that answered clears its entry, so a fresh root with the same prompt still starts from the first step', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'read,glob');
+    const ledger = memoryLedger();
+    const root = [text('system', ORCHESTRATOR_SYSTEM), text('user', 'same prompt')];
+    expect(nameOf(await answered(clock, scriptedClient(clock, () => {}, undefined, ledger), root))).toBe('read_file');
+    expect(await taken(clock, scriptedClient(clock, () => {}, undefined, ledger), root)).toBe('read_file');
+  });
+
+  it('PD-ORCH-005: an entry left over another conversation does not place a fresh agent', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'hang,read,glob');
+    const ledger = memoryLedger();
+    expect(await interrupted(clock, scriptedClient(clock, () => {}, undefined, ledger), [text('system', ORCHESTRATOR_SYSTEM), text('user', 'one prompt')])).toBe('failed:aborted');
+    const fresh = scriptedClient(clock, () => {}, undefined, ledger);
+    expect(await interrupted(clock, fresh, [text('system', ORCHESTRATOR_SYSTEM), text('user', 'another prompt')])).toBe('failed:aborted');
+  });
+
+  it('PD-ORCH-005: the file ledger reads back, in a new ledger over the same file, what the last one left', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'read,hang,glob');
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-standing-'));
+    try {
+      const file = join(dir, 'scripted-standing.json');
+      const unbroken = scriptedClient(clock, () => {}, undefined, fileLedger(file, () => {}));
+      const root = [text('system', ORCHESTRATOR_SYSTEM), text('user', 'quit mid-call')];
+      const one = await answered(clock, unbroken, root);
+      const record = [...root, one, result(one)];
+      expect(await interrupted(clock, unbroken, record)).toBe('failed:aborted');
+      // A relaunch: a new run host, a new ledger over the file the last one wrote.
+      const relaunched = scriptedClient(clock, () => {}, undefined, fileLedger(file, () => {}));
+      expect(await taken(clock, relaunched, record)).toBe('glob');
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
 });
 
 const COMPRESSOR_SYSTEM = 'You condense an agent conversation so the agent can carry on with a shorter history.';
@@ -188,4 +269,16 @@ async function answered(clock: FakeClock, client: ReturnType<typeof scriptedClie
     if (part.value.kind === 'tool-call') calls.push({ kind: 'tool-call', callId: part.value.callId, name: part.value.name, args: part.value.argsDelta });
   }
   return { role: 'assistant', content: [...(said ? [{ kind: 'text' as const, text: said }] : []), ...calls] };
+}
+/** A call cut while it is in flight — the quit or a crash: the clock is moved on a little, then the caller aborts. */
+async function interrupted(clock: FakeClock, client: ReturnType<typeof scriptedClient>, messages: readonly ChatMessage[]): Promise<string> {
+  const controller = new AbortController();
+  const parts = client.stream(request(messages, controller.signal))[Symbol.asyncIterator]();
+  const next = parts.next();
+  let r = await Promise.race([next, settled()]);
+  if (r === undefined) { clock.advance(200); r = await Promise.race([next, settled()]); }
+  if (r !== undefined) { await parts.return?.(); return r.done === true ? 'answer' : r.value.ok ? `took:${r.value.value.kind}` : `failed:${r.value.error.headline}`; }
+  controller.abort();
+  const after = await next;
+  return after.done === true ? 'answer' : after.value.ok ? `took:${after.value.value.kind}` : `failed:${after.value.error.headline}`;
 }

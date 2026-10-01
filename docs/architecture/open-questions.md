@@ -1721,6 +1721,11 @@ assertion that guards it: the linear-growth ratio was a quotient of two single w
 load-sensitive by construction and had already gone red once at 3.06 against a 3.0 threshold. It is now the
 quotient of the **minimum of three readings** on each side, with a **work-count ratio asserted unconditionally**
 beside it and the timing ratio recorded rather than asserted below a 25 ms floor. **The threshold was not moved.**
+*Corrected 2026-10-01 (R-067):* "the minimum of three readings on each side" was not how the readings were taken. Each
+side's three readings were taken in turn, the full tree's first, so the half side ran hotter; and the sweep's full side
+was a single reading. Each pair is now read with seven readings a side, interleaved and alternating which side goes
+first (ADR-0040, third execution, "Corrected 2026-10-01"). The parser's ratio read 1.89 to 2.06 in six runs. Its answer
+to this entry is unchanged.
 
 **OQ-25 — Project-supplied regular expressions run unbounded.** *(ADR-0040.)* `REQ-TRACE-073` compiles
 four patterns per project-declared convention and evaluates them against every claimed file;

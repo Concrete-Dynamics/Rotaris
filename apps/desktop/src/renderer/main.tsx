@@ -185,7 +185,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
   // REQ-CONFIG-472: what the settings screen currently holds wins over what the file says, until Save says otherwise.
   const pendingCaps = useStore(pendingDisplay, (s) => s.caps);
   const personas = useMemo(() => personasOf(snapshot), [snapshot]);
-  const entry = useMemo(() => entryOf(snapshot, rows, session?.agents ?? []), [snapshot, rows, session]);
+  const entry = useMemo(() => entryOf(snapshot, rows, session), [snapshot, rows, session]);
   const nowIso = useElapsedTick(session);
   const display = useStore(displayPrefs, (s) => s);
   const needsRecovery = useNeedsRecovery(session?.id ?? null, session?.executionStatus ?? null);
@@ -342,7 +342,7 @@ function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) 
   const selectAgent = useShellState((st) => st.selectAgent);
   const snapshot = useConfigSnapshot(workspace);
   const refresh = useStore(refreshStats, (st) => st);
-  const entry = useMemo(() => entryOf(snapshot, rows, session?.agents ?? []), [snapshot, rows, session]);
+  const entry = useMemo(() => entryOf(snapshot, rows, session), [snapshot, rows, session]);
   // PD-ORCH-005 clauses 13 and 16 (OQ-100, OQ-101): in REQ-CHAT-008's recovery state the run-level agent presents `paused`,
   // as its agents do, and a paused child offers "Cancel selection" while its session rests — both from `restingView`,
   // the one call the Workspace makes too.

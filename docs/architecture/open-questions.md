@@ -4069,6 +4069,18 @@ first new iteration (`PD-ORCH-003` revision 2). Building it raised OQ-102, OQ-10
 
 Until they are built, the readings above stand.
 
+**Beside it, 2026-10-01 — which persona the surfaces draw the run-level agent as (not ruled; recorded by the repair of
+[`after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`](../defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md)).**
+This question settles the name a resumed root dispatches under, not the persona the surfaces draw the run-level agent as
+once the entry persona has changed between runs (`default_persona` is read for every run, and PD-ORCH-003 lets a plan
+cycle run fresh after an iteration). The specification does not state it: REQ-MONITOR-060's stand-in is "the persona's
+declared tools", and a session that ran under two personas has two. **What the build proceeds under:** the run-level agent
+is drawn as the **latest root** — its name, model, reasoning and stand-in tools are the persona of the transcript's last
+agent row that no child carries, a row named for one of the session's roots preferred (`entryRole`,
+`packages/ui/src/agents.ts`). That is the persona whose calls mark its chips (`entryToolsOf` reads the latest root's
+history), and, for a root resumed under a fallback, the role it runs as (each row's `persona`, above). No requirement was
+found against it; it is raised as no question of its own. Until 2026-10-01 the first root's persona was drawn.
+
 **OQ-98 — What does the Continue action count, where does it say so, and which continues offer the decline?** *(`PD-ORCH-005` clause 6; REQ-SHELL-023, REQ-MONITOR-125 and REQ-SESSION-110, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061). Numbered OQ-71 while it was built; renumbered when it reached `main`, where OQ-71 had been taken meanwhile.)*
 
 Clause 6: "The Continue action SHALL state how many agents will resume, and SHALL offer to continue without them;

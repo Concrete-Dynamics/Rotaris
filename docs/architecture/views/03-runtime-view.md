@@ -641,7 +641,12 @@ after an iteration, and the cycle's root runs fresh under a persona that may hav
 `a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md`, 2026-10-01) — or, before any iteration,
 under every name the tracker holds that is no child's, which can only be a plan cycle's root's, since a plan cycle has no
 iteration row (REQ-ORCH-153; `AgentActivity.calledToolsWhere`, acceptance A21, 2026-09-29) — and the surface lets the
-role's declared tools stand in (REQ-MONITOR-060; the snapshot's `declaredTools`). **`SessionRecord.entryStalledSeconds`**
+role's declared tools stand in (REQ-MONITOR-060; the snapshot's `declaredTools`). That role is the **latest** root's: the
+surfaces draw the run-level agent's name, model, reasoning and stand-in tools from the persona of the transcript's last
+agent row that no child carries, a row named for one of `SessionRecord.entryRoots` preferred (`entryRole`,
+`packages/ui/src/agents.ts`, behind the renderer's `entryOf`), so they come from the persona whose calls mark its chips
+(the reading recorded beside OQ-97; the first such row was read until 2026-10-01, the repair of
+`after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`). **`SessionRecord.entryStalledSeconds`**
 (2026-09-30, OQ-153) is the same route for the root's stall watch's figure. **`SessionRecord.entryToolCalls`** (2026-10-01,
 acceptance A20) is the run-level agent's tool-call count (REQ-MONITOR-044/052): the roots' share of the persisted total — the
 total less every child's persisted `children.tool_calls` — plus the calls the live root has started in its running execution

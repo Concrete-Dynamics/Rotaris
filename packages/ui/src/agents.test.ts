@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { contextPercent, DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
-import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cascadeNote, PAUSED_CANCEL_ALONE, PAUSED_CANCEL_WITH, pausedCancelWith, chipStates, countNoun, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, steerOffered, tableOrder } from './agents.js';
+import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cascadeNote, entryRole, PAUSED_CANCEL_ALONE, PAUSED_CANCEL_WITH, pausedCancelWith, chipStates, countNoun, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, steerOffered, tableOrder } from './agents.js';
 import { personaColourToken } from './PersonaWindow.js';
 import { useShellState } from './shell-state.js';
 
@@ -99,6 +99,45 @@ describe('agents — the inspector follows the latest author (REQ-MONITOR-053/05
     // The root's row written before the rest, under the persona it ran as then, is followed to the run-level agent too.
     expect(followedAgent(rows.slice(0, 1), [coding], fallback, roots)?.id).toBe(RUN_AGENT_ID);
     expect(followedAgent(rows, [coding], fallback, roots)?.id).toBe(coding.id);
+  });
+});
+
+/*
+ * REQ-MONITOR-060/069 with PD-ORCH-003 (docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md):
+ * the entry persona can change between runs, and the run-level agent's chips are marked from the latest root's history
+ * (`entryToolsOf`). Its name, its model and reasoning and the declared tools that stand in for its grant come from that
+ * same root's persona, not the first root's. Until 2026-10-01 they came from the transcript's first root row, so after an
+ * iteration as `orchestrator` and a plan cycle as `reviewer` the inspector drew `orchestrator`'s fourteen tools with
+ * `reviewer`'s `glob` marked used.
+ */
+describe('entryRole — the run-level agent is drawn as the latest root (REQ-MONITOR-060, PD-ORCH-003)', () => {
+  const roles = [
+    { role: 'orchestrator', effectiveModel: 'large', rawThinking: 'high', declaredTools: ['read_file', 'grep', 'glob', 'write_file'] },
+    { role: 'reviewer', effectiveModel: 'scripted', rawThinking: null, declaredTools: ['glob', 'read_file', 'todo'] },
+  ];
+  it('rows for an orchestrator root then a reviewer root draw the reviewer, with its declared tools, model and reasoning', () => {
+    const rows = [
+      row({ index: 0, kind: 'user', body: 'read the readme' }),
+      row({ index: 1, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }),
+      row({ index: 2, kind: 'agent', name: 'helper', persona: 'coding-agent' }),
+      row({ index: 3, kind: 'user', body: 'now review it' }),
+      row({ index: 4, kind: 'agent', name: 'reviewer', persona: 'reviewer' }),
+      row({ index: 5, kind: 'agent', name: 'helper', persona: 'coding-agent' }),
+    ];
+    expect(entryRole(roles, rows, [agent({ name: 'helper' })])).toEqual({ persona: 'reviewer', model: 'scripted', reasoning: 'medium', tools: ['glob', 'read_file', 'todo'] });
+  });
+  it('a row named for one of the session\'s roots is preferred, so a child\'s row ahead of its record cannot pass for the latest root', () => {
+    const rows = [row({ index: 0, kind: 'agent', name: 'reviewer', persona: 'reviewer' }), row({ index: 1, kind: 'agent', name: 'fresh', persona: 'coding-agent' })];
+    expect(entryRole(roles, rows, [], [{ name: 'reviewer' }]).persona).toBe('reviewer');
+    // OQ-97: a root resumed under a fallback keeps its own name on its rows while their persona is the role it runs as.
+    const resumed = [row({ index: 0, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }), row({ index: 1, kind: 'agent', name: 'house-style', persona: 'reviewer' })];
+    expect(entryRole(roles, resumed, [], [{ name: 'orchestrator' }, { name: 'house-style' }]).persona).toBe('reviewer');
+  });
+  it('one root, a child\'s rows after it, or no root row at all', () => {
+    const rows = [row({ index: 0, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }), row({ index: 1, kind: 'agent', name: 'helper', persona: 'coding-agent' })];
+    expect(entryRole(roles, rows, [agent({ name: 'helper' })])).toEqual({ persona: 'orchestrator', model: 'large', reasoning: 'high', tools: ['read_file', 'grep', 'glob', 'write_file'] });
+    expect(entryRole(roles, [], []).persona).toBe('orchestrator');
+    expect(entryRole([], [row({ kind: 'agent', name: 'reviewer', persona: 'reviewer' })], [])).toEqual({ persona: 'reviewer', model: '', reasoning: 'medium', tools: [] });
   });
 });
 

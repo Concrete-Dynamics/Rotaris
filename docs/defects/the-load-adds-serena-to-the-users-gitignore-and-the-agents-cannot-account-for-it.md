@@ -82,7 +82,9 @@ on the lookup before.
 registered `katalyst` endpoint (pack `.live-run/runs/2026-10-01T11-11-22-487Z/` of the `fin2-config-readings` worktree;
 git-ignored): both scenarios passed. In `edit`, a child's own `git status --porcelain` (transcript step 44) listed only
 `src/todos.js`, and the script's `git diff` counted the two files the task changed; neither transcript mentions
-`.gitignore`. The `duress` run, where the unrequested child appeared, was not run in this round (the acceptance plan's).
+`.gitignore`. After the verifier's repair (only a git directory Git would recognise), `--only=edit` passed again on the
+rebuilt head (pack `2026-10-01T12-07-54-539Z`), and nothing in its pack mentions `.gitignore`. The `duress` run, where
+the unrequested child appeared, was not run in this round (the acceptance plan's).
 
 **Left to the owner.** OQ-161's ruling: whether the load may write the marker's directory anywhere at all, and if so
 whether the exclude file is the place, or whether the runtime should be started so that it creates no marker in the

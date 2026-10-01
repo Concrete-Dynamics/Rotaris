@@ -78,6 +78,14 @@ The header half is repaired; the rest stays open under [OQ-162](../architecture/
   the Continue classifies `explicit_trivial`, the last published record reads `explicit_trivial`; it fails with the
   `readSession`s reading the launch audit alone), and "… the status reads the newest continuation intent over the launch
   audit …"; the DAL read's query plan by `packages/store/src/store.test.ts`. OQ-162's built reading is changed in place.
+- **Repaired, the transient status.** While a continuation's pre-flight classification is in flight, the status reads
+  `classifying` (REQ-ORCH-014's first clause), not the previous run's intent, and the result replaces it in place: the
+  live run's pre-flight sets `Run.intentClassifying` before the save that publishes `starting` and clears it when the
+  call returns or raises, and `intentStatusOf` reads it first. Before this, a continue by the Continue action showed the
+  launch's fallback for the whole classification call (6.6 s in the live run, up to the 12 s bound). Pinned by
+  `preflight.test.ts`, "REQ-ORCH-014 (OQ-162): while a continue classifies, the status reads `classifying`, and the new
+  intent replaces it in place" (the continuation's classifier is held; every published `starting` record reads
+  `classifying`; it fails without the flag), and the unit case "classifying while starting with no audit …".
 - **Open, the owner's (OQ-162).** The Continue action still classifies the last user prompt again; a successful fresh
   classification still replaces a fallback launch intent; the new grant still reaches the resumed root in the middle of
   its iteration (24 tools to 29 in the live run), and clause 14's fingerprint still raises

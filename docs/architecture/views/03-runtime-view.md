@@ -114,7 +114,8 @@ captured, so a skill invoked between prompts reaches the next agent built while 
 context it was built with (REQ-CONFIG-166). Because the list is a property of the session and not of the role,
 REQ-WORKSPACE-065's "every agent built for a session sees the same catalog" holds by construction.
 
-`Run.start()` in order (REQ-SESSION-087): save `starting` → the pre-flight (intent classification through the
+`Run.start()` in order (REQ-SESSION-087): save `starting` → the pre-flight, during which the record's intent status
+reads `classifying` (`Run.intentClassifying`, REQ-ORCH-014, a continuation's included, since 2026-10-01) (intent classification through the
 small slot's rung ladder; the grant; the playbooks; the BUDGET cell) → **the plan gate's hold settled** → the
 launch audit (once per session, REQ-SESSION-138; a continuation's run records its payload as a
 `run_continuation_intent` timeline entry instead, and the record's intent status, REQ-ORCH-014, reads the newest of

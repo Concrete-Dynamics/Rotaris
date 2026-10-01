@@ -425,6 +425,14 @@ export class Run {
   /** REQ-HOOKS-087: the session's hook attachment, removed at the end of the run. */
   private hooks: HookPort | null;
   private preflight: Preflight | null = null;
+  /**
+   * REQ-ORCH-014: true while this run's pre-flight classification is in flight, so the status reads `classifying` before
+   * the call and is replaced in place by its result. Derived from the live run, as `currentWait` is: a continuation's
+   * pre-flight runs with the previous run's intent already on the record (OQ-162), which the status must not go on
+   * showing as the intent in effect while the new one is decided.
+   */
+  private classifying = false;
+  get intentClassifying(): boolean { return this.classifying; }
   /** REQ-MONITOR-123: a graceful pause requested; honoured at the next model step and at the iteration boundary. */
   private pauseRequested = false;
   /**
@@ -779,11 +787,14 @@ export class Run {
 
       // REQ-SESSION-087, in order and observably. PD-ORCH-005 clause 17: the todo with it, so a continue's message task
       // survives a process that dies during the pre-flight, as the message itself does in the resumed root's record.
+      // REQ-ORCH-014: set before the save that publishes `starting`, so that snapshot already reads `classifying`.
+      this.classifying = this.deps.preflight !== undefined;
       writer.save('starting', { todo: this.todoJson() });
       this.startedAt = clocks.monotonic.now();
       // REQ-ORCH-005: the intent is in effect before the first iteration; while it is being decided the session reads `classifying`.
       if (this.deps.preflight) {
         try { this.preflight = await this.deps.preflight(this.abort.signal); } catch (cause) { this.deps.warn(`the pre-flight raised and the run continues on the fallback intent: ${String(cause)}`); }
+        finally { this.classifying = false; }
       }
       if (this.deps.continuation) {
         const intent = this.preflight?.intent ?? NO_PREFLIGHT_INTENT;

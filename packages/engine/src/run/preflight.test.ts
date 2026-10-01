@@ -31,7 +31,7 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
       playbookFor: (role) => (role === 'orchestrator' ? 'PLAYBOOK\nROUTE: routed text' : ''), budgetCell: { maxActive: 2, maxTotal: 6, maxDepth: 2 }, warnings: [],
     };
   }
-  function sessionsWith(calls: ScriptedCall[], preflight: Preflight | (() => Preflight) | null, onTools?: (ctx: ToolPortContext) => void, onPreflight?: (ctx: PreflightContext) => void, publisher: Publisher = NONE) {
+  function sessionsWith(calls: ScriptedCall[], preflight: Preflight | (() => Preflight | Promise<Preflight>) | null, onTools?: (ctx: ToolPortContext) => void, onPreflight?: (ctx: PreflightContext) => void, publisher: Publisher = NONE) {
     const client = new ScriptedModelClient(calls);
     let n = 0;
     const seen: string[] = [];
@@ -113,6 +113,40 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     expect(intentStatusOf(dal.getSession(sid)!, intentPayloadOf(dal, sid))).toMatchObject({ phase: 'classified', category: 'explicit_trivial' });
   });
 
+  it('REQ-ORCH-014 (OQ-162): while a continue classifies, the status reads `classifying`, and the new intent replaces it in place', async () => {
+    const fallback: Preflight = { ...preflightOf('none', 'whole_project'), intent: { category: 'moderate_feature', confidence: 0, reason: 'the classification call timed out after 12 s', fallback: true, carried_over: false } };
+    const classified: Preflight = { ...preflightOf('direct-work', 'single_file_change'), intent: { category: 'explicit_trivial', confidence: 0.92, reason: 'a one-line edit', fallback: false, carried_over: false } };
+    let releaseTurn!: () => void;
+    const turnHeld = new Promise<void>((r) => { releaseTurn = r; });
+    let releaseClassifier!: () => void;
+    const classifierHeld = new Promise<void>((r) => { releaseClassifier = r; });
+    let calls = 0;
+    const snapshots: { executionStatus: string; intent: unknown }[] = [];
+    const publisher: Publisher = { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } };
+    const { sessions } = sessionsWith([{ parts: [{ hold: turnHeld }, ...toolCalls([{ callId: 'c1', name: 'read_file', args: { path: 'README.md' } }], 'looking').parts] }, answer('done')],
+      async () => { calls += 1; if (calls === 1) return fallback; await classifierHeld; return classified; }, undefined, undefined, publisher);
+    const sid = (sessions.start(dal, 'C:/ws', 'fix the typo') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && dal.getSession(sid)!.execution_status !== 'running'; i++) await new Promise((r) => setTimeout(r, 5));
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    releaseTurn();
+    await sessions.running(sid)!;
+    const before = snapshots.length;
+    expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+    for (let i = 0; i < 40 && calls < 2; i++) await new Promise((r) => setTimeout(r, 5));
+    expect(calls).toBe(2);
+    // The continuation's classification call is in flight: the previous run's fallback is not shown as the intent.
+    expect(dal.getSession(sid)!.execution_status).toBe('starting');
+    const during = snapshots.slice(before);
+    expect(during.length).toBeGreaterThan(0);
+    expect(during.every((s) => s.executionStatus !== 'starting' || (s.intent as { phase: string }).phase === 'classifying')).toBe(true);
+    expect(during.at(-1)!.intent).toEqual({ phase: 'classifying' });
+    releaseClassifier();
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const after = snapshots.slice(before + during.length);
+    expect(after.find((s) => (s.intent as { phase: string }).phase === 'classified')!.intent).toMatchObject({ phase: 'classified', category: 'explicit_trivial' });
+    expect(snapshots.at(-1)!.intent).toMatchObject({ phase: 'classified', category: 'explicit_trivial' });
+  });
+
   it('REQ-ORCH-014: the status reads the newest continuation intent over the launch audit, and the launch audit where no continuation recorded one', async () => {
     const { sessions } = sessionsWith([answer('done')], preflightOf('direct-work', 'single_file_change'));
     const sid = (sessions.start(dal, 'C:/ws', 'fix the typo') as { value: SessionId }).value;
@@ -134,5 +168,9 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     expect(intentStatusOf(row, null)).toEqual({ phase: 'classifying' });
     expect(intentStatusOf({ execution_status: 'created' } as Parameters<typeof intentStatusOf>[0], null)).toBeNull();
     expect(intentStatusOf(row, '{"run_intent":{"category":"nope"}}')).toEqual({ phase: 'classifying' });
+    // A continuation's pre-flight in flight: the previous run's intent on the record is not shown as the one in effect.
+    const previous = '{"run_intent":{"category":"moderate_feature","confidence":0,"reason":"r","fallback":true,"carried_over":false}}';
+    expect(intentStatusOf(row, previous)).toMatchObject({ phase: 'classified', category: 'moderate_feature' });
+    expect(intentStatusOf(row, previous, true)).toEqual({ phase: 'classifying' });
   });
 });

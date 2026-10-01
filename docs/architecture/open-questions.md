@@ -8099,7 +8099,13 @@ status the surfaces read is the intent in effect: the newest continuation's, els
 the header half of the note:* REQ-ORCH-014 asks the status to convey the classified intent, and whatever the ruling below
 decides about classifying again, the intent the resumed run is using is the one in effect; the first form showed the
 launch's after a continue that had replaced it. Should the ruling keep the launch's intent across a continue, the
-continuation records that intent and the status still reads it.
+continuation records that intent and the status still reads it. While a continuation's pre-flight classification is in
+flight the status reads `classifying` (REQ-ORCH-014's transient status), not the previous run's intent, and the result
+replaces it in place (`Run.intentClassifying`; `preflight.test.ts`, "REQ-ORCH-014 (OQ-162): while a continue classifies
+…"; added 2026-10-01 at the verifier's finding). REQ-ORCH-013's prior intent is still the launch audit's alone
+(`previousIntent`, `sessions.ts`), so a second continue whose classification is unusable carries the launch's category
+over, not a first continue's, while the status before it showed the first continue's; which intent is "prior" after a
+continue that classified is part of this ruling.
 
 **What a ruling decides.** Whether the Continue action, which brings no message, classifies at all or carries the
 launch's intent and grant. Whether a resumed iteration keeps the grant it started with, so that a new classification

@@ -9,10 +9,15 @@
  * host enumeration will predict cannot be the basis of a capacity, so the capacity is declared and reviewable.
  *
  * 4,320 is chosen as the height of a 4320p display in its ordinary orientation — the tallest panel the product
- * expects to be maximised onto. At REQ-CHAT-057's 30 px minimum row height that is 144 slots, which with the
- * overscan is 154 always-allocated containers: a few hundred bytes of layout each, and REQ-UIBENCH-087's memory
- * tripwire does not object to over-allocation at all (it subtracts RSS at tail replacement 500 from RSS at 999, so
- * an allocation made at construction appears in both samples and cancels).
+ * expects to be maximised onto. At the shortest a row can draw (`SHORTEST_ROW_HEIGHT`, 20 px) that is 216 slots,
+ * which with the overscan is 226 always-allocated containers: a few hundred bytes of layout each, and
+ * REQ-UIBENCH-087's memory tripwire does not object to over-allocation at all (it subtracts RSS at tail replacement
+ * 500 from RSS at 999, so an allocation made at construction appears in both samples and cancels).
+ *
+ * **Falsified 2026-10-01, kept beside its replacement: "At REQ-CHAT-057's 30 px minimum row height that is 144 slots,
+ * which with the overscan is 154".** PD-CHAT-003 lifted the 30 px floor off the row's box, and a one-line system notice
+ * inside a block drew 23.8 px in the built app, so a viewport of 3,430 px or more of such notices showed more rows than
+ * 154 slots bind and left the rest blank (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
  *
  * **ADR-0045's "Revisit if" names the trigger this constant must be checked against:** if `H_MAX` is chosen at a
  * value a supported display can exceed, the one growth branch stops being unreachable and `REQ-UIBENCH-054`
@@ -26,14 +31,29 @@ export const H_MAX = 4320;
  * REQ-CHAT-057 fixes the minimum row height normatively, in pixels; PD-CHAT-003 narrows it to a
  * one-line ROW's rendered height (the estimate floor and the slot-size arithmetic's conservative
  * unit), not a padding-box minimum the stylesheet enforces on every row.
+ *
+ * It is the ESTIMATE's floor and no longer the capacity's unit: a row PD-CHAT-003 draws may be shorter than it.
  */
 export const ROW_MIN_HEIGHT = 30;
+
+/**
+ * ADR-0045's capacity unit: the shortest a row can draw, whatever it carries — so that `ceil(H_MAX / unit)` slots bind
+ * every row a viewport inside `H_MAX` shows. A row's slot holds `.row`'s 4 px top margin and its 1 px border either
+ * side around a grid whose role column carries either the attribution (the first row of a block, which also carries
+ * 12 px above it) or REQ-CHAT-057's continuation bar at its 14 px `min-height` — 4 + 2 + 14. The shortest row measured
+ * in the built app, a one-line system notice inside a block, drew 23.8 px (2026-09-30); `transcript.test.ts` reads the
+ * three figures from `shell.css` and holds this unit to them.
+ *
+ * For capacity a unit SHORTER than every row is the conservative one; the 30 px it replaced was taller than a row
+ * PD-CHAT-003 draws (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
+ */
+export const SHORTEST_ROW_HEIGHT = 20;
 
 /** Slots above and below the visible span, so an ordinary scroll rebinds rather than reveals blank space. */
 export const OVERSCAN = 10;
 
-/** ADR-0045: capacity is `ceil(H_max / 30 px)` plus overscan, and is fixed for the life of the window. */
-export const POOL_CAPACITY = Math.ceil(H_MAX / ROW_MIN_HEIGHT) + OVERSCAN;
+/** ADR-0045: capacity is `ceil(H_max / the shortest row)` plus overscan, and is fixed for the life of the window. */
+export const POOL_CAPACITY = Math.ceil(H_MAX / SHORTEST_ROW_HEIGHT) + OVERSCAN;
 
 /**
  * The one growth branch ADR-0045 permits: a viewport TALLER than `H_MAX` grows the pool, and that is the only
@@ -43,7 +63,7 @@ export const POOL_CAPACITY = Math.ceil(H_MAX / ROW_MIN_HEIGHT) + OVERSCAN;
  * in either dimension.
  */
 export function capacityFor(viewportHeight: number): number {
-  return viewportHeight <= H_MAX ? POOL_CAPACITY : Math.ceil(viewportHeight / ROW_MIN_HEIGHT) + OVERSCAN;
+  return viewportHeight <= H_MAX ? POOL_CAPACITY : Math.ceil(viewportHeight / SHORTEST_ROW_HEIGHT) + OVERSCAN;
 }
 
 /** REQ-CHAT-065: the searchable member blob of a group header. */

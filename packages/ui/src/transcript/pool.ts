@@ -372,16 +372,32 @@ export function indexAt(table: OffsetTable, y: number): number {
   return lo;
 }
 
-/** The span of displayed rows a viewport needs, with the overscan margin above and below. */
+/**
+ * The span of displayed rows a viewport needs, with the overscan margin above and below.
+ *
+ * When the span with its overscan is wider than the pool, the OVERSCAN gives way first — below, then above — and only a
+ * span of visible rows wider than the pool itself is cut, from the top of the span. A viewport `H` tall can show
+ * `ceil(H / h) + 1` rows of height `h`, one partly at either edge, which is one more than ADR-0045's `ceil(H_max / unit)`
+ * counts; shedding overscan before a visible row is what keeps that row bound at `H_MAX`
+ * (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
+ */
 export function visibleRange(table: OffsetTable, scrollTop: number, viewportHeight: number, count: number, capacity: number): { first: number; last: number } {
   if (count === 0) return { first: 0, last: -1 };
   const firstVisible = indexAt(table, scrollTop);
   const lastVisible = indexAt(table, scrollTop + viewportHeight);
-  const first = Math.max(0, firstVisible - OVERSCAN);
+  let first = Math.max(0, firstVisible - OVERSCAN);
   let last = Math.min(count - 1, lastVisible + OVERSCAN);
-  // The pool is FIXED: a span wider than the pool binds what fits, starting from the top of the span. This cannot
-  // happen while the viewport is inside `H_MAX` (REQ-CHAT-057's 30 px floor bounds the span by the capacity), and
-  // is the safety rail rather than the design.
+  if (last - first + 1 > capacity) {
+    // The pool is FIXED: the overscan below gives way, then the overscan above.
+    last = Math.max(Math.min(count - 1, lastVisible), first + capacity - 1);
+    if (last - first + 1 > capacity) first = Math.min(firstVisible, last - capacity + 1);
+  }
+  // A span of visible rows wider than the pool binds what fits, starting from the top of the span. This cannot happen
+  // while the viewport is inside `H_MAX` (`SHORTEST_ROW_HEIGHT`, the shortest a row can draw, bounds the visible span by
+  // the capacity less its overscan), and is the safety rail rather than the design. **Falsified 2026-10-01, kept beside
+  // its replacement: "REQ-CHAT-057's 30 px floor bounds the span by the capacity".** PD-CHAT-003 draws rows shorter than
+  // 30 px — a one-line system notice inside a block, 23.8 px — and this rail cut the bottom of a tall viewport of them
+  // (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
   if (last - first + 1 > capacity) last = first + capacity - 1;
   return { first, last };
 }

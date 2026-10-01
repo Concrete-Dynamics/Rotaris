@@ -225,9 +225,13 @@ floor and only the mechanism transfers.**
 Further specifics:
 
 - **Pool capacity is a declared product constant, not a function of the window as constructed.** Capacity
-  is `ceil(H_max ÷ 30 px)` plus overscan, where 30 px is the minimum row height `REQ-CHAT-057` fixes and
+  is `ceil(H_max ÷ 20 px)` plus overscan, where 20 px is the shortest a row can draw and
   `H_max` is a **declared maximum supported transcript viewport height** written down once as a product
-  constant. It is derived from the *window's* content height, not from the transcript pane's, so a
+  constant. **Falsified 2026-10-01, kept beside its replacement: "`ceil(H_max ÷ 30 px)` plus overscan, where 30 px is
+  the minimum row height `REQ-CHAT-057` fixes".** `PD-CHAT-003` lifted that minimum off the row's box, and a one-line
+  system notice inside a block drew 23.8 px, so a viewport inside `H_max` could show more rows than the pool bound. The
+  rule is unchanged — the declared maximum over the minimum row height — and the minimum is now what the stylesheet can
+  draw: `.row`'s 4 px top margin, its border and the 14 px continuation bar (see the report of that date below). It is derived from the *window's* content height, not from the transcript pane's, so a
   divider drag (`REQ-SHELL-069`) cannot force growth either. The earlier formulation — size at
   construction for "the largest viewport the window can reach" — is not determinable in the live
   application, where a user can maximise onto a larger display or attach a monitor after the window
@@ -421,7 +425,8 @@ caches and the four-part reuse predicate), `project.ts` (ADR-0046 step 4), `sear
 slots and step 5). `TranscriptRows.tsx`'s row-per-article list is gone from the Workspace view.
 
 **`H_max` is declared at 4,320 CSS pixels**, the height of a 4320p panel in its ordinary orientation — so the pool
-is **154 slots** (`ceil(4320 / 30) + 10`), allocated once and never added to. The record asked for the number to be
+is **154 slots** (`ceil(4320 / 30) + 10`), allocated once and never added to. *(226 since 2026-10-01 —
+`ceil(4320 / 20) + 10`; the 30 px unit was taller than a row `PD-CHAT-003` draws, reported below.)* The record asked for the number to be
 chosen and reviewable rather than imagined, and that is the number. The one growth branch (`capacityFor`) exists in
 the product's own rendering path, is not conditioned on being under measurement, and is unreachable at every size
 REQ-UIBENCH-060's sweep visits.
@@ -688,8 +693,25 @@ paging check now holds the anchor row itself to 4 px, because a row measured bel
 height and not the reader, and fails on any bound row positioned by its estimate once the pool has settled
 (`docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`). Noticed
 on the way and recorded, not repaired: the capacity rule's 30 px unit is larger than a row PD-CHAT-003 draws inside a
-block — a one-line system notice drew 23.8 px (`docs/defects/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`);
+block — a one-line system notice drew 23.8 px (`docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`, repaired 2026-10-01 below);
 and a row that GROWS is positioned by the height its identity drew last until it is measured again, which drew the
 planted activity line 21.8 px through the row beneath it for a frame in one run of six when it turned live again
 (`docs/defects/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md`) — the proof's new-row
 watch records such a pair of rows already drawn and holds only the pairs with a new row to 1 px.
+
+**The capacity unit, 2026-10-01 (R-067, acceptance finding A38) — the capacity rule's 30 px reason falsified, kept beside its
+replacement above.** The pool's capacity was counted in REQ-CHAT-057's 30 px minimum row height, which PD-CHAT-003 lifted
+off the row's box; for capacity a unit TALLER than the shortest row is the opposite of conservative. `transcript-proof`'s new
+stage 3c measured what the note had computed: 400 planted one-line system notices (23.8 px each) in a window resized to
+1440x4300 under Xvfb — a 3,890 px viewport, inside `H_max`, showing 164 rows — bound 144 of them through a 154-slot pool and
+left the viewport blank from 3,414.5 px down while the pane followed the tail. **The capacity unit moved, not the growth
+condition**: the only event that changes the slot count is still a viewport taller than `H_max`, so REQ-UIBENCH-054 holds as
+before. The unit is `SHORTEST_ROW_HEIGHT`, 20 px — a row's 4 px top margin, its 1 px border either side and the continuation
+bar's 14 px `min-height`, the shortest a row's slot holds whatever it carries (`transcript.test.ts` reads the three from
+`shell.css`) — and the pool is **226 slots**. `ROW_MIN_HEIGHT` stays 30 px as the estimate's floor. And the visible span now
+sheds its overscan, below and then above, before it cuts a visible row: a viewport shows up to one row more than
+`ceil(H ÷ h)` (one partly at either edge), which the rule does not count and the old rail cut first. On the repair the stage
+is green — 226 slots, the bound rows covering the viewport with no gap at the tail and in the middle. A larger pool is more
+empty containers allocated at construction, which the memory tripwire subtracts away; nothing else this record decided
+moved (`docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`; OQ-160 asks whether
+PD-CHAT-003's cost paragraph, which describes the capacity arithmetic as keeping 30 px, needs a revision).

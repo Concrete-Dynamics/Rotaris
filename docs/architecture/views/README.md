@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**The transcript pool counts its capacity in the shortest row a slot holds (REQ-CHAT-165, PD-CHAT-003, ADR-0045, R-067).**
+The 30 px unit was taller than a one-line system notice inside a block (23.8 px), so a tall viewport of them inside `H_max`
+was blank below the 154th slot. `SHORTEST_ROW_HEIGHT` (20 px) makes the pool 226 slots, and `visibleRange` sheds its
+overscan before a visible row. This repairs `the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md` (acceptance
+A38); the **runtime view**'s "What paints it" says so. No package, edge, process, message kind, channel, command or store
+column changed.
+
 **The run-level agent's tool-call count is its own while its turn runs (REQ-MONITOR-044/052, R-067).** The surfaces derived
 it as the session's total less the children's, and a root's calls join the total only when its turn returns, so the meta
 line read `0 tool calls` beside the root's used chips. `SessionRecord.entryToolCalls` now carries it: the roots' share of

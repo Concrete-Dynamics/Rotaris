@@ -16,6 +16,12 @@
  *                   bound slot carries a measurement key, and no slot is drawn through its neighbour — at
  *                   appointments, and on each of the frames after the run's reasoning row is first drawn, before
  *                   the rows it appends have been measured.
+ *   3c. capacity   — a planted run of 400 one-line system notices, the shortest row PD-CHAT-003 draws, in a window
+ *                   resized to 1440x4300 — inside `H_MAX`, and tall enough that the pool's old 30 px capacity unit bound
+ *                   fewer slots than the viewport shows rows: every row on screen is bound, at the tail and in the middle
+ *                   (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md). Run it under a
+ *                   display at least that tall (`xvfb-run -s "-screen 0 1600x4400x24"`); a window the host clamps below
+ *                   the height fails the stage's own guard rather than passing it.
  *   4/5. append-empty / append-loaded — the same scripted run appended to an empty transcript and to a 1200-row
  *                   one, timed at REQ-CHAT-055's stated point: after the frame showing the update has been
  *                   painted, never a synchronous figure. Since the R-048 measurement round the two are launched
@@ -27,7 +33,9 @@
  *                   attributed to the functions and source modules it ran in, loaded against empty.
  *
  * Evidence under `.proof/transcript-proof/`: one PNG and one log per launch, the two traces, `results.json`.
- * `--skip-build` skips the build.
+ * `--skip-build` skips the build. `--only=<stages>` runs the named stages alone (comma-separated, of `invariance`,
+ * `behaviour`, `geometry`, `capacity`, `append`) after the `empty` launch, which always runs because it creates the store
+ * the others are planted in; the verdict names them, since a partial run is evidence for those stages and no others.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -55,6 +63,10 @@ if (!process.argv.includes('--skip-build')) {
   if (built.status !== 0) throw new Error(`desktop build exited ${built.status ?? built.signal ?? 'unknown'}`);
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
+const STAGES = ['invariance', 'behaviour', 'geometry', 'capacity', 'append'];
+const only = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length).split(',').filter(Boolean) ?? null;
+if (only !== null && only.some((stage) => !STAGES.includes(stage))) throw new Error(`--only names a stage this proof does not have: ${only.join(',')} (stages: ${STAGES.join(', ')})`);
+const wanted = (stage) => only === null || only.includes(stage);
 
 
 
@@ -239,16 +251,41 @@ function plantLiveRun(sid) {
   });
 }
 
+/**
+ * docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md: a run of one-line system notices,
+ * which REQ-CHAT-057's attribution rule makes ONE block, so every notice after the first is the shortest row PD-CHAT-003
+ * draws — 23.8 px in the built app (2026-09-30).
+ */
+const NOTICES = 400;
+function plantNotices(sid) {
+  return withDb((db) => {
+    const wsRoot = db.prepare('SELECT workspace_root FROM sessions LIMIT 1').get()?.workspace_root ?? workspace;
+    db.prepare('INSERT INTO sessions (session_id, execution_status, workspace_root, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+      .run(sid, 'completed', wsRoot, '2026-09-06T09:00:00.000Z', '2026-09-06T09:05:00.000Z');
+    const insert = db.prepare(`INSERT INTO transcript_rows (session_id, row_index, kind, settled, body, at, ts, page)
+      VALUES (@sid, @i, 'system', 1, @body, @at, @ts, NULL)`);
+    const planned = [];
+    for (let i = 0; i < NOTICES; i += 1) {
+      const at = new Date(Date.UTC(2026, 8, 6, 9, Math.floor(i / 60), i % 60, 0)).toISOString();
+      planned.push({ sid, i, body: `notice ${i + 1} of ${NOTICES}`, at, ts: at.slice(11, 19) });
+    }
+    db.transaction((batch) => { for (const row of batch) insert.run(row); })(planned);
+    return sid;
+  });
+}
+
 plant('S1', 1);
 plant('S601', 601);
 plant('S1200', 1200, { released: 200, foldAt: 400, longAt: 420 });
 plantLiveRun('SLIVE');
 plant('S0', 1);
+plantNotices('SNOTICE');
 
 // ── 2. invariance ───────────────────────────────────────────────────────────────────────────────────────────
 // ADR-0045's own claim, measured in the product: the count of live structural elements the application's layout
 // owns does not move across 0, 1, 601 and 1200 displayed rows, nor across REQ-UIBENCH-060's five window sizes.
 const COUNTS = 'window.__rotarisCounts()';
+if (wanted('invariance')) {
 const invariance = await launch('invariance', {
   ROTARIS_CAPTURE_VIEWS: '2@900',
   ROTARIS_CAPTURE_OPEN_AT: 'S1@3000;;S601@8000;;S1200@13000',
@@ -282,6 +319,7 @@ const invariance = await launch('invariance', {
     png: invariance.png,
   };
 }
+}
 
 // ── 3. behaviour ────────────────────────────────────────────────────────────────────────────────────────────
 const SCROLL = `document.querySelector('[data-testid="transcript-scroll"]')`;
@@ -289,6 +327,7 @@ const SCROLL = `document.querySelector('[data-testid="transcript-scroll"]')`;
 // is not the height they draw: a row positioned by its estimate rather than by its measurement. Statements, for splicing.
 const SLOTS_READ = `const v = s.getBoundingClientRect(); const slots = [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound).map((n) => { const r = n.getBoundingClientRect(); return { key: n.dataset.bound, top: Math.round((r.top - v.top) * 10) / 10, height: Math.round(r.height * 10) / 10 }; }).sort((a, b) => a.top - b.top); const unmeasured = slots.slice(0, -1).map((x, i) => ({ key: x.key, draws: x.height, allotted: Math.round((slots[i + 1].top - x.top) * 10) / 10 })).filter((x) => Math.abs(x.draws - x.allotted) > 0.5);`;
 const GROUPS = `[...document.querySelectorAll('[data-shape="group"]')]`;
+if (wanted('behaviour')) {
 const behaviour = await launch('behaviour', {
   ROTARIS_CAPTURE_RESUME: 'S1200',
   ROTARIS_CAPTURE_EVAL_AT: [
@@ -418,13 +457,14 @@ const behaviour = await launch('behaviour', {
     png: behaviour.png,
   };
 }
+}
 
 // ── 3b. geometry: nothing is drawn through anything else ────────────────────────────────────────────────────
 // REQ-CHAT-058 says heights are MEASURED rather than assumed, and the pool positions every slot from the prefix
 // sum of those heights. The property that makes the sum right is the one a reader actually sees: no two slots
 // overlap. This reads boxes rather than attributes, because a row drawn through another row is in the DOM,
 // focusable, carrying every identifier it should — and unreadable (docs/defects/live-rows-are-never-measured.md).
-{
+if (wanted('geometry')) {
   // One line, deliberately: the log reader's `capture: eval-at (\d+) (.*?) → (.*)$` cannot span newlines, and a
   // multi-line expression parses as no result at all rather than as an error.
   //
@@ -491,6 +531,45 @@ const behaviour = await launch('behaviour', {
   expect(newRows !== null && Array.isArray(newRows.fresh) && newRows.fresh.some((k) => k.startsWith('think:')) && newRows.frames >= NEW_ROWS_FRAMES, `the new-row watch never saw the run's rows drawn, so the frames before their measurement were never read: ${JSON.stringify(newRows)}`);
   expect(newRows.worstOverlapPx <= 1, `a newly appended row overlaps its neighbour by ${newRows.worstOverlapPx} px before its first measurement ${JSON.stringify(newRows.pair)}: ${JSON.stringify(newRows)}`);
   results.geometry = { samples, wrappedToLines: wrapped, liveSamples: liveSamples.length, worstOverlapPx: worst.worstOverlapPx, newRows, tallestRolePx: Math.max(...samples.map((s) => s.tallestRolePx)), png: geometry.png };
+}
+
+// ── 3c. capacity: every row on screen is bound, however short ───────────────────────────────────────────────
+// ADR-0045 sizes the pool once, as `ceil(H_MAX / unit)` slots plus overscan, and binds no row past the pool. The unit was
+// REQ-CHAT-057's 30 px minimum, which PD-CHAT-003 lifted off the row's box; a viewport showing more than 144 rows shorter
+// than that — 3,430 px of 23.8 px notices at the tail — was left blank below the 154th slot. The window is resized to
+// 1440x4300, inside `H_MAX`, and the transcript read at the tail (the pane follows on open) and in the middle: the bound
+// slots must cover the viewport from its top to its bottom with no gap, and the viewport must have shown more rows than
+// the old unit's pool held, or the stage asked the question of nothing
+// (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
+if (wanted('capacity')) {
+  const TALL = { width: 1440, height: 4300 };
+  const OLD_VISIBLE = Math.ceil(4320 / 30);
+  const COVER = `(() => { const s = ${SCROLL}; const v = s.getBoundingClientRect(); const viewport = s.clientHeight; const slots = [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound).map((n) => { const r = n.getBoundingClientRect(); return { key: n.dataset.bound, top: r.top - v.top, bottom: r.bottom - v.top }; }).sort((a, b) => a.top - b.top); const onScreen = slots.filter((x) => x.bottom > 0.5 && x.top < viewport - 0.5); let reach = 0; const gaps = []; for (const x of slots) { if (x.top > reach + 1 && x.top < viewport) gaps.push({ from: Math.round(reach * 10) / 10, to: Math.round(x.top * 10) / 10, before: x.key }); reach = Math.max(reach, x.bottom); } const heights = onScreen.slice(1, -1).map((x) => x.bottom - x.top); return { window: innerHeight, viewport, scrollTop: Math.round(s.scrollTop), scrollHeight: s.scrollHeight, slots: Number(s.dataset.slots), bound: Number(s.dataset.bound), displayed: Number(s.dataset.displayed), following: s.dataset.following, onScreen: onScreen.length, reach: Math.round(Math.min(reach, viewport) * 10) / 10, gaps, shortestPx: heights.length > 0 ? Math.round(Math.min(...heights) * 10) / 10 : null, lastBound: slots.length > 0 ? slots[slots.length - 1].key : null }; })()`;
+  const capacity = await launch('capacity', {
+    ROTARIS_CAPTURE_RESUME: 'SNOTICE',
+    ROTARIS_CAPTURE_RESIZE: `${TALL.width}x${TALL.height}@2500`,
+    ROTARIS_CAPTURE_EVAL_AT: [
+      `${COVER}@6000`,
+      `(() => { const s = ${SCROLL}; s.scrollTop = Math.round((s.scrollHeight - s.clientHeight) / 2); return { scrollTop: s.scrollTop }; })()@6400`,
+      `${COVER}@7400`,
+    ].join(';;'),
+    ROTARIS_CAPTURE_AFTER_MS: '8000',
+  }, 240_000);
+  const tail = evalAt(capacity, 6000);
+  const middle = evalAt(capacity, 7400);
+  expect(tail !== null && middle !== null, `the capacity stage took no reading (see capacity.log): ${JSON.stringify({ tail, middle })}`);
+  // The guards: the window really is that tall, every notice is displayed, and the screen shows more rows than a pool
+  // counted in 30 px units binds — or the assertions below are true of a question nobody asked.
+  expect(tail.window >= TALL.height - 1, `the window is ${tail.window} px tall, not ${TALL.height}: the host clamped it — run under a display at least that tall: ${JSON.stringify(tail)}`);
+  expect(tail.displayed === NOTICES, `expected ${NOTICES} displayed notices, saw ${tail.displayed}`);
+  for (const [where, r] of [['tail', tail], ['middle', middle]]) {
+    // How many rows the viewport shows is its height over the notices' own, not the rows bound — a pool too small
+    // for the viewport binds fewer than it shows, which is the defect.
+    expect(r.shortestPx !== null && r.viewport / r.shortestPx > OLD_VISIBLE, `${where}: a ${r.viewport} px viewport of ${r.shortestPx} px notices shows no more than the ${OLD_VISIBLE} rows a 30 px unit binds, so nothing was asked: ${JSON.stringify(r)}`);
+    expect(r.gaps.length === 0 && r.reach >= r.viewport - 1, `${where}: the bound slots left the viewport blank from ${r.reach} px of ${r.viewport} (${r.bound} bound of a ${r.slots}-slot pool, ${r.onScreen} rows on screen): ${JSON.stringify(r)}`);
+  }
+  expect(tail.following === '1' && tail.lastBound === `row:${NOTICES - 1}`, `the tail's last notice is not bound while the pane follows: ${JSON.stringify(tail)}`);
+  results.capacity = { window: TALL, oldUnitVisibleRows: OLD_VISIBLE, tail, middle, png: capacity.png };
 }
 
 // ── 4/5. the append comparison ──────────────────────────────────────────────────────────────────────────────
@@ -615,6 +694,7 @@ function side(launches, frameMs) {
     isolatedMs: isolated.map((s) => Math.round(s.ms * 10) / 10),
   };
 }
+if (wanted('append')) {
 const emptyLaunches = [];
 const loadedLaunches = [];
 for (let i = 1; i <= APPEND_LAUNCHES; i += 1) {
@@ -692,7 +772,8 @@ const loadedTraced = await appendRun('append-loaded-traced', 'S1200', loadedTrac
   expect(thinking >= 1, 'the scripted deliberation produced no streamed-reasoning row');
   results.reasoning = { thinkingRows: thinking, note: 'REQ-CHAT-163: reasoning reached a row of its own rather than being discarded by the sink' };
 }
+}
 
-results.verdict = 'PASSED';
+results.verdict = only === null ? 'PASSED' : `PASSED (only: empty, ${only.join(', ')})`;
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
-console.log(`transcript proof PASSED — evidence under ${relative(repo, output)}`);
+console.log(`transcript proof ${results.verdict} — evidence under ${relative(repo, output)}`);

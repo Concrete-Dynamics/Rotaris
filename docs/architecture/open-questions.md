@@ -7912,3 +7912,27 @@ and called-tool history are the run's aggregate — and then whether that aggreg
 with its lag during a pass, or the persisted total plus every live agent's calls not yet counted; or whether it is an
 agent as REQ-MONITOR-044 presents one, carrying its own count and history, and REQ-MONITOR-101's synthetic root node is
 some other surface — the run header, or the run-wide totals of REQ-MONITOR-098.
+
+**OQ-160 — Does PD-CHAT-003's cost paragraph still describe the pool's capacity arithmetic?** *(PD-CHAT-003, "Why, and what
+it costs": "the recycled pool's capacity arithmetic (`ROW_MIN_HEIGHT` in `packages/ui/src/transcript/constants.ts`) keeps
+the 30 px figure as a conservative slot-size floor while real rows may be shorter"; REQ-CHAT-057's 30 px minimum row height,
+which the directive narrows off the row's box; REQ-CHAT-165; ADR-0045's capacity rule. Raised 2026-10-01 under
+[R-067](../product/requests.md#r-067) by the repair of
+[`the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`](../defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md),
+acceptance finding A38. Open.)*
+
+PD-CHAT-003's normative clauses — a row sizes to its content, 12 px above a block and at most 4 px within one, no row drawn
+so tightly that its lines touch — are untouched by the repair. Its cost paragraph is not normative but it is specific: it
+says the pool's capacity arithmetic keeps the 30 px figure. For capacity that figure was the opposite of conservative — a
+unit taller than the shortest row binds fewer slots than a tall viewport of such rows shows — and the repair counts the
+pool in `SHORTEST_ROW_HEIGHT`, 20 px, the shortest a row's slot holds. `ROW_MIN_HEIGHT` is still 30 px and is still a
+floor, of the estimate a row is positioned by before its first measurement, which is the other half of the paragraph's
+"slot-size floor".
+
+**What the build proceeds under.** The paragraph as a description of the cost when the directive was made, not as a
+constraint on the capacity unit: the capacity counts in 20 px, the estimate's floor stays 30 px, and the directive's text
+is not edited (a directive is the owner's).
+
+**What a ruling decides.** Whether PD-CHAT-003 gains a revision whose cost paragraph names the capacity unit as the
+shortest row a slot can hold, or the paragraph stands as written of its date.
+

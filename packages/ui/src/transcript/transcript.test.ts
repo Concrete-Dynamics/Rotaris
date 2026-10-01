@@ -14,7 +14,8 @@ import {
 import { countLabel, indexAll, indexSuffix, matchRow, step } from './search.js';
 import { SCROLL_ORIGIN_EPSILON, isOwnScroll } from './scroll.js';
 import { LruCache, identityOf, measureKey, reuseKey } from './cache.js';
-import { H_MAX, POOL_CAPACITY, ROW_MIN_HEIGHT, capacityFor } from './constants.js';
+import { H_MAX, POOL_CAPACITY, ROW_MIN_HEIGHT, SHORTEST_ROW_HEIGHT, capacityFor } from './constants.js';
+import { readFileSync } from 'node:fs';
 
 const row = (index: number, over: Partial<TranscriptRow> = {}): TranscriptRow => ({
   index, kind: 'agent', settled: true, body: `row ${index}`, at: '2026-09-06T09:00:00.000Z', ts: '09:00:00', name: 'orchestrator', persona: 'orchestrator', ...over,
@@ -56,11 +57,50 @@ const thinking = (index: number, over: Partial<TranscriptRow> = {}): TranscriptR
 
 describe('ADR-0045 — the pool, its capacity and its geometry', () => {
   it('capacity is a declared product constant, not a function of the window (ADR-0045)', () => {
-    expect(POOL_CAPACITY).toBe(Math.ceil(H_MAX / ROW_MIN_HEIGHT) + 10);
+    expect(POOL_CAPACITY).toBe(Math.ceil(H_MAX / SHORTEST_ROW_HEIGHT) + 10);
+    expect(POOL_CAPACITY).toBe(226);
     // The ONE growth branch: a viewport taller than H_max, which the benchmark's window never reaches.
     expect(capacityFor(900)).toBe(POOL_CAPACITY);
     expect(capacityFor(H_MAX)).toBe(POOL_CAPACITY);
     expect(capacityFor(20_000)).toBeGreaterThan(POOL_CAPACITY);
+  });
+
+  /*
+   * docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md: PD-CHAT-003 lifted REQ-CHAT-057's
+   * 30 px floor off the row's box, and a one-line system notice inside a block drew 23.8 px in the built app (2026-09-30).
+   * A capacity counted in 30 px units left the rows past `first + capacity - 1` unbound — blank space at the bottom of a
+   * tall viewport (REQ-CHAT-165). The unit is now the shortest a row can draw, whatever it carries.
+   */
+  it('REQ-CHAT-165 / PD-CHAT-003: inside H_MAX the pool binds every visible row, however short a row PD-CHAT-003 draws', () => {
+    // The measured system notice inside a block, and the floor itself: no row the stylesheet draws is shorter.
+    for (const height of [23.8, SHORTEST_ROW_HEIGHT]) {
+      const count = 2_000;
+      const table = buildOffsets(Array.from({ length: count }, () => height));
+      for (const viewport of [900, 3_200, 3_430, 3_800, H_MAX]) {
+        // At the tail, where nothing lies below and the whole overscan sits above, and in the middle.
+        for (const scrollTop of [table.total - viewport, Math.floor(table.total / 2)]) {
+          const span = visibleRange(table, scrollTop, viewport, count, capacityFor(viewport));
+          const lastVisible = Math.min(count - 1, indexAt(table, scrollTop + viewport));
+          expect(span.first <= indexAt(table, scrollTop) && span.last >= lastVisible,
+            `${height} px rows at a ${viewport} px viewport, scrolled to ${scrollTop}: bound ${span.first}..${span.last}, visible to ${lastVisible}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('PD-CHAT-003: the capacity unit is no taller than the shortest row the stylesheet can draw', () => {
+    // A continuation row is `.row`'s 4 px top margin, its 1 px border either side and a grid whose role column holds the
+    // 2 px continuation bar at its `min-height`; the first row of a block carries 12 px above it and a role line instead.
+    const css = readFileSync(new URL('../shell.css', import.meta.url), 'utf8');
+    const rule = (selector: string): string => new RegExp(`^${selector.replace(/\./g, '\\.')} \\{([^}]*)\\}`, 'm').exec(css)?.[1] ?? '';
+    const marginTop = Number(/margin:\s*(\d+)px/.exec(rule('.row'))?.[1]);
+    const border = Number(/border:\s*(\d+)px/.exec(rule('.row'))?.[1]);
+    const bar = Number(/min-height:\s*(\d+)px/.exec(rule('.row__bar'))?.[1]);
+    const floor = marginTop + 2 * border + bar;
+    expect(floor).toBe(20);
+    expect(SHORTEST_ROW_HEIGHT).toBeLessThanOrEqual(floor);
+    // And no taller than the shortest one-line row measured in the built app (2026-09-30).
+    expect(SHORTEST_ROW_HEIGHT).toBeLessThanOrEqual(23.8);
   });
 
   it('the offset table is a prefix sum and locates a row by binary search', () => {
@@ -79,6 +119,10 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
     expect(span.first).toBe(90);
     expect(span.last).toBe(130);
     expect(visibleRange(table, 0, 600, 1000, 5)).toEqual({ first: 0, last: 4 });
+    // A pool too small for the span with its overscan sheds the overscan — below, then above — before a visible row:
+    // rows 100..120 are on screen, and 25 slots bind all of them and four above.
+    expect(visibleRange(table, 3000, 600, 1000, 25)).toEqual({ first: 96, last: 120 });
+    expect(visibleRange(table, 3000, 600, 1000, 35)).toEqual({ first: 90, last: 124 });
     expect(visibleRange(table, 0, 600, 0, POOL_CAPACITY)).toEqual({ first: 0, last: -1 });
   });
 

@@ -10,7 +10,8 @@ answer `ok`. That is a correct answer, not a raced pass.
 Seen 2026-10-01 while repairing
 [`traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`](fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md).
 Six consecutive runs of `node apps/desktop/scripts/traceability-proof.mjs --skip-build` were made as root under Xvfb,
-Node 24, with another worktree's `vitest run` on the host (load average 3.5 to 4.4). Run 4 stopped at
+Node 24, with another worktree's `vitest run` on the host (load average 3.5 to 4.4 as read during these six; the growth
+note's 2.2 to 4.4 spans the builder's nine runs together, the two before the repair and the seventh included). Run 4 stopped at
 `two concurrent checks did not yield exactly one busy refusal (REQ-TRACE-512): [true,true]`. Runs 1 to 3, 5 and 6
 passed the same check. The run's `process-results.json` was overwritten by run 5, so the two replies' timings were not
 kept. Which side of the race the service was on is inferred from the guard's code, not measured. A seventh run followed

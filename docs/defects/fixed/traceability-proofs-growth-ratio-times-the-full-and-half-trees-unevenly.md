@@ -60,7 +60,8 @@ minimum; the pair keeps the full readings apart from the half readings; and a me
 the ratio is recorded and not asserted; a half tree that is not about half the work fails whatever the clock reads.
 
 **Shown by.** `node apps/desktop/scripts/traceability-proof.mjs --skip-build`, run as root under Xvfb on Node 24 after
-one `pnpm build`. Another worktree's `vitest run` was on the host throughout (load average 2.2 to 4.4).
+one `pnpm build`. During the two runs before the repair, the six after it and the seventh, another worktree's
+`vitest run` was on the host (load average 2.2 to 4.4 across those nine).
 
 | | parse ratio | parser ratio | sweep ratio | result |
 | --- | --- | --- | --- | --- |

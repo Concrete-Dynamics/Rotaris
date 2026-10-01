@@ -6425,6 +6425,14 @@ read `create` from a call with `path` and `content`, no `operation` and no exist
 did. It would change what the gate executes and what a session approval matches (PD-TOOLS-004), so the requirement has
 to allow it before the code can.
 
+**Seen again 2026-10-01, on merged `main` `71ad8e8`.** The duress run (pack
+`.live-run/runs/2026-10-01T03-15-27-194Z`, session `57095770`) refused 2 of 5 children's first `write_file` for want of
+`operation`. Those were #126 (`design-decisions`, `docs/decisions.md`) and #244 (`verify-result`,
+`docs/verification.md`), against 1 of 4 on 2026-09-30. Regenerating cost about 77.5 s and about 7.0k output tokens. Both
+calls sent `path` and `content` for a file that did not yet exist, the case a fourth repair would read as `create`. The
+note carries the per-call figures. The build still proceeds under the reading above. This question stays open and is
+the owner's to rule.
+
 **OQ-140 — Under bubblewrap, does a writable root that lacks `.git` or `.rotaris` refuse every confined command?**
 *(REQ-SANDBOX-077: its case (c) renders `--tmpfs <p> --remount-ro <p>`, and its closing paragraph refuses, under
 REQ-SANDBOX-083, a carve-out that cannot be established without a host-visible directory. Also REQ-SANDBOX-061's

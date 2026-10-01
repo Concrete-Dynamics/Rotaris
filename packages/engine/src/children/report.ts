@@ -87,14 +87,6 @@ function eventTexts(messages: readonly ChatMessage[]): string[] {
 }
 
 /**
- * The transcript as text, each event cut to 2,000 and the whole to 12,000 from its head. The compressor's reader
- * (`run/compression.ts`); the report's pass reads `reportTranscript` below.
- */
-export function transcriptText(messages: readonly ChatMessage[]): string {
-  return cut(eventTexts(messages).join('\n'), TRANSCRIPT_CAP);
-}
-
-/**
  * REQ-ORCH-110 as OQ-111 rules it: the transcript the report's pass reads, each event cut to 2,000 characters and the
  * whole held to 12,000 — the marker included — keeping its START (the task as given) and its MOST RECENT part, with the
  * omission marked between them and saying how much was left out.

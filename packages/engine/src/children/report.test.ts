@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FakeClock } from '@rotaris/kernel';
 import type { ChatMessage } from '@rotaris/model';
-import { commandsFrom, deterministicTesterReport, editedFilesFrom, fallbackReport, produceReport, reportFacts, reportTranscript, TRANSCRIPT_CAP, transcriptText, type ReportInput, type SummariserDeps } from './report.js';
+import { commandsFrom, deterministicTesterReport, editedFilesFrom, fallbackReport, produceReport, reportFacts, reportTranscript, TRANSCRIPT_CAP, type ReportInput, type SummariserDeps } from './report.js';
 import { commandsForArtifact } from './ledger.js';
 import { childPayload } from './notify.js';
 import { interruptedResult, ranBeforeItWasCut } from '../run/interruption.js';
@@ -354,7 +354,8 @@ describe('engine/children/report — OQ-111: the pass reads the start and the mo
   });
 
   it('the head-only cut it replaces loses every edit of the duress shape (the finding, reproduced)', () => {
-    expect(transcriptText(duress())).not.toContain('tool-call haet_edit');
+    // The cut as it was: each event to 2,000, the whole to 12,000 from its head.
+    expect(events(duress()).join('\n').slice(0, TRANSCRIPT_CAP)).not.toContain('tool-call haet_edit');
   });
 
   it("the first repair's start — the first event, cut to 2,000 — is the payload's blocks and loses the task behind them (the verification's finding, reproduced)", () => {
@@ -407,7 +408,7 @@ describe('engine/children/report — OQ-111: the pass reads the start and the mo
   it('a transcript within the cap is given whole, unmarked — and with the task given, its start is the task, the blocks ahead of it marked', () => {
     const short = [say('user', 'write docs/a.md'), call('w', 'write_file', { path: 'docs/a.md', content: 'x' }), result('w', 'write_file', 'ok'), say('assistant', 'done')];
     const t = reportTranscript(short);
-    expect(t).toBe(transcriptText(short));
+    expect(t).toBe(events(short).join('\n'));
     expect(t).not.toContain('omitted');
     const payload = childPayload('/ws', 'TASK: write docs/a.md', '');
     const given = [say('user', payload), ...short.slice(1)];

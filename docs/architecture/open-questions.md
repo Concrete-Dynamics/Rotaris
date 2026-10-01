@@ -5747,7 +5747,8 @@ None of them says what ends a silent child's step so that there is an outcome to
   when it had been asked for no output in that time. REQ-NOTIFY-112's condition is that *it* produced none. The turn the
   run starts is now the fourth event (`children.test.ts`, "a child that waited on its own child past the window …"). The
   watch's own warnings and issues during such a wait are a separate question
-  ([`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/a-child-waiting-on-its-own-children-is-reported-stalled.md)).
+  ([`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md)),
+  since 2026-09-30 OQ-155's: the watch counts no silence between the child's turns.
 - **The outcomes that earn nothing, as a failed step carries them:**
   - `cancelled`: the child's own abort or the run's;
   - `blocked`: such a child never runs;
@@ -5842,10 +5843,13 @@ None of them says what ends a silent child's step so that there is an outcome to
   threshold, is left open in the same note.~~ *Corrected in place, 2026-09-30 (R-067, acceptance finding A6): the callback
   reaches the agent's record and every agent surface draws the stall, the root is watched, and a stall evaluation wakes an
   agent waiting on its children for a pending steer. The readings are **OQ-153**.*
-- **A child waiting on its own children reads as stalled.** It has no model step and no call in flight while it waits,
+- ~~**A child waiting on its own children reads as stalled.** It has no model step and no call in flight while it waits,
   and the requirements tell a wait from a stall only by active tool calls. The build reports it stalled; whether the
   wait pauses the watch or counts as waiting on N children is recorded in
-  [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/a-child-waiting-on-its-own-children-is-reported-stalled.md).
+  [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md).~~
+  *Corrected in place, 2026-09-30, by the repair of acceptance finding A7:* the watch counts no silence between the
+  child's turns, so a wait on its own children is neither a stall nor a wait on calls; the reading, and what a ruling
+  decides, is OQ-155's.
 
 **OQ-128 — What becomes of a steering prompt still pending when the run comes to rest, or ends?** *(REQ-MONITOR-133, "the
 prompt is pending until injected"; REQ-MONITOR-134, "all pending steering prompts for an agent are delivered into its
@@ -6833,6 +6837,96 @@ resumable iteration (`PD-ORCH-005` clause 6, after the continuing run's `session
 **What a ruling decides.** For each of the four paths: fire at the moment, through a port resolved for the purpose
 (and, after `session_end`, out of REQ-HOOKS-076's order); owe it to the next run of the session, after its
 `session_start`; or fire none, as built.
+
+**OQ-155 — Is a child waiting on its own children silent, for the stall watchdog?** *(REQ-ORCH-089, "when active tool
+calls exist, the condition is reported at informational level as waiting on N active tool calls instead of as a stall";
+REQ-MONITOR-117 to REQ-MONITOR-120, "each agent is evaluated for a stall"; REQ-NOTIFY-112; OQ-127. Raised 2026-09-30 by
+the repair of acceptance finding A7,
+[`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md),
+under [R-067](../product/requests.md#r-067). Open; numbered OQ-152 when it was raised, renumbered OQ-154 at
+the merge once origin/main's OQ-152 and OQ-153 had landed, and OQ-155 at the next merge once origin/main's OQ-154 had.)*
+
+A child that delegated, and then waits for its children's reports before the run resumes it (REQ-ORCH-055 to
+REQ-ORCH-059), or that the run resumes into that wait from its record (PD-ORCH-005 clause 4), has no model step and no
+tool call in flight while it waits. The requirements tell a stall from a wait
+only by "active tool calls", so read literally the wait is "the same silence with no tool call in flight", and
+REQ-MONITOR-119 asks every evaluation to warn that the child "appears stalled" and to write a `stall` issue. Through a
+wait on a child that works for twenty minutes, that is some 240 warning-severity issues about a child working as
+designed, each carrying the words "no model event or token", which describe a step it is not taking.
+
+**What the build proceeds under.** The watch measures the silence of the child's model steps. Once a turn ends and
+until the run starts its next — which is exactly the wait on its own children, or the end of its execution — the run
+asks the child for no output, so no silence is counted against it: an evaluation there reports no stall and no wait,
+and calls the callback with *not stalled*; ~~a stall under way when the turn ended is reported recovered, the turn's end
+being read as REQ-MONITOR-120's "activity resumes" — the step the silence was counted against has answered, whether
+with its final event or by settling.~~ *Corrected in place 2026-09-30, at the merge with origin/main (found by the
+verifier's review):* a turn that settles because it was cancelled, paused, timed out or failed is not activity resuming,
+and OQ-153 already reads REQ-MONITOR-120's recovery as "only when the agent was active". A stall under way when the turn
+ended is over at the first evaluation between turns, and its figure cleared; it is logged recovered only when the agent
+was active after the evaluation that last found it stalled (`StallWatch.endStall`; `stall.test.ts`, "REQ-MONITOR-120
+(OQ-155 with OQ-153): a stall under way when the turn ends is over …"). The next turn
+the run starts counts from its start, as OQ-127 already reads for REQ-NOTIFY-112's recovery. Each child it waits on has
+its own watch, which reports that child's own silence (`StallWatch.betweenTurns`; `stall.test.ts` and `children.test.ts`,
+"a child waiting on its own child between its turns is not reported stalled"). A child the run resumes into waiting
+(PD-ORCH-005 clause 4: its record ends on its own answer) takes no step until a child of its own reports, so its watch
+is between turns from the start of that execution (`execute`, when its start is resumed and waiting; `children.test.ts`,
+"a child resumed into waiting on its own child is not reported stalled"). *Corrected in place 2026-09-30:* the reading's
+first build marked the watch only as a turn settled, which such an execution never reaches before its wait, so a child
+paused while waiting and continued had a `stall` issue at every evaluation of the wait (found by the verifier's review).
+
+**What a ruling decides.** Whether the wait is outside the watch (as built), or is reported at REQ-MONITOR-118's
+informational level as "waiting on N active children", which would need words no requirement has and, while REQ-ORCH-139's
+vocabulary has none, a session-log line in the manner OQ-127 records.
+
+**OQ-156 — How much of the history it replaces does the compressing model read?** *(REQ-MONITOR-082, "only the action
+history recorded after the original request is compressed, and the summary it produces must state the work performed,
+the findings reached, and the questions left open"; REQ-MONITOR-084; REQ-MONITOR-080, whose compressing model is "able
+to hold the context being compressed"; REQ-MONITOR-078; REQ-ORCH-110's 12,000 and 2,000 characters; ADR-0060 decision 4.
+Raised 2026-09-30 by the repair of acceptance finding A12,
+[`the-compressor-reads-only-the-head-of-what-it-compresses.md`](../defects/fixed/the-compressor-reads-only-the-head-of-what-it-compresses.md),
+under [R-067](../product/requests.md#r-067). Open; numbered OQ-153 when it was raised, renumbered OQ-155 at
+the merge once origin/main's OQ-152 and OQ-153 had landed, and OQ-156 at the next merge once origin/main's OQ-154 had.)*
+
+The compressing pass replaced the history between the original request and the preserved turns with a summary written
+from `transcriptText`, the report pass's reader: each event cut to 2,000 characters and the whole to 12,000 from its
+head. Those are REQ-ORCH-110's figures, which bound the child-report pass and nothing else; the compressor reached them
+only by reusing the report's function (ADR-0060 decision 4 modelled the pass on `produceReport`). At the default trigger
+(60 % of 265,000 tokens at 4 characters each) the history is some 636,000 characters, so the model read its first 2 %,
+and the rest left the conversation absent from the summary that stood in for it. No requirement bounds what the
+compressing model is given, and none says which part it reads when not all of it fits.
+
+**What the build proceeds under.** The compressing model reads the history it replaces, each event whole, up to its own
+effective threshold (REQ-MONITOR-078, `ResolvedTrigger.tokens` for the compressing model — `compressor.model`'s when
+configured, else the agent's own) at `chars_per_token`. Whenever the compressing model is the agent's own, a history at
+the agent's automatic trigger is, by the estimate REQ-MONITOR-081 falls back to, within that bound less the system
+prompt, the tool definitions, the original request and the preserved turns, so it is read whole unless the provider's
+own count ran well below the estimate; so is a manual compression's. Where it passes the bound — REQ-ORCH-093's recovery
+from a context rejection, or a configured `compressor.model` whose threshold is smaller —
+the reading keeps its **start** (a previous compression's summary where there was one, else the agent's first act), held
+to half the bound, and its **most recent part**, the part the preserved turns carry on from, with OQ-111's marker between
+them saying how many characters were left out. Where the most recent part is shorter than the other half it is given
+whole, with no marker, and the start has what it leaves of the bound (`compressorTranscript`,
+`packages/engine/src/run/compression.ts`; `compression.test.ts`, "REQ-MONITOR-082 (OQ-156, acceptance A12) …" and
+"REQ-MONITOR-082 / REQ-MONITOR-080 (OQ-156) …"). A threshold that resolves to no tokens gives the history whole.
+*Found by the branch's verification and kept beside its repair:* the reading first held the start to half the bound in
+every case, so a first event longer than half before a short most recent part wrote a second marker with a negative
+count where nothing was left out, and left the rest of the bound unused.
+
+**A consequence the build accepts, and the ruling may weigh.** The compressing request can now approach the compressing
+model's threshold (some 159,000 tokens at the defaults) where it was about 3,000, under the same 120-second compression
+timeout (REQ-MONITOR-080). A slow endpoint will reach that timeout more often, and where it does REQ-ORCH-093 surfaces
+the original rejection unchanged. And on REQ-ORCH-093's rejection path (REQ-MONITOR-077) the compressing request can be
+nearly as large as the context the provider has just rejected: the bound is 60 % of the resolved capacity at 4 characters
+a token — some 159,000 tokens where the model's own input limit is unknown and the 265,000 default applies — and the
+compressible slice is sent whole under it. Where the real window is smaller than the capacity resolved, or the real
+characters per token fewer than 4, the compressing request can itself be rejected; REQ-ORCH-093 then surfaces the original
+rejection and the call fails, where the 12,000-character request it replaced would have been accepted (found by the
+branch's verification, 2026-09-30).
+
+**What a ruling decides.** Whether the compressing model's input has a bound at all, and if so which figure: its own
+threshold (as built), its capacity, or a figure of the compressor's section; whether the rejection pass is bounded below
+the size that was rejected; and, past the bound, whether the start and the most recent part are kept (as built), or the
+history is condensed in more than one pass so nothing is left unread.
 
 ## Design-reference dependencies
 

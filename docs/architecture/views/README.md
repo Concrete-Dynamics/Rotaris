@@ -45,6 +45,21 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**The compressing model reads the history it replaces (REQ-MONITOR-082, REQ-MONITOR-084, REQ-ORCH-110, OQ-156, R-067).**
+`compress` reads `compressorTranscript` (`run/compression.ts`) instead of the report pass's `transcriptText`, which is
+removed: each event whole, the slice whole up to the compressing model's own threshold at `chars_per_token`
+(`CompressorDeps.inputTokens`, set by `Run.compressionFor`), its start and most recent part past it. This repairs
+`the-compressor-reads-only-the-head-of-what-it-compresses.md` (acceptance A12). The **runtime view**'s compression
+paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A child waiting on its own children is not reported stalled (REQ-ORCH-089, REQ-MONITOR-119, REQ-NOTIFY-112, OQ-155,
+R-067).** `StallWatch.betweenTurns` (`children/stall.ts`), called by `execute`'s `turn` closure as each turn settles,
+holds the watch's evaluation off the silence until the run starts the child's next turn, and `execute` calls it as the
+watch is armed for an execution resumed into waiting (PD-ORCH-005 clause 4; added 2026-09-30, the first reading having
+missed that path), so the wait inside `runWithChildren` writes no `stall` issue and no warning. This repairs
+`a-child-waiting-on-its-own-children-is-reported-stalled.md` (acceptance A7). The **runtime view**'s stall-watch paragraph
+says so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A child settled outside its execution fires `child_completed` (REQ-HOOKS-003, REQ-ORCH-048, REQ-ORCH-052,
 REQ-ORCH-053, REQ-ORCH-133, PD-ORCH-005 clause 6, R-067).** The cascade, the finalize sweep and the user's cancel of one
 child now fire it through `IterationChildren.completedOutside`, in line, and the run waits for them after the sweep
@@ -427,7 +442,7 @@ paragraph names it; no package, edge, message or store table changes.
 the blocks the payload puts ahead of it marked omitted) and the most recent part, within 12,000 characters, with
 `… [N characters omitted] …` between them. It also gives `reportFacts`, the
 edited files and each command with its exit code, derived from the whole transcript. The head-only `transcriptText`
-remains the compressor's alone. The **runtime view**'s children paragraph names it; no package, edge, message or store
+remains the compressor's alone (removed 2026-09-30 with the compressor's own reader, OQ-156). The **runtime view**'s children paragraph names it; no package, edge, message or store
 table changes.
 
 **A continue in the process that ran the session takes the lock back (ADR-0005, REQ-SESSION-047/048/083, 2026-09-29,

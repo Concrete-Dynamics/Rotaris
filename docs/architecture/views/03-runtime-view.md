@@ -578,7 +578,11 @@ resolution of REQ-CONFIG-134 — capacity from the model's `context_compression_
 call**, the original rejection surfaced unchanged when the condensation itself fails; the issue is
 `llm_bad_request`, or `parent_resume_bad_request` on the first call of a turn resumed with child reports. A
 compression asks the `compressor.model` (else the agent's own, REQ-MONITOR-080) for a summary of **only** the slice
-between the original request and the preserved turns (REQ-MONITOR-082 forbids sending the three survivors), then
+between the original request and the preserved turns (REQ-MONITOR-082 forbids sending the three survivors) — read by
+`compressorTranscript`, each event whole and the slice whole up to the compressing model's own threshold at
+`chars_per_token` (`CompressorDeps.inputTokens`, which `Run.compressionFor` resolves through `triggerFor`), past which it
+keeps the start and the most recent part with the omission marked (OQ-156; the report pass's 12,000-character head cut
+it once shared is gone) — then
 rebuilds the conversation as REQ-MONITOR-084's five parts: the original request, the summary (clamped to 300 lines
 and nothing else is, REQ-MONITOR-083), the todo items one for one, and the most recent `preserve_recent_turns`
 turns verbatim — a **turn boundary being any message that is not a `tool` message**, so a cut can never orphan a
@@ -793,10 +797,16 @@ as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds
 - each tool call's start and end (`onToolStarted`, `onToolCompleted`);
 - every turn the run starts for the child (the `turn` closure in `execute`): its payload or record, its children's
   reports, a re-prompt, the corrective message — so a wait on its own children is not counted in the silence
-  REQ-NOTIFY-112's recovery reads (`quietFor`). The watch's own evaluation still counts such a wait, and reports the
-  child stalled while it waits
-  ([`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../defects/a-child-waiting-on-its-own-children-is-reported-stalled.md),
-  OQ-127).
+  REQ-NOTIFY-112's recovery reads (`quietFor`);
+- the end of each of those turns (`betweenTurns`, when the turn's promise settles): until the run starts the next, the
+  child is waiting on its own children or ending, and an evaluation counts no silence — no stall, no wait on tools, the
+  callback *not stalled* — so a wait on its own children is not reported as its stall (OQ-155; the repair of
+  [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md)).
+  Each child it waits on is watched by its own watch;
+- the start of an execution resumed into waiting (PD-ORCH-005 clause 4, `execute`, as the watch is armed): the child
+  takes no step until a child of its own reports, so it is between its turns from the start. (Corrected 2026-09-30: the
+  bullet above was first read as covering this path too, but no turn settles before such a wait, so it was counted as
+  silence.)
 
 What it writes:
 - a silence of the threshold with no call in flight: a `stall` issue at every evaluation (REQ-MONITOR-119), and a

@@ -381,6 +381,13 @@ export class SessionWriter {
   get sessionId(): SessionId {
     return this.deps.sessionId;
   }
+  /**
+   * The wall clock this writer stamps its entries with, for a record written beside them by a caller with no clock of its
+   * own — the crash record and the stale-child settle, which run from the store alone (`writeTeardown`, REQ-ORCH-098).
+   */
+  get wall(): WallClock {
+    return this.deps.wall;
+  }
   /** REQ-EVENTS-088: sticky for the remainder of the run. */
   get failed(): string | null {
     return this.failedReason;

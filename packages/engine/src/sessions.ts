@@ -25,7 +25,7 @@ import { UserPresence } from './run/presence.js';
 import type { ToolPort } from './run/turn.js';
 import { settleStaleChildren } from './children/orchestration.js';
 import type { DelegationOps } from './children/delegation.js';
-import { DEFAULT_BUDGET, holdsModelSlot, storeChildReport, userCancellation, type Budget } from './children/ledger.js';
+import { DEFAULT_BUDGET, holdsModelSlot, storeChildReport, userCancellation, writeCancelledTeardown, type Budget } from './children/ledger.js';
 import { DEFAULT_CONTEXT_CAPACITY, isInterruption, isReadyArtifactStatus, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState, type EntryRoot, type EntryToolsPayload, type SessionArtifactLink } from '@rotaris/contracts';
 import type { ChildRow } from '@rotaris/store';
 import { SummaryWriter } from './run/summary.js';
@@ -1996,6 +1996,8 @@ export class Sessions {
       const written = userCancellation(t, self, true);
       storeChildReport({ writer: s.writer, artifacts, warn }, t.task_id, t, written.report);
       s.writer.appendTimeline('child_user_cancelled', 'user', written.message, written.metadata);
+      // REQ-ORCH-098: torn down as the live cancel tears it down, after its entry.
+      writeCancelledTeardown(s.writer, t, written.report);
     }
     // PD-ORCH-005 clause 16 with REQ-CONFIG-094: a cancelled paused child gives up the place it kept (OQ-149).
     this.settleModelSlots(sid, s.dal);

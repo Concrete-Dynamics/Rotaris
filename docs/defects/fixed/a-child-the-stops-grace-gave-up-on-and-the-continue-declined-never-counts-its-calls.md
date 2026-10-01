@@ -65,6 +65,6 @@ counted at the rest; that held only for the rest that pauses it.
 Noticed while repairing: the explicit cancel's own `outlast` — the cancel that brings the iteration to no rest — gives up
 on a child the same way and no rest follows, so that child's calls are never counted either; nor are those of a child
 the user had cancelled on its own before a later stop's grace gave up on it (terminal, so no rest path counts it) —
-[`a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md`](../a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md),
+[`a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md`](a-child-the-explicit-cancel-gave-up-on-never-counts-its-calls.md),
 recorded open. Repaired 2026-09-30 under R-067.
 

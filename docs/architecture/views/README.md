@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A setup whose finished status never arrives still ends (REQ-WORKSPACE-084/109, OQ-168, ADR-0064).** Main tells the
+initialization coordinator when the run host exits (`onRunHostExit`), and a follow is bounded by the stage budgets plus
+REQ-WORKSPACE-092's 5 s each (`SETUP_FOLLOW_BOUND_MS`); either ends it as a retryable failure and the next setup's turn
+comes (process view, `initialization.*`). This repairs
+`nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`. No package, edge, process, message kind,
+channel, command or store column changed.
+
 **A closed workspace's failed resolution raises no banner (REQ-WORKSPACE-013/102, OQ-141, ADR-0064).** The initialization
 coordinator's resolution, failing after its workspace was closed, says so in the log at info level and raises no
 "Project setup could not be checked" banner, as `publish` already showed nothing of it (process view, `initialization.*`).

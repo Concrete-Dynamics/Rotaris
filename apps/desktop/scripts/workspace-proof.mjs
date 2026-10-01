@@ -120,6 +120,8 @@ function initProject(name, { slow = false } = {}) {
 const INIT_SLOW = initProject('init-slow', { slow: true });
 const INIT_QUICK = initProject('init-quick');
 const INIT_HELD = initProject('init-held', { slow: true });
+const INIT_LOST = initProject('init-lost', { slow: true });
+const INIT_QUEUED = initProject('init-queued');
 
 const launches = [];
 /** Quit every app still running, keeping its log as evidence. Idempotent, so `finally` may call it again. */
@@ -751,6 +753,75 @@ try {
       await s.driver.command({ kind: 'mcp.setup', action: 'cancel' });
       await waitUntil(() => (logOf(s).match(/mcp setup: cancelled /g) ?? []).length >= 2, 10_000);
     }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 8d — the run host lost while a setup is under way, another workspace's setup queued behind it (REQ-WORKSPACE-084/109).
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    /*
+     * The coordinator's setups are one at a time, and a follow ended only on the run host's `finished` status. Main never
+     * forks the run host again, so with the run host gone that status could never come: the run under way never ended and
+     * every later workspace's setup waited behind it for the life of the process
+     * (`docs/defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`). The run host is
+     * found as the nearest Electron utility process above the stand-in's `project create`, and killed.
+     */
+    const s = await launch('init-host-lost', { workspace: INIT_LOST, folders: [INIT_QUEUED] });
+    const startedFor = (name) => (logOf(s).match(new RegExp(`mcp setup: started for [^\\n]*${name}`, 'g')) ?? []).length;
+    const outcomes = () => logOf(s).match(/initialization: code-intelligence-setup → [^\n]*/g) ?? [];
+    const waitUntil = async (predicate, timeoutMs) => {
+      const began = Date.now();
+      while (!predicate()) {
+        if (Date.now() - began > timeoutMs) return false;
+        await sleep(100);
+      }
+      return true;
+    };
+    /** The nearest ancestor of `pid` that is an Electron utility process — the run host, which launched the setup step. */
+    const utilityAbove = (pid) => {
+      let at = pid;
+      for (let depth = 0; depth < 8; depth += 1) {
+        let stat;
+        try { stat = readFileSync(`/proc/${at}/stat`, 'utf8'); } catch { return null; }
+        const parent = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1]);
+        if (!(parent > 1)) return null;
+        let cmdline = '';
+        try { cmdline = readFileSync(`/proc/${parent}/cmdline`, 'utf8'); } catch { return null; }
+        if (cmdline.includes('--type=utility')) return parent;
+        at = parent;
+      }
+      return null;
+    };
+    const lostStarted = await waitUntil(() => startedFor('init-lost') === 1 && existsSync(join(INIT_LOST, '.stand-in-create.pid')), 30_000);
+    const createPid = lostStarted ? Number(readFileSync(join(INIT_LOST, '.stand-in-create.pid'), 'utf8')) : 0;
+    let queued = false;
+    if (lostStarted) {
+      await s.driver.command({ kind: 'workspace.choose', newWindow: true });
+      queued = await waitUntil(() => /init-queued waits for the setup under way to end/.test(logOf(s)), 30_000);
+    }
+    const host = lostStarted && process.platform === 'linux' ? utilityAbove(createPid) : null;
+    if (!lostStarted || !queued || host === null) {
+      skip('REQ-WORKSPACE-084 / REQ-WORKSPACE-109: a setup whose run host is lost ends, and the setup queued behind it is attempted',
+        !lostStarted ? `the first project's setup never started within 30 s (log tail: ${JSON.stringify(logOf(s).slice(-600))})`
+          : !queued ? 'the second window\'s setup never queued behind the first'
+            : `no run host was found above the stand-in's project create (pid ${createPid}${process.platform === 'linux' ? '' : `; /proc is Linux's, and this is ${process.platform}`})`);
+    } else {
+      process.kill(host, 'SIGKILL');
+      const killedAt = Date.now();
+      const lostEnded = await waitUntil(() => outcomes().length >= 1, 10_000);
+      const lostAfter = Date.now() - killedAt;
+      // The queued run's start then goes to a run host that is gone, and ends within the request's own 15 s bound.
+      const queuedEnded = await waitUntil(() => outcomes().length >= 2, 30_000);
+      const log = logOf(s);
+      const [lost = '', next = ''] = outcomes();
+      check('REQ-WORKSPACE-084 / REQ-WORKSPACE-093 / REQ-WORKSPACE-109: a setup whose run host is lost ends as a retryable failure, and the setup queued behind it is then attempted',
+        lostEnded && queuedEnded && /initialization: the run host exited \(\d+\) while code-intelligence-setup's setup was under way/.test(log)
+          && lost.endsWith("→ failure — Code intelligence could not create this project's configuration: the run host exited before the setup finished.")
+          && next.includes('→ failure'),
+        `run host pid ${host} killed; the lost setup's run ${lostEnded ? `ended ${lostAfter} ms later: ${JSON.stringify(lost.slice(0, 260))}` : 'NEVER ended'}; the queued run ${queuedEnded ? `ended: ${JSON.stringify(next.slice(0, 260))}` : 'NEVER ended'}`);
+    }
+    // Nothing in main ends a step's processes when the run host that launched them is killed (OQ-168): end the stand-in here.
+    if (createPid > 0) { try { process.kill(createPid, 'SIGKILL'); } catch { /* already gone */ } }
   }
 
   // ───────────────────────────────────────────────────────────────────────────────────────────────────────────

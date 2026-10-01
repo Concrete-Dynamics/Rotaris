@@ -417,3 +417,20 @@ unit cases only, the closed one red on the code before: no proof can hold the st
 `workspace-proof` passed on the repair (41 passed, 0 failed, 2 skipped; as root under Xvfb, Node 24, `--skip-build` after
 `pnpm build`), no launch logging a resolution failure.
 
+**Eleventh round (2026-10-01, R-067): a follow whose finished status never comes.** "Pushed, not polled" holds, with a
+condition it left open: the task ended only on the run host's `finished` status, and the seventh round made every later
+setup wait for that end. Main never forks the run host again, so with the run host lost that status could never come,
+and a lost push had the same effect — the run never ended and every later setup waited behind it for the life of the
+process (`../../defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`). Main now
+tells the coordinator when the run host exits (`onRunHostExit`), and a follow is bounded at every stage budget plus
+REQ-WORKSPACE-092's 5 s each, 2235 s (`SETUP_FOLLOW_BOUND_MS`); either ends it as REQ-WORKSPACE-093's retryable failure,
+under the stage that was running, in the build's detail (OQ-168), and the next setup's turn comes. **Measured** by
+`workspace-proof`'s new scenario 8d, which kills the run host by SIGKILL while the first project's setup holds `create`
+and a second window's setup waits behind it: on the build before this round neither run had ended 40 s after the kill;
+with it the first ended 101 ms after it ("… could not create this project's configuration: the run host exited before the
+setup finished.") and the queued run was attempted (42 passed, 0 failed, 2 skipped; as root under Xvfb, Node 24,
+`--skip-build` after `pnpm build`). The bound is the unit cases' alone: no proof holds a setup for 37 minutes. **Found
+besides:** the queued run's start, sent to the run host that is gone, ends 15 s later as a task with no outcome rather
+than in REQ-WORKSPACE-093's words (`../../defects/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`,
+recorded, not repaired).
+

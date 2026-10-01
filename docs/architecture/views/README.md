@@ -48,7 +48,8 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 **The run-level agent's tool-call count is its own while its turn runs (REQ-MONITOR-044/052, R-067).** The surfaces derived
 it as the session's total less the children's, and a root's calls join the total only when its turn returns, so the meta
 line read `0 tool calls` beside the root's used chips. `SessionRecord.entryToolCalls` now carries it: the roots' share of
-the persisted total plus the live root's calls not yet counted (`entryToolCallsOf`, `Run.entryUncountedToolCalls`). This
+the persisted total plus the live root's calls not yet counted (`entryToolCallsOf`, `Run.entryUncountedToolCalls`) — the
+agent's own count, where REQ-MONITOR-101 gives the synthetic root the run's aggregate; **OQ-158** asks which, open. This
 repairs `the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md` (acceptance A20). The **runtime view**'s §3
 entry-record paragraph and the **state-ownership view**'s tool-call row say so. One `SessionRecord` field was added on the
 existing snapshot channel; no package, edge, process, message kind, channel, command or store column changed.

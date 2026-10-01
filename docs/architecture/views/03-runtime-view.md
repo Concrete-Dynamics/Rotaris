@@ -627,7 +627,9 @@ total less every child's persisted `children.tool_calls` — plus the calls the 
 that the total does not hold yet (`entryToolCallsOf`, `Run.entryUncountedToolCalls`: the tracker's count under `rootName`
 less its count when the execution began, zero once its calls join the total). Null on a stored record, where the surface
 derives it as the total less the children's (`runLevelAgent`). A root's calls join the total only when its turn returns
-(REQ-ORCH-097's cadence, OQ-116), so before this the meta line read `0 tool calls` while the root's turn ran. A LIVE run-level agent whose root port
+(REQ-ORCH-097's cadence, OQ-116), so before this the meta line read `0 tool calls` while the root's turn ran. It is the
+agent's own count (REQ-MONITOR-044/052), not REQ-MONITOR-101's aggregate run count for the synthetic root; which of the two
+the run-level agent shows is **OQ-158**, open, and the figure stays the agent's own until it is ruled. A LIVE run-level agent whose root port
 has not resolved yet — the pre-flight, before `Run.iterate` sets the port — lists nothing (`runLevelGrant`), never the
 declared set (REQ-MONITOR-061). **`SessionRecord.artifacts`** is the
 session's artifacts not superseded, with producer, ready flag and consumers (`artifactLinksOf`, one body-free read through

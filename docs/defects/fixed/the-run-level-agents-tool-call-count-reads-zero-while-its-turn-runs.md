@@ -55,4 +55,10 @@ uncounted term is added whether or not it was cleared, so nothing pinned the cla
 (0 where 2 is due); and `pnpm artifacts-proof` item 2's new meta-line assertion, which failed on a build without the
 surface change and passed with it (`running · 8s · 3 tool calls`: the root's `artifact_write` and two `delegate` calls).
 
+What the figure means is open: it is the run-level agent's own count, as REQ-MONITOR-044/052 present an agent's and as
+the figure was before the repair, while REQ-MONITOR-101 gives the run's synthetic root "the aggregate run count and the
+aggregate called-tool history". **OQ-158** asks which the run-level agent shows; the figure stays its own until it is
+ruled. *(Added 2026-10-01 at verification: the repair first wrote the roots'-share reading into the contract and the views
+without citing REQ-MONITOR-101.)*
+
 Not shown live: no live-run scenario was run for this task; the proof that found it shows the repair.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProcessReply, RunHostRequest, WorkspaceServiceRequest } from '@rotaris/contracts';
 import { canonicalPath } from '@rotaris/platform';
+import { FakeClock } from '@rotaris/kernel';
 import { sessionCommands } from './session.js';
 import type { CommandAt, CommandContext, MainWindowState } from './context.js';
 
@@ -30,7 +31,7 @@ interface Harness {
   readonly raised: { severity: string; headline: string; detail: string | undefined }[];
   readonly svcAsked: WorkspaceServiceRequest[];
   readonly hostAsked: RunHostRequest[];
-  readonly ctx: Pick<CommandContext, 'capturing' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runHost' | 'services'>;
+  readonly ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runHost' | 'services'>;
   /** PD-ORCH-005 clause 9: what `quitting()` answers. */
   readonly quit: { now: boolean };
 }
@@ -43,6 +44,7 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
   const quit = { now: false };
   const ctx = {
     capturing: false,
+    clocks: new FakeClock(),
     quitting: () => quit.now,
     dialogs: new Map(),
     log: (m: string) => { logs.push(m); },
@@ -146,5 +148,46 @@ describe('PD-CHAT-002 revision 2 and PD-ORCH-005 clause 9: a question the quit c
     // Any other control still goes through while the quit is under way.
     await sessionCommands(h.ctx)['session.control']({ kind: 'session.control', request: { op: 'pause', sessionId: 'S1', args: {} } }, windowOn('ws-1'));
     expect(h.hostAsked.map((r) => (r as { request: { op: string } }).request.op)).toEqual(['pause']);
+  });
+});
+
+describe("session.subscribe's verification seam: the reply held after the attach (ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS)", () => {
+  // The window a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md was found in: the
+  // run is drawn active before this reply settles the renderer's send. part-j-proof's steer-early launch widens it.
+  const subscribe = { kind: 'session.subscribe', sessionId: 'S1' } as const;
+  const withSeam = (capturing: boolean) => {
+    const h = harness(() => ({ kind: 'ack' }), () => ({ kind: 'ack' }));
+    const clock = new FakeClock();
+    const ctx = {
+      ...h.ctx, capturing, clocks: clock,
+      relay: { subscribe: () => undefined } as unknown as CommandContext['relay'],
+      mainWindows: { setFollowedSession: () => undefined } as unknown as CommandContext['mainWindows'],
+    };
+    return { h, clock, commands: sessionCommands(ctx) };
+  };
+  const settledWithin = async (p: Promise<unknown>) => { let settled = false; void p.then(() => { settled = true; }); for (let i = 0; i < 10; i += 1) await Promise.resolve(); return settled; };
+
+  it('holds the reply the configured time after the attach, while capturing', async () => {
+    process.env['ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS'] = '1500';
+    try {
+      const { h, clock, commands } = withSeam(true);
+      const reply = Promise.resolve(commands['session.subscribe'](subscribe, windowOn('ws-1')));
+      expect(await settledWithin(reply)).toBe(false);
+      expect(h.hostAsked).toEqual([{ kind: 'session.attach', sessionId: 'S1' }]);
+      clock.advance(1499);
+      expect(await settledWithin(reply)).toBe(false);
+      clock.advance(1);
+      expect(await reply).toEqual({ ok: true });
+      expect(h.logs).toEqual(['capture: session.subscribe reply held 1500 ms', 'capture: session.subscribe reply released']);
+    } finally { delete process.env['ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS']; }
+  });
+
+  it('holds nothing outside a capture, whatever the environment says', async () => {
+    process.env['ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS'] = '1500';
+    try {
+      const { h, commands } = withSeam(false);
+      expect(await commands['session.subscribe'](subscribe, windowOn('ws-1'))).toEqual({ ok: true });
+      expect(h.logs).toEqual([]);
+    } finally { delete process.env['ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS']; }
   });
 });

@@ -18,6 +18,13 @@ the run before it (head 4868b8c) and the run after it, on the same build with no
 passed all eleven scenarios. Intermittent: it depends on which notice reaches the slot first. Noticed while running the
 proof for the repair of `a-provider-wait-or-a-compression-is-counted-as-a-stall.md`; recorded, not repaired.
 
+The `fatal` scenario reads the same slot and is exposed the other way: it asserts only that the notice it found is *not*
+a provider limit, so a setup notice satisfies it. On 2026-10-01 (head of this branch after the verifier's round 1,
+`pnpm symbols && pnpm build`, one run of `pnpm resilience-proof --skip-build` with another plan's live run and app on
+the host) all eleven scenarios passed while `results.json`'s `fatal.notice` read "Project setup did not finish … Code
+intelligence setup did not complete for this project …": the 401's own notice was not what the scenario saw, and it
+passed without showing it.
+
 ## Specs
 
 None contradicted by the product: the setup's notice is the product doing what it should (REQ-WORKSPACE-093,

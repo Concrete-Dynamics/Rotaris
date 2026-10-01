@@ -2165,6 +2165,30 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     void sessions;
   });
 
+  it('REQ-MONITOR-102 / REQ-SESSION-129 (the repair of a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running): the stale settle answers the phantom child\'s open calls as cut by no rest, settles its row, and counts its calls once', async () => {
+    const sid0 = 'S-prev-calls' as SessionId;
+    const w = SessionWriter.create({ dal, sessionId: sid0, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { workspaceRoot: 'C:/ws', pid: 1, host: HOST });
+    if (!w.ok) throw new Error('writer');
+    w.value.spawnChild({ task_id: 'bg_0000dead', canonical_name: 'ghost', given_name: 'ghost', persona: 'coding-agent', state: 'running', parent_id: 'root:1', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}' });
+    // A call that completed, and one the dead run cut while its row was `running`.
+    w.value.recordAgentMessage('bg_0000dead', 1, 'message', { role: 'user', content: [{ kind: 'text', text: 'TASK' }] });
+    w.value.recordAgentMessage('bg_0000dead', 1, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'a', name: 'grep', args: '{}' }, { kind: 'tool-call', callId: 'b', name: 'glob', args: '{}' }] });
+    w.value.appendRow('tool', 'grep', true, { name: 'ghost', toolName: 'grep', toolStatus: 'ok', callKey: 'a', output: 'a.ts:1' });
+    w.value.appendRow('tool', 'glob', false, { name: 'ghost', toolName: 'glob', toolStatus: 'running', callKey: 'b', output: 'partial' });
+    const { settleStaleChildren } = await import('./orchestration.js');
+    expect(settleStaleChildren(dal, w.value, sid0, () => undefined)).toBe(1);
+    expect(dal.getChild(sid0, 'bg_0000dead')).toMatchObject({ state: 'cancelled', tool_calls: 2 });
+    expect(dal.getSession(sid0)!.tool_calls).toBe(2);
+    expect(conversationOf(dal.agentConversation(sid0, 'bg_0000dead')).at(-1)).toEqual({ role: 'tool', content: [
+      { kind: 'tool-result', callId: 'a', name: 'grep', isError: false, result: 'a.ts:1' },
+      { kind: 'tool-result', callId: 'b', name: 'glob', isError: true, result: interruptedResult(null, true, 'partial') },
+    ] });
+    expect(dal.residentRows(sid0).map((r) => [r.call_key, r.tool_status])).toEqual([['a', 'ok'], ['b', 'failed']]);
+    // A second settle finds the child terminal and changes nothing.
+    expect(settleStaleChildren(dal, w.value, sid0, () => undefined)).toBe(0);
+    expect(dal.getSession(sid0)!.tool_calls).toBe(2);
+  });
+
   it('REQ-ORCH-050: with a cap of 1 the second child parks waiting_on_model_slot and is promoted when the first ends', async () => {
     let releaseFirst!: () => void;
     const hold = new Promise<void>((r) => { releaseFirst = r; });
@@ -3476,7 +3500,16 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       await sessions.running(sid)!;
       expect(byName(sid, 'work')).toMatchObject({ state: 'cancelled' });
       expect(JSON.parse(byName(sid, 'work').report!)).toMatchObject({ status: 'cancelled', summary: 'The user cancelled this child.' });
-      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_end')).toEqual([]);
+      // REQ-ORCH-098 (the repair of a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries): the cancel
+      // tears the child down, once, in the cancellation's words; the summariser, aborted, wrote no teardown of its own.
+      const work = byName(sid, 'work');
+      const own = dal.timelineOf(sid).filter((t) => (JSON.parse(t.metadata) as { task_id?: string }).task_id === work.task_id);
+      expect(own.filter((t) => ['child_end', 'child_result', 'child_conversation_closed'].includes(t.name)).map((t) => [t.name, t.message])).toEqual([
+        ['child_end', `Child work (${work.task_id}) ended cancelled.`],
+        ['child_result', 'Child work reported cancelled: The user cancelled this child.'],
+        ['child_conversation_closed', 'Child work\'s conversation closed.'],
+      ]);
+      expect(own.findIndex((t) => t.name === 'child_end')).toBeGreaterThan(own.findIndex((t) => t.name === 'child_user_cancelled'));
     });
 
     describe('the summarising pass cut short (found by phase 3\'s second review): no summarising call follows it', () => {
@@ -4049,6 +4082,26 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const last = snapshots.at(-1)!;
       expect(last.resumable).toEqual({ iteration: 1, agents: 2 });
       expect(Object.fromEntries(last.agents.map((a) => [a.name, a.presentationState]))).toEqual({ one: 'cancelled', two: 'paused', grand: 'cancelled', quick: 'done' });
+    });
+
+    it('REQ-ORCH-098 (the repair of a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries): it and its paused descendant are torn down once each, after their `child_user_cancelled`, in their reports\' words; the rest are not', async () => {
+      const { sessions, sid } = await restedFamily();
+      const one = byName(sid, 'one').task_id;
+      expect(cancel(sessions, sid, one)).toEqual({ ok: true });
+      const teardown = ['child_end', 'child_result', 'child_conversation_closed'];
+      const ownOf = (taskId: string) => dal.timelineOf(sid).filter((t) => (JSON.parse(t.metadata) as { task_id?: string }).task_id === taskId);
+      for (const name of ['one', 'grand']) {
+        const c = byName(sid, name);
+        expect(ownOf(c.task_id).filter((t) => teardown.includes(t.name)).map((t) => [t.name, t.message]), name).toEqual([
+          ['child_end', `Child ${name} (${c.task_id}) ended cancelled.`],
+          ['child_result', `Child ${name} reported cancelled: ${(JSON.parse(c.report!) as { summary: string }).summary}`],
+          ['child_conversation_closed', `Child ${name}'s conversation closed.`],
+        ]);
+        expect(ownOf(c.task_id).findIndex((t) => t.name === 'child_end'), name).toBeGreaterThan(ownOf(c.task_id).findIndex((t) => t.name === 'child_user_cancelled'));
+      }
+      // `two` is still paused, and `quick` was torn down by its own settle when it finished.
+      expect(ownOf(byName(sid, 'two').task_id).filter((t) => teardown.includes(t.name))).toEqual([]);
+      expect(ownOf(byName(sid, 'quick').task_id).filter((t) => teardown.includes(t.name)).map((t) => t.name)).toEqual(teardown);
     });
 
     it('refused for the run, the root, an unknown id, and an agent no longer paused; a descendant alone takes nothing above it', async () => {
@@ -5363,6 +5416,77 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
           ['child_conversation_closed', `Child ${c.canonical_name}'s conversation closed.`],
         ]);
       }
+    });
+
+    describe('the repair of a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries: every path that settles a child `cancelled` without its execution tears it down, once', () => {
+      const userText = (req: ModelRequest): string => req.messages.filter((m) => m.role === 'user').map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n');
+      const settle = async (until: () => boolean) => { for (let i = 0; i < 400 && !until(); i += 1) await new Promise((r) => setTimeout(r, 5)); };
+      /** The three entries of `c`, as its stored report words them. */
+      const tornDown = (c: ChildRow) => [
+        ['child_end', `Child ${c.canonical_name} (${c.task_id}) ended cancelled.`],
+        ['child_result', resultLine(c.canonical_name, 'cancelled', (JSON.parse(c.report!) as { summary: string }).summary)],
+        ['child_conversation_closed', `Child ${c.canonical_name}'s conversation closed.`],
+      ];
+      const entriesOf = (sid: SessionId, taskId: string) => teardownOf(sid, taskId).map((t) => [t.name, t.message]);
+
+      it('REQ-ORCH-133 / REQ-MONITOR-128: the user\'s cancel of a running child tears it and its live descendant down at the cancel, after each one\'s `child_user_cancelled`; their executions, which return later, write no second', async () => {
+        let release!: () => void;
+        const hold = new Promise<void>((r) => { release = r; });
+        const { sessions } = sessionsWith((persona, turn, req) => {
+          if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : answer('ok');
+          if (persona === 'summariser') return answer('{"summary":"x"}');
+          const grand = userText(req).includes('TASK: grand');
+          if (!grand && !req.messages.some((m) => m.role === 'tool')) return toolCalls([{ callId: 'g1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'grand', task: 'TASK: grand' } }], 'Delegating.');
+          return { parts: [{ hold }, ...answer(grand ? 'grand late' : 'late').parts] };
+        });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await settle(() => children(sid).length === 2 && children(sid).every((c) => c.state === 'running'));
+        expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'work').task_id } })).toEqual({ ok: true });
+        for (const name of ['work', 'grand']) {
+          const c = byName(sid, name);
+          expect(entriesOf(sid, c.task_id), name).toEqual(tornDown(c));
+          const cancelledAt = dal.timelineOf(sid).find((t) => t.name === 'child_user_cancelled' && (JSON.parse(t.metadata) as { task_id: string }).task_id === c.task_id)!.ordinal;
+          expect(teardownOf(sid, c.task_id)[0]!.ordinal, name).toBeGreaterThan(cancelledAt);
+        }
+        release();
+        await sessions.running(sid)!;
+        for (const name of ['work', 'grand']) expect(entriesOf(sid, byName(sid, name).task_id), name).toEqual(tornDown(byName(sid, name)));
+      });
+
+      it('PD-ORCH-005 clause 6: "continue without them" tears down each paused agent it cancels, once', async () => {
+        let releaseChild!: () => void;
+        const hold = new Promise<void>((r) => { releaseChild = r; });
+        const { sessions } = sessionsWith((persona, turn) => {
+          if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : answer('handled');
+          if (persona === 'summariser') return answer('{"summary":"x"}');
+          return { parts: [{ hold }, ...answer('late').parts] };
+        });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await settle(() => byName(sid, 'work')?.state === 'running');
+        expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+        releaseChild();
+        await sessions.running(sid)!;
+        expect(byName(sid, 'work').state).toBe('paused');
+        expect(teardownOf(sid, byName(sid, 'work').task_id)).toEqual([]);
+        expect(sessions.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
+        await sessions.running(sid)!;
+        const work = byName(sid, 'work');
+        expect(work.state).toBe('cancelled');
+        expect(entriesOf(sid, work.task_id)).toEqual(tornDown(work));
+      });
+
+      it('REQ-ORCH-053: a child a previous run left unfinished is torn down by the settle of the next run, once', async () => {
+        const { sessions } = sessionsWith((persona) => (persona === 'orchestrator' ? answer('hi') : answer('{}')));
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await sessions.running(sid)!;
+        dal.insertChild({ session_id: sid, task_id: 'bg_0000dead', canonical_name: 'ghost', given_name: 'ghost', persona: 'coding-agent', state: 'running', parent_id: dal.iterationsOf(sid)[0]!.root_task_id, depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: new Date(Number(clock.instant())).toISOString() });
+        expect(sessions.prompt(sid, 'again').ok).toBe(true);
+        await sessions.running(sid)!;
+        const ghost = byName(sid, 'ghost');
+        expect(ghost.state).toBe('cancelled');
+        expect(entriesOf(sid, ghost.task_id)).toEqual(tornDown(ghost));
+        expect(JSON.parse(teardownOf(sid, ghost.task_id)[0]!.metadata)).toEqual({ task_id: ghost.task_id, state: 'cancelled', at: expect.any(String) });
+      });
     });
   });
 });

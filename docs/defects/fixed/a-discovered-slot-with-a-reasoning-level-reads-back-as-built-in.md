@@ -48,3 +48,6 @@ the fixture's snapshot as the drive profile's `project_settings.yaml` and the wo
 `small_model_thinking: high`: `config.read` answers
 `{ slot: 'small_model', value: 'openai-compatible--beta/qwen', origin: 'discovered', thinking: 'high' }` — the Scope
 column's source (REQ-CONFIG-341).
+In the same driven launch, Settings → Models labels the row `small_model` `discovered` with `openai-compatible--beta/qwen`
+(`.settings__origin`), where the other slots read `built-in`. `pnpm config-proof` and `pnpm settings-proof` pass on the
+build; neither fixture has a snapshot-supplied slot with a reasoning level, so neither shows this case.

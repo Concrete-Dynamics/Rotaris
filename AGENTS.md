@@ -80,7 +80,7 @@ show it, which a check of the status passes as a clean exit. (Before the applica
 | | `improvements-proof` | the reviewed-improvement lifecycle end to end |
 | | `retrospective-proof` | the retrospective pass, driven from its surfaces against the built app (PD-LIBRARY-002) |
 | | `theme-proof` | the themes and scales, rendered — plus two counterfactuals that must stay red; since 2026-09-30 a text's contrast is read only from the part of it left on screen by the window and by every ancestor whose `overflow` is not `visible` (scroll, `hidden` and `clip` alike), and a fragment under one em is skipped with its size (`lib/text-sample.mjs`), so a status-strip item scrolled 1.2 px onto the screen no longer decides the verdict |
-| | `layout-proof` | the Workspace view's grid, **measured** at the sizes the specification names |
+| | `layout-proof` | the Workspace view's grid, **measured** at the sizes the specification names, and a task whose text is one unbroken token kept inside the plan column (REQ-SHELL-022) |
 | **Requirements** | `requirements-proof` | the delivery store and the board (ADR-0041) |
 | | `requirements-runs-proof` | runs started from the board, against a real scratch repository |
 | | `traceability-proof` | the traceability engine, including spike 7's scale store (ADR-0040) |

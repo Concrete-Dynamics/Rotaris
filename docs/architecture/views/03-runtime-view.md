@@ -610,7 +610,9 @@ finding K1, 2026-09-29) is the same route for its tools: `resolved` is the nativ
 REQ-MONITOR-061), `called`
 and `active` the tracker's under the name the root dispatches as (`Run.entryTools`, `rootName`: a root resumed as the
 entry role keeps the persona its iteration was opened with, OQ-97); with no run live nothing is
-resolved, the history is read under the latest iteration's `root_persona` (`entryToolsOf`), and the surface lets the
+resolved, the history is read under the latest iteration's `root_persona` (`entryToolsOf`) — or, before any iteration,
+under every name the tracker holds that is no child's, which can only be a plan cycle's root's, since a plan cycle has no
+iteration row (REQ-ORCH-153; `AgentActivity.calledToolsWhere`, acceptance A21, 2026-09-29) — and the surface lets the
 role's declared tools stand in (REQ-MONITOR-060; the snapshot's `declaredTools`). **`SessionRecord.entryStalledSeconds`**
 (2026-09-30, OQ-153) is the same route for the root's stall watch's figure. A LIVE run-level agent whose root port
 has not resolved yet — the pre-flight, before `Run.iterate` sets the port — lists nothing (`runLevelGrant`), never the

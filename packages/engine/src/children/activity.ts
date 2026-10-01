@@ -99,6 +99,16 @@ export class AgentActivity {
   calledTools(agent: string): string[] {
     return [...(this.agents.get(agent)?.called ?? [])];
   }
+  /**
+   * The called tools of every agent `include` admits, once each: agents in the order the tracker first saw them, each
+   * agent's in its first-call order. `entryToolsOf` reads the run-level agent's history this way when no iteration names
+   * the root it ran as (REQ-MONITOR-060 with REQ-ORCH-153).
+   */
+  calledToolsWhere(include: (agent: string) => boolean): string[] {
+    const out = new Set<string>();
+    for (const [agent, e] of this.agents) if (include(agent)) for (const tool of e.called) out.add(tool);
+    return [...out];
+  }
   activeTools(agent: string): string[] {
     const e = this.agents.get(agent);
     if (!e) return [];

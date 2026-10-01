@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**The run-level agent's tool history at a plan gate no iteration precedes (REQ-MONITOR-060, REQ-MONITOR-069,
+REQ-ORCH-153, acceptance A21, R-067).** With no run live and no iteration recorded, `entryToolsOf` reads the run-level
+agent's history under every name the tracker holds that is no child's (`AgentActivity.calledToolsWhere`): only a root or
+a child dispatches a call, and before any iteration every root was a plan cycle's, which no row names. This repairs
+`the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md`. The **runtime view**'s
+`entryTools` paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A write through a loaded session from outside a run holds the lock (ADR-0005, REQ-EVENTS-098, REQ-SESSION-060,
 REQ-GIT-094, acceptance A14, R-067).** `Sessions.withWriter`'s live branch — the repair, the safety checkpoint and the
 restore's outcome for a session loaded here — writes under the lock `claimHold` gives (kept, or taken with the one reap

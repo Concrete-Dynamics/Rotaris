@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type Result, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
-import { buildContinuationPayload, entryRootsOf, offersToldIn, RUN_CONFIG_DEFAULTS, Sessions, type ArtifactOps, type Preflight, type PreflightContext, type RunSetup, type TodoDocument, type ToolPort } from './index.js';
+import { buildContinuationPayload, entryRootsOf, offersToldIn, RUN_CONFIG_DEFAULTS, Sessions, type ArtifactOps, type Preflight, type PreflightContext, type RunSetup, type SessionWriter, type TodoDocument, type ToolPort } from './index.js';
 import type { SessionRecord } from '@rotaris/contracts';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
@@ -672,6 +672,57 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
       expect(dal.planCyclesOf(sid)).toEqual([]);
       expect(dal.iterationsOf(sid)).toEqual([]);
       expect(entryRootsOf(dal, sid, undefined)).toEqual([ROOT]);
+    });
+  });
+
+  /*
+   * REQ-MONITOR-060/069 with REQ-ORCH-153 (the repair of
+   * `the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md`, acceptance A21, R-067): with no run
+   * live the run-level agent's history was read under the latest iteration root's persona alone, and a plan cycle's root has
+   * no iteration row, so in a session whose first run parked at the gate every chip read `not used` while the user reviewed
+   * the plan — although the ring and the tracker held the root's calls under the name it dispatched under.
+   */
+  describe('REQ-MONITOR-060 with REQ-ORCH-153: the run-level agent\'s tool history at a plan gate no iteration precedes', () => {
+    // Each call is recorded through the writer as the run host's gate records it (`openToolCall`, `settleToolCall`).
+    const grepping = (writer: SessionWriter): ToolPort => ({
+      specs: () => [{ name: 'grep', description: 'search', parameters: { type: 'object' } }],
+      dispatch: async (c) => {
+        const open = { call_id: c.callId, agent_name: c.agentName, tool_name: c.name, args: {} };
+        const ordinal = writer.openToolCall(open);
+        if (ordinal.ok) writer.settleToolCall(ordinal.value, open, { status: 'ok', elapsed_ms: 1, is_error: false, result: 'a.ts:1: match' });
+        return { text: 'a.ts:1: match', isError: false, status: 'ok' as const, durationMs: 1, label: 'grep', args: {} };
+      },
+      cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+    });
+    const planSessions = (pid: number, backend: AgentBackend, snapshots: SessionRecord[]) => new Sessions({
+      clocks: clock, publisher: { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } }, pid, host: HOST,
+      retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-plan-tools',
+      model: null, sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid), attended: () => true,
+      tools: (ctx) => grepping(ctx.writer),
+      configure: () => ({ ok: true, value: {
+        model: { backend, config: { ...RUN_CONFIG_DEFAULTS, persona: 'Lead Planner', model: MODEL, credentialFor: () => async () => '' } },
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, runStartMode: 'plan' },
+      } }),
+    });
+
+    it('parked at the gate: the plan cycle root\'s calls are the run-level agent\'s history, in the process that parked it and in a fresh one', async () => {
+      const backend = new DefaultAgentBackend(new ScriptedModelClient([toolCalls([{ callId: 'g1', name: 'grep', args: { pattern: 'x' } }], 'Searching.'), answer('Step 1: the plan.')]));
+      const live: SessionRecord[] = [];
+      const first = planSessions(82, backend, live);
+      const sid = (first.start(dal, 'C:/ws', 'plan it') as { value: SessionId }).value;
+      expect((await first.running(sid)!).execution_status).toBe('awaiting_plan_decision');
+      expect(dal.iterationsOf(sid)).toEqual([]);
+      expect(dal.toolCallCounts(sid).map((t) => t.tool_name)).toEqual(['grep']);
+      first.owner(sid)!.reconcile();
+      expect(live.at(-1)!.entryTools).toEqual({ resolved: [], called: ['grep'], active: [] });
+      // The application quits and a fresh process opens the parked session: the tracker is seeded from the ring.
+      await first.closeAll();
+      const reopened: SessionRecord[] = [];
+      const second = planSessions(83, backend, reopened);
+      expect(second.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      second.owner(sid)!.reconcile();
+      expect(reopened.at(-1)!.planGate?.cycle).toBe(1);
+      expect(reopened.at(-1)!.entryTools).toEqual({ resolved: [], called: ['grep'], active: [] });
     });
   });
 

@@ -715,11 +715,20 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
  * and the tracker's history (`Run.entryTools`). With none, nothing is resolved — the persona's declared tools stand in on the
  * surface (REQ-MONITOR-060) — and the history is the tracker's, seeded from the tool-call ring when the session was opened,
  * under the persona the latest iteration's root ran as (the name the root dispatches under).
+ *
+ * With no iteration recorded, every root the session has run was a plan cycle's (REQ-ORCH-153: a plan cycle is not an
+ * iteration), and no row names it. Only a root or a child dispatches a call, and a child under its canonical name, so the
+ * tracker's names that are no child's are those roots', and their calls are the run-level agent's history. Before this the
+ * history was read under no name, and in a session whose first run parked at the gate every chip read `not used` while the
+ * user reviewed the plan (the repair of
+ * `the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md`, acceptance A21, R-067).
  */
 export function entryToolsOf(dal: StoreDal, sessionId: SessionId, run: { readonly entryTools: EntryToolsPayload } | null | undefined, activity: AgentActivity): EntryToolsPayload {
   if (run) return run.entryTools;
   const persona = dal.iterationsOf(sessionId).at(-1)?.root_persona;
-  return { resolved: [], called: persona ? activity.calledTools(persona) : [], active: [] };
+  if (persona) return { resolved: [], called: activity.calledTools(persona), active: [] };
+  const children = new Set(dal.childrenOf(sessionId).map((c) => c.canonical_name));
+  return { resolved: [], called: activity.calledToolsWhere((agent) => !children.has(agent)), active: [] };
 }
 
 /**

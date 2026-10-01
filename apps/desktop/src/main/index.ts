@@ -975,9 +975,11 @@ async function main(): Promise<void> {
     setup: {
       start: async () => {
         const id = activeWindow()?.workspaceId;
-        if (!id) return { ok: false, reason: 'no workspace is open' };
+        if (!id) return { ok: false, code: 'workspace.none', reason: 'no workspace is open' };
         const r = await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'start' }, millis(15_000));
-        return r.kind === 'mcp.setup' ? { ok: true, status: r.status } : { ok: false, reason: r.kind === 'refused' ? r.headline : `the run host answered ${r.kind}` };
+        // The refusal's code travels with its words, so the coordinator can tell a busy slot from REQ-WORKSPACE-094's case.
+        if (r.kind === 'mcp.setup') return { ok: true, status: r.status };
+        return r.kind === 'refused' ? { ok: false, code: r.code, reason: r.headline } : { ok: false, code: r.kind, reason: `the run host answered ${r.kind}` };
       },
       // Rejects unless the run host took it, so an undelivered cancellation reaches the log (REQ-WORKSPACE-092).
       cancel: async () => await deliverSetupCancel(activeWindow()?.workspaceId, async (id) => await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'cancel' }, millis(15_000))),

@@ -694,8 +694,9 @@ server carries the fixed project-memories block iff both gating names are grante
 runtime answers `tools/list` about 4 s after launch, connect about 4.2 s; the first symbol tool on a language provisions
 that language's server (minutes; IC-7 adopted under ESC-32 — a declared package at its declared version, disclosed on the
 MCP category before any run can trigger it, `REQ-MCP-118`), warm afterwards. **The project setup** (`McpHost.startSetup`): the invocation
-derived from the entry (REQ-MCP-036 — a remote or launch-less entry is the non-retryable "not a local launch"
-refusal), the contains-code walk once (breadth-first from the root, VCS directories skipped, the root `.gitignore`
+derived from the entry (REQ-MCP-036 — a remote or launch-less entry is the non-retryable "not a local launch",
+answered as a finished status whose outcome is `unavailable`, not as a refusal; the one refusal `startSetup` makes is
+a second run while one is running), the contains-code walk once (breadth-first from the root, VCS directories skipped, the root `.gitignore`
 honoured, dot-directories walked, no symlink followed, first indexable file stops it), the marker
 (`.serena/project.yml`) skipping creation, then the three steps in order with the closed status vocabulary; one run at
 a time, re-runnable, cancellable; the status held in the run host for the application's life, never on disk.

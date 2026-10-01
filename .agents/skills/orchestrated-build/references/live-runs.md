@@ -35,15 +35,17 @@ works for a user, and it can spend money. Proofs pass on a product a live run st
   ```
 
   Adding it is the owner's decision: ask at planning time (SKILL.md §1). A settings file created mid-session may take
-  effect only after the session reloads. A detached launch (below) is not one of these forms; the classifier judges it.
+  effect only after the session reloads. A detached launch (`references/environment.md`, Long jobs) is not one of
+  these forms; the classifier judges it.
 - Until a rule holds, the orchestrator runs the live runs itself and gives the packs to an autopsy agent.
 
 ## Running
 
 - Build the head you mean to judge first; a live run of a stale build judges nothing.
-- The default run takes about sixteen minutes and fits a background task. Duress needs a window the endpoint can
-  fill (`LIVE_RUN_DURESS_MS=5400000` under `timeout 7200` here) and outlives a background task: run it detached and
-  poll its log (`references/environment.md`, Long jobs).
+- The default run takes about sixteen minutes. Duress needs a window the endpoint can fill
+  (`LIVE_RUN_DURESS_MS=5400000` under `timeout 7200` here; one took 85 minutes): run it as a background task with
+  the Bash tool's largest `timeout`, 7,200,000 ms (`references/environment.md`, Long jobs). That launch is one of
+  the allow-rule forms above, so an agent holding the rule can run it as well.
 - One acceptance live run at a time on this host: they compete for CPU and the endpoint. Two concurrent ones leave
   each other's sandboxes alone.
 - Evidence lands in `.live-run/runs/<stamp>/` of the tree that ran it, the newest named in `.live-run/latest.txt`.

@@ -3,6 +3,21 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-01 — long background jobs take an explicit timeout
+
+**Prompted by** two background tasks of the same session. One given no `timeout` (task `by0p2inlx`, a waiter on the
+duress live run) was stopped thirty minutes after launch, at 03:45:34 UTC. One given `timeout: 5400000` (task
+`bw0152q7w`, the same waiter re-armed) ran from about 03:52 to 04:40:37 UTC and ended on its own condition; the
+duress run it waited on took 5078 s. The skill had said a job longer than thirty minutes must run detached, which
+also kept agents from launching duress under the live-run allow rules.
+
+**Changed** `references/environment.md` (Long jobs), `references/live-runs.md` (Running), SKILL.md §5 and the
+template's grounding line: a long background job carries an explicit `timeout` covering its expected length (the
+tool accepts up to 7,200,000 ms); detaching is the fallback when a long `timeout` is refused.
+
+**Verified** by the self-test and `pnpm check`, and reviewed with `references/skill-review.md`. Prompt text, so
+reviewed rather than pinned.
+
 ## 2026-10-01 — first version
 
 **Prompted by** a release-backlog session (2026-09-28 to 2026-10-01) that drove about eighty bundles through

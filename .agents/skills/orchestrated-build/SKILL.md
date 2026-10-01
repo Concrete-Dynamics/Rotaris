@@ -135,8 +135,8 @@ serialized halves, the authorized live runs, then an autopsy listing what still 
 paired by area, go through the same loop; then the next round. A cached acceptance result is replayed only while
 nothing but its own repairs merged after it; `"acceptance": { "fresh": true }` forces a fresh round.
 
-- A live run refused by the permission system, or longer than a background task may run, is yours: run it detached
-  (`references/live-runs.md`), have an agent autopsy the packs, and feed the findings in as a new plan.
+- A live run refused by the permission system is yours: run it (a long one as a background task with an explicit
+  `timeout`, `references/live-runs.md`), have an agent autopsy the packs, and feed the findings in as a new plan.
 - **Record every finding left unrepaired** when the rounds end: a defect note, or an open question for one that needs
   a ruling. While actionable findings remain, plan another round.
 - **Done** means: an acceptance round with the gate green, every proof passing or stated not-applicable with its

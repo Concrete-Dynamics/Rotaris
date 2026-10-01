@@ -299,9 +299,10 @@ child of that plan cycle answered and counted the same way (`recordCutChild`, si
 the stale-child settle that ends it runs only at a continue), every `tool_calls` ring
 row still `running` settled `failed` with the crash's statement and a NULL duration, its `tool.finish` with it
 (`settleDeadToolCalls`, REQ-SESSION-129 with ADR-0024: an orderly end settles them when the run's ports close, and a crash
-closes none — except at a continue after a run of this process that parked without closing its ports, the message-limit
-pause or the plan gate, `!Run.closedItsPorts`, when a row still `running` may be its call still under way and is left to
-that call's own settle), the stored approvals withdrawn, and the background
+closes none — except at a continue while any run of this process on the session parked without closing its ports, the
+message-limit pause or the plan gate, `!Run.closedItsPorts` over every run in `Live.portsOpen` and not only the last, when
+a row still `running` may be its call still under way and is left to that call's own settle; which of a parked run's ports
+a park or a continue should close is OQ-170's), the stored approvals withdrawn, and the background
 sessions still recorded running and not held by this process ended by the crash. Loading a session records and
 settles nothing (clause 8), and neither does the user's cancel of one crash-left child while the session rests: it
 cancels that child and its descendants from where they stood, answers their own calls the crash cut off (no later crash

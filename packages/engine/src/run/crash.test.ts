@@ -1658,5 +1658,44 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       await sessions.running(sid);
       expect(stray()).toMatchObject({ status: 'running' });
     });
+
+    /*
+     * Residual 2 of a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md: the skip read only the session's
+     * current run, so once a later run of this process had torn down (its ports closed), the next continue settled `failed`,
+     * as a crash's, the ring row the earlier parked run's call may still hold. Every run of this process on the session
+     * that parked with its ports open is read, not only the last.
+     */
+    it('a later run of this process that tore down does not re-arm the settle over an earlier parked run\'s ring row', async () => {
+      const client = new ScriptedModelClient([toolCalls([{ callId: 'g1', name: 'grep', args: {} }], 'Reading.'), answer('Step 1: change it.'), answer('Done.'), answer('Done again.')]);
+      const call = (callId: string, agent: string) => ({ call_id: callId, agent_name: agent, tool_name: 'grep', args: {} });
+      const port = (ctx: ToolPortContext): ToolPort => ({
+        specs: () => [{ name: 'grep', description: 'search', parameters: { type: 'object' } }],
+        dispatch: (c) => {
+          const own = ctx.writer.openToolCall(call(c.callId, 'orchestrator'));
+          if (own.ok) ctx.writer.settleToolCall(own.value, call(c.callId, 'orchestrator'), { status: 'ok', elapsed_ms: 1, is_error: false, result: 'a.ts:1' });
+          if (c.callId === 'g1') ctx.writer.openToolCall(call('stray', 'c9'));
+          return Promise.resolve({ text: 'a.ts:1', isError: false, status: 'ok' as const, durationMs: 1, label: 'grep', args: {} });
+        },
+        cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+      });
+      const sessions = new Sessions({
+        clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-park2', isProcessAlive: () => true,
+        model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s), tools: (ctx) => port(ctx),
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', runStartMode: 'plan' },
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+      expect((await sessions.running(sid))!.execution_status).toBe('awaiting_plan_decision');
+      const stray = () => dal.toolCallsOf(sid).find((r) => r.call_id === 'stray');
+      expect(stray()).toMatchObject({ status: 'running' });
+      // Run 2, the approved continuation, completes and tears down: its own ports are closed.
+      expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+      expect((await sessions.running(sid))!.execution_status).not.toBe('awaiting_plan_decision');
+      expect(stray()).toMatchObject({ status: 'running' });
+      // Run 3's continue records a crash again; run 1 is still parked with its ports open, so its call's row is left to it.
+      expect(sessions.prompt(sid, 'again').ok).toBe(true);
+      expect(stray()).toMatchObject({ status: 'running', is_error: 0 });
+      await sessions.running(sid);
+      expect(stray()).toMatchObject({ status: 'running' });
+    });
   });
 });

@@ -8321,3 +8321,35 @@ killed by signal; whether they outlive it was not measured, and `workspace-proof
 one (it adds nothing for the run host's own work around the stages, which the budgets do not cover); whether the
 coordinator should instead ask the run host for the setup's status when the bound passes; and whether REQ-WORKSPACE-092's
 "nothing the step launched SHALL still be running 5 s later" binds a step whose run host was lost.
+
+**OQ-170 — What becomes of a parked run's tool ports, and of the `tool_calls` ring row of a call that outlives its run's
+park?** *(REQ-MONITOR-105, "a running tool renders as a pulsing in-progress row"; REQ-MONITOR-228, "After a run has ended,
+no row may still render as in progress"; REQ-SESSION-129, a call that was under way and produced no result is a failure;
+REQ-ORCH-153 and REQ-ORCH-087, the plan gate and the message-limit pause, neither a termination; ADR-0024, the ring.
+Raised 2026-10-01 under [R-067](../product/requests.md#r-067) by the repair of residual 2 of
+[`a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md`](../defects/a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md).
+Open.)*
+
+A run that parks — at the plan gate or at the message-limit pause — does not tear down, so it never closes the tool ports
+it built (`Run.closePorts` runs only at the teardown), and the run host's gate sink never settles the ring rows its calls
+left open (`writerSink`'s `close`, `apps/desktop/src/run-host/tools.ts`). A call of that run that ignored its abort may
+still be under way, so the crash record a continue makes skips the ring settle while such a run of this process exists
+(`ownCallsMayRun`, `run/crash.ts`). No requirement names a parked run's ports, or the ring row of a call that outlives
+its run's park, and two cases follow that the specification does not settle:
+
+- **A call that never returns.** Nothing closes the parked run's ports, the continue leaves the row to the call, and the
+  call never settles it: the row reads `running` for good, a call still under way by REQ-MONITOR-105, long after its run
+  moved on (the driven `stray` rows of `packages/engine/src/run/crash.test.ts` read so).
+- **Two processes over one workspace.** Process A parks a run; process B continues the session and crashes; A continues
+  again and, holding its parked run, skips the settle, leaving B's dead ring rows `running`. A ring row carries no process
+  identity, so a crash record cannot tell a dead process's row from a live one's (a question that touches ESC-10's ground).
+
+**What the build proceeds under.** A parked run keeps its ports open; a continue closes none of them; the crash record a
+continue makes settles no ring row while any run of this process on the session parked with its ports open
+(`Live.portsOpen` in `packages/engine/src/sessions.ts`, every such run and not only the last — the part of the note
+repaired with this question); a ring row carries no process identity. Both cases above stand.
+
+**What a ruling decides.** Whether a park closes its run's ports, settling their open calls through the gate sink's
+`close` as an orderly end does (so the call that later returns writes nothing); whether a continue abandons the ports of
+the parked run it replaces, settling their rows as cut off; or whether the ring rows are stamped with the process that
+opened them, through an appended store migration, so a crash record settles exactly the rows of a dead process.

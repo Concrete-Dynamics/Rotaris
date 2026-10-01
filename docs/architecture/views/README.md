@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A later run's teardown no longer re-arms the crash record's ring settle over an earlier parked run's rows
+(REQ-MONITOR-105, REQ-MONITOR-228, REQ-SESSION-129, REQ-ORCH-153, REQ-ORCH-087, ADR-0024, OQ-170).** `Sessions` keeps, per
+live session, every run of this process that parked without closing its tool ports (`Live.portsOpen`); a continue passes
+`ownCallsMayRun` while any of them has its ports open, and a run leaves the set once it has closed them. Before, only the
+session's current run was read. This repairs residual 2 of `a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md`,
+which stays open for residuals 1 and 3 (OQ-170). The **runtime view**'s §2 crash paragraph says so. No package, edge,
+process, message kind, channel, command or store column changed.
+
 **A paused child cancelled while `session_end` runs fires no `child_completed` (REQ-HOOKS-076, REQ-HOOKS-081,
 REQ-HOOKS-003, REQ-ORCH-133, OQ-154, R-067).** `Run`'s teardown calls `IterationChildren.endLifecycle` once it has awaited
 the outside hooks (`childCompletionsSettled`) and before it fires `session_end`; from then `completedOutside` queues none,

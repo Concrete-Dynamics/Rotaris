@@ -89,7 +89,7 @@ export interface CrashRecord {
  *   does each of its unfinished children (`recordCutChild`), which the next continue's stale-child settle ends `cancelled`;
  * - every call's row in the `tool_calls` ring still `running` settles `failed` with the crash's statement, as its
  *   transcript row does (`settleDeadToolCalls`, REQ-SESSION-129 with ADR-0024) — unless `ownCallsMayRun`: a continue
- *   after a run of this process that parked without closing its tool ports, whose call may still be under way;
+ *   while any run of this process on the session parked without closing its tool ports, whose call may still be under way;
  * - every approval still listed as pending is withdrawn by the crash, never denied (clause 9);
  * - every background terminal session still recorded as running, and not held by this process, is recorded as ended by
  *   the crash (clause 10: a crash ends them).
@@ -264,7 +264,9 @@ export function recordCutChild(dal: StoreDal, writer: SessionWriter, sessionId: 
  * (`Run.closedItsPorts`); one that parked — the message-limit pause, the plan gate — closed none, and a call of its that
  * ignored its abort may still be under way, its real settle still to come, so the caller passes `ownCallsMayRun` and the
  * ring is left as it is (corrected 2026-10-01: this read "a run of this process closed its ports when it ended", which
- * holds only for a teardown). Every row this settles settles `failed` with the statement
+ * holds only for a teardown). The caller reads every run of this process on the session that parked so, not only the last
+ * (`Live.portsOpen`; repaired 2026-10-01: a later run's teardown re-armed the settle over an earlier parked run's rows).
+ * Every row this settles settles `failed` with the statement
  * that the crash interrupted it and it was not re-run, as its transcript row does (`answerOpenCalls`), with REQ-EVENTS-057's
  * `tool.finish`. The ring row recorded no output, so the statement carries none; no process observed the call's end, so its
  * duration is not known (null). Every agent's, the crash record's paused agents' and the stale-child settle's alike: a

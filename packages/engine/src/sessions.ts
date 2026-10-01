@@ -328,6 +328,26 @@ interface Live {
   modeOverride: { value: string | null };
   /** PD-TOOLS-005: the run's away state, on the same one-holder-per-run terms as `modeOverride`; the control arms clear it. */
   presence: UserPresence;
+  /**
+   * REQ-MONITOR-105 with ADR-0024 (residual 2 of `a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md`):
+   * every run of this process on the session that parked — the plan gate, the message-limit pause — without closing its
+   * tool ports. A call of any of them that ignored its abort may still hold its `tool_calls` ring row `running`, so the
+   * crash record's ring settle is skipped while one is here (`ownCallsMayRunOf`), not only while the LAST run is parked:
+   * a later run that tore down does not re-arm the settle over an earlier one's rows. A run leaves the set once it has
+   * closed its ports. Which of a parked run's ports a park or a continue should close is OQ-170's.
+   */
+  readonly portsOpen: Set<Run>;
+}
+
+/**
+ * REQ-MONITOR-105 with ADR-0024: whether a call of a run of this process on the session may still be under way — some
+ * run that parked without closing its tool ports. The current run joins the set (it is not running when a continue
+ * launches, so it either tore down or parked) and every run that has closed its ports since leaves it.
+ */
+function ownCallsMayRunOf(s: Live): boolean {
+  if (s.run !== null) s.portsOpen.add(s.run);
+  for (const r of s.portsOpen) if (r.closedItsPorts) s.portsOpen.delete(r);
+  return s.portsOpen.size > 0;
 }
 
 export interface SessionListItem {
@@ -1167,7 +1187,7 @@ export class Sessions {
     });
     entry.owner = owner;
     // Part Q: the memory is rehydrated at the first continuation, when the run's model resolver exists (REQ-SESSION-196's override).
-    this.live.set(sessionId, { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: null, artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null }, presence: new UserPresence({ record: warn }) });
+    this.live.set(sessionId, { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: null, artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null }, presence: new UserPresence({ record: warn }), portsOpen: new Set() });
     return ok({ sessionId });
   }
 
@@ -1226,7 +1246,7 @@ export class Sessions {
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
-    const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: new ResilienceMemory(), artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null }, presence: new UserPresence({ record: warn }) };
+    const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: new ResilienceMemory(), artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null }, presence: new UserPresence({ record: warn }), portsOpen: new Set() };
     this.live.set(sessionId, live);
     const row = writer.appendRow('user', prompt, true, { attachments: storedAttachments.attachments });
     if (!row.ok) return err({ code: row.error.code, reason: 'reason' in row.error ? row.error.reason : String(row.error.code) });
@@ -1421,8 +1441,9 @@ export class Sessions {
     const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, info: (m: string) => { s.log?.info(m); this.deps.log?.(m); }, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     s.tools = null;
     // PD-ORCH-005 clause 3: what a crash left is recorded before the settle, which leaves every `paused` agent as it is.
-    // A run of this process that parked closed no tool port: a ring row still `running` may be its call still under way.
-    this.recordCrashOf(s.dal, s.writer, sessionId, warn, artifacts, s.run !== null && !s.run.closedItsPorts);
+    // A run of this process that parked closed no tool port: a ring row still `running` may be its call still under way —
+    // any such run's, not only the last one's.
+    this.recordCrashOf(s.dal, s.writer, sessionId, warn, artifacts, ownCallsMayRunOf(s));
     // REQ-HOOKS-003: each settled child's `child_completed` is the run's, fired once its `session_start` has.
     const settledBeforeStart: Readonly<Record<string, unknown>>[] = [];
     const stale = settleStaleChildren(s.dal, s.writer, sessionId, warn, artifacts, (fields) => { settledBeforeStart.push(fields); });

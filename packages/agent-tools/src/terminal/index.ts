@@ -553,8 +553,15 @@ function sessionAction(a: TerminalArgs, bg: BackgroundManager): Promise<Observat
       const out = s.readNew();
       return finish(`Session ${s.id} is ${s.status}${s.exitCode !== null ? ` (exit ${s.exitCode})` : ''}.`, out === '' ? '(no new output since last poll)' : out);
     }
-    case 'kill':
+    case 'kill': {
+      // REQ-TOOLS-110: a kill returns the final output whatever the session's state. Only a running session is ended, and
+      // only it reads `was killed.`: one that had already ended — completed, failed, timed out, killed, or never started
+      // (OQ-143) — is left as it was, and the detail says so with the status and exit code its diagnostic block reports
+      // (REQ-TOOLS-109), rather than claiming an end the status denies
+      // (docs/defects/fixed/a-kill-of-a-background-session-that-has-already-ended-says-it-was-killed.md).
+      if (s.status !== 'running') return finish(`Session ${s.id} had already ended; nothing was killed. It is ${s.status}${s.exitCode !== null ? ` (exit ${s.exitCode})` : ''}.`, s.readAll());
       return s.end('killed').then(() => finish(`Session ${s.id} was killed.`, s.readAll()));
+    }
     case 'send_input': {
       const data = a.input_data ?? '';
       const ok = s.sendInput(data);

@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { linuxProcessTable, parseStat, sigintStanding } from './process-group.js';
+import { linuxProcessTable, parseStat, sigintStanding, type GroupMember } from './process-group.js';
 
 /**
  * OQ-135 (REQ-TOOLS-110, REQ-TOOLS-128): the facts a background session reads to tell whether a SIGINT reached each
@@ -103,8 +103,13 @@ describe('OQ-135: the process table a SIGINT is checked against', () => {
       expect(shell).toMatchObject({ comm: 'sh', sigint: 'caught', cmdline: '/bin/sh\0-c\0sleep 30\0' });
       // Acceptance finding A8, round 3: the command's own parent and arguments, which an `exec` gives it.
       expect(command).toMatchObject({ ppid: pid, comm: 'sleep', sigint: 'default', cmdline: 'sleep\x0030\0' });
-      // The walk from the leader reads the same two.
-      expect([...table.tree(pid)].sort((a, b) => a.pid - b.pid)).toEqual([...members].sort((a, b) => a.pid - b.pid));
+      // The walk from the leader reads the same two: the same processes with the same parent, name, SIGINT standing and
+      // arguments. Not the same state letter: the walk is a second read of `/proc`, and as the scheduler runs a process it
+      // can read `R` or `D` in one and `S` in the other, both rightly (the repair of
+      // the-process-group-test-compares-two-proc-reads-including-each-process-state.md).
+      const lasting = ({ state: _state, ...rest }: GroupMember) => rest;
+      const byPid = (a: GroupMember, b: GroupMember) => a.pid - b.pid;
+      expect([...table.tree(pid)].sort(byPid).map(lasting)).toEqual([...members].sort(byPid).map(lasting));
     });
   });
 });

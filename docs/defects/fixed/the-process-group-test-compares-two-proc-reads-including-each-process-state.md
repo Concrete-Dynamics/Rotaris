@@ -30,3 +30,31 @@ assertion compares a field that no requirement asks to be stable between two rea
 - `packages/platform/src/process-group.ts:19-33` (`GroupMember`, `state` at `:25-26`), `:72-93` (`parseStat` and the
   member read).
 - `docs/architecture/open-questions.md`, OQ-135: the signal question the group reading serves.
+
+## Repaired 2026-10-01
+
+Repaired 2026-10-01 on `fin2-load-robust-tests`. The assertion still compares the walk from the leader
+(`table.tree(pid)`) with the group read before it (`table.group(pid)`), member by member and sorted by pid. Each member
+is now compared without its `state` letter. Everything else about the processes is still compared: pid, parent, name,
+SIGINT standing and arguments. Fields a later change adds to `GroupMember` are compared too, because the comparison
+drops `state` alone rather than picking the fields to keep. No product code changed.
+
+**What confirmed it first.**
+- **A probe of the live race.** A scratch probe ran the test's own steps 60 times each: spawn the `dash -c` group, wait
+  for `sleep`, read the group, then walk the tree. The two reads gave different state letters 4 times in 60 on the
+  host as it was (`SR/SS`, `RR/RS`, `RR/SR`, `RS/SS`). They differed once in 60 beside twelve CPU-bound `node` loops.
+- **A forced change on the old form.** A scratch copy of the test wrapped the table so that each read reports `R` and
+  `S` in turn. The old comparison failed on `state` alone; the new form passed 6 of 6.
+- **The kept comparison still bites.** A second scratch copy made the walk report another parent for the command.
+  The new form failed on `ppid`.
+
+Both scratch copies and the probe were removed.
+
+**Pinned by** the case itself, "a `dash -c` group reads its shell catching SIGINT under the shell's name, and its
+command at the default under its own". It passed the file alone, 6 of 6 (`pnpm vitest run
+packages/platform/src/process-group.test.ts`). Beside twelve CPU-bound loops (load average about 21), the old and new
+forms ran 12 times each with `-t "dash -c"`. The comparison (`:107` on the old form) never failed in either form.
+
+Each form failed once, both times at `:103` and not on this note's comparison: the shell read `sigint: 'blocked'`
+where the case expects `'caught'`. That is a separate volatile reading, recorded open in
+[`the-process-group-test-reads-the-shells-sigint-standing-before-dash-unblocks-it.md`](../the-process-group-test-reads-the-shells-sigint-standing-before-dash-unblocks-it.md).

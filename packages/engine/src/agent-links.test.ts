@@ -2,11 +2,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
+import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls } from '@rotaris/model';
+import type { SessionRecord } from '@rotaris/contracts';
 import { ArtifactStore } from './artifacts/store.js';
 import { AgentActivity } from './children/activity.js';
-import { artifactLinksOf, entryToolsOf, toSessionRecord } from './sessions.js';
+import { RUN_CONFIG_DEFAULTS, Sessions, type SessionWriter, type ToolPort } from './index.js';
+import { artifactLinksOf, entryToolCallsOf, entryToolsOf, toSessionRecord } from './sessions.js';
 
 /**
  * Live-run finding K1 (R-067): the inspector drew "No tools resolved." and "No artifacts yet — this build has no artifact
@@ -68,5 +71,83 @@ describe('engine — the run-level agent\'s tools and the session\'s artifact li
     expect(links.map((l) => l.slug)).toEqual(['the-plan', report.value.record.slug, 'notes-v2']);
     expect(links[0]).toEqual({ id: plan.value.id, slug: 'the-plan', title: 'The plan', status: 'published', producer: 'planner-1', ready: true, consumedBy: ['coder-1'] });
     expect(links[1]).toMatchObject({ producer: 'coder-1', status: 'failed', ready: false, consumedBy: [] });
+  });
+});
+
+/**
+ * docs/defects/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md (acceptance A20, R-067): the surfaces
+ * derived the run-level agent's `{N} tool calls` (REQ-MONITOR-052, REQ-MONITOR-044) as the session's total less the
+ * children's, and the root's calls join that total only when its turn returns (REQ-ORCH-097's cadence, OQ-116), so while
+ * the root's turn ran it read 0 beside the tools it had used. The session record now carries the run-level agent's own
+ * count (`SessionRecord.entryToolCalls`): the roots' calls the total holds, plus the live root's calls it does not yet.
+ */
+describe('engine — the run-level agent\'s tool-call count while its turn runs (REQ-MONITOR-044/052)', () => {
+  let dir: string;
+  let dal: StoreDal;
+  const clock = new FakeClock();
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-entry-calls-'));
+    const db = openStore(join(dir, 'workspace.db'));
+    migrateStore(db);
+    dal = new StoreDal(db);
+  });
+  afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
+
+  const MODEL = { providerId: 'test', modelId: 'test', dialect: 'chat' as const };
+  const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
+  /** Each call recorded through the writer as the run host's gate records it (`openToolCall`, `settleToolCall`). */
+  const port = (writer: SessionWriter): ToolPort => ({
+    specs: () => [{ name: 'grep', description: 'grep', parameters: { type: 'object' } }],
+    dispatch: async (c) => {
+      const open = { call_id: c.callId, agent_name: c.agentName, tool_name: c.name, args: {} };
+      const ordinal = writer.openToolCall(open);
+      if (ordinal.ok) writer.settleToolCall(ordinal.value, open, { status: 'ok', elapsed_ms: 1, is_error: false, result: 'found' });
+      return { text: 'found', isError: false, status: 'ok' as const, durationMs: 1, label: c.name, args: {} };
+    },
+    cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+  });
+
+  it('counts the root\'s calls while its turn runs, then the same figure from the total once it returns, never twice', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const client = new ScriptedModelClient([
+      toolCalls([{ callId: 'g1', name: 'grep', args: {} }, { callId: 'g2', name: 'grep', args: {} }], 'Searching.'),
+      { parts: [{ hold }, ...answer('Done.').parts] },
+    ]);
+    const snapshots: SessionRecord[] = [];
+    const sessions = new Sessions({
+      clocks: clock, publisher: { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } }, pid: 82, host: HOST,
+      retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-entry-calls',
+      model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => '' } },
+      sessionFilesDir: (_store, s) => join(dir, 'sessions', s), tools: (ctx) => port(ctx.writer),
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'find it') as { value: SessionId }).value;
+    let called = false;
+    for (let i = 0; i < 200 && !called; i++) { await new Promise((r) => setTimeout(r, 5)); called = dal.toolCallsOf(sid).filter((c) => c.status !== 'running').length === 2; }
+    expect(called).toBe(true);
+    sessions.owner(sid)!.reconcile();
+    const running = snapshots.at(-1)!;
+    // The cause: the total does not hold the running root's calls yet, so the total less the children's read 0.
+    expect(running.toolCalls.total).toBe(0);
+    expect(running.entryToolCalls).toBe(2);
+    release();
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    sessions.owner(sid)!.reconcile();
+    const done = snapshots.at(-1)!;
+    expect(done.toolCalls.total).toBe(2);
+    expect(done.entryToolCalls).toBe(2);
+    await sessions.closeAll();
+  });
+
+  it('a stored record carries no count of its own; the projection reads the roots\' share of the total, less every child\'s, with no run live', () => {
+    const sid = asSessionId('S-entry-share');
+    dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: '2026-09-29T00:00:00.000Z', updated_at: '2026-09-29T00:00:00.000Z' });
+    dal.updateSessionRun(sid, { tool_calls: 7 });
+    dal.insertChild({ session_id: sid, task_id: 'bg_child001', canonical_name: 'Research', given_name: 'Research', persona: 'researcher', state: 'succeeded', parent_id: 'root', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
+    dal.setChildTodo(sid, 'bg_child001', null, 3);
+    const row = dal.getSession(sid)!;
+    expect(toSessionRecord(row).entryToolCalls).toBeNull();
+    expect(entryToolCallsOf(row, dal.childrenOf(sid), null)).toBe(4);
+    expect(entryToolCallsOf(row, dal.childrenOf(sid), { entryUncountedToolCalls: 2 })).toBe(6);
   });
 });

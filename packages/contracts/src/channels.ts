@@ -352,6 +352,14 @@ export const SessionRecordSchema = z.object({
    * no model event or token while its watch finds it stalled, else null. Null for a record read with no live run.
    */
   entryStalledSeconds: z.number().int().nonnegative().nullable(),
+  /**
+   * REQ-MONITOR-044/052 (the repair of `the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`, acceptance
+   * A20, R-067): the run-level agent's tool-call count — the roots' calls the session's total holds (the total less every
+   * child's persisted count), plus the live root's calls that have not joined it yet, since a root's calls join the total
+   * only when its turn returns (REQ-ORCH-097's cadence, OQ-116). Null for a record read with no projection; a surface then
+   * derives it from the total.
+   */
+  entryToolCalls: z.number().int().nonnegative().nullable(),
 });
 export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 

@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**The run-level agent's tool-call count is its own while its turn runs (REQ-MONITOR-044/052, R-067).** The surfaces derived
+it as the session's total less the children's, and a root's calls join the total only when its turn returns, so the meta
+line read `0 tool calls` beside the root's used chips. `SessionRecord.entryToolCalls` now carries it: the roots' share of
+the persisted total plus the live root's calls not yet counted (`entryToolCallsOf`, `Run.entryUncountedToolCalls`). This
+repairs `the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md` (acceptance A20). The **runtime view**'s §3
+entry-record paragraph and the **state-ownership view**'s tool-call row say so. One `SessionRecord` field was added on the
+existing snapshot channel; no package, edge, process, message kind, channel, command or store column changed.
+
 **A plan cycle's root is recorded for good when it starts (REQ-MONITOR-044/052/069, REQ-LIBRARY-093/099, REQ-ORCH-153,
 R-067).** A plan cycle has no `iterations` row, so the session named its root through its live run and, after a park or an
 end, through its publishes alone; one that only read an artifact was no agent's, and the run-level agent lost that received

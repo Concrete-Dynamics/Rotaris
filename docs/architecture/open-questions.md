@@ -5435,6 +5435,14 @@ before a crash that never reach the total — is a defect of its own,
 record during a pass, which would amend or narrow REQ-ORCH-097's timing; or whether the lag stands and the surface says
 the total is as of the last completed pass.
 
+*Reported 2026-10-01 by the repair of
+[`the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`](../defects/fixed/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md)
+(acceptance A20, R-067), which leaves this cadence and the displayed total as they were.* The per-agent figures no longer
+wait for it: a child's count already read the tracker's live count beside its persisted one, and the run-level agent's now
+reads the roots' persisted share plus the live root's calls not yet counted (`SessionRecord.entryToolCalls`). So during a
+pass the per-agent figures may sum to more than the displayed total; a ruling that accumulates per call would close that
+gap as well.
+
 **OQ-117 — What is an iteration told of a task it takes up that is not the run's own, and with what?** *(REQ-CHAT-040, whose queued prompt becomes a task "carrying the prompt text as its content"; REQ-ORCH-004 and REQ-ORCH-135, whose task a resumed session carries on and "stays anchored"; REQ-ORCH-072, which gives the root execution record "the task's execution payload"; REQ-CHAT-090 and REQ-CHAT-091, which let the user rename a task; and `PD-ORCH-005` clause 17 with OQ-102, whose message is told in words of its own. Raised 2026-09-29 by the repair of [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md) under [R-067](../product/requests.md#r-067). Open.)*
 
 No requirement says what an iteration's first message holds when the task it selected is not the one the launch

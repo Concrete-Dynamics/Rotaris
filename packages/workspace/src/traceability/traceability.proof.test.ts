@@ -10,6 +10,7 @@ import { loadLayout } from './layout.js';
 import { loadParser, parserLoadMs } from './parser.js';
 import { parseStore } from './store.js';
 import { SPIKE_7, generateScaleRepository } from './scale-fixture.js';
+import { growthPair, interleavedMinima } from './growth-readings.js';
 import { sweepRepository, type SweepDetails } from './sweep.js';
 
 /**
@@ -33,6 +34,12 @@ const ms = (fn: () => void): number => { const t0 = performance.now(); fn(); ret
  * Each paired timing is taken three times, the minimum is what the ratio is computed from, and every reading is
  * recorded beside it. The 3.0 threshold is NOT raised. The work counts (documents, files, sites, functions) are
  * recorded with them so the proof can assert the input really is half-size, which no clock can tell it.
+ *
+ * 2026-10-01 (R-067): `msMin` still takes the budget figures; the GROWTH pairs are read by `interleavedMinima`
+ * (`growth-readings.ts`) — seven readings a side after a warm-up each, the sides alternating. All full-size readings
+ * used to come first and the half-size ones after them, so the half side ran hotter and the parse ratio read 3.04 to
+ * 3.37 on an idle host against a work ratio of 2.14; and the sweep's full side was a single reading
+ * (`docs/defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).
  */
 const msMin = (fn: () => void, runs = 3): { readonly minMs: number; readonly runsMs: readonly number[] } => {
   const all: number[] = [];
@@ -59,15 +66,16 @@ describe.skipIf(!out)('spike 7 — the traceability engine at scale', () => {
     expect(parsed.records.length).toBe(shape.requirements);
     results.parse = { documents: shape.documents, requirements: shape.requirements, storeBytes: shape.bytes, coldMs: cold, warmMs: warm, warmRunsMs: warmRuns.runsMs, heapDeltaMiB: Math.round((after.heapUsed - before.heapUsed) / 1048576 * 10) / 10, rssMiB: Math.round(after.rss / 1048576) };
     expect(warm).toBeLessThan(1_500);
-    // linear growth: half the store in about half the time (REQ-TRACE-501's linear clause)
+    // linear growth: half the store in about half the time (REQ-TRACE-501's linear clause), the two sides read evenly
     const halfDir = join(scale, '..', 'scale-half');
     rmSync(halfDir, { recursive: true, force: true });
     mkdirSync(halfDir, { recursive: true });
     const halfShape = generateScaleRepository(halfDir, { ...SPIKE_7, blocks: 7, implFiles: 400, testFiles: 100 });
-    parseStore({ root: halfDir, layout, retiredLog: null });
-    const halfRuns = msMin(() => { parseStore({ root: halfDir, layout, retiredLog: null }); });
-    const half = halfRuns.minMs;
-    results.parseHalf = { documents: halfShape.documents, warmMs: half, warmRunsMs: halfRuns.runsMs, fullMinMs: warm, halfMinMs: half, work: { full: shape.documents, half: halfShape.documents }, ratio: Math.round((warm / Math.max(half, 0.1)) * 100) / 100 };
+    const growth = interleavedMinima({
+      full: () => ms(() => { parseStore({ root: scale, layout, retiredLog: null }); }),
+      half: () => ms(() => { parseStore({ root: halfDir, layout, retiredLog: null }); }),
+    });
+    results.parseHalf = { documents: halfShape.documents, storeBytes: halfShape.bytes, ...growthPair(growth, { full: shape.documents, half: halfShape.documents }) };
     if (out) writeFileSync(join(out, 'spike-results.json'), JSON.stringify(results, null, 2));
   });
   it('REQ-TRACE-088: 10^3 source files carrying 10^4 annotation sites sweep in about one second on one thread', () => {
@@ -87,17 +95,18 @@ describe.skipIf(!out)('spike 7 — the traceability engine at scale', () => {
     expect(swept.sites.length).toBeGreaterThanOrEqual(10_000);
     results.sweep = { files: swept.details.files, sites: swept.sites.length, annotations: swept.details.annotations.length, coldMs: cold, warmMs: warm, parseMs: swept.details.parseMs, parsedFiles: swept.details.parsedFiles, wholeMs: swept.durationMs, parserLoadMs: parserLoadedIn };
     expect(warm).toBeLessThan(1_500);
-    // linear growth: a half-size tree in about half the time
+    // linear growth: a half-size tree in about half the time. The sweep times itself, so each reader returns the
+    // sweep's own figure less the parse time it keeps apart, the same figure the budget above reads; the two sides are
+    // read evenly (`interleavedMinima`), where the full side used to be the one reading above against a minimum of three.
     const halfDir = join(scale, '..', 'scale-half');
     const halfParsed = parseStore({ root: halfDir, layout, retiredLog: null });
-    sweepRepository({ root: halfDir, layout, aliases: halfParsed.details.legacyAliases, clock });
-    // Part R2: the minimum of three sweeps on each side, for the reason `msMin` states; the sweep times itself, so the
-    // repetition is written out here rather than through that helper.
     let half = sweepRepository({ root: halfDir, layout, aliases: halfParsed.details.legacyAliases, clock });
-    const halfRuns: number[] = [];
-    for (let i = 0; i < 3; i += 1) { half = sweepRepository({ root: halfDir, layout, aliases: halfParsed.details.legacyAliases, clock }); halfRuns.push(half.durationMs - half.details.parseMs); }
-    const halfWarm = Math.min(...halfRuns);
-    results.sweepHalf = { files: half.details.files, sites: half.sites.length, warmMs: halfWarm, warmRunsMs: halfRuns, fullMinMs: warm, halfMinMs: halfWarm, work: { full: swept.details.files, half: half.details.files }, ratio: Math.round((warm / Math.max(halfWarm, 1)) * 100) / 100 };
+    const growth = interleavedMinima({
+      full: () => { const s = sweepRepository({ root: scale, layout, aliases: parsed.details.legacyAliases, clock }); return s.durationMs - s.details.parseMs; },
+      half: () => { half = sweepRepository({ root: halfDir, layout, aliases: halfParsed.details.legacyAliases, clock }); return half.durationMs - half.details.parseMs; },
+    });
+    // The sweep's figures are whole milliseconds, so the quotient's denominator is floored at 1 ms as before.
+    results.sweepHalf = { files: half.details.files, sites: half.sites.length, ...growthPair(growth, { full: swept.details.files, half: half.details.files }, 1) };
     if (out) writeFileSync(join(out, 'spike-results.json'), JSON.stringify(results, null, 2));
   });
   it('OQ-24 (Part AJ2): the parse-requiring checks of REQ-TRACE-104 rule 1 and REQ-TRACE-109/110 over the same 10^3-file tree, with the TypeScript compiler API', () => {
@@ -129,16 +138,14 @@ describe.skipIf(!out)('spike 7 — the traceability engine at scale', () => {
     expect(full.swept.details.parser.available).toBe(true);
     const halfDir = join(scale, '..', 'scale-half');
     const half = corpus(halfDir);
-    half.pass();
-    const halfRuns = msMin(half.pass);
-    const halfWarm = halfRuns.minMs;
+    // the growth pair, read evenly (`interleavedMinima`); the budget-free figures above stay the full side's own
+    const growth = interleavedMinima({ full: () => ms(full.pass), half: () => ms(half.pass) });
     results.parser = {
       version: parser.version, loadMs: parserLoadMs(), files: full.texts.length, modules: SPIKE_7.implFiles, tests: SPIKE_7.testFiles, functions: counts.functions,
       coldMs: cold, warmMs: warm, warmRunsMs: warmRuns.runsMs, perFileMs: Math.round((warm / full.texts.length) * 1000) / 1000,
       sweepParseMs: full.swept.details.parseMs, sweepParsedFiles: full.swept.details.parsedFiles,
-      halfFiles: half.texts.length, halfWarmMs: halfWarm, halfWarmRunsMs: halfRuns.runsMs,
-      fullMinMs: warm, halfMinMs: halfWarm, work: { full: full.texts.length, half: half.texts.length },
-      ratio: Math.round((warm / Math.max(halfWarm, 1)) * 100) / 100,
+      halfFiles: half.texts.length, halfWarmMs: growth.half.minMs,
+      ...growthPair(growth, { full: full.texts.length, half: half.texts.length }, 1),
     };
     if (out) writeFileSync(join(out, 'spike-results.json'), JSON.stringify(results, null, 2));
   });

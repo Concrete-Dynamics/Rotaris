@@ -141,7 +141,6 @@ export function Inspector(props: InspectorProps) {
             <div className="inspector__ring-caption text-secondary">
               <div>This agent's own context window: {shown.contextUsed.toLocaleString()} of {shown.contextLimit.toLocaleString()} tokens.</div>
               <div>Compression at {compressionThresholdPercent}% of the limit. Not a session-wide figure.</div>
-              {isRunLevel && <div className="inspector__note">The record does not carry the run-level agent's prompt reading in this build.</div>}
             </div>
           </div>
           <div className="inspector__controls">

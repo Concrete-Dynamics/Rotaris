@@ -207,3 +207,21 @@ describe('REQ-LIBRARY-102 / REQ-MONITOR-052 (live-run finding K1): a link deep-l
     useShellState.getState().takeLibraryProposalId();
   });
 });
+
+/**
+ * Acceptance A36 (R-067): for the run-level agent the inspector's ring caption stated the entry role's prompt reading and,
+ * one line under it, "The record does not carry the run-level agent's prompt reading in this build." The record has carried
+ * it since Part AH (`SessionRecord.entryContext`). REQ-MONITOR-089: the synthetic root exposes the newest reading so a
+ * root-level surface has a figure; REQ-MONITOR-065: the meter is that agent's own context window.
+ */
+describe('REQ-MONITOR-089 / REQ-MONITOR-065 (acceptance A36): the run-level agent\'s prompt reading', () => {
+  it('the caption states the recorded reading and never denies that the record carries it', () => {
+    const s = session({ entryContext: { used: 4_505, limit: 262_144 } });
+    const root = runLevelAgent(s, entry, false)!;
+    expect(root.contextUsed).toBe(4_505);
+    const html = inspector(s, RUN_AGENT_ID, root);
+    expect(html).toContain(`This agent&#x27;s own context window: ${(4_505).toLocaleString()} of ${(262_144).toLocaleString()} tokens.`);
+    expect(html).not.toContain('does not carry');
+    expect(html).not.toContain('prompt reading in this build');
+  });
+});

@@ -22,10 +22,11 @@ import { LaunchDisclosure } from './panes/LaunchDisclosure.js';
 import { QueuePane } from './panes/QueuePane.js';
 import { ReviewPane } from './panes/ReviewPane.js';
 import { createPaneRegistry } from './panes/registry.js';
+import type { DecisionResult } from './panes/presentation.js';
 // Defect R2-3: `PANE_TITLE` belongs in this list. It was dropped from it while the pane host's own chrome did not yet
 // exist, then used by that chrome — and a bundler does not resolve identifiers, so the renderer built cleanly and threw
 // `PANE_TITLE is not defined` the first time a pane opened, which React answers by unmounting the whole tree.
-import { consequenceForDecision, DISCLOSURE_PENDING, DISPATCH_NOTHING_STARTED, LAUNCH_ABANDONED, PANE_TITLE, QUEUE_CONTROL_LABEL, readOnlyEditorRefusal } from './panes-host.js';
+import { consequenceForDecision, DISPATCH_NOTHING_STARTED, heldLaunch, LAUNCH_ABANDONED, PANE_TITLE, QUEUE_CONTROL_LABEL, readOnlyEditorRefusal, type HeldLaunch } from './panes-host.js';
 import { Button as DesignButton, Checkbox as DesignCheckbox, EmptyState as DesignEmptyState, Input as DesignInput, Select as DesignSelect } from '../design-system/index.js';
 
 /**
@@ -62,8 +63,12 @@ export type LocationPreviewOutcome =
   | { readonly ok: true; readonly value: { readonly id: ReqId; readonly location: string; readonly confirmSourceWrites: boolean; readonly storeDir: string; readonly epics: readonly { readonly id: ReqId; readonly title: string }[] } }
   | { readonly ok: false; readonly error: Refusal };
 export interface DispatchOutcome { readonly started: readonly { readonly id: ReqId; readonly unit: string; readonly sessionId: string }[]; readonly abandoned: readonly { readonly id: ReqId; readonly unit: string; readonly reason: string }[] }
-/** What the one write path answers a pane that asked for a decision: taken, or not taken with the reason (REQ-TRACE-423/432). */
-export type PerformResult = { readonly ok: true } | { readonly ok: false; readonly reason: string };
+/**
+ * What the one write path answers a pane that asked for a decision: taken, or not taken with the reason
+ * (REQ-TRACE-423/432) — and, for a decision held behind the launch's disclosure, the outcome still to come
+ * (REQ-TRACE-472; `DecisionResult`).
+ */
+export type PerformResult = DecisionResult;
 export type BoardPreferenceKey = 'requirements/filter/text' | 'requirements/filter/epic' | 'requirements/filter/source' | 'requirements/filter/lifecycle' | 'requirements/filter/health' | 'requirements/filter/priority' | 'requirements/sort' | 'requirements/blocked_column' | 'requirements/axis' | 'workspaces/{workspace}/requirementColumnFolds';
 export interface BoardPreferences { readonly filter: BoardFilter; readonly sort: string; readonly axis: string; readonly blockedColumn: boolean; readonly folds: string }
 
@@ -167,6 +172,12 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
   const [blockerPayload, setBlockerPayload] = useState<BlockerPayload | null>(null);
   /** REQ-TRACE-472: the launch whose disclosure is on screen. Nothing has been sent while this stands; abandoning sends nothing at all. */
   const [launch, setLaunch] = useState<{ readonly id: ReqId; readonly action: BoardAction; readonly from: ColumnToken; readonly to: ColumnToken; readonly payload: Readonly<Record<string, string>> | undefined; readonly preview: LaunchPreview; readonly via: 'act' | 'queue'; readonly sendTarget: ColumnToken | undefined } | null>(null);
+  /**
+   * REQ-TRACE-472 with REQ-TRACE-426: the outcome owed to whoever asked for the launch now on screen. The disclosure
+   * is answered here, not where the action was asked for, so the asker is told what it came to — the act's result
+   * once accepted, the abandonment otherwise — rather than being left with "nothing has been recorded".
+   */
+  const held = useRef<HeldLaunch | null>(null);
   /** REQ-TRACE-322/323: the graph's centre, and its depth — held here and deliberately NOT persisted (the graph opens at the default every time). */
   const [graphCentre, setGraphCentre] = useState<ReqId | null>(null);
   const [graphDepth, setGraphDepth] = useState(GRAPH_DEPTH_DEFAULT);
@@ -438,8 +449,11 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
         // failure on the run side from stopping a blocker clearing, so it proceeds and the queue states the reason.
         if (action !== 'resume') { addFeedback(id, [`The launch of ${id} could not be disclosed, so nothing was started and nothing was written: ${p.reason}`]); return { ok: false, reason: p.reason }; }
       } else if (p.value.disclosure === 'due') {
+        held.current?.abandon();
+        const h = heldLaunch(id);
+        held.current = h;
         setLaunch({ id, action, from, to, payload, preview: p.value, via: 'act', sendTarget });
-        return { ok: false, reason: DISCLOSURE_PENDING(id) };
+        return h.result;
       } else if (p.value.disclosure !== 'unattended') {
         // `suppressed` and `off` are disclosures too — the run's permissions are settled and the service records which.
         effective = { ...(effective ?? {}), disclosure: p.value.disclosure };
@@ -660,12 +674,17 @@ export function RequirementsView({ host }: { readonly host: RequirementsHost }) 
     if (always) void host.suppressDisclosure();
     const disclosure = always ? 'suppressed' : 'accepted';
     if (l.via === 'queue') { await queueSet({ release: l.id, disclosure }); return; }
-    await perform(l.id, l.action, l.from, l.to, { ...(l.payload ?? {}), disclosure }, l.sendTarget);
+    const h = held.current;
+    held.current = null;
+    const r = await perform(l.id, l.action, l.from, l.to, { ...(l.payload ?? {}), disclosure }, l.sendTarget);
+    h?.settle(r);
   }, [launch, host, perform, queueSet]);
   /** REQ-TRACE-472: abandoning sends NOTHING — no act, no release, no preference — and the card says so. */
   const abandonLaunch = useCallback(() => {
     const l = launch;
     setLaunch(null);
+    held.current?.abandon();
+    held.current = null;
     if (l !== null) addFeedback(l.id, [LAUNCH_ABANDONED(l.id)]);
   }, [launch, addFeedback]);
 

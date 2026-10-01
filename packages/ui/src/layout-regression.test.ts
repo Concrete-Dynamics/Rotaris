@@ -41,4 +41,11 @@ describe('minimum-window layout regressions', () => {
     expect(rule('.start-session__scroll')).toContain('overflow-y: auto');
     expect(rule('.start-session .dialog-actions')).toContain('flex: none');
   });
+
+  it('breaks an unbroken token in the sidebar Project section\'s failure hint inside the column (REQ-WORKSPACE-113)', () => {
+    // "Last run failed: {message}" carries the failed task's raw output, and one token of it — measured live as
+    // `[8996:1001/041354.004464:ERROR:dbus/bus.cc:406]` — has no break opportunity. The hint ran 60 px past the
+    // sidebar (scrollWidth 295 in a 235 px box) and gave the column a horizontal scrollbar.
+    expect(rule('.agents__project .settings__hint')).toContain('overflow-wrap: anywhere');
+  });
 });

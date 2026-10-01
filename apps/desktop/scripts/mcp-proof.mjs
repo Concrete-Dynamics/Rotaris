@@ -2,7 +2,7 @@
  * The MCP proof (Part S): ADR-0033 and ADR-0034's first execution behind the real run host — the hand-written
  * fixture server (`fixtures/mcp-fixture-server.mjs`) declared three ways (global YAML, a workspace `.mcp.json`
  * with an envFile and an unknown key, a workspace YAML overlay), a persona carrying the three with a grant, a
- * denial and a rename, one stored secret, and nine launches against one scratch profile:
+ * denial and a rename, one stored secret, and ten launches against one scratch profile:
  *
  *   1. discovery   — the prompt's MCP section character-exact and equal to the callable set; the inert grant reported
  *                    once; gamma's unknown key warned once per load; the discovery file byte-identical after the run;
@@ -15,6 +15,9 @@
  *                    list naming `read_file` and `echo`, and each child's row records that grant — `read_file` alone of its
  *                    native tools and `echo` alone under alpha — not its declared tools (REQ-MCP-065 with REQ-TOOLS-006;
  *                    the row recorded the declared set until 2026-10-01).
+ *  3b. empty grant — a child whose `tool_restrictions` names `echo` alone: its row records an empty native grant marked
+ *                    `recorded`, and the inspector, the child selected, lists no native tool and `echo` used under alpha
+ *                    (REQ-MONITOR-049/060; the declared tools stood in for that empty grant until 2026-10-01). Driven.
  *   4. narrowing   — `--rename-after` withdraws `extra` mid-run; calling it is refused; the prompt is not re-rendered.
  *   5. crash       — `--crash-after` fails the call in flight, one warning issue, the next call re-establishes (069).
  *   6. drop rules  — an unknown server, an unavailable command, `enabled: false`, and a session toggle off from the
@@ -374,6 +377,43 @@ const ROUND_OVER = `(() => {
     if (JSON.stringify(mcp.granted) !== '{"alpha":["echo"]}') throw new Error(`${c.canonical_name}'s recorded MCP grant is not what tool_restrictions left: ${JSON.stringify(mcp.granted)}`);
   }
   results.oneProcess = { children: children.map((c) => `${c.canonical_name}:${c.state}`), sessionPid: connected[0], launches: launches.length, evidence, grantedTools: children.map((c) => JSON.parse(c.granted_tools)) };
+}
+
+// ---- 3b. A grant the controls left empty of native tools ------------------------------------------------------
+/*
+ * REQ-MONITOR-049/060 with REQ-TOOLS-006 and REQ-MCP-065: a child whose `tool_restrictions` list names only `echo` keeps no
+ * native tool. Its row records that empty grant (marked `recorded`), and the inspector, with the child selected, lists no
+ * native tool and `echo` under alpha. Until 2026-10-01 the empty list read as "no grant recorded" and the inspector listed
+ * the persona's declared tools as granted (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
+ * Driven, as 6 is: the selection and every read wait for their condition.
+ */
+{
+  const r = await drivenLaunch('empty-native-grant', { ROTARIS_SCRIPT: 'delegate:coding-agent:four,answer', ROTARIS_CHILD_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_INTENT_SCRIPT: 'moderate_feature' }, {
+    files: { global: globalYaml({ personas: { 'coding-agent': '{ mcp_servers: [alpha], tool_restrictions: { coding-agent: [echo] } }' } }), workspace: WORKSPACE.replace('  delegation_strategy: single\n', '  delegation_strategy: orchestrator\n') },
+  }, async (d, step) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    const before = latestSessionId();
+    await typePrompt(d, step, 'delegate to four');
+    const session = await step('the run settled', until(() => sessionAfter(before), (s) => s !== null && SETTLED.has(s.execution_status), { timeoutMs: 90_000, what: 'a new session settling' }));
+    await step('four in the tree', d.waitFor('.agent-row__task', { text: 'four' }));
+    await step('select four', d.click('.agent-row__task', { text: 'four' }));
+    await step('the inspector shows four', d.waitFor('[data-testid="inspector-name"]', { text: 'four' }));
+    await step('alpha in the inspector', d.waitFor('.inspector__mcp[data-mcp-server="alpha"] .chip'));
+    const native = await step('the native tools field', d.probe('[data-testid="inspector-chips"]'));
+    const nativeChips = await step('the native chips', d.probe('[data-testid="inspector-chips"] .chip'));
+    const alpha = await step('the alpha chips', d.probe('.inspector__mcp[data-mcp-server="alpha"] .chip'));
+    return { session, native: native[0]?.text ?? null, nativeChips: nativeChips.map((c) => c.data['data-tool']), alpha: alpha.map((c) => `${c.data['data-tool']}:${c.data['data-state']}`) };
+  });
+  const db = new Database(oneDatabase(), { readonly: true });
+  const four = db.prepare('SELECT canonical_name, state, granted_tools, granted_mcp FROM children WHERE session_id = ?').all(r.value.session.session_id);
+  db.close();
+  if (four.length !== 1 || four[0].canonical_name !== 'four') throw new Error(`expected the one child four: ${JSON.stringify(four)}`);
+  const recorded = JSON.parse(four[0].granted_mcp);
+  if (four[0].granted_tools !== '[]' || recorded.recorded !== true || JSON.stringify(recorded.granted) !== '{"alpha":["echo"]}') throw new Error(`four's row does not record the empty native grant beside echo: ${four[0].granted_tools} ${four[0].granted_mcp}`);
+  if (r.value.nativeChips.length !== 0) throw new Error(`the inspector lists native tools the controls removed (REQ-MONITOR-049/060): ${JSON.stringify(r.value.nativeChips)}`);
+  if (!/No tools resolved\./.test(r.value.native ?? '')) throw new Error(`the native tools field does not say it holds none: ${JSON.stringify(r.value.native)}`);
+  if (JSON.stringify(r.value.alpha) !== '["echo:used"]') throw new Error(`alpha's chips are not echo, used: ${JSON.stringify(r.value.alpha)}`);
+  results.emptyNativeGrant = { row: { grantedTools: JSON.parse(four[0].granted_tools), grantedMcp: recorded }, inspector: { native: r.value.native, nativeChips: r.value.nativeChips, alpha: r.value.alpha }, sessionStatus: r.value.session.execution_status, png: r.png };
 }
 
 // ---- 4. Narrowing ---------------------------------------------------------------------------------------------

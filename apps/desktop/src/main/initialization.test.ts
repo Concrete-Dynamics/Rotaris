@@ -294,7 +294,7 @@ describe('resolution on workspace open', () => {
     await new Promise((r) => setImmediate(r));
     const task = h.published.at(-1)!.report.tasks[0]!;
     expect(task.error).toBe("Code intelligence could not create this project's configuration: boom");
-    // A step never attempted wrote nothing, so its detail is empty; its status says why (OQ-174).
+    // A step never attempted wrote nothing, so its detail is empty; its status says why (OQ-175).
     expect(task.steps.map((s) => s.detail)).toEqual(['boom', '', '']);
     expect(JSON.stringify(h.published)).not.toContain('exited with code');
   });
@@ -319,7 +319,7 @@ describe('resolution on workspace open', () => {
   });
 
   /**
-   * REQ-WORKSPACE-092/093 (OQ-174): a stage that exited non-zero and wrote nothing has an empty detail, so its error's
+   * REQ-WORKSPACE-092/093 (OQ-175): a stage that exited non-zero and wrote nothing has an empty detail, so its error's
    * "{detail}" is the setup's final sentence, as for a failed setup with no failed step — the build's reading.
    */
   it('reports a silent non-zero exit with an empty step detail and the setup\'s final sentence in the error', async () => {
@@ -334,7 +334,7 @@ describe('resolution on workspace open', () => {
     expect(task.error).toBe("Code intelligence could not index this project's symbols: A step failed, so the workspace is only partly set up.");
   });
 
-  /** REQ-WORKSPACE-091/093 (OQ-174): a stage whose command could not be started has no output; its detail is the launch's own error. */
+  /** REQ-WORKSPACE-091/093 (OQ-175): a stage whose command could not be started has no output; its detail is the launch's own error. */
   it('reports a stage whose command could not be started in the launch\'s own error', async () => {
     const h = harness();
     const run = h.coordinator.resolve(h.root, true);

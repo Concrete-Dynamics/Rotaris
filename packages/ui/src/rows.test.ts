@@ -305,7 +305,7 @@ describe('rows — REQ-CHAT-068/069, delegation and scope', () => {
   const agent: AgentRecord = {
     id: 'c1', name: 'helper', givenName: 'helper', persona: 'coding-agent', state: 'running', presentationState: 'running', parentId: 'run',
     dependencies: [], activity: '', model: 'm', depth: 1, background: true, category: 'implementation', spawnedAt: AT, completedAt: null,
-    toolCalls: 0, delegationTask: 'a'.repeat(400), reasoning: 'high', contextUsed: 0, contextLimit: 1, grantedTools: [], calledTools: [],
+    toolCalls: 0, delegationTask: 'a'.repeat(400), reasoning: 'high', contextUsed: 0, contextLimit: 1, grantedTools: [], grantRecorded: false, calledTools: [],
     activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null,
   };
 

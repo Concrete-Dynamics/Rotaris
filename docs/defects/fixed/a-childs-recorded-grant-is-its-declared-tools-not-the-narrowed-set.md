@@ -69,4 +69,4 @@ the grant was recorded, and the row is not rewritten
 ([`a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md`](../a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md));
 and a grant the controls left empty of native tools reads, on the surface, as no grant recorded (REQ-MONITOR-049's
 stand-in), since an empty list is how the record says "none"
-([`a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md`](../a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md)).
+([`a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md`](a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md); repaired since).

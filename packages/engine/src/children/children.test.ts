@@ -473,10 +473,34 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     expect((await sessions.running(sid)!).status).toBe('completed');
     const c = children(sid)[0]!;
     expect(JSON.parse(c.granted_tools)).toEqual(['read_file', 'grep']);
-    expect(JSON.parse(c.granted_mcp)).toEqual(narrowed.mcp);
+    expect(JSON.parse(c.granted_mcp)).toEqual({ ...narrowed.mcp, recorded: true });
     for (const declared of BUILT_IN_PERSONAS['coding-agent'].tools.filter((t) => !narrowed.tools.includes(t))) expect(JSON.parse(c.granted_tools)).not.toContain(declared);
     // The record reaches the projection: the agent's tools are the grant, not the declared set standing in.
     expect(snapshots.at(-1)?.agents.find((a) => a.name === 'implement')).toMatchObject({ grantedTools: ['read_file', 'grep'], grantedMcp: { srv: [] } });
+  });
+
+  /*
+   * REQ-MONITOR-049/060 with REQ-TOOLS-006 (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md):
+   * a `tool_restrictions` list naming only a tool-server tool leaves the child no native tool. The row records that empty
+   * grant, and the record says a grant was recorded, so the declared tools do not stand in for it on the surface. Until
+   * 2026-10-01 the record could not tell it from the spawn's "no grant yet", and the inspector listed every tool removed.
+   */
+  it('REQ-MONITOR-049 / REQ-TOOLS-006: a grant the controls left empty of native tools is recorded as a grant, not read as none', async () => {
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coder', task_name: 'implement', task: 'TASK: write it', run_in_background: false } }], 'Delegating.') : answer('All done.');
+      if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+      return answer('I implemented it.');
+    };
+    const onlyEcho: AgentGrant = { tools: [], mcp: { granted: { srv: ['echo'] }, servers: [{ name: 'srv', transport: 'stdio', origin: 'workspace', fate: 'connected' }] } };
+    const snapshots: SessionRecord[] = [];
+    const publisher: Publisher = { increment: () => undefined, snapshot: (p: { session: SessionRecord }) => { snapshots.push(p.session); } } as Publisher;
+    const { sessions } = sessionsWith(script, { grant: (ctx) => (ctx.depth === 1 ? onlyEcho : null), publisher });
+    const sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const c = children(sid)[0]!;
+    expect(JSON.parse(c.granted_tools)).toEqual([]);
+    expect(JSON.parse(c.granted_mcp)).toEqual({ ...onlyEcho.mcp, recorded: true });
+    expect(snapshots.at(-1)?.agents.find((a) => a.name === 'implement')).toMatchObject({ grantedTools: [], grantRecorded: true, grantedMcp: { srv: ['echo'] } });
   });
 
   // A port that reports no grant records none: REQ-MONITOR-049's stand-in then applies on the surface, rather than the
@@ -526,7 +550,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     expect(JSON.parse(heldGrant ?? 'null')).toEqual([]);
     expect((await sessions.running(sid)!).status).toBe('completed');
     expect(JSON.parse(grantedAtFirstRequest ?? 'null')).toEqual(['read_file']);
-    expect(JSON.parse(children(sid)[0]!.granted_mcp)).toEqual(narrowed.mcp);
+    expect(JSON.parse(children(sid)[0]!.granted_mcp)).toEqual({ ...narrowed.mcp, recorded: true });
   });
 
   it('REQ-EVENTS-053 / PD-MONITOR-001: a delegated child\'s provider requests reach the run\'s tokens, cost and usage.update', async () => {

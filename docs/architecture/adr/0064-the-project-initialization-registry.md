@@ -491,7 +491,7 @@ holds: the run host's status carries facts beside its own `detail` — `McpSetup
 `output` (the trimmed tail of a step whose command ran, without the prose) and `startError` (a launch that failed) — and the
 runner's `stepDetail` writes REQ-WORKSPACE-091's fixed sentences and REQ-WORKSPACE-092's last 400 bytes of the output, cut
 where a UTF-8 character begins, with no prefix, in the live rows, the step rows and the error. Steps with no output to give
-read empty, a launch that failed in its own error (OQ-174). **Measured** by the unit cases, which now push the run host's
+read empty, a launch that failed in its own error (OQ-175). **Measured** by the unit cases, which now push the run host's
 real details and facts (eight red on the code before), and by `workspace-proof`'s new scenario 8g: a project carrying the
 marker read "project file already exists; left as is", a documentation-only one its creation's output and the two
 `skipped-no-code` sentences, and one whose creation wrote to both streams and exited 3 its output, "ä" intact, in the row

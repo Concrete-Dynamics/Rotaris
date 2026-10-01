@@ -107,7 +107,7 @@ export function lastUtf8Bytes(text: string, bytes: number): string {
  * (`docs/defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`). A stopped step and a
  * skipped one read in the requirements' fixed sentences; every other step's detail is the last 400 bytes of its output, with
  * no prefix, empty for a step that wrote nothing or never ran. A step whose command could not be started has no output and
- * reads in the launch's own error (OQ-174 records that reading and the empty ones).
+ * reads in the launch's own error (OQ-175 records that reading and the empty ones).
  */
 const stepDetail = (s: McpSetupStatus['steps'][number]): string => {
   if (s.stopped === 'cancelled') return STEP_STOPPED_BY_CANCEL;

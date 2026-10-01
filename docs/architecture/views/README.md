@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A dialog opened while the composer's send is settling keeps its focus (REQ-MONITOR-137, REQ-CHAT-002).** The
+composer's awaited submissions (a queue, a start or continue, an executed slash command) return the focus through one
+rule, `composerReclaimsFocus` (`ui/src/composer.ts`): to the composer only when the focus is nowhere, in the composer, or
+still on what held it when the submission began. Main's `session.subscribe` gains a verification seam,
+`ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS`, which holds its reply after the attach; the **process view**'s subscription
+paragraph says both. This repairs `a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`;
+`part-j-proof`'s steer-early launch (scenario 2b) shows it. No package, edge, process, message kind, channel, command or
+store column changed.
+
 **The intent status after a continue is the continuation's (REQ-ORCH-014, OQ-162).** The record's `intent` reads the
 newest `run_continuation_intent` entry's payload, else the launch audit's (`intentPayloadOf`, `sessions.ts`, over the
 new `StoreDal.latestTimelineEntry`, a read under the timeline's primary key whose plan `store.test.ts` asserts), and
@@ -133,6 +142,27 @@ new run whose ports are built with the gate released (pinned in `run/plan-gate.t
 `an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md`; the **runtime view**'s MCP surface says so. No
 package, edge, process, message kind, channel, command or store column changed.
 
+**The run-level agent is drawn as the latest root's persona, not the first root's (REQ-MONITOR-060/069, PD-ORCH-003,
+OQ-97).** The renderer's `entryOf` named the run-level agent, and chose the declared tools standing in for its chips, its
+model and its reasoning, from the transcript's first agent row no child carries, while its chips were marked from the
+latest root's history. It now hands to `packages/ui`'s new `entryRole`: while a run is live, the persona its root runs as,
+`SessionRecord.entryPersona` (new, from `Run.entryPersona`; null with no live run), so the name is the root's from the run's
+start, before that root has written a row; at rest, the last row a root authored of any kind a turn writes under its
+agent's name (`agent`, `tool`, `thinking`, `diff`), a row named for one of `SessionRecord.entryRoots` preferred. (The first
+repair read the last `agent` row alone, and a live root whose first steps were tool calls was drawn as the root before it:
+the verifier's finding.) This repairs
+`after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`; the **runtime view**'s
+`entryTools` paragraph says so, and the reading is recorded beside OQ-97. `SessionRecord` gains one nullable field; no
+package, edge, process, message kind, channel, command or store column changed.
+
+**A grant the controls left empty of native tools is drawn as none, not as the declared tools (REQ-MONITOR-049/060,
+REQ-TOOLS-006, REQ-MCP-065).** `recordChildGrant` adds `recorded: true` to the `granted_mcp` object it writes, and the
+projection carries it as the new `AgentRecord.grantRecorded` (a contract field); `resolvedTools` lets the declared tools
+stand in only where no grant was recorded. A row without the marker — the spawn's, and every row written before
+2026-10-01 — keeps the old reading, `[]` as no grant recorded. This repairs
+`a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md`; the **runtime view**'s `AgentRecord` passage and its
+`children` row say so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A child's row records the grant its port put in force, not its persona's declared tools (REQ-MCP-065, REQ-TOOLS-006,
 REQ-MCP-114).** The spawn wrote `children.granted_tools` from the persona's declared tools and `granted_mcp` from its MCP
 surface before any control, so a tool `coordinator_only`, `read_only`, `tool_restrictions`, the `restricted` preset or the
@@ -144,7 +174,7 @@ pending. This repairs `a-childs-recorded-grant-is-its-declared-tools-not-the-nar
 surface and its `children` row say so, and ADR-0034's evidence passages are corrected in place. No package, edge, process,
 message kind, channel, command or store column changed.
 
-**A setup step reads in REQ-WORKSPACE-091/092's words (ADR-0064, OQ-174).** `McpSetupStep` gained three optional facts
+**A setup step reads in REQ-WORKSPACE-091/092's words (ADR-0064, OQ-175).** `McpSetupStep` gained three optional facts
 set by the run host's `runSetupSteps` — `skipped`, `output` and `startError` — and the initialization coordinator writes the
 requirements' fixed sentences and the output's last 400 bytes from them, the MCP category keeping the run host's `detail`
 (process view, `mcp.setup`). This repairs `the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`. No

@@ -53,7 +53,7 @@ captured output's trimmed tail, at most 400 characters, on every step whose comm
 - a stopped step keeps REQ-WORKSPACE-092's two sentences.
 
 The steps with no output to give — not attempted, never started, silent — are raised as
-[OQ-174](../../architecture/open-questions.md) with the reading built: empty, except a step that could not be started,
+[OQ-175](../../architecture/open-questions.md) with the reading built: empty, except a step that could not be started,
 which reads in the launch's own error; a failed stage with an empty detail keeps the setup's final sentence in its error.
 
 Pinned by `apps/desktop/src/main/initialization.test.ts`, whose cases now push the run host's real details and facts

@@ -393,7 +393,8 @@ in `configuration.ts`'s header.)
    ONE sink fanning out to the 8 s notice and the `mcp_config` issue; MCP tools as executors outside the registry
    through the ONE gate (fail-closed per ADR-0016: withheld under `restricted`/`read_only`, asked under `ask`); the
    per-child evidence in `children.granted_mcp` (since 2026-10-01 the grant the child's port put in force, recorded once it
-   is ready, with `children.granted_tools` — the spawn recorded the persona's declared set before any control until then); the session override held in the run host; the Settings category
+   is ready, with `children.granted_tools` — the spawn recorded the persona's declared set before any control until then —
+   and marked `recorded`, so an empty native grant is drawn as none, `AgentRecord.grantRecorded`); the session override held in the run host; the Settings category
    (`McpSettings.tsx`: every configured row with its four-state health as text, origin, the switch and its wording, the
    secrets read side masked). **Placement read against the record:** every path lives in the **run host**, the one
    holder REQ-MCP-047 now asks for — ADR-0034 consequence 3 falsified and kept. OQ-22 read as overlay on the parent
@@ -1215,9 +1216,18 @@ header's selectors. Decisions taken here for the owner: a manual pause ends the 
 set has no `paused`); the pause at the limit writes no terminal pair; operations with no mechanism answer false.
 `ROTARIS_CAPTURE_TYPE`, `ROTARIS_CAPTURE_PAUSE_ANSWER` and `ROTARIS_CAPTURE_QUIT_MS` are verification seams.
 
-**What `pnpm part-j-proof` does.** It builds Electron and launches the app seven times against scratch stores: a
+**What `pnpm part-j-proof` does.** It builds Electron and launches the app eleven times against scratch stores (seven
+until scenario 6 and the steer-early launch were added): a
 message typed during a run is queued and consumed once as a completed task; a steer is submitted from the composer's
-card and injected; Pause then the composer's Continue run leave the pause row and two run starts, and a worker thread
+card and injected — since 2026-10-01 with the steer-rest launch's steer (`STEER_CLICKS` in `lib/steer-rest.mjs`: Steer
+the run waits for its control and the settled send, and the launch fails by name on a step it never pressed), where it
+had pressed at fixed appointments a late run start misses
+(`../defects/fixed/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md`); a steer whose dialog opened while the composer's send was still settling reaches the root's record
+with the text typed into it — since 2026-10-01 the composer takes the focus back after a submission only when nothing
+else took it meanwhile (`composerReclaimsFocus`), and main holds the `session.subscribe` reply under
+`ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS` so the launch opens the dialog inside that window every time
+(`apps/desktop/scripts/lib/steer-early.mjs`,
+`../defects/fixed/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`); Pause then the composer's Continue run leave the pause row and two run starts, and a worker thread
 sampling the store while the app runs shows the pause released the lock and the continued run held it throughout
 (ADR-0005, 2026-09-29, R-067) and the paused session's summary naming no stop (REQ-ORCH-082 rule 1, OQ-118); a steer
 submitted while the entry role's step is held, then a pause, reaches the root's record at the rest, injected once, and

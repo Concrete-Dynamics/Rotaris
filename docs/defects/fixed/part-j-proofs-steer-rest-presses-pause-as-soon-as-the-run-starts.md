@@ -42,7 +42,7 @@ schedule moved to `apps/desktop/scripts/lib/steer-rest.mjs`, which `part-j-proof
   (3800 ms) and the dialog's Steer (4200 ms) are appointments after that deadline. A run starting at 2.16 s missed the
   old 1900 ms appointment once on 2026-10-01; a dialog opened before the send settled lost its focus to the composer
   (recorded as its own product defect,
-  [`a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer`](../a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md)).
+  [`a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer`](a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md)).
 - **The proof asserts what the launch exercised.** It fails by name on any step the log does not show pressed on its
   own control (`unpressedClicks`), and on a timeline where the steer was not pending when the pause was asked for
   (`steerPendingAtPause`: `steering_submitted` before `run_pause_requested`, and no `steering_injected` before it).
@@ -59,6 +59,7 @@ loaded runs the Steer pressed 3.5 to 5.6 s after the launch, and the Pause follo
 every time. The whole `part-j-proof` then passed, every scenario, with the other plan's agents on the host (load
 average 9.7 at its start, 4.8 at its end).
 
-Not repaired here: the `steer` launch (scenario 2) keeps the fixed appointments this launch had
-([`part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss`](../part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md),
+Not repaired here: the `steer` launch (scenario 2) keeps the fixed appointments this launch had (repaired later the
+same day in the fin4 round, when it took this launch's steer)
+([`part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss`](part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md),
 recorded).

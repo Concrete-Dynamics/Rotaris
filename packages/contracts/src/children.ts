@@ -200,8 +200,19 @@ export const AgentRecordSchema = z.object({
    * completion already counted is never counted again (REQ-MONITOR-102's per-agent metrics).
    */
   compressions: z.number().int().nonnegative(),
-  /** REQ-MONITOR-049: the granted native tool set as recorded at spawn; empty when no grant was recorded (the surface lets the persona's declared tools stand in). */
+  /**
+   * REQ-MONITOR-049 / REQ-MCP-065: the granted native tool set as the agent's tool port recorded it once ready (REQ-TOOLS-006's
+   * controls applied); empty both when no grant was recorded and when the controls left no native tool — `grantRecorded`
+   * tells the two apart.
+   */
   grantedTools: z.array(z.string()),
+  /**
+   * REQ-MONITOR-049/060: whether a grant was recorded for this agent. Only where none was do the persona's declared tools
+   * stand in for `grantedTools` on the surface; a recorded grant is shown as it is, an empty one as no native tool. Until
+   * 2026-10-01 an empty list stood for "no grant recorded", so a grant the controls left empty listed every declared tool
+   * (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
+   */
+  grantRecorded: z.boolean(),
   /** REQ-MONITOR-044/060: the distinct tool names this agent has called, in first-call order (maintained incrementally, REQ-MONITOR-038). */
   calledTools: z.array(z.string()),
   /** REQ-MONITOR-044/060: the tool calls running now, by name. */

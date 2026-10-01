@@ -717,6 +717,10 @@ key (`.proof/slice-proof/results.json`), after two runs that each found a defect
 credential file where the product writes it on the running platform (`tokensDirFor`): the Windows spelling it used
 everywhere left the first launch's wait, the strays check and the sign-out check with nothing to read off Windows
 ([note](../defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md)).
+Since 2026-10-01 step 3 reads the priming from the run host's opening credential report (`lib/priming-report.mjs`,
+pinned against `LeaseReportLog`): the provider among the authenticated, nothing unresolved (REQ-PROVIDER-067/068), in
+place of "credentials: 1 provider(s) authenticated", a line nothing writes
+([note](../defects/fixed/slice-proof-asserts-a-priming-line-the-product-does-not-write.md); not yet run since).
 
 **What `pnpm live-run` does.** It is the only check here that answers to a real model rather than a scripted one,
 and the only one that spends money, so it never runs on its own: `pnpm check` does not reach it and without

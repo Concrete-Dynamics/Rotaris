@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { primingProblem } from './lib/priming-report.mjs';
 
 /**
  * The vertical slice's proof (Part K.4): sign in to OpenRouter through the product and complete one run on a
@@ -202,7 +203,11 @@ const log3 = replay('run') ? readFileSync(join(output, 'run.log'), 'utf8') : awa
 assertNoCredential(log3, 'run');
 // The lease's report is the run host's (REQ-PROVIDER-068, `LeaseReportLog`); main no longer restates it (a71-9).
 if (!/credentials: leased for openai-compatible--openrouter/.test(log3)) throw new Error('main did not lease the bearer');
-if (!/credentials: 1 provider\(s\) authenticated/.test(log3)) throw new Error('the run host did not report the priming');
+// REQ-PROVIDER-067/068: the priming report is that same opening line — the provider among the authenticated, nothing
+// unresolved. No product code writes "credentials: 1 provider(s) authenticated", which this step asserted before
+// (`docs/defects/fixed/slice-proof-asserts-a-priming-line-the-product-does-not-write.md`).
+const priming = primingProblem(log3, PROVIDER_ID);
+if (priming !== null) throw new Error(`the run host did not report the priming: ${priming}`);
 const requests = (log3.match(/model request POST (\S+)/g) ?? []).map((l) => l.replace('model request POST ', ''));
 if (!requests.some((u) => u.startsWith(`${BASE_URL}/chat/completions`))) throw new Error(`no request reached OpenRouter:\n${requests.join('\n')}`);
 if (/capture: wait for result timed out/.test(log3)) throw new Error('the run did not end within the wait');

@@ -31,7 +31,8 @@ import { parseEvals, readEval } from './lib/capture-evals.mjs';
  * 10. **REQ-MONITOR-060 at a gate an iteration precedes, under a switched entry persona** (PD-ORCH-003) — a fresh
  *     session runs an iteration as `orchestrator` with `run_start_mode: auto`; `plan` is chosen and the entry persona
  *     switched before the next prompt, whose plan cycle root calls another tool and parks; reopened, the chips mark the
- *     plan cycle root's tool `used` and the iteration root's not.
+ *     plan cycle root's tool `used` and the iteration root's not, and the run-level agent is named, and its chips drawn,
+ *     as the latest root's persona (`reviewer`: glob, read_file, todo), not the first root's.
  * 11. **REQ-MCP-062 with REQ-ORCH-153: a tool-server tool withheld at the gate is not printed** — the entry role carries
  *     the MCP fixture server `alpha`; every model request of the held cycle (launch 1, captured by the scripted client)
  *     lists the server with no tool under it, and the approved run's requests (launch 4) print and offer its tools. Until
@@ -495,6 +496,13 @@ const chips8 = probed8(INSPECTOR_CHIPS).map((c) => `${c.data['data-tool']}:${c.d
 const shown8 = probed8(INSPECTOR_NAME)[0]?.text ?? null;
 if (!chips8.includes(`${planTool}:used`)) throw new Error(`at the gate after an iteration the chips do not mark the plan cycle root's ${planTool} call used (REQ-MONITOR-060): ${JSON.stringify(chips8)} (inspector shows ${JSON.stringify(shown8)})`);
 if (chips8.includes(`${iterationTool}:used`)) throw new Error(`at the gate after an iteration the chips mark the earlier iteration root's ${iterationTool} call used: ${JSON.stringify(chips8)} (inspector shows ${JSON.stringify(shown8)})`);
+// The run-level agent is drawn as the latest root, whose calls mark its chips: named `reviewer`, with reviewer's declared
+// tools standing in (REQ-MONITOR-060). Until 2026-10-01 it was named, and its chips drawn, from the first root's persona,
+// `orchestrator`'s fourteen tools with `reviewer`'s glob marked used
+// (docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
+if (shown8 !== 'reviewer') throw new Error(`at the gate after a persona switch the run-level agent is not drawn as the latest root's persona, reviewer: ${JSON.stringify(shown8)}`);
+const tools8 = chips8.map((c) => c.slice(0, c.indexOf(':')));
+if (JSON.stringify(tools8) !== JSON.stringify(['glob', 'read_file', 'todo'])) throw new Error(`at the gate after a persona switch the chips are not reviewer's declared tools glob, read_file and todo: ${JSON.stringify(chips8)}`);
 results.toolsAtGateAfterIteration = { iterationRoots, planRoots, calls: switchCalls, inspector: shown8, chips: chips8 };
 
 /*

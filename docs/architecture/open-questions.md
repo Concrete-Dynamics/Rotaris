@@ -4069,6 +4069,21 @@ first new iteration (`PD-ORCH-003` revision 2). Building it raised OQ-102, OQ-10
 
 Until they are built, the readings above stand.
 
+**Beside it, 2026-10-01 — which persona the surfaces draw the run-level agent as (not ruled; recorded by the repair of
+[`after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`](../defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md)).**
+This question settles the name a resumed root dispatches under, not the persona the surfaces draw the run-level agent as
+once the entry persona has changed between runs (`default_persona` is read for every run, and PD-ORCH-003 lets a plan
+cycle run fresh after an iteration). The specification does not state it: REQ-MONITOR-060's stand-in is "the persona's
+declared tools", and a session that ran under two personas has two. **What the build proceeds under:** the run-level agent
+is drawn as the **latest root** — its name, model, reasoning and stand-in tools are, while a run is live, the persona its
+root runs as (`SessionRecord.entryPersona`), and at rest the persona of the transcript's last row a root authored (`agent`,
+`tool`, `thinking` or `diff`) that no child carries, a row named for one of the session's roots preferred (`entryRole`,
+`packages/ui/src/agents.ts`). That is the persona whose tools its chips show (the live run's root port and history,
+`Run.entryTools`; at rest the latest root's history, `entryToolsOf`), and, for a root resumed under a fallback, the role it
+runs as (each row's `persona`, above). No requirement was found against it; it is raised as no question of its own. Until
+2026-10-01 the first root's persona was drawn; the first repair read the last `agent` row alone, which a live root whose
+first steps were tool calls had not written yet (the verifier's finding, repaired the same day).
+
 **OQ-98 — What does the Continue action count, where does it say so, and which continues offer the decline?** *(`PD-ORCH-005` clause 6; REQ-SHELL-023, REQ-MONITOR-125 and REQ-SESSION-110, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061). Numbered OQ-71 while it was built; renumbered when it reached `main`, where OQ-71 had been taken meanwhile.)*
 
 Clause 6: "The Continue action SHALL state how many agents will resume, and SHALL offer to continue without them;
@@ -8640,3 +8655,32 @@ manual compression (Part AO) runs beside the step in flight and is not a wait of
 **What a ruling decides.** Whether a wait the run imposes, and a compression's model call, are outside the stall watch
 (as built), are stalls as REQ-MONITOR-119 reads literally, or are reported in words of their own — which REQ-ORCH-139's
 vocabulary does not have — and whether the dispatch layer's retry delays are such a wait too.
+
+**OQ-174 — Does a child's recorded MCP grant keep a tool a mid-run list update withdrew?** *(REQ-MCP-065, "Each child
+run's persisted state SHALL record both its granted native tools and its granted MCP tools"; REQ-MCP-060, a mid-run
+update "SHALL only ever narrow" the callable set, the withdrawn name "ceases to be callable at once", and narrowing "SHALL
+NOT … re-render the prompt"; REQ-MCP-114, the inspector's per-server list "sourced from the run's own recorded evidence,
+so it reads the same for a finished run as for a running one"; REQ-MCP-100, the persona window's line per server from the
+same evidence; REQ-MONITOR-060, the inspector's chips. Raised 2026-10-01 for
+[`a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md`](../defects/a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md)
+by the second triage of open defect notes, which judged it the owner's. Open.)*
+
+A child's row records its MCP grant once, when its tool port is ready (`ChildLedger.recordGrant` →
+`SessionWriter.recordChildGrant`, once per execution). When a carried server then publishes a changed tool list,
+REQ-MCP-060's recomputation narrows the callable set: the port deletes the withdrawn tool's executor from its callable
+map and logs the withdrawal (`McpHost.executorsFor`'s `onToolsChanged`, `apps/desktop/src/run-host/mcp.ts`, through the
+port's `remove`, `apps/desktop/src/run-host/tools.ts`). The row's `granted_mcp` is not rewritten, so the inspector
+(REQ-MCP-114, REQ-MONITOR-060) and the persona window (REQ-MCP-100) go on listing the withdrawn tool under its server,
+for the rest of the run and for the finished run. The specification says "granted" for what configuration allows and
+"callable" for what a mid-run update leaves, and does not say which the record holds. Not reproduced in a built app:
+`mcp-proof`'s launch 4 narrows the run-level agent, whose grant is not recorded on a row.
+
+**What the build proceeds under.** The recorded grant is the grant at readiness. A tool withdrawn mid-run stays in the
+row's `granted_mcp`, unmarked, and every surface that reads the record lists it as granted; it is no longer callable,
+and a call to it is refused per REQ-MCP-062 (`mcp-proof` launch 4). The prompt is not re-rendered (REQ-MCP-060), and the
+record, a different reader, is not rewritten either.
+
+**What a ruling decides.** Whether the record keeps the grant at readiness (as built); follows the callable set, the
+withdrawn tool dropped from the row when the update narrows it; or keeps it marked as withdrawn mid-run, so a finished
+run's record shows both what was granted and what was taken away — and, for either of the last two, whether the surfaces
+draw a withdrawn tool at all.

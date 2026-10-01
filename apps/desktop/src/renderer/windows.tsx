@@ -134,7 +134,7 @@ export function PersonaApp({ persona, initialSelect }: { persona: string; initia
   }, []);
   // REQ-MONITOR-128 / REQ-MONITOR-296: this window's surfaces read the record under its optimistic cancels of one agent.
   const session = useCancelOverlaid(state.session);
-  const entry = useMemo(() => entryOf(snapshot, state.rows, session?.agents ?? []), [snapshot, state.rows, session]);
+  const entry = useMemo(() => entryOf(snapshot, state.rows, session), [snapshot, state.rows, session]);
   // PD-ORCH-005 clause 13 (OQ-100): in REQ-CHAT-008's recovery state the run-level agent presents `paused`, as in the main
   // window — from `restingView`, the one call the Workspace and the Mission root make too.
   const needsRecovery = useNeedsRecovery(session?.id ?? null, session?.executionStatus ?? null);

@@ -10,6 +10,12 @@ withdrawn tool as granted for the rest of the run and for the finished run. The 
 Noticed 2026-10-01 while repairing `a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md` (fin2).
 Not reproduced in a built app (mcp-proof's launch 4 narrows the run-level agent, whose grant is not recorded on a row).
 
+**Open with the owner as OQ-174** (raised 2026-10-01, fin3): whether the recorded grant keeps a tool a server withdrew
+mid-run, drops it, or marks it withdrawn is the owner's to rule, since the specification says "granted" for what
+configuration allows and "callable" for what an update leaves. The build proceeds under the grant at readiness, the
+behaviour this note describes ([`open-questions.md`](../architecture/open-questions.md), OQ-174). The note stays open
+until that ruling is built.
+
 ## Specs
 
 - `REQ-MCP-065`: a child's persisted state records its granted MCP tools per server. A tool REQ-MCP-060 withdrew is no

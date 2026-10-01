@@ -142,6 +142,27 @@ new run whose ports are built with the gate released (pinned in `run/plan-gate.t
 `an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md`; the **runtime view**'s MCP surface says so. No
 package, edge, process, message kind, channel, command or store column changed.
 
+**The run-level agent is drawn as the latest root's persona, not the first root's (REQ-MONITOR-060/069, PD-ORCH-003,
+OQ-97).** The renderer's `entryOf` named the run-level agent, and chose the declared tools standing in for its chips, its
+model and its reasoning, from the transcript's first agent row no child carries, while its chips were marked from the
+latest root's history. It now hands to `packages/ui`'s new `entryRole`: while a run is live, the persona its root runs as,
+`SessionRecord.entryPersona` (new, from `Run.entryPersona`; null with no live run), so the name is the root's from the run's
+start, before that root has written a row; at rest, the last row a root authored of any kind a turn writes under its
+agent's name (`agent`, `tool`, `thinking`, `diff`), a row named for one of `SessionRecord.entryRoots` preferred. (The first
+repair read the last `agent` row alone, and a live root whose first steps were tool calls was drawn as the root before it:
+the verifier's finding.) This repairs
+`after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`; the **runtime view**'s
+`entryTools` paragraph says so, and the reading is recorded beside OQ-97. `SessionRecord` gains one nullable field; no
+package, edge, process, message kind, channel, command or store column changed.
+
+**A grant the controls left empty of native tools is drawn as none, not as the declared tools (REQ-MONITOR-049/060,
+REQ-TOOLS-006, REQ-MCP-065).** `recordChildGrant` adds `recorded: true` to the `granted_mcp` object it writes, and the
+projection carries it as the new `AgentRecord.grantRecorded` (a contract field); `resolvedTools` lets the declared tools
+stand in only where no grant was recorded. A row without the marker — the spawn's, and every row written before
+2026-10-01 — keeps the old reading, `[]` as no grant recorded. This repairs
+`a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md`; the **runtime view**'s `AgentRecord` passage and its
+`children` row say so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A child's row records the grant its port put in force, not its persona's declared tools (REQ-MCP-065, REQ-TOOLS-006,
 REQ-MCP-114).** The spawn wrote `children.granted_tools` from the persona's declared tools and `granted_mcp` from its MCP
 surface before any control, so a tool `coordinator_only`, `read_only`, `tool_restrictions`, the `restricted` preset or the

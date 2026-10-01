@@ -16,7 +16,8 @@
  *                 which sends `traceability.operate` (check, regenerate, regenerate) against a second copy of the
  *                 fixture and a `check` over the scale tree cancelled mid-pass through `traceability.cancel` — so
  *                 the real worker thread, the shared cancel flag and the process protocol execute before merge;
- *                 `process-results.json`.
+ *                 then the board's command family over the fixture, and REQ-TRACE-512's busy refusal over the scale
+ *                 tree, the second check answered while the first is still unanswered; `process-results.json`.
  *
  * `--skip-build` skips the desktop build. The scale tree and the fixture copies are removed at the end (they are
  * TypeScript the linter would otherwise parse); the numbers and texts stay in the JSON and log files.
@@ -185,8 +186,22 @@ try {
   const bb = viaBoard(proc.boardBaselines);
   expect(bb !== null && bb.result.ok && bb.result.value.length === 3 && proc.boardBaselines.changed, 'the baseline update through the board did not write three baselines with the generation moved');
   expect(viaBoard(proc.boardCompare) !== null && proc.boardCompare.changed === undefined, 'compare through the board did not answer in the operation reply shape, or moved the generation');
-  const busy = proc.boardBusy.map(viaBoard);
-  expect(busy.filter((b) => b && b.result.ok === false && b.result.error.kind === 'busy').length === 1 && busy.filter((b) => b && b.result.ok === true).length === 1, `two concurrent checks did not yield exactly one busy refusal (REQ-TRACE-512): ${JSON.stringify(busy.map((b) => b && b.result.ok))}`);
+  // REQ-TRACE-512: the second check, posted while the first was unanswered, is refused `busy`; the first is not refused,
+  // and answers `cancelled` (the cancel found it in flight) or ok (it finished first). The timings make a red readable.
+  const [busyFirst, busySecond] = proc.boardBusy.map(viaBoard);
+  // Recorded before it is asserted, so `results.json` carries both replies and their timings on a red as on a pass.
+  results.busyPair = {
+    replies: [busyFirst, busySecond].map((b) => (b === null ? 'unreadable' : b.result.ok ? 'ok' : b.result.error.kind)),
+    serviceMs: [busyFirst, busySecond].map((b) => (b === null ? null : b.elapsedMs)),
+    ...proc.boardBusyTiming,
+    cancelFoundTheFirst: proc.boardBusyCancel && proc.boardBusyCancel.value ? proc.boardBusyCancel.value.cancelled : null,
+  };
+  const busyRead = JSON.stringify(results.busyPair);
+  expect(results.busyPair.replies[1] === 'busy', `a second check posted while the first was in flight was not refused busy (REQ-TRACE-512): ${busyRead}`);
+  // The service takes its requests in order, so a second answered while the first is still unanswered was decided while the
+  // first was in flight: that is what makes the refusal evidence rather than a race that happened to line up.
+  expect(results.busyPair.firstUnansweredAtSecondReply === true, `the first check had answered before the second did, so it was not held in flight (REQ-TRACE-512): ${busyRead}`);
+  expect(['ok', 'cancelled'].includes(results.busyPair.replies[0]), `the first of the two checks answered neither ok nor cancelled (REQ-TRACE-512): ${busyRead}`);
   const boardValue = proc.board.value;
   expect(boardValue && boardValue.source.kind === 'store' && boardValue.cards.length === fixtureResults.records.length, `the board after the operations: ${JSON.stringify(boardValue).slice(0, 200)}`);
   // REQ-TRACE-258/270: the projection joins the verification state the pass now supplies — no card without one.
@@ -212,6 +227,7 @@ console.log(`  parser (TypeScript ${results.spike.parser.version}) over ${result
 console.log(`  process path: check ${results.process.check.elapsedMs} ms, regenerate ${results.process.regenerate1.elapsedMs} ms, cancelled check ${results.process.cancelledCheck.elapsedMs} ms`);
 for (const line of growthLines) console.log(`  growth: ${line}`);
 console.log(`  board path (requirements.operation): check ${results.boardPath.checkMs} ms, regenerate ${results.boardPath.regenerateMs} ms, baselines ${results.boardPath.baselinesMs} ms; generation ${results.boardPath.generation}; the card's sentences asserted over the real replies`);
+console.log(`  busy pair over the scale tree: first ${results.busyPair.replies[0]} at ${results.busyPair.firstAnsweredMs} ms (service ${results.busyPair.serviceMs[0]} ms), second ${results.busyPair.replies[1]} at ${results.busyPair.secondAnsweredMs} ms (posted at ${results.busyPair.secondPostedMs} ms; the first still unanswered)`);
 
 /** The Electron driver: fork the built workspace service as a utilityProcess and speak the process protocol to it. */
 function driverSource() {
@@ -271,8 +287,24 @@ app.whenReady().then(async () => {
     results.boardRegenerate = await board({ name: 'requirements.operation', operation: 'regenerate' });
     results.boardBaselines = await board({ name: 'requirements.operation', operation: 'baselines' });
     results.boardCompare = await board({ name: 'requirements.operation', operation: 'compare' });
-    results.boardBusy = await Promise.all([board({ name: 'requirements.operation', operation: 'check' }), board({ name: 'requirements.operation', operation: 'check' })]);
     results.board = await board({ name: 'requirements.board' });
+    // REQ-TRACE-512's busy refusal, with the first check held in flight for real: two checks over the 11-requirement
+    // fixture raced, since a first that finished in ~8 ms before the service took the second off its channel left both
+    // answering ok (docs/defects/fixed/traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md).
+    // The pair runs over the scale tree, opened as the workspace, whose check lasts long enough to cancel mid-pass above;
+    // the second is posted only while the first is unanswered, the first is then cancelled, and both replies are timed.
+    results.scaleOpened = await request({ kind: 'workspace.open', workspaceRoot: scaleRoot });
+    const scaleBoard = (command) => request({ kind: 'requirements.command', workspaceRoot: scaleRoot, command: { workspace: scaleRoot, ...command }, actor: { kind: 'system' } });
+    const busyStarted = Date.now();
+    const busyTiming = { firstAnsweredMs: null };
+    const first = scaleBoard({ name: 'requirements.operation', operation: 'check' }).then((r) => { busyTiming.firstAnsweredMs = Date.now() - busyStarted; return r; });
+    busyTiming.secondPostedMs = Date.now() - busyStarted; // in the same tick: the first cannot have answered yet
+    const second = await scaleBoard({ name: 'requirements.operation', operation: 'check' });
+    busyTiming.secondAnsweredMs = Date.now() - busyStarted;
+    busyTiming.firstUnansweredAtSecondReply = busyTiming.firstAnsweredMs === null;
+    results.boardBusyCancel = await scaleBoard({ name: 'requirements.cancel', operation: 'check' });
+    results.boardBusy = [await first, second];
+    results.boardBusyTiming = busyTiming;
     shuttingDown = true;
     await request({ kind: 'shutdown', deadlineMs: 5000 }, 10000);
     fs.writeFileSync(outFile, JSON.stringify(results, null, 2));

@@ -49,7 +49,7 @@ reopened inspector marks `glob` used and not `read_file`. On the code before the
 
 **Noticed while building it, not repaired:** the reopened inspector names that run-level agent `orchestrator` and draws
 `orchestrator`'s declared tools, the first root's persona rather than the latest's —
-[`../after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`](../after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
+[`after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`](after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md) (repaired since).
 
 ## Specs
 

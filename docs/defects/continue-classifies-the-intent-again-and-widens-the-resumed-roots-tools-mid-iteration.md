@@ -83,6 +83,11 @@ The header half is repaired; the rest stays open under [OQ-162](../architecture/
   its iteration (24 tools to 29 in the live run), and clause 14's fingerprint still raises
   `resumed_under_changed_instructions` although no persona changed; the classification still adds its time (6.6 s in
   the live run) to the Continue. Whether any of this changes is the ruling's.
-- **Not shown in the built app.** The live-run `resume` scenario that would show the header in `resume.png` was not run
-  for this repair (see the round's report).
+- **Shown in the built app** by the live run's `resume` scenario at this repair (pack `.live-run/runs/2026-10-01T15-19-31-213Z/`
+  of the `fin1-stallandinte` worktree, git-ignored; the self-hosted `katalyst` endpoint): the launch's classification
+  timed out and fell back (`moderate_feature`, "the classification call timed out after 12 s"); the Continue's was
+  unusable too and carried the launch's intent over (timeline #12, `carried_over: true`); and `resume/resume.png`'s header
+  reads "Intent: moderate_feature (continued from the previous run)", the continuation's status, where it read the
+  launch's fallback before. The categories did not diverge this time, so the grant did not change and no warning was
+  raised; the case where they diverge is the test's.
 

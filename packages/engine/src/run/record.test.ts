@@ -584,7 +584,7 @@ describe('PD-ORCH-005 clause 14: the fingerprint an agent started with', () => {
     await new Promise((r) => setTimeout(r, 5));
     clock.advance(30_000);
     expect((await s.sessions.running(sid)!).status).toBe('completed');
-    expect(dal.timelineOf(sid).map((t) => t.name)).toContain('child_timeout_fallback');
+    expect(dal.timelineOf(sid).map((t) => t.name)).toContain('fallback_model');
     // The precondition: each agent's later request carried instructions its first did not.
     const requests = (persona: string) => s.client.requests.filter((r) => personaOf(r) === persona).map(systemOf);
     for (const persona of ['orchestrator', 'child']) {

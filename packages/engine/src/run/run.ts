@@ -8,7 +8,7 @@ import type { Committed, SessionWriter } from '../session-writer.js';
 import { Aggregates } from './aggregates.js';
 import { classifyStop, statusForResult, stopCondition, summarise, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
-import { Todo, type Task, type TodoDocument } from './todo.js';
+import { taskLine, Todo, type Task, type TodoDocument } from './todo.js';
 import { planRequestSection, resumedWorkSection } from './plan-text.js';
 import { recordSteeringInjected, runTurn, steeringMessage, type ToolPort, type TurnOutcome } from './turn.js';
 import { childCompletedFields, IterationChildren, refreshing } from '../children/orchestration.js';
@@ -1226,7 +1226,7 @@ export class Run {
 
   /** REQ-MONITOR-084 (4): the run-level plan as lines, for the entry agent's own compression. */
   private plannerTodoLines(): readonly string[] {
-    return this.todo.toDocument().phases.flatMap((phase) => phase.tasks.map((task) => `[${task.state}] ${phase.name} — ${task.text}`));
+    return this.todo.toDocument().phases.flatMap((phase) => phase.tasks.map((task) => `[${task.state}] ${phase.name} — ${taskLine(task)}`));
   }
 
   /** The per-agent ladder deps shared by the root and every child (the cell is the agent's own). */
@@ -1735,11 +1735,15 @@ export class Run {
     return this.pauseRequested;
   }
 
-  /** REQ-CHAT-040: every QUEUED prompt becomes a task in phase "Queued Prompts"; the supervisor sees a user instruction. */
+  /**
+   * REQ-CHAT-040 / REQ-ORCH-071: every QUEUED prompt becomes a task in phase "Queued Prompts", named "Queued Prompt: <first 8
+   * characters of the prompt id>" and carrying the prompt text as its content (acceptance A28); the supervisor sees a user
+   * instruction.
+   */
   private consumeQueued(): void {
     const r = this.deps.writer.triggerQueuedPrompts();
     if (!r.ok || r.value.length === 0) return;
-    for (const p of r.value) this.todo.appendTask('Queued Prompts', p.prompt_id, p.content);
+    for (const p of r.value) this.todo.appendTask('Queued Prompts', p.prompt_id, p.content, `Queued Prompt: ${p.prompt_id.slice(0, 8)}`);
     this.deps.supervisorFor?.(this.rootId).noteUserInstruction();
     this.saveRunning({});
   }

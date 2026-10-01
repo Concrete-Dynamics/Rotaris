@@ -45,6 +45,25 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A queued prompt's task is named "Queued Prompt: <id>" (REQ-CHAT-040, REQ-ORCH-071, OQ-117, R-067).** A planner todo
+task carries an optional `name` beside its text (`run/todo.ts`), and `consumeQueued` names a queued prompt's task
+`Queued Prompt: <first 8 characters of the prompt id>` with the prompt as its text. The pane and the handoff's todo list
+(REQ-SESSION-115's display titles) draw the name (`taskTitle`), and so does the plan gate's implied-task list
+(`planTodoLines` in `packages/ui/src/PlanGate.tsx`, which reads the stored todo itself), the compression's todo lines carry the name and then the
+content (`taskLine`), and a rename renames the name. This repairs
+`a-queued-prompts-task-is-not-named-queued-prompt.md` (acceptance A28). The **runtime view**'s iteration-boundary diagram
+says so. No package, edge, process, message kind, channel, command or store column changed; the todo document gains an
+optional field inside its existing column.
+
+**The fallbacks are named by REQ-ORCH-139's vocabulary, and the vocabulary is checked (REQ-ORCH-139, REQ-NOTIFY-090,
+OQ-157, R-067).** The ladder's same-tier change writes `quota_fallback_model` and the `quota_fallback` issue, its
+unresponsive-model fallback `llm_unresponsive` (entry and issue), and the children's hard-timeout retry `fallback_model`
+and the `timeout_fallback` issue, where they wrote `model_fallback`, `unresponsive_model_fallback`/`unresponsive_model`
+and `child_timeout_fallback`. `tools/check-timeline-vocabulary.mjs`, in `pnpm lint`, fails on a timeline name in no
+vocabulary; the names the product writes that no list has are held there by OQ-157. This partly repairs
+`the-run-writes-timeline-events-outside-its-closed-vocabulary.md` (acceptance A29). The **runtime view**'s ladder paragraph
+and its `timeline` row say so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A crash settles its cut call's ring row (REQ-SESSION-129, REQ-MONITOR-105, ADR-0024, R-067).** An orderly end settles
 every open `tool_calls` row when the run's ports close; a crash closes none, so after the crash record settled a call's
 transcript row its ring row stayed `running` for good. `recordCrash` now settles every ring row still `running`

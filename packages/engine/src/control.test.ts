@@ -54,9 +54,11 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     const prompts = dal.queuedPromptsOf(sid);
     expect(prompts).toHaveLength(1);
     expect(prompts[0]).toMatchObject({ prompt_id: promptId, content: 'then do this instead', status: 'TRIGGERED' });
-    const todo = JSON.parse(row.todo!) as { phases: { name: string; tasks: { id: string; text: string; state: string }[] }[] };
+    const todo = JSON.parse(row.todo!) as { phases: { name: string; tasks: { id: string; name?: string; text: string; state: string }[] }[] };
     expect(todo.phases.map((p) => p.name)).toEqual(['main', 'Queued Prompts']);
-    expect(todo.phases[1]!.tasks[0]).toMatchObject({ id: promptId, text: 'then do this instead', state: 'complete' });
+    // REQ-CHAT-040 / REQ-ORCH-071 (acceptance A28): the task is NAMED "Queued Prompt: <first 8 characters of the prompt id>"
+    // and carries the prompt text as its content.
+    expect(todo.phases[1]!.tasks[0]).toMatchObject({ id: promptId, name: `Queued Prompt: ${promptId.slice(0, 8)}`, text: 'then do this instead', state: 'complete' });
     expect(dal.timelineOf(sid).map((t) => t.name)).toEqual(expect.arrayContaining(['prompt_queued', 'prompt_edited', 'prompt_triggered']));
     // A run that ended answers false; a triggered prompt cannot be edited or removed.
     expect(sessions.control({ op: 'removeQueuedPrompt', sessionId: sid, args: { promptId } })).toEqual({ ok: false });

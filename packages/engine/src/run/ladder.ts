@@ -131,8 +131,10 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
       cell.fallbackAttempted = true;
       const seconds = r.llmResponseTimeoutMs / 1000;
       const message = `${agent} received no model event from ${provider}/${modelId} within ${seconds} s; the call was closed and re-run on the fallback model ${fbProvider}/${fb.model.modelId}.`;
-      writer.appendTimeline('unresponsive_model_fallback', 'rotaris', message, { agent, from_provider: provider, from_model: modelId, to_provider: fbProvider, to_model: fb.model.modelId, threshold_seconds: seconds });
-      writer.recordIssue({ kind: 'unresponsive_model', severity: 'warning', actor: agent, message, metadata: { requested_model: `${provider}/${modelId}`, fallback_model: `${fbProvider}/${fb.model.modelId}`, threshold_seconds: seconds } });
+      // REQ-ORCH-139: the vocabulary's `llm_unresponsive` names both the entry and the issue (A29; formerly
+      // `unresponsive_model_fallback` and `unresponsive_model`, names no list has).
+      writer.appendTimeline('llm_unresponsive', 'rotaris', message, { agent, from_provider: provider, from_model: modelId, to_provider: fbProvider, to_model: fb.model.modelId, threshold_seconds: seconds });
+      writer.recordIssue({ kind: 'llm_unresponsive', severity: 'warning', actor: agent, message, metadata: { requested_model: `${provider}/${modelId}`, fallback_model: `${fbProvider}/${fb.model.modelId}`, threshold_seconds: seconds } });
       deps.warn(message);
       cell.attempted.add(pairKey(provider, modelId));
       cell.model = withSettings(catalogue, fb);
@@ -193,8 +195,11 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
         cell.attempted.add(pairKey(candidate.provider, candidate.model.modelId));
         const condition = cls === 'quota_exhausted' ? 'quota exhaustion' : 'rate limit';
         const message = `${agent} moved from ${provider}/${modelId} to ${candidate.provider}/${candidate.model.modelId} after a ${condition} response (same tier, different provider${exhausted ? '; the provider is marked exhausted' : ''}).`;
-        writer.appendTimeline('model_fallback', 'rotaris', message, { agent, from_provider: provider, from_model: modelId, to_provider: candidate.provider, to_model: candidate.model.modelId, to_key: candidate.key, condition: cls, provider_exhausted: exhausted });
-        writer.recordIssue({ kind: 'model_fallback', severity: 'warning', actor: agent, message, metadata: { requested_model: `${provider}/${modelId}`, fallback_model: `${candidate.provider}/${candidate.model.modelId}`, provider_exhausted: exhausted, condition: cls } });
+        // REQ-ORCH-139 / REQ-NOTIFY-090: the vocabulary's words for the same-tier change — the `quota_fallback_model` entry and
+        // the `quota_fallback` issue, under a rate limit as under exhaustion (REQ-NOTIFY-082's "usage limit"); A29, formerly
+        // `model_fallback` for both, a name no list has. `condition` in the metadata still says which it was.
+        writer.appendTimeline('quota_fallback_model', 'rotaris', message, { agent, from_provider: provider, from_model: modelId, to_provider: candidate.provider, to_model: candidate.model.modelId, to_key: candidate.key, condition: cls, provider_exhausted: exhausted });
+        writer.recordIssue({ kind: 'quota_fallback', severity: 'warning', actor: agent, message, metadata: { requested_model: `${provider}/${modelId}`, fallback_model: `${candidate.provider}/${candidate.model.modelId}`, provider_exhausted: exhausted, condition: cls } });
         deps.warn(message);
         cell.model = withSettings(catalogue, { model: candidate.model, thinking: candidate.thinking });
         continue;

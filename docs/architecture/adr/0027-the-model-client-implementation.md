@@ -215,11 +215,11 @@ a 429 with `retry-after: 2` waited 2 s — the header read "Resumes automaticall
 completed, `model_wait {wait_seconds: 2, auto_resume: true}`, no `transient_llm_error`; a 429 with no header waited 60 s
 locally (header "1:00", the wording naming no interval), `cancel` from the header ended the run `user_cancelled` / `paused`
 with the condition as its error and main raised REQ-NOTIFY-063's notice with "Open Models settings"; quota with a
-snapshot-recorded candidate moved `scripted/alpha → scripted-b/beta` transparently (`model_fallback`, `model_exhausted`,
+snapshot-recorded candidate moved `scripted/alpha → scripted-b/beta` transparently (`model_fallback` — *`quota_fallback_model` since 2026-10-01, A29* — `model_exhausted`,
 the warning issue, no wait); quota with no candidate waited indefinitely ("Resumes only when you decide", provider marked
 exhausted), `setModel` from the header rebuilt and completed on `beta`, `model_override` persisted, and the relaunched
 session's continuation called `scripted-b/beta` and nothing else; an unresponsive model fell back after exactly 30 s
-(`unresponsive_model_fallback`), and with no fallback the call was still open at 36 s; a child hung under `child_timeout: 8`
+(`unresponsive_model_fallback` — *`llm_unresponsive` since 2026-10-01, A29*), and with no fallback the call was still open at 36 s; a child hung under `child_timeout: 8`
 was retried once on the role's fallback and succeeded, and failed with `Child timed out after 8s` without one; a 503 took one
 transient retry after 1 s and a 401 failed at once with no retry and the ordinary failure notice.
 

@@ -214,7 +214,7 @@ await scenarioRun('retry-after', async () => {
   const meta = JSON.parse(wait.metadata);
   expect(meta.wait_seconds === 2 && meta.auto_resume === true && meta.provider_exhausted === false && meta.attempt === 1, `the wait issue is wrong: ${wait.metadata}`);
   expect(!kinds.some((i) => i.kind === 'transient_llm_error'), 'a 429 was spent from the transient budget (REQ-ORCH-092)');
-  expect(!list.includes('model_fallback'), 'a same-tier fallback happened with no candidate configured');
+  expect(!list.includes('quota_fallback_model'), 'a same-tier fallback happened with no candidate configured');
   expect(rows.some((b) => b.startsWith('Waiting on a provider limit') && b.includes('Wait 2 s')), `no wait row naming the interval: ${rows.join(' | ')}`);
   const during = probes(r.log, 'probe-at ~6000');
   const header = during[0]?.found[0];
@@ -260,13 +260,13 @@ await scenarioRun('same-tier', async () => {
   const kinds = issues(db, row.session_id);
   db.close();
   expect(row.execution_status === 'completed', `the run did not complete on the fallback: ${JSON.stringify(row)}`);
-  const fallback = list.find((t) => t.name === 'model_fallback');
-  expect(fallback !== undefined, `no model_fallback timeline entry: ${list.map((t) => t.name).join(',')}`);
+  const fallback = list.find((t) => t.name === 'quota_fallback_model');
+  expect(fallback !== undefined, `no quota_fallback_model timeline entry: ${list.map((t) => t.name).join(',')}`);
   const meta = JSON.parse(fallback.metadata);
   expect(meta.from_provider === 'scripted' && meta.from_model === 'alpha' && meta.to_provider === 'scripted-b' && meta.to_model === 'beta' && meta.provider_exhausted === true, `the fallback names the wrong pair: ${fallback.metadata}`);
   const exhausted = list.find((t) => t.name === 'model_exhausted');
   expect(exhausted !== undefined && JSON.parse(exhausted.metadata).provider === 'scripted', `the exhausted pair was not recorded: ${exhausted?.metadata}`);
-  expect(kinds.some((i) => i.kind === 'model_fallback' && i.severity === 'warning'), 'no warning issue for the fallback (REQ-NOTIFY-090)');
+  expect(kinds.some((i) => i.kind === 'quota_fallback' && i.severity === 'warning'), 'no warning issue for the fallback (REQ-NOTIFY-090)');
   expect(!kinds.some((i) => i.kind === 'model_wait'), 'the run waited although a candidate existed');
   const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted/beta', `the calls did not move to beta: ${JSON.stringify(calls)}`);
@@ -291,7 +291,7 @@ await scenarioRun('override', async () => {
   const override = list.find((t) => t.name === 'model_override');
   expect(override !== undefined && JSON.parse(override.metadata).model_key === 'beta', `no model_override entry: ${list.map((t) => t.name).join(',')}`);
   expect(rows.some((b) => b.includes('Model changed to beta during the wait')), `no system row for the change: ${rows.join(' | ')}`);
-  expect(!list.some((t) => t.name === 'model_fallback'), 'a same-tier fallback happened with no candidate');
+  expect(!list.some((t) => t.name === 'quota_fallback_model'), 'a same-tier fallback happened with no candidate');
   const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted-b/beta', `the run did not resume on beta: ${JSON.stringify(calls)}`);
   results.override = { status: row.execution_status, headerDuringWait: header.text, chooser: r.value.chosen.kind, override: JSON.parse(override.metadata), calls, headerAfterChange: r.value.after.length, png: r.png, elapsedMs: r.elapsedMs };
@@ -316,9 +316,9 @@ await scenarioRun('unresponsive', async () => {
   const kinds = issues(db, row.session_id);
   db.close();
   expect(row.execution_status === 'completed', `the run did not complete on the fallback: ${JSON.stringify(row)}`);
-  const entry = list.find((t) => t.name === 'unresponsive_model_fallback');
-  expect(entry !== undefined && JSON.parse(entry.metadata).threshold_seconds === 30 && JSON.parse(entry.metadata).to_model === 'beta', `no unresponsive_model_fallback entry: ${list.map((t) => t.name).join(',')}`);
-  expect(kinds.some((i) => i.kind === 'unresponsive_model'), 'no unresponsive_model issue (REQ-ORCH-090)');
+  const entry = list.find((t) => t.name === 'llm_unresponsive');
+  expect(entry !== undefined && JSON.parse(entry.metadata).threshold_seconds === 30 && JSON.parse(entry.metadata).to_model === 'beta', `no llm_unresponsive entry: ${list.map((t) => t.name).join(',')}`);
+  expect(kinds.some((i) => i.kind === 'llm_unresponsive'), 'no llm_unresponsive issue (REQ-ORCH-090)');
   const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted-b/beta', `the calls did not move to the fallback: ${JSON.stringify(calls)}`);
   const at = /unresponsive-model timer .*?(\d+) ms|no model event .* within (\d+) s/.exec(r.log);
@@ -332,7 +332,7 @@ await scenarioRun('unresponsive-no-fallback', async () => {
   const list = names(db, row.session_id).map((t) => t.name);
   db.close();
   expect(row.execution_status === 'running', `with no fallback the call should still be waiting at 36 s: ${JSON.stringify(row)}`);
-  expect(!list.includes('unresponsive_model_fallback'), 'a fallback fired although none is configured');
+  expect(!list.includes('llm_unresponsive'), 'a fallback fired although none is configured');
   expect(modelCalls(r.log).filter((c) => c.who === 'orchestrator').length === 1, 'a second call was made with no fallback');
   results.unresponsiveNoFallback = { status: row.execution_status, calls: modelCalls(r.log), png: r.png, elapsedMs: r.elapsedMs };
 });
@@ -349,8 +349,8 @@ await scenarioRun('child-timeout', async () => {
   db.close();
   expect(row.execution_status === 'completed', `the run did not complete: ${JSON.stringify(row)}`);
   expect(children.length === 1 && children[0].state === 'succeeded', `the child did not succeed on the fallback: ${JSON.stringify(children)}`);
-  const entry = list.find((t) => t.name === 'child_timeout_fallback');
-  expect(entry !== undefined && JSON.parse(entry.metadata).timeout_seconds === 8 && JSON.parse(entry.metadata).to_model === 'beta', `no child_timeout_fallback entry: ${list.map((t) => t.name).join(',')}`);
+  const entry = list.find((t) => t.name === 'fallback_model');
+  expect(entry !== undefined && JSON.parse(entry.metadata).timeout_seconds === 8 && JSON.parse(entry.metadata).to_model === 'beta', `no fallback_model entry: ${list.map((t) => t.name).join(',')}`);
   const childCalls = modelCalls(r.log).filter((c) => c.who === 'child');
   expect(childCalls[0]?.model === 'scripted/alpha' && childCalls[1]?.model === 'scripted-b/beta', `the child was not retried on beta: ${JSON.stringify(childCalls)}`);
   results.childTimeoutFallback = { child: children[0].state, fallback: JSON.parse(entry.metadata), childCalls, png: r.png, elapsedMs: r.elapsedMs };
@@ -367,7 +367,7 @@ await scenarioRun('child-timeout-no-fallback', async () => {
   expect(children.length === 1 && children[0].state === 'failed', `the child did not fail at the timeout: ${JSON.stringify(children)}`);
   const report = JSON.parse(children[0].report);
   expect(report.errors.some((e) => e.message === 'Child timed out after 8s'), `the report does not carry the timeout text: ${children[0].report}`);
-  expect(kinds.includes('timeout') && !list.includes('child_timeout_fallback'), `the timeout issue or a spurious fallback: ${kinds.join(',')} / ${list.join(',')}`);
+  expect(kinds.includes('timeout') && !list.includes('fallback_model'), `the timeout issue or a spurious fallback: ${kinds.join(',')} / ${list.join(',')}`);
   results.childTimeoutNoFallback = { child: children[0].state, errors: report.errors.map((e) => e.message), status: row.execution_status, png: r.png, elapsedMs: r.elapsedMs };
 });
 

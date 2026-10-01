@@ -115,6 +115,36 @@ describe('the ledger and the scheduler against a real store (ADR-0012)', () => {
     expect(dal.eventsOfKind(sid, 'child.spawn')).toHaveLength(4);
   });
 
+  it('REQ-ORCH-044 with REQ-MONITOR-071/044 and REQ-CHAT-069 (OQ-158): no child at any depth takes a name a root of the session carries — the current root\'s persona and canonical name, and each earlier root\'s — so no child is presented as the run-level agent too', () => {
+    const nameOf = (r: ReturnType<typeof spawn>): string => (r.ok ? r.value.row.canonical_name : `rejected: ${r.error.reason}`);
+    // An earlier iteration's root, of a persona the canonicaliser rewrites: its rows carry `Lead Planner`, its publishes `Lead-Planner`.
+    expect(writer.openIteration({ iteration: 7, root_task_id: 'bg_0000e1a1', root_canonical_name: 'Lead-Planner', root_persona: 'Lead Planner', todo_task_id: '', task: 'earlier' })).toMatchObject({ ok: true, value: true });
+    const l = ledger();
+    expect(l.root).toMatchObject({ canonicalName: 'orchestrator', persona: 'orchestrator' });
+    const someone = spawn(l, 'someone');
+    const someoneId = someone.ok ? someone.value.row.task_id : '';
+    // A grandchild named like the current root: the ledger kept only the root's direct children off its name.
+    expect(nameOf(spawn(l, 'orchestrator', { parentId: someoneId, parentDepth: 1 }))).toBe('orchestrator_1');
+    // A direct child named like the current root, as before.
+    expect(nameOf(spawn(l, 'orchestrator'))).toBe('orchestrator_1');
+    // A child named like an earlier root, directly under the root and deeper.
+    expect(nameOf(spawn(l, 'Lead Planner'))).toBe('Lead-Planner_1');
+    expect(nameOf(spawn(l, 'Lead Planner', { parentId: someoneId, parentDepth: 1 }))).toBe('Lead-Planner_1');
+    // A name no root carries is the model's own, and a reused one still counts up under its parent alone (REQ-ORCH-044).
+    expect(nameOf(spawn(l, 'survey', { parentId: someoneId, parentDepth: 1 }))).toBe('survey');
+    expect(nameOf(spawn(l, 'survey'))).toBe('survey');
+    expect(nameOf(spawn(l, 'orchestrator', { parentId: someoneId, parentDepth: 1 }))).toBe('orchestrator_2');
+  });
+
+  it('REQ-ORCH-044 (OQ-158): a resumed root\'s canonical name and the entry persona it runs as are kept off its grandchildren too', () => {
+    const nameOf = (r: ReturnType<typeof spawn>): string => (r.ok ? r.value.row.canonical_name : `rejected: ${r.error.reason}`);
+    const l = new ChildLedger({ dal, writer, sessionId: sid, iteration: 1, budget: { maxDepth: 3, maxTotal: 20, maxActive: 6 }, modelCap: () => null, warn: (m) => warnings.push(m), rootRecord: { taskId: 'bg_0000e1a2', canonicalName: 'Lead-Planner', persona: 'orchestrator', task: '', iteration: 1, depth: 0, state: 'running' } });
+    const a = spawn(l, 'a');
+    const aId = a.ok ? a.value.row.task_id : '';
+    expect(nameOf(spawn(l, 'Lead Planner', { parentId: aId, parentDepth: 1 }))).toBe('Lead-Planner_1');
+    expect(nameOf(spawn(l, 'orchestrator', { parentId: aId, parentDepth: 1 }))).toBe('orchestrator_1');
+  });
+
   it('REQ-TOOLS-152: an inherited-context id naming no task at all refuses the call with no record; one naming a failed or unfinished task is ignored; a completed sibling with its report is carried once', () => {
     const l = ledger();
     const done = spawn(l, 'done'); const idDone = done.ok ? done.value.row.task_id : '';
@@ -3169,6 +3199,45 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         expect(byName(sid, 'stuck')).toMatchObject({ state: 'paused', interruption: 'stop' });
         expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', interruption: 'stop' }]);
         expect(dal.getLock(sid)).toBeUndefined();
+      });
+
+      /*
+       * REQ-MONITOR-044/052 (acceptance A20, the verifier's finding on its repair): between a root's return and the end of
+       * the rest that waits for its children, the root's calls are in the total — they joined it with the root's outcome —
+       * and the run is still live. The run-level agent's figure there is the root's share alone, never that plus the
+       * tracker's count of the same calls (`Run.entryUncountedToolCalls` is cleared as its outcome is counted).
+       */
+      it('REQ-MONITOR-044/052: while the rest waits for a child after the root returned, the run-level agent\'s count holds the root\'s calls once', async () => {
+        // The root's two calls are recorded through the writer as the gate records them, so the tracker counts them too.
+        let ids = 0;
+        const recorded = (ctx: ToolPortContext, name: string, result: Promise<PortToolResult>): Promise<PortToolResult> => {
+          const open = { call_id: `r${++ids}`, agent_name: ctx.agentName, tool_name: name, args: {} };
+          const ordinal = ctx.writer.openToolCall(open);
+          return result.then((r) => { if (ordinal.ok) ctx.writer.settleToolCall(ordinal.value, open, { status: 'ok', elapsed_ms: 1, is_error: false, result: r.text }); return r; });
+        };
+        const tools: TestTool = (name, _a, ctx, builtIn) => {
+          if (name === 'hang') return new Promise<PortToolResult>(() => undefined);
+          if (name === 'slow') return recorded(ctx, name, new Promise<PortToolResult>((r) => { clock.after(millis(29_000), () => r({ text: 'slow', isError: false, status: 'ok', durationMs: 1, label: 'slow', args: {} })); }));
+          if (name === 'delegate' && ctx.agentName === 'orchestrator') return recorded(ctx, name, builtIn());
+          return undefined;
+        };
+        const snapshots: SessionRecord[] = [];
+        const publisher: Publisher = { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } };
+        const { sessions } = sessionsWith((persona, turn) => {
+          if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'stuck', task: 'TASK: stuck' } }, { callId: 's1', name: 'slow', args: {} }]) : answer('never');
+          return toolCalls([{ callId: 'h2', name: 'hang', args: {} }], 'Hanging.');
+        }, { tool: tools, publisher });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool' && r.tool_name === 'slow') && dal.residentRows(sid).some((r) => r.kind === 'tool' && r.tool_name === 'hang'));
+        expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+        // At 29 s the root has returned with its two calls; the rest still waits for the child's call, to 30 s.
+        expect(await endsAfter(sessions, sid, 29_000)).toBe(false);
+        expect(dal.getSession(sid)!.tool_calls).toBe(2);
+        sessions.owner(sid)!.reconcile();
+        const resting = snapshots.at(-1)!;
+        expect(resting.toolCalls.total).toBe(2);
+        expect(resting.entryToolCalls).toBe(2);
+        expect(await endsAfter(sessions, sid, 1_000)).toBe(true);
       });
 
       it('REQ-SESSION-094: the root\'s call that returns after the run ended writes nothing more into the finished session', async () => {

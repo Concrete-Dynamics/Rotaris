@@ -109,7 +109,7 @@ before the ladder's), **OQ-111** (what the report summariser reads), **OQ-112** 
 write is refused) **and OQ-113** (REQ-LIBRARY-092's fallback, answered by amendment). **Three more were raised the same day
 from the live runs and left open: OQ-114** (the specification's fixed figures on a reasoning model's critical path, and a
 continuation that starts from nothing), **OQ-115** (the code-intelligence server's imperative tool description, rendered
-verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-117** (what an iteration is told of a task it takes up that is not the run's own) was raised the same day by the repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` and left open. **OQ-119** (whether the task the report summariser keeps as its start may pass REQ-ORCH-110's 2,000 per event) **and OQ-120** (the size of the facts given to the report summariser) were raised the same day by the repair of D1 and left open, as OQ-118 and OQ-119 on their branch, renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. **And OQ-122** (whether the window may open the setup dialog before the open's resolution, and what a skip answered in that interval records — built as: the dialog opens on the values, and such a skip performs the open's one automatic resolution first), raised 2026-09-29 by repairing `init-proof`'s red on Linux under R-062. **And OQ-123** (which run REQ-WORKSPACE-105's "no run is in progress" means — built as a run the user started, so a background run neither withdraws the setup prompt nor is drawn in its dialog), raised the same day by the same repair's second round. The two were raised as OQ-109 and OQ-110 on their branch, renumbered there to OQ-118 and OQ-119 when OQ-109 to OQ-117 had been taken on `main`, and renumbered again at the merge, OQ-118 to OQ-121 having been taken on `main` meanwhile. **One more was raised on 2026-09-29 by building REQ-ORCH-089's stall watchdog and REQ-NOTIFY-111/112's corrective message under R-067: OQ-127** (what counts as "an outcome that produced no output within `child_stall_timeout`" when the watchdog never cancels, and what the watchdog counts, writes and calls — including the three records REQ-ORCH-139's timeline vocabulary has no word for, written to the session log instead, and whether REQ-MONITOR-119's issue at every evaluation may evict REQ-SESSION-133's ring), raised as OQ-109 on its branch, renumbered there to OQ-126 when OQ-109 to OQ-125 had been taken on `main`, and renumbered again at the merge, OQ-126 having been taken on `main` meanwhile. **And OQ-129** (what REQ-MONITOR-128's optimistic cancel of one agent shows, where, and until when — built as the agents' activity text, in the window that sent the cancel, until the engine's next record), raised 2026-09-29 by the repair of `cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md` under R-067, raised as OQ-128 on its branch and renumbered at the merge, OQ-128 having been taken on `main` meanwhile. **And OQ-130** (whether the iteration the record of an accepted explicit cancel closes takes REQ-GIT-051's capture — built as: none is captured), raised the same day by the repair of `a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md` under OQ-103's ruling, raised as OQ-129 on its branch and renumbered at the merge, OQ-129 having been taken on `main` meanwhile. **And OQ-131** (what a follow-up by `delegate`'s `session_id` does beyond what `PD-ORCH-005` clause 22 states — built as: the child resumes into `queued` and starts as any queued child does, only the call's `task` is read, a child that never started is given its payload first, and a follow-up waits for an execution still winding down; a child the user cancelled may be followed up), raised 2026-09-29 by building clause 22 under R-067, raised as OQ-130 on its branch and renumbered at the merge, OQ-130 having been taken on `main` meanwhile. **And OQ-132** (what is asked of a person in the quit's gap, after the last window closes and before the shutdown — built as: held unshown for the quit to withdraw, no budget expiring meanwhile, never denied), raised 2026-09-29 by the repair of `an-approval-asked-after-the-last-window-closes-is-denied.md` under R-067. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-117** (what an iteration is told of a task it takes up that is not the run's own) was raised the same day by the repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` and left open. **OQ-119** (whether the task the report summariser keeps as its start may pass REQ-ORCH-110's 2,000 per event) **and OQ-120** (the size of the facts given to the report summariser) were raised the same day by the repair of D1 and left open, as OQ-118 and OQ-119 on their branch, renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. **And OQ-122** (whether the window may open the setup dialog before the open's resolution, and what a skip answered in that interval records — built as: the dialog opens on the values, and such a skip performs the open's one automatic resolution first), raised 2026-09-29 by repairing `init-proof`'s red on Linux under R-062. **And OQ-123** (which run REQ-WORKSPACE-105's "no run is in progress" means — built as a run the user started, so a background run neither withdraws the setup prompt nor is drawn in its dialog), raised the same day by the same repair's second round. The two were raised as OQ-109 and OQ-110 on their branch, renumbered there to OQ-118 and OQ-119 when OQ-109 to OQ-117 had been taken on `main`, and renumbered again at the merge, OQ-118 to OQ-121 having been taken on `main` meanwhile. **One more was raised on 2026-09-29 by building REQ-ORCH-089's stall watchdog and REQ-NOTIFY-111/112's corrective message under R-067: OQ-127** (what counts as "an outcome that produced no output within `child_stall_timeout`" when the watchdog never cancels, and what the watchdog counts, writes and calls — including the three records REQ-ORCH-139's timeline vocabulary has no word for, written to the session log instead, and whether REQ-MONITOR-119's issue at every evaluation may evict REQ-SESSION-133's ring), raised as OQ-109 on its branch, renumbered there to OQ-126 when OQ-109 to OQ-125 had been taken on `main`, and renumbered again at the merge, OQ-126 having been taken on `main` meanwhile. **And OQ-129** (what REQ-MONITOR-128's optimistic cancel of one agent shows, where, and until when — built as the agents' activity text, in the window that sent the cancel, until the engine's next record), raised 2026-09-29 by the repair of `cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md` under R-067, raised as OQ-128 on its branch and renumbered at the merge, OQ-128 having been taken on `main` meanwhile. **And OQ-130** (whether the iteration the record of an accepted explicit cancel closes takes REQ-GIT-051's capture — built as: none is captured), raised the same day by the repair of `a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md` under OQ-103's ruling, raised as OQ-129 on its branch and renumbered at the merge, OQ-129 having been taken on `main` meanwhile. **And OQ-131** (what a follow-up by `delegate`'s `session_id` does beyond what `PD-ORCH-005` clause 22 states — built as: the child resumes into `queued` and starts as any queued child does, only the call's `task` is read, a child that never started is given its payload first, and a follow-up waits for an execution still winding down; a child the user cancelled may be followed up), raised 2026-09-29 by building clause 22 under R-067, raised as OQ-130 on its branch and renumbered at the merge, OQ-130 having been taken on `main` meanwhile. **And OQ-132** (what is asked of a person in the quit's gap, after the last window closes and before the shutdown — built as: held unshown for the quit to withdraw, no budget expiring meanwhile, never denied), raised 2026-09-29 by the repair of `an-approval-asked-after-the-last-window-closes-is-denied.md` under R-067. **Four more were raised on 2026-10-01 from the live-run autopsy at `71ad8e8`: OQ-161** (whether a configuration load may append the code-intelligence runtime's marker directory to the user's `.gitignore` beside `.rotaris/` — built as: it appends both), **OQ-162** (whether continuing a paused iteration classifies the intent again, and may change the resumed root's grant — built as: every continue classifies, the Continue action its last user prompt, and the new grant reaches the resumed root), **OQ-163** (what REQ-TOOLS-145's refusal names when a `replace`'s own list marks two tasks in progress and none is active — built as: the first of them, under an id the rejected list minted) **and OQ-164** (what a foreground call made while an earlier command is soft-paused does and reports — built as: it waits behind that command and reports only its own, the paused command's end kept for a poll), each stating the reading the build proceeds under. The four were raised as OQ-160 to OQ-163 on their branch and renumbered before they reached `main`, OQ-160 having been taken there meanwhile. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -5438,6 +5438,14 @@ before a crash that never reach the total — is a defect of its own,
 record during a pass, which would amend or narrow REQ-ORCH-097's timing; or whether the lag stands and the surface says
 the total is as of the last completed pass.
 
+*Reported 2026-10-01 by the repair of
+[`the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`](../defects/fixed/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md)
+(acceptance A20, R-067), which leaves this cadence and the displayed total as they were.* The per-agent figures no longer
+wait for it: a child's count already read the tracker's live count beside its persisted one, and the run-level agent's now
+reads the roots' persisted share plus the live root's calls not yet counted (`SessionRecord.entryToolCalls`). So during a
+pass the per-agent figures may sum to more than the displayed total; a ruling that accumulates per call would close that
+gap as well. Whether the run-level agent's figure is its own at all, or REQ-MONITOR-101's aggregate run count, is OQ-159.
+
 **OQ-117 — What is an iteration told of a task it takes up that is not the run's own, and with what?** *(REQ-CHAT-040, whose queued prompt becomes a task "carrying the prompt text as its content"; REQ-ORCH-004 and REQ-ORCH-135, whose task a resumed session carries on and "stays anchored"; REQ-ORCH-072, which gives the root execution record "the task's execution payload"; REQ-CHAT-090 and REQ-CHAT-091, which let the user rename a task; and `PD-ORCH-005` clause 17 with OQ-102, whose message is told in words of its own. Raised 2026-09-29 by the repair of [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md) under [R-067](../product/requests.md#r-067). Open.)*
 
 No requirement says what an iteration's first message holds when the task it selected is not the one the launch
@@ -5703,8 +5711,10 @@ root publishes under". The repair of
 [`the-run-level-agent-is-known-by-its-entry-persona-alone.md`](../defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
 A plan cycle's root, which no iteration row records, is named by its publishes; one that published nothing is named only
 while its run is live
-([`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`](../defects/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md),
-open).* A superseded artifact is listed nowhere, as the Library's table lists it nowhere. The ready flag is stated in
+([`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`](../defects/fixed/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md),
+open). Reported back 2026-10-01, at the repair's first execution (acceptance A22, R-067): no longer true — every plan
+cycle's root is recorded when its turn starts (`plan_roots`, store v30) and named from there, whether or not it
+published, so what such a root read is the run-level agent's received link at the gate and after it.* A superseded artifact is listed nowhere, as the Library's table lists it nowhere. The ready flag is stated in
 words: "ready" (REQ-LIBRARY-136), else the status.
 
 **What a ruling decides.** Whether a link should open the Library (as built in the main window), an inspector in place
@@ -7832,14 +7842,252 @@ chat controls to the chat domain's Data & Formats, the rest to domain 01's list 
 them, and names REQ-NOTIFY-268's entry type, because the timeline is what an autopsy reads first and the export reaches
 it, and the session log is neither.
 
-**OQ-158 — What is the optimistic `cancelling` of the run's cancel: where is it shown, and until when?** *(REQ-MONITOR-127,
+**OQ-158 — May a child be renamed off a root's name when no sibling under its parent holds that name?**
+*(REQ-ORCH-044, "Child task names MUST be scoped per parent. A reused name is deterministically renamed `<name>_<n>` … and
+the canonical name is used everywhere the task is referenced (transcripts, dependency resolution, artifacts)";
+REQ-MONITOR-071, REQ-CHAT-069 and REQ-MONITOR-044, which the surfaces meet by name; PD-ORCH-005 clause 4 with OQ-97, under
+which a root keeps its own persona's name; REQ-LIBRARY-093. Raised 2026-10-01 under [R-067](../product/requests.md#r-067)
+by the repair of
+[`a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`](../defects/fixed/a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md),
+acceptance finding A23. Open.)*
+
+A transcript row, a tool call and an artifact know their agent by a name alone. The surfaces give the run-level agent every
+row and artifact carrying the entry persona or a name one of the session's roots carries (`ownRow`, `artifactNames`,
+`SessionRecord.entryRoots`), and a child every row carrying its canonical name. A child whose canonical name is a root's is
+therefore drawn as both agents, and a name-only rule cannot tell them apart: the root's own rows carry the same name.
+REQ-ORCH-044 makes a name unique under its parent and renames only a name "reused" there. The ledger already read the
+root's own canonical name as in use under the root, so a direct child was never named after it; it did not for a deeper
+child, nor for the names of an earlier root (a resumed root's persona, a root of a persona the canonicaliser rewrites).
+Two readings were weighed:
+- **A root's names are in use under every parent.** No child at any depth takes the canonical name or the persona of any
+  root the session has recorded, or of the root it works under; it is renamed `<name>_<n>` by REQ-ORCH-044's own rule.
+  A child the model names `orchestrator` two levels down is `orchestrator_1`, which the specification renames only when a
+  sibling holds the name.
+- **Only siblings' names are in use.** A child keeps the model's name unless a sibling holds it, and the rows carry an
+  identity the ledger keeps unique across the session — a task id on every transcript row and tool call — which the surfaces
+  match instead of the name. This widens the transcript row's envelope, and every row recorded before carries none.
+
+**What the build proceeds under:** the first. `ChildLedger.spawn` (`packages/engine/src/children/ledger.ts`) counts as
+taken, beside the parent's children's names, its root's canonical name and the entry persona it runs as, and every
+recorded root's two names (`recordedRootNames` in `children/naming.ts`: each iteration's `root_persona` and
+`root_canonical_name`, and each publishing root no iteration records, by its publish — the sources `entryRootsOf` reads).
+Two edges are left as they are. A child named before this repair keeps its name. And a **root named like an earlier child**
+— the entry persona changed to one an earlier child's canonical name already spells — is drawn as both, since the root's
+name is its persona and no ledger names it
+([`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../defects/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md)).
+
+**What a ruling decides.** Whether a root's names count as in use under every parent, or the surfaces must tell a child
+from a root by an identity the rows carry; with the second, whether rows recorded before keep the name-only rule.
+
+**OQ-159 — Is the run-level agent's tool-call count its own, or the run's aggregate?** *(REQ-MONITOR-101, "Each agent node
+exposes its live tool-call count and the set of tool names it has called; the synthetic root node exposes the aggregate run
+count and the aggregate called-tool history"; REQ-MONITOR-044, under which each agent as presented carries its tool-call
+count; REQ-MONITOR-052's meta line, `{state} · {elapsed or em-dash} · {N} tool calls`; REQ-MONITOR-043 and REQ-MONITOR-089,
+which call the run's own agent its synthetic root, as ADR-0012 does; REQ-MONITOR-086 and REQ-MONITOR-060; REQ-MONITOR-102
+with REQ-ORCH-097's cadence (OQ-116). Raised 2026-10-01 under [R-067](../product/requests.md#r-067) by the verification of
+the repair of
+[`the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`](../defects/fixed/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md),
+acceptance finding A20. Raised on its branch as OQ-158 and renumbered OQ-159 at the merge, origin/main's OQ-158 keeping its number. Open.)*
+
+The inspector, the Mission view and the persona windows present the run's own agent as the run-level agent
+(`runLevelAgent`, `packages/ui/src/agents.ts`), and the record calls that agent the run's synthetic root (REQ-MONITOR-043,
+REQ-MONITOR-089, ADR-0012). REQ-MONITOR-101 gives that node "the aggregate run count and the aggregate called-tool history";
+REQ-MONITOR-044 and REQ-MONITOR-052 give every agent as presented its own tool-call count on its meta line, and do not
+except the run-level agent. The two part whenever a child has called a tool: the aggregate is the session's total, the
+agent's own count is the roots' share of it. The build already takes both readings, one per figure: the run-level agent's
+compression count is the run-wide sum ("what the synthetic root shows", REQ-MONITOR-086), while its tool chips and called
+history are the root's own (`SessionRecord.entryTools`, REQ-MONITOR-060) and so is its tool-call count. Neither reading
+would have avoided A20: the session's total also read 0 while the root's turn ran, since a root's calls join it only when
+the turn returns (REQ-ORCH-097, OQ-116).
+
+**What the build proceeds under.** The agent's own count, as before the repair: the run-level agent's `{N} tool calls` is
+the roots' share of the persisted total — the total less every child's persisted `children.tool_calls` — plus the live
+root's calls not yet counted (`SessionRecord.entryToolCalls`, `entryToolCallsOf` in `packages/engine/src/sessions.ts`,
+`Run.entryUncountedToolCalls`). The run's aggregate count is the displayed total of REQ-MONITOR-102
+(`SessionRecord.toolCalls.total`), and the run-level agent's called history stays the root's own. Nothing about either
+figure changes until a ruling.
+
+**What a ruling decides.** Whether the run-level agent is REQ-MONITOR-101's synthetic root node, so its tool-call count
+and called-tool history are the run's aggregate — and then whether that aggregate is the persisted total of REQ-MONITOR-102,
+with its lag during a pass, or the persisted total plus every live agent's calls not yet counted; or whether it is an
+agent as REQ-MONITOR-044 presents one, carrying its own count and history, and REQ-MONITOR-101's synthetic root node is
+some other surface — the run header, or the run-wide totals of REQ-MONITOR-098.
+
+**OQ-160 — Does the sidebar's "Last run failed: {message}" carry the failed task's whole output, or a bounded form of it?**
+*(REQ-WORKSPACE-113, "a recorded failure appends 'Last run failed: {message}' to the hint"; REQ-WORKSPACE-093, which fixes a
+failure's form as "{reason}: {detail}"; REQ-WORKSPACE-103, under which the recorded outcome is visible in Settings Project. Raised 2026-10-01 under
+[R-067](../product/requests.md#r-067) by the repair of
+[`the-project-sections-failure-hint-runs-out-of-the-sidebar.md`](../defects/fixed/the-project-sections-failure-hint-runs-out-of-the-sidebar.md),
+acceptance finding A39. Open.)*
+
+The recorded failure of the shipped code-intelligence task is its process's raw output: the exit, the platform's own log
+lines (a `[pid:date/time:ERROR:dbus/bus.cc:406]` prefix among them) and the runtime's explanation. Measured in the built
+app at 1440 × 900, the hint holding it is about 267 px tall in a 235 px column, most of the sidebar's free height. The repair
+broke its unbroken tokens inside the column; it did not shorten it. REQ-WORKSPACE-113 names `{message}` and does not say
+whether that is the whole recorded output. Two readings: the whole recorded message, broken to the column; or a bounded
+form in the sidebar (its first line, or REQ-WORKSPACE-093's reason alone), with the whole output left to Settings
+Project, where REQ-WORKSPACE-103 makes the recorded outcome visible.
+
+**What the build proceeds under:** the first. `projectSidebarSection` (`packages/ui/src/settings/project-init.ts`) appends
+`lastError` whole, and `.agents__project .settings__hint` breaks it with `overflow-wrap: anywhere` (`shell.css`).
+
+**What a ruling decides.** Whether the sidebar hint's `{message}` is the recorded failure whole; if not, which part of it
+the sidebar shows.
+
+**OQ-161 — May a configuration load append the code-intelligence runtime's marker directory to the user's `.gitignore`
+beside `.rotaris/`?** *(REQ-CONFIG-013, "if `<workspace>/.gitignore` contains no line that, once trimmed and stripped of a
+trailing `/`, equals `.rotaris`, the line `.rotaris/` is appended"; REQ-MCP-089, "the workspace `.gitignore` SHALL be
+best-effort amended to exclude `.rotaris/`"; REQ-CONFIG-456; ground 3 of REQ-CONFIG-477, "Version control stays the user's
+choice"; REQ-MCP-099 and REQ-MCP-116, which name the runtime's per-project marker file and read it from the binding
+manifest; ADR-0035, "At the merge", which took the reading and flagged it for the owner. Raised 2026-10-01 from the
+live-run autopsy at 71ad8e8 finding a71-1,
+[`the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md`](../defects/the-load-adds-serena-to-the-users-gitignore-and-the-agents-cannot-account-for-it.md).
+Open. Raised as OQ-160 on its branch and renumbered OQ-161 before it reached `main`, where OQ-160 had been taken
+meanwhile.)*
+
+The bundled runtime creates `.serena/project.yml` in the workspace root whenever it starts with a project (ADR-0035,
+finding 5). With the `code_intelligence` entry enabled by default, every first run therefore left an untracked directory
+in the user's repository. On 2026-09-06 the build answered that by appending the marker's directory in the same
+amendment as the product's own scope directory, and ADR-0035 and `codebase.md` record the reading as "flagged for the
+owner". No question was raised for it. The two requirements name one line.
+
+The live run of 2026-10-01 measured the cost of the second line. The load makes the change before any agent runs.
+Nothing the agents are given says the product made it, and `git status` shows ` M .gitignore` to every agent that checks
+its own work. In the default run, the answers of `edit`, `resume` and `frictions` each told the user of an unexplained
+`.gitignore` change. In the duress run the orchestrator commissioned a ninth child, unrequested, to find out who had
+changed the file: 319.4 s, 6.3 % of the run's wall time, and about 393 thousand tokens.
+
+**What the build proceeds under.** Every configuration load appends `.rotaris/` and `.serena/` to the workspace's
+`.gitignore`, each only when it is missing, unless the caller passes `keepIgnored: false`. The second name is taken from
+the generated manifest (`keepScopeDirIgnored`, `packages/config/src/load.ts`). Nothing tells an agent or the user that
+the product wrote either line.
+
+**What a ruling decides.** Whether the load may append the marker's directory to a tracked file the user owns, which
+REQ-CONFIG-013 and REQ-MCP-089 do not provide for. If it may not, whether the marker is left untracked as the runtime
+creates it, kept out of version control by a means that changes no tracked file, or avoided by starting the runtime so
+that it creates no marker in the workspace root. If the line stays, whether the agents' instructions or the user are told
+that the product wrote it.
+
+**OQ-162 — Does continuing a paused iteration classify the intent again, and may the resumed root's grant change with
+it?** *(`PD-ORCH-005` clause 4, "Continuing resumes the iteration where it stood … each carries on from its last
+message"; clause 14, "A resumed agent runs with its persona's current instructions and tools", with OQ-105, which reads
+the warning a continue's new classification raises; REQ-ORCH-005, "the classified intent MUST be in effect before the
+first iteration"; REQ-ORCH-013, the prior intent inherited only "when (a) the fresh classification is unusable";
+REQ-ORCH-016, the intent-to-tools mapping that "MUST gate the entry role's tool set"; REQ-ORCH-014, the status that
+conveys the classified intent; REQ-ORCH-007 and REQ-ORCH-008, the 12 s bound and its fallback (OQ-114). Raised 2026-10-01
+from the live-run autopsy at 71ad8e8 finding a71-3,
+[`continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md`](../defects/continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md).
+Open. Raised as OQ-161 on its branch and renumbered OQ-162 before it reached `main`, where OQ-160 had been taken
+meanwhile.)*
+
+The directive resumes an iteration "where it stood" and runs a resumed agent with its persona's current instructions and
+tools. It does not say whether the run's classification is taken again. REQ-ORCH-005 places the classification before
+the first iteration. REQ-ORCH-013 describes a resumed session's carry-over, which inherits the earlier intent only when
+the fresh one is unusable.
+
+Under the build every continue classifies again, and that includes the Continue action, which brings no message and so
+classifies the session's last user prompt. The result governs the resumed iteration: its playbook, its budget clamp and
+REQ-ORCH-016's grant to the entry role. A launch whose classification fell back and a continue whose classification
+succeeds can therefore produce different intents. The coordinator's tools then change in the middle of the iteration it
+is resuming. Clause 14's fingerprint warns of a change no one made to a persona.
+
+In the default live run's `resume` scenario the launch's classification ran into the 12 s bound. It fell back to
+`moderate_feature` with no grant, and the orchestrator had 24 tools. The user pressed Continue 2.7 s after the pause.
+The Continue classified the same prompt in 6.6 s as `explicit_trivial` (0.92), and the resumed orchestrator was offered
+29 tools: `fetch`, `haet`, `haet_edit`, `terminal` and `write_file` were added. A `resumed_under_changed_instructions`
+warning followed, and the header went on showing the launch's intent. The classification added 6.6 s to the Continue.
+
+**What the build proceeds under.** Every continue runs the pre-flight: on the last user prompt for the Continue action,
+or on the message for a continue by message. The launch's category, fallback or not, is REQ-ORCH-013's prior intent. The
+result is in effect for the resumed iteration and every iteration after it, grant included (`Sessions.launchContinuation`,
+`Run.start`). The resumed root is offered the tools of the new grant, and clause 14's warning is raised when they differ
+from its fingerprint (OQ-105). The intent status the surfaces read is the launch audit's (`intentStatusOf`); a
+continuation's intent is recorded as a `run_continuation_intent` timeline entry and a transcript row.
+
+**What a ruling decides.** Whether the Continue action, which brings no message, classifies at all or carries the
+launch's intent and grant. Whether a resumed iteration keeps the grant it started with, so that a new classification
+takes effect only from the next iteration. Whether a successful fresh classification replaces a fallback launch intent,
+as built. And which intent the status shows after a continue.
+
+**OQ-163 — What does REQ-TOOLS-145's refusal name when a `replace`'s own list marks two tasks in progress and no task is
+active?** *(REQ-TOOLS-145, "At most one task may be `IN_PROGRESS` at a time, enforced both when marking a task and on
+wholesale state changes; the violation message is `Only one task can be IN_PROGRESS at a time. Active task: <id> (<name>).
+Mark it COMPLETED or ABANDONED before moving another task to IN_PROGRESS.`"; REQ-TOOLS-146, whose rejection "with the
+message of REQ-TOOLS-145" covers a `replace` that marks another task `IN_PROGRESS` "while a protected active task exists".
+Raised 2026-10-01 from the live-run autopsy at 71ad8e8 finding a71-7,
+[`a-rejected-todo-replace-names-an-active-task-it-never-stored.md`](../defects/a-rejected-todo-replace-names-an-active-task-it-never-stored.md).
+Open. Raised as OQ-162 on its branch and renumbered OQ-163 before it reached `main`, where OQ-160 had been taken
+meanwhile.)*
+
+REQ-TOOLS-146 foresees one case: an active task exists, and the incoming list marks another. It does not foresee an
+incoming list that itself marks two tasks `IN_PROGRESS` while nothing is active. REQ-TOOLS-145's single-active rule still
+refuses such a list, and its message names an "Active task", which in that case does not exist. The list is rejected
+whole, so the tasks it named, and the ids the build mints for them, are never stored. The message's remedy, "Mark it
+COMPLETED or ABANDONED", then names a task the agent cannot reach.
+
+In the default live run's `frictions` scenario the orchestrator's first call (#1) was a `replace` over an empty list with
+two tasks `IN_PROGRESS`. It was refused with "Active task: 3c55ec35 (Create friction-probe.txt)". The orchestrator
+followed the advice (#8, `update 3c55ec35 COMPLETED`), was told "Unknown task id '3c55ec35'. Available phases: (none)",
+and then reasoned that the list was empty (row 18). The cost was one wasted call and one turn, and two `tool_error` issues.
+
+**What the build proceeds under.** The refusal is REQ-TOOLS-145's sentence. It names the first `IN_PROGRESS` task of the
+rejected list, under the id the rejected `replace` minted for it (`packages/agent-tools/src/tools/todo.ts:153-154`).
+Nothing of the list is stored.
+
+**What a ruling decides.** What the refusal says when no task is active. The options are REQ-TOOLS-145's sentence as
+built, or a sentence of its own that names no active task and says the incoming list marks more than one task in
+progress. A ruling also decides whether such a `replace` is refused at all, or accepted with all but one of those tasks
+left pending.
+
+**OQ-164 — What does a foreground call made while an earlier command is soft-paused do, and what does it report of that
+command?** *(REQ-TOOLS-098, under which a soft-paused call returns −1 "while its process keeps running" and the
+observation explains "that the agent can poll with an empty `command` or interrupt with `C-c` and `is_input=true`";
+REQ-TOOLS-187, "a second foreground call against a session whose previous foreground command has not returned waits for
+it"; REQ-TOOLS-096, the empty-command poll; REQ-TOOLS-097, the no-output window and the hard timeout; REQ-TOOLS-179, the
+exit status a call reports; OQ-147, what the paused call reports once a poll hands it over. Raised 2026-10-01 from the
+live-run autopsy at 71ad8e8 finding a71-8,
+[`a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md`](../defects/a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced.md).
+Open. Raised as OQ-163 on its branch and renumbered OQ-164 before it reached `main`, where OQ-160 had been taken
+meanwhile.)*
+
+REQ-TOOLS-098 offers the agent two moves after a soft pause: poll, or interrupt. A third, issuing a new command, is
+always open, and no requirement says what it does. REQ-TOOLS-187 makes a second foreground call wait for a previous
+command that "has not returned". A soft-paused call has returned while its command has not finished, so the requirement
+does not settle these points:
+
+- whether the new call waits;
+- whether that wait counts against its own no-output window and timeout;
+- whether its observation says that it waited, and for what;
+- whether it carries the paused command's end.
+
+In the default live run's `terminal` scenario `node -e "setTimeout(…, 45000)"` (#5) soft-paused at 30.0 s. After one poll
+(#6), the agent issued a `node -e "console.log(…)"` (#7). That call took 5,932 ms, ending when the 45 s timer ran out,
+and its observation said only "The command exited with code 0." The paused command's own end was held for a poll that
+never came.
+
+**What the build proceeds under.** The new call's line is submitted at once, and the shell queues it behind the paused
+command (`ForegroundSession.execute`). Its no-output window and its timeout run from its own start, so they include the
+wait. Its observation states its own outcome and nothing of the paused command. The paused command's share of the stream
+ends at its own end frame or at the new call's start marker, and its end is kept for the next empty poll (`pausedDone`,
+`poll`). The code also shows a case the run did not reach. A later soft pause, including the new call's own when the
+paused command stays silent for its whole no-output window, replaces the kept call, and that call's end is never
+reported.
+
+**What a ruling decides.** Whether a call made while a command is soft-paused is refused with the remedy REQ-TOOLS-098
+names, waits as REQ-TOOLS-187 has a second call wait (and if so, whether the wait counts against the new call's window
+and timeout), or interrupts the paused command. And whether the new call's observation says that it waited behind the
+paused command and carries that command's end, meaning its output since the last poll and its exit status, rather than
+leaving it to a poll.
+
+**OQ-165 — What is the optimistic `cancelling` of the run's cancel: where is it shown, and until when?** *(REQ-MONITOR-127,
 "On confirmation the session status is optimistically set to `cancelling` … Given a refusal, the status is restored to
 `running`"; REQ-MONITOR-296, "eventually be overwritten by the authoritative final read"; REQ-MONITOR-130, "whichever surface
 asked for it"; REQ-MONITOR-126; `PD-ORCH-005` clauses 3 and 15, which make every confirmed "Cancel the run?" the explicit,
 final cancel; OQ-129, the same question for one agent's cancel. Raised 2026-10-01 under [R-067](../product/requests.md#r-067)
 by the repair of
 [`the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md`](../defects/fixed/the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md),
-acceptance finding A35. Open.)*
+acceptance finding A35. Raised on its branch as OQ-158 and renumbered OQ-165 at the merge, origin/main's OQ-158 keeping its
+number. Open.)*
 
 The requirement sets an optimistic status and its rollback. It does not say what overwrites it, and the engine gives it
 nothing to be overwritten by: the explicit cancel (the reserved run id's `cancelAgent`, `Run.cancelAgent`) raises the final

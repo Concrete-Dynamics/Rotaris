@@ -331,7 +331,11 @@ briefs, thirty-one exports — plus `shared.ts` (the two class helpers) and `lay
 under `packages/ui/src` and `apps/desktop/src/renderer` without an exception list. Each component forwards native
 attributes and its ref, so a caller's `data-testid`, `aria-*` and handler survive the substitution; a specialised
 class already carrying a requirement's visual contract is passed through rather than overwritten
-(`componentClass`).
+(`componentClass`). **`Tag` and `StatusDot` are the exceptions** (acceptance A40, 2026-10-01): `Tag` joins a caller's
+class to the `tag tag-<kind>` it draws, its kinds the design Tag's seven tones (`TAG_KINDS`), and
+`tools/check-ui-language.mjs` refuses a Tag whose class spells `tag` or a `tag-` tone; `StatusDot` writes the design
+StatusDot's state (`STATUS_DOT_STATES`) to `data-state`, which `shell.css` paints from its token at the specificity of
+`.status-dot` alone.
 
 `layout-contract.ts` is **verification-only data, not behaviour**: a `UiLayoutContract` on a component root is
 serialised into `data-ui` / `data-ui-contract` — by `layoutContractAttributes` alone, which `tools/check-ui-language.mjs` enforces — and evaluated by `ui-audit` against live geometry after layout and

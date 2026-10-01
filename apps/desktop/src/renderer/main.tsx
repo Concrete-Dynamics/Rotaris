@@ -993,7 +993,7 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   const groupTools = useStore(displayPrefs, (s) => s.groupTools);
   const changePopOut = useCallback((value: boolean) => { setPopOut(value); void bridge.command({ kind: 'prefs.set', key: 'interface/agentPopOut', value }); }, []);
   const session = useStore(replica, (s) => s.session);
-  // REQ-MONITOR-127/130 (acceptance A35, OQ-158): the strip names the run's state as this window's surfaces show it — a
+  // REQ-MONITOR-127/130 (acceptance A35, OQ-165): the strip names the run's state as this window's surfaces show it — a
   // confirmed run cancel reads `cancelling` from the confirmation, as the run header and the Mission view do.
   const shownStatus = useShownSession()?.executionStatus ?? null;
   const notice = useStore(notices, (s) => s.current);

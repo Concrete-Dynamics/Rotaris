@@ -137,12 +137,12 @@ export function HooksSettings({ summary, loading, error, onRefresh, onReview, on
               <div className="hooks__invocation-head">
                 <span className="hooks__invocation-name">{inv.name}</span>
                 <span className="mono text-secondary">{inv.event}{inv.toolName ? ` · ${inv.toolName}` : ''}</span>
-                {inv.withheld ? <DesignTag className="tag tag-wait">withheld: {inv.reason}</DesignTag> : (
+                {inv.withheld ? <DesignTag kind="wait">withheld: {inv.reason}</DesignTag> : (
                   <>
                     <span className="mono text-secondary">exit {inv.exitCode} · {inv.durationMs} ms</span>
-                    {inv.timedOut && <DesignTag className="tag tag-fail">timed out</DesignTag>}
-                    {inv.blocked && <DesignTag className="tag tag-run">stopped the call</DesignTag>}
-                    {inv.switchedOff && <DesignTag className="tag tag-neutral">switched off after this</DesignTag>}
+                    {inv.timedOut && <DesignTag kind="fail">timed out</DesignTag>}
+                    {inv.blocked && <DesignTag kind="run">stopped the call</DesignTag>}
+                    {inv.switchedOff && <DesignTag kind="neutral">switched off after this</DesignTag>}
                   </>
                 )}
               </div>

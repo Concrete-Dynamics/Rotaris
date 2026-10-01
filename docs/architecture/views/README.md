@@ -45,7 +45,7 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
-**A confirmed run cancel is shown cancelling on every surface of the window that sent it (REQ-MONITOR-127/130/296, OQ-158,
+**A confirmed run cancel is shown cancelling on every surface of the window that sent it (REQ-MONITOR-127/130/296, OQ-165,
 R-067).** The renderer's `cancelRun` lays a run overlay (`cancel-overlay.ts`, `beginRun`) over the window's record before it
 sends the reserved run id's `cancelAgent`: the session's status reads `cancelling` in the run header, the composer, the
 status strip, the Mission view's subtitle and run row, and a persona window's run instance (its state label and tab
@@ -59,6 +59,39 @@ session it takes. Until then only the Workspace set anything — its stop button
 repairs `the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md` (acceptance A35). The
 **runtime view**'s `cancelAgent` row and the **state ownership** view's optimistic-cancel row say so. No package, edge,
 process, message kind, channel, command or store column changed.
+
+**The run-level agent's tool-call count is its own while its turn runs (REQ-MONITOR-044/052, R-067).** The surfaces derived
+it as the session's total less the children's, and a root's calls join the total only when its turn returns, so the meta
+line read `0 tool calls` beside the root's used chips. `SessionRecord.entryToolCalls` now carries it: the roots' share of
+the persisted total plus the live root's calls not yet counted (`entryToolCallsOf`, `Run.entryUncountedToolCalls`) — the
+agent's own count, where REQ-MONITOR-101 gives the synthetic root the run's aggregate; **OQ-159** asks which, open. This
+repairs `the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md` (acceptance A20). The **runtime view**'s §3
+entry-record paragraph and the **state-ownership view**'s tool-call row say so. One `SessionRecord` field was added on the
+existing snapshot channel; no package, edge, process, message kind, channel, command or store column changed.
+
+**A plan cycle's root is recorded for good when it starts (REQ-MONITOR-044/052/069, REQ-LIBRARY-093/099, REQ-ORCH-153,
+R-067).** A plan cycle has no `iterations` row, so the session named its root through its live run and, after a park or an
+end, through its publishes alone; one that only read an artifact was no agent's, and the run-level agent lost that received
+link at the gate. `plan_roots` (store **v30**) records each plan cycle's root — task id, canonical name, the name its rows
+carry — in `SessionWriter.openPlanRoot`'s transaction, never released, and `entryRootsOf` names it from there. This repairs
+`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md` (acceptance A22). The **runtime view**'s
+§3 `entryRoots` paragraph, its §7 heading (the store is now v30) and a new §7 `plan_roots` row, and the **state-ownership
+view**'s new plan-root row, say so. One table was added (store v30); no package, edge, process, message kind, channel or
+command changed.
+
+**The design Tag's kinds are the language's tones, and StatusDot paints its state (acceptance A40, R-067).** `Tag`
+takes the design Tag's seven kinds (`TAG_KINDS`: `accent`, `neutral`, `outline`, `run`, `wait`, `done`, `fail`) and joins a
+caller's class to `tag tag-<kind>` instead of letting it replace them; every caller names its tone by `kind`, and
+`tools/check-ui-language.mjs` refuses a Tag class that spells `tag` or a tone. `StatusDot` takes the design StatusDot's
+states (`STATUS_DOT_STATES`) and writes `data-state`, which `shell.css` paints at `.status-dot`'s own specificity. This
+repairs `the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md`. The **component view**'s
+`ui/design-system` section says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A child's name is never a root's (REQ-ORCH-044, OQ-158, acceptance A23, R-067).** `ChildLedger.spawn` keeps every child,
+at every depth, off its root's canonical name and entry persona and off every recorded root's two names
+(`recordedRootNames`), which the surfaces give the run-level agent; only the root's direct children were kept off its
+canonical name before. This repairs `a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`. The **runtime
+view**'s §4 says so. No package, edge, process, message kind, channel, command or store column changed.
 
 **A queued prompt's task is named "Queued Prompt: <id>" (REQ-CHAT-040, REQ-ORCH-071, OQ-117, R-067).** A planner todo
 task carries an optional `name` beside its text (`run/todo.ts`), and `consumeQueued` names a queued prompt's task

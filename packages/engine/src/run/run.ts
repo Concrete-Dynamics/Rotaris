@@ -379,6 +379,11 @@ export class Run {
   private rootIterationId = 'root:1';
   private rootRecord: RootExecutionRecord | null = null;
   /**
+   * REQ-MONITOR-044/052 (acceptance A20): the tracker's call count under the current root's name when its execution began,
+   * while none of that execution's calls has joined the session total; null once they have, or with no root running.
+   */
+  private rootUncountedFrom: number | null = null;
+  /**
    * PD-ORCH-005 clauses 3 and 4: the name the current root's rows carry — the persona its iteration was opened with
    * (`iterations.root_persona`), so a root resumed as the entry role because that persona is no longer configured (OQ-97)
    * keeps writing under the name its earlier rows and the crash record read (the repair of
@@ -701,6 +706,17 @@ export class Run {
     return this.deps.writer.activity.stalledSeconds(this.rootName);
   }
   /**
+   * REQ-MONITOR-044/052 (the repair of `the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`, acceptance
+   * A20, R-067): the calls the current root has started in this execution that the session's total does not hold yet. A
+   * root's calls join the total only when its turn returns, or from its record when it never does (REQ-ORCH-097's cadence,
+   * OQ-116); until then they are the tracker's count under the name it dispatches as (`rootName`) less that count when the
+   * execution began. Zero once they are counted, so the run-level agent's figure (`entryToolCallsOf`) never holds a call
+   * twice.
+   */
+  get entryUncountedToolCalls(): number {
+    return this.rootUncountedFrom === null ? 0 : Math.max(0, this.deps.writer.activity.callCount(this.rootName) - this.rootUncountedFrom);
+  }
+  /**
    * REQ-MONITOR-060/061 (live-run finding K1, R-067): the entry role's tools as the run-level agent presents them — the native
    * set its port's one resolution kept (policy narrowing applied), and its called and in-flight tools from the tracker the
    * writer feeds, keyed by the name the root dispatches under (`rootName`, as `entryContext` reads it). Not the run's
@@ -717,7 +733,8 @@ export class Run {
    * PD-ORCH-005 clause 4 with OQ-97, and REQ-LIBRARY-093: the root this run executes, or executed last, by the name its rows
    * and calls carry (`rootName`) and its canonical instance name — what `SessionRecord.entryRoots` adds, while the run is
    * live, for a root with no iteration row, a plan cycle's. The session lets go of the run once it parks or ends, and such
-   * a root is then named by its publishes alone (`entryRootsOf`). Null before the run's first turn.
+   * a root is then named by the record its turn's start wrote (`plan_roots`, store v30) — before v30 by its publishes alone,
+   * so one that only read was no agent's at the gate (`entryRootsOf`). Null before the run's first turn.
    */
   get currentRoot(): EntryRoot | null {
     return this.rootRecord === null ? null : { name: this.rootName, canonical: this.rootRecord.canonicalName };
@@ -1297,7 +1314,7 @@ export class Run {
      */
     const planRoot = iterationOverride !== undefined && resume === undefined ? rootTaskId : null;
     if (planRoot !== null) {
-      const r = writer.openPlanRoot(planRoot, rootName);
+      const r = writer.openPlanRoot(planRoot, rootName, rootCanonical);
       if (!r.ok) this.deps.warn(`the plan cycle's root ${rootName} (${planRoot}) of ${this.sessionId} was not recorded under way: ${r.error.code}`);
     }
     const children = this.deps.toolsFor && this.deps.dal
@@ -1428,6 +1445,8 @@ export class Run {
      */
     const rootCount = iterationOverride === undefined ? iteration : null;
     const rootCounts = (add: number): Parameters<SessionWriter['countToolCalls']>[0] => (rootCount !== null ? { root: { iteration: rootCount, add } } : planRoot !== null ? { planRoot: { taskId: planRoot, add } } : {});
+    // REQ-MONITOR-044/052 (acceptance A20): from here until they join the total, the root's calls are counted live.
+    this.rootUncountedFrom = writer.activity.callCount(rootName);
     rootWatch.start();
     try {
       const start: TurnStart = resume ? this.resumedRootStart(rootTaskId) : { kind: 'fresh', task };
@@ -1452,6 +1471,7 @@ export class Run {
         // REQ-MONITOR-102: the root's count on its iteration moves with the total, in one transaction (REQ-ORCH-097's
         // cadence: when its turn returns).
         this.persistToolCalls(rootCounts(outcome.toolCallCount));
+        this.rootUncountedFrom = null;
       }
       /*
        * REQ-ORCH-080: a stop with active background children drains before anything is cancelled — only a stop that
@@ -1537,6 +1557,8 @@ export class Run {
         this.aggregates.addToolCalls(gained);
         this.persistToolCalls(rootCounts(gained));
       }
+      // The root's execution is over: its calls are in the total, or — with no store record to count from — never will be.
+      this.rootUncountedFrom = null;
       /*
        * A plan cycle's root is released with its calls above — returned, given up on, or whose turn raised (the repair of
        * `a-root-whose-turn-raises-never-counts-its-calls.md`) — in the transaction that adds them; this release, of a root

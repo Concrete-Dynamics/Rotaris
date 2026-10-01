@@ -92,7 +92,11 @@ export function runLevelGrant(resolved: readonly string[], declared: readonly st
  * before that every root-level meter drew zero for a run that spawned no child, whatever the run had actually spent.
  * Its tools are `entryTools` (live-run finding K1, R-067): the set the live run's root port resolved, else — only with no
  * live instance — the entry persona's declared tools standing in (REQ-MONITOR-060, `runLevelGrant`), its called history and, while it runs, its active calls —
- * before that it drew "No tools resolved." beside a run that had made fifteen calls.
+ * before that it drew "No tools resolved." beside a run that had made fifteen calls. Its tool-call count is the session's
+ * `entryToolCalls` (REQ-MONITOR-044/052, acceptance A20, R-067): the roots' share of the persisted total plus the live root's
+ * calls not counted yet — else, for a record with no projection, the total less the children's. The agent's own count, not
+ * REQ-MONITOR-101's aggregate run count for the synthetic root: which of the two it shows is OQ-159's. The total alone read
+ * `0 tool calls` while the root's turn ran, since a root's calls join it only when its turn returns.
  */
 export function runLevelAgent(session: SessionRecord | null, entry: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }, recovery: boolean): AgentRecord | null {
   if (!session || session.runStartedAt === null) return null;
@@ -107,7 +111,7 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
   return {
     id: RUN_AGENT_ID, name: entry.persona, givenName: entry.persona, persona: entry.persona, state: resting ? 'paused' : busy ? 'running' : presentationState === 'done' ? 'succeeded' : presentationState === 'failed' ? 'failed' : 'cancelled',
     presentationState, parentId: '', dependencies: [], activity: session.summary?.message ?? '', model: entry.model, depth: 0, background: false, category: '',
-    spawnedAt: session.runStartedAt, completedAt: busy || resting ? null : session.updatedAt, toolCalls: Math.max(0, session.toolCalls.total - childCalls), delegationTask: '',
+    spawnedAt: session.runStartedAt, completedAt: busy || resting ? null : session.updatedAt, toolCalls: session.entryToolCalls ?? Math.max(0, session.toolCalls.total - childCalls), delegationTask: '',
     // REQ-MONITOR-086: the run-wide count is the sum of the per-agent counts, which is what the synthetic root shows.
     compressions: session.agents.reduce((n, a) => n + a.compressions, 0),
     reasoning: entry.reasoning, contextUsed: session.entryContext.used, contextLimit: session.entryContext.limit > 0 ? session.entryContext.limit : DEFAULT_CONTEXT_CAPACITY, grantedTools: runLevelGrant(session.entryTools.resolved, entry.tools, busy), calledTools: [...session.entryTools.called], activeTools: busy ? [...session.entryTools.active] : [], delegationSessionId: null, inheritedContext: '', live: busy,
@@ -131,7 +135,7 @@ export function restingView(session: SessionRecord | null, entry: Parameters<typ
 }
 
 /**
- * REQ-MONITOR-127 / REQ-MONITOR-130 (acceptance A35, OQ-158): the muted state word a surface draws for an agent. The agent
+ * REQ-MONITOR-127 / REQ-MONITOR-130 (acceptance A35, OQ-165): the muted state word a surface draws for an agent. The agent
  * vocabulary (`PRESENTATION_CHILD_STATES`) has no `cancelling`, and `runLevelAgent` presents every busy status as
  * `running`, so a confirmed cancel of the run reached no word a persona window draws. The run-level agent is the run
  * (REQ-MONITOR-043), so while it is live and the shown session reads `cancelling` — a confirmed cancel's overlay, or the

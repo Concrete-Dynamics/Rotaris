@@ -15,7 +15,7 @@ import { Button as DesignButton, EmptyState as DesignEmptyState, PageHeader as D
  * REQ-SHELL-074/075, REQ-MONITOR-068..071 (Part R): the persona pop-out window's content. The header with the persona
  * name and the instance count with its noun agreeing (REQ-SHELL-044); one tab per instance live or finished, text the
  * agent's name, tooltip `{state} · {activity}`, the state being the run's `cancelling` on the run's own instance while the shown
- * session reads it (`agentStateLabel`, A35, OQ-158); the "Artifacts by {persona} (all instances)" card with its empty
+ * session reads it (`agentStateLabel`, A35, OQ-165); the "Artifacts by {persona} (all instances)" card with its empty
  * sentence; per tab, in order: (a) the heading — the dot pulsing only while live, the name in the persona's colour,
  * the muted state; (b) the "Agent transcript" card (accessible name `{name} transcript`, min height 260 px, the
  * empty sentence) showing only that agent's rows through the ONE row renderer; (c) "Context" with the ring and
@@ -145,7 +145,7 @@ export function PersonaWindow(props: PersonaWindowProps) {
             <div className="persona-window__context-body">
               <ContextRing used={shown.contextUsed} limit={shown.contextLimit} thresholdPercent={compressionThresholdPercent} label={`${shown.name}'s context window`} />
               <div>
-                <div className="mono" data-testid="persona-context-line">{countNoun(shown.toolCalls, 'tool call')} · {elapsed ?? '-'}{shown.stalledSeconds !== null && <>{' '}<DesignTag className="tag tag-wait agent-row__stalled" data-testid="agent-stalled">{stalledText(shown.stalledSeconds)}</DesignTag></>}</div>
+                <div className="mono" data-testid="persona-context-line">{countNoun(shown.toolCalls, 'tool call')} · {elapsed ?? '-'}{shown.stalledSeconds !== null && <>{' '}<DesignTag kind="wait" className="agent-row__stalled" data-testid="agent-stalled">{stalledText(shown.stalledSeconds)}</DesignTag></>}</div>
                 <div className="text-secondary">{shown.contextUsed.toLocaleString()} of {shown.contextLimit.toLocaleString()} tokens; compression at {compressionThresholdPercent}%.</div>
               </div>
             </div>

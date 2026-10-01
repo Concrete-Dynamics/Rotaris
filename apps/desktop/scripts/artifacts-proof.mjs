@@ -145,6 +145,7 @@ const INSPECTOR_ARTIFACTS = '[data-testid="inspector-artifacts"]';
 const INSPECTOR_PRODUCED = '[data-testid="inspector-artifacts-produced"]';
 // Acceptance A36: the ring caption, which denied the run-level agent's prompt reading one line under the figure.
 const INSPECTOR_RING_CAPTION = '.inspector__ring-caption';
+const INSPECTOR_META = '[data-testid="inspector-meta"]';
 const PROBES = [PROBE_ROWS, '[data-testid="library-artifacts"]', '[data-testid="library-artifacts-empty"]', '[data-testid="library-artifacts-inspect"]', '[data-testid="artifact-inspector"]', '[data-testid="artifact-inspector-meta"]', '[data-testid="artifact-inspector-status"]', '[data-testid="artifact-preview"]', '[data-testid="artifact-save"]'];
 const results = {};
 
@@ -246,7 +247,7 @@ const results = {};
     // declared tools standing in, is launch 5's, in a freshly opened process.
     // (This comment first said "with the run over … its declared tools stand in" — false: the verifier found the 10 s
     // probes and the 11 s click land before the run ends, and the PNG reads "Run active".)
-    ROTARIS_CAPTURE_PROBE_AT: [INSPECTOR_NAME, INSPECTOR_CHIPS, INSPECTOR_ARTIFACTS, INSPECTOR_PRODUCED, INSPECTOR_RING_CAPTION].map((s) => `${s}@10000`).concat(['.app-shell@12500', '[data-testid="artifact-inspector"]@12500', '[data-testid="library"]@12500']).join(';;'),
+    ROTARIS_CAPTURE_PROBE_AT: [INSPECTOR_NAME, INSPECTOR_META, INSPECTOR_CHIPS, INSPECTOR_ARTIFACTS, INSPECTOR_PRODUCED, INSPECTOR_RING_CAPTION].map((s) => `${s}@10000`).concat(['.app-shell@12500', '[data-testid="artifact-inspector"]@12500', '[data-testid="library"]@12500']).join(';;'),
     ROTARIS_CAPTURE_CLICKS: [`${INSPECTOR_PRODUCED} .artifact-link__open@11000`, `${ARTIFACTS_TAB}@16400`].join(';;'),
     ROTARIS_CAPTURE_PNG_AT: `${join(output, 'children-inspector.png')}@10200`,
     ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
@@ -288,6 +289,14 @@ const results = {};
   const chipNames = chips.map((c) => c.split(':')[0]);
   if (!chipNames.includes('background_output') || !chipNames.includes('wait_for_tasks')) throw new Error(`the running run-level agent's chips are not its root port's resolution (REQ-MONITOR-060/061): ${JSON.stringify(chips)}`);
   if (!chips.includes('delegate:used') || !chips.includes('artifact_write:used')) throw new Error(`the run-level agent's chips are not marked from its history (REQ-MONITOR-060): ${JSON.stringify(chips)}`);
+  // Acceptance A20 (REQ-MONITOR-044/052): the meta line's count is the run-level agent's own while its turn runs — at least
+  // one call per tool its chips mark used or active. It read `running · 8s · 0 tool calls` beside the used chips, because
+  // the root's calls join the session total only when its turn returns
+  // (docs/defects/fixed/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md).
+  const meta = probe(r.log, INSPECTOR_META, 10000)[0]?.text ?? '';
+  const metaCalls = /· (\d+) tool calls?\b/.exec(meta);
+  const marked = chips.filter((c) => c.endsWith(':used') || c.endsWith(':active')).length;
+  if (!metaCalls || Number(metaCalls[1]) < marked) throw new Error(`the running run-level agent's meta line counts fewer calls than the ${marked} tools its chips mark used (REQ-MONITOR-052): "${meta}"`);
   if (/no artifact store/.test(panel?.text ?? '')) throw new Error(`the inspector still says there is no artifact store: "${panel?.text}"`);
   // Acceptance A36 (REQ-MONITOR-089/065): the caption states the run-level agent's own reading and never denies that the
   // record carries it.
@@ -300,7 +309,7 @@ const results = {};
   const library = probe(r.log, '[data-testid="library"]', 12500)[0]?.data?.['data-tab'];
   if (view !== 'library' || library !== 'artifacts' || opened.length !== 1 || opened[0] !== published.id) throw new Error(`following the link did not open the artifact in the Library: view ${view}, tab ${library}, inspectors ${JSON.stringify(opened)} (REQ-LIBRARY-102/131)`);
   results.children = {
-    inspector: { runActive: true, shown: shownName, chips, produced, ringCaption: caption, openedFromLink: { view, tab: library, artifact: opened[0] }, png: join(output, 'children-inspector.png') },
+    inspector: { runActive: true, shown: shownName, meta, chips, produced, ringCaption: caption, openedFromLink: { view, tab: library, artifact: opened[0] }, png: join(output, 'children-inspector.png') },
     children: children.map((c) => `${c.canonical_name}:${c.state}`),
     artifacts: reports.map((x) => ({ id: x.id, slug: x.slug, status: x.status, importance: x.importance, task: x.source_task_id, persona: x.source_persona, timelineEventId: x.timeline_event_id })),
     publishedEntries: timeline.length,

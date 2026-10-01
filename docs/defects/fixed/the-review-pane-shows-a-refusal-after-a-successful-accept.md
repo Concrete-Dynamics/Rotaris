@@ -51,4 +51,4 @@ the pane was not re-read.
 
 Noticed while repairing it: a re-run or send-back taken through the launch disclosure leaves the pane saying nothing
 was recorded. See
-[`a-review-decision-taken-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`](../a-review-decision-taken-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md).
+[`a-review-decision-taken-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`](a-review-decision-taken-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md).

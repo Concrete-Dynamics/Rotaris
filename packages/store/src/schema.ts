@@ -1032,6 +1032,36 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE sessions ADD COLUMN plan_root_persona TEXT;
     `,
   },
+  {
+    to: 30,
+    /*
+     * REQ-MONITOR-044/052/069 with REQ-LIBRARY-093 and REQ-LIBRARY-099 (R-067, the repair of
+     * `a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`): the run-level agent is known by the
+     * names of the session's roots — each iteration's from its `iterations` row. A plan cycle is not an iteration
+     * (REQ-ORCH-153) and has no row; its root was named by its live run, and once that run parked or ended, by its publishes
+     * alone. A plan cycle's root that read an artifact and published nothing was then no agent's: the read records the
+     * reader by its canonical instance name (REQ-LIBRARY-099, REQ-LIBRARY-093), and the run-level agent lost that received
+     * link at the gate and in every later snapshot.
+     *
+     * `plan_roots`: one row per plan cycle's root, written when its turn starts (in the transaction that records it under
+     * way, v29) and never changed — its task id, the canonical instance name it reads and publishes under, and the name its
+     * rows carry. A plan cycle's root is always a fresh root, so the pair is the one `iterations` keeps for an iteration's.
+     * Unlike v29's pair it is not released when the root's calls are counted: it is who the root was, not whether it is
+     * under way. The table cascades with its session; every read is the primary key's prefix. A session written before
+     * this version has no rows, and true of it: its plan cycles' roots were never recorded, and those that published are
+     * still named by their publishes.
+     */
+    sql: `
+      CREATE TABLE plan_roots (
+        session_id          TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        root_task_id        TEXT NOT NULL,
+        root_canonical_name TEXT NOT NULL,
+        root_persona        TEXT NOT NULL,
+        opened_at           TEXT NOT NULL,
+        PRIMARY KEY (session_id, root_task_id)
+      );
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

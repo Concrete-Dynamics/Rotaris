@@ -299,7 +299,7 @@ const s4 = scenario('cancel', ['personas:', '  lead:', '    name: lead', '    mo
 
 // 4b. Cancel the run from the Mission view (acceptance A35, REQ-MONITOR-127/130/296): the run row selected, "Cancel selection",
 // confirmed. The session is shown `cancelling` from the confirmation — the engine writes no `cancelling` for the explicit
-// cancel, so its records read `running` until the run's end (OQ-158) — and no sample from the confirm to the run's end
+// cancel, so its records read `running` until the run's end (OQ-165) — and no sample from the confirm to the run's end
 // reads `Running`, in the subtitle, the run row or the status strip. Before the repair only the Workspace set anything, and the Mission view read `Running` throughout.
 const s4b = scenario('cancel-run', ['personas:', '  lead:', '    name: lead', '    model: scripted', "    purpose: 'Delegates the work, then waits for it.'", "    system_prompt: 'You are a lead. Delegate the work, then wait for it.'", '    tools: [delegate, read_file, todo]']);
 {

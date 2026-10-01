@@ -24,7 +24,7 @@ below were red before the change (`beginRun` did not exist, and the renderer's `
 - `packages/ui/src/cancel-overlay.ts` gains the run's cancel: `beginRun` lays an overlay with no agent ids and the run's
   `runStartedAt`, and `shownSession` shows the session's status `cancelling` over every active record of that run,
   answered or not. A refusal removes it; an acceptance keeps it until the run's first record at rest, and it never covers
-  a later run (OQ-158 — the engine gives the overlay no `cancelling` record to yield to).
+  a later run (OQ-165 — the engine gives the overlay no `cancelling` record to yield to).
   *Corrected 2026-10-01, at the verification: "it never covers a later run" was false as first built. Keyed on
   `runStartedAt` alone, the overlay covered the next run's pre-flight, whose records carry the cancelled run's key until
   the engine writes the new one after the pre-flight, so a follow-up read `Cancelling` and the composer refused input.
@@ -45,7 +45,7 @@ below were red before the change (`beginRun` did not exist, and the renderer's `
   `running`), so its heading's state and its tab's tooltip read `running` until the record at rest arrived — before this
   repair and after its first build alike. They now read the run's `cancelling` on the run's own live instance while the
   shown session reads it (`agentStateLabel` in `packages/ui/src/agents.ts`, read by `PersonaWindow`; the dot keeps
-  pulsing, since the instance is live until the run rests; OQ-158 states the word's reading). Pinned by
+  pulsing, since the instance is live until the run rests; OQ-165 states the word's reading). Pinned by
   `packages/ui/src/persona-run-cancel.test.ts`, which renders the window under `beginRun` and was red before
   ("expected 'running' to be 'cancelling'"), and by `pnpm mission-proof` item 4c, new: the inspector pops out the
   run-level agent, the window's Cancel on the run's own instance is confirmed, and every snapshot after the confirmation
@@ -72,7 +72,7 @@ below were red before the change (`beginRun` did not exist, and the renderer's `
   and counts only the snapshots that no longer hold the confirmation, which closes in the same commit that lays the
   overlay; the "never `Running`" and "no other active status" assertions are unchanged.*
 - What is not repaired: another window shows the cancel only when the run's record at rest reaches it, since the engine
-  writes no `cancelling` for the explicit cancel. OQ-158 asks whether it should.
+  writes no `cancelling` for the explicit cancel. OQ-165 asks whether it should.
 
 ## Specs
 

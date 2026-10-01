@@ -37,7 +37,7 @@ import { cancelCascade } from './agents.js';
  * no agent ids) covers every ACTIVE record of the run it was confirmed against, unanswered or accepted, and none at rest:
  * the run's own final read overwrites it (REQ-MONITOR-296), and a lagging reader's older record of that run is still
  * covered. The session's status is shown `cancelling`; no agent is shown cancelled by it, since the engine settles them in
- * the teardown (OQ-158).
+ * the teardown (OQ-165).
  *
  * "The run it was confirmed against" is an order too, not the `runStartedAt` alone. The engine saves a new run `starting`
  * before it writes that run's `runStartedAt` (after the pre-flight), and the store keeps the column until then, so a
@@ -182,7 +182,7 @@ export function createCancelOverlayStore(): CancelOverlayStore {
     // the one change drawn again for (the note above). A record of ANOTHER session ends them too: the window has followed
     // away and will not take that run's final read, and on its return every record it takes is newer than the confirmation,
     // so a run started meanwhile would read `cancelling` until it rested. It is shown as the engine writes it instead, as a
-    // window that never confirmed the cancel shows it (the verifier's optional finding on A35, OQ-158).
+    // window that never confirmed the cancel shows it (the verifier's optional finding on A35, OQ-165).
     const ends = (o: CancelOverlay): o is CancelOverlay & { readonly run: NonNullable<CancelOverlay['run']> } => o.run !== undefined && o.run.restedAt === undefined && (o.sessionId === session.id ? !isBusy(session.executionStatus) : true);
     const { overlays } = store.getState();
     if (overlays.some(ends)) store.setState({ overlays: overlays.map((o) => (ends(o) ? { ...o, run: { ...o.run, restedAt: n } } : o)) });

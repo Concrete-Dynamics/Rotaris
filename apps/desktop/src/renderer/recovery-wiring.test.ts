@@ -61,7 +61,7 @@ describe('PD-ORCH-005 clauses 13, 16 and 18 (OQ-100, OQ-101, OQ-103): the render
    * view do (`statusStripRunItem`, pinned in `packages/ui` by composer.test.ts), from the third of main.tsx's
    * `useNeedsRecovery` calls, the one the window root makes. Handing it `false`, or naming the status without it, would
    * read "run Running" beside a run-level agent drawn `paused` (PD-ORCH-005 clause 13, OQ-100) and fails here. Since
-   * acceptance A35 (REQ-MONITOR-127, OQ-158) the status it names is the one the window's surfaces show — the record under
+   * acceptance A35 (REQ-MONITOR-127, OQ-165) the status it names is the one the window's surfaces show — the record under
    * this window's optimistic cancels (`useShownSession`), so a confirmed run cancel reads `cancelling` there too.
    */
   it('main.tsx names the strip\'s run item from the recovery fact, over the status the window shows', () => {

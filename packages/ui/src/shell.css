@@ -177,6 +177,19 @@
 .run-header__state .status-dot { background: currentColor; }
 @media (prefers-reduced-motion: reduce) { .status-dot.is-pulsing { animation: none; } }
 .status-dot.is-pulsing[data-motion='reduced'] { animation: none; }
+/* The design StatusDot's states (`system/components/core/StatusDot.jsx` paints each from these tokens, `idle` excepted:
+   `docs/design/README.md` §4.1 resolves it to `--rt-info-500`, not a neutral grey, so REQ-SHELL-036's fifth group keeps
+   its colour). The adopted `components.css` gives `.status-dot` no colour, so the product's `StatusDot` writes its
+   state and this paints it.
+   `:where` holds the rule at `.status-dot`'s own specificity, so a surface that paints its dot otherwise — the tag's
+   ink in the run header and the improvement indicator — still does (A40, 2026-10-01). */
+.status-dot:where([data-state='run']) { background: var(--rt-run); }
+.status-dot:where([data-state='wait']) { background: var(--rt-wait); }
+.status-dot:where([data-state='done']) { background: var(--rt-done); }
+.status-dot:where([data-state='fail']) { background: var(--rt-fail); }
+.status-dot:where([data-state='ok']) { background: var(--rt-ok); }
+.status-dot:where([data-state='warn']) { background: var(--rt-warn); }
+.status-dot:where([data-state='idle']) { background: var(--rt-info-500); }
 .run-header__timing { font-size: var(--rt-text-xs, 12px); color: var(--rt-text-tertiary); min-width: 48px; }
 .run-header .run-controls { margin-left: auto; }
 /* REQ-CHAT-010: the divider is a real control — a pointer target with a keyboard tab stop, not a decorative rule. */
@@ -762,6 +775,10 @@
 .workspace > .queue { grid-area: queue; }
 .workspace > .composer__divider { grid-area: divider; }
 .agents { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); padding: var(--rt-space-3, 12px); border-right: 1px solid var(--rt-border); background: var(--rt-chrome); overflow: auto; }
+/* REQ-WORKSPACE-113: "Last run failed: {message}" carries the failed task's raw output, whose tokens can have no
+   break opportunity (a process's `[pid:date/time:ERROR:file:line]` prefix). Broken inside the column, as every other
+   surface that shows raw output here breaks it, so the sidebar never grows a sideways scroll to read the hint. */
+.agents__project .settings__hint { overflow-wrap: anywhere; }
 /* Density review 2026-09-13: the mockup draws a 40 px header BAR with a bottom hairline — title, tag and
    counts inline — not a bare kicker line. The bar escapes the panel's own padding by negative margins so
    the hairline runs the panel's full width, as the mockup's does. */

@@ -16,7 +16,7 @@ and not repaired: the repair asked for was the persona window's, and the one fun
 - REQ-MONITOR-127: on confirmation the session status is optimistically set to `cancelling`.
 - REQ-MONITOR-130: the same observable state whichever surface asks.
 - REQ-MONITOR-052: the inspector's meta line `{state} · …`; which vocabulary `{state}` takes for the run-level agent
-  while the run is cancelling is OQ-158's reading (the agent vocabulary has no `cancelling`).
+  while the run is cancelling is OQ-165's reading (the agent vocabulary has no `cancelling`).
 
 ## Relevant files
 

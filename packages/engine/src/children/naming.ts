@@ -43,3 +43,17 @@ export function takenTaskIds(dal: StoreDal | undefined, sessionId: SessionId): S
   if (!dal) return new Set();
   return new Set([...dal.childrenOf(sessionId).map((c) => c.task_id), ...dal.iterationsOf(sessionId).map((i) => i.root_task_id), ...dal.recordedTaskIds(sessionId)]);
 }
+
+/**
+ * REQ-ORCH-044 with OQ-158 (the repair of `a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`): the names
+ * the session's recorded roots carry — each iteration's root by the persona its rows carry (`root_persona`) and its canonical
+ * name, and each root no iteration records that published (a plan cycle's, OQ-106) by its publish's persona and `created_by`.
+ * The surfaces know the run-level agent by these names (`SessionRecord.entryRoots`, read by `entryRootsOf` in `sessions.ts`
+ * from the same sources: a source added there belongs here too), so the ledger keeps every child off them.
+ */
+export function recordedRootNames(dal: StoreDal, sessionId: SessionId): Set<string> {
+  const names = new Set<string>();
+  for (const r of dal.iterationsOf(sessionId)) { names.add(r.root_persona); names.add(r.root_canonical_name); }
+  for (const p of dal.rootPublishersOf(sessionId)) if (p.source_persona && p.created_by) { names.add(p.source_persona); names.add(p.created_by); }
+  return names;
+}

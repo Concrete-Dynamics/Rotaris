@@ -12,7 +12,7 @@ import { PersonaWindow } from './PersonaWindow.js';
  * the Workspace and the Mission view read. The run-level agent is presented through the agent vocabulary, which has no
  * `cancelling` — every busy status maps to `running` — so the overlay's `cancelling` reached no word the window draws and
  * the run's instance read `running` until the record at rest arrived. Its muted state label (REQ-SHELL-075 (a)) and its
- * tab's tooltip now read the run's status while the shown session reads `cancelling` (OQ-158).
+ * tab's tooltip now read the run's status while the shown session reads `cancelling` (OQ-165).
  */
 const ENTRY = { persona: 'orchestrator', model: 'scripted/alpha', reasoning: 'medium', tools: ['read_file'] } as const;
 const session = (over: Partial<SessionRecord> = {}): SessionRecord => ({

@@ -132,7 +132,7 @@ describe('REQ-MONITOR-128: a confirmed cancel of one agent is shown at once', ()
  * Mission view and a persona window do not show a confirmed run cancel as cancelling"). On confirmation the session's status
  * is shown `cancelling`; a refusal restores the record's own; an accepted cancel is shown until the run's record leaves the
  * active statuses, because the engine writes no `cancelling` for the explicit cancel and its records keep reading `running`
- * through the graceful stop (OQ-158).
+ * through the graceful stop (OQ-165).
  */
 describe('REQ-MONITOR-127: a confirmed cancel of the run is shown cancelling at once', () => {
   const RUN = '2026-09-29T09:58:00.000Z';

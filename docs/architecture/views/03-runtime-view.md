@@ -619,7 +619,10 @@ finding K1, 2026-09-29) is the same route for its tools: `resolved` is the nativ
 REQ-MONITOR-061), `called`
 and `active` the tracker's under the name the root dispatches as (`Run.entryTools`, `rootName`: a root resumed as the
 entry role keeps the persona its iteration was opened with, OQ-97); with no run live nothing is
-resolved, the history is read under the latest iteration's `root_persona` (`entryToolsOf`) — or, before any iteration,
+resolved, the history is read under the latest iteration's `root_persona` (`entryToolsOf`), or under the latest plan
+cycle root's `root_persona` when that root opened after it (`plan_roots.opened_at`, store v30: PD-ORCH-003 re-arms `plan`
+after an iteration, and the cycle's root runs fresh under a persona that may have been switched in between; the repair of
+`a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md`, 2026-10-01) — or, before any iteration,
 under every name the tracker holds that is no child's, which can only be a plan cycle's root's, since a plan cycle has no
 iteration row (REQ-ORCH-153; `AgentActivity.calledToolsWhere`, acceptance A21, 2026-09-29) — and the surface lets the
 role's declared tools stand in (REQ-MONITOR-060; the snapshot's `declaredTools`). **`SessionRecord.entryStalledSeconds`**

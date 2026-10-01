@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A plan cycle's chips after an iteration read the plan cycle root's history (REQ-MONITOR-060, REQ-MONITOR-069,
+REQ-ORCH-153, PD-ORCH-003).** With no run live and an iteration recorded, `entryToolsOf` reads the tracker under the latest
+plan cycle root's persona when that root opened after the latest iteration (`plan_roots`, store v30), and under the
+iteration root's otherwise. This repairs `a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md`.
+The **runtime view**'s `entryTools` paragraph says so. No package, edge, process, message kind, channel, command or store
+column changed.
+
 **A todo edit at rest and the quit's terminal record hold the lock (ADR-0005, REQ-EVENTS-098, REQ-CHAT-090, PD-ORCH-005
 clause 10).** `editStoredTodo` claims through `claimHold` before it writes and is refused `session_locked` (REQ-SESSION-048's
 words) or `store_failed` with nothing written; `closeAll`'s quit record of a resting session's background sessions

@@ -726,11 +726,24 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
  * history was read under no name, and in a session whose first run parked at the gate every chip read `not used` while the
  * user reviewed the plan (the repair of
  * `the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md`, acceptance A21, R-067).
+ *
+ * With an iteration recorded, the root that ran last may still be a plan cycle's: PD-ORCH-003 lets the user re-arm `plan`
+ * after an iteration, and the cycle's root runs fresh under the run's persona, which may have been switched in between.
+ * Every plan cycle's root is recorded in `plan_roots` with the name it dispatches under and when its turn started (store
+ * v30), so the history is read under whichever root opened last — the latest plan cycle's root when it opened after the
+ * latest iteration, that iteration's root otherwise (a tie goes to the iteration: an approved plan's iteration opens after
+ * its cycle). Before this the latest iteration's root was read whenever one existed, and a plan cycle under a switched
+ * persona was marked from the earlier iteration root's calls (the repair of
+ * `a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md`).
  */
 export function entryToolsOf(dal: StoreDal, sessionId: SessionId, run: { readonly entryTools: EntryToolsPayload } | null | undefined, activity: AgentActivity): EntryToolsPayload {
   if (run) return run.entryTools;
-  const persona = dal.iterationsOf(sessionId).at(-1)?.root_persona;
-  if (persona) return { resolved: [], called: activity.calledTools(persona), active: [] };
+  const iteration = dal.iterationsOf(sessionId).at(-1);
+  if (iteration) {
+    const plan = dal.planRootsOf(sessionId).at(-1);
+    const persona = plan && plan.opened_at > iteration.opened_at ? plan.root_persona : iteration.root_persona;
+    return { resolved: [], called: activity.calledTools(persona), active: [] };
+  }
   const children = new Set(dal.childrenOf(sessionId).map((c) => c.canonical_name));
   return { resolved: [], called: activity.calledToolsWhere((agent) => !children.has(agent)), active: [] };
 }

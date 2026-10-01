@@ -36,6 +36,9 @@ text is the prompt (`appendTask`'s fourth argument). Which of the two each reade
   (`Todo.editTask`, REQ-CHAT-091), as an agent task's rename keeps its description;
 - **the handoff's todo list** (`buildContinuationPayload`) carries the name too (`taskTitle`), cut to 80 characters:
   REQ-SESSION-115 states its lines as "task display titles", and the name is the task's display title;
+- **the plan gate's implied tasks** (`planTodoLines` in `packages/ui/src/PlanGate.tsx`, over the `todo` the run passes
+  `openPlanGate` at a later plan cycle) list the name too, as the pane draws it, so two queued prompts of the same text
+  are two lines and PD-ORCH-002's deduplication of identical tasks does not merge them;
 - **the entry agent's todo lines across a compression** (`Run.plannerTodoLines`, `todoLinesFromStored`), which
   REQ-MONITOR-084 (4) carries "one for one" and states no display title for, carry the name and then the content
   (`taskLine`), as an agent task's line carries its name and then its description — a built reading, not the
@@ -45,7 +48,8 @@ text is the prompt (`appendTask`'s fourth argument). Which of the two each reade
 
 A stored todo without names reads as before; a stored name that is not a string is not a planner document. Pinned by
 `packages/engine/src/run/todo.test.ts` ("a task named beside its content"), `packages/engine/src/todo-view.test.ts` ("a named
-planner task"), `packages/engine/src/session-resume.test.ts` (the handoff's line is the display title) and `packages/engine/src/control.test.ts`
+planner task"), `packages/engine/src/session-resume.test.ts` (the handoff's line is the display title), `packages/ui/src/plan-gate.test.ts`
+(the gate lists a named task by its name) and `packages/engine/src/control.test.ts`
 (the consumed prompt's task carries the name), each failing on the old code; and in the built app by
 `apps/desktop/scripts/part-j-proof.mjs`'s queue scenario, which reads the stored task's name and content. Repaired
 2026-10-01 under R-067.
@@ -53,3 +57,7 @@ planner task"), `packages/engine/src/session-resume.test.ts` (the handoff's line
 *Corrected 2026-10-01 at verification:* the outcome first had the handoff's todo lines carry the name and then the
 content (`taskLine`), which is not REQ-SESSION-115's "task display titles"; `buildContinuationPayload` now writes
 `taskTitle`, and the session-resume test expects `- [pending] Queued Prompt: 0123abcd`.
+
+*Corrected 2026-10-01 at the second verification:* the list of readers above first left out the plan gate, whose
+`planTodoLines` parses the stored todo itself and still listed a queued prompt's task by its prompt text; it now reads the
+name where the task has one, and the bullet above was added.

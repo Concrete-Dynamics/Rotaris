@@ -5475,16 +5475,20 @@ images its prompt was sent with, which needs a task to hold them.
 (acceptance A28, R-067).* The task a queued prompt becomes is now named as REQ-CHAT-040 and REQ-ORCH-071 state: a todo task
 carries an optional `name` beside its text, and `Run.consumeQueued` names it "Queued Prompt: <first 8 characters of the
 prompt id>" with the prompt text as its content. The Todo pane draws the name, and so does the handoff's todo list,
-whose lines REQ-SESSION-115 states as "task display titles cut to 80 characters" (as OQ-104 reads them); the entry
+whose lines REQ-SESSION-115 states as "task display titles cut to 80 characters" (as OQ-104 reads them), and so does the
+plan gate's list of implied tasks (REQ-ORCH-153, PD-ORCH-002), which lists each task as the pane draws it; the entry
 agent's todo lines across a compression (REQ-MONITOR-084 (4), "todo items carried across one for one", which states no
 display title) carry the name and then the content, as an agent task's line carries its name and then its description.
 A rename renames the name and keeps the content, as an agent task's rename keeps its description (REQ-CHAT-091). The
 iteration that takes the task up is still sent its content alone, as the first bullet above reads: what the model is to
-do is the prompt, and the name is the plan's. That a queued prompt's task is *named* is REQ-CHAT-040's and REQ-ORCH-071's
+do is the prompt, and the name is the plan's; the `task` field of the iteration's records (`iteration.start`, and the
+iteration's end record and `iteration_end` message) carries the content too, and is part of what stays open here. That a queued prompt's task is *named* is REQ-CHAT-040's and REQ-ORCH-071's
 own words; which of name and content the compression's lines and the iteration's task part carry is the built reading
 above, not something the requirements state, and whether the task part should also state the name stays open with the
 rest. *Corrected 2026-10-01 at verification:* this note first read the handoff's lines as carrying the name and then the
-content; REQ-SESSION-115 names them display titles, so they now carry the name alone.
+content; REQ-SESSION-115 names them display titles, so they now carry the name alone. *Corrected 2026-10-01 at the
+second verification:* this note first left the plan gate out of the readers; its implied-task list still showed a queued
+prompt's task by its prompt text, and now lists the name.
 
 **OQ-118 — May the end-of-run summary say which rest a person asked for, and what a continue will resume?** *(REQ-ORCH-082
 rule 1, "not asserting which of the two person-stops it was" and "no rule of this list may distinguish the two";

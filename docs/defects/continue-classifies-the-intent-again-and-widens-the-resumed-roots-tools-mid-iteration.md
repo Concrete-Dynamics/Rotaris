@@ -98,4 +98,9 @@ The header half is repaired; the rest stays open under [OQ-162](../architecture/
   reads "Intent: moderate_feature (continued from the previous run)", the continuation's status, where it read the
   launch's fallback before. The categories did not diverge this time, so the grant did not change and no warning was
   raised; the case where they diverge is the test's.
+- **Run again after the transient status** (pack `.live-run/runs/2026-10-01T16-06-59-097Z/`, same worktree and endpoint,
+  `live-run PASSED`): the launch classified `small_feature` (0.72) and the Continue classified `small_feature` again
+  (0.86, timeline #12, written just before the resumed run's `run_start` #13); `resume/resume.png`'s header reads
+  "Intent: small_feature". The harness takes no screenshot while the Continue's classification is in flight, so the
+  `classifying` status in that window is shown by the test alone, not in the built app.
 

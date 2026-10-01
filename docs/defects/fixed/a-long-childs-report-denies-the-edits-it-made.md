@@ -51,7 +51,9 @@ that a middle marked omitted is not evidence that nothing happened there. Each c
 characters and the block to 12,000, REQ-ORCH-110's two figures, so the pass stays bounded. The ruling gives the facts
 no bound of its own; this bound is the build's, asked as OQ-120. `transcriptText` keeps its head-only cut for its other
 reader, the compressor
-([`the-compressor-reads-only-the-head-of-what-it-compresses`](../the-compressor-reads-only-the-head-of-what-it-compresses.md)).
+([`the-compressor-reads-only-the-head-of-what-it-compresses`](the-compressor-reads-only-the-head-of-what-it-compresses.md)),
+until 2026-09-30, when the compressor was given a reader of its own and `transcriptText` was removed (acceptance A12,
+OQ-156).
 
 *The first repair's start, falsified by the branch's verification and kept beside its replacement:* it kept "the first
 event (the task as given, itself cut to 2,000 characters)". The first event is the whole payload, and the task comes

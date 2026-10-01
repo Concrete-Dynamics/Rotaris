@@ -1472,6 +1472,93 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toEqual([]);
       expect(byName('mid')!.state).toBe('failed');
     });
+
+    it('REQ-ORCH-089 / REQ-MONITOR-119 (OQ-155): a child waiting on its own child between its turns is not reported stalled; the child that is silent is, by its own watch', async () => {
+      let releaseLeaf!: () => void;
+      const leafHeld = new Promise<void>((r) => { releaseLeaf = r; });
+      let midAsked = 0;
+      let leafAsked = 0;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'mid', task: 'TASK: mid' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        if (!userText(req).includes('TASK: mid')) { leafAsked += 1; return { parts: [{ hold: leafHeld }, ...answer('leaf done').parts] }; }
+        midAsked += 1;
+        if (midAsked === 1) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'leaf', task: 'TASK: leaf' } }], 'Delegating.');
+        if (midAsked === 2) return answer('Waiting on leaf.');
+        return answer('Leaf reported; done.');
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      const byName = (name: string) => children(sid).find((c) => c.canonical_name === name)!;
+      await settle(() => midAsked === 2 && leafAsked === 1);
+      await new Promise((r) => setTimeout(r, 20));
+      // Two minutes: past the 90 s window, the leaf silent in its step and `mid` waiting on it between its turns.
+      clock.advance(120_000);
+      const stallsOf = (name: string) => dal.issuesOf(sid).filter((i) => i.kind === 'stall' && i.actor === name);
+      // The leaf is silent inside a model step: its own watch reports it (REQ-MONITOR-119), at every evaluation.
+      expect(stallsOf('leaf').length).toBeGreaterThan(0);
+      expect(warnings.some((m) => m.startsWith(`child appears stalled: no model event or token for 90 seconds (leaf, ${byName('leaf').task_id})`))).toBe(true);
+      // `mid`, asked for nothing while it waits, is not silent: no `stall` issue and no stall warning name it.
+      expect(stallsOf('mid')).toEqual([]);
+      expect(warnings.filter((m) => m.startsWith('child appears stalled') && m.includes(`(mid, ${byName('mid').task_id})`))).toEqual([]);
+      releaseLeaf();
+      await sessions.running(sid)!;
+      expect(midAsked).toBe(3);
+      expect(byName('mid').state).toBe('succeeded');
+      // Its resumed turn after the wait is not a recovery from a stall it never had.
+      expect(warnings.filter((m) => m.startsWith('child stall recovered:') && m.includes('(mid,'))).toEqual([]);
+      expect(stallsOf('mid')).toEqual([]);
+    });
+
+    it('REQ-ORCH-089 / REQ-MONITOR-119 (OQ-155) with PD-ORCH-005 clause 4: a child resumed into waiting on its own child is not reported stalled; the child that is silent is, by its own watch', async () => {
+      const leafGates: (() => void)[] = [];
+      let midAsked = 0;
+      let leafAsked = 0;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'mid', task: 'TASK: mid' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        if (!userText(req).includes('TASK: mid')) {
+          leafAsked += 1;
+          // Its only call never ran, so REQ-ORCH-095's one re-prompt follows its resumed answer: that one is not held.
+          if (leafAsked > 2) return answer('leaf done');
+          const hold = new Promise<void>((r) => { leafGates.push(r); });
+          // The leaf's first step is the one in flight when the pause is accepted: it asks for a call the pause cuts.
+          if (leafAsked === 1) return { parts: [{ hold }, ...toolCalls([{ callId: 'l1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Checking.').parts] };
+          return { parts: [{ hold }, ...answer('leaf done').parts] };
+        }
+        midAsked += 1;
+        if (midAsked === 1) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'leaf', task: 'TASK: leaf' } }], 'Delegating.');
+        if (midAsked === 2) return answer('Waiting on leaf.');
+        return answer('Leaf reported; done.');
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      const byName = (name: string) => children(sid).find((c) => c.canonical_name === name)!;
+      await settle(() => midAsked === 2 && leafGates.length === 1);
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      leafGates[0]!();
+      expect((await sessions.running(sid)!).status).toBe('interrupted');
+      expect(byName('mid')).toMatchObject({ state: 'paused' });
+      expect(byName('leaf')).toMatchObject({ state: 'paused' });
+      // Continued: `mid`'s record ends on its answer, so it resumes into waiting and takes no step; the leaf's resumed step
+      // is held, silent.
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await settle(() => leafGates.length === 2);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(midAsked).toBe(2);
+      clock.advance(120_000);
+      const stallsOf = (name: string) => dal.issuesOf(sid).filter((i) => i.kind === 'stall' && i.actor === name);
+      // The leaf is silent inside a model step: its own watch reports it (REQ-MONITOR-119).
+      expect(stallsOf('leaf').length).toBeGreaterThan(0);
+      expect(warnings.some((m) => m.startsWith(`child appears stalled: no model event or token for 90 seconds (leaf, ${byName('leaf').task_id})`))).toBe(true);
+      // `mid`, resumed into waiting and asked for nothing, is not silent: no `stall` issue and no stall warning name it.
+      expect(stallsOf('mid')).toEqual([]);
+      expect(warnings.filter((m) => m.startsWith('child appears stalled') && m.includes(`(mid, ${byName('mid').task_id})`))).toEqual([]);
+      leafGates[1]!();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(midAsked).toBe(3);
+      expect(byName('mid').state).toBe('succeeded');
+      expect(warnings.filter((m) => m.startsWith('child stall recovered:') && m.includes('(mid,'))).toEqual([]);
+      expect(stallsOf('mid')).toEqual([]);
+    });
   });
 
   it('REQ-ORCH-088: the ceiling asks the child to land, so the step in flight finishes and its words reach the report', async () => {
@@ -3099,6 +3186,52 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       });
     });
 
+    describe('REQ-MONITOR-102 (the repair of a-root-whose-turn-raises-never-counts-its-calls.md): a root whose turn raises counts its calls from its record', () => {
+      const probed: PortToolResult = { text: 'probed', isError: false, status: 'ok', durationMs: 1, label: 'probe', args: {} };
+      const rootRow = (sid: SessionId, name: string) => dal.residentRows(sid).find((r) => r.kind === 'tool' && r.tool_name === name && r.name === 'orchestrator');
+
+      it('a raise that closes the iteration failed: the calls it ran reach the total and its iteration, the one it never started does not, and no row is left running', async () => {
+        const { sessions } = sessionsWith((persona, turn) => {
+          if (persona !== 'orchestrator') return answer('done');
+          // One call that returns, then a step whose first call raises out of its dispatch and whose second never starts.
+          return turn === 1 ? toolCalls([{ callId: 'q1', name: 'probe', args: {} }]) : toolCalls([{ callId: 'b1', name: 'boom', args: {} }, { callId: 'q2', name: 'probe', args: {} }]);
+        }, { tool: (name) => (name === 'boom' ? Promise.reject(new Error('the port raised')) : name === 'probe' ? Promise.resolve(probed) : undefined) });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await sessions.running(sid);
+        expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'closed' }]);
+        // q1 and the raising b1 — q2 was asked for and never started.
+        expect(dal.getSession(sid)!.tool_calls).toBe(2);
+        expect(dal.iterationsOf(sid)[0]!.root_tool_calls).toBe(2);
+        // REQ-SESSION-129: the call it raised out of is answered, and its row settled, as cut off — naming no rest.
+        expect(rootRow(sid, 'boom')).toMatchObject({ tool_status: 'failed' });
+        expect(rootRow(sid, 'boom')!.output).toMatch(/^This call was cut off before it completed, and it was not re-run\./);
+      });
+
+      it('a raise while the run comes to rest leaves the iteration open; the continue counts only the calls the resumed root adds', async () => {
+        let fail!: () => void;
+        const raised = new Promise<PortToolResult>((_, reject) => { fail = () => reject(new Error('the port raised')); });
+        const { sessions } = sessionsWith((persona, turn) => {
+          if (persona !== 'orchestrator') return answer('done');
+          // q1 returns; b1 raises once the pause is asked for; resumed, the root makes q3 and answers.
+          return turn === 1 ? toolCalls([{ callId: 'q1', name: 'probe', args: {} }]) : turn === 2 ? toolCalls([{ callId: 'b1', name: 'boom', args: {} }]) : turn === 3 ? toolCalls([{ callId: 'q3', name: 'probe', args: {} }]) : answer('Done.');
+        }, { tool: (name) => (name === 'boom' ? raised : name === 'probe' ? Promise.resolve(probed) : undefined) });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await settle(() => rootRow(sid, 'boom') !== undefined);
+        expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+        fail();
+        await sessions.running(sid);
+        expect(warnings.some((w) => /raised while coming to rest, and is left open/.test(w))).toBe(true);
+        // q1 and b1, which no returned turn counted.
+        expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', interruption: 'pause', root_tool_calls: 2 }]);
+        expect(dal.getSession(sid)!.tool_calls).toBe(2);
+        expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+        expect((await sessions.running(sid))!.status).toBe('completed');
+        // q3 added once; the record's first two are not counted again.
+        expect(dal.getSession(sid)!.tool_calls).toBe(3);
+        expect(dal.iterationsOf(sid)[0]).toMatchObject({ state: 'closed', root_tool_calls: 3 });
+      });
+    });
+
     describe('REQ-SESSION-094: a detached call no longer writes through its tool gate or its stream (the repair of a-detached-call-still-writes-through-its-tool-gate.md)', () => {
       it('teardown closes every port the run built, before the terminal pair, each with the statement its open calls settle with', async () => {
         const closed: { agent: string; statement: string; ended: number }[] = [];
@@ -3497,6 +3630,29 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         expect(byName(sid, 'work')).toMatchObject({ state: 'paused', interruption: 'stop' });
         expectAnswered(sid, 'stop');
       });
+    });
+
+    it('REQ-ORCH-109 with clause 3 (found by the verification of the repair of a-reports-edited-files-counts-refused-writes): a write that landed after the pause\'s tool deadline cut it off is still in the resumed child\'s report', async () => {
+      const g = gate();
+      const wrote: PortToolResult = { text: 'Overwrote src/app.ts', isError: false, status: 'ok', durationMs: 1, label: 'write_file', args: {} };
+      const write = (): ScriptedCall => toolCalls([{ callId: 'w1', name: 'write_file', args: { operation: 'overwrite', path: 'src/app.ts', content: 'x' } }], 'Writing.');
+      // The tool holds its `ok` the way a post-tool hook (a formatter) would, past the pause's 30 s tool deadline.
+      const { sessions } = scriptedChild([write, () => answer('Wrote src/app.ts.')], { tool: (name) => (name === 'write_file' ? g.hold.then(() => wrote) : undefined) });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool' && r.tool_name === 'write_file'));
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(31_000);
+      g.open();
+      await sessions.running(sid)!;
+      const work = byName(sid, 'work');
+      expect(work).toMatchObject({ state: 'paused', interruption: 'pause' });
+      // The record: the call is answered as cut off, with what it had produced.
+      expect(conversationOf(dal.agentConversation(sid, work.task_id)).at(-1)).toEqual({ role: 'tool', content: [{ kind: 'tool-result', callId: 'w1', name: 'write_file', isError: true, result: interruptedResult('pause', true, 'Overwrote src/app.ts') }] });
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await sessions.running(sid)!;
+      expect(byName(sid, 'work')).toMatchObject({ state: 'succeeded', report_stored: 1 });
+      expect((JSON.parse(byName(sid, 'work').report!) as { edited_files: string[] }).edited_files).toEqual(['src/app.ts']);
     });
 
     it('REQ-TOOLS-156 at a rest: a parent waiting in wait_for_tasks is released at once, and its wait is recorded as interrupted', async () => {
@@ -4470,6 +4626,508 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(fired.sort()).toEqual(['broken', 'first']);
       expect(warnings.filter((w) => w.includes('child_completed') && w.includes('the hook port exploded'))).toHaveLength(2);
       expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
+    });
+  });
+
+  /**
+   * REQ-HOOKS-003 ("`child_completed` once a delegated child agent has finished, whatever its final state"), REQ-HOOKS-075
+   * (its `state` is one of `succeeded`, `failed`, `cancelled` or `blocked`), REQ-ORCH-048 and REQ-ORCH-052 (terminal-state
+   * callbacks fire for cascaded and swept records "exactly as for directly completed ones"): the repair of
+   * `a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`. Only a child's own execution and
+   * `settleRaised` fired it; every other path that ends a child fired nothing.
+   */
+  describe('REQ-HOOKS-003 / REQ-ORCH-048 / REQ-ORCH-052 / REQ-ORCH-053 / REQ-ORCH-133 / PD-ORCH-005 clause 6: a child settled outside its execution fires `child_completed`', () => {
+    const settle = async (until: () => boolean, rounds = 400) => { for (let i = 0; i < rounds && !until(); i += 1) await new Promise((r) => setTimeout(r, 5)); };
+    const byName = (sid: SessionId, name: string): ChildRow => children(sid).find((c) => c.canonical_name === name)!;
+    const textOf = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('')).join('\n');
+    /**
+     * Every lifecycle occurrence in order, a `child_completed` labelled by its child, and each `child_completed`'s fields.
+     * `held`: the child whose `child_completed` is held until `release`, its end then recorded as `…:end`.
+     */
+    function recordingHooks(held?: string) {
+      const order: string[] = [];
+      const completed: Record<string, unknown>[] = [];
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event, fields) => {
+          if (event !== 'child_completed') { order.push(event); return []; }
+          const name = String(fields['child_name']);
+          completed.push({ ...fields });
+          order.push(`child_completed(${name})`);
+          if (name === held) { await hold; order.push(`child_completed(${name}):end`); }
+          return [];
+        },
+        advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      return { order, completed, hooks, release: () => release() };
+    }
+    const fieldsOf = (row: ChildRow, state: string, summary: string) => ({ child_id: row.task_id, child_name: row.canonical_name, persona: row.persona, state, status: state, summary });
+
+    it('REQ-ORCH-048: a child the cascade blocks fires it, `blocked`, with its report\'s summary, before the iteration ends', async () => {
+      const { order, completed, hooks } = recordingHooks();
+      let sid = '' as SessionId;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'a', task: 'TASK: a' } }]);
+          if (turn === 2) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'b', task: 'TASK: b', depends_on: [byName(sid, 'a').task_id] } }]);
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        // `a` says nothing and calls nothing, twice, so it ends failed and `b` is blocked.
+        return answer(textOf(req).includes('TASK: b') ? 'b ran.' : '');
+      }, { hooks });
+      sid = (sessions.start(dal, 'C:/ws', 'a then b') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const b = byName(sid, 'b');
+      expect(b.state).toBe('blocked');
+      expect(completed.filter((f) => f['child_name'] === 'b')).toEqual([fieldsOf(b, 'blocked', (JSON.parse(b.report!) as { summary: string }).summary)]);
+      expect(order.filter((e) => e.startsWith('child_completed(b)'))).toHaveLength(1);
+      expect(order.indexOf('child_completed(b)')).toBeGreaterThan(order.indexOf('child_completed(a)'));
+      expect(order.indexOf('child_completed(b)')).toBeLessThan(order.indexOf('iteration_end'));
+    });
+
+    it('REQ-ORCH-133: the user\'s cancel of one running child fires it once, `cancelled`, before the iteration ends', async () => {
+      const { order, completed, hooks } = recordingHooks();
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return { parts: [{ hold }, ...answer('late').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'work')?.state === 'running');
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'work').task_id } })).toEqual({ ok: true });
+      releaseChild();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const work = byName(sid, 'work');
+      expect(work.state).toBe('cancelled');
+      expect(completed).toEqual([fieldsOf(work, 'cancelled', 'The user cancelled this child.')]);
+      expect(order).toEqual(['session_start', 'child_completed(work)', 'iteration_end', 'session_end']);
+    });
+
+    it('REQ-ORCH-052: a child the finalize sweep cancels at the explicit cancel — one that never started — fires it once, `cancelled`, before the run ends', async () => {
+      // `second`'s hook is held: the run ends only after it (REQ-HOOKS-076 / REQ-HOOKS-080).
+      const { order, completed, hooks, release } = recordingHooks('second');
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      // One model slot (REQ-ORCH-050): `second` waits behind `first`, so no execution of its own ends it.
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'first', task: 'TASK: first' } }, { callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'second', task: 'TASK: second' } }]) : answer('never');
+        if (persona === 'summariser') return answer('{}');
+        return { parts: [{ hold }, ...answer('late').parts] };
+      }, { hooks, cap: 1 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'first')?.state === 'running' && byName(sid, 'second')?.state === 'waiting_on_model_slot');
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: RUN_AGENT_ID } })).toEqual({ ok: true });
+      releaseChild();
+      await settle(() => order.includes('child_completed(second)'));
+      await settle(() => order.includes('session_end'), 40);
+      expect(order).not.toContain('session_end');
+      release();
+      await sessions.running(sid)!;
+      const second = byName(sid, 'second');
+      expect(second.state).toBe('cancelled');
+      expect(completed.filter((f) => f['child_name'] === 'second')).toEqual([fieldsOf(second, 'cancelled', (JSON.parse(second.report!) as { summary: string }).summary)]);
+      expect(order.filter((e) => e.startsWith('child_completed') && !e.endsWith(':end')).sort()).toEqual(['child_completed(first)', 'child_completed(second)']);
+      expect(order.indexOf('child_completed(second):end')).toBeLessThan(order.indexOf('session_end'));
+    });
+
+    it('REQ-ORCH-052: a child the finalize sweep cancels at an ordinary exit — its root\'s turn failed — fires it, and the iteration ends only after it', async () => {
+      const { order, completed, hooks, release } = recordingHooks('work');
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : { parts: [{ error: modelError({ code: 'unknown', headline: 'the provider failed' }) }] };
+        if (persona === 'summariser') return answer('{}');
+        return { parts: [{ hold }, ...answer('late').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => order.includes('child_completed(work)'));
+      await settle(() => order.includes('iteration_end') || order.includes('session_end'), 40);
+      // The sweep's hook holds the run: neither the iteration's hook nor the session's has started (REQ-HOOKS-076/080).
+      expect(order).not.toContain('iteration_end');
+      expect(order).not.toContain('session_end');
+      release();
+      releaseChild();
+      await sessions.running(sid)!;
+      const work = byName(sid, 'work');
+      expect(work.state).toBe('cancelled');
+      expect(completed).toEqual([fieldsOf(work, 'cancelled', (JSON.parse(work.report!) as { summary: string }).summary)]);
+      const done = order.indexOf('child_completed(work):end');
+      expect(order.filter((e, i) => i < done && (e === 'iteration_end' || e === 'session_end'))).toEqual([]);
+      expect(order.at(-1)).toBe('session_end');
+    });
+
+    it('REQ-ORCH-053: a child a previous run left unfinished, settled by the next run, fires it after that run\'s `session_start`', async () => {
+      const { order, completed, hooks } = recordingHooks();
+      const { sessions } = sessionsWith((persona) => (persona === 'orchestrator' ? answer('hi') : answer('{}')), { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      // A child left `running` by a previous run, as a killed host would leave it.
+      dal.insertChild({ session_id: sid, task_id: 'bg_0000dead', canonical_name: 'ghost', given_name: 'ghost', persona: 'coding-agent', state: 'running', parent_id: dal.iterationsOf(sid)[0]!.root_task_id, depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: new Date(Number(clock.instant())).toISOString() });
+      order.length = 0;
+      expect(sessions.prompt(sid, 'again').ok).toBe(true);
+      await sessions.running(sid)!;
+      const ghost = byName(sid, 'ghost');
+      expect(ghost.state).toBe('cancelled');
+      expect(completed).toEqual([fieldsOf(ghost, 'cancelled', 'Cancelled: the run that owned this child ended (killed host or hard cancel) before it settled.')]);
+      expect(order.slice(0, 2)).toEqual(['session_start', 'child_completed(ghost)']);
+    });
+
+    it('PD-ORCH-005 clause 6: "continue without them" fires it for each paused agent it cancels, after the continuing run\'s `session_start`', async () => {
+      const { order, completed, hooks } = recordingHooks();
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return { parts: [{ hold }, ...answer('late').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'work')?.state === 'running');
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      releaseChild();
+      await sessions.running(sid)!;
+      expect(byName(sid, 'work').state).toBe('paused');
+      expect(completed).toEqual([]);
+      order.length = 0;
+      expect(sessions.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
+      await sessions.running(sid)!;
+      const work = byName(sid, 'work');
+      expect(work.state).toBe('cancelled');
+      expect(completed).toEqual([fieldsOf(work, 'cancelled', (JSON.parse(work.report!) as { summary: string }).summary)]);
+      expect(order.slice(0, 2)).toEqual(['session_start', 'child_completed(work)']);
+    });
+
+    it('REQ-HOOKS-076 with clause 22 (found by the verification of this repair): a child followed up while its cancel\'s hook still runs fires it once for each end, not a third time when the first hook ends mid-way through the second', async () => {
+      const gateOf = () => { let open!: () => void; const hold = new Promise<void>((r) => { open = r; }); return { hold, open: () => open() }; };
+      const ends: string[] = [];
+      const gates = [gateOf(), gateOf()];
+      let n = 0;
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event, fields) => {
+          if (event !== 'child_completed') return [];
+          const i = n; n += 1;
+          ends.push(String(fields['state']));
+          await gates[i]?.hold;
+          return [];
+        },
+        advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      let sid = '' as SessionId;
+      const rootGate = gateOf();
+      let releaseChild!: () => void;
+      const childHold = new Promise<void>((r) => { releaseChild = r; });
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]);
+          // Its second step is held until the cancel's hook is running, then follows the cancelled child up.
+          if (turn === 2) return { parts: [{ hold: rootGate.hold }, ...toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: again', session_id: byName(sid, 'work').task_id } }]).parts] };
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return textOf(req).includes('TASK: again') ? answer('Done again.') : { parts: [{ hold: childHold }, ...answer('late').parts] };
+      }, { hooks });
+      sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'work')?.state === 'running');
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'work').task_id } })).toEqual({ ok: true });
+      releaseChild();
+      await settle(() => ends.length === 1);
+      rootGate.open();
+      // The follow-up ends and its own settle's hook starts while the cancel's hook still runs.
+      await settle(() => ends.length === 2);
+      expect(ends).toEqual(['cancelled', 'succeeded']);
+      gates[0]!.open();
+      await new Promise((r) => setTimeout(r, 20));
+      gates[1]!.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(byName(sid, 'work').state).toBe('succeeded');
+      expect(ends).toEqual(['cancelled', 'succeeded']);
+    });
+
+    it('REQ-HOOKS-080 (the third verification of this repair): a parent takes a child the user cancelled as ended only once its `child_completed` hook is done — its next model step waits for the hook', async () => {
+      const { order, hooks, release } = recordingHooks('work');
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          order.push(`root(${turn})`);
+          return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work', background: true } }]) : answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return { parts: [{ hold }, ...answer('late').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      // The root's turn has ended and it waits on its child in the resume loop.
+      await settle(() => byName(sid, 'work')?.state === 'running' && order.includes('root(2)'));
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'work').task_id } })).toEqual({ ok: true });
+      releaseChild();
+      await settle(() => order.includes('child_completed(work)'));
+      await settle(() => order.includes('root(3)'), 40);
+      // The cancel woke the parent, but the child is settling until its hook is done: no model step yet.
+      expect(order).not.toContain('root(3)');
+      release();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(order.indexOf('root(3)')).toBeGreaterThan(order.indexOf('child_completed(work):end'));
+    });
+
+    it('REQ-HOOKS-003 (the third verification of this repair): a store that cannot be read as the scheduler is told still fires the hook, from the moved row', async () => {
+      const { completed, hooks } = recordingHooks();
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return { parts: [{ hold }, ...answer('late').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'work')?.state === 'running');
+      const workId = byName(sid, 'work').task_id;
+      // The cancel's timeline entry arms one failed read of the child's record: the next, the terminal listener's.
+      let armed = false;
+      const insert = dal.insertTimeline.bind(dal);
+      const inserted = vi.spyOn(dal, 'insertTimeline').mockImplementation((...args: Parameters<typeof dal.insertTimeline>) => { if (args[3] === 'child_user_cancelled') armed = true; return insert(...args); });
+      const getChild = dal.getChild.bind(dal);
+      let raised = 0;
+      const read = vi.spyOn(dal, 'getChild').mockImplementation((s: SessionId, taskId: string) => {
+        if (armed && taskId === workId) { armed = false; raised += 1; throw new Error('SQLITE_IOERR: disk I/O error'); }
+        return getChild(s, taskId);
+      });
+      try {
+        expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: workId } })).toEqual({ ok: true });
+      } finally { inserted.mockRestore(); read.mockRestore(); }
+      expect(raised).toBe(1);
+      releaseChild();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(byName(sid, 'work').state).toBe('cancelled');
+      expect(completed.map((f) => [f['child_name'], f['state']])).toEqual([['work', 'cancelled']]);
+    });
+
+    it('REQ-HOOKS-080 with clause 22 (the third verification of this repair): a child followed up while its cancel\'s hook runs is still settling when that hook ends and the follow-up\'s own hook runs — its parent waits for the second', async () => {
+      const gateOf = () => { let open!: () => void; const hold = new Promise<void>((r) => { open = r; }); return { hold, open: () => open() }; };
+      const order: string[] = [];
+      const gates = [gateOf(), gateOf()];
+      let n = 0;
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event, fields) => {
+          if (event !== 'child_completed') return [];
+          const i = n; n += 1;
+          order.push(`hook${i}(${String(fields['state'])})`);
+          await gates[i]?.hold;
+          order.push(`hook${i}:end`);
+          return [];
+        },
+        advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      let sid = '' as SessionId;
+      const followGate = gateOf();
+      const endTurnGate = gateOf();
+      let releaseChild!: () => void;
+      const childHold = new Promise<void>((r) => { releaseChild = r; });
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          order.push(`root(${turn})`);
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]);
+          // Held until the cancel's hook is running, then follows the cancelled child up.
+          if (turn === 2) return { parts: [{ hold: followGate.hold }, ...toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: again', session_id: byName(sid, 'work').task_id } }]).parts] };
+          // Held until the follow-up has ended and the cancel's hook has ended too: the turn then ends and the root finds
+          // its child ended on its own, while the follow-up's own hook still runs.
+          if (turn === 3) return { parts: [{ hold: endTurnGate.hold }, ...answer('root turn 3').parts] };
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return textOf(req).includes('TASK: again') ? answer('Done again.') : { parts: [{ hold: childHold }, ...answer('late').parts] };
+      }, { hooks });
+      sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'work')?.state === 'running');
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'work').task_id } })).toEqual({ ok: true });
+      releaseChild();
+      await settle(() => order.includes('hook0(cancelled)'));
+      followGate.open();
+      // The follow-up ends `succeeded` and its own settle's hook starts while the cancel's hook still runs.
+      await settle(() => order.includes('hook1(succeeded)'));
+      gates[0]!.open();
+      await settle(() => order.includes('hook0:end'));
+      endTurnGate.open();
+      await settle(() => order.includes('root(4)'), 40);
+      // The first hook's end did not end the second's settle: the root has not been resumed with its child's report.
+      expect(order).not.toContain('root(4)');
+      gates[1]!.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(byName(sid, 'work').state).toBe('succeeded');
+      expect(order.indexOf('root(4)')).toBeGreaterThan(order.indexOf('hook1:end'));
+    });
+
+    /**
+     * Two children, `y` and `x`. The user cancels `y`, whose hook is held, then `x`, whose hook is queued behind it; the
+     * root follows `x` up (clause 22) before `y`'s hook ends. `again` says how the follow-up goes.
+     */
+    function queuedBehindAHeldHook(again: 'answers' | 'holds') {
+      const gateOf = () => { let open!: () => void; const hold = new Promise<void>((r) => { open = r; }); return { hold, open: () => open() }; };
+      const fired: { name: string; state: string; summary: string }[] = [];
+      const yGate = gateOf();
+      const rootGate = gateOf();
+      const againGate = gateOf();
+      let releaseChild!: () => void;
+      const childHold = new Promise<void>((r) => { releaseChild = r; });
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event, fields) => {
+          if (event !== 'child_completed') return [];
+          const name = String(fields['child_name']);
+          fired.push({ name, state: String(fields['state']), summary: String(fields['summary']) });
+          if (name === 'y') await yGate.hold;
+          return [];
+        },
+        advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      let sid = '' as SessionId;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'y', task: 'TASK: y' } }, { callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'x', task: 'TASK: x' } }]);
+          if (turn === 2) return { parts: [{ hold: rootGate.hold }, ...toolCalls([{ callId: 'd3', name: 'delegate', args: { persona: 'coding-agent', task_name: 'x', task: 'TASK: again', session_id: byName(sid, 'x').task_id } }]).parts] };
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"the follow-up\'s summary"}');
+        if (textOf(req).includes('TASK: again')) return again === 'answers' ? answer('Done again.') : { parts: [{ hold: againGate.hold }, ...answer('late again').parts] };
+        return { parts: [{ hold: childHold }, ...answer('late').parts] };
+      }, { hooks });
+      sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      const cancelBoth = async () => {
+        await settle(() => byName(sid, 'y')?.state === 'running' && byName(sid, 'x')?.state === 'running');
+        expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'y').task_id } })).toEqual({ ok: true });
+        await settle(() => fired.length === 1);
+        expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'x').task_id } })).toEqual({ ok: true });
+        releaseChild();
+        rootGate.open();
+      };
+      return { sessions, sid, fired, cancelBoth, releaseY: yGate.open, releaseAgain: againGate.open };
+    }
+
+    it('REQ-HOOKS-075 / REQ-HOOKS-076 with clause 22 (found by the verification of this repair): a hook queued behind another carries the fields of the end that queued it, not those of a later end of the same child', async () => {
+      const { sessions, sid, fired, cancelBoth, releaseY } = queuedBehindAHeldHook('answers');
+      await cancelBoth();
+      // The follow-up ends `succeeded` and its own settle's hook runs while `x`'s cancel's hook still waits behind `y`'s.
+      await settle(() => fired.some((f) => f.name === 'x'));
+      expect(byName(sid, 'x').state).toBe('succeeded');
+      expect(fired.map((f) => `${f.name}:${f.state}`)).toEqual(['y:cancelled', 'x:succeeded']);
+      releaseY();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // Each end once, each with its own state and summary: the cancel's is not replaced by the follow-up's record.
+      const xs = fired.filter((f) => f.name === 'x').sort((a, b) => a.state.localeCompare(b.state));
+      expect(xs).toEqual([{ name: 'x', state: 'cancelled', summary: 'The user cancelled this child.' }, { name: 'x', state: 'succeeded', summary: 'the follow-up\'s summary' }]);
+      expect(fired.filter((f) => f.name === 'y')).toEqual([{ name: 'y', state: 'cancelled', summary: 'The user cancelled this child.' }]);
+    });
+
+    it('REQ-HOOKS-003 with clause 22 (found by the verification of this repair): a followed-up child cancelled again while its first cancel\'s hook is still queued fires it for the second cancel too', async () => {
+      const { sessions, sid, fired, cancelBoth, releaseY, releaseAgain } = queuedBehindAHeldHook('holds');
+      await cancelBoth();
+      // The follow-up is running while `x`'s first cancel's hook still waits behind `y`'s; the user cancels it again.
+      await settle(() => byName(sid, 'x')?.state === 'running');
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'x').task_id } })).toEqual({ ok: true });
+      releaseAgain();
+      releaseY();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(byName(sid, 'x').state).toBe('cancelled');
+      expect(fired.filter((f) => f.name === 'x')).toEqual([
+        { name: 'x', state: 'cancelled', summary: 'The user cancelled this child.' },
+        { name: 'x', state: 'cancelled', summary: 'The user cancelled this child.' },
+      ]);
+    });
+
+    /**
+     * Two children, `a` and `b`, each held in its step, and `b`'s `child_completed` held. The run is brought to rest by
+     * `op` and the user cancels `b` while the rest waits on the executions it saw when it began (the fourth verification
+     * of this repair). The children are deaf to the stop's abort, so a stop's rest waits on their steps as a pause's does.
+     */
+    async function cancelledWhileTheRestWaits(op: 'pause' | 'cancel') {
+      const { order, completed, hooks, release } = recordingHooks('b');
+      const gateOf = () => { let open!: () => void; const hold = new Promise<void>((r) => { open = r; }); return { hold, open: () => open() }; };
+      const aGate = gateOf();
+      const bGate = gateOf();
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'a', task: 'TASK: a' } }, { callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'b', task: 'TASK: b' } }]) : answer('never');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return { parts: [{ hold: textOf(req).includes('TASK: b') ? bGate.hold : aGate.hold }, ...answer('late').parts] };
+      }, { hooks, deaf: ['child'] });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'a')?.state === 'running' && byName(sid, 'b')?.state === 'running');
+      expect(sessions.control({ op, sessionId: sid, args: {} })).toEqual({ ok: true });
+      await new Promise((r) => setTimeout(r, 20));
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'b').task_id } })).toEqual({ ok: true });
+      bGate.open();
+      await settle(() => order.includes('child_completed(b)'));
+      aGate.open();
+      await settle(() => order.includes('session_end') || dal.timelineOf(sid).some((t) => t.name === 'iteration_paused'), 40);
+      return { sessions, sid, order, completed, release };
+    }
+
+    it('REQ-HOOKS-076 / REQ-HOOKS-080 with PD-ORCH-005 clause 2 (the fourth verification of this repair): a child the user cancels while a pause waits on the executions is waited for too — its `child_completed` ends before the rest is recorded and before `session_end`', async () => {
+      const { sessions, sid, order, completed, release } = await cancelledWhileTheRestWaits('pause');
+      // The rest still waits: the hook `b`'s cancel queued is an execution it waits for, though it began after the rest did.
+      expect(dal.timelineOf(sid).some((t) => t.name === 'iteration_paused')).toBe(false);
+      expect(order).not.toContain('session_end');
+      release();
+      expect((await sessions.running(sid)!).status).toBe('interrupted');
+      expect(byName(sid, 'a').state).toBe('paused');
+      const b = byName(sid, 'b');
+      expect(b.state).toBe('cancelled');
+      expect(completed).toEqual([fieldsOf(b, 'cancelled', 'The user cancelled this child.')]);
+      expect(order).toEqual(['session_start', 'child_completed(b)', 'child_completed(b):end', 'session_end']);
+    });
+
+    it('REQ-HOOKS-076 / REQ-HOOKS-080 with REQ-SESSION-092 (the fourth verification of this repair): a child the user cancels while a stop waits on the executions is waited for within the stop\'s grace — its `child_completed` ends before `session_end`', async () => {
+      const { sessions, sid, order, release } = await cancelledWhileTheRestWaits('cancel');
+      expect(dal.timelineOf(sid).some((t) => t.name === 'iteration_paused')).toBe(false);
+      expect(order).not.toContain('session_end');
+      release();
+      await sessions.running(sid)!;
+      expect(byName(sid, 'b').state).toBe('cancelled');
+      expect(order).toEqual(['session_start', 'child_completed(b)', 'child_completed(b):end', 'session_end']);
+    });
+
+    it('REQ-HOOKS-076 / REQ-HOOKS-080 (the fourth verification of this repair): a paused child the user cancels once the rest is recorded, before the run ends, fires `child_completed` before `session_end`', async () => {
+      const { order, completed, hooks, release } = recordingHooks('work');
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      let releaseDrain!: () => void;
+      const drainHold = new Promise<void>((r) => { releaseDrain = r; });
+      let holding = false;
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : answer('never');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return { parts: [{ hold }, ...answer('late').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      // REQ-EVENTS-165: the open iteration's drain waits on this consumer. The hold is taken at the first delivery once the
+      // child is paused, which the rest's own drain — after `iteration_paused` is written — is queued behind. Holding only
+      // once `iteration_paused` was in the timeline left the hold to whichever forward happened to straddle that write, and
+      // one microtask more on a child's turn (the stall watch's `betweenTurns`, OQ-155) let the rest's drain pass first, so
+      // the cancel landed after the run's last wait on the outside hooks — the open defect
+      // `a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`, not the path this case pins.
+      sessions.bus.attach(sid, { mode: 'blocking', deliver: () => { if (dal.timelineOf(sid).some((t) => t.name === 'child_paused')) { holding = true; return drainHold; } return undefined; } });
+      await settle(() => byName(sid, 'work')?.state === 'running');
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      releaseChild();
+      await settle(() => holding && dal.timelineOf(sid).some((t) => t.name === 'iteration_paused'));
+      expect(dal.timelineOf(sid).some((t) => t.name === 'iteration_paused')).toBe(true);
+      expect(byName(sid, 'work').state).toBe('paused');
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'work').task_id } })).toEqual({ ok: true });
+      await settle(() => order.includes('child_completed(work)'));
+      releaseDrain();
+      await settle(() => order.includes('session_end'), 40);
+      expect(order).not.toContain('session_end');
+      release();
+      await sessions.running(sid)!;
+      const work = byName(sid, 'work');
+      expect(work.state).toBe('cancelled');
+      expect(completed).toEqual([fieldsOf(work, 'cancelled', 'The user cancelled this child.')]);
+      expect(order).toEqual(['session_start', 'child_completed(work)', 'child_completed(work):end', 'session_end']);
     });
   });
 

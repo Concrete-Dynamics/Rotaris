@@ -341,6 +341,20 @@ argument name the file tools accept, and UNIONS the summariser's own list after 
 made survives while an invented one can no longer be the only thing the field holds. No new plumbing: the
 call site already derived `toolsUsed` from the same messages.
 
+*Corrected 2026-09-30 under [R-067](../../product/requests.md#r-067), the claim above kept as it was built:* "the
+path of every … call" listed a write whatever answered it. A write a sibling's claim refused (`PD-TOOLS-006`), one
+the permission gate or a pre-tool hook refused, or a `haet_edit` whose find text matched nothing changed nothing,
+and still reached `edited_files`, the fallback's "Files touched" and, since OQ-111, the facts the pass is told never
+to deny. `editedFilesFrom` now skips a write call the record answers as refused, and the summariser's own list cannot
+name a path whose every write was so answered
+([`a-reports-edited-files-counts-refused-writes`](../../defects/fixed/a-reports-edited-files-counts-refused-writes.md)).
+A call no result answers — which the turn never leaves — is still listed. *Falsified by the repair's verification and
+kept beside its correction:* this correction first said a write call answered with any error (`isError`) was skipped,
+which took a call a rest, a stop or a crash cut off for a refusal. A call that was under way when it was cut off is
+answered with an error even when its write had landed (the turn cuts a dispatch that returned `ok` after the pause's
+tool deadline), so a call whose result is the `ran` statement of `interruptedResult` (`ranBeforeItWasCut`) is still
+listed; only a call cut before it started, or whose approval was withdrawn, is skipped with the refusals.
+
 **The bound, stated rather than hidden.** A context compression REPLACES the conversation
 (`REQ-MONITOR-084`), so a child compressed mid-task no longer carries its earliest tool calls in the
 transcript the report is built from, and the derived lists are of what survives there. The durable
@@ -532,6 +546,16 @@ Neither changes the decision: the watch still reads only the clock port and the 
 words are no longer written: they are session-log lines through the run's `warn`, as OQ-76's are, the reason for
 minting them (that the log was out of reach without editing `Run.turn`) having been false. `children.test.ts` now has
 nine cases, `stall.test.ts` twelve, and `record.test.ts` one more.
+
+**Repaired in place by acceptance finding A7, 2026-09-30.** The watch's own evaluation still read the time since the
+child's last event, so a child waiting on its own children between its turns had a `stall` issue at every evaluation
+past the window, and the warning, while it worked as designed. The turn's end is now fed to the watch too
+(`betweenTurns`), and until the run starts the next turn no silence is counted. The decision stands: the watch still
+reads only the clock port and the child's own events. The reading is OQ-155's; `children.test.ts` has ten cases for the
+watch and `stall.test.ts` fourteen, each new one failing with the limb reverted. *Corrected in place the same day:* an
+execution resumed into waiting (PD-ORCH-005 clause 4) ends no turn before its wait, so the turn's end never marked it and
+the wait was still counted; `execute` now marks such an execution between turns as its watch is armed, and
+`children.test.ts` has eleven cases for the watch.
 
 ## First execution of the process-wide count — 2026-09-30: the cap was one iteration's
 

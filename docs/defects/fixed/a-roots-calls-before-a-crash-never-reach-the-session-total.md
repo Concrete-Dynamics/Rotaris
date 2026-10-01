@@ -73,7 +73,7 @@ and the total still lags during a pass (OQ-116, open). The agents panel still de
 the children's. A store a pre-v26 build crashed, continued and let crash again — a child credited from its record at that
 continue, its `tool_calls` never persisted with the credit — has that credit counted a second time when a v26 build records
 the second crash; the case is narrow and is not repaired. A root whose turn raises (neither a crash nor given up on)
-counts none of its calls: [`a-root-whose-turn-raises-never-counts-its-calls.md`](../a-root-whose-turn-raises-never-counts-its-calls.md).
+counted none of its calls: [`a-root-whose-turn-raises-never-counts-its-calls.md`](a-root-whose-turn-raises-never-counts-its-calls.md) (repaired 2026-09-29: such a root is now counted from its record, as one given up on is).
 
 Pinned by: `packages/engine/src/run/crash.test.ts` — "the root's beyond its iteration's count and each unfinished child's
 beyond its own…", "a root whose count is not known…", "the calls the root and a child made before the crash reach the

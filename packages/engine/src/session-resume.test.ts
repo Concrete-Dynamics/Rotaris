@@ -141,6 +141,16 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     expect(context.length).toBeLessThanOrEqual(3_200);
   });
 
+  it('REQ-SESSION-115 / REQ-CHAT-040: a named task\'s line in the handoff carries its name and then its content, within the 80 characters', () => {
+    const sid = asSessionId('S-named');
+    dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: new Date(clock.instant()).toISOString(), updated_at: new Date(clock.instant()).toISOString() });
+    const todo: TodoDocument = { schema_version: 1, phases: [{ name: 'Queued Prompts', tasks: [{ id: '0123abcd-x', name: 'Queued Prompt: 0123abcd', text: `then do this ${'q'.repeat(100)}`, state: 'pending' as const, consecutiveRetries: 0 }] }] };
+    const line = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', todo).split('\n').find((l) => l.startsWith('- [pending] '))!;
+    expect(line.startsWith('- [pending] Queued Prompt: 0123abcd: then do this q')).toBe(true);
+    expect(line.slice('- [pending] '.length)).toHaveLength(80);
+    expect(line.endsWith('...')).toBe(true);
+  });
+
   it('REQ-SESSION-115\'s artifact is the latest one the session holds, never a line saying none is recorded (the repair of the-continuation-payload-says-no-artifact-is-recorded)', () => {
     const sid = asSessionId('S-artifact');
     const at = new Date(clock.instant()).toISOString();

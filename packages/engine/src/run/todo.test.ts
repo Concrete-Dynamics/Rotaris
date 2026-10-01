@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Todo } from './todo.js';
+import { taskLine, taskTitle, Todo } from './todo.js';
 
 /** PD-ORCH-005 clause 17: a continue's message as a task the resumed iteration holds, and how it closes. */
 describe('Todo — a task held by an open iteration (PD-ORCH-005 clause 17)', () => {
@@ -125,5 +125,43 @@ describe('Todo.settleStranded — an iteration\'s own task its closed iteration 
     t.settleStranded('open', (id) => { asked.push(id); return undefined; });
     expect(shape(t)).toEqual([['open', 'in_progress', 0], ['none', 'in_progress', 0], ['m', 'in_progress', 0]]);
     expect(asked).toEqual(['none']);
+  });
+});
+
+/**
+ * REQ-CHAT-040 / REQ-ORCH-071: a queued prompt becomes a task NAMED "Queued Prompt: <first 8 characters of the prompt id>"
+ * carrying the prompt text as its CONTENT — so a task has a name beside its content, as REQ-TOOLS-144's agent task does.
+ * Acceptance finding A28: docs/defects/fixed/a-queued-prompts-task-is-not-named-queued-prompt.md.
+ */
+describe('Todo — a task named beside its content (REQ-CHAT-040, REQ-ORCH-071)', () => {
+  it('appendTask keeps the name beside the text, and the stored document carries both', () => {
+    const t = Todo.fresh('a', 'first');
+    t.appendTask('Queued Prompts', 'p1', 'then do this', 'Queued Prompt: 0123abcd');
+    expect(t.task('p1')).toMatchObject({ name: 'Queued Prompt: 0123abcd', text: 'then do this', state: 'pending' });
+    expect(Todo.fromDocument(t.toDocument()).task('p1')).toMatchObject({ name: 'Queued Prompt: 0123abcd', text: 'then do this' });
+    // A task without a name stores none: its text is both what it is called and what it holds.
+    expect(Object.hasOwn(t.task('a')!, 'name')).toBe(false);
+    // Selection and the run's reading of what to work on read the content.
+    t.complete(t.selectNext()!);
+    expect(t.pendingTexts()).toEqual(['then do this']);
+    expect(t.textOf('p1')).toBe('then do this');
+  });
+
+  it('REQ-CHAT-091: a rename of a named task renames it and keeps its content; an unnamed task\'s rename edits its text', () => {
+    const t = Todo.fresh('a', 'first');
+    t.appendTask('Queued Prompts', 'p1', 'then do this', 'Queued Prompt: 0123abcd');
+    expect(t.editTask('update', 'p1', 'Queued Prompt: 0123abcd')).toBe(false);
+    expect(t.editTask('update', 'p1', '  my own name ')).toBe(true);
+    expect(t.task('p1')).toMatchObject({ name: 'my own name', text: 'then do this' });
+    expect(t.editTask('update', 'a', 'renamed')).toBe(true);
+    expect(t.task('a')).toMatchObject({ text: 'renamed' });
+    expect(Object.hasOwn(t.task('a')!, 'name')).toBe(false);
+  });
+
+  it('taskTitle and taskLine: the name where the task has one, the content beside it on a line', () => {
+    expect(taskTitle({ text: 'then do this', name: 'Queued Prompt: 0123abcd' })).toBe('Queued Prompt: 0123abcd');
+    expect(taskTitle({ text: 'first' })).toBe('first');
+    expect(taskLine({ text: 'then do this', name: 'Queued Prompt: 0123abcd' })).toBe('Queued Prompt: 0123abcd: then do this');
+    expect(taskLine({ text: 'first' })).toBe('first');
   });
 });

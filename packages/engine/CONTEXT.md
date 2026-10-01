@@ -238,7 +238,9 @@ surface and is not a composer mode. — `REQ-MONITOR-070`, `REQ-MONITOR-137`
 _Avoid_: interrupt, injection
 
 **Queued prompt**:
-Follow-up work a user submits while an iteration is running, to be taken up afterwards. —
+Follow-up work a user submits while an iteration is running, to be taken up afterwards. At the next iteration boundary
+it becomes a todo task in the phase "Queued Prompts", named "Queued Prompt: <first 8 characters of the prompt id>" and
+carrying the prompt text as its content (`REQ-CHAT-040`, `REQ-ORCH-071`). —
 `REQ-MONITOR` §15
 
 **Compression**:

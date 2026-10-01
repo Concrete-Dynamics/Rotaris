@@ -141,10 +141,13 @@ await launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PR
   const todo = JSON.parse(session.todo);
   const phase = todo.phases.find((p) => p.name === 'Queued Prompts');
   if (!phase || phase.tasks[0].state !== 'complete') throw new Error(`the queued prompt did not become a completed task: ${session.todo}`);
+  // REQ-CHAT-040 / REQ-ORCH-071 (acceptance A28): the task is NAMED "Queued Prompt: <first 8 characters of the prompt id>"
+  // and carries the prompt text as its content.
+  if (phase.tasks[0].name !== `Queued Prompt: ${prompts[0].prompt_id.slice(0, 8)}` || phase.tasks[0].text !== 'and then this') throw new Error(`the queued prompt's task is not named "Queued Prompt: <id>" with the prompt as its content: ${JSON.stringify(phase.tasks[0])}`);
   const took = sent.filter((s) => s.queued);
   if (took.length !== 1 || !took[0].first.startsWith('first task') || !took[0].first.endsWith('\n\nand then this')) throw new Error(`the iteration that took the queued prompt up was not sent it: ${JSON.stringify(sent)}`);
   if (sent.some((s) => !s.queued && s.first.includes('and then this'))) throw new Error(`an iteration whose task is the launch prompt was sent the queued prompt: ${JSON.stringify(sent)}`);
-  results.queue = { iterations: session.iterations_completed, prompt: prompts[0], sent };
+  results.queue = { iterations: session.iterations_completed, prompt: prompts[0], task: phase.tasks[0], sent };
 }
 
 // 2. A steer reaches the entry role at its next step.

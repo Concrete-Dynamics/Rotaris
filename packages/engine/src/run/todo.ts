@@ -17,7 +17,16 @@ export type TaskState = 'pending' | 'in_progress' | 'complete' | 'abandoned';
 
 export interface Task {
   readonly id: string;
+  /**
+   * What the task holds — the work an iteration that takes it up is told to do. A task with no `name` is also called by it.
+   */
   readonly text: string;
+  /**
+   * REQ-CHAT-040 / REQ-ORCH-071: what the task is called, where that is not its content — a queued prompt's task is named
+   * "Queued Prompt: <first 8 characters of the prompt id>" and carries the prompt text as its content, as REQ-TOOLS-144's
+   * agent task carries a name beside its description. Absent on every other task, which its text names. Acceptance A28.
+   */
+  readonly name?: string;
   state: TaskState;
   consecutiveRetries: number;
   /**
@@ -47,6 +56,19 @@ export interface TodoDocument {
 
 export const CONSECUTIVE_RETRY_LIMIT_DEFAULT = 3;
 
+/** REQ-CHAT-040: what a task is called — its name where it has one, else its text. What the Todo pane draws. */
+export function taskTitle(task: { readonly text: string; readonly name?: string | undefined }): string {
+  return task.name ?? task.text;
+}
+
+/**
+ * REQ-CHAT-040: a task as one line of a plan read as text — its name and then its content where it has a name, as an agent
+ * task's line is its name and then its description (`todoLinesFromStored`); else its text.
+ */
+export function taskLine(task: { readonly text: string; readonly name?: string | undefined }): string {
+  return task.name === undefined ? task.text : `${task.name}: ${task.text}`;
+}
+
 export class Todo {
   private readonly phases: Phase[] = [];
 
@@ -65,11 +87,14 @@ export class Todo {
     return t;
   }
 
-  /** REQ-ORCH-004: a resumed session appends its new top-level task to the existing state. */
-  appendTask(phaseName: string, taskId: string, text: string): void {
+  /**
+   * REQ-ORCH-004: a resumed session appends its new top-level task to the existing state. REQ-CHAT-040: `name`, where the
+   * task is called something other than what it holds (a queued prompt's "Queued Prompt: <id>").
+   */
+  appendTask(phaseName: string, taskId: string, text: string, name?: string): void {
     let phase = this.phases.find((p) => p.name === phaseName);
     if (!phase) { phase = { name: phaseName, tasks: [] }; this.phases.push(phase); }
-    phase.tasks.push({ id: taskId, text, state: 'pending', consecutiveRetries: 0 });
+    phase.tasks.push({ id: taskId, text, state: 'pending', consecutiveRetries: 0, ...(name === undefined ? {} : { name }) });
   }
 
   /**
@@ -189,8 +214,10 @@ export class Todo {
       if (at === -1) continue;
       const task = p.tasks[at]!;
       if (op === 'update') {
-        if (body === '' || body === task.text) return false;
-        p.tasks[at] = { ...task, text: body };
+        // REQ-CHAT-091's rename renames what the pane draws (`taskTitle`): a named task's name, its content kept — as an
+        // agent task's rename keeps its description (`editAgentTodo`) — and an unnamed task's text.
+        if (body === '' || body === taskTitle(task)) return false;
+        p.tasks[at] = task.name === undefined ? { ...task, text: body } : { ...task, name: body };
         return true;
       }
       p.tasks.splice(at, 1);

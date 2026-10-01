@@ -193,7 +193,7 @@ refusals answer it.
 flowchart TB
   L0["loop head"] --> S1{"stop requested?<br/>pause requested?"}
   S1 -- yes --> T["teardown(reason)"]
-  S1 -- no --> Q["consumeQueued():<br/>every QUEUED prompt → TRIGGERED (one conditional update),<br/>a task in phase 'Queued Prompts',<br/>supervisor.noteUserInstruction()"]
+  S1 -- no --> Q["consumeQueued():<br/>every QUEUED prompt → TRIGGERED (one conditional update),<br/>a task in phase 'Queued Prompts',<br/>named 'Queued Prompt: ' + the id's first 8 characters,<br/>the prompt text its content (REQ-CHAT-040),<br/>supervisor.noteUserInstruction()"]
   Q --> S2{"stopCondition:<br/>allTasksComplete · iteration limit ·<br/>time limit · no pending tasks"}
   S2 -- reason --> T
   S2 -- keep going --> I["iterate(): selectNext task → in_progress<br/>iteration.start event"]

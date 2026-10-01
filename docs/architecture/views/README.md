@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A queued prompt's task is named "Queued Prompt: <id>" (REQ-CHAT-040, REQ-ORCH-071, OQ-117, R-067).** A planner todo
+task carries an optional `name` beside its text (`run/todo.ts`), and `consumeQueued` names a queued prompt's task
+`Queued Prompt: <first 8 characters of the prompt id>` with the prompt as its text. The pane draws the name (`taskTitle`),
+a plan read as text carries the name and then the content (`taskLine`), and a rename renames the name. This repairs
+`a-queued-prompts-task-is-not-named-queued-prompt.md` (acceptance A28). The **runtime view**'s iteration-boundary diagram
+says so. No package, edge, process, message kind, channel, command or store column changed; the todo document gains an
+optional field inside its existing column.
+
 **The fallbacks are named by REQ-ORCH-139's vocabulary, and the vocabulary is checked (REQ-ORCH-139, REQ-NOTIFY-090,
 OQ-157, R-067).** The ladder's same-tier change writes `quota_fallback_model` and the `quota_fallback` issue, its
 unresponsive-model fallback `llm_unresponsive` (entry and issue), and the children's hard-timeout retry `fallback_model`

@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { logTail, overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { choose, startApp, stopApp, stopOverrunMessage, until } from './lib/driver.mjs';
+import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-marker.mjs';
 
 /**
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
@@ -63,7 +64,13 @@ function scenario(name, agentsYaml, opts = {}) {
     // about 4.5 s (ADR-0035's note, finding 6); this proof measures another mechanism, so the entry is off here.
     'mcp_servers:', '  code_intelligence: { enabled: false }',
     ...(opts.personas ?? []),
-    ...(opts.delegation ? [] : ['rotaris:', '  delegation_strategy: single']), '',
+    ...(opts.delegation ? [] : ['rotaris:', '  delegation_strategy: single']),
+    // The project-setup task answered (REQ-WORKSPACE-081/111): `enabled: false` above does not make it inapplicable
+    // (REQ-WORKSPACE-090), and without the bundled runtime its background run fails and publishes "Project setup did not
+    // finish" into the ONE notice slot `cancel` and `fatal` read (REQ-NOTIFY-024) — read by `cancel` in place of
+    // REQ-NOTIFY-063's notice, and passed by `fatal` as "not a provider limit"
+    // (`docs/defects/fixed/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md`).
+    ...SETUP_ANSWERED, '',
   ].join('\n'));
   if (opts.snapshot) {
     // By the platform that reads it (`configDirFor`), not the Windows spelling alone.
@@ -93,6 +100,8 @@ async function launch(name, s, extra, opts = {}) {
   writeFileSync(join(output, `${name}.log`), log);
   if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? result.error?.message ?? 'unknown'}; see ${name}.log`);
+  // The precondition the section establishes, checked rather than assumed: a background setup's notice is not this proof's subject.
+  if (backgroundSetupStarted(log)) throw new Error(`${name}: the workspace's initialization started code-intelligence-setup in the background, so its notice may stand in the slot this proof reads; see ${name}.log`);
   if (opts.expectPng !== false && !existsSync(png)) throw new Error(`${name} produced no screenshot`);
   return { log, png, elapsedMs: Date.now() - started };
 }
@@ -169,6 +178,7 @@ async function drivenOverride(s, { boundMs = 180_000 } = {}) {
   writeFileSync(join(output, 'override.steps.json'), `${JSON.stringify(trail, null, 2)}\n`);
   const problems = [];
   if (failure) problems.push(`override: ${failure.message} (see override.steps.json)`);
+  if (backgroundSetupStarted(log)) problems.push('override: the workspace\'s initialization started code-intelligence-setup in the background, so its notice may stand in the notice slot');
   if (stopped.overran) problems.push(stopOverrunMessage('override', stopped, log).split('\n--- ')[0]);
   else if (stopped.exit.code !== 0) problems.push(`override exited ${stopped.exit.code ?? stopped.exit.signal} on the driver's quit`);
   if (!existsSync(png)) problems.push(`override produced no screenshot (the closing picture: ${stopped.screenshot})`);
@@ -419,13 +429,21 @@ await scenarioRun('fatal', async () => {
   const db = open(s7b);
   const row = session(db);
   const kinds = issues(db, row.session_id).map((i) => i.kind);
+  const events = db.prepare("SELECT payload FROM events WHERE session_id = ? AND kind = 'result'").all(row.session_id).map((e) => JSON.parse(e.payload));
   db.close();
   expect(row.execution_status === 'failed', `a 401 did not fail the run at once: ${JSON.stringify(row)}`);
   expect(!kinds.includes('transient_llm_error') && !kinds.includes('model_wait'), `a 401 was retried or waited: ${kinds.join(',')}`);
   expect(modelCalls(r.log).filter((c) => c.who === 'orchestrator').length === 1, 'a 401 was retried');
+  const error = events[0]?.result?.error ?? null;
+  expect(typeof error === 'string' && /HTTP 401/.test(error), `the result does not carry the 401: ${JSON.stringify(events[0])}`);
+  // The notice is asserted as the 401's OWN, not merely as "not a limit": it carries the run's failure text as its
+  // detail (REQ-NOTIFY-064, REQ-NOTIFY-065) and is dismissable. "Not a limit" alone was satisfied by a background
+  // project setup's notice standing in the one slot (REQ-NOTIFY-024;
+  // `docs/defects/fixed/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md`).
   const notice = probes(r.log, 'probe').find((p) => p.selector === '.notice-slot')?.found[0];
-  expect(notice !== undefined && !/provider limit was reached/.test(notice.text), `a 401 was reported as a provider limit: ${JSON.stringify(notice)}`);
-  results.fatal = { status: row.execution_status, notice: notice?.text ?? null, png: r.png, elapsedMs: r.elapsedMs };
+  expect(notice !== undefined && notice.text.includes(error) && /Dismiss/.test(notice.text), `the 401's own notice is not the one on screen: ${JSON.stringify(notice)}`);
+  expect(!/provider limit was reached/.test(notice.text), `a 401 was reported as a provider limit: ${JSON.stringify(notice)}`);
+  results.fatal = { status: row.execution_status, error, notice: notice.text, png: r.png, elapsedMs: r.elapsedMs };
 });
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify({ ...results, failures }, null, 2)}\n`);

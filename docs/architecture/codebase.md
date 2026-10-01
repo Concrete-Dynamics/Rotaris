@@ -1115,6 +1115,11 @@ scenario runs to its end with its failure listed in `results.json`
 `spawnSync`'s own timeout could not bound a launch: it closes the pipes as it signals, and the application's quit then
 loops on its own EPIPE ([note](../defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md); repaired
 2026-09-29 under R-067 — the application log's writer, `standardStreamWriter`, absorbs a failed write and stops).
+Since 2026-10-01 every scenario's workspace carries the answered project-setup section (`lib/initialization-marker.mjs`)
+and every launch fails if the setup started in the background anyway, so a bundle-less checkout's "Project setup did not
+finish" no longer stands in the one notice slot `cancel` and `fatal` read; `fatal` asserts the 401's own notice (its
+failure text as detail) rather than only "not a provider limit"
+([note](../defects/fixed/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md)).
 
 **A probe is a deadline, not an appointment (2026-09-12).** Three of this proof's assertions were mid-run DOM probes
 fired at a fixed instant — `.wait-header@1700` — and they failed intermittently on a busy machine with nothing wrong

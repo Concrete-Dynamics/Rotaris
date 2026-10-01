@@ -6,7 +6,7 @@ Its workspaces carry `code_intelligence: { enabled: false }` and nothing else ab
 starts the code-intelligence project setup in the background (REQ-WORKSPACE-090 makes the task applicable whatever
 `enabled` says), and in a checkout without the bundled runtime that setup fails. When its notice reaches the one slot
 first, the probe reads it and the scenario fails on a notice it does not own. This is the shape
-[`chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`](fixed/chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md)
+[`chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`](chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md)
 repaired for `chat-controls-proof` and `notice-proof` with the `initialization:` section of
 `apps/desktop/scripts/lib/initialization-marker.mjs` (`SETUP_ANSWERED`) and the `backgroundSetupStarted` guard;
 `resilience-proof` has neither.
@@ -37,3 +37,31 @@ REQ-NOTIFY-024's one slot). The proof reads a notice it does not own.
 - `apps/desktop/scripts/lib/initialization-marker.mjs` — `SETUP_ANSWERED` and `backgroundSetupStarted`, the repair the two
   other proofs took.
 - `apps/desktop/src/main/initialization.ts` — `CODE_INTELLIGENCE_FAILED_SUMMARY`, the notice's detail.
+
+## Outcome — repaired 2026-10-01 (branch `fin4-proof-evidence`)
+
+Confirmed first on the branch's base (origin/main 29314c0, `pnpm build`, one `pnpm resilience-proof --skip-build` under
+Xvfb, no code-intelligence bundle in the worktree): every launch logged `initialization: running code-intelligence-setup
+… (background)`; `cancel` failed (its confirmation dialog never matched after the setup's failure landed beside the
+first click, so the 60 s wait ran out and the run completed), and `fatal` **passed** with `results.json`'s
+`fatal.notice` reading "×Project setup did not finish … Code intelligence setup did not complete for this project …".
+
+- `scenario()` writes `SETUP_ANSWERED` (`lib/initialization-marker.mjs`) into every workspace's `agents.yaml`, so the
+  one registered task is answered (`skipped`) and never starts in the background (REQ-WORKSPACE-081/083/111).
+- Every launch is guarded: `launch()` throws, and `drivenOverride()` reports a problem, when the log shows
+  `backgroundSetupStarted` — the precondition checked rather than assumed.
+- `fatal` asserts its notice **positively**: the run's `result` event carries the 401 (`HTTP 401`), and the notice in the
+  slot carries that failure text as its detail and is dismissable (REQ-NOTIFY-064/065), beside the old "not a provider
+  limit". `results.json` now records `fatal.error` and `fatal.notice`. The triage's sketch asked for "the 401's
+  provider-auth wording and the Models settings action": the product has neither — REQ-NOTIFY-060's authentication class
+  and its recovery (REQ-NOTIFY-067..079) are not built, and the generic notice lacks REQ-NOTIFY-064's wording and action.
+  That is recorded as its own note,
+  [`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md),
+  and the scenario asserts what a 401's notice is today, not that recovery.
+- Pinned in `apps/desktop/scripts/lib/initialization-marker.test.ts`: `resilience-proof` joins `SLOT_READERS` (the section
+  in `scenario()`, the guard in `launch()`), and a case of its own holds the driven launch's guard. Without the repair
+  the three cases fail; with it the file's eleven pass.
+- Shown: after the repair, `pnpm resilience-proof --skip-build` passed all eleven scenarios on each of three runs in the
+  same bundle-less worktree, no launch log holding `initialization: running`, `cancel.notice` REQ-NOTIFY-063's ("The
+  provider limit was reached; the session is preserved … Open Models settings") and `fatal.notice` the 401's ("The run
+  failed: scripted authentication failure (HTTP 401) — HTTP 401 — Incorrect API key provided …").

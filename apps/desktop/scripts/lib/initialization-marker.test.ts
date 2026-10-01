@@ -72,11 +72,14 @@ describe('the answered project-setup section a proof writes (REQ-WORKSPACE-081, 
 /**
  * Each proof that reads the notice slot without project setup as its subject, with the line its `launch()` ends before.
  * `notice-proof` read "Project setup did not finish" in place of REQ-NOTIFY-224's hook-review notice
- * (`docs/defects/fixed/notice-proof-reads-a-failed-project-setup-in-place-of-the-hook-review-notice.md`).
+ * (`docs/defects/fixed/notice-proof-reads-a-failed-project-setup-in-place-of-the-hook-review-notice.md`), and
+ * `resilience-proof`'s `cancel` in place of REQ-NOTIFY-063's limit notice, while its `fatal` passed on it
+ * (`docs/defects/fixed/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md`).
  */
 const SLOT_READERS = [
   { proof: 'chat-controls-proof', ids: 'REQ-CHAT-080, REQ-NOTIFY-024', launchEnd: 'const match =' },
   { proof: 'notice-proof', ids: 'REQ-NOTIFY-224, REQ-NOTIFY-024', launchEnd: 'const escape =' },
+  { proof: 'resilience-proof', ids: 'REQ-NOTIFY-063, REQ-NOTIFY-024', launchEnd: 'return { log, png, elapsedMs' },
 ];
 
 describe.each(SLOT_READERS)('$proof keeps a background project setup out of the notice slot it reads ($ids)', ({ proof, launchEnd }) => {
@@ -91,5 +94,15 @@ describe.each(SLOT_READERS)('$proof keeps a background project setup out of the 
     const start = text.indexOf('async function launch(');
     const launch = text.slice(start, text.indexOf(launchEnd, start));
     expect(launch).toMatch(/if \(backgroundSetupStarted\(log\)\) throw/);
+  });
+});
+
+describe('resilience-proof guards its driven launch as well (REQ-NOTIFY-024)', () => {
+  const text = readFileSync(resolve(import.meta.dirname, '..', 'resilience-proof.mjs'), 'utf8');
+
+  it('the override launch, driven rather than spawned, fails when its log shows the setup started anyway', () => {
+    const start = text.indexOf('async function drivenOverride(');
+    const driven = text.slice(start, text.indexOf('function open(', start));
+    expect(driven).toMatch(/if \(backgroundSetupStarted\(log\)\) problems\.push/);
   });
 });

@@ -45,6 +45,22 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A child the stale settle ends, or a plan cycle's child a crash ends, is counted and its cut rows settle (REQ-MONITOR-102,
+REQ-SESSION-129, REQ-ORCH-053, OQ-96, R-067).** `recordCutChild` (`run/crash.ts`) answers one child's open calls and adds
+the calls its record holds to the session total. `recordPlanRootCrash` runs it for the plan cycle's unfinished children,
+and `settleStaleChildren` runs it for each child before the `cancelled` move. This repairs
+`a-child-the-stale-settle-cancels-never-counts-its-calls-and-keeps-its-cut-rows-running.md`. The **runtime view**'s crash
+paragraph and its launch sequence say so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A child cancelled outside its execution is torn down (REQ-ORCH-098, REQ-ORCH-133, REQ-ORCH-053, PD-ORCH-005 clauses 6
+and 16, OQ-152, R-067).** The user's cancel of one child and its live descendants, the cancel of a paused child at rest,
+"continue without them", the crash record of an accepted cancel and the stale-child settle each write `child_end`,
+`child_result` and `child_conversation_closed` after the report they store (`writeCancelledTeardown`). `writeTeardown`
+moved from `children/orchestration.ts` to `children/ledger.ts`, beside `storeChildReport`, and stamps its `child_end` with
+the writer's clock (`SessionWriter.wall`, a new read-only accessor). This repairs
+`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`. The **runtime view**'s "A child settled
+without its turn" paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A plan cycle's chips after an iteration read the plan cycle root's history (REQ-MONITOR-060, REQ-MONITOR-069,
 REQ-ORCH-153, PD-ORCH-003).** With no run live and an iteration recorded, `entryToolsOf` reads the tracker under the latest
 plan cycle root's persona when that root opened after the latest iteration (`plan_roots`, store v30), and under the
@@ -242,7 +258,7 @@ changed; the snapshot channel's `SessionRecord` gained the two fields.
 
 **A child the scheduler settles is torn down (REQ-ORCH-098, REQ-ORCH-048, REQ-ORCH-052, R-067).** `Scheduler.cascadeBlocked`
 and `Scheduler.finalizeIncomplete` call `SchedulerDeps.teardown`, which `IterationChildren` answers with `writeTeardown`
-(`children/orchestration.ts`), so a blocked child and one the finalize sweep cancels get `child_end`, `child_result` and
+(`children/orchestration.ts`; in `children/ledger.ts` since 2026-10-01), so a blocked child and one the finalize sweep cancels get `child_end`, `child_result` and
 `child_conversation_closed` as a settled execution's child does (OQ-152). This repairs
 `a-child-that-never-started-gets-no-teardown-timeline-entries.md` (acceptance A16). The **runtime view**'s "A child settled
 without its turn" paragraph says so. No package, edge, process, message kind, channel, command or store column changed.

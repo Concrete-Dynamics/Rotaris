@@ -6778,6 +6778,10 @@ and order as a child whose execution settles it, with its report's status and su
 resume its parent (`SchedulerDeps.teardown`, `writeTeardown` in `children/orchestration.ts`; the two cases "REQ-ORCH-098,
 the repair of a-child-that-never-started-gets-no-teardown-timeline-entries" in `children/children.test.ts`). For a child
 that never started, `child_conversation_closed` records that it will have none; no conversation is created to be closed.
+Since 2026-10-01 the same holds on every path that settles a child `cancelled` outside its execution. These are the
+user's cancel, the cancel at rest, "continue without them", the crash record of an accepted cancel and the stale-child
+settle (`writeCancelledTeardown`; `writeTeardown` now lives in `children/ledger.ts`). That change is the repair of
+[`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../defects/fixed/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md).
 
 **What a ruling decides.** Whether a child that never started is torn down as built, or is excepted from the clause (its
 `child_end` and `child_result` kept, its `child_conversation_closed` dropped, or all three dropped), and whether the words

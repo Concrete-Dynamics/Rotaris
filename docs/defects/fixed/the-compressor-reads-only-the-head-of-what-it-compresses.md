@@ -45,7 +45,7 @@ its facts past the first reads and past each result's first 2,000 characters abs
   (`compressor.model` when configured, else the agent's own) through the same `triggerFor` the trigger uses.
 - `transcriptText` is gone from `packages/engine/src/children/report.ts`; the report's pass reads `reportTranscript` as
   before, and `report.test.ts` states the old head-only cut itself where it reproduces the report's finding.
-- The reading is OQ-155's, raised by this repair.
+- The reading is OQ-156's, raised by this repair.
 - Pinned by `compression.test.ts`: "at the default trigger … is given whole", "a history longer than the compressing
   model's own threshold keeps its start and its most recent part …", and, through `Sessions`, "the compressing pass reads
   the history up to its model's own threshold at chars_per_token …". All three fail on the previous code; the last also

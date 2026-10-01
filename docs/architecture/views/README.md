@@ -45,20 +45,43 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
-**The compressing model reads the history it replaces (REQ-MONITOR-082, REQ-MONITOR-084, REQ-ORCH-110, OQ-155, R-067).**
+**The compressing model reads the history it replaces (REQ-MONITOR-082, REQ-MONITOR-084, REQ-ORCH-110, OQ-156, R-067).**
 `compress` reads `compressorTranscript` (`run/compression.ts`) instead of the report pass's `transcriptText`, which is
 removed: each event whole, the slice whole up to the compressing model's own threshold at `chars_per_token`
 (`CompressorDeps.inputTokens`, set by `Run.compressionFor`), its start and most recent part past it. This repairs
 `the-compressor-reads-only-the-head-of-what-it-compresses.md` (acceptance A12). The **runtime view**'s compression
 paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
 
-**A child waiting on its own children is not reported stalled (REQ-ORCH-089, REQ-MONITOR-119, REQ-NOTIFY-112, OQ-154,
+**A child waiting on its own children is not reported stalled (REQ-ORCH-089, REQ-MONITOR-119, REQ-NOTIFY-112, OQ-155,
 R-067).** `StallWatch.betweenTurns` (`children/stall.ts`), called by `execute`'s `turn` closure as each turn settles,
 holds the watch's evaluation off the silence until the run starts the child's next turn, and `execute` calls it as the
 watch is armed for an execution resumed into waiting (PD-ORCH-005 clause 4; added 2026-09-30, the first reading having
 missed that path), so the wait inside `runWithChildren` writes no `stall` issue and no warning. This repairs
 `a-child-waiting-on-its-own-children-is-reported-stalled.md` (acceptance A7). The **runtime view**'s stall-watch paragraph
 says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A child settled outside its execution fires `child_completed` (REQ-HOOKS-003, REQ-ORCH-048, REQ-ORCH-052,
+REQ-ORCH-053, REQ-ORCH-133, PD-ORCH-005 clause 6, R-067).** The cascade, the finalize sweep and the user's cancel of one
+child now fire it through `IterationChildren.completedOutside`, in line, and the run waits for them after the sweep
+(`completionsSettled`); the stale settle's and the decline's fire after the run's `session_start`
+(`RunDeps.settledBeforeStart`, `Run.childCompleted`). An outside hook's fields are taken as the scheduler is told, not
+when a queued hook starts (the second verification). `beginSettle`'s own-entry guard keeps a followed-up child settling
+to a parent's `settlesOf` until the later end's hook is done, corrected in §4 from "fires the hook once for each end" (the
+third verification). A rest's wait on the executions looks again until none is left (`IterationChildren.drained`), and
+the run waits for the outside hooks once more before `session_end` (`Run.childCompletionsSettled`), corrected in §4 from
+"awaited as executions" over a snapshot (the fourth verification). Three paths outside a run's hooks fire none, raised as OQ-154. This
+repairs `a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`. The **runtime view**'s §4 gains the
+paragraph after the one on a settle's hook. No package, edge, process, message kind, channel, command or store column
+changed.
+
+**A report's edited files are the writes that landed (REQ-ORCH-108, REQ-ORCH-109, PD-TOOLS-006, OQ-111, R-067).**
+`editedFilesFrom` now skips a write call the record answers as refused — a sibling's claim, the permission gate or a
+pre-tool hook refusing it, a `haet_edit` whose find text matched nothing — or as cut before it started, and the
+summariser's own list cannot bring such a path back. A write cut off while under way (the pause's tool deadline, the
+stop's abort, a crash) is still listed, since it may have landed: `run/interruption.ts`'s `ranBeforeItWasCut` reads the
+statement the turn records for it. The report's `edited_files`, the fallback's "Files touched" and the facts the pass is told never to deny all
+read it. This repairs `a-reports-edited-files-counts-refused-writes.md`. The **runtime view**'s §4 report sentence says
+so. No package, edge, process, message kind, channel, command or store column changed.
 
 **A stalled agent is shown stalled; the root is watched; a stall evaluation lands a steer (REQ-ORCH-089, REQ-MONITOR-117..122,
 REQ-MONITOR-135, R-067).** `AgentRecord.stalledSeconds` and `SessionRecord.entryStalledSeconds` carry each stall watch's
@@ -419,7 +442,7 @@ paragraph names it; no package, edge, message or store table changes.
 the blocks the payload puts ahead of it marked omitted) and the most recent part, within 12,000 characters, with
 `… [N characters omitted] …` between them. It also gives `reportFacts`, the
 edited files and each command with its exit code, derived from the whole transcript. The head-only `transcriptText`
-remains the compressor's alone (removed 2026-09-30 with the compressor's own reader, OQ-155). The **runtime view**'s children paragraph names it; no package, edge, message or store
+remains the compressor's alone (removed 2026-09-30 with the compressor's own reader, OQ-156). The **runtime view**'s children paragraph names it; no package, edge, message or store
 table changes.
 
 **A continue in the process that ran the session takes the lock back (ADR-0005, REQ-SESSION-047/048/083, 2026-09-29,

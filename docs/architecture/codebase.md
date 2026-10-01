@@ -545,7 +545,8 @@ in `configuration.ts`'s header.)
    gated on provenance (a workspace's list runs only under a stored approval keyed by its fingerprint; withheld
    hooks are announced once and the displaced global entries reinstated), narrowed by the policy toggles, joined
    by the enabled Claude Code imports, and fixed for the run. `session_start` fires ahead of iteration 1,
-   `iteration_end` before the next iteration, `child_completed` once a child settles, `session_end` with the one
+   `iteration_end` before the next iteration, `child_completed` once a child settles (whichever path settles it inside
+   a run, since 2026-09-30; OQ-154 asks about the paths outside one), `session_end` with the one
    status string; a permitted tool call passes the `pre_tool` slot (a stop is a `blocked` row with REQ-HOOKS-049's
    text) and, having run, the `post_tool` slot (feedback in the same result, or a following user message).
    Every invocation is one `hook.start`/`hook.finish` pair and one `hook_run` entry written before the event;

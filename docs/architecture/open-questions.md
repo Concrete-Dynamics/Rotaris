@@ -5748,7 +5748,7 @@ None of them says what ends a silent child's step so that there is an outcome to
   run starts is now the fourth event (`children.test.ts`, "a child that waited on its own child past the window …"). The
   watch's own warnings and issues during such a wait are a separate question
   ([`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md)),
-  since 2026-09-30 OQ-154's: the watch counts no silence between the child's turns.
+  since 2026-09-30 OQ-155's: the watch counts no silence between the child's turns.
 - **The outcomes that earn nothing, as a failed step carries them:**
   - `cancelled`: the child's own abort or the run's;
   - `blocked`: such a child never runs;
@@ -5849,7 +5849,7 @@ None of them says what ends a silent child's step so that there is an outcome to
   [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md).~~
   *Corrected in place, 2026-09-30, by the repair of acceptance finding A7:* the watch counts no silence between the
   child's turns, so a wait on its own children is neither a stall nor a wait on calls; the reading, and what a ruling
-  decides, is OQ-154's.
+  decides, is OQ-155's.
 
 **OQ-128 — What becomes of a steering prompt still pending when the run comes to rest, or ends?** *(REQ-MONITOR-133, "the
 prompt is pending until injected"; REQ-MONITOR-134, "all pending steering prompts for an agent are delivered into its
@@ -6799,13 +6799,52 @@ injected into a conversation whose model step or tool call is in flight.
 timeline entry; whether the root is watched against the child threshold or one of its own; and whether REQ-MONITOR-135's
 evaluation leg means waking a waiting agent, as built, or something a step in flight could receive.
 
-**OQ-154 — Is a child waiting on its own children silent, for the stall watchdog?** *(REQ-ORCH-089, "when active tool
+**OQ-154 — Does a child that ends where no run's lifecycle hooks are live fire `child_completed`, and when?**
+*(REQ-HOOKS-003, "`child_completed` once a delegated child agent has finished, whatever its final state"; REQ-HOOKS-076,
+whose order is `session_start`, `child_completed`, …, `session_end` "matching where each occurs"; REQ-HOOKS-080, which runs
+lifecycle hooks in line with the run loop; `PD-ORCH-005` clauses 3 and 16. Raised 2026-09-30 by the repair of acceptance
+finding A15,
+[`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](../defects/fixed/a-child-settled-outside-its-execution-fires-no-child-completed-hook.md),
+under [R-067](../product/requests.md#r-067). Open; numbered OQ-151 when it was raised, then OQ-152, and renumbered OQ-154
+at merge once origin/main's OQ-151 to OQ-153 had landed.)*
+
+A run's hooks are resolved at its start and live until its teardown (ADR-0015; `Sessions` builds one hook port per run),
+and every lifecycle event the specification orders falls between that run's `session_start` and its `session_end`. Three
+paths end a delegated child outside that window, and a fourth ends one inside a run that never opens it:
+
+- the cancel of one paused child while its session rests (`PD-ORCH-005` clause 16, `Sessions.cancelPausedAtRest`): no run
+  exists, and no hook port;
+- the explicit cancel that lands after its run has come to rest (`Run`'s teardown, `closeOpenIteration` after the run's
+  `session_end` has fired): the port is still held, but the run has announced its end;
+- the record of an accepted explicit cancel whose run host died (`recordCrash`'s `recordAcceptedCancel`), written from the
+  store by a repair, which has no run, or by the next continue before its run exists;
+- the stale settle (REQ-ORCH-053) of a run that ends before its `session_start` — a stop requested while its pre-flight
+  runs (`Run`'s `teardown` ahead of the hook), or a raise before that point: the settled children's fields are handed to
+  the run (`RunDeps.settledBeforeStart`) and fired only after its `session_start`, so they are never fired, and the next
+  run does not fire them either, because they are already terminal. *(Added 2026-09-30 by the second verification of the
+  repair.)*
+
+REQ-HOOKS-003 says the event fires once a child has finished and names no exception; REQ-HOOKS-076 and REQ-HOOKS-080 place
+it inside a run. Firing at the moment would run hooks with no `session_start` before them or after the `session_end`
+they follow, and at rest would need a hook port resolved for no run. Firing at the next run would announce, possibly much
+later, a child a run that never saw it ended, and never if the session is not continued.
+
+**What the build proceeds under:** none of the four fires `child_completed`. The paths the specification places inside a
+run all do: the cascade (REQ-ORCH-048), the finalize sweep (REQ-ORCH-052), the user's cancel of one child in a live run
+(REQ-ORCH-133), the stale settle (REQ-ORCH-053, fired after the settling run's `session_start`), and the decline of a
+resumable iteration (`PD-ORCH-005` clause 6, after the continuing run's `session_start`).
+
+**What a ruling decides.** For each of the four paths: fire at the moment, through a port resolved for the purpose
+(and, after `session_end`, out of REQ-HOOKS-076's order); owe it to the next run of the session, after its
+`session_start`; or fire none, as built.
+
+**OQ-155 — Is a child waiting on its own children silent, for the stall watchdog?** *(REQ-ORCH-089, "when active tool
 calls exist, the condition is reported at informational level as waiting on N active tool calls instead of as a stall";
 REQ-MONITOR-117 to REQ-MONITOR-120, "each agent is evaluated for a stall"; REQ-NOTIFY-112; OQ-127. Raised 2026-09-30 by
 the repair of acceptance finding A7,
 [`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../defects/fixed/a-child-waiting-on-its-own-children-is-reported-stalled.md),
 under [R-067](../product/requests.md#r-067). Open; numbered OQ-152 when it was raised, renumbered OQ-154 at
-the merge once origin/main's OQ-152 and OQ-153 had landed.)*
+the merge once origin/main's OQ-152 and OQ-153 had landed, and OQ-155 at the next merge once origin/main's OQ-154 had.)*
 
 A child that delegated, and then waits for its children's reports before the run resumes it (REQ-ORCH-055 to
 REQ-ORCH-059), or that the run resumes into that wait from its record (PD-ORCH-005 clause 4), has no model step and no
@@ -6825,7 +6864,7 @@ verifier's review):* a turn that settles because it was cancelled, paused, timed
 and OQ-153 already reads REQ-MONITOR-120's recovery as "only when the agent was active". A stall under way when the turn
 ended is over at the first evaluation between turns, and its figure cleared; it is logged recovered only when the agent
 was active after the evaluation that last found it stalled (`StallWatch.endStall`; `stall.test.ts`, "REQ-MONITOR-120
-(OQ-154 with OQ-153): a stall under way when the turn ends is over …"). The next turn
+(OQ-155 with OQ-153): a stall under way when the turn ends is over …"). The next turn
 the run starts counts from its start, as OQ-127 already reads for REQ-NOTIFY-112's recovery. Each child it waits on has
 its own watch, which reports that child's own silence (`StallWatch.betweenTurns`; `stall.test.ts` and `children.test.ts`,
 "a child waiting on its own child between its turns is not reported stalled"). A child the run resumes into waiting
@@ -6839,14 +6878,14 @@ paused while waiting and continued had a `stall` issue at every evaluation of th
 informational level as "waiting on N active children", which would need words no requirement has and, while REQ-ORCH-139's
 vocabulary has none, a session-log line in the manner OQ-127 records.
 
-**OQ-155 — How much of the history it replaces does the compressing model read?** *(REQ-MONITOR-082, "only the action
+**OQ-156 — How much of the history it replaces does the compressing model read?** *(REQ-MONITOR-082, "only the action
 history recorded after the original request is compressed, and the summary it produces must state the work performed,
 the findings reached, and the questions left open"; REQ-MONITOR-084; REQ-MONITOR-080, whose compressing model is "able
 to hold the context being compressed"; REQ-MONITOR-078; REQ-ORCH-110's 12,000 and 2,000 characters; ADR-0060 decision 4.
 Raised 2026-09-30 by the repair of acceptance finding A12,
 [`the-compressor-reads-only-the-head-of-what-it-compresses.md`](../defects/fixed/the-compressor-reads-only-the-head-of-what-it-compresses.md),
 under [R-067](../product/requests.md#r-067). Open; numbered OQ-153 when it was raised, renumbered OQ-155 at
-the merge once origin/main's OQ-152 and OQ-153 had landed.)*
+the merge once origin/main's OQ-152 and OQ-153 had landed, and OQ-156 at the next merge once origin/main's OQ-154 had.)*
 
 The compressing pass replaced the history between the original request and the preserved turns with a summary written
 from `transcriptText`, the report pass's reader: each event cut to 2,000 characters and the whole to 12,000 from its
@@ -6867,8 +6906,8 @@ the reading keeps its **start** (a previous compression's summary where there wa
 to half the bound, and its **most recent part**, the part the preserved turns carry on from, with OQ-111's marker between
 them saying how many characters were left out. Where the most recent part is shorter than the other half it is given
 whole, with no marker, and the start has what it leaves of the bound (`compressorTranscript`,
-`packages/engine/src/run/compression.ts`; `compression.test.ts`, "REQ-MONITOR-082 (OQ-155, acceptance A12) …" and
-"REQ-MONITOR-082 / REQ-MONITOR-080 (OQ-155) …"). A threshold that resolves to no tokens gives the history whole.
+`packages/engine/src/run/compression.ts`; `compression.test.ts`, "REQ-MONITOR-082 (OQ-156, acceptance A12) …" and
+"REQ-MONITOR-082 / REQ-MONITOR-080 (OQ-156) …"). A threshold that resolves to no tokens gives the history whole.
 *Found by the branch's verification and kept beside its repair:* the reading first held the start to half the bound in
 every case, so a first event longer than half before a short most recent part wrote a second marker with a negative
 count where nothing was left out, and left the rest of the bound unused.

@@ -11,7 +11,7 @@ import { StopRequest } from './stop-request.js';
 import { Todo, type Task, type TodoDocument } from './todo.js';
 import { planRequestSection, resumedWorkSection } from './plan-text.js';
 import { recordSteeringInjected, runTurn, steeringMessage, type ToolPort, type TurnOutcome } from './turn.js';
-import { IterationChildren, refreshing } from '../children/orchestration.js';
+import { childCompletedFields, IterationChildren, refreshing } from '../children/orchestration.js';
 import type { DelegationOps } from '../children/delegation.js';
 import type { Budget as ChildBudget } from '../children/ledger.js';
 import { canonicaliseName, mintTaskId, takenTaskIds } from '../children/naming.js';
@@ -203,6 +203,12 @@ export interface RunDeps {
   readonly permission: PermissionPosture;
   /** ADR-0015: the session's hooks; null or absent means none exist and nothing about hooks is observable (REQ-HOOKS-041). */
   readonly hooks?: HookPort | null | undefined;
+  /**
+   * REQ-HOOKS-003 with REQ-ORCH-053: the `child_completed` fields of each child this run settled before it existed — the
+   * stale settle (`settleStaleChildren`), made once the run has the session's lock and before its first iteration. The
+   * run fires them once its own `session_start` has, so they keep REQ-HOOKS-076's order.
+   */
+  readonly settledBeforeStart?: readonly Readonly<Record<string, unknown>>[] | undefined;
   /** The host's notice channel (REQ-HOOKS-054/086/087). */
   readonly notice?: ((n: RunNotice) => void) | undefined;
   /** ADR-0039 / REQ-GIT-024/051: the session's checkpoint port; null or absent means no capture at any iteration close. */
@@ -801,6 +807,8 @@ export class Run {
       await this.drain();
       // REQ-HOOKS-003/081: session_start once, ahead of the first iteration, in line with the loop (REQ-HOOKS-080).
       if (this.hooks) await this.hooks.fireLifecycle('session_start', { task: this.deps.task });
+      // REQ-HOOKS-003 / REQ-ORCH-053: the children this run's stale settle ended, each in line, before anything else runs.
+      for (const fields of this.deps.settledBeforeStart ?? []) await this.childCompleted(fields);
 
       // PD-ORCH-005 clauses 4 and 6: an iteration a previous run left open resumes before anything else runs, as the
       // loop's first iteration below; declined, it closes here.
@@ -1040,7 +1048,7 @@ export class Run {
     // what left the agents paused as its agents' reports do. Every run that reaches here was told to decline: a run is
     // told nothing only when it opens a new session (`Sessions.start`), where no iteration is open (`RunDeps.openIteration`).
     const closed = await this.closeOpenIteration((open) => `the session was continued without the agents ${interruptionPhrase(open.interruption ?? 'crash')} had left paused`,
-      (c) => `Cancelled: the session was continued without this agent, which ${interruptionPhrase(c.interruption ?? '')} had left paused.`);
+      (c) => `Cancelled: the session was continued without this agent, which ${interruptionPhrase(c.interruption ?? '')} had left paused.`, undefined, true);
     if (!closed) return;
     this.initialIterations = this.iterationsCompleted;
     this.saveRunning({});
@@ -1051,12 +1059,16 @@ export class Run {
    * back to `pending` and `iteration.end` and the row's close with that todo in one transaction, its capture, and the
    * count moved past it.
    * `only` names the one iteration the caller may close. False when none is open, or the open one is not that one.
+   * `completed`: each agent it cancels fires `child_completed` (REQ-HOOKS-003), in line, before the iteration closes — the
+   * decline's close, which runs after this run's `session_start`. The explicit cancel's close after the run's
+   * `session_end` fires none (OQ-154).
    */
-  private async closeOpenIteration(summary: (open: IterationRow) => string, agentReport: (c: ChildRow) => string, only?: number | null): Promise<boolean> {
+  private async closeOpenIteration(summary: (open: IterationRow) => string, agentReport: (c: ChildRow) => string, only?: number | null, completed = false): Promise<boolean> {
     const dal = this.deps.dal;
     const open = dal?.openIterationOf(this.sessionId);
     if (!dal || !open || (only !== undefined && open.iteration !== only)) return false;
-    this.cancelPausedAgents(dal, open, agentReport);
+    const cancelled = this.cancelPausedAgents(dal, open, agentReport);
+    if (completed) for (const c of cancelled) await this.childCompleted(childCompletedFields(dal.getChild(this.sessionId, c.task_id) ?? c));
     this.todo.reopen(open.todo_task_id);
     // PD-ORCH-005 clause 17: a continue's message the iteration held is left pending, so the next iteration takes it up.
     this.todo.releaseHeld(open.iteration, false);
@@ -1075,14 +1087,27 @@ export class Run {
    * report saying so, before the iteration closes as cancelled. Until the resume is built this is what every continue
    * does with an iteration a rest left open; once it is, only the user's declining does.
    */
-  private cancelPausedAgents(dal: StoreDal, open: IterationRow, report: (c: ChildRow) => string): void {
+  private cancelPausedAgents(dal: StoreDal, open: IterationRow, report: (c: ChildRow) => string): ChildRow[] {
+    const cancelled: ChildRow[] = [];
     for (const c of iterationAgents(dal, this.sessionId, open)) {
       if (c.state !== 'paused') continue;
       const r = this.deps.writer.transitionChild(c.task_id, 'cancelled', 'cancellation');
       if (!r.ok) { this.deps.warn(r.error.code === 'illegal-move' ? r.error.reason : `cancelling paused ${c.task_id} failed: ${r.error.code}`); continue; }
       // REQ-LIBRARY-092: the report is materialised as every terminal child's is.
       storeChildReport({ writer: this.deps.writer, artifacts: this.deps.artifacts, warn: this.deps.warn }, c.task_id, c, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: report(c), key_findings: [], last_response: '', final_response: '', errors: [] });
+      cancelled.push(r.value);
     }
+    return cancelled;
+  }
+
+  /**
+   * REQ-HOOKS-003: one `child_completed`, in line (REQ-HOOKS-080), for a child this run ended outside an iteration's
+   * children — the stale settle's and the decline's. A raise out of the port reduces to a warning (REQ-HOOKS-079).
+   */
+  private async childCompleted(fields: Readonly<Record<string, unknown>>): Promise<void> {
+    if (!this.hooks) return;
+    try { await this.hooks.fireLifecycle('child_completed', fields); }
+    catch (cause) { this.deps.warn(`the child_completed hooks raised for child ${String(fields['child_name'])} (${String(fields['child_id'])}): ${String(cause instanceof Error ? cause.message : cause)}`); }
   }
 
   /** REQ-GIT-051 / REQ-GIT-045: the one capture an iteration that closes is owed, which never raises and never aborts the run. */
@@ -1125,7 +1150,7 @@ export class Run {
     if (!c) return undefined;
     const chosen = c.model ?? { model: choice.model, thinking: choice.thinking };
     return {
-      // OQ-155: the compressing model is given the history it condenses up to its own threshold (REQ-MONITOR-078).
+      // OQ-156: the compressing model is given the history it condenses up to its own threshold (REQ-MONITOR-078).
       compressor: { backend: c.backend, model: chosen.model, thinking: chosen.thinking, timers: c.timers, credentialFor: c.credentialFor, timeoutMs: c.timeoutMs, inputTokens: c.triggerFor(chosen.model).tokens },
       trigger: c.triggerFor(choice.model), charsPerToken: c.charsPerToken, preserveRecentTurns: c.preserveRecentTurns, todoLines,
       // Part AO: every turn of this run — the root's and each child's — registers its conversation for the manual pass.
@@ -1429,7 +1454,8 @@ export class Run {
          */
         if (this.restCause === null) {
           rootRecord.state = 'cancelled';
-          if (children) children.finalize('cancelled: the run was cancelled while it was coming to rest');
+          // REQ-HOOKS-003 / REQ-HOOKS-080: the sweep's `child_completed` hooks finish before the iteration's own.
+          if (children) { children.finalize('cancelled: the run was cancelled while it was coming to rest'); await children.completionsSettled(); }
         } else {
           this.iterationRest = this.restCause;
           rootRecord.state = 'paused';
@@ -1447,6 +1473,8 @@ export class Run {
         // REQ-ORCH-052: every exit path from an iteration leaves every child record terminal.
         const n = children.finalize(this.stop.requested ? 'cancelled: the run was stopped while this child was in flight' : 'cancelled during iteration cleanup');
         if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) settled cancelled at exit (REQ-ORCH-052)`);
+        // REQ-HOOKS-003 / REQ-HOOKS-080: the sweep's `child_completed` hooks finish before the iteration's own.
+        await children.completionsSettled();
         /*
          * REQ-SESSION-092 / REQ-SESSION-094: a stop that rests nothing — the explicit cancel, a stop the run raises itself,
          * a plan cycle's — aborted every child execution with the root. Each is awaited within what is left of the grace
@@ -1481,6 +1509,24 @@ export class Run {
   private persistToolCalls(counts: Parameters<SessionWriter['countToolCalls']>[0]): void {
     const r = this.deps.writer.countToolCalls(counts, this.aggregates.figures.toolCalls);
     if (!r.ok) this.deps.warn(`the tool-call count of ${this.sessionId} was not persisted: ${r.error.code}`);
+  }
+
+  /**
+   * REQ-HOOKS-076 / REQ-HOOKS-080 (the fourth verification of the repair of
+   * `a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`): every `child_completed` hook the last
+   * iteration's children queued from outside a settle (`IterationChildren.completedOutside`) is awaited — after a stop,
+   * only within what is left of its 30 s grace (REQ-SESSION-092), so one the grace gave up on may still finish after
+   * `session_end`, bounded by its own per-hook timeout (REQ-HOOKS-033).
+   */
+  private async childCompletionsSettled(): Promise<void> {
+    const children = this.children;
+    if (!children || !this.hooks) return;
+    if (!this.stop.requested) { await children.completionsSettled(); return; }
+    const grace = this.stopGraceLeft();
+    if (grace <= 0) return;
+    let timer: TimerHandle | undefined;
+    await Promise.race([children.completionsSettled(), new Promise<void>((r) => { timer = this.deps.clocks.timers.after(grace, r); })]);
+    timer?.cancel();
   }
 
   /**
@@ -2079,6 +2125,9 @@ export class Run {
     const elapsed = this.startedAt === null ? null : (clocks.monotonic.now() - this.startedAt) / 1000;
     // REQ-NOTIFY-093: a wait the user cancelled ends the run with the limit condition as its error, so main classifies it (REQ-NOTIFY-063).
     const error = this.lastFailure ?? this.waits.cancelledReason;
+    // REQ-HOOKS-076 / REQ-HOOKS-080: a `child_completed` the user's cancel of one child queued once the iteration's own
+    // waits were done — a paused child cancelled while the rest was being recorded — ends before `session_end`.
+    await this.childCompletionsSettled();
     // REQ-HOOKS-003/081: session_end on every exit path, after the status is decided and before shutdown; `classified.result`
     // is the one string the payload, the result and the session.end event below all carry.
     if (this.hooks) {

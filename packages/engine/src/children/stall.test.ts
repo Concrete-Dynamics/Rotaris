@@ -109,7 +109,7 @@ describe('REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch', () => {
     expect(w.stalled).toEqual([]);
   });
 
-  it('REQ-MONITOR-119 (OQ-154): between the child\'s turns there is no step to be silent: no stall is reported, the callback reads not stalled, and the next turn counts from its start', () => {
+  it('REQ-MONITOR-119 (OQ-155): between the child\'s turns there is no step to be silent: no stall is reported, the callback reads not stalled, and the next turn counts from its start', () => {
     const w = watched(12_000);
     w.watch.start();
     w.watch.modelEvent('finish');
@@ -127,7 +127,7 @@ describe('REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch', () => {
     expect(w.stalled.map((r) => [r.silentS, r.entry])).toEqual([[12, true]]);
   });
 
-  it('REQ-MONITOR-120 (OQ-154 with OQ-153): a stall under way when the turn ends is over at the next evaluation between turns; it is logged recovered only when the agent was active after it', () => {
+  it('REQ-MONITOR-120 (OQ-155 with OQ-153): a stall under way when the turn ends is over at the next evaluation between turns; it is logged recovered only when the agent was active after it', () => {
     // The turn ended with no activity after the stall — cancelled, paused, timed out: the stall is over, not recovered.
     const quiet = watched(12_000);
     quiet.watch.start();

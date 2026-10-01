@@ -3,6 +3,33 @@
 Every change to this skill, newest first: the date, what prompted it (with evidence), what changed, how it was
 verified. An entry that turns out wrong is corrected by a new entry, never edited away.
 
+## 2026-10-01 — a run executes two agents at a time; one integration worktree per plan
+
+**Prompted by** plan `fin1` (run `wf_64915ef8-93e`): four lanes rendered, and for over twenty minutes only
+`implement:child-teardown` and `implement:session-rest-writes` had started (journal `started` entries). Measured over
+the session's sixteen runs (each agent transcript's first and last timestamps; script `measure-concurrency.py`, output
+`concurrency.txt`, both in the session scratchpad), none ran more than two agents at once: fourteen peaked at two, two
+small ones at one. The first version's "an unbounded `parallel()` had six builders working at once" (and the repair
+pool's reason in its entry) is false: in `wf_a0529435-e19`, `implement:accept1-1` to `-6` ran two at a time, a
+sliding window, from 11:36 to 12:56 UTC on 2026-09-30 (five left commits, one uncommitted edits). Agents started with
+the Agent tool ran beside a run, and two runs overlapping on 2026-09-29 (`wf_4da43d03-b3a`, `wf_f722534f-88d`, 05:27
+to 11:29 UTC) ran four workflow agents at once, every merge made then green. The Workflow tool's own reference
+(the `workflow-authoring` skill, read 2026-10-01 at the owner's suggestion) states the cause: concurrent `agent()`
+calls are capped at min(16, available CPUs − 2) per workflow, two on this 4-CPU host.
+
+**Changed** `references/workflow-tool.md` (Concurrency), `references/environment.md` (Load), SKILL.md §2 and §3: a
+run executes two agents at a time and lanes past two queue; to go faster, split disjoint bundles over two plans, each
+with its own scratchpad directory and no acceptance rounds, then one acceptance-only plan. The profile's `integ`
+becomes `{repo}-wt-integ-{id}`, so two plans never merge in one worktree, and `integ` joins `skillref` as a reserved
+plan id (`<repo>-wt-integ-<id>` would read as a bundle worktree of a plan named `integ`); `references/repository.md`
+names the new path. The self-test's existing integration-path assertion now expects the `{id}` suffix. That edit is
+the owner's to approve, and the owner approved it: "Yes I do approve that. I highly value when work can gets
+parallelized and reduces the overall time spent." (2026-10-01).
+
+**Verified** by two new self-test assertions (two plans resolve to two integration worktrees; `integ` is no plan id),
+each failing with its hunk reverted, the edited assertion failing with the profile's old path, the self-test and
+`pnpm check`, and a review with `references/skill-review.md`.
+
 ## 2026-10-01 — long background jobs take an explicit timeout
 
 **Prompted by** two background tasks of the same session. One given no `timeout` (task `by0p2inlx`, a waiter on the

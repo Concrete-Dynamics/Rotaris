@@ -18,8 +18,6 @@ import { deriveSets, readInitializationState, TaskRegistry } from '@rotaris/conf
 import { CODE_INTELLIGENCE_TASK_ID } from '../../src/main/initialization.js';
 import { backgroundSetupStarted, INITIALIZATION_TASK_ID, SETUP_ANSWERED } from './initialization-marker.mjs';
 
-const PROOF = resolve(import.meta.dirname, '..', 'chat-controls-proof.mjs');
-
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
@@ -71,8 +69,18 @@ describe('the answered project-setup section a proof writes (REQ-WORKSPACE-081, 
   });
 });
 
-describe('chat-controls-proof keeps a background project setup out of the notice slot it reads (REQ-CHAT-080, REQ-NOTIFY-024)', () => {
-  const text = readFileSync(PROOF, 'utf8');
+/**
+ * Each proof that reads the notice slot without project setup as its subject, with the line its `launch()` ends before.
+ * `notice-proof` read "Project setup did not finish" in place of REQ-NOTIFY-224's hook-review notice
+ * (`docs/defects/fixed/notice-proof-reads-a-failed-project-setup-in-place-of-the-hook-review-notice.md`).
+ */
+const SLOT_READERS = [
+  { proof: 'chat-controls-proof', ids: 'REQ-CHAT-080, REQ-NOTIFY-024', launchEnd: 'const match =' },
+  { proof: 'notice-proof', ids: 'REQ-NOTIFY-224, REQ-NOTIFY-024', launchEnd: 'const escape =' },
+];
+
+describe.each(SLOT_READERS)('$proof keeps a background project setup out of the notice slot it reads ($ids)', ({ proof, launchEnd }) => {
+  const text = readFileSync(resolve(import.meta.dirname, '..', `${proof}.mjs`), 'utf8');
 
   it('writes the answered section into every scenario\'s workspace configuration', () => {
     const scenario = text.slice(text.indexOf('function scenario('), text.indexOf('async function launch('));
@@ -80,7 +88,8 @@ describe('chat-controls-proof keeps a background project setup out of the notice
   });
 
   it('fails a launch whose log shows the setup started anyway, before reading any notice', () => {
-    const launch = text.slice(text.indexOf('async function launch('), text.indexOf('const match ='));
+    const start = text.indexOf('async function launch(');
+    const launch = text.slice(start, text.indexOf(launchEnd, start));
     expect(launch).toMatch(/if \(backgroundSetupStarted\(log\)\) throw/);
   });
 });

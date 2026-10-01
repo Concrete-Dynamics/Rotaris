@@ -3,6 +3,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { ensureBundle, withSetupFailure } from './lib/code-intelligence-bundle.mjs';
 
 /**
  * ADR-0064's first execution in the BUILT app (Part AS): project initialization resolved once per
@@ -36,6 +37,10 @@ if (!process.argv.includes('--skip-build')) {
   if (built.status !== 0) throw new Error(`desktop build exited ${built.status ?? built.signal ?? 'unknown'}`);
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
+// Scenarios 1, 3, 4 and 5 expect the shipped task recorded completed, and it runs the bundled runtime, which git ignores:
+// built here when the proof builds, refused at once under --skip-build naming `pnpm code-intel:bundle`.
+const bundle = ensureBundle({ skipBuild: process.argv.includes('--skip-build') });
+console.log(`init-proof: the code-intelligence bundle is ${bundle}`);
 
 const GLOBAL = [
   'models:',
@@ -131,8 +136,8 @@ if (gate1.dialog) throw new Error('a fresh workspace with the default task set r
 // `null` would mean the composer never mounted and the reading proved nothing; the gate must be OFF, seen.
 if (gate1.send !== false) throw new Error(`the composer Send control read ${JSON.stringify(gate1.send)}; a fresh workspace with the default task set must leave it enabled (REQ-WORKSPACE-104/142)`);
 const ws1 = readFileSync(s1.workspaceFile, 'utf8');
-if (!/initialization:/.test(ws1)) throw new Error(`the background task recorded nothing:\n${ws1}`);
-if (!/completed:\s*\n?\s*(-\s*code-intelligence-setup|\[\s*code-intelligence-setup\s*\])/.test(ws1.replace(/\r/g, ''))) throw new Error(`code-intelligence-setup was not recorded completed:\n${ws1}`);
+if (!/initialization:/.test(ws1)) throw new Error(withSetupFailure(`the background task recorded nothing:\n${ws1}`, log1));
+if (!/completed:\s*\n?\s*(-\s*code-intelligence-setup|\[\s*code-intelligence-setup\s*\])/.test(ws1.replace(/\r/g, ''))) throw new Error(withSetupFailure(`code-intelligence-setup was not recorded completed:\n${ws1}`, log1));
 if (!/last_run:/.test(ws1)) throw new Error(`last_run was not stamped:\n${ws1}`);
 if (!/classification:\s*non-code/.test(ws1)) throw new Error(`the documentation-only tree was not classified non-code:\n${ws1}`);
 if (!ws1.startsWith('# workspace configuration — this header must survive the marker write\n')) throw new Error('the marker write lost the comment header');
@@ -189,7 +194,7 @@ if (!/verification-consent/.test(ws3)) throw new Error(`Escape did not record th
 // opens; a skip answered first performs that resolution first (OQ-122). On Linux the Escape used to come first and skip
 // both (`docs/defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`).
 if (!/initialization: running code-intelligence-setup[^\n]*\(background\)/.test(log3)) throw new Error('the background task did not start by itself beside the consent prompt (REQ-WORKSPACE-083)');
-if (!/completed:\s*\n?\s*(-\s*code-intelligence-setup|\[\s*code-intelligence-setup\s*\])/.test(ws3)) throw new Error(`the background task beside the consent prompt was not recorded completed (REQ-WORKSPACE-088):\n${ws3}`);
+if (!/completed:\s*\n?\s*(-\s*code-intelligence-setup|\[\s*code-intelligence-setup\s*\])/.test(ws3)) throw new Error(withSetupFailure(`the background task beside the consent prompt was not recorded completed (REQ-WORKSPACE-088):\n${ws3}`, log3));
 const log3b = await launch('consent-reopen', s3, {
   ROTARIS_INIT_TEST_TASK: 'consent',
   ROTARIS_CAPTURE_VIEW: '2',
@@ -211,7 +216,7 @@ const s4 = scenario('failure', WORKSPACE);
 const log4 = await launch('failure', s4, { ROTARIS_INIT_TEST_TASK: 'fail', ROTARIS_CAPTURE_AFTER_MS: '30000' }, 180_000);
 const ws4 = readFileSync(s4.workspaceFile, 'utf8').replace(/\r/g, '');
 if (/verification-fail/.test(ws4)) throw new Error(`a failed task recorded an outcome:\n${ws4}`);
-if (!/code-intelligence-setup/.test(ws4)) throw new Error(`the task after the failure was not attempted:\n${ws4}`);
+if (!/code-intelligence-setup/.test(ws4)) throw new Error(withSetupFailure(`the task after the failure was not attempted:\n${ws4}`, log4));
 if (!/initialization: verification-fail → failure/.test(log4)) throw new Error(`the failure was not reported:\n${log4}`);
 if (!/Project setup did not finish/.test(log4)) throw new Error(`the background banner was not raised:\n${log4}`);
 results.failure = { workspaceFile: ws4 };
@@ -227,7 +232,7 @@ const log5 = await launch('settings-card', s5, {
   ROTARIS_CAPTURE_AFTER_MS: '45000',
 }, 180_000);
 const card = JSON.parse(evalOf(log5, 'probe:"card"'));
-if (card.state !== 'completed') throw new Error(`the Project card read state ${JSON.stringify(card.state)}, expected completed`);
+if (card.state !== 'completed') throw new Error(withSetupFailure(`the Project card read state ${JSON.stringify(card.state)}, expected completed`, log5));
 if (card.headline !== 'Project initialized') throw new Error(`the card headline read ${JSON.stringify(card.headline)}`);
 if (!card.lines.some((l) => /every initialization task/i.test(l))) throw new Error(`the completed sentence is missing: ${JSON.stringify(card.lines)}`);
 if (!card.lines.includes('No code memories were created — this workspace is a documentation-only project.')) throw new Error(`REQ-WORKSPACE-101's sentence is missing: ${JSON.stringify(card.lines)}`);

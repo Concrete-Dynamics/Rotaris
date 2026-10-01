@@ -324,7 +324,7 @@ export class IterationChildren implements DelegationOps {
     }
     const r = this.ledger.spawn({
       parentId, parentDepth, persona: req.persona, taskName: req.taskName, task: req.task, dependsOn: req.dependsOn, inheritedContext: req.inheritedContext,
-      category: req.category, background: req.runInBackground, modelKey: childModelKey(persona, this.deps), grantedTools: persona?.tools ?? [],
+      category: req.category, background: req.runInBackground, modelKey: childModelKey(persona, this.deps),
       ...(continuationOf !== '' ? { continuationOf } : {}),
       ...(scope.patterns.length > 0 ? { writeScope: scope.patterns } : {}),
       ...(req.suppressAutoContext === true ? { suppressAutoContext: true } : {}),
@@ -1069,6 +1069,32 @@ export class IterationChildren implements DelegationOps {
     const compression = deps.compressionFor?.({ model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking }, () => todoLinesFromStored(this.ledger.get(row.task_id)?.todo ?? null));
     // REQ-TOOLS-006 (4), OQ-145: the delegating agent's persona, whose `tool_restrictions` may name this child's.
     const tools = deps.toolsFor(row.persona, row.canonical_name, this, row.task_id, row.depth, undefined, this.parentPersonaOf(row.parent_id));
+    /*
+     * REQ-MCP-065 with REQ-TOOLS-006: the grant this execution's port puts in force — what the controls left of the persona's
+     * declared tools and of its MCP surface — recorded on the child's row once the port is ready, before its first model
+     * step (the turn awaits the same readiness, so nothing is resolved twice). A resumed or followed-up child builds a new
+     * port, and its grant is recorded again. Until 2026-10-01 the spawn recorded the declared set instead.
+     */
+    let grantRecorded = false;
+    /*
+     * Started as the first turn starts, and never waited on by it: the turn records the child's payload at once and only
+     * then awaits readiness (`runTurn`), so a crash while an MCP discovery is pending leaves the task in the child's record
+     * for PD-ORCH-005's resume. The recording's reaction is registered on readiness before the turn's own await, so the
+     * grant still lands before the first model request. Until the 2026-10-01 repair round the turn was chained behind the
+     * recording, and a child waiting on readiness was `running` with an empty record.
+     */
+    const recordGrant = (): void => {
+      if (grantRecorded || !tools) return;
+      grantRecorded = true;
+      const record = (): void => {
+        const grant = tools.grant?.() ?? null;
+        if (grant !== null && !this.detached) this.ledger.recordGrant(row.task_id, grant);
+      };
+      if (!tools.ready) { record(); return; }
+      // A readiness that fails records nothing here; the turn awaits the same promise and meets the failure as it always did.
+      void tools.ready().then(record, () => undefined)
+        .catch((cause: unknown) => { deps.warn(`the grant of child ${row.task_id} could not be recorded: ${String(cause instanceof Error ? cause.message : cause)}`); });
+    };
     const dispatched = new Map<string, string>();
     // REQ-ORCH-047 / REQ-TOOLS-154: the prior-agent-context block, exactly once, ahead of everything.
     const depRows = (): ChildRow[] => (JSON.parse(row.depends_on) as string[]).map((d) => this.ledger.get(d)).filter((d): d is ChildRow => d !== undefined);
@@ -1137,12 +1163,13 @@ export class IterationChildren implements DelegationOps {
         backstop.handle = deps.clocks.timers.after(CHILD_LANDING_GRACE, () => { controller.abort(); });
       });
       let firstCall = true;
-      const turn = (task: string | null, history: readonly ChatMessage[]) => {
+      const turn = (task: string | null, history: readonly ChatMessage[]): Promise<TurnOutcome> => {
         const wasFirst = firstCall; firstCall = false;
         // REQ-NOTIFY-112: the run hands the child something to answer — its payload, its record, its children's reports, a
         // re-prompt or the corrective message — so the silence it could be blamed for starts now. A wait on its own children
         // before this asked it for no output.
         stallWatch.activity();
+        recordGrant();
         return runTurn({
         writer: deps.writer, owner: deps.owner, backend: deps.backend, tools, clocks: deps.clocks, persona: row.persona, agentName: row.canonical_name,
         // REQ-WORKSPACE-060 (ADR-0063): the session's context units follow the role's instructions and its playbook,
@@ -1170,7 +1197,8 @@ export class IterationChildren implements DelegationOps {
         // REQ-ORCH-093: the resume limb — a child's turn after its first is a parent being resumed with reports.
         parentResume: !wasFirst,
         // OQ-155: once the turn ends the child waits on its own children, or ends; neither is a silence of its own.
-      }, task, history, controller.signal).finally(() => stallWatch.betweenTurns()); };
+      }, task, history, controller.signal).finally(() => stallWatch.betweenTurns());
+      };
       // A resumed child's first attempt carries on from its record; REQ-ORCH-088's retry starts again from its payload.
       const fromRecord = start !== null;
       try {

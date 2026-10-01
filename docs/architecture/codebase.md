@@ -392,7 +392,8 @@ in `configuration.ts`'s header.)
    the normalised description, the byte-exact prompt section) returning `{ value, diagnostics }` at every stage with
    ONE sink fanning out to the 8 s notice and the `mcp_config` issue; MCP tools as executors outside the registry
    through the ONE gate (fail-closed per ADR-0016: withheld under `restricted`/`read_only`, asked under `ask`); the
-   per-child evidence in `children.granted_mcp`; the session override held in the run host; the Settings category
+   per-child evidence in `children.granted_mcp` (since 2026-10-01 the grant the child's port put in force, recorded once it
+   is ready, with `children.granted_tools` — the spawn recorded the persona's declared set before any control until then); the session override held in the run host; the Settings category
    (`McpSettings.tsx`: every configured row with its four-state health as text, origin, the switch and its wording, the
    secrets read side masked). **Placement read against the record:** every path lives in the **run host**, the one
    holder REQ-MCP-047 now asks for — ADR-0034 consequence 3 falsified and kept. OQ-22 read as overlay on the parent

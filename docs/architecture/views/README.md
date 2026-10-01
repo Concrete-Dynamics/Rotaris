@@ -45,6 +45,21 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A plan cycle's chips after an iteration read the plan cycle root's history (REQ-MONITOR-060, REQ-MONITOR-069,
+REQ-ORCH-153, PD-ORCH-003).** With no run live and an iteration recorded, `entryToolsOf` reads the tracker under the latest
+plan cycle root's persona when that root opened after the latest iteration (`plan_roots`, store v30), and under the
+iteration root's otherwise. This repairs `a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md`.
+The **runtime view**'s `entryTools` paragraph says so. No package, edge, process, message kind, channel, command or store
+column changed.
+
+**A todo edit at rest and the quit's terminal record hold the lock (ADR-0005, REQ-EVENTS-098, REQ-CHAT-090, PD-ORCH-005
+clause 10).** `editStoredTodo` claims through `claimHold` before it writes and is refused `session_locked` (REQ-SESSION-048's
+words) or `store_failed` with nothing written; `closeAll`'s quit record of a resting session's background sessions
+(`recordQuitTerminals`) claims the same way and records nothing of a session another live process holds. This repairs
+`a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md`. The **runtime view**'s §6 lock paragraph, the
+`announceShutdown` control row and the `session_locks` row, and the **state-ownership view**'s session-lock row say so. No
+package, edge, process, message kind, channel, command or store column changed.
+
 **A row that grows is measured at the commit, before it is painted (PD-CHAT-003, REQ-CHAT-058, ADR-0045, R-067).** A row whose
 content changed was placed by the height its identity drew last until the observer's delivery rendered a frame later, and a
 row that grew was painted through the row beneath it. The pane now reads every bound slot with no measurement of its present

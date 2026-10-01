@@ -4,6 +4,7 @@ import type { ChatMessage } from '@rotaris/model';
 import { commandsFrom, deterministicTesterReport, editedFilesFrom, fallbackReport, produceReport, reportFacts, reportTranscript, TRANSCRIPT_CAP, transcriptText, type ReportInput, type SummariserDeps } from './report.js';
 import { commandsForArtifact } from './ledger.js';
 import { childPayload } from './notify.js';
+import { interruptedResult, ranBeforeItWasCut } from '../run/interruption.js';
 
 /**
  * REQ-ORCH-108..112 and the specification's "Child report artifact (behavioral schema)": the report names
@@ -112,6 +113,98 @@ describe('engine/children/report — edited files derived from the transcript (R
     const messages = [call('w1', 'write_file', { operation: 'create', path: 'docs/a.md', content: 'x' })];
     expect(editedFilesFrom(messages, ['docs/a.md', 'Memory: domain-design/core-domain'])).toEqual(['docs/a.md', 'Memory: domain-design/core-domain']);
     expect(editedFilesFrom([], ['docs/only-the-model-said-so.md'])).toEqual(['docs/only-the-model-said-so.md']);
+  });
+});
+
+/**
+ * `a-reports-edited-files-counts-refused-writes`: the path of a write CALL was listed whatever answered it, so a write a
+ * sibling's claim refused (PD-TOOLS-006), the permission gate refused, or a `haet_edit` whose find text matched nothing
+ * reached `edited_files`, the fallback's "Files touched" and — since OQ-111 — the facts the pass "must never deny".
+ */
+describe('engine/children/report — a write the record answers with an error is not an edit (REQ-ORCH-108, REQ-ORCH-109, PD-TOOLS-006, OQ-111)', () => {
+  const refused = (callId: string, name: string, text: string): ChatMessage => ({ role: 'tool', content: [{ kind: 'tool-result', callId, name, result: text, isError: true }] });
+  const CLAIMED = 'docs/api.md is inside the write scope another child holds; write only inside your own scope.';
+  const messages = [
+    call('w1', 'write_file', { operation: 'create', path: 'docs/a.md', content: 'x' }), result('w1', 'write_file', 'Created docs/a.md'),
+    call('w2', 'write_file', { operation: 'overwrite', path: 'docs/api.md', content: 'y' }), refused('w2', 'write_file', CLAIMED),
+    call('w3', 'haet_edit', { path: 'docs/b.md', content_hash: 'a'.repeat(64), old_string: 'x', new_string: 'y' }), refused('w3', 'haet_edit', 'old_string was not found in docs/b.md. Read it again with haet_read.'),
+    call('w4', 'haet', { file_path: 'docs/c.md', content_hash: 'b'.repeat(64), old_string: 'x', new_string: 'y' }), refused('w4', 'haet', 'The permission gate refused this call.'),
+    say('assistant', 'wrote the documents'),
+  ];
+
+  it('lists only the writes that were answered without an error', () => {
+    expect(editedFilesFrom(messages)).toEqual(['docs/a.md']);
+  });
+
+  it('a path refused once and written later is listed once, at the write that landed', () => {
+    const retried = [...messages, call('w5', 'haet_edit', { path: 'docs/b.md', content_hash: 'c'.repeat(64), old_string: 'x', new_string: 'y' }), result('w5', 'haet_edit', 'applied')];
+    expect(editedFilesFrom(retried)).toEqual(['docs/a.md', 'docs/b.md']);
+  });
+
+  it("the summariser's own list cannot bring back a path whose every write was refused", () => {
+    expect(editedFilesFrom(messages, ['docs/api.md', 'docs/b.md', 'docs/notes.md'])).toEqual(['docs/a.md', 'docs/notes.md']);
+  });
+
+  it("the summariser's own list spelled another way — a leading `./`, backslashes, a doubled slash — neither brings back a refused path nor repeats a listed one", () => {
+    expect(editedFilesFrom(messages, ['./docs/api.md', 'docs\\b.md', 'docs//c.md', '.\\docs\\a.md', 'docs/notes.md'])).toEqual(['docs/a.md', 'docs/notes.md']);
+  });
+
+  it("the summariser's own list with a `./` segment inside the path — `docs/./api.md` — neither brings back a refused path nor repeats a listed one", () => {
+    expect(editedFilesFrom(messages, ['docs/./api.md', 'docs/././b.md', 'docs\\.\\a.md', 'docs/notes.md'])).toEqual(['docs/a.md', 'docs/notes.md']);
+  });
+
+  it('the facts, the fallback\'s "Files touched" and every construction site agree', async () => {
+    expect(reportFacts(messages)).toBe('Edited files: docs/a.md\nCommands run: (none)');
+    const fallback = fallbackReport(input({ messages, toolCallCount: 4, lastText: '' }), 'no summariser is configured');
+    expect(fallback.edited_files).toEqual(['docs/a.md']);
+    expect(fallback.summary).toContain('Files touched: docs/a.md.');
+    expect(fallback.summary).not.toContain('docs/api.md');
+    // REQ-ORCH-111's tester path takes at most eight events: the four calls and their answers.
+    const tester = deterministicTesterReport(input({ role: 'tester', messages: messages.slice(0, 8), toolCallCount: 4, lastText: 'all green' }));
+    expect(tester!.edited_files).toEqual(['docs/a.md']);
+    const asked: string[] = [];
+    const backend = {
+      runTurn: async (req: { messages: { content: { text: string }[] }[] }) => {
+        asked.push(req.messages[0]!.content[0]!.text);
+        return { status: 'succeeded' as const, usage: { input: 1, output: 1 }, text: JSON.stringify({ summary: 'wrote docs/a.md; the other writes were refused', key_findings: [], next_actions: [], tags: ['implementation'], edited_files: ['docs/a.md', 'docs/api.md'] }) };
+      },
+    };
+    const s: SummariserDeps = { backend: backend as never, model: { providerId: 'a', modelId: 'a1', dialect: 'chat' }, thinking: 'unset', timers: new FakeClock().timers, credentialFor: () => async () => 'k' };
+    const r = await produceReport(input({ messages, toolCallCount: 4 }), s, new AbortController().signal);
+    expect(asked[0]).toContain('Facts:\nEdited files: docs/a.md\n');
+    expect(r!.edited_files).toEqual(['docs/a.md']);
+  });
+});
+
+describe('engine/children/report — a write that was under way when a rest, a stop or a crash cut it off is still an edit (REQ-ORCH-109, OQ-111, PD-ORCH-005 clause 3)', () => {
+  // Found by the verification of the repair above: the turn answers a call cut off after its executor started with an
+  // error even when the write had landed (the pause's tool deadline, the stop's abort), and a crash's continue answers a
+  // row still `running` the same way. The record keeps what it produced; the report may not deny it.
+  const cutOff = (callId: string, name: string, text: string): ChatMessage => ({ role: 'tool', content: [{ kind: 'tool-result', callId, name, result: text, isError: true }] });
+  const messages = [
+    call('w1', 'write_file', { operation: 'overwrite', path: 'src/app.ts', content: 'x' }), cutOff('w1', 'write_file', interruptedResult('pause', true, 'Overwrote src/app.ts')),
+    call('w2', 'haet_edit', { path: 'src/b.ts', content_hash: 'a'.repeat(64), old_string: 'x', new_string: 'y' }), cutOff('w2', 'haet_edit', interruptedResult(null, true, '')),
+    call('w3', 'haet', { file_path: 'src/c.ts', content_hash: 'b'.repeat(64), old_string: 'x', new_string: 'y' }), cutOff('w3', 'haet', interruptedResult('crash', true, 'applied')),
+    call('w4', 'write_file', { operation: 'create', path: 'src/never.ts', content: 'x' }), cutOff('w4', 'write_file', interruptedResult('pause', false, '')),
+    call('w5', 'haet_edit', { path: 'src/withdrawn.ts', content_hash: 'c'.repeat(64), old_string: 'x', new_string: 'y' }), cutOff('w5', 'haet_edit', interruptedResult('stop', false, 'The approval was withdrawn.')),
+    say('assistant', 'done'),
+  ];
+
+  it('a call cut off after it started is listed, whatever cut it and whatever it had produced; one that never started is not', () => {
+    expect(editedFilesFrom(messages)).toEqual(['src/app.ts', 'src/b.ts', 'src/c.ts']);
+    expect(reportFacts(messages)).toBe('Edited files: src/app.ts, src/b.ts, src/c.ts\nCommands run: (none)');
+    expect(fallbackReport(input({ messages, toolCallCount: 5, lastText: '' }), 'no summariser is configured').summary).toContain('Files touched: src/app.ts, src/b.ts, src/c.ts.');
+  });
+
+  it("the summariser's own list may name a path a cut-off call wrote, and still not one only a call that never started named", () => {
+    expect(editedFilesFrom(messages, ['src/app.ts', 'src/never.ts'])).toEqual(['src/app.ts', 'src/b.ts', 'src/c.ts']);
+  });
+
+  it('only the statement heads the turn writes count: a refusal that merely quotes one is still a refusal', () => {
+    const quoted = [call('w6', 'write_file', { operation: 'create', path: 'src/q.ts', content: 'x' }), cutOff('w6', 'write_file', `Refused.\n${interruptedResult('pause', true, '')}`)];
+    expect(editedFilesFrom(quoted)).toEqual([]);
+    expect(ranBeforeItWasCut(interruptedResult('quit', true, 'line one\nline two'))).toBe(true);
+    expect(ranBeforeItWasCut(interruptedResult('quit', false, ''))).toBe(false);
   });
 });
 

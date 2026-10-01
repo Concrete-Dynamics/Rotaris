@@ -45,6 +45,29 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**A child settled outside its execution fires `child_completed` (REQ-HOOKS-003, REQ-ORCH-048, REQ-ORCH-052,
+REQ-ORCH-053, REQ-ORCH-133, PD-ORCH-005 clause 6, R-067).** The cascade, the finalize sweep and the user's cancel of one
+child now fire it through `IterationChildren.completedOutside`, in line, and the run waits for them after the sweep
+(`completionsSettled`); the stale settle's and the decline's fire after the run's `session_start`
+(`RunDeps.settledBeforeStart`, `Run.childCompleted`). An outside hook's fields are taken as the scheduler is told, not
+when a queued hook starts (the second verification). `beginSettle`'s own-entry guard keeps a followed-up child settling
+to a parent's `settlesOf` until the later end's hook is done, corrected in §4 from "fires the hook once for each end" (the
+third verification). A rest's wait on the executions looks again until none is left (`IterationChildren.drained`), and
+the run waits for the outside hooks once more before `session_end` (`Run.childCompletionsSettled`), corrected in §4 from
+"awaited as executions" over a snapshot (the fourth verification). Three paths outside a run's hooks fire none, raised as OQ-154. This
+repairs `a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`. The **runtime view**'s §4 gains the
+paragraph after the one on a settle's hook. No package, edge, process, message kind, channel, command or store column
+changed.
+
+**A report's edited files are the writes that landed (REQ-ORCH-108, REQ-ORCH-109, PD-TOOLS-006, OQ-111, R-067).**
+`editedFilesFrom` now skips a write call the record answers as refused — a sibling's claim, the permission gate or a
+pre-tool hook refusing it, a `haet_edit` whose find text matched nothing — or as cut before it started, and the
+summariser's own list cannot bring such a path back. A write cut off while under way (the pause's tool deadline, the
+stop's abort, a crash) is still listed, since it may have landed: `run/interruption.ts`'s `ranBeforeItWasCut` reads the
+statement the turn records for it. The report's `edited_files`, the fallback's "Files touched" and the facts the pass is told never to deny all
+read it. This repairs `a-reports-edited-files-counts-refused-writes.md`. The **runtime view**'s §4 report sentence says
+so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A stalled agent is shown stalled; the root is watched; a stall evaluation lands a steer (REQ-ORCH-089, REQ-MONITOR-117..122,
 REQ-MONITOR-135, R-067).** `AgentRecord.stalledSeconds` and `SessionRecord.entryStalledSeconds` carry each stall watch's
 figure, kept in `AgentActivity` and republished by `ProjectionOwner.refreshRecord` when it changes; the agent trees, the

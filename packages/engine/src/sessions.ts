@@ -1216,7 +1216,9 @@ export class Sessions {
     const tools: ToolPort | null = null;
     live.tools = tools;
     // REQ-ORCH-053: a run that has just taken the lock settles every non-terminal child a previous run left, before its first iteration.
-    const stale = settleStaleChildren(dal, writer, sessionId, warn, artifacts);
+    // REQ-HOOKS-003: each settled child's `child_completed` is the run's, fired once its `session_start` has.
+    const settledBeforeStart: Readonly<Record<string, unknown>>[] = [];
+    const stale = settleStaleChildren(dal, writer, sessionId, warn, artifacts, (fields) => { settledBeforeStart.push(fields); });
     if (stale > 0) warn(`${stale} child record(s) from a previous run were settled cancelled before the first iteration (REQ-ORCH-053)`);
     // REQ-ORCH-024: the configured policy; the run clamps it by the pre-flight's BUDGET cell (the `normal` cell stood in until playbooks existed).
     const budget = runtime?.childBudget ?? DEFAULT_BUDGET;
@@ -1244,7 +1246,7 @@ export class Sessions {
       // at the top level and NOT inside the tools block: an agent with no tool port still holds a conversation.
       ...(model.compression ? { compression: { backend: meteredBackend(model.backend, countUsage), timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor, model: model.compression.model, timeoutMs: millis(model.compression.timeoutMs), charsPerToken: model.compression.charsPerToken, preserveRecentTurns: model.compression.preserveRecentTurns, triggerFor: model.compression.triggerFor } } : {}),
       // PD-ORCH-005: every run's store for the conversation and iteration records, with or without a tool port.
-      dal, readSession: () => dal.getSession(sessionId), warn, hooks, checkpoints, ...(this.deps.notice ? { notice: this.deps.notice } : {}),
+      dal, readSession: () => dal.getSession(sessionId), warn, hooks, settledBeforeStart, checkpoints, ...(this.deps.notice ? { notice: this.deps.notice } : {}),
       onSaved: (g) => summary.rebuild(g, () => dal.getSession(sessionId)),
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
@@ -1376,7 +1378,9 @@ export class Sessions {
     s.tools = null;
     // PD-ORCH-005 clause 3: what a crash left is recorded before the settle, which leaves every `paused` agent as it is.
     this.recordCrashOf(s.dal, s.writer, sessionId, warn, artifacts);
-    const stale = settleStaleChildren(s.dal, s.writer, sessionId, warn, artifacts);
+    // REQ-HOOKS-003: each settled child's `child_completed` is the run's, fired once its `session_start` has.
+    const settledBeforeStart: Readonly<Record<string, unknown>>[] = [];
+    const stale = settleStaleChildren(s.dal, s.writer, sessionId, warn, artifacts, (fields) => { settledBeforeStart.push(fields); });
     if (stale > 0) warn(`${stale} child record(s) from a previous run were settled cancelled before the first continuation iteration (REQ-ORCH-053)`);
     const open = s.dal.openIterationOf(sessionId);
     /*
@@ -1467,7 +1471,7 @@ export class Sessions {
       // PD-ORCH-004 revision 4: the offers the payload's handoff covers, named or left out, told no later root again.
       handoffOffers: openOfferIds(s.dal, sessionId),
       tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn,
-      continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(appendsTask && !restatesUnfinished ? {} : { appendsTask: false }), ...(hooks ? { hooks } : {}), checkpoints,
+      continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(appendsTask && !restatesUnfinished ? {} : { appendsTask: false }), ...(hooks ? { hooks } : {}), settledBeforeStart, checkpoints,
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, previousIntent: priorIntent, hasUnfinishedWork: true }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),

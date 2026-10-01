@@ -675,7 +675,8 @@ on `succeeded` + report stored, promote one held child per freed model slot, cla
 turn loop under its persona's tools, model, credential and supervisor; its **report** comes from a bounded summarising pass on `default_summary_model` (REQ-CONFIG-065) or the entry model,
 which reads the task as given (the ledger row's, the payload's blocks ahead of it marked omitted) and the most recent
 part of the transcript within 12,000 characters, the omission marked between them, beside the report's deterministic
-facts — edited files, commands and exit codes (OQ-111; OQ-119 and OQ-120 ask its two bounds);
+facts — edited files (a write the record answers as refused, or cut before it started, is not one; a write cut off
+while under way is), commands and exit codes (OQ-111; OQ-119 and OQ-120 ask its two bounds);
 the parent resumes with the report. Every exit from an iteration leaves every child record terminal — except a rest
 (PD-ORCH-005), which leaves every unfinished child `paused`.
 
@@ -746,6 +747,37 @@ settles as executions. So the hook finishes before the parent is given the repor
 found the child ended. The repair's first form waited only on the settles running when each wait began, so a second
 child that ended during the wait was taken while its hook ran (found by the verifier's fifth round). Both are recorded
 in [`a-child-completed-hook-can-finish-after-its-iteration-ends.md`](../../defects/fixed/a-child-completed-hook-can-finish-after-its-iteration-ends.md).
+
+**A child settled outside its execution fires the hook too (REQ-HOOKS-003 / REQ-ORCH-048 / REQ-ORCH-052 / REQ-ORCH-053 /
+REQ-ORCH-133 / PD-ORCH-005 clause 6; repaired 2026-09-30).** `IterationChildren` listens to every terminal move the
+scheduler is told of; one its own settle did not make — the cascade, the finalize sweep, the user's `cancel` of one
+child — fires `child_completed` through `completedOutside`, one hook after another in the order the children settled,
+each child held in `settles` until its hook is done, and tracked as an execution. Its fields are taken as the scheduler is
+told and carried to the hook, so a hook queued behind another sends the end that queued it even when a follow-up (clause
+22) has moved the record on meanwhile — the first form read the record when the hook started and sent the follow-up's
+state, found by the second verification. The listener tells a settle's own terminal move by `tellingOwnSettle`, not by a
+`settles` entry, which a queued outside hook holds too. The run waits for all of them after the
+finalize sweep (`completionsSettled`), before `iteration_end`. The stale settle's children are handed to the run
+(`RunDeps.settledBeforeStart`) and fired after its `session_start`; the decline fires one for each agent it cancels, after
+the continuing run's `session_start`. A child ended where no run's hooks are live — cancelled at rest (clause 16), by the
+explicit cancel's close after `session_end`, or by the record of an accepted cancel — fires none, nor does a stale-settled
+child whose run ends before its `session_start` (OQ-154). A settle
+ends only its own `settles` entry (`beginSettle`), ~~so a child followed up while an earlier end's hook still runs (clause
+22) fires the hook once for each end~~ so a child followed up while an earlier end's hook still runs (clause 22) is still
+settling, to a parent's `settlesOf`, until the later end's hook is done — the parent in the resume loop or in
+`wait_for_tasks` takes it as ended only then (REQ-HOOKS-080). *(Corrected 2026-09-30, the third verification: firing
+once per end now comes from `tellingOwnSettle`, not from this guard.)* An outside hook holds its child as settling the
+same way, so a parent the cancel, the cascade or the sweep wakes waits for that hook before its next model step. ~~At a stop or a quit these hooks are awaited as executions within what is left of
+the 30 s grace and then given up on with them, as a settle's own hook is (REQ-SESSION-092), bounded by the per-hook
+timeout.~~ *(Corrected 2026-09-30, the fourth verification: a rest waited on a snapshot of the executions, so a hook the
+user's cancel queued while it waited ended after `session_end`.)* A rest waits for these hooks as executions, looking
+again until none is left (`IterationChildren.drained`): a pause for as long as each hook's own timeout allows, a stop or
+a quit within what is left of the 30 s grace, after which they are given up on with the executions, as a settle's own
+hook is (REQ-SESSION-092). Before `session_end` the run waits again for every one the last iteration's children queued
+(`Run.childCompletionsSettled`) — within what is left of the grace after a stop — so a paused child cancelled once the
+rest is recorded has its hook end first. The explicit cancel's sweep is awaited (`completionsSettled`) before `outlast`,
+bounded only by each hook's timeout. The note is
+[`a-child-settled-outside-its-execution-fires-no-child-completed-hook.md`](../../defects/fixed/a-child-settled-outside-its-execution-fires-no-child-completed-hook.md).
 Since 2026-09-30 both settles end through one tail, `IterationChildren.afterTerminal`, which tells the scheduler in a
 `finally`: a raise out of the teardown or the hook port no longer leaves a parent waiting on a child that has ended
 (REQ-ORCH-048, REQ-TOOLS-156). A raise out of the hook port reduces to a warning and the settle goes on (REQ-HOOKS-079);

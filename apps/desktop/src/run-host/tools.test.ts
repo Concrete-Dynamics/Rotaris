@@ -633,6 +633,16 @@ ${coder('    tool_restrictions:\n      coding-agent: [read_file, grep, terminal]
     expect(grant?.mcp).toEqual({ granted: { srv: [] }, servers: [{ name: 'srv', transport: 'stdio', origin: 'workspace', fate: 'connected' }] });
   });
 
+  // REQ-TOOLS-006 (4) with REQ-MCP-065: an allowed-tool list naming only a server's tool leaves no native tool, and the port
+  // reports that empty native grant — which the row records as a grant, not as none
+  // (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
+  it('REQ-TOOLS-006 / REQ-MCP-065: a tool_restrictions list naming only a server tool leaves an empty native grant beside the server tool', async () => {
+    const serverTool = simpleExecutor('lookup', 'a server tool', anySchema, async () => ({ text: 'ok', isError: false }));
+    const only = port(coder('    tool_restrictions:\n      coding-agent: [lookup]\n'), 'coding-agent', { parentId: 'bg_0a1b2c3d', depth: 1 }, [serverTool]);
+    await only.ready?.();
+    expect(only.grant?.()).toEqual({ tools: [], mcp: { granted: { srv: ['lookup'] }, servers: [{ name: 'srv', transport: 'stdio', origin: 'workspace', fate: 'connected' }] } });
+  });
+
   it('REQ-MCP-065 / REQ-MCP-114: a read_only persona\'s carried server is listed with no granted tool; an unrestricted one lists what it can call', async () => {
     const serverTool = simpleExecutor('lookup', 'a server tool', anySchema, async () => ({ text: 'ok', isError: false }));
     const reader = port(`  coding-agent:

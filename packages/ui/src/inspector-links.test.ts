@@ -20,7 +20,7 @@ const link = (over: Partial<SessionArtifactLink>): SessionArtifactLink => ({ id:
 const child = (over: Partial<AgentRecord>): AgentRecord => ({
   id: 'bg_00000001', name: 'coder-1', givenName: 'Coder', persona: 'coding-agent', state: 'running', presentationState: 'running', parentId: 'root:1', dependencies: [], activity: 'do it', model: 'm',
   depth: 1, background: false, category: '', spawnedAt: '2026-09-29T10:00:00.000Z', completedAt: null, toolCalls: 1, delegationTask: 'do it', reasoning: 'medium', contextUsed: 0, contextLimit: DEFAULT_CONTEXT_CAPACITY,
-  grantedTools: ['read_file'], calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null, ...over,
+  grantedTools: ['read_file'], grantRecorded: true, calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null, ...over,
 });
 const session = (over: Partial<SessionRecord> = {}): SessionRecord => ({
   id: 's1', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-09-29T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [],

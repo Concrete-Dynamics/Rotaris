@@ -133,6 +133,14 @@ new run whose ports are built with the gate released (pinned in `run/plan-gate.t
 `an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md`; the **runtime view**'s MCP surface says so. No
 package, edge, process, message kind, channel, command or store column changed.
 
+**A grant the controls left empty of native tools is drawn as none, not as the declared tools (REQ-MONITOR-049/060,
+REQ-TOOLS-006, REQ-MCP-065).** `recordChildGrant` adds `recorded: true` to the `granted_mcp` object it writes, and the
+projection carries it as the new `AgentRecord.grantRecorded` (a contract field); `resolvedTools` lets the declared tools
+stand in only where no grant was recorded. A row without the marker — the spawn's, and every row written before
+2026-10-01 — keeps the old reading, `[]` as no grant recorded. This repairs
+`a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md`; the **runtime view**'s `AgentRecord` passage and its
+`children` row say so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A child's row records the grant its port put in force, not its persona's declared tools (REQ-MCP-065, REQ-TOOLS-006,
 REQ-MCP-114).** The spawn wrote `children.granted_tools` from the persona's declared tools and `granted_mcp` from its MCP
 surface before any control, so a tool `coordinator_only`, `read_only`, `tool_restrictions`, the `restricted` preset or the

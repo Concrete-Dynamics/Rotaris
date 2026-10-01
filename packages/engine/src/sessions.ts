@@ -972,6 +972,7 @@ export function toAgentRecord(c: ChildRow, clocks: Clocks, facts: AgentFacts = {
     // REQ-MONITOR-281 (Part AH): the per-agent compression count, live from the tracker and seeded from the timeline on open.
     compressions: activity?.compressions(c.canonical_name) ?? 0,
     grantedTools: parseList(c.granted_tools),
+    grantRecorded: grantRecordedOf(c),
     calledTools: activity?.calledTools(c.canonical_name) ?? [],
     // REQ-MONITOR-211/213: a settled agent presents no active tool, whatever a crash left in the ring; nor does a paused one.
     activeTools: terminal || paused ? [] : activity?.activeTools(c.canonical_name) ?? [],
@@ -1026,6 +1027,20 @@ export function cancelLeftOf(dal: StoreDal, r: SessionRow, notLive: () => boolea
   if (!open || open.cancel_accepted_at === null) return NONE_CRASH_LEFT;
   if (isActiveStatus(status) && !notLive()) return NONE_CRASH_LEFT;
   return new Set(iterationAgents(dal, asSessionId(r.session_id), open).filter((c) => !isTerminalChildState(c.state)).map((c) => c.task_id));
+}
+
+/**
+ * REQ-MONITOR-049/060 with REQ-MCP-065: whether the row holds a recorded grant. `recordChildGrant` marks the evidence it
+ * writes `recorded: true`, so a grant REQ-TOOLS-006's controls left empty of native tools reads as recorded. A row written
+ * before the marker (2026-10-01) keeps the reading it had: an empty native list is no grant recorded, and the persona's
+ * declared tools stand in; a non-empty one is the grant (a pre-2026-10-01 spawn wrote the declared set there).
+ */
+function grantRecordedOf(c: Pick<ChildRow, 'granted_tools' | 'granted_mcp'>): boolean {
+  try {
+    const v = JSON.parse(c.granted_mcp) as { recorded?: unknown } | null;
+    if (v !== null && typeof v === 'object' && v.recorded === true) return true;
+  } catch { /* an unreadable value carries no marker */ }
+  return parseList(c.granted_tools).length > 0;
 }
 
 /** REQ-MCP-065 / REQ-MCP-114 (Part S): the row's recorded evidence as the record's two fields; an unreadable or pre-Part-S `{}` value reads as none. */

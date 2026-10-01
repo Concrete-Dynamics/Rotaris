@@ -21,7 +21,7 @@ vi.mock('./terminal/host.js', async (importOriginal) => ({ ...(await importOrigi
 const agent = (over: Partial<AgentRecord>): AgentRecord => ({
   id: 'bg_00000001', name: 'one', givenName: 'one', persona: 'coding-agent', state: 'paused', presentationState: 'paused', parentId: 'bg_0000root', dependencies: [], activity: 'TASK: one', model: 'm',
   depth: 1, background: true, category: '', spawnedAt: '2026-09-28T10:00:00.000Z', completedAt: null, toolCalls: 1, delegationTask: 'TASK: one', reasoning: 'medium', contextUsed: 0, contextLimit: DEFAULT_CONTEXT_CAPACITY,
-  grantedTools: [], calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: false, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: 'pause', stalledSeconds: null, ...over,
+  grantedTools: [], grantRecorded: false, calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: false, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: 'pause', stalledSeconds: null, ...over,
 });
 const paused = agent({});
 const grand = agent({ id: 'bg_00000002', name: 'grand', parentId: 'bg_00000001', depth: 2 });

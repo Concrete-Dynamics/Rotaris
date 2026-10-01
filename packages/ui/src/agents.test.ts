@@ -7,7 +7,7 @@ import { useShellState } from './shell-state.js';
 const agent = (over: Partial<AgentRecord>): AgentRecord => ({
   id: 'bg_00000001', name: 'helper', givenName: 'Helper', persona: 'coding-agent', state: 'running', presentationState: 'running', parentId: 'root:1', dependencies: [], activity: 'do the thing', model: 'scripted/alpha',
   depth: 1, background: true, category: 'quick', spawnedAt: '2026-09-05T10:00:00.000Z', completedAt: null, toolCalls: 2, delegationTask: 'do the thing', reasoning: 'medium', contextUsed: 1000, contextLimit: DEFAULT_CONTEXT_CAPACITY,
-  grantedTools: ['read_file', 'grep'], calledTools: ['grep'], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null, ...over,
+  grantedTools: ['read_file', 'grep'], calledTools: ['grep'], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantRecorded: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null, ...over,
 });
 const row = (over: Partial<TranscriptRow>): TranscriptRow => ({ index: 0, kind: 'agent', settled: true, body: 'x', at: '2026-09-05T10:00:00.000Z', ts: '10:00:00', ...over });
 const session = (over: Partial<SessionRecord>): SessionRecord => ({
@@ -109,8 +109,19 @@ describe('agents — chips, enablement, cascade, pause (REQ-MONITOR-060/062/063/
     expect(before.map((c) => c.name)).toEqual(after.map((c) => c.name));
     expect(before.map((c) => c.state)).toEqual(['not used', 'active', 'not used']);
     expect(after.map((c) => c.state)).toEqual(['not used', 'used', 'not used']);
-    expect(resolvedTools(agent({ grantedTools: [] }), ['a', 'b'])).toEqual(['a', 'b']);
+    expect(resolvedTools(agent({ grantedTools: [], grantRecorded: false }), ['a', 'b'])).toEqual(['a', 'b']);
     expect(resolvedTools(agent({ grantedTools: ['x'] }), ['a'])).toEqual(['x']);
+  });
+  /*
+   * REQ-MONITOR-049/060 with REQ-TOOLS-006 (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md):
+   * a grant the controls left empty of native tools is a recorded grant, and the declared tools do not stand in for it.
+   * Until 2026-10-01 an empty list read as "no grant recorded", so the inspector listed every tool the controls removed.
+   */
+  it('REQ-MONITOR-049 / REQ-TOOLS-006: a recorded empty grant lists no native tool; an unrecorded one lets the declared tools stand in', () => {
+    expect(resolvedTools(agent({ grantedTools: [], grantRecorded: true, live: false }), ['read_file', 'grep'])).toEqual([]);
+    expect(resolvedTools(agent({ grantedTools: [], grantRecorded: true, live: true }), ['read_file', 'grep'])).toEqual([]);
+    expect(resolvedTools(agent({ grantedTools: [], grantRecorded: false, live: false }), ['read_file', 'grep'])).toEqual(['read_file', 'grep']);
+    expect(resolvedTools(agent({ grantedTools: ['read_file'], grantRecorded: true }), ['read_file', 'grep'])).toEqual(['read_file']);
   });
   it('Steer while running or waiting; Cancel while running, waiting or queued; Pop out always for a shown agent', () => {
     expect(inspectorEnablement('running')).toEqual({ steer: true, cancel: true, popOut: true });

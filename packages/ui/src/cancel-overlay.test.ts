@@ -11,7 +11,7 @@ const AT = '2026-09-29T10:00:00.000Z';
 const agent = (over: Partial<AgentRecord>): AgentRecord => ({
   id: 'bg_00000001', name: 'alpha', givenName: 'alpha', persona: 'coding-agent', state: 'running', presentationState: 'running', parentId: 'bg_0000root', dependencies: [], activity: 'TASK: alpha', model: 'm',
   depth: 1, background: true, category: '', spawnedAt: '2026-09-29T09:59:00.000Z', completedAt: null, toolCalls: 1, delegationTask: 'TASK: alpha', reasoning: 'medium', contextUsed: 0, contextLimit: 1000,
-  grantedTools: [], calledTools: [], activeTools: ['read_file'], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, ...over,
+  grantedTools: [], grantRecorded: false, calledTools: [], activeTools: ['read_file'], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, ...over,
 } as AgentRecord);
 const alpha = agent({});
 const sub = agent({ id: 'bg_00000002', name: 'sub', parentId: alpha.id, depth: 2 });

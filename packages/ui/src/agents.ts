@@ -114,7 +114,9 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
     spawnedAt: session.runStartedAt, completedAt: busy || resting ? null : session.updatedAt, toolCalls: session.entryToolCalls ?? Math.max(0, session.toolCalls.total - childCalls), delegationTask: '',
     // REQ-MONITOR-086: the run-wide count is the sum of the per-agent counts, which is what the synthetic root shows.
     compressions: session.agents.reduce((n, a) => n + a.compressions, 0),
-    reasoning: entry.reasoning, contextUsed: session.entryContext.used, contextLimit: session.entryContext.limit > 0 ? session.entryContext.limit : DEFAULT_CONTEXT_CAPACITY, grantedTools: runLevelGrant(session.entryTools.resolved, entry.tools, busy), calledTools: [...session.entryTools.called], activeTools: busy ? [...session.entryTools.active] : [], delegationSessionId: null, inheritedContext: '', live: busy,
+    reasoning: entry.reasoning, contextUsed: session.entryContext.used, contextLimit: session.entryContext.limit > 0 ? session.entryContext.limit : DEFAULT_CONTEXT_CAPACITY, grantedTools: runLevelGrant(session.entryTools.resolved, entry.tools, busy),
+    // The run-level agent's set is already `runLevelGrant`'s choice; no row records its grant (REQ-MCP-065 is per child).
+    grantRecorded: false, calledTools: [...session.entryTools.called], activeTools: busy ? [...session.entryTools.active] : [], delegationSessionId: null, inheritedContext: '', live: busy,
     // Part S's evidence (REQ-MCP-065/114) is per child; the run-level agent carries none in this build.
     grantedMcp: {}, mcpServers: [],
     // PD-ORCH-005: the interruption belongs to a delegated agent's record; the synthetic run-level agent carries none.
@@ -212,10 +214,13 @@ export function mcpFateText(s: { readonly fate: 'connected' | 'dropped'; readonl
  * REQ-MONITOR-049/060: the granted set, else the persona's declared tools stand in — but never for a LIVE run-level agent
  * (REQ-MONITOR-061; see `runLevelGrant`), whose empty set means its root port has not resolved yet, not that no grant was
  * recorded: the persona has a live instance, so REQ-MONITOR-060's stand-in does not apply, and a coordinator's declared set
- * holds the write, terminal and commit tools its policy withholds.
+ * holds the write, terminal and commit tools its policy withholds. A recorded grant is shown as it is, an empty one as no
+ * native tool (`grantRecorded`, REQ-TOOLS-006): until 2026-10-01 an empty list read as no grant recorded, so a child whose
+ * controls removed every native tool listed them all
+ * (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
  */
-export function resolvedTools(agent: Pick<AgentRecord, 'id' | 'grantedTools' | 'live'>, declared: readonly string[]): string[] {
-  if (agent.grantedTools.length > 0) return [...agent.grantedTools];
+export function resolvedTools(agent: Pick<AgentRecord, 'id' | 'grantedTools' | 'grantRecorded' | 'live'>, declared: readonly string[]): string[] {
+  if (agent.grantedTools.length > 0 || agent.grantRecorded) return [...agent.grantedTools];
   return agent.id === RUN_AGENT_ID && agent.live ? [] : [...declared];
 }
 

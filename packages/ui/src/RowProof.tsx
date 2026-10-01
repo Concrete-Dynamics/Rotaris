@@ -119,7 +119,7 @@ const AGENT: AgentRecord = {
   parentId: RUN_AGENT_ID, dependencies: ['bg_0000beef'], activity: 'reading the repository', model: 'scripted', depth: 1, background: true,
   category: 'implementation', spawnedAt: AT, completedAt: null, toolCalls: 4,
   delegationTask: 'TASK: read the repository and report what the transcript renderer must draw, at length enough that the collapsed summary has to compact it to one hundred and ten characters with an ellipsis where it is cut.',
-  reasoning: 'high', contextUsed: 1_200, contextLimit: DEFAULT_CONTEXT_CAPACITY, grantedTools: ['read_file', 'terminal'], calledTools: ['read_file', 'terminal'], activeTools: ['terminal'],
+  reasoning: 'high', contextUsed: 1_200, contextLimit: DEFAULT_CONTEXT_CAPACITY, grantedTools: ['read_file', 'terminal'], grantRecorded: true, calledTools: ['read_file', 'terminal'], activeTools: ['terminal'],
   delegationSessionId: null, inheritedContext: 'The parent asked for the transcript rendering rules.', live: true, grantedMcp: {}, mcpServers: [], compressions: 0,
   interruption: null, stalledSeconds: null,
 };

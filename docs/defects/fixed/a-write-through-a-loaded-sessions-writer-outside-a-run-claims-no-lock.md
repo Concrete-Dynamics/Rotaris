@@ -44,7 +44,7 @@ checkpoint on the session: Session … is held by pid 4242 on …"), the hand ed
 On the code before the repair, the same launch restored the file under the other holder's lock, and the proof failed.
 
 The same shape remains at two other writes through a loaded session's writer outside a run. They are recorded in
-[`../a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md`](../a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md).
+[`a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md`](a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md) (repaired 2026-10-01).
 
 ## Specs
 

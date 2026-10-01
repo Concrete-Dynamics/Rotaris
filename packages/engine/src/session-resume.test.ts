@@ -792,6 +792,59 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
       expect(reopened.at(-1)!.planGate?.cycle).toBe(1);
       expect(reopened.at(-1)!.entryTools).toEqual({ resolved: [], called: ['grep'], active: [] });
     });
+
+    /*
+     * PD-ORCH-003 with REQ-ORCH-153 (the repair of
+     * `a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md`): with an iteration recorded the
+     * history was read under the latest iteration root's persona, so a plan cycle re-armed after it, under an entry persona
+     * switched in between, was marked from the earlier iteration root's calls. Its root is recorded in `plan_roots` (v30),
+     * so the history is read under whichever root ran last.
+     */
+    it('a plan cycle re-armed after an iteration, under a switched entry persona: the chips read the plan cycle root\'s calls, not the iteration root\'s', async () => {
+      const port = (writer: SessionWriter): ToolPort => {
+        const base = grepping(writer);
+        return { ...base, specs: () => [{ name: 'grep', description: 'search', parameters: { type: 'object' } }, { name: 'glob', description: 'list', parameters: { type: 'object' } }] };
+      };
+      let persona = 'Builder';
+      let mode: 'auto' | 'plan' = 'auto';
+      const backend = new DefaultAgentBackend(new ScriptedModelClient([
+        toolCalls([{ callId: 'b1', name: 'glob', args: { pattern: '*' } }], 'Listing.'), answer('Built.'),
+        toolCalls([{ callId: 'r1', name: 'grep', args: { pattern: 'x' } }], 'Searching.'), answer('Step 1: the review plan.'),
+      ]));
+      const switching = (pid: number, snapshots: SessionRecord[]) => new Sessions({
+        clocks: clock, publisher: { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } }, pid, host: HOST,
+        retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-plan-after-iteration',
+        model: null, sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid), attended: () => true,
+        tools: (ctx) => port(ctx.writer),
+        configure: () => ({ ok: true, value: {
+          model: { backend, config: { ...RUN_CONFIG_DEFAULTS, persona, model: MODEL, credentialFor: () => async () => '' } },
+          runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, runStartMode: mode },
+        } }),
+      });
+      const live: SessionRecord[] = [];
+      const first = switching(84, live);
+      const sid = (first.start(dal, 'C:/ws', 'build it') as { value: SessionId }).value;
+      expect((await first.running(sid)!).execution_status).toBe('completed');
+      expect(dal.iterationsOf(sid).map((r) => r.root_persona)).toEqual(['Builder']);
+      // The user re-arms `plan` on the run-start chip and switches the entry persona before the next prompt (PD-ORCH-003).
+      clock.advance(1_000);
+      mode = 'plan';
+      persona = 'Reviewer';
+      expect(first.prompt(sid, 'now review it').ok).toBe(true);
+      expect((await first.running(sid)!).execution_status).toBe('awaiting_plan_decision');
+      expect(dal.iterationsOf(sid).map((r) => r.root_persona)).toEqual(['Builder']);
+      expect(dal.planRootsOf(sid).map((r) => r.root_persona)).toEqual(['Reviewer']);
+      first.owner(sid)!.reconcile();
+      expect(live.at(-1)!.entryTools).toEqual({ resolved: [], called: ['grep'], active: [] });
+      // A fresh process opens the parked session: the tracker is seeded from the ring, and the reading is the same.
+      await first.closeAll();
+      const reopened: SessionRecord[] = [];
+      const second = switching(85, reopened);
+      expect(second.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      second.owner(sid)!.reconcile();
+      expect(reopened.at(-1)!.planGate?.cycle).toBe(1);
+      expect(reopened.at(-1)!.entryTools).toEqual({ resolved: [], called: ['grep'], active: [] });
+    });
   });
 
   it('entryRootsOf (REQ-MONITOR-071, REQ-LIBRARY-093, OQ-97, OQ-106): each iteration\'s root, then each root no iteration records that published, and no child — read from the store alone', () => {

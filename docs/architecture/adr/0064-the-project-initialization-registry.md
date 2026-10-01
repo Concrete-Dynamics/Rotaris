@@ -371,5 +371,38 @@ REQ-WORKSPACE-084/109. Reachable by PD-SHELL-001's two windows, or by a switch w
 replacement's 800 ms resolution. The follow now removes its abort listener when its setup finishes, so a run's abort
 reaches the run host only while that run's own setup is live; two cases in `initialization.test.ts` ("leaves the next
 workspace's setup running when …", on a close and on a Cancel) fail without it. **Not shown:** a setup the MCP settings category starts beside a background run, which is not one of the
-coordinator's and is still refused (`../../defects/a-refused-setup-start-is-reported-as-not-a-local-launch.md`); the
+coordinator's and is still refused (`../../defects/fixed/a-refused-setup-start-is-reported-as-not-a-local-launch.md`, where the refusal was reported as "not a local launch" — its reporting repaired 2026-10-01 in the eighth round); the
 Windows orders.
+
+**Eighth round (2026-10-01, R-067): a refused start is not "not a local launch".** "Why the task delegates rather than
+reimplements" names REQ-WORKSPACE-094's non-retryable refusal among the words this domain states, and the runner stated
+it for every refusal of `setup.start`. The run host refuses a start for three reasons — its one setup slot taken
+(`mcp.setup.running`, which a setup the MCP category starts beside a background run still reaches after the seventh
+round), the workspace not open there, its configuration not loaded — and none is an entry that is not a local launch:
+that one the run host answers with a finished status whose outcome is `unavailable`, which `resultOf` already maps.
+Main's setup port now carries the refusal's code with its words, and the runner reports a refused start as a retryable
+failure in REQ-WORKSPACE-093's summary, the refusal's own words as its detail, under the build's reason for a setup that
+began no stage (OQ-167); it is not waited out. **Measured** by `workspace-proof`'s new scenario 8c (the open's background
+run cancelled, the category's setup holding `create`, then Initialize): on a build of the code before it failed with
+"This workspace's `code_intelligence` entry is not a local launch, …", retryable `false`; with this round it passed, the
+run host's `mcp.setup.running` named in a warning and the task's error reading "Code intelligence could not complete this
+project's setup: A code-intelligence setup is already running for this workspace; …", retryable (as root under Xvfb on
+Linux, Node 24, `--skip-build` after `pnpm build`; 40 passed, 0 failed, 2 skipped).
+
+**Ninth round (2026-10-01, R-067): a stopped step in REQ-WORKSPACE-092's words.** The words this domain states, listed in
+"Why the task delegates rather than reimplements", now include REQ-WORKSPACE-092's two fixed details for a step stopped
+before it finished: "Setup was stopped before this step finished." for a cancelled step and "This step did not finish
+within its time budget." for an exhausted budget. The runner passed every step's detail through, so a stopped step read in
+the run host's sentences ("cancelled while running; the child was terminated; …", "exceeded its budget of N s and was
+terminated; …"), which are the MCP category's. The run host's status now says what stopped a step (`McpSetupStep.stopped`,
+`cancelled` or `budget`, set by `runSetupSteps`) and the runner maps it (`stepDetail`) in the live rows, the step rows and
+the "{reason}: {detail}" error; `detail` itself stays the run host's, so the category reads as before. The fact is carried
+rather than read out of the prose because the budget case cannot be told from a non-zero exit by the outcome alone. A run
+cancelled before its setup started keeps the build's sentence, under OQ-167
+(`../../defects/fixed/a-stopped-setup-step-is-not-reported-in-req-workspace-092s-words.md`). **Measured** by
+`workspace-proof`'s scenario 8c, which now reads the outcome of its Cancel: on the build before this round, "… could not
+create this project's configuration: cancelled while running; the child was terminated"; with it, "… configuration: Setup
+was stopped before this step finished.", in 8b's outgoing run too (41 passed, 0 failed, 2 skipped; as root under Xvfb,
+Node 24, `--skip-build` after `pnpm build`). **Not shown in the built app:** the budget sentence, which needs a step held for
+its whole budget; the unit cases pin it. **Found besides:** the other step details are not this domain's words either
+(`../../defects/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`, recorded, not repaired).

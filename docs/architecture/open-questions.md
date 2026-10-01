@@ -8175,3 +8175,34 @@ is not edited (a directive is the owner's).
 
 **What a ruling decides.** Whether PD-CHAT-003 gains a revision whose cost paragraph names the capacity unit as the
 shortest row a slot can hold, or the paragraph stands as written of its date.
+
+**OQ-167 — What does REQ-WORKSPACE-093's "{reason}: {detail}" read for a code-intelligence setup in which no stage began?**
+*(REQ-WORKSPACE-093, "Failure reporting SHALL be "{reason}: {detail}" with per-stage reasons …; the result is retryable";
+REQ-WORKSPACE-092, whose fixed details are a stopped **step's**; REQ-WORKSPACE-094, whose non-retryable words are for an
+entry that is not a local launch and nothing else; REQ-WORKSPACE-103; REQ-MCP-112, "SHALL refuse to start a second
+concurrent run". Raised 2026-10-01 under [R-067](../product/requests.md#r-067) by the repair of
+[`a-refused-setup-start-is-reported-as-not-a-local-launch.md`](../defects/fixed/a-refused-setup-start-is-reported-as-not-a-local-launch.md).
+Open.)*
+
+`code-intelligence-setup` can fail before any of REQ-WORKSPACE-091's three stages has begun, in two ways. The run host can
+refuse the setup's start: its one setup slot is taken by a setup the MCP settings category started (`mcp.setup.running`,
+REQ-MCP-112's one run at a time), the workspace is not open there (`workspace.unknown`), or its configuration could not
+be loaded (`mcp.configuration`). Or the run can be cancelled while its setup waits for the setup before it to end
+(`setupTurn`, ADR-0064's seventh round). REQ-WORKSPACE-093 names a reason per stage and REQ-WORKSPACE-092 a detail per
+stopped step; neither names one for a setup that started no stage. Before the repair a refused start was reported in
+REQ-WORKSPACE-094's words, which the requirement reserves for an entry that is not a local launch.
+
+**What the build proceeds under** (`apps/desktop/src/main/initialization.ts`, `SETUP_REASON`): a retryable failure with
+REQ-WORKSPACE-093's summary ("Code intelligence setup did not complete for this project. It runs again the next time this
+workspace is opened."), so a background run reaches REQ-WORKSPACE-103's banner with it. Its reason is the build's
+"Code intelligence could not complete this project's setup" — the one `resultOf` already used for a failed setup with no
+failed step — and its detail is the run host's own refusal ("A code-intelligence setup is already running for this
+workspace; wait for it to finish or cancel it first.", "That workspace is not open in the run host", "The configuration
+could not be loaded") or, for a run cancelled before its setup started, "the setup was cancelled before it started."
+(`CANCELLED_BEFORE_SETUP_ERROR`, as built under R-067 on 2026-09-30). A refused start is not waited out: the task fails
+at once, as any other retryable failure does, and runs again at the next open or on Try again.
+
+**What a ruling decides.** Whether a setup that began no stage has a reason and a detail of the specification's own —
+for the refusal, and for the cancellation, where REQ-WORKSPACE-092's "Setup was stopped before this step finished." is
+the nearest sentence but names a step that never ran; and whether a start refused because another setup holds the run
+host's one slot should instead wait for that setup to end, as the coordinator's own setups wait for one another.

@@ -32,7 +32,44 @@ function child(body: string, { detached = false } = {}): Promise<ChildProcess & 
   });
 }
 
-const alive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch { return false; } };
+/** A process's state letter from `/proc/<pid>/stat` (`R`, `S`, `Z`, …), or `null` when it has no entry: on Linux only. */
+const PROC = process.platform === 'linux' && existsSync('/proc/self/stat');
+function procState(pid: number): string | null {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+    return stat.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3); // the field after `(comm)`, which may hold `)`
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether the process is still running. One that has exited but is not yet reaped is a zombie, and `kill(pid, 0)` still
+ * finds it; once its parent is gone only PID 1 reaps it, which this container's init did 1.7 to 1.8 s after a dead
+ * proof's launch had become one (measured 2026-10-01), later under load. A zombie runs nothing and holds nothing but its
+ * pid, so where `/proc` says so it counts as gone; elsewhere `kill(pid, 0)` decides.
+ */
+function alive(pid: number): boolean {
+  if (PROC) {
+    const state = procState(pid);
+    return state !== null && state !== 'Z' && state !== 'X';
+  }
+  try { process.kill(pid, 0); return true; } catch { return false; }
+}
+
+/**
+ * Whether the process is gone within `ms`, polled on a deadline. The bound asks THAT the process dies, not how fast a
+ * loaded host gets round to it — well inside the 30 s test timeout, and far past anything a live handler needs.
+ */
+const GONE_WITHIN_MS = 15_000;
+async function goneWithin(pid: number, ms = GONE_WITHIN_MS): Promise<boolean> {
+  const deadline = Date.now() + ms;
+  while (alive(pid)) {
+    if (Date.now() >= deadline) return false;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return true;
+}
 
 describe('R-062: ending a proof launch within its bound', () => {
   it('reports the exit of a process that ends by itself, and null for one still running at the bound', async () => {
@@ -75,9 +112,8 @@ describe('R-062: ending a proof launch within its bound', () => {
     expect(grandchild).toBeGreaterThan(0);
     const ended = await endOverrun(leader, { graceMs: 400, group: true });
     expect(ended.endedBy).toBe('SIGKILL');
-    // The kernel reaps the grandchild on its own schedule; give it a moment rather than assert on the same tick.
-    for (let i = 0; i < 50 && alive(grandchild); i += 1) await new Promise((r) => setTimeout(r, 50));
-    expect(alive(grandchild)).toBe(false);
+    // The SIGKILL lands at once; the grandchild, orphaned, is reaped by PID 1 on its own schedule, so wait on a deadline.
+    expect(await goneWithin(grandchild)).toBe(true);
   });
 
   it('spawnBounded returns a launch that ends by itself as spawnSync would, with nothing overrun', async () => {
@@ -136,12 +172,28 @@ describe('R-062: ending a proof launch within its bound', () => {
       const died = new Promise<{ code: number | null; signal: string | null }>((resolve) => proof.once('exit', (code, signal) => resolve({ code, signal })));
       process.kill(-proof.pid!, sig); // the proof's whole group, as a terminal sends it
       expect(await died).toEqual({ code: null, signal: sig });
-      for (let i = 0; i < 50 && alive(launched); i += 1) await new Promise((r) => setTimeout(r, 50));
-      expect(alive(launched)).toBe(false);
+      // Not "within 2.5 s": the launch dies at once, and a loaded host's PID 1 reaps it when it reaps it
+      // (`docs/defects/fixed/the-signal-test-gives-a-dead-proofs-launch-two-and-a-half-seconds-to-be-gone.md`).
+      expect(await goneWithin(launched)).toBe(true);
     } finally {
       try { process.kill(-proof.pid!, 'SIGKILL'); } catch { /* gone */ }
       if (existsSync(pidFile)) { try { process.kill(Number(readFileSync(pidFile, 'utf8')), 'SIGKILL'); } catch { /* gone */ } }
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(!PROC)('counts a process that has exited but is not yet reaped as gone, where kill(pid, 0) still finds it', async () => {
+    // `sh` starts a child that exits at once and execs into `sleep`, which never waits for it: the child stays a zombie.
+    const holder = spawn('sh', ['-c', 'sleep 0 & echo $!; exec sleep 30'], { stdio: ['ignore', 'pipe', 'ignore'] });
+    try {
+      const zombie = await new Promise<number>((resolve) => holder.stdout!.once('data', (d) => resolve(Number(String(d).trim()))));
+      expect(zombie).toBeGreaterThan(0);
+      for (const deadline = Date.now() + 10_000; procState(zombie) !== 'Z' && Date.now() < deadline;) await new Promise((r) => setTimeout(r, 20));
+      expect(procState(zombie)).toBe('Z');
+      expect(() => process.kill(zombie, 0)).not.toThrow(); // what the check used to ask, and why it waited on PID 1's reaping
+      expect(alive(zombie)).toBe(false);
+    } finally {
+      holder.kill('SIGKILL');
     }
   });
 

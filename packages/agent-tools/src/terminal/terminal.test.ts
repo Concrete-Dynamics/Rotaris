@@ -6,7 +6,7 @@ import { FakeClock, type Clocks } from '@rotaris/kernel';
 import { foregroundStreamId } from '@rotaris/contracts';
 import { nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
-import { CommandRegion, ForegroundSession, parseSnapshot, pausedShare, printsMarker, processIdentity, snapshotCommand, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
+import { CommandRegion, ForegroundSession, parseSnapshot, pausedShare, printsMarker, processIdentity, snapshotCommand, unstartedShare, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
 import { xtermEmulatorFactory, type EmulatorFactory } from './emulator.js';
 import { endOfExit } from './background.js';
 import { execFileSync } from 'node:child_process';
@@ -64,6 +64,11 @@ async function tool(over: Partial<typeof TERMINAL_DEFAULTS> = {}) {
 }
 const diag = (text: string) => JSON.parse(text.slice(text.indexOf('[terminal_diagnostic] ') + '[terminal_diagnostic] '.length)) as Record<string, unknown>;
 const output = (text: string) => { const m = /\[(?:partial_)?terminal_output\]\n([\s\S]*?)\n\[terminal_diagnostic\]/.exec(text); return m ? m[1] : ''; };
+/**
+ * OQ-164: what an observation carries of a soft-paused command other than its own subject — the block between its detail and
+ * its own output section ('' when there is none), which a next call or a poll now reports in place of a later poll.
+ */
+const earlierOutput = (text: string) => { const m = /since it was last observed(?: \(truncated\))?:\n([\s\S]*?)\n\[(?:partial_)?terminal_output\]/.exec(text); return m ? m[1]! : ''; };
 const args = (a: Record<string, unknown>) => ({ command: '', is_input: false, reset: false, background: false, ...a }) as Parameters<Awaited<ReturnType<typeof tool>>['execute']>[0];
 
 afterAll(async () => { await manager?.dispose(); rmSync(root, { recursive: true, force: true }); });
@@ -254,9 +259,63 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     }
     expect(collect([ended], N)).toEqual({ taken: `late\r\n${P}:1`, stop: 'own' });
     // With no next call there is no marker to wait for: every byte is given at once, a trailing `_` included.
-    expect(pausedShare('', 'progress__', P, null)).toEqual({ take: 'progress__', undecided: '', stop: null });
+    expect(pausedShare('', 'progress__', P, null)).toEqual({ take: 'progress__', undecided: '', stop: null, marker: null });
     // A command that prints ANOTHER call's marker text is output like any other.
-    expect(pausedShare('', '__rot_deadbeefdeadbeefdeadbeef_s\r\n', P, N)).toEqual({ take: '__rot_deadbeefdeadbeefdeadbeef_s\r\n', undecided: '', stop: null });
+    expect(pausedShare('', '__rot_deadbeefdeadbeefdeadbeef_s\r\n', P, N)).toEqual({ take: '__rot_deadbeefdeadbeefdeadbeef_s\r\n', undecided: '', stop: null, marker: null });
+  });
+  // OQ-164's verification: an interrupt discards every line the shell has not read, so the line queued directly behind the
+  // paused one may never print its marker. Whichever later line's marker prints first ends the paused call's share.
+  it('REQ-TOOLS-098/127 (OQ-164): a paused call\'s share ends at the first later line\'s printed marker, the queued line\'s discarded or not, however the bytes arrive', () => {
+    const P = '__rot_aaaaaaaaaaaaaaaaaaaaaaaa_e';
+    const Q = '__rot_cccccccccccccccccccccccc_s';
+    const N = '__rot_bbbbbbbbbbbbbbbbbbbbbbbb_s';
+    const collect = (chunks: readonly string[]) => {
+      let undecided = '';
+      let taken = '';
+      for (const c of chunks) {
+        const s = pausedShare(undecided, c, P, [Q, N]);
+        taken += s.take;
+        undecided = s.undecided;
+        if (s.stop !== null) return { taken, stop: s.stop, marker: s.marker };
+      }
+      return { taken, stop: null, marker: null };
+    };
+    // The queued line Q was echoed while the paused command ran and then discarded by the C-c; the next call N runs.
+    const pty = `out\r\n# printf '%s\\n' '${Q}'; command eval 'echo queued'\r\n^C\r\n# printf '%s\\n' '${N}'; command eval 'echo next'\r\n${N}\r\nnext\r\n`;
+    const want = { taken: pty.slice(0, pty.indexOf(`${N}\r\nnext`) + N.length), stop: 'next', marker: N };
+    expect(collect([pty])).toEqual(want);
+    for (let i = 1; i < pty.length; i += 1) expect(collect([pty.slice(0, i), pty.slice(i)])).toEqual(want);
+    // The queued call itself never started: nothing is its own, and the next line's marker printing first says it never ran.
+    for (let i = 0; i <= pty.length; i += 1) {
+      let undecided = '';
+      let result: ReturnType<typeof unstartedShare> | null = null;
+      for (const c of i === 0 ? [pty] : [pty.slice(0, i), pty.slice(i)]) {
+        const r = unstartedShare(undecided, c, Q, '__rot_cccccccccccccccccccccccc_e', [N]);
+        expect(r.take).toBe('');
+        undecided = r.undecided;
+        if (r.stop !== null) { result = r; break; }
+      }
+      expect(result).toMatchObject({ started: false, stop: 'next', marker: N });
+    }
+    // A queued call that does start takes from its own printed marker on, and nothing the earlier command wrote before it.
+    const ran = `a1\r\n# printf '%s\\n' '${Q}'; command eval 'echo queued'\r\na2\r\n${Q}\r\nqueued\r\n__rot_cccccccccccccccccccccccc_e:0\r\n# `;
+    for (let i = 0; i <= ran.length; i += 1) {
+      let undecided = '';
+      let taken = '';
+      let started = false;
+      for (const c of i === 0 ? [ran] : [ran.slice(0, i), ran.slice(i)]) {
+        const r = unstartedShare(undecided, c, Q, '__rot_cccccccccccccccccccccccc_e', [N]);
+        const s = started ? pausedShare(undecided, c, '__rot_cccccccccccccccccccccccc_e', [N]) : r;
+        if (!started && r.started) started = true;
+        taken += s.take;
+        undecided = s.undecided;
+        if (s.stop !== null) break;
+      }
+      expect(started).toBe(true);
+      // Its frame is not held across chunks (`pausedShare`: the capture cuts it, and `onData`'s scan reads its status).
+      expect(taken.startsWith(`${Q}\r\nqueued\r\n__rot_cccccccccccccccccccccccc_e:0`)).toBe(true);
+      expect(taken).not.toMatch(/a1|a2/);
+    }
   });
   it('REQ-TOOLS-127 (A10): the echo of a POSIX wrapper wider than the screen is dropped whole from the capture, wherever its rows break', () => {
     const S = '__rot_0123456789abcdef01234567_s';
@@ -507,6 +566,67 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(output((await t.execute(args({ command: cmdline, timeout: 15 }), ctx())).text)).toBe(ours);
     } finally { await m.dispose(); }
   }, 40_000);
+  // `a-command-that-exits-the-session-shell-reads-as-a-soft-pause` (OQ-144's sibling): a command that ENDS the session's
+  // shell — `exit 3`, `kill -9 $$` — never prints the end frame either, because the shell that would print it is gone.
+  // Before the repair the call waited out the no-output window and read as a soft pause, exit −1, "may still be running";
+  // the next call ran in a fresh shell with the directory and variables gone, and reported `session_reinitialized` false.
+  it.skipIf(PS)('REQ-TOOLS-097/098/100/103 (OQ-144): a command that ends the session\'s shell ends at once as an execution_error, never a soft pause, and the next call reports the respawn with the shell state restored', async () => {
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 3_000 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 3_000 });
+    const sub = realpathSync(mkdtempSync(join(root, 'ends-')));
+    try {
+      for (const [i, command] of ['exit 3', 'kill -9 $$'].entries()) {
+        const value = `kept${i}`;
+        expect(diag((await t.execute(args({ command: `${SH.setVar('ROTARIS_ENDS', value)}; cd '${sub}'`, timeout: 15 }), ctx())).text)).toMatchObject({ exit_code: 0 });
+        // It names no timeout, so the soft pause is armed, as it is for a model's call.
+        const began = clocks.monotonic.now() as number;
+        const r = await t.execute(args({ command }), ctx());
+        const took = (clocks.monotonic.now() as number) - began;
+        // Before the repair: `soft_pause`, exit −1, after the whole 3 s window.
+        expect(diag(r.text)['outcome_kind'], command).not.toBe('soft_pause');
+        expect(took, command).toBeLessThan(1_500);
+        expect(r).toMatchObject({ isError: true, failureKind: 'execution_error', outcomeKind: 'execution_error' });
+        expect(diag(r.text)).toMatchObject({ failure_kind: 'execution_error', kill_status: 'session_reset', error_class: 'ExecutionError' });
+        expect(diag(r.text)).not.toHaveProperty('exit_code');
+        expect(r.text).toContain('Terminal execution failed before completion');
+        expect(r.text).toContain('ended the session\'s shell');
+        expect(r.text).toContain(`were restored (${sub})`);
+        expect(r.text).not.toContain('__rot_');
+        // The next call runs in the respawned shell, says so, and finds the directory and the variable re-applied.
+        const next = await t.execute(args({ command: `${SH.echoVar('ROTARIS_ENDS')}; pwd`, timeout: 15 }), ctx());
+        expect(diag(next.text), command).toMatchObject({ exit_code: 0, session_reinitialized: true });
+        expect((output(next.text) ?? '').split('\n').map((l) => l.trim())).toEqual([value, sub]);
+        // And only that call: the one after it is in the same shell.
+        expect(diag((await t.execute(args({ command: 'true', timeout: 15 }), ctx())).text)['session_reinitialized'] ?? false).toBe(false);
+      }
+    } finally { await m.dispose(); }
+  }, 40_000);
+  it.skipIf(PS)('REQ-TOOLS-098/100/103 (OQ-144): a soft-paused command that ends the shell is handed over by the poll as an execution_error, and a shell that ended between calls is respawned, restored and reported', async () => {
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_000 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_000 });
+    const sub = realpathSync(mkdtempSync(join(root, 'ends-paused-')));
+    try {
+      expect(diag((await t.execute(args({ command: `${SH.setVar('ROTARIS_ENDS', 'paused')}; cd '${sub}'`, timeout: 15 }), ctx())).text)).toMatchObject({ exit_code: 0 });
+      const paused = await t.execute(args({ command: 'sleep 2; exit 4' }), ctx());
+      expect(diag(paused.text)['outcome_kind']).toBe('soft_pause');
+      await new Promise((res) => setTimeout(res, 2_500));
+      // Before the repair: −1, `soft_pause`, "The process may still be running", on every poll after the shell had gone.
+      const poll = await t.execute(args({ command: '' }), ctx());
+      expect(diag(poll.text)['outcome_kind']).not.toBe('soft_pause');
+      expect(diag(poll.text)).toMatchObject({ failure_kind: 'execution_error', outcome_kind: 'execution_error' });
+      expect(diag(poll.text)).not.toHaveProperty('exit_code');
+      expect(poll.text).toContain('ended the session\'s shell');
+      const next = await t.execute(args({ command: `${SH.echoVar('ROTARIS_ENDS')}; pwd`, timeout: 15 }), ctx());
+      expect(diag(next.text)).toMatchObject({ exit_code: 0, session_reinitialized: true });
+      expect((output(next.text) ?? '').split('\n').map((l) => l.trim())).toEqual(['paused', sub]);
+      // A shell ended between calls — keystrokes the agent wrote to it — is respawned by the next call, which says so.
+      expect(diag((await t.execute(args({ command: 'exit\r', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+      await new Promise((res) => setTimeout(res, 1_000));
+      const after = await t.execute(args({ command: `${SH.echoVar('ROTARIS_ENDS')}; pwd`, timeout: 15 }), ctx());
+      expect(diag(after.text)).toMatchObject({ exit_code: 0, session_reinitialized: true });
+      expect((output(after.text) ?? '').split('\n').map((l) => l.trim())).toEqual(['paused', sub]);
+    } finally { await m.dispose(); }
+  }, 40_000);
   // OQ-144's first-call handshake is one no-op round trip on a fresh shell before the command is written: an await before
   // the call's own abort listener and kill handler exist. Both cases give the fresh shell a startup that takes a second
   // (`ENV`, which an interactive POSIX shell reads), so the cancel and the kill land inside the handshake on any host.
@@ -671,15 +791,15 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(diag(r.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
       expect(output(r.text)).toBe('own-output');
       expect(r.text).not.toContain('__rot_');
-      expect(r.text).not.toContain('done-later');
+      expect(output(r.text)).not.toContain('done-later');
       expect(r.text).not.toContain('not found');
       // The live stream carries the call's own output again, and nothing of the wrapper or the paused call.
       expect(stripVt(tapped).split('\n').map((l) => l.trim()).filter((l) => l !== '')).toEqual(['own-output']);
-      // The paused call's end frame is its own: the poll after reads its late output and the exit status it ended with.
-      const poll = await t.execute(args({ command: '' }), ctx());
-      expect(output(poll.text)).toBe('done-later');
-      expect(diag(poll.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
-      expect(poll.text).not.toContain('__rot_');
+      // The paused call's end frame is its own: its late output and the exit status it ended with. Since OQ-164's reading
+      // they are reported by the call that waited behind it, not left for a poll.
+      expect(earlierOutput(r.text)).toBe('done-later');
+      expect(String(diag(r.text)['detail'])).toMatch(/waited behind it: that command ended .* with exit code 0\./);
+      expect((await t.execute(args({ command: '' }), ctx())).text).toContain('No paused command to poll.');
     } finally { await m.dispose(); }
   }, 30_000);
 
@@ -695,10 +815,10 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       const next = await t.execute(args({ command: SH.echo('next-ok'), timeout: 15 }), ctx());
       expect(diag(next.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
       expect(output(next.text)).toBe('next-ok');
-      const poll = await t.execute(args({ command: '' }), ctx());
-      expect(output(poll.text)).toBe('failed-later');
-      expect(diag(poll.text)).toMatchObject({ exit_code: 1, outcome_kind: 'shell_failure' });
-      expect(poll.text).not.toContain('__rot_');
+      // OQ-164: the call that waited behind it reports the paused command's end — its own output and its own status, 1.
+      expect(earlierOutput(next.text)).toBe('failed-later');
+      expect(String(diag(next.text)['detail'])).toMatch(/that command ended .* with exit code 1\./);
+      expect(next.text).not.toContain('__rot_');
     } finally { await m.dispose(); }
   }, 30_000);
 
@@ -717,13 +837,16 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(diag((await t.execute(args({ command: 'C-c', is_input: true }), ctx())).text)['exit_code']).toBe(0);
       const aaa = await t.execute(args({ command: SH.echo('AAA'), timeout: 15 }), ctx());
       expect(output(aaa.text)).toBe('AAA');
+      // OQ-164: the call that closed it reports the paused command's end, with no status borrowed from its own exit, and
+      // nothing of its own output, the later calls or the snapshot in what it carries of the paused command.
+      expect(String(diag(aaa.text)['detail'])).toContain('with no exit status of its own');
+      expect(String(diag(aaa.text)['detail'])).not.toMatch(/sleep.*with exit code/);
+      for (const leaked of ['__rot_', 'AAA', 'BBB', 'done-later', '__rot_b64__']) expect(earlierOutput(aaa.text)).not.toContain(leaked);
+      expect(aaa.text).not.toContain('__rot_');
       const bbb = await t.execute(args({ command: SH.echo('BBB'), timeout: 15 }), ctx());
       expect(output(bbb.text)).toBe('BBB');
-      const poll = await t.execute(args({ command: '' }), ctx());
-      expect(diag(poll.text)['outcome_kind']).not.toBe('soft_pause');
-      expect(diag(poll.text)).toMatchObject({ exit_code: -1, outcome_kind: 'execution_error' });
-      expect(poll.text).toContain('without an exit status of its own');
-      for (const leaked of ['__rot_', 'AAA', 'BBB', 'done-later']) expect(poll.text).not.toContain(leaked);
+      // Reported once: BBB says nothing of it.
+      expect(String(diag(bbb.text)['detail'])).toBe('The command exited with code 0.');
       // The paused call was handed over once; there is nothing left to poll.
       expect((await t.execute(args({ command: '' }), ctx())).text).toContain('No paused command to poll.');
     } finally { await m.dispose(); }
@@ -894,11 +1017,14 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       const long = await t.execute(args({ command: 'seq 1 20000', timeout: 30 }), ctx());
       expect(diag(long.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
       expect((output(long.text) ?? '').trimEnd().endsWith('\n20000')).toBe(true);
-      const poll = await t.execute(args({ command: '' }), ctx());
-      expect(diag(poll.text)).toMatchObject({ exit_code: -1, outcome_kind: 'execution_error' });
-      for (const leaked of ['__rot_', '20000', '7503', 'done-later']) expect(poll.text).not.toContain(leaked);
-      expect(diag(poll.text)['output_truncated']).not.toBe(true);
-      expect((output(poll.text) ?? '').split('\n').filter((l) => /^\d+$/.test(l.trim()))).toEqual([]);
+      // OQ-164: the long call reports the paused command's end, and what it carries of that command holds nothing of its
+      // own output, no end frame and no false truncation.
+      expect(String(diag(long.text)['detail'])).toContain('with no exit status of its own');
+      const paused = earlierOutput(long.text);
+      for (const leaked of ['__rot_', '20000', '7503', 'done-later']) expect(paused).not.toContain(leaked);
+      expect(long.text).not.toContain('__rot_');
+      expect(long.text).not.toContain('since it was last observed (truncated)');
+      expect(paused.split('\n').filter((l) => /^\d+$/.test(l.trim()))).toEqual([]);
     } finally { await m.dispose(); }
   }, 90_000);
 
@@ -917,17 +1043,19 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       // The call's own output wraps at the screen's width like any other line the screen keeps.
       const next = await t.execute(args({ command: SH.echo(wide), timeout: 15 }), ctx());
       expect((output(next.text) ?? '').replace(/\n/g, '')).toBe(wide);
-      const ended = await t.execute(args({ command: '' }), ctx());
-      expect(diag(ended.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
-      expect(output(ended.text)).toBe('done-later');
-      for (const leaked of ['__rot_', 'QQQ', '"$?"']) expect(ended.text).not.toContain(leaked);
+      // OQ-164: the wide call reports the paused command's end; what it carries of it holds no row of the wide call's echo.
+      expect(String(diag(next.text)['detail'])).toMatch(/that command ended .* with exit code 0\./);
+      expect(earlierOutput(next.text)).toBe('done-later');
+      for (const leaked of ['__rot_', 'QQQ', '"$?"']) expect(earlierOutput(next.text)).not.toContain(leaked);
+      expect(next.text).not.toContain('__rot_');
       // Road two: the paused command is interrupted, and the wide call closes it.
       expect(diag((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
       expect(diag((await t.execute(args({ command: 'C-c', is_input: true }), ctx())).text)['exit_code']).toBe(0);
-      expect((output((await t.execute(args({ command: SH.echo(wide), timeout: 15 }), ctx())).text) ?? '').replace(/\n/g, '')).toBe(wide);
-      const interrupted = await t.execute(args({ command: '' }), ctx());
-      expect(diag(interrupted.text)).toMatchObject({ exit_code: -1, outcome_kind: 'execution_error' });
-      for (const leaked of ['__rot_', 'QQQ', '"$?"', 'done-later']) expect(interrupted.text).not.toContain(leaked);
+      const closing = await t.execute(args({ command: SH.echo(wide), timeout: 15 }), ctx());
+      expect((output(closing.text) ?? '').replace(/\n/g, '')).toBe(wide);
+      expect(String(diag(closing.text)['detail'])).toContain('with no exit status of its own');
+      for (const leaked of ['__rot_', 'QQQ', '"$?"', 'done-later']) expect(earlierOutput(closing.text)).not.toContain(leaked);
+      expect(closing.text).not.toContain('__rot_');
     } finally { await m.dispose(); }
   }, 90_000);
 
@@ -1027,6 +1155,267 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     expect(c.text).not.toContain('__rot_');
     expect(output(c.text)).toBe('tail-no-newline');
   }, 30_000);
+
+  // `a-call-made-while-a-command-is-soft-paused-waits-behind-it-unannounced` (live-run finding a71-8, OQ-164): a new command
+  // issued while an earlier one is soft-paused is queued behind it by the shell. Before the repair its observation said only
+  // its own exit, and the paused command's end waited for a poll nobody made; a second soft pause replaced the first paused
+  // call and its end was never reported at all. Its own session, window 1 s, so the timings are this case's.
+  const pausedSession = async () => {
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_000 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    return { m, t: terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_000 }) };
+  };
+  it('REQ-TOOLS-098/179 (OQ-164): a command issued behind a still-running soft-paused one says it waited, and carries that command\'s end and output', async () => {
+    const { m, t } = await pausedSession();
+    try {
+      expect(diag((await t.execute(args({ command: SH.echo('warm'), timeout: 15 }), ctx())).text)['exit_code']).toBe(0);
+      const wedge = await t.execute(args({ command: `${SH.sleep(3)}; ${SH.echo('wedge-done')}; ${SH.exit(5)}` }), ctx());
+      expect(diag(wedge.text)['outcome_kind']).toBe('soft_pause');
+      // Issued at once, with a timeout of its own: the shell runs it once the wedge ends, about two seconds later.
+      const began = clocks.monotonic.now() as number;
+      const behind = await t.execute(args({ command: SH.echo('behind'), timeout: 15 }), ctx());
+      const took = (clocks.monotonic.now() as number) - began;
+      expect(took).toBeGreaterThan(1_000);
+      expect(diag(behind.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+      expect(output(behind.text)).toBe('behind');
+      // Before the repair: "The command exited with code 0." and nothing of the wedge.
+      const detail = String(diag(behind.text)['detail']);
+      expect(detail).toMatch(/submitted while the soft-paused command `.*sleep.*` was still running/);
+      expect(detail).toMatch(/ended (\d+\.\d|under 0\.1) seconds? after this command was submitted, with exit code 5/);
+      expect(behind.text).toContain('wedge-done');
+      expect(behind.text).not.toContain('__rot_');
+      // Handed over, so nothing waits for a poll.
+      expect(String(diag((await t.execute(args({ command: '' }), ctx())).text)['detail'] ?? '')).not.toMatch(/exit code 5/);
+    } finally { await m.dispose(); }
+  }, 30_000);
+  it('REQ-TOOLS-098/179 (OQ-164): a paused command that ended unpolled is reported by the next command, and a second soft pause no longer loses the first one\'s end', async () => {
+    const { m, t } = await pausedSession();
+    try {
+      expect(diag((await t.execute(args({ command: SH.echo('warm'), timeout: 15 }), ctx())).text)['exit_code']).toBe(0);
+      // Ended before the next command was issued, and never polled.
+      expect(diag((await t.execute(args({ command: `${SH.sleep(2)}; ${SH.exit(6)}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      await new Promise((res) => setTimeout(res, 2_000));
+      const next = await t.execute(args({ command: SH.echo('next'), timeout: 15 }), ctx());
+      expect(output(next.text)).toBe('next');
+      expect(String(diag(next.text)['detail'])).toMatch(/had ended (\d+\.\d|under 0\.1) seconds? before this command was submitted, with exit code 6/);
+      // The worse case the code showed: a command issued behind a silent paused one, with no timeout, soft-pauses in turn.
+      expect(diag((await t.execute(args({ command: `${SH.sleep(4)}; ${SH.exit(7)}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      const queued = await t.execute(args({ command: SH.echo('queued') }), ctx());
+      expect(diag(queued.text)['outcome_kind']).toBe('soft_pause');
+      expect(String(diag(queued.text)['detail'])).toMatch(/still running: the shell has not started this command yet/);
+      await new Promise((res) => setTimeout(res, 3_500));
+      // Before the repair the first paused call was disposed by the second pause, and this poll said nothing of exit 7.
+      const poll = await t.execute(args({ command: '' }), ctx());
+      expect(diag(poll.text)).toMatchObject({ exit_code: 0 });
+      expect(output(poll.text)).toBe('queued');
+      expect(String(diag(poll.text)['detail'])).toMatch(/ahead of the polled one ended (\d+\.\d|under 0\.1) seconds? ago, with exit code 7/);
+    } finally { await m.dispose(); }
+  }, 40_000);
+
+  // The verifier's findings on the repair above (repair round 1). An interrupt (`C-c`) makes the terminal discard the input the
+  // shell has not read, so a line queued behind the interrupted one never runs and its start marker never prints. The
+  // interrupted call was closed only by a later call's END frame, its capture cut at a marker that never appeared, and the
+  // next call carried its own start marker, its output and its end frame as the paused command's; the queued call read as
+  // abandoned by the shell, and both as having made the next call wait.
+  const carried = (text: string) => text.slice(0, text.indexOf('[terminal_output]')).split('\n').map((l) => l.trim());
+  it.skipIf(PS)('REQ-TOOLS-098/127/179 (OQ-164, OQ-147): after C-c, a soft pause queued behind the interrupted one never ran, and the next call carries nothing of its own as the interrupted command\'s', async () => {
+    const { m, t } = await pausedSession();
+    try {
+      expect(diag((await t.execute(args({ command: SH.echo('warm'), timeout: 15 }), ctx())).text)['exit_code']).toBe(0);
+      expect(diag((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('wedge-done')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: SH.echo('queued') }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: 'C-c', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+      const next = await t.execute(args({ command: SH.echo('next'), timeout: 10 }), ctx());
+      expect(diag(next.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+      expect(output(next.text)).toBe('next');
+      expect(next.text).not.toContain('__rot_');
+      // Nothing of the next call's own in what it carries of the paused commands, and nothing of the wedge's line after the C-c.
+      expect(carried(next.text)).not.toContain('next');
+      expect(carried(next.text)).not.toContain('wedge-done');
+      const detail = String(diag(next.text)['detail']);
+      expect(detail).toMatch(/`sleep 20.*` .*with no exit status of its own/);
+      expect(detail).toMatch(/`printf '%s\\n' 'queued'` never ran/);
+      expect(detail).not.toContain('waited behind');
+      expect(detail).not.toMatch(/queued.*abandoned the rest of its line/);
+      expect((await t.execute(args({ command: '' }), ctx())).text).toContain('No paused command to poll.');
+    } finally { await m.dispose(); }
+  }, 40_000);
+
+  // OQ-147 in the same arrangement: the interrupt marked the line the shell was running, and the poll looked for the end only
+  // of the polled call, which is queued behind it, so no closer was ever written and every poll read "still running" over a
+  // dead command and an idle prompt.
+  it.skipIf(PS)('REQ-TOOLS-098/179 (OQ-147, OQ-164): a poll after C-c with a soft pause queued behind the interrupted one reads both as ended, not as still running', async () => {
+    const { m, t } = await pausedSession();
+    try {
+      expect(diag((await t.execute(args({ command: SH.echo('warm'), timeout: 15 }), ctx())).text)['exit_code']).toBe(0);
+      expect(diag((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('wedge-done')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: SH.echo('queued') }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: 'C-c', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+      const poll = await t.execute(args({ command: '' }), ctx());
+      expect(diag(poll.text)['outcome_kind']).not.toBe('soft_pause');
+      expect(diag(poll.text)).toMatchObject({ outcome_kind: 'execution_error' });
+      expect(diag(poll.text)['exit_code'] ?? null).toBeNull();
+      expect(poll.text).not.toContain('still running');
+      const detail = String(diag(poll.text)['detail']);
+      expect(detail).toMatch(/`sleep 20.*` ahead of the polled one ended .*with no exit status of its own/);
+      expect(detail).toContain('never ran');
+      // The command labels name `wedge-done`; no line of output does.
+      expect(poll.text).not.toContain('__rot_');
+      expect(carried(poll.text)).not.toContain('wedge-done');
+      expect(output(poll.text)).toBe('(no output)');
+      expect((await t.execute(args({ command: '' }), ctx())).text).toContain('No paused command to poll.');
+      const after = await t.execute(args({ command: SH.echo('after'), timeout: 10 }), ctx());
+      expect(output(after.text)).toBe('after');
+      expect(String(diag(after.text)['detail'])).toBe('The command exited with code 0.');
+    } finally { await m.dispose(); }
+  }, 40_000);
+
+  // OQ-147/OQ-164, the verifier's finding on the repair above: the interrupt's mark went on the line the shell was running
+  // only. A command that handles or ignores SIGINT ends on its own frame, the shell goes on, and the queued line — which the
+  // same interrupt discarded — was left the only open paused call, unmarked: no poll wrote a closer, and every poll read it
+  // "still running" over an idle prompt until the next command.
+  it.skipIf(PS)('REQ-TOOLS-098/179 (OQ-147, OQ-164): after C-c, a command that survives the interrupt ends with its own status, and the soft pause queued behind it reads never run on the next poll', async () => {
+    const { m, t } = await pausedSession();
+    try {
+      expect(diag((await t.execute(args({ command: SH.echo('warm'), timeout: 15 }), ctx())).text)['exit_code']).toBe(0);
+      const ended = join(root, 'survived-interrupt.done');
+      rmSync(ended, { force: true });
+      const head = await t.execute(args({ command: `(trap '' INT; ${SH.sleep(5)}); ${SH.echo('a-done')}; : > '${ended}'` }), ctx());
+      expect(diag(head.text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: SH.echo('queued') }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: 'C-c', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+      // The head ignores the interrupt and ends on its own, a few seconds later. No poll is made before: wait for its
+      // file, then for its frame to reach the session, rather than for a time.
+      const by = (clocks.monotonic.now() as number) + 15_000;
+      while (!existsSync(ended)) {
+        expect(clocks.monotonic.now() as number).toBeLessThan(by);
+        await new Promise((res) => setTimeout(res, 50));
+      }
+      await new Promise((res) => setTimeout(res, 500));
+      const poll = await t.execute(args({ command: '' }), ctx());
+      const detail = String(diag(poll.text)['detail']);
+      expect(detail).toMatch(/`\(trap '' INT; sleep 5\).*` ahead of the polled one ended .*with exit code 0/);
+      expect(poll.text).toContain('a-done');
+      // The queued line never ran: the same interrupt discarded it.
+      expect(diag(poll.text)['outcome_kind']).not.toBe('soft_pause');
+      expect(diag(poll.text)).toMatchObject({ outcome_kind: 'execution_error' });
+      expect(detail).toContain('never ran');
+      expect(poll.text).not.toContain('still running');
+      expect(poll.text).not.toContain('__rot_');
+      expect(output(poll.text)).toBe('(no output)');
+      expect((await t.execute(args({ command: '' }), ctx())).text).toContain('No paused command to poll.');
+      const after = await t.execute(args({ command: SH.echo('after'), timeout: 10 }), ctx());
+      expect(output(after.text)).toBe('after');
+      expect(String(diag(after.text)['detail'])).toBe('The command exited with code 0.');
+    } finally { await m.dispose(); }
+  }, 40_000);
+
+  // A poll of a call queued behind a paused one, before the shell has started it: its screen held the earlier command's
+  // output, and with no start marker of its own on it the whole screen was handed over as the queued command's.
+  it.skipIf(PS)('REQ-TOOLS-098 (OQ-164): a poll of a soft pause the shell has not started yet hands over nothing of the earlier command\'s as its own', async () => {
+    const { m, t } = await pausedSession();
+    try {
+      expect(diag((await t.execute(args({ command: SH.echo('warm'), timeout: 15 }), ctx())).text)['exit_code']).toBe(0);
+      expect(diag((await t.execute(args({ command: `${SH.sleep(1.5)}; ${SH.echo('a1')}; ${SH.sleep(1.5)}; ${SH.echo('a2')}; ${SH.sleep(4)}; ${SH.echo('a3')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      const queued = await t.execute(args({ command: SH.echo('queued') }), ctx());
+      expect(diag(queued.text)['outcome_kind']).toBe('soft_pause');
+      expect(output(queued.text)).toBe('(no output)');
+      await new Promise((res) => setTimeout(res, 1_200));
+      const poll = await t.execute(args({ command: '' }), ctx());
+      expect(diag(poll.text)['outcome_kind']).toBe('soft_pause');
+      expect(String(diag(poll.text)['detail'])).toMatch(/has not started the polled command yet/);
+      expect(output(poll.text)).toBe('(no output)');
+      expect(earlierOutput(poll.text)).toContain('a2');
+      expect(diag(poll.text)['output_truncated'] ?? null).toBeNull();
+      // Once the earlier command ends and the shell runs the queued one, the poll reads the queued command's own output.
+      await new Promise((res) => setTimeout(res, 5_000));
+      const done = await t.execute(args({ command: '' }), ctx());
+      expect(diag(done.text)).toMatchObject({ exit_code: 0 });
+      expect(output(done.text)).toBe('queued');
+      expect(earlierOutput(done.text)).toBe('a3');
+      expect(String(diag(done.text)['detail'])).toMatch(/ahead of the polled one ended .* with exit code 0/);
+    } finally { await m.dispose(); }
+  }, 40_000);
+
+  // The verifier's optional finding: a soft-paused command that ends the session's shell while a call waits behind it, or while
+  // a soft pause is queued behind it. Neither line ever ran — the shell that would have read it is gone — and each is reported
+  // so, with the shell respawned and PD-TOOLS-001's snapshot re-applied (OQ-144's shell-exit case).
+  it.skipIf(PS)('REQ-TOOLS-098/100/103 (OQ-144, OQ-164): a soft-paused command that ends the shell ends a call waiting behind it as never run, and a soft pause queued behind it reads never run on its poll', async () => {
+    const { m, t } = await pausedSession();
+    try {
+      expect(diag((await t.execute(args({ command: SH.setVar('ROTARIS_KEPT', 'kept'), timeout: 15 }), ctx())).text)['exit_code']).toBe(0);
+      expect(diag((await t.execute(args({ command: 'sleep 2; exit 4' }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      const behind = await t.execute(args({ command: SH.echo('behind'), timeout: 10 }), ctx());
+      expect(diag(behind.text)).toMatchObject({ failure_kind: 'execution_error', outcome_kind: 'execution_error', kill_status: 'session_reset' });
+      expect(diag(behind.text)).not.toHaveProperty('exit_code');
+      const detail = String(diag(behind.text)['detail']);
+      expect(detail).toContain('the session\'s shell ended before the command ran (a soft-paused command ahead of it ended the shell), so the command never ran');
+      expect(detail).toMatch(/`sleep 2; exit 4` .*by ending the session's shell, with no exit code/);
+      expect(output(behind.text)).toBe('(no output)');
+      const next = await t.execute(args({ command: SH.bracketVar('ROTARIS_KEPT'), timeout: 10 }), ctx());
+      expect(diag(next.text)).toMatchObject({ exit_code: 0, session_reinitialized: true });
+      expect(output(next.text)).toBe('[kept]');
+      // A soft pause queued behind it: its poll hands it over as never run, and respawns the shell. `sleep 4`, so the queued
+      // call's own 1 s window ends well before the shell does.
+      expect(diag((await t.execute(args({ command: 'sleep 4; exit 4' }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: SH.echo('queued') }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      await new Promise((res) => setTimeout(res, 3_000));
+      const poll = await t.execute(args({ command: '' }), ctx());
+      expect(diag(poll.text)).toMatchObject({ failure_kind: 'execution_error', kill_status: 'session_reset' });
+      expect(diag(poll.text)).not.toHaveProperty('exit_code');
+      expect(String(diag(poll.text)['detail'])).toContain('the session\'s shell ended before the command ran');
+      expect(String(diag(poll.text)['detail'])).toMatch(/`sleep 4; exit 4` ahead of the polled one ended .*by ending the session's shell/);
+      expect(output(poll.text)).toBe('(no output)');
+      const after = await t.execute(args({ command: SH.bracketVar('ROTARIS_KEPT'), timeout: 10 }), ctx());
+      expect(diag(after.text)).toMatchObject({ exit_code: 0 });
+      expect(output(after.text)).toBe('[kept]');
+    } finally { await m.dispose(); }
+  }, 40_000);
+
+  // The same discard in the other order: the terminal window's interrupt (REQ-SHELL-093) while a call waits behind a soft-paused
+  // command. The interrupt reached the paused line and discarded the waiting call's, so that call could only wait out its
+  // timeout and reset the session.
+  it.skipIf(PS)('REQ-SHELL-093/REQ-TOOLS-098 (OQ-164, OQ-147): the window\'s interrupt while a call waits behind a soft-paused command ends that call as never run, at once, with no reset', async () => {
+    const { m, t } = await pausedSession();
+    try {
+      expect(diag((await t.execute(args({ command: SH.setVar('ROTARIS_KEPT', 'kept'), timeout: 15 }), ctx())).text)['exit_code']).toBe(0);
+      expect(diag((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('wedge-done')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      setTimeout(() => { m.streams.interrupt(foregroundStreamId('orchestrator')); }, 700);
+      const began = clocks.monotonic.now() as number;
+      const waiting = await t.execute(args({ command: SH.echo('waiting'), timeout: 10 }), ctx());
+      expect((clocks.monotonic.now() as number) - began).toBeLessThan(5_000);
+      expect(diag(waiting.text)).toMatchObject({ outcome_kind: 'execution_error' });
+      expect(diag(waiting.text)['exit_code'] ?? null).toBeNull();
+      expect(diag(waiting.text)['kill_status'] ?? null).toBeNull();
+      expect(String(diag(waiting.text)['detail'])).toContain('never ran');
+      expect(String(diag(waiting.text)['detail'])).toMatch(/`sleep 20.*` .*with no exit status of its own/);
+      expect(output(waiting.text)).toBe('(no output)');
+      expect(waiting.text).not.toContain('__rot_');
+      expect(carried(waiting.text)).not.toContain('wedge-done');
+      const after = await t.execute(args({ command: SH.bracketVar('ROTARIS_KEPT'), timeout: 10 }), ctx());
+      expect(output(after.text)).toBe('[kept]');
+      expect(String(diag(after.text)['detail'])).toBe('The command exited with code 0.');
+    } finally { await m.dispose(); }
+  }, 40_000);
+
+  // OQ-164's second verification: a soft pause queued behind a running one, closed by the session's reset before its line
+  // ran, was reported as "submitted while … was still running, and waited behind it: that command ended … without having
+  // run, the session's shell being gone before it" — a command that never ran called still running, and the shell blamed
+  // where the reset ended it.
+  it.skipIf(PS)('REQ-TOOLS-098/099 (OQ-164): a soft pause queued behind a running one that a reset closes is reported as never run, by the reset', async () => {
+    const { m, t } = await pausedSession();
+    try {
+      expect(diag((await t.execute(args({ command: SH.echo('warm'), timeout: 15 }), ctx())).text)['exit_code']).toBe(0);
+      expect(diag((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('wedge-done')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: SH.echo('q1') }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      const r = await t.execute(args({ command: SH.echo('late'), timeout: 2 }), ctx());
+      expect(diag(r.text)).toMatchObject({ exit_code: 124, kill_status: 'session_reset' });
+      const detail = String(diag(r.text)['detail']);
+      expect(detail).toMatch(/`sleep 20.*` .*when the terminal session was reset/);
+      expect(detail).toContain("`printf '%s\\n' 'q1'` never ran, so it has no exit code: the terminal session was reset before its shell reached that line.");
+      expect(detail).not.toMatch(/q1'` was still running/);
+      expect(detail).not.toContain('the session\'s shell being gone');
+    } finally { await m.dispose(); }
+  }, 40_000);
 
   it('REQ-TOOLS-098: a call with no timeout that produces nothing for the no-output window returns −1 while the process keeps running; an empty command polls', async () => {
     const t = await tool();
@@ -1318,6 +1707,8 @@ describe('terminal — availability (REQ-TOOLS-104)', () => {
     for (const text of ['PowerShell, not bash', '`&&`', '`;`', '`2>&1`', '`$env:VAR`', 'heredoc never returns', 'bash arrays', '`[[ … ]]`', '`source`']) expect(windows).toContain(text);
     expect(windows).not.toContain('/bin/sh');
     expect(windows).not.toContain('exec <program>');
+    // OQ-164: the third move after a soft pause, as the build answers it, is stated beside REQ-TOOLS-098's two.
+    for (const d of [posix, windows]) expect(d).toContain('a new command issued meanwhile waits behind it, and its result reports how the paused one ended');
     // The executor names the manager's own shell.
     expect(terminalTool(new TerminalManager({ factory: { spawn: () => { throw new Error('unused'); } }, backend: { kind: 'posix', file: '/bin/sh' }, clocks, config: TERMINAL_DEFAULTS, env: {}, warn: () => undefined }), TERMINAL_DEFAULTS).description).toBe(posix);
   });

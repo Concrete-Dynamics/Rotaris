@@ -605,7 +605,7 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
     });
 
     /*
-     * docs/defects/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md (acceptance A22, R-067):
+     * docs/defects/fixed/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md (acceptance A22, R-067):
      * a plan cycle's root that READ an artifact of the session and published none was named only by its live run, so at
      * the gate the artifact's consumer — its canonical name, `Lead-Planner` (REQ-LIBRARY-099, REQ-LIBRARY-093) — was no
      * agent's, and the run-level agent lost its received link (REQ-MONITOR-044/052/069). The session records each plan

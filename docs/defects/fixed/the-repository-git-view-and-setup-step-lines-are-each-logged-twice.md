@@ -67,13 +67,15 @@ Pinned by:
   (red before the repair);
 - `apps/desktop/scripts/lib/restated-facts.mjs` (with its test) — the reader that names a restatement of any of the four
   facts in a launch's log; `git-proof` asserts none in its painted and no-git launches, and every live-run launch checks
-  "each fact reaches the application log from one emitter". The lease has no unit test of its own: main's ask handler is
-  inline in `main/index.ts`, so the live-run check is its pin.
+  "none of the four known restatements reaches the application log" (labelled "each fact reaches the application log
+  from one emitter" until the verifier's first round: it knows these four restatements only, and a duplicate of another
+  fact passes it). The lease has no unit test of its own: main's ask handler is inline in `main/index.ts`, so the
+  live-run check is its pin.
 
 Shown on the built branch: `git-proof` passed, its painted launch carrying the workspace service's repository line once,
 its two Git-view refreshes once each, and no line of main's; a live-run sign-in launch (`--only=`, which runs sign-in
 alone; pack `.live-run/runs/2026-10-01T13-09-07-111Z/` of the `fin2-logandreader` worktree, git-ignored) passed "sign-in:
-each fact reaches the application log from one emitter", its `app.log` carrying the repository line and the Git-view line
+each fact reaches the application log from one emitter" (the check's label then), its `app.log` carrying the repository line and the Git-view line
 once each. That launch neither leases a credential nor runs a setup step to success (the worktree has no bundled
 code-intelligence runtime, so `create` exits 127), so the lease and setup-step repairs are shown by the unit tests above
 and by the live-run check in every scenario that does, not by this pack.

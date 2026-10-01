@@ -778,9 +778,10 @@ async function launch(name, extra, timeoutMs = 180_000) {
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${join(dir, 'app.log')}`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
   assertNoCredential(`${name}/app.log`, log);
-  // PD-MONITOR-002, live-run finding a71-9: every launch's log says each fact once, from the process that owns it.
+  // PD-MONITOR-002, live-run finding a71-9: no launch's log carries one of the four restatements `restated-facts.mjs`
+  // knows (main's repository, Git view and lease lines, `runSetupSteps`' success). A duplicate of another fact passes.
   const restated = restatedFacts(log);
-  check(restated.length === 0, `${name}: each fact reaches the application log from one emitter`, restated.map((r) => `app.log line ${r.line}, ${r.fact} restated (its owner is the ${r.owner}): ${r.text}`).join(' | ') || undefined);
+  check(restated.length === 0, `${name}: none of the four known restatements reaches the application log`, restated.map((r) => `app.log line ${r.line}, ${r.fact} restated (its owner is the ${r.owner}): ${r.text}`).join(' | ') || undefined);
   return log;
 }
 /** The store as the run left it: the newest session, its rows, its events, and the totals across every session. */

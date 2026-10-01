@@ -268,7 +268,8 @@ const noGit = await launch('no-git', workspace, local, preferences, { ROTARIS_CA
   if (!/notice: Working without Git/.test(noGit.log)) throw new Error('the Working without Git notice was not raised');
   // The workspace service's line names the root ahead of the state: `git view: N reads in M ms (<root>: git=false …)`.
   if (!/git view: \d+ reads in \d+ ms \([^\n]*git=false/.test(noGit.log)) throw new Error('the read did not end in the git=false state');
-  if (restatedFacts(noGit.log).length > 0) throw new Error(`with no git a fact reached the log twice: ${restatedFacts(noGit.log).map((r) => r.text).join(' | ')}`);
+  const restatedNoGit = restatedFacts(noGit.log);
+  if (restatedNoGit.length > 0) throw new Error(`with no git a fact reached the log twice: ${restatedNoGit.map((r) => r.text).join(' | ')}`);
   if (/Error box|dialog/i.test(noGit.log.split('\n').filter((l) => /git view/.test(l)).join('\n'))) throw new Error('a dialog was raised for a missing git');
   const headlines = text(p, '.notice__headline');
   // ADR-0049 holds ONE current notice: the first-launch provider notice, raised 800 ms after the workspace opened, may have replaced it by capture time.

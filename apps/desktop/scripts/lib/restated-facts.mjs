@@ -13,7 +13,8 @@
  *   a setup step's outcome the run host's step reporter (`mcp setup: <id> succeeded (N ms)`), not `runSetupSteps`.
  *
  * `restatedFacts` returns every line in a launch's log written by the emitter that no longer owns its fact — the
- * restatement, never the owner's line — so a proof or a live run can say "each fact once" and name the line if not.
+ * restatement, never the owner's line — so a proof or a live run can say none of these four facts was restated and name
+ * the line if one was. It knows these four restatements only: a duplicate of any other fact passes it.
  */
 const LINE = /^\[main [^\]]+\]\s+\S+\s+(.*)$/;
 const SOURCES = ['run host', 'workspace service'];

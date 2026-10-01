@@ -83,6 +83,19 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
     try { return !/^\d+ \(.*\) Z/.test(readFileSync(`/proc/${pid}/stat`, 'utf8')); } catch { return true; }
   };
   const pidsIn = (root: string): number[] => readFileSync(join(root, 'pids'), 'utf8').split(' ').map(Number);
+  /**
+   * Once the step has written both pids, hand them on. Polled rather than read at a fixed delay: on a loaded host the
+   * step's Node may not have written the file yet, and a read that throws inside a timer would be lost to the test.
+   */
+  const whenPids = (root: string, then: (pids: number[]) => void): void => {
+    const look = (): void => {
+      let pids: number[] = [];
+      try { pids = pidsIn(root); } catch { /* not written yet */ }
+      if (pids.length === 2 && pids.every((pid) => pid > 0)) then(pids);
+      else setTimeout(look, 20);
+    };
+    look();
+  };
   const settled = async (pids: readonly number[], ms = 1_000): Promise<boolean> => {
     const until = performance.now() + ms;
     while (pids.some(alive) && performance.now() < until) await new Promise((r) => setTimeout(r, 20));
@@ -93,7 +106,7 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
     const root = mkdtempSync(join(tmpdir(), 'rotaris-setup-family-'));
     const abort = new AbortController();
     let pids: number[] = [];
-    const r = await runSetupSteps({ invocation: familyInvocation, workspaceRoot: root, steps: [step('create', 'holds')], creationStepId: 'create', markerPresent: false, containsCode: true, env: process.env as Record<string, string>, clocks: realClocks(), log, signal: abort.signal, onStep: (s) => { if (s.id === 'create' && s.status === 'running') setTimeout(() => { pids = pidsIn(root); abort.abort(); }, 500); }, pollMs: millis(50), graceMs: millis(400) });
+    const r = await runSetupSteps({ invocation: familyInvocation, workspaceRoot: root, steps: [step('create', 'holds')], creationStepId: 'create', markerPresent: false, containsCode: true, env: process.env as Record<string, string>, clocks: realClocks(), log, signal: abort.signal, onStep: (s) => { if (s.id === 'create' && s.status === 'running') whenPids(root, (found) => { pids = found; abort.abort(); }); }, pollMs: millis(50), graceMs: millis(400) });
     expect(r.steps[0]!.stopped).toBe('cancelled');
     expect(pids).toHaveLength(2);
     expect(await settled(pids)).toBe(true);
@@ -110,7 +123,7 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
       env: process.env as Record<string, string>, clocks: realClocks(), log, signal: abort.signal, pollMs: millis(50), graceMs: millis(10_000),
       shutdown: { signal: shutdown.signal, graceMs: millis(300) },
       // A cancellation under the 10 s grace first, then the shutdown 300 ms into it.
-      onStep: (s) => { if (s.id === 'create' && s.status === 'running') setTimeout(() => { pids = pidsIn(root); abort.abort(); setTimeout(() => { shutdownAt = performance.now(); shutdown.abort(); }, 300); }, 500); },
+      onStep: (s) => { if (s.id === 'create' && s.status === 'running') whenPids(root, (found) => { pids = found; abort.abort(); setTimeout(() => { shutdownAt = performance.now(); shutdown.abort(); }, 300); }); },
     });
     const endedAfter = performance.now() - shutdownAt;
     expect(r.outcome).toBe('cancelled');

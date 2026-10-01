@@ -26,7 +26,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app as appDirectory, buildDesktop, cleanEnvironment, electron, evidenceDirectory, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
-import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { exitWithin, overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { startApp } from './lib/driver.mjs';
 
 const output = evidenceDirectory('.workspace-proof');
@@ -92,15 +92,25 @@ const MARKUP = project(MARKUP_NAME);
  */
 const STAND_IN = join(output, 'code-intelligence-stand-in.mjs');
 writeFileSync(STAND_IN, [
+  "import { spawn } from 'node:child_process';",
   "import { existsSync, writeFileSync } from 'node:fs';",
   "import { join } from 'node:path';",
   'const [group, verb, root] = process.argv.slice(2);',
   "if (group === 'project' && verb === 'create') {",
   "  writeFileSync(join(root, '.stand-in-create.pid'), String(process.pid));",
-  "  if (!existsSync(join(root, 'SLOW'))) process.exit(0);",
+  '  // In a project carrying STUBBORN (8f) the step, and a process it starts, ignore the ask to terminate: only the force-kill ends them.',
+  "  if (existsSync(join(root, 'STUBBORN'))) {",
+  "    process.on('SIGTERM', () => undefined);",
+  "    const pidFile = JSON.stringify(join(root, '.stand-in-descendant.pid'));",
+  "    spawn(process.execPath, ['-e', `process.on('SIGTERM', () => undefined); require('node:fs').writeFileSync(${pidFile}, String(process.pid)); setInterval(() => undefined, 1_000);`], { stdio: 'ignore' });",
+  '    setInterval(() => undefined, 1_000);',
+  '  }',
+  "  else if (!existsSync(join(root, 'SLOW'))) process.exit(0);",
   '  // Asked to terminate, it takes 2 s to go: the outgoing setup is still ending when the replacement resolves.',
-  "  process.on('SIGTERM', () => setTimeout(() => process.exit(143), 2_000));",
-  '  setTimeout(() => process.exit(0), 90_000);',
+  "  else {",
+  "    process.on('SIGTERM', () => setTimeout(() => process.exit(143), 2_000));",
+  '    setTimeout(() => process.exit(0), 90_000);',
+  '  }',
   "} else if ((group === 'project' && verb === 'index') || (group === 'memories' && verb === 'initialize')) {",
   '  process.exit(0);',
   '} else {',
@@ -108,11 +118,12 @@ writeFileSync(STAND_IN, [
   '}',
   '',
 ].join('\n'));
-function initProject(name, { slow = false } = {}) {
+function initProject(name, { slow = false, stubborn = false } = {}) {
   const root = join(output, name);
   mkdirSync(join(root, '.rotaris'), { recursive: true });
   writeFileSync(join(root, 'README.md'), `# ${name}\n`);
   if (slow) writeFileSync(join(root, 'SLOW'), 'the stand-in holds project create here\n');
+  if (stubborn) writeFileSync(join(root, 'STUBBORN'), 'the stand-in and a process it starts ignore the ask to terminate here\n');
   writeFileSync(join(root, '.rotaris', 'agents.yaml'), AGENTS.replace('  code_intelligence: { enabled: false }',
     `  code_intelligence: { command: ${JSON.stringify(process.execPath)}, args: [${JSON.stringify(STAND_IN)}, start-mcp-server] }`));
   return root;
@@ -124,6 +135,7 @@ const INIT_LOST = initProject('init-lost', { slow: true });
 const INIT_QUEUED = initProject('init-queued');
 const INIT_TWO_A = initProject('init-two-a', { slow: true });
 const INIT_TWO_B = initProject('init-two-b');
+const INIT_QUIT = initProject('init-quit', { stubborn: true });
 // The second window's workspace has been initialized before, so the two windows' states tell apart by `lastRun` alone;
 // its setup is still pending, as no list names it.
 writeFileSync(join(INIT_TWO_B, '.rotaris', 'agents.yaml'), `${readFileSync(join(INIT_TWO_B, '.rotaris', 'agents.yaml'), 'utf8')}initialization:\n  completed: []\n  skipped: []\n  last_run: "2026-09-01T00:00:00.000+00:00"\n  classification: code\n`);
@@ -132,8 +144,12 @@ const launches = [];
 /** Quit every app still running, keeping its log as evidence. Idempotent, so `finally` may call it again. */
 async function closeAll() {
   for (const { name, started } of launches.splice(0)) {
-    writeFileSync(join(output, `app-${name}.log`), existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '');
     await started.driver.quit().catch(() => undefined);
+    // The quit answers before the app has ended; a kill at once cut its orderly end short, and a code-intelligence setup
+    // the run host's shutdown was ending outlived the launch (8b's stand-in, found 2026-10-01). Wait for the exit first,
+    // and keep the log once the quit's own lines are in it.
+    await exitWithin(started.child, 15_000);
+    writeFileSync(join(output, `app-${name}.log`), existsSync(started.logFile) ? readFileSync(started.logFile, 'utf8') : '');
     started.driver.close();
     try { if (started.child.pid) process.kill(started.child.pid); } catch { /* already gone after quit */ }
   }
@@ -891,6 +907,63 @@ try {
         `the first project's create (pid ${pid}) ${ended ? `ended ${endedAfter} ms after the Cancel answered` : 'was STILL running 5 s after the Cancel'}; cancellation ${log.includes('mcp setup: cancellation requested') ? 'requested' : 'NEVER requested'}; the second project's setup started ${startedFor('init-two-b')} time(s) and its outcome is ${recorded ? `recorded (${JSON.stringify(fileB.slice(fileB.indexOf('initialization:')).slice(0, 160))})` : 'NOT recorded'}${/init-two-b was closed|cancelled before it started/.test(log) ? '; the second project\'s run was cancelled instead' : ''}`);
     }
     if (pid > 0) { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 8f — an orderly quit while a setup step, and a process it started, are running (REQ-WORKSPACE-092/109).
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    /*
+     * The run host's `shutdown` never reached the setup: the host exited with the step still running, and the step and
+     * what it had launched outlived the application, while the close's cancellation, sent to a run host already going,
+     * was logged as a warning
+     * (`docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+     * Here the stand-in holds `create` and has started a process of its own, and both ignore the ask to terminate, so
+     * only the shutdown's force-kill of the step's process group ends them. Measured with `dispatch`'s call to
+     * `McpHost.endSetup` replaced by `Promise.resolve()`: the quit took 144 ms and both were still running 5 s after it.
+     */
+    const s = await launch('init-quit', { workspace: INIT_QUIT });
+    const waitUntil = async (predicate, timeoutMs) => {
+      const began = Date.now();
+      while (!predicate()) {
+        if (Date.now() - began > timeoutMs) return false;
+        await sleep(100);
+      }
+      return true;
+    };
+    const createFile = join(INIT_QUIT, '.stand-in-create.pid');
+    const descendantFile = join(INIT_QUIT, '.stand-in-descendant.pid');
+    const running = await waitUntil(() => /mcp setup: started for [^\n]*init-quit/.test(logOf(s)) && existsSync(createFile) && existsSync(descendantFile), 30_000);
+    const pids = running ? [Number(readFileSync(createFile, 'utf8')), Number(readFileSync(descendantFile, 'utf8'))] : [];
+    /** Whether a process still runs: present, and not a zombie (one ended whose parent has not reaped it yet). */
+    const alive = (pid) => {
+      if (process.platform === 'linux') {
+        let stat;
+        try { stat = readFileSync(`/proc/${pid}/stat`, 'utf8'); } catch { return false; }
+        return stat.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3) !== 'Z';
+      }
+      try { process.kill(pid, 0); return true; } catch { return false; }
+    };
+    if (!running || !pids.every(alive)) {
+      skip('REQ-WORKSPACE-092 / REQ-WORKSPACE-109: an orderly quit during a setup step ends the step and what it started',
+        !running ? `the stand-in's create and its descendant never both ran within 30 s (log tail: ${JSON.stringify(logOf(s).slice(-600))})` : `of the stand-in's pids ${JSON.stringify(pids)} one had already ended before the quit`);
+    } else {
+      const quitAt = Date.now();
+      await s.driver.quit();
+      const exit = await exitWithin(s.child, 15_000);
+      const exitedAfter = Date.now() - quitAt;
+      if (exit !== null) await sleep(5_000);
+      const left = pids.filter(alive);
+      const log = logOf(s);
+      const undelivered = log.split('\n').filter((l) => /\] warning /.test(l) && l.includes('could not be delivered'));
+      check('REQ-WORKSPACE-092 / REQ-WORKSPACE-109: an orderly quit during a setup step completes within 5000 ms, and neither the step nor a process it started is running 5 s later',
+        exit !== null && exitedAfter <= 5_000 && left.length === 0 && log.includes("mcp setup: ended by the run host's shutdown"),
+        `the quit ${exit === null ? 'did NOT end the app within 15 s' : `ended the app in ${exitedAfter} ms (${exit.code ?? exit.signal})`}; the run host's shutdown ${log.includes("mcp setup: ended by the run host's shutdown") ? 'ended the setup' : 'NEVER reached the setup'}; 5 s after the exit ${left.length === 0 ? `neither the step (pid ${pids[0]}) nor its descendant (pid ${pids[1]}) is running` : `still running: ${JSON.stringify(left)}`}`);
+      check('PD-MONITOR-002: the close\'s cancellation, undeliverable at the quit, is not reported as a fault',
+        undelivered.length === 0,
+        undelivered.length === 0 ? `no warning that a cancellation could not be delivered${/did not reach the run host at the quit/.test(log) ? ' (it was said at info, as expected at a quit)' : ''}` : `warned: ${JSON.stringify(undelivered[0].slice(0, 300))}`);
+    }
+    for (const pid of pids) { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } }
   }
 
   // ───────────────────────────────────────────────────────────────────────────────────────────────────────────

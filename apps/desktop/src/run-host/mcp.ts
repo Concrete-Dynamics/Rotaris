@@ -408,7 +408,8 @@ export class McpHost {
    * app: both still running 5 s after it exited;
    * `docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
    * The step is asked to terminate and force-killed after `SETUP_SHUTDOWN_GRACE_MS`, a cancellation already under way
-   * included.
+   * included — REQ-MCP-099's 5 s grace is not given at a close, the build's reading of OQ-171. `dispatch`'s `shutdown`
+   * calls this and awaits it before the stores close (pinned in `dispatch.test.ts` and `workspace-proof` 8f).
    */
   async endSetup(): Promise<void> {
     const run = this.setupRun;

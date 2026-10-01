@@ -8342,3 +8342,34 @@ for a workspace no window holds any more is not raised (OQ-141's reading).
 
 **What a ruling decides.** Whether these banners are the window's (shown only in the windows holding the workspace) or
 the application's; and, if the application's, whether they name the project they concern.
+
+**OQ-171 — At a close, which bounds a setup step's termination: REQ-MCP-099's 5 s grace, or the close's 5 s?**
+*(REQ-MCP-099, "on cancellation or timeout the child SHALL be asked to terminate, given 5 seconds to exit and then
+force-killed"; REQ-WORKSPACE-109, "Closing the application while a run is under way SHALL raise no dialog and SHALL
+complete within 5000 ms, the run being stopped by force if it has not ended by then"; REQ-WORKSPACE-092, "when the
+application is closed while setup is running, nothing the step launched SHALL still be running 5 s later". Raised
+2026-10-01 by the repair of
+[`an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`](../defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md),
+on its verifier's finding. Open.)*
+
+At an orderly quit the window's close cancels the initialization run, so the step in flight is asked to terminate under
+REQ-MCP-099's cancellation: 5 s, then the force-kill. The run host's `shutdown` follows within milliseconds (measured
+2026-10-01 on the built app: "mcp setup: cancellation requested" at 12:08:26.943, "ended by the run host's shutdown" at
+.948). A step that uses its whole 5 s grace is force-killed only when the close's 5000 ms are already spent, with the
+poll, the force-kill's own settling and the host's exit still to come, so REQ-WORKSPACE-109's close and
+REQ-WORKSPACE-092's "5 s later" cannot both be met beside REQ-MCP-099's full grace. The specification states the grace for
+a cancellation and the bound for a close, and says nothing of a cancellation that a close causes.
+
+**What the build proceeds under** (`packages/mcp/src/setup.ts`, `SETUP_SHUTDOWN_GRACE_MS` and `terminateSetupChild`'s
+`hurry`; `apps/desktop/src/run-host/mcp.ts`, `McpHost.endSetup`): at a close, REQ-WORKSPACE-109 and REQ-WORKSPACE-092
+bound the step. The run host's shutdown asks the step's process group to terminate and force-kills it after 2 s, and a
+cancellation already under way when the shutdown arrives has its remaining grace cut to 2 s from that moment. So at every
+orderly quit with a step running, REQ-MCP-099's 5 s grace is not given. A cancellation while the application stays keeps
+the full 5 s. The 2 s is the build's figure: it leaves the close room for the poll, the force-kill's settling and the
+host's exit inside 5000 ms (measured: a step and a descendant that both ignore SIGTERM, force-killed, the quit 2234 ms and
+2274 ms).
+
+**What a ruling decides.** Whether a close's cancellation is REQ-MCP-099's cancellation, with its 5 s grace (and then
+whether REQ-WORKSPACE-109's 5000 ms and REQ-WORKSPACE-092's 5 s give way, or the grace is counted inside them); or the
+close's own, bounded by REQ-WORKSPACE-109 and REQ-WORKSPACE-092 alone; and, if the latter, what grace the step is given
+before the force-kill.

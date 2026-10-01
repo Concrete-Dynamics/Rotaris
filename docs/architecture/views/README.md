@@ -49,7 +49,8 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 ADR-0035, ADR-0064).** On POSIX each code-intelligence setup step now leads a process group, and its ask and force-kill
 go to the group. The run host's `shutdown` ends a setup under way with a 2 s grace (`McpHost.endSetup`) before it exits.
 The initialization coordinator says a cancellation undelivered at a quit at `info`, reading `QuitState`. See the process
-view, `mcp.setup` and `initialization.*`. This repairs
+view, `mcp.setup` and `initialization.*`, and the runtime view's paragraph on the application's end; the 2 s grace
+overrides REQ-MCP-099's 5 s at a close, the build's reading of OQ-171. This repairs
 `an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`. No package, edge,
 process, message kind, channel, command or store column changed.
 

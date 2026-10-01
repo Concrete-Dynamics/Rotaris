@@ -20,7 +20,7 @@ Live-run finding: a71-12
 
 The cancellation's delivery and this log line were added by the repair of
 [`a-workspace-switch-never-cancels-the-outgoing-initialization-run.md`](a-workspace-switch-never-cancels-the-outgoing-initialization-run.md).
-Recorded, not repaired.
+Recorded, not repaired, when it was written; repaired 2026-10-01 (the outcome below).
 
 ## Specs
 
@@ -92,6 +92,15 @@ ran, as root under Xvfb, Node 24.
   they have gone.
 - `apps/desktop/src/main/initialization.test.ts`: no warn line at a quit, and a warn line for the same refusal while the
   application stays.
+- `apps/desktop/src/run-host/dispatch.test.ts` (added on the verifier's finding): `shutdown` calls `McpHost.endSetup`
+  first and neither closes a store nor schedules the exit until the setup has ended. Red with the call replaced by
+  `Promise.resolve()`. Before it, nothing reached that one call: the verifier removed it, rebuilt, and nothing in
+  `pnpm check`, `workspace-proof` or `init-proof` turned red, while a quit left both processes running.
+- `workspace-proof` scenario 8f (added on the same finding): an orderly `driver.quit()` while a stand-in step holds
+  `create` with a process of its own, both ignoring SIGTERM. It asserts the quit ends within 5000 ms through the run
+  host's shutdown ending the setup, neither process running 5 s after the exit, and no warning that the close's
+  cancellation could not be delivered. On the build with the call replaced by `Promise.resolve()` it failed: the quit
+  took 138 ms, the shutdown never reached the setup, and both pids were still running 5 s later.
 
 **Shown by:**
 
@@ -100,11 +109,24 @@ ran, as root under Xvfb, Node 24.
   error line; neither does `ask/app.log`.
 - `init-proof`, all five scenarios, with the bundle built.
 - `workspace-proof`, 44 passed, 0 failed, 2 skipped.
+- `workspace-proof` with scenario 8f, on the verifier's round: 46 passed, 0 failed, 2 skipped, in two runs. In 8f the quit
+  ended the app in 2411 ms and 2213 ms, through the run host's shutdown ending the setup, and neither process was running
+  5 s after the exit. The proof's own `closeAll` used to kill each launch's main process as soon as the driver's quit
+  answered, which cut the orderly end short and left 8b's stand-in running past the launch; it now waits for the exit
+  first, and the second run left no stand-in behind.
+
+**Raised:** [OQ-171](../../architecture/open-questions.md), on the verifier's finding. At an orderly quit the window's
+close cancels the run a few milliseconds before the run host's shutdown arrives, and the shutdown cuts the cancellation's
+grace to 2 s, so REQ-MCP-099's 5 s grace is never given at a close. The build reads REQ-WORKSPACE-109's 5000 ms and
+REQ-WORKSPACE-092's 5 s as binding there; a ruling decides which governs.
 
 **Not reached:**
 
 - The live run's sign-in launch ends through the capture seam's immediate exit, a verification seam that sends no
   `shutdown`, so its run host is ended by Electron. The step there ended by itself (the bundled runtime) and nothing was
   left. The orderly path is the one the driver's quit measures above.
-- A run host killed by a signal still orphans its step's group, which is OQ-169's open part.
+- A run host killed by a signal still orphans its step's group, which is OQ-169's open part. On POSIX `processGroup` is
+  Node's `detached`, so the step also runs in a session of its own: a signal sent to the application's process group (a
+  terminal's Ctrl+C on `pnpm dev`, a harness's group kill) no longer reaches it, and only the run host's own ending of
+  the setup does. A descendant that calls `setsid()` itself leaves the group too.
 - Windows was not measured.

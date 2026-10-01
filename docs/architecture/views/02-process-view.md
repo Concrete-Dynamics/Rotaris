@@ -419,7 +419,8 @@ run host as children of the derived invocation (`Rotaris.exe builtin:code-intell
 terminate then tree-killed after 5 s on cancel or timeout — on POSIX each step leads a process group of its own and the
 signals go to the group, so what the step started is ended with it (REQ-WORKSPACE-092; 2026-10-01) — and the run host's
 `shutdown` ends a setup under way the same way after 2 s (`McpHost.endSetup`, `SETUP_SHUTDOWN_GRACE_MS`), shortening a
-cancellation's grace already running, and exits only once the step has gone (REQ-WORKSPACE-092/109; 2026-10-01); the
+cancellation's grace already running — so REQ-MCP-099's 5 s grace is not given at a close, the build's reading of OQ-171 —
+and exits only once the step has gone (REQ-WORKSPACE-092/109; 2026-10-01); the
 category polls the status every 500 ms while it runs.
 `ROTARIS_SCRIPT_MCP_ARGS` (verification only) hands the scripted client the arguments of an MCP step.
 

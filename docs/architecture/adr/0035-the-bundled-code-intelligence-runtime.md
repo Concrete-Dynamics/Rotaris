@@ -409,7 +409,10 @@ grace ends when no member of the group still runs; a zombie that nobody reaps do
 may never reap one. The run host's `shutdown` calls `McpHost.endSetup`: the step is stopped as a cancellation is, but
 with a 2 s grace (`SETUP_SHUTDOWN_GRACE_MS`, the build's figure inside REQ-WORKSPACE-109's 5000 ms close), and that
 grace also shortens a cancellation's grace already under way. The host exits only once the step has gone. Windows keeps
-`taskkill /T`.
+`taskkill /T`. At an orderly quit the window's close cancels the run a few milliseconds before the shutdown arrives, so
+REQ-MCP-099's 5 s cancellation grace is never given at a close: the build reads REQ-WORKSPACE-109's 5000 ms and
+REQ-WORKSPACE-092's 5 s as binding there, a conflict between the requirements raised as
+[OQ-171](../open-questions.md) (2026-10-01, on the verifier's finding).
 
 **Measured** on the built app at an orderly quit (`driver.quit()`), as root under Xvfb, Node 24, with two kinds of step.
 

@@ -57,8 +57,16 @@ process that parked without closing its tool ports (the message-limit pause, the
 a row still `running` then may be a call of that run that ignored its abort and is still under way, so the continue passes
 `ownCallsMayRun` and the ring is left to that call's own settle. (This read "and a run of this process closed its ports when
 it ended", which holds only for a run that ended at its teardown; corrected at review on 2026-10-01.)
+What that exception leaves is recorded apart, not repaired here: a parked run never closes its ports, so a call of its that
+never returns keeps its ring row `running` for good (the pinning case's `stray` row reads `running` after the continuation
+run completes); a later run of this process that tears down re-arms the settle over the parked run's rows; and two processes
+over one workspace can leave a dead process's rows to a live one's skip —
+[`a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md`](../a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md).
 No process observed the call's end, so its duration is NULL (`ToolCallSettle.elapsed_ms` admits null for this case alone),
-never invented. The ring's settle-once trigger is unchanged; a second recording finds none running.
+never invented. Neither clause that gives a settled call a duration governs this row: REQ-EVENTS-057's `tool.finish` duration is
+a **completed** call's, and this call did not complete; REQ-MONITOR-228's interval runs from a transcript row's start to the
+run's terminal state, and a dead host recorded no terminal state — the moment of the crash is not known, so the interval has
+no end to take. Its `tool.finish` carries `duration_ms: null` for the same reason (a reading stated at review, 2026-10-01). The ring's settle-once trigger is unchanged; a second recording finds none running.
 
 Pinned by: `packages/engine/src/run/crash.test.ts` — "REQ-SESSION-129 with ADR-0024 (the repair of
 a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md): the ring row of every call a dead run left running settles

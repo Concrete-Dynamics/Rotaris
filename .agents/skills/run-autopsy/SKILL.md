@@ -39,7 +39,7 @@ REQ-SESSION-139/199/153/136/134/135, REQ-EVENTS-056). It emits the session
 row, per-tool breakdown (failed vs blocked partitioned, elapsed sums),
 failure detail grouped by cause, usage curve with largest jumps, coherence
 warnings, and per-model-key tool-call attribution (children from the children
-record, the entry agent from its own launch audit and switches), in one
+record, the entry agent from its own launch audit, switches and overrides), in one
 read-only pass:
 
 ```bash
@@ -51,8 +51,10 @@ Two facts the reader bakes in: the `usage.update` payload carries tokens and
 cost alone — no provider or model — so attribution reads `children.model_key`
 for a child and, for the entry agent, the key its launch audit's configuration
 snapshot, its continuations and its `entry_model_switched` entries record,
+carried through every `model_override` of the pair it runs on (`undetermined`
+where the snapshot cannot place the root's pair against a recorded override),
 joined in order when it ran on more than one (`session` means none is recorded;
-it is never borrowed from the children), and every printed line is truncated to 220 columns, so one catalogue dump
+it is never borrowed from the children; automatic fallbacks are not read yet), and every printed line is truncated to 220 columns, so one catalogue dump
 cannot take the transcript.
 
 Then supplement from the store by hand for anything the snapshot doesn't

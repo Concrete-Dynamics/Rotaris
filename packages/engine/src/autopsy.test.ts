@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
-import { readAutopsy } from './autopsy.js';
+import { ENTRY_KEY_UNDETERMINED, readAutopsy } from './autopsy.js';
 const WS = 'C:/ws';
 
 /**
@@ -116,6 +116,53 @@ describe('R-043 — the run-autopsy snapshot', () => {
         { endpoint: 'root-model → child-model → third-model', agents: ['orchestrator'], tool_calls: 3 },
         { endpoint: 'child-model', agents: ['impl', 'tests'], tool_calls: 2 },
       ]);
+    });
+
+    describe('a "change model now" during a wait (REQ-MONITOR-303, REQ-ORCH-091 d) moves the root exactly when it replaces the pair the root runs on', () => {
+      const models = {
+        'root-model': { provider: 'openai-compatible', auth_provider: 'katalyst', model_id: 'r', base_url: 'http://e' },
+        'child-model': { provider: 'openai', auth_provider: null, model_id: 'c' },
+        'spare-model': { provider: 'anthropic', auth_provider: null, model_id: 's' },
+      };
+      // run.ts `setEntryModel` records the waiting pair and the choice; the run resolves the root through every override of the session.
+      const override = (sid: SessionId, n: number, provider: string, model: string, key: string, to: readonly [string, string]) =>
+        dal.insertTimeline(sid, n, `t${n}`, 'model_override', 'user', `The user chose ${key}.`, JSON.stringify({ provider, model, model_key: key, to_provider: to[0], to_model: to[1] }), `aaaaaaaaaab${n}`, 'info');
+
+      it('an override of the root\'s own pair: its calls read launch key → override key, and a continuation keeps the override', () => {
+        const sid = plant('S-override-root', 'completed');
+        dal.transaction(() => {
+          run(sid); audit(sid, 'root-model', models);
+          override(sid, 1, 'katalyst', 'r', 'spare-model', ['anthropic', 's']);
+          // ResilienceMemory.rehydrate replays the override on the continuation, whose snapshot still names root-model.
+          dal.insertTimeline(sid, 2, 't2', 'run_continuation_intent', 'rotaris', 'Continuation intent: answer.', JSON.stringify({ config_snapshot: snapshot('root-model', models) }), 'aaaaaaaaaac2', 'info');
+        });
+        expect(readAutopsy(dal, sid, clock.wall)!.requests).toEqual([
+          { endpoint: 'root-model → spare-model', agents: ['orchestrator'], tool_calls: 3 },
+          { endpoint: 'child-model', agents: ['impl', 'tests'], tool_calls: 2 },
+        ]);
+      });
+
+      it('an override of a child\'s different pair leaves the root on its own key', () => {
+        const sid = plant('S-override-child', 'completed');
+        dal.transaction(() => { run(sid); audit(sid, 'root-model', models); override(sid, 1, 'openai', 'c', 'spare-model', ['anthropic', 's']); });
+        expect(readAutopsy(dal, sid, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model', agents: ['orchestrator'], tool_calls: 3 });
+      });
+
+      it('a later switch onto an overridden pair runs on the override, as the run resolves it', () => {
+        const sid = plant('S-switch-onto-override', 'completed');
+        dal.transaction(() => {
+          run(sid); audit(sid, 'root-model', models);
+          override(sid, 1, 'openai', 'c', 'spare-model', ['anthropic', 's']);
+          dal.insertTimeline(sid, 2, 't2', 'entry_model_switched', 'user', 'The entry model switched to child-model.', JSON.stringify({ model: 'child-model' }), 'aaaaaaaaaac2', 'info');
+        });
+        expect(readAutopsy(dal, sid, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model → spare-model', agents: ['orchestrator'], tool_calls: 3 });
+      });
+
+      it('where the snapshot does not say which pair the root\'s key resolves to, an override makes the key undetermined from that point', () => {
+        const sid = plant('S-override-unknown', 'completed');
+        dal.transaction(() => { run(sid); audit(sid, 'root-model'); override(sid, 1, 'openai', 'c', 'spare-model', ['anthropic', 's']); });
+        expect(readAutopsy(dal, sid, clock.wall)!.requests[0]).toEqual({ endpoint: `root-model → ${ENTRY_KEY_UNDETERMINED}`, agents: ['orchestrator'], tool_calls: 3 });
+      });
     });
 
     it('a loader-made copy (a role\'s `thinking`) reads as the one key it copies, and as its own name when two keys match', () => {

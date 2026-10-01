@@ -40,7 +40,20 @@ printed in order joined by `→`, the root's calls kept on that one row rather t
 is printed only when none of them records a key. A loader-made copy (a slot's or a role's reasoning synthesis,
 `__startup_slot__:` / `__persona__:`) reads as the one non-copy `models:` key it was copied from — the key a child on that
 model is recorded under (REQ-CONFIG-094) — and as its own recorded name when none or more than one matches, since the
-snapshot does not carry the loader's origins. A `model_override` names no agent, so it is not read as the root's.
+snapshot does not carry the loader's origins. ~~A `model_override` names no agent, so it is not read as the root's.~~
+Falsified at the verifier's first repair round, kept here beside its replacement: a `model_override` names no agent, but
+it moves every agent on the pair it replaces, the root included. The wait's "change model now" (REQ-MONITOR-303,
+REQ-ORCH-091 d) records only `model_override` (the waiting `provider|model` pair, the chosen `model_key` and its
+`to_provider|to_model`); the run resolves the root's model through every override of the session
+(`ResilienceMemory.effective` in `rootResilience`) and replays them on every later run (`ResilienceMemory.rehydrate`), so a
+continuation whose snapshot still names the configured key runs on the override. `entryModelKeys` therefore carries the
+root's configured key through the recorded overrides: an override moves the root exactly when it replaces the pair the
+root's current key resolves to in the snapshot's `models:` (its sign-in provider, else its family, and its `model_id` —
+`providerIdentity`), chains are followed as the run follows them, and a later switch onto an overridden pair reads as the
+override. Where the snapshot does not record the pair the root's key resolves to and an override is recorded, the key
+from that point on is printed as `undetermined` (`ENTRY_KEY_UNDETERMINED`), never one key given as fact. The automatic
+moves of the root (`quota_fallback_model`, `llm_unresponsive`) are not read yet: open note
+[the-autopsy-reader-does-not-read-the-roots-automatic-model-fallbacks.md](../the-autopsy-reader-does-not-read-the-roots-automatic-model-fallbacks.md).
 `apps/desktop/scripts/autopsy.mjs` reads the same through `scripts/lib/autopsy-entry-model.mjs`, which mirrors the engine's
 function (the script cannot import the engine's TypeScript); the run-autopsy skill's description of the reader says so.
 
@@ -49,11 +62,18 @@ Pinned by:
 - `packages/engine/src/autopsy.test.ts` — "the entry agent's model key comes from what the store records of the entry
   agent, never from its children": a root on `root-model` beside two children on `child-model` (red before: all five
   calls under `child-model`), no launch audit (red before: the root under the children's key), a switch and two
-  continuations, and a loader copy with one and with two originals;
+  continuations, and a loader copy with one and with two originals; and, under "a \"change model now\" during a wait
+  moves the root exactly when it replaces the pair the root runs on", an override of the root's own pair (`root-model →
+  spare-model`, kept across a continuation), an override of a child's different pair (root unchanged), a switch onto an
+  overridden pair, and an override the snapshot cannot place against the root (`root-model → undetermined`) — the three
+  that move or mark the root red before the round-1 repair;
 - `apps/desktop/scripts/lib/autopsy-entry-model.test.ts` — the script's copy and the engine's function answer the same
-  eight cases alike.
+  thirteen cases alike, the round-1 case "an override names no agent, so it is not the root's" replaced by the override
+  cases above plus an override chain and an override with no pair recorded (four red before the round-1 repair).
 
 Shown on the 71ad8e8 stores (copies of both packs' `workspace.db`; the packs were not written): every session's root is
 now attributed to `openai-compatible--katalyst/qwen3.8-flash-next` from its launch audit. Where children exist the line
 reads as before, because the root and its children did share that model; `ask`, `faults-ladder`, `faults-stall` and
 `terminal`, which have no children, now print that key where they printed `session`.
+The 2026-10-01 stores record no `model_override`, so the reader's output over them is unchanged by the round-1 repair
+(re-run over the same copies, line for line).

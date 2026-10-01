@@ -26,8 +26,8 @@
  * - `requests`: per-model-key tool-call attribution — a child's calls under
  *   the model_key the children record carries (the usage.update payload
  *   carries tokens and cost alone), the entry agent's under the key the
- *   launch audit, its continuations and its switches record for it
- *   (`entryModelKeys`), newest totals last.
+ *   launch audit, its continuations, its switches and the session's
+ *   overrides of its pair record for it (`entryModelKeys`), newest totals last.
  */
 
 import type { SessionId, WallClock } from '@rotaris/kernel';
@@ -140,41 +140,108 @@ const copiedFields = (entry: unknown): string => {
   return JSON.stringify(Object.keys(rest).sort().map((k) => [k, rest[k]]));
 };
 
+const asMap = (v: unknown): Record<string, unknown> | undefined => (v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined);
+
 /**
- * The model key one configuration snapshot (REQ-SESSION-138's `config_snapshot`) records for its entry role: the
- * entry persona's resolved `model`. A loader-made copy (a slot's or a role's reasoning synthesis, REQ-CONFIG-076..081)
- * reads as the one non-copy `models:` key it was copied from — the key a child on that model is recorded under
- * (REQ-CONFIG-094) — and as its own recorded name when none or more than one matches. `null` when nothing is recorded.
+ * The label a recorded model name reads as: a loader-made copy (a slot's or a role's reasoning synthesis,
+ * REQ-CONFIG-076..081) reads as the one non-copy `models:` key it was copied from — the key a child on that model is
+ * recorded under (REQ-CONFIG-094) — and as its own recorded name when none or more than one matches.
  */
-function snapshotEntryKey(snapshot: unknown): string | null {
-  if (snapshot === null || typeof snapshot !== 'object' || Array.isArray(snapshot)) return null;
-  const s = snapshot as Record<string, unknown>;
-  const role = str(s['default_persona']);
-  const personas = s['personas'];
-  const persona = role !== '' && personas !== null && typeof personas === 'object' && !Array.isArray(personas) ? (personas as Record<string, unknown>)[role] : undefined;
-  const model = persona !== null && typeof persona === 'object' && !Array.isArray(persona) ? str((persona as Record<string, unknown>)['model']) : '';
-  if (model === '') return null;
+function modelLabel(models: Record<string, unknown>, model: string): string {
   if (!isSynthetic(model)) return model;
-  const models = s['models'] !== null && typeof s['models'] === 'object' && !Array.isArray(s['models']) ? (s['models'] as Record<string, unknown>) : {};
   const copied = copiedFields(models[model]);
   const origins = copied === '' ? [] : Object.keys(models).filter((k) => !isSynthetic(k) && copiedFields(models[k]) === copied);
   return origins.length === 1 ? origins[0]! : model;
 }
 
 /**
+ * The `provider|model` pair a `models:` key resolves to in a snapshot — the identity the run's session-wide override
+ * memory is keyed by (`providerIdentity`, `pairKey`: the entry's sign-in provider when it names one, else its family;
+ * REQ-NOTIFY-082) — or `null` when the snapshot does not record the key's provider and model id.
+ */
+function modelPair(models: Record<string, unknown>, key: string): string | null {
+  const entry = asMap(models[key]);
+  if (!entry || typeof entry['model_id'] !== 'string') return null;
+  const provider = entry['auth_provider'] ?? entry['provider'];
+  return typeof provider === 'string' ? `${provider}|${entry['model_id']}` : null;
+}
+
+/** What one configuration snapshot (REQ-SESSION-138's `config_snapshot`) records of its entry role's model, or `null`. */
+function snapshotEntry(snapshot: unknown): { readonly models: Record<string, unknown>; readonly label: string; readonly pair: string | null } | null {
+  const s = asMap(snapshot);
+  if (!s) return null;
+  const role = str(s['default_persona']);
+  const persona = role !== '' ? asMap(asMap(s['personas'])?.[role]) : undefined;
+  const model = str(persona?.['model']);
+  if (model === '') return null;
+  const models = asMap(s['models']) ?? {};
+  return { models, label: modelLabel(models, model), pair: modelPair(models, model) };
+}
+
+/** Printed where the record cannot say which key the entry agent ran on: an override may or may not have moved it. */
+export const ENTRY_KEY_UNDETERMINED = 'undetermined';
+
+/**
  * Live-run finding a71-13: every model key the entry agent ran on, in order, from what the store records of the entry
- * agent itself — the launch audit's configuration snapshot (REQ-SESSION-138), then each continuation's own snapshot
- * (`run_continuation_intent`) and each switch (`entry_model_switched`, REQ-MONITOR-142), consecutive repeats folded.
- * Empty when none of them records one. Never read from the children: a child's key says nothing about the root's.
- * A `model_override` (REQ-ORCH-091 d) names no agent, so it is not read as the root's.
+ * agent itself, consecutive repeats folded; empty when nothing records one. Never read from the children: a child's
+ * key says nothing about the root's.
+ *
+ * The entry agent's configured key comes from the launch audit's configuration snapshot (REQ-SESSION-138), then each
+ * continuation's own snapshot (`run_continuation_intent`) and each switch (`entry_model_switched`, REQ-MONITOR-142).
+ * The key it runs on is that one carried through the session's overrides: the wait's "change model now"
+ * (REQ-MONITOR-303, REQ-ORCH-091 d) records a `model_override` keyed by the waiting `provider|model` pair, and the run
+ * resolves the root's model through every override of the session (`ResilienceMemory.effective`, replayed on every
+ * later run), whichever agent was waiting. So an override moves the root exactly when it replaces the pair the root's
+ * key resolves to. Where the snapshot does not say which pair the root's key resolves to and an override is recorded,
+ * the key from that point on is `ENTRY_KEY_UNDETERMINED`, never one key given as fact.
  */
 export function entryModelKeys(launchAuditPayload: string | undefined, timeline: readonly Pick<TimelineRow, 'name' | 'metadata'>[]): string[] {
   const keys: string[] = [];
+  let models: Record<string, unknown> = {};
+  let base: { readonly label: string; readonly pair: string | null } | null = null;
+  const overrides = new Map<string, { readonly key: string; readonly to: string | null }>();
+  const effective = (): string | null => {
+    if (base === null) return null;
+    if (base.pair === null) return overrides.size > 0 ? ENTRY_KEY_UNDETERMINED : base.label;
+    let label = base.label;
+    let pair: string = base.pair;
+    for (let hops = 0; hops < 8; hops++) {
+      const o = overrides.get(pair);
+      if (!o || o.to === pair) break;
+      label = o.key;
+      if (o.to === null) return overrides.size > 1 ? ENTRY_KEY_UNDETERMINED : label;
+      pair = o.to;
+    }
+    return label;
+  };
   const add = (key: string | null): void => { if (key !== null && key !== '' && keys[keys.length - 1] !== key) keys.push(key); };
-  if (launchAuditPayload !== undefined) add(snapshotEntryKey(parseJson(launchAuditPayload)?.['config_snapshot']));
+  const fromSnapshot = (snapshot: unknown): void => {
+    const e = snapshotEntry(snapshot);
+    if (!e) return;
+    models = e.models;
+    base = { label: e.label, pair: e.pair };
+    add(effective());
+  };
+  if (launchAuditPayload !== undefined) fromSnapshot(parseJson(launchAuditPayload)?.['config_snapshot']);
   for (const t of timeline) {
-    if (t.name === 'run_continuation_intent') add(snapshotEntryKey(parseJson(t.metadata)?.['config_snapshot']));
-    else if (t.name === 'entry_model_switched') add(str(parseJson(t.metadata)?.['model']) || null);
+    if (t.name === 'run_continuation_intent') fromSnapshot(parseJson(t.metadata)?.['config_snapshot']);
+    else if (t.name === 'entry_model_switched') {
+      const key = str(parseJson(t.metadata)?.['model']);
+      if (key === '') continue;
+      base = { label: modelLabel(models, key), pair: modelPair(models, key) };
+      add(effective());
+    } else if (t.name === 'model_override') {
+      const meta = parseJson(t.metadata);
+      const provider = meta?.['provider'];
+      const model = meta?.['model'];
+      const key = str(meta?.['model_key']);
+      if (typeof provider !== 'string' || typeof model !== 'string' || key === '') continue;
+      const toProvider = meta?.['to_provider'];
+      const toModel = meta?.['to_model'];
+      const to = typeof toProvider === 'string' && typeof toModel === 'string' ? `${toProvider}|${toModel}` : modelPair(models, key);
+      overrides.set(`${provider}|${model}`, { key, to });
+      add(effective());
+    }
   }
   return keys;
 }
@@ -293,8 +360,9 @@ export function readAutopsy(dal: StoreDal, sessionId: SessionId, _wall: WallCloc
     // the usage.update payload (REQ-EVENTS-053's payload is tokens and cost
     // alone), so a child's tool calls go to the model_key the children record
     // carries. The entry agent — the one no child names — is attributed to the
-    // key(s) its own records name (`entryModelKeys`), joined in order when it
-    // ran on more than one, and to `session` when none is recorded. Its calls
+    // key(s) its own records name (`entryModelKeys`: its snapshots, its switches
+    // and the overrides of the pair it runs on), joined in order when it ran on
+    // more than one, and to `session` when none is recorded. Its calls
     // are never split between keys by guess, and its key is never taken from
     // its children (live-run finding a71-13: it had been, whenever they shared one).
     const callsByAgent = new Map<string, number>();

@@ -437,6 +437,23 @@ replacement. Whether such a call should wait at all is OQ-164's, not ruled. Pinn
 `terminal.test.ts`, both red before the change. Five A10 cases now read the hand-over from the next call and keep their
 assertions.*
 
+*Corrected 2026-10-01, before its merge, by its verification: **the line assumed that every line written after a paused
+one reaches the shell.** An interrupt (`C-c`) makes the terminal discard every line the shell has not read, so a line
+queued behind the interrupted one never runs and its start marker never prints. Three readings of the first build were
+false. Each is kept struck beside its replacement in `foreground.ts` and in [OQ-164](../open-questions.md):
+- "the next line's start marker" closes a paused call. It is now ANY later line's, whichever prints first (`pausedShare`).
+  The interrupted call had been cut at a marker that never appeared, and the next call carried its own marker, output and
+  end frame as that call's.
+- A poll after the interrupt looked for the end only of the polled call, queued behind the interrupted one. It wrote no
+  no-op line and read "still running" over a dead command, which re-opened OQ-147's defect. It now looks at every open
+  paused call, and its no-op line closes them all.
+- A queued call "carries none of the earlier command's output as its own". That held for its pause only; its poll handed
+  the earlier output over as its own. A call the shell has not started now takes nothing before its own printed start
+  marker (`unstartedShare`, `PausedCall.started`, `CommandRegion.started`).
+A line whose marker never printed when a later one did is reported as never run, with no exit code, and so is a call
+discarded while it waited (the window's interrupt, REQ-SHELL-093). Measured with dash through a real PTY: the four
+cases named in OQ-164 were red on the first build and are green on the correction.*
+
 *Reported back 2026-10-01, the repair of
 [`a-command-that-exits-the-session-shell-reads-as-a-soft-pause`](../../defects/fixed/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md)
 (OQ-144's sibling case): **the marker protocol also assumed that the shell outlives the command.** A command that ends

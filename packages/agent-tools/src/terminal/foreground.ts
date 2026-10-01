@@ -82,12 +82,18 @@ export interface ForegroundResult {
  * OQ-164: what an observation reports of a soft-paused command other than its own subject. `end` says how it ended: its
  * own exit status (`exit`); none of its own, the shell having abandoned its line (`no-status`, OQ-147); by ending the
  * session's shell (`shell`); by the session's reset (`reset`); never having run, the shell being gone before its line
- * (`never-ran`); or not yet (`running`).
+ * (`never-ran`) or its line gone unread — an interrupt discards what the shell has not read (`discarded`); or not yet
+ * (`running`).
  */
 export interface PausedEnd {
   /** The command as the agent issued it. */
   readonly label: string;
-  readonly end: 'exit' | 'no-status' | 'shell' | 'reset' | 'never-ran' | 'running';
+  readonly end: 'exit' | 'no-status' | 'shell' | 'reset' | 'never-ran' | 'discarded' | 'running';
+  /**
+   * True when an interrupt (`C-c`) had been sent to it before the reporting call was submitted, and it ended with no status
+   * of its own (`no-status`): it ended at that interrupt or after it, and the call did not simply wait behind it.
+   */
+  readonly interruptedBefore: boolean;
   readonly exitCode: number | null;
   /**
    * Monotonic ms from the reporting call's submission to the paused command's end — negative when it had ended before the
@@ -156,6 +162,18 @@ export const SHELL_ENDED_ERROR = 'the command ended the session\'s shell';
 export const PAUSED_SHELL_ENDED_ERROR = 'the paused command ended the session\'s shell';
 /** OQ-164: the error a call carries when the session's shell ended before its line ran — a paused command ahead of it ended it. */
 export const SHELL_ENDED_BEFORE_ERROR = 'the session\'s shell ended before the command ran';
+/**
+ * OQ-164 (the verifier's finding on its repair): why a line queued behind a soft-paused one can vanish unread — an interrupt
+ * (`C-c`) makes the terminal discard the input the shell has not read, and a command reading its input takes it.
+ */
+const LINE_GONE = 'its line was gone before the shell reached it (an interrupt (C-c) discards a line the shell has not read yet, and a command that reads its input takes it)';
+/** OQ-164: the error a poll carries for a paused command whose line never ran (`LINE_GONE`). */
+export const PAUSED_NEVER_RAN_ERROR = `the paused command never ran, so it has no exit code: ${LINE_GONE}`;
+/**
+ * OQ-164: the error a call carries when it waited behind a soft-paused command and an interrupt sent to that command — the
+ * terminal window's (REQ-SHELL-093) — discarded its line before the shell read it.
+ */
+export const NEVER_RAN_ERROR = `the command never ran, so it has no exit code: it waited behind a soft-paused command, and ${LINE_GONE}`;
 
 export const FOREGROUND_CAP = 100_000;
 /**
@@ -294,16 +312,23 @@ interface PausedCall {
   /** The exit status its own end frame carried; null while it runs, and for a call that ended with no frame (`until`). */
   code: number | null;
   /**
-   * Set when the call was closed by the NEXT call's printed start marker because its own end frame never printed — an
-   * interrupt (`C-c`) makes an interactive `sh` abandon the rest of the wrapper's line (A10): that marker, where what the
-   * paused call collected stops.
+   * Set when the call was closed by a later line's printed start marker because its own end frame never printed — an
+   * interrupt (`C-c`) makes an interactive `sh` abandon the rest of the wrapper's line (A10): the marker that printed first,
+   * where what the paused call collected stops (every later line's, when it closed on a later end frame alone).
    */
-  until: string | null;
+  until: readonly string[] | null;
+  /**
+   * OQ-164: false while the shell has not started the call's line — it was queued behind an earlier paused line — and so
+   * nothing of the stream is its own yet (`unstartedShare`); true once its start marker printed, and for every other pause.
+   */
+  started: boolean;
   /**
    * True once keystrokes carrying an interrupt (`C-c`, REQ-TOOLS-098's advice) were written while the call was paused: a
    * poll may then look for the end of its line (`findInterruptedEnd`).
    */
   interrupted: boolean;
+  /** OQ-164: monotonic time of the first such interrupt; null when none was written. */
+  interruptedAt: number | null;
   /**
    * The printed start marker of the product's own no-op line that a poll after an interrupt submitted to find where the
    * paused line ended; null until one is submitted. The shell reaches it only once the paused line is done, so it closes
@@ -318,10 +343,11 @@ interface PausedCall {
   observedAt: number;
   /**
    * How the call closed when not by its own end frame (OQ-164): the session's shell ended while its command ran (`shell`,
-   * OQ-144's shell-exit case), or before its line ran (`never-ran`); or the session was reset under it (`reset`). Null while
-   * open, and when it closed on its own frame or at the next line's start marker.
+   * OQ-144's shell-exit case), or before its line ran (`never-ran`); the session was reset under it (`reset`); or a later
+   * line started though its own never had, its line gone unread (`discarded`, `unstartedShare`). Null while open, and when it
+   * closed on its own frame or at a later line's start marker.
    */
-  endedBy: 'shell' | 'never-ran' | 'reset' | null;
+  endedBy: 'shell' | 'never-ran' | 'reset' | 'discarded' | null;
   /** OQ-164: the command as the agent issued it, for the observation that reports its end. */
   readonly label: string;
   /** OQ-164: monotonic time the call closed; null while open. */
@@ -351,6 +377,10 @@ export class CommandRegion {
   /** True once the end frame has been seen: nothing more passes. */
   get ended(): boolean {
     return this.phase === 'after';
+  }
+  /** OQ-164: true once the printed start marker has been seen — the shell has started the call's line. */
+  get started(): boolean {
+    return this.phase !== 'before';
   }
   /**
    * OQ-147: rows carrying `fragment` — the product's own no-op line after an interrupt (`findInterruptedEnd`): its echo,
@@ -412,42 +442,89 @@ export class CommandRegion {
 }
 
 /**
+ * Where `marker` first PRINTS in `text`, told from the shell's echo of its line — which quotes it — as `CommandRegion` tells
+ * it: its index (`at`, −1 when it has not printed), and `hold`, the index from which a tail of `text` could still be the
+ * marker — an occurrence at the very end, or the beginning of one split across two chunks — for the next chunk to decide.
+ */
+function printedAt(text: string, marker: string): { readonly at: number; readonly hold: number } {
+  for (let from = 0; ;) {
+    const at = text.indexOf(marker, from);
+    if (at < 0) break;
+    const after = at + marker.length;
+    if (after >= text.length) return { at: -1, hold: at };
+    if (text[after] === "'") { from = after; continue; }
+    return { at, hold: text.length };
+  }
+  let keep = Math.min(text.length, marker.length - 1);
+  while (keep > 0 && !marker.startsWith(text.slice(text.length - keep))) keep -= 1;
+  return { at: -1, hold: text.length - keep };
+}
+
+/** The first of `markers` to print in `text` (`printedAt`), and the earliest index any of them could still begin at. */
+function firstPrinted(text: string, markers: readonly string[]): { readonly at: number; readonly marker: string | null; readonly hold: number } {
+  let at = -1;
+  let marker: string | null = null;
+  let hold = text.length;
+  for (const m of markers) {
+    const r = printedAt(text, m);
+    if (r.at >= 0 && (at < 0 || r.at < at)) { at = r.at; marker = m; }
+    hold = Math.min(hold, r.hold);
+  }
+  return { at, marker, hold };
+}
+
+/** What `pausedShare` decided of one chunk; `marker` is the later line's printed start marker it stopped at (`stop: 'next'`). */
+export interface PausedShare {
+  readonly take: string;
+  readonly undecided: string;
+  readonly stop: 'own' | 'next' | null;
+  readonly marker: string | null;
+}
+
+/**
  * A10: the share of one PTY chunk that belongs to a soft-paused call, while it is still open. The shell runs its lines in
  * order, so the paused call's bytes end at the first of two things: its OWN end frame, when the line reaches it, or the
- * NEXT call's PRINTED start marker, which the shell writes only once the paused line is done — with or without its frame,
- * since an interrupt (`C-c`) makes an interactive `sh` abandon the rest of that line. Nothing after either is the paused
- * call's, and none of it is given to its screen: the next call's output, however long, cannot scroll the boundary off the
- * screen the paused call's poll is read from. The printed start marker is told from the shell's echo of the next call's
- * wrapper as `CommandRegion` tells it — the echo quotes it — and a marker at the very end of a chunk, which the next chunk
- * decides, is held back as `undecided` with nothing after it given away. The own frame needs no hold: the capture cuts it
- * on the screen, and with no next call only the prompt follows it.
+ * printed start marker of ANY line written after it, which the shell writes only once the paused line is done — with or
+ * without its frame, since an interrupt (`C-c`) makes an interactive `sh` abandon the rest of that line. Nothing after either
+ * is the paused call's, and none of it is given to its screen: the next call's output, however long, cannot scroll the
+ * boundary off the screen the paused call's poll is read from. The printed start marker is told from the shell's echo of a
+ * later wrapper as `CommandRegion` tells it — the echo quotes it — and a marker at the very end of a chunk, which the next
+ * chunk decides, is held back as `undecided` with nothing after it given away. The own frame needs no hold: the capture cuts
+ * it on the screen, and with no later line only the prompt follows it.
+ *
+ * FALSIFIED, kept beside its replacement (OQ-164's verification, 2026-10-01): "the NEXT call's printed start marker" — the
+ * line written directly after. An interrupt makes the terminal discard every line the shell has not read yet, so a line
+ * queued behind the interrupted one never runs and its marker never prints; the interrupted call then collected the next
+ * call's marker, output and end frame, and its capture was cut at a marker that never appeared. Every later line's marker
+ * counts now (`later`): the shell runs them in order, so whichever prints first is past the paused line.
  */
-export function pausedShare(undecided: string, chunk: string, ownEnd: string, nextStart: string | null): { readonly take: string; readonly undecided: string; readonly stop: 'own' | 'next' | null } {
+export function pausedShare(undecided: string, chunk: string, ownEnd: string, later: string | readonly string[] | null): PausedShare {
   const text = undecided + chunk;
+  const markers = later === null ? [] : typeof later === 'string' ? [later] : later;
   const own = new RegExp(`${ownEnd}:-?\\d+`).exec(text);
   const ownAt = own ? own.index + own[0].length : -1;
-  let nextAt = -1;
-  let holdFrom = text.length;
-  if (nextStart !== null) {
-    for (let from = 0; ;) {
-      const at = text.indexOf(nextStart, from);
-      if (at < 0) break;
-      const after = at + nextStart.length;
-      if (after >= text.length) { holdFrom = at; break; }
-      if (text[after] === "'") { from = after; continue; }
-      nextAt = after;
-      break;
-    }
-    if (nextAt < 0 && holdFrom === text.length) {
-      // A tail that could still begin the marker, split across two chunks.
-      let keep = Math.min(text.length, nextStart.length - 1);
-      while (keep > 0 && !nextStart.startsWith(text.slice(text.length - keep))) keep -= 1;
-      holdFrom = text.length - keep;
-    }
-  }
-  if (ownAt >= 0 && (nextAt < 0 || ownAt <= nextAt)) return { take: text.slice(0, ownAt), undecided: '', stop: 'own' };
-  if (nextAt >= 0) return { take: text.slice(0, nextAt), undecided: '', stop: 'next' };
-  return { take: text.slice(0, holdFrom), undecided: text.slice(holdFrom), stop: null };
+  const next = firstPrinted(text, markers);
+  const nextAt = next.marker === null ? -1 : next.at + next.marker.length;
+  if (ownAt >= 0 && (nextAt < 0 || ownAt <= nextAt)) return { take: text.slice(0, ownAt), undecided: '', stop: 'own', marker: null };
+  if (nextAt >= 0) return { take: text.slice(0, nextAt), undecided: '', stop: 'next', marker: next.marker };
+  return { take: text.slice(0, next.hold), undecided: text.slice(next.hold), stop: null, marker: null };
+}
+
+/**
+ * OQ-164 (the verifier's finding on its repair): the share of one chunk that belongs to a soft-paused call whose line the
+ * shell has NOT STARTED — one queued behind an earlier paused line. Until its own start marker prints, every byte is the
+ * earlier command's, which that command's own share carries, so nothing is taken; a poll before then handed the earlier
+ * command's output over as the queued one's own. From its printed start marker on it is `pausedShare`. A later line's marker
+ * printing first means its line never ran: the terminal discarded it unread — an interrupt (`C-c`) discards whatever the shell
+ * has not read — or a command reading its input took it (`stop: 'next'`, `started` false).
+ */
+export function unstartedShare(undecided: string, chunk: string, ownStart: string, ownEnd: string, later: readonly string[]): PausedShare & { readonly started: boolean } {
+  const text = undecided + chunk;
+  const own = printedAt(text, ownStart);
+  const next = firstPrinted(text, later);
+  if (next.marker !== null && (own.at < 0 || next.at < own.at)) return { started: false, take: '', undecided: '', stop: 'next', marker: next.marker };
+  if (own.at >= 0) return { started: true, ...pausedShare('', text.slice(own.at), ownEnd, later) };
+  return { started: false, take: '', undecided: text.slice(Math.min(own.hold, next.hold)), stop: null, marker: null };
 }
 
 /**
@@ -873,10 +950,10 @@ export class ForegroundSession {
     const chain = this.openPaused();
     const now = this.deps.monotonic.now();
     chain.forEach((paused, i) => {
-      if (paused.undecided !== '') paused.hold.push(paused.undecided);
+      if (paused.undecided !== '' && paused.started) paused.hold.push(paused.undecided);
       paused.undecided = '';
       paused.code = null;
-      paused.endedBy = i === 0 ? 'shell' : 'never-ran';
+      paused.endedBy = i === 0 && paused.started ? 'shell' : 'never-ran';
       paused.endedAt = now;
       paused.onClose?.();
     });
@@ -923,18 +1000,27 @@ export class ForegroundSession {
     const chain = this.openPaused();
     const active = this.active;
     if (!active && chain.length === 0) return;
-    // A soft-paused call and the call queued behind it share the stream, and the shell runs their lines in order. What the
-    // paused call collects is its share of each chunk (`pausedShare`), which ends at its own end frame or at the next call's
-    // printed start marker, whichever the shell reaches (A10). A paused call queued behind another (OQ-164) collects the
-    // earlier one's bytes too until its own start marker prints, and its capture is cut at that marker as any call's is.
-    const next = (i: number): string | null => {
-      const later = chain[i + 1];
-      // The no-op line a poll after an interrupt submitted (`closer`) was written before any later call's, so its marker
-      // is the first the shell can print once the paused line is done.
-      return later !== undefined ? later.start : (chain[i]!.closer ?? active?.start ?? null);
+    // A soft-paused call and the calls queued behind it share the stream, and the shell runs their lines in order. What the
+    // paused call collects is its share of each chunk (`pausedShare`), which ends at its own end frame or at the printed start
+    // marker of any line written after it, whichever the shell reaches (A10). A paused call queued behind another (OQ-164)
+    // collects nothing until its own start marker prints (`unstartedShare`).
+    // FALSIFIED, kept beside its replacement (OQ-164's verification, 2026-10-01): "the next line's start marker" alone — the
+    // queued line's, else the no-op line's, else the running call's. An interrupt discards every line the shell has not read,
+    // so the queued line's marker never printed, and nothing cut the interrupted call's share short of the next call's frame.
+    const later = (i: number): string[] => {
+      const out: string[] = [];
+      const add = (m: string | null | undefined) => { if (m) out.push(m); };
+      // The no-op line a poll after an interrupt submitted (`closer`) was written after its call's line and before any later
+      // call's.
+      add(chain[i]!.closer);
+      for (const behind of chain.slice(i + 1)) { add(behind.start); add(behind.closer); }
+      add(active?.start);
+      add(active?.closer);
+      return out;
     };
     const shares = chain.map((paused, i) => {
-      const share = pausedShare(paused.undecided, chunk, paused.end, next(i));
+      const share = paused.started ? pausedShare(paused.undecided, chunk, paused.end, later(i)) : unstartedShare(paused.undecided, chunk, paused.start, paused.end, later(i));
+      if ('started' in share && share.started) paused.started = true;
       if (share.take !== '') { paused.hold.push(share.take); paused.lastOutputAt = this.deps.monotonic.now(); }
       paused.undecided = share.undecided;
       return share;
@@ -973,14 +1059,16 @@ export class ForegroundSession {
     // call the same way, the shell having gone past its line.
     const laterFrame = (i: number): boolean => activeCode !== null || chain.slice(i + 1).some((later) => frame(later.end) !== null);
     chain.forEach((paused, i) => {
-      const pausedCode = frame(paused.end);
-      if (!(pausedCode !== null || shares[i]!.stop === 'next' || laterFrame(i))) return;
-      // Closed without a decision on the raw stream: whatever it still held back was its own.
-      if (paused.undecided !== '') paused.hold.push(paused.undecided);
+      const pausedCode = paused.started ? frame(paused.end) : null;
+      const share = shares[i]!;
+      if (!(pausedCode !== null || share.stop === 'next' || laterFrame(i))) return;
+      // Closed without a decision on the raw stream: whatever it still held back was its own — once its line had started.
+      if (paused.undecided !== '' && paused.started) paused.hold.push(paused.undecided);
       paused.undecided = '';
       paused.code = pausedCode;
-      const following = next(i);
-      if (pausedCode === null && following !== null) paused.until = following;
+      // OQ-164: a later line started and this one never had — its line was gone unread (`unstartedShare`).
+      if (!paused.started) paused.endedBy = 'discarded';
+      else if (pausedCode === null) paused.until = share.marker !== null ? [share.marker] : later(i);
       paused.endedAt = this.deps.monotonic.now();
       if (paused === this.pausedCommand) {
         this.pausedDone = paused;
@@ -1001,15 +1089,15 @@ export class ForegroundSession {
       this.active = null;
       active.onCloser?.();
     }
-    if (!this.active && !this.pausedCommand && this.pausedAhead.length === 0) this.pendingText = '';
+    if (!this.active && this.openPaused().length === 0) this.pendingText = '';
   }
 
   /** The capture: the emulated screen with the echoed command line and both marker frames removed. */
-  static clean(screenText: string, start: string, end: string, until: string | null = null): string {
+  static clean(screenText: string, start: string, end: string, until: string | readonly string[] | null = null): string {
     return ForegroundSession.cleanLines(screenText, start, end, until).join('\n').replace(/\s+$/, '');
   }
 
-  private static cleanLines(screenText: string, start: string, end: string, until: string | null = null): string[] {
+  private static cleanLines(screenText: string, start: string, end: string, until: string | readonly string[] | null = null): string[] {
     // The echoed wrapper is dropped BEFORE the start marker is looked for, not only after it. The marker's own
     // line can carry the shell's PROMPT in front of it: the line discipline echoes what we wrote as soon as it
     // arrives, and the shell prints its prompt when it reads — so when the write lands first, the screen reads
@@ -1025,7 +1113,8 @@ export class ForegroundSession {
     // marker in any form — printed, or in an echo of its wrapper that escaped the removal above: what follows is the
     // next call's, and after that the product's snapshot.
     if (until !== null) {
-      const next = kept.findIndex((l) => l.includes(until));
+      const markers = typeof until === 'string' ? [until] : until;
+      const next = kept.findIndex((l) => markers.some((m) => l.includes(m)));
       if (next >= 0) kept = kept.slice(0, next);
     }
     let body = kept.join('\n');
@@ -1083,12 +1172,13 @@ export class ForegroundSession {
       p.screen.dispose();
       const endedAt = p.endedAt ?? now;
       const end: PausedEnd['end'] = p.endedBy ?? (p.code === null ? 'no-status' : 'exit');
-      out.push({ label: p.label, end, exitCode: p.code, endedAfterSubmitMs: submittedAt === null ? null : endedAt - submittedAt, endedAgoMs: Math.max(0, now - endedAt), output, truncated });
+      const interruptedBefore = end === 'no-status' && submittedAt !== null && p.interruptedAt !== null && p.interruptedAt <= submittedAt;
+      out.push({ label: p.label, end, interruptedBefore, exitCode: p.code, endedAfterSubmitMs: submittedAt === null ? null : endedAt - submittedAt, endedAgoMs: Math.max(0, now - endedAt), output, truncated });
     }
     for (const p of this.pausedAhead) {
       const output = await ForegroundSession.sincePoll(p);
       p.observedAt = now;
-      out.push({ label: p.label, end: 'running', exitCode: null, endedAfterSubmitMs: null, endedAgoMs: null, output, truncated: p.screen.truncated || p.hold.dropped });
+      out.push({ label: p.label, end: 'running', interruptedBefore: false, exitCode: null, endedAfterSubmitMs: null, endedAgoMs: null, output, truncated: p.screen.truncated || p.hold.dropped });
     }
     return out;
   }
@@ -1155,6 +1245,7 @@ export class ForegroundSession {
     // there with OQ-147's reading. Where `/proc` does not say who holds the terminal nothing is written while the call
     // runs; the mark is carried into the soft pause, and a poll after it reads it as a C-c sent after the pause.
     let interrupted = false;
+    let interruptedAt: number | null = null;
     let closer: string | null = null;
     const done = new Promise<{ kind: 'exit'; code: number } | { kind: 'timeout' } | { kind: 'pause' } | { kind: 'abort' } | { kind: 'kill'; reset: boolean } | { kind: 'replaced' } | { kind: 'ended' } | { kind: 'shellEnded'; ran: boolean }>((resolve) => {
       let hard: TimerHandle | null = null;
@@ -1170,6 +1261,7 @@ export class ForegroundSession {
         onInterrupt: () => {
           if (interrupted) return;
           interrupted = true;
+          interruptedAt = monotonic.now();
           const look = () => {
             lookForEnd = null;
             if (this.active !== active || active.closer !== null) return;
@@ -1222,8 +1314,12 @@ export class ForegroundSession {
     });
     // The scan's buffer starts afresh with the call — unless a paused call is still open, whose end frame may be split
     // across the chunk already taken and the next one: cleared here, it would lose its status and read as OQ-147's −1.
-    if (!this.pausedCommand) this.pendingText = '';
-    this.region = new CommandRegion(start, end);
+    // OQ-164: such a call is queued behind the paused line, and until its own start marker prints (`region.started`) nothing
+    // the stream carries is its own: the earlier command's output is that command's report, never this call's capture.
+    const queuedBehind = this.openPaused().length > 0;
+    if (!queuedBehind) this.pendingText = '';
+    const region = new CommandRegion(start, end);
+    this.region = region;
     this.submit(p, wrapCommand(this.deps.backend, command, start, end));
     const outcome = await done;
     // Only a soft-paused command keeps writing to its stream; after any other outcome what the PTY carries is the
@@ -1240,7 +1336,9 @@ export class ForegroundSession {
     let paused: PausedCall | null = null;
     // OQ-164: a soft pause while an earlier paused call is still open means this call's line has not started: the shell is
     // still running the earlier one. It has written nothing of its own.
-    const queued = outcome.kind === 'pause' && this.pausedCommand !== null;
+    const queued = outcome.kind === 'pause' && this.openPaused().length > 0;
+    // A call the shell never started has nothing of its own on its screen: whatever is there is an earlier command's.
+    const ranLine = !queuedBehind || region.started;
     if (outcome.kind === 'pause') {
       // FALSIFIED, kept beside its replacement (OQ-164, 2026-10-01): "a pause nobody ever polled is replaced here: release
       // its screen rather than leave it". The replaced call was still running, or had ended with nothing yet reported, so
@@ -1253,16 +1351,25 @@ export class ForegroundSession {
       // call's start marker closes it (A10). `delivered` is what this call returns, set once the screen has it.
       // An interrupt that reached it while it ran is carried (OQ-147), and so is the no-op line already submitted for it,
       // whose printed marker then closes the paused call as a poll's own would.
-      paused = { start, end, screen, hold, delivered: '', undecided: '', code: null, until: null, interrupted, closer, onClose: null, lastOutputAt, observedAt: monotonic.now(), endedBy: null, label: opts.label ?? command, endedAt: null };
+      // A queued one starts from an empty hold, so the earlier command's bytes count against neither its bound nor its
+      // truncation, and is fed from its own start marker on (`unstartedShare`).
+      paused = { start, end, screen, hold: queued ? new HeldBytes(this.size.cols) : hold, delivered: '', undecided: '', code: null, until: null, started: ranLine && !queued, interrupted, interruptedAt, closer, onClose: null, lastOutputAt, observedAt: monotonic.now(), endedBy: null, label: opts.label ?? command, endedAt: null };
       this.pausedCommand = paused;
       this.active = null;
       this.state = 'idle';
     }
     this.listeners = this.listeners.filter((l) => l !== listener);
     const taken = hold.take();
-    await screen.write(taken);
+    if (paused !== null && !paused.started) {
+      // Only a tail that could still be its start marker is kept; the rest is the earlier command's.
+      const share = unstartedShare('', taken, start, end, closer === null ? [] : [closer]);
+      if (share.started) { paused.started = true; if (share.take !== '') paused.hold.push(share.take); }
+      paused.undecided = share.undecided;
+    } else if (ranLine) {
+      await screen.write(taken);
+    }
     // A call ended by the product's own no-op line (OQ-147) stops where that line begins.
-    const lines = ForegroundSession.cleanLines(screen.text(), start, end, outcome.kind === 'ended' ? closer : null);
+    const lines = ranLine && !queued ? ForegroundSession.cleanLines(screen.text(), start, end, outcome.kind === 'ended' ? closer : null) : [];
     const finish = (r: Omit<ForegroundResult, 'output' | 'truncated' | 'sessionReinitialized' | 'restore'>): ForegroundResult => {
       let text = lines.join('\n').replace(/\s+$/, '');
       // REQ-TOOLS-097's 100,000-character cap, truncated from the OLDEST end, over what the screen retained.
@@ -1286,7 +1393,11 @@ export class ForegroundSession {
       // status of its own; it is reported as the paused call's is, −1 with the reason. The shell answered the no-op line,
       // so it is idle and the session is not reset: what the command's line changed before the interrupt stays.
       this.state = 'idle';
-      const r = finish({ exitCode: -1, timedOut: false, softPaused: false, killStatus: null, error: ENDED_WITHOUT_STATUS });
+      // OQ-164: a call that waited behind a soft-paused command never ran when the interrupt reached that command first —
+      // the terminal discarded its line unread — so it has no exit status at all.
+      const r = finish(ranLine
+        ? { exitCode: -1, timedOut: false, softPaused: false, killStatus: null, error: ENDED_WITHOUT_STATUS }
+        : { exitCode: null, timedOut: false, softPaused: false, killStatus: null, error: NEVER_RAN_ERROR });
       screen.dispose();
       await this.refreshState();
       return r;
@@ -1294,10 +1405,9 @@ export class ForegroundSession {
     if (paused !== null) {
       // REQ-TOOLS-098: return −1, the process keeps running; a later empty command polls what it produced since.
       // The call's screen is kept and keeps filling, so the poll reads the same emulated screen further along.
-      // A call queued behind a paused one (OQ-164) has written nothing: what its screen holds before its own start marker is
-      // the earlier command's, which that command's report carries.
-      paused.delivered = queued ? '' : lines.join('\n').replace(/\s+$/, '');
-      if (queued) lines.length = 0;
+      // A call queued behind a paused one (OQ-164) has written nothing, and its screen is given nothing before its own start
+      // marker prints: what came before is the earlier command's, which that command's report carries.
+      paused.delivered = lines.join('\n').replace(/\s+$/, '');
       return finish({ exitCode: -1, timedOut: false, softPaused: true, killStatus: null, error: null });
     }
     if (outcome.kind === 'kill') {
@@ -1353,9 +1463,15 @@ export class ForegroundSession {
    * end frame on the same unanchored terms as the capture — the anchored form left the marker here too.
    */
   async poll(): Promise<ForegroundResult> {
+    // OQ-164 (the verifier's finding on its repair): the interrupt reaches the line the shell is running — the oldest open
+    // paused call's — and the polled call may be queued behind it. The no-op line goes after every open paused line, on the
+    // polled one (`closer`), so its printed marker closes them all: the interrupted one with OQ-147's reading, and any whose
+    // line the interrupt discarded as never having run. Looking only at the polled call, nothing was ever written and every
+    // poll read "still running" over a dead command and an idle prompt.
+    const chain = this.openPaused();
     const open = this.pausedCommand;
     const pty = this.pty;
-    if (open !== null && open.interrupted && open.closer === null && this.active === null && pty !== null) {
+    if (open !== null && chain.some((c) => c.interrupted) && chain.every((c) => c.closer === null) && this.active === null && pty !== null) {
       // A poll made at once after the `C-c` can meet a shell still waiting on the dying program; it waits a short, bounded
       // while for the shell to take its terminal back (`INTERRUPT_SETTLE_MS`).
       let holds = shellHoldsTerminal(pty.pid);
@@ -1389,6 +1505,8 @@ export class ForegroundSession {
         const ran = done.endedBy === 'shell';
         return { output: out, exitCode: null, timedOut: false, softPaused: false, killStatus: respawn === null ? null : respawn.reset ? 'session_reset' : 'reset_failed', sessionReinitialized: false, truncated, error: ran ? PAUSED_SHELL_ENDED_ERROR : SHELL_ENDED_BEFORE_ERROR, restore: respawn?.restore ?? { status: 'none' }, shellEnded: ran ? 'command' : 'before' };
       }
+      // OQ-164: its line was gone unread — an interrupt sent to the command ahead of it discarded it — so it never ran.
+      if (done.endedBy === 'discarded') return { output: out, exitCode: null, timedOut: false, softPaused: false, killStatus: null, sessionReinitialized: false, truncated, error: PAUSED_NEVER_RAN_ERROR, restore: { status: 'none' } };
       // A paused call that ended with no frame of its own has no exit status to report (OQ-147): it is reported as the
       // terminal window's kill is, −1 with the reason, and never with a status another command produced (A10).
       if (done.code === null) return { output: out, exitCode: -1, timedOut: false, softPaused: false, killStatus: null, sessionReinitialized: false, truncated, error: PAUSED_ENDED_WITHOUT_STATUS, restore: { status: 'none' } };
@@ -1448,6 +1566,8 @@ export class ForegroundSession {
    * retained text is returned, which is the safe direction.
    */
   private static async sincePoll(p: PausedCall): Promise<string> {
+    // OQ-164: a call the shell has not started has written nothing (`unstartedShare`).
+    if (!p.started) return '';
     if (!p.hold.empty) await p.screen.write(p.hold.take());
     const text = ForegroundSession.clean(p.screen.text(), p.start, p.end, p.until);
     const from = p.delivered !== '' && text.startsWith(p.delivered) ? p.delivered.length : 0;
@@ -1467,7 +1587,7 @@ export class ForegroundSession {
     const now = this.deps.monotonic.now();
     this.openPaused().forEach((paused, i) => {
       paused.code = null;
-      paused.endedBy = i === 0 ? 'reset' : 'never-ran';
+      paused.endedBy = i === 0 && paused.started ? 'reset' : 'never-ran';
       paused.endedAt = now;
       paused.onClose?.();
     });
@@ -1516,10 +1636,15 @@ export class ForegroundSession {
    */
   private noteInterrupt(text: string): void {
     if (!text.includes('\x03')) return;
-    // OQ-164: the interrupt reaches the line the shell is running — the oldest open paused call's.
+    // OQ-164: the interrupt reaches the line the shell is running — the oldest open paused call's — and the terminal discards
+    // every line the shell has not read yet, a call waiting behind it included: that call is marked too, so it looks for
+    // the end of the line ahead of it as a running call does, and reads as never having run.
     const head = this.pausedAhead[0] ?? this.pausedCommand;
-    if (head !== null) head.interrupted = true;
-    else this.active?.onInterrupt?.();
+    if (head !== null) {
+      head.interrupted = true;
+      head.interruptedAt ??= this.deps.monotonic.now();
+    }
+    this.active?.onInterrupt?.();
   }
 
   /**

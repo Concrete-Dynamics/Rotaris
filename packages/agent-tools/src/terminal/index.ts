@@ -226,8 +226,15 @@ export function earlierSentence(e: PausedEnd, polled: boolean): string {
       ? `${capital(name)} ahead of the polled one is still running, so the shell has not started the polled command yet.`
       : `This command was submitted while ${name} was still running, and that command is still running: the shell has not started this command yet, and runs it once that command ends.`;
   }
+  // The verifier's finding on OQ-164's repair: a line the terminal discarded unread never ran — no status, no wait behind it.
+  if (e.end === 'discarded') {
+    return `${capital(name)}${polled ? ' ahead of the polled one' : ''} never ran, so it has no exit code: its line was gone before the shell reached it (an interrupt (C-c) discards a line the shell has not read yet, and a command that reads its input takes it).`;
+  }
   if (polled || e.endedAfterSubmitMs === null) return `${capital(name)} ahead of the polled one ended ${seconds(e.endedAgoMs ?? 0)} ago, ${how}.`;
   if (e.endedAfterSubmitMs < 0) return `${capital(name)} had ended ${seconds(-e.endedAfterSubmitMs)} before this command was submitted, ${how}, and no poll had reported it.`;
+  // Interrupted before this command was submitted: it may have ended at the interrupt, and the product learns of it only when
+  // the shell starts a later line, so what is measured is when the shell was past it — never that this command waited.
+  if (e.interruptedBefore) return `An interrupt (C-c) had been sent to ${name} before this command was submitted; that command ended ${how}, and the shell was past its line when it started this command, ${seconds(e.endedAfterSubmitMs)} after this command was submitted.`;
   return `This command was submitted while ${name} was still running, and waited behind it: that command ended ${seconds(e.endedAfterSubmitMs)} after this command was submitted, ${how}.`;
 }
 

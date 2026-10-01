@@ -78,7 +78,16 @@ not ruled):
 - **The case the code showed is closed.** A call that soft-pauses while the earlier paused command is still running no
   longer disposes of it. The earlier call is kept ahead (`pausedAhead`), still fed its share of the stream, and the next
   observation reports its end. The new call's own pause says that the shell has not started it yet, and carries none of
-  the earlier command's output as its own.
+  the earlier command's output as its own. *(The first build's claim was true of the pause only.
+  Its verification found that a poll of the queued call handed the earlier command's output over as the queued command's
+  own. Corrected before the merge: nothing before the call's own printed start marker is its own, on any observation.)*
+- **After an interrupt, a line queued behind the interrupted one never runs**, because the terminal discards what the
+  shell has not read. The first build missed this, as its verification found: the next call carried its own marker,
+  output and end frame as the interrupted command's, and a poll after the `C-c` read "still running" over a dead command.
+  Corrected before the merge: the first later line's printed marker closes a paused call, a discarded line is reported as
+  never run with no exit code, and the poll's no-op line closes every open paused call. A call waiting behind the paused
+  command when the terminal window's interrupt comes ends at once as never run, with no reset. The detail of a call
+  submitted after the interrupt says that the interrupt came first, not that the call waited.
 - The tool description states the third move: "a new command issued meanwhile waits behind it, and its result reports
   how the paused one ended".
 
@@ -86,7 +95,11 @@ not ruled):
 it waited, and carries that command's end and output", and "… a paused command that ended unpolled is reported by the next
 command, and a second soft pause no longer loses the first one's end". The second covers the replaced-pause case: the poll
 after reads "ahead of the polled one ended … with exit code 7". Five A10 cases now read the paused command's end from the
-next call's report and keep their assertions. The live run's `terminal` scenario carries `wedge-again` and `behind-paused`
+next call's report and keep their assertions. The verification's corrections are pinned by four more real-PTY cases,
+each red on the first build: "… after C-c, a soft pause queued behind the interrupted one never ran …", "… a poll after C-c
+with a soft pause queued behind the interrupted one reads both as ended …", "… a poll of a soft pause the shell has not
+started yet hands over nothing of the earlier command's as its own", and "… the window's interrupt while a call waits
+behind a soft-paused command ends that call as never run …". The live run's `terminal` scenario carries `wedge-again` and `behind-paused`
 (`lib/terminal-shapes.mjs`, `pausedBehindReading`). Its first run (2026-10-01, the self-hosted endpoint, pack
 `.live-run/runs/2026-10-01T11-09-06-837Z` of the `fin1-termshellend` worktree) read the command issued behind the paused
 `sleep 45` as "… waited behind it: that command ended 12.5 seconds after this command was submitted, with exit code 0",

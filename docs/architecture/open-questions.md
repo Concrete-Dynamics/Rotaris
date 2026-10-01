@@ -6755,7 +6755,11 @@ collection stops there, and the echo of that call's wrapper is dropped whole. `t
 next call longer than …" and "REQ-TOOLS-127 (A10): the echo of a next call wider than the screen …" pin it. *(Since 2026-10-01 the next call that closes such
 a paused call hands it over itself, under OQ-164's reading. Its observation's detail says the paused command
 ended "with no exit status of its own", and what the command wrote follows the detail. The poll's reading above still
-holds for a poll that closes it. The A10 cases now read the hand-over from that call.)*
+holds for a poll that closes it. The A10 cases now read the hand-over from that call. A soft pause queued behind the
+interrupted one, OQ-164's arrangement, briefly re-opened this question's defect: the poll looked for the end only of the
+polled call, which is queued behind the interrupted one, and read "still running" over a dead command. It was corrected
+before its merge: the poll looks at every open paused call, its no-op line closes them all, and a line the interrupt
+discarded is reported as never run (OQ-164's reading).)*
 
 **What a ruling decides.** Which exit status and outcome that poll carries: −1 with the reason, as built; a status
 the product recovers from the shell (which would need the wrapper to carry the previous `$?`, on both backends); or a
@@ -8140,14 +8144,53 @@ for a poll nobody is prompted to make:
   carries none of the earlier command's output as its own. The earlier call is kept ahead of it, still fed its share of
   the stream, and the next observation reports its end: the poll ("… ahead of the polled one ended N seconds ago, with
   exit code X") or a later call.
-- **An interrupt reaches the oldest open paused call**, the line the shell is running. That call is closed at the next
-  line's start marker, as OQ-147's reading already closes it.
+  ~~It carries none of the earlier command's output as its own.~~ *(False of the first build, found by its verification
+  on 2026-10-01: true of the pause's own return only. A poll of the queued call before the shell had started it handed
+  the earlier command's output over as the queued command's own, beside the same text in the earlier command's report.)*
+  Nothing before the queued call's own printed start marker is its own now, on its pause, its polls, or any other outcome
+  (`unstartedShare` and `PausedCall.started` in `foreground.ts`; `CommandRegion.started` for a call still waiting). A
+  poll before the shell has started it hands over no output of its own, and its hold takes no byte before that marker.
+- ~~**An interrupt reaches the oldest open paused call**, the line the shell is running. That call is closed at the next
+  line's start marker, as OQ-147's reading already closes it.~~ *(False of the first build, found by its verification
+  on 2026-10-01. An interrupt makes the terminal discard every line the shell has not read yet, so a line queued
+  behind the interrupted one never runs and its start marker never prints. The interrupted call was closed only by the
+  next call's END frame, cut at a marker that never appeared, and the next call carried its own start marker, output and
+  end frame as the paused command's. The queued call read as abandoned by the shell, and both as having made the next
+  call wait. A poll after the interrupt looked for the end only of the polled call, which was queued behind the
+  interrupted one, so it wrote nothing and read "still running" over a dead command.)*
+  **An interrupt reaches the oldest open paused call**, the line the shell is running, and the terminal discards every
+  line queued behind it:
+  - A paused call closes at the printed start marker of ANY line written after it, whichever prints first
+    (`pausedShare`), and its capture is cut at that marker.
+  - A paused call whose own start marker never printed when a later line's did never ran, and is reported so, with no exit
+    code: "… never ran, so it has no exit code: its line was gone before the shell reached it (an interrupt (C-c)
+    discards a line the shell has not read yet, and a command that reads its input takes it)". Its poll is an
+    `execution_error` saying the same.
+  - A poll after the interrupt looks at every open paused call. When any is interrupted, its no-op line (OQ-147) goes
+    after all of them, so its printed marker closes them all.
+  - A call that was waiting behind the paused command when the terminal window's interrupt (REQ-SHELL-093) came is
+    discarded the same way. It looks for the end of the line ahead of it as a running call does (OQ-147), and ends at once
+    as never run, with no reset.
+  - A call submitted after the interrupt is not said to have waited. Its detail says that an interrupt had been sent
+    before it was submitted, how the paused command ended, and that the shell was past that line when it started this
+    command, N seconds after it was submitted.
+- **What is carried of a paused command is not counted in REQ-TOOLS-097's 100,000-character cap** on the call's own
+  output. It is bounded by the paused call's own screen, `FOREGROUND_SCREEN_LINES` rows at the session's width, once per
+  paused command reported. The cap is applied to the call's own output section alone. Whether a call's whole observation
+  should share one cap is part of this question.
 - **The tool description states the third move** beside REQ-TOOLS-098's two: "a new command issued meanwhile waits behind
   it, and its result reports how the paused one ended".
 
 The cases "REQ-TOOLS-098/179 (OQ-164): a command issued behind a still-running soft-paused one …" and "… a paused command
 that ended unpolled is reported by the next command, and a second soft pause no longer loses the first one's end" in
-`terminal/terminal.test.ts` pin this reading. Both are red on the code before it. Five A10 cases that read the paused
+`terminal/terminal.test.ts` pin this reading. Both are red on the code before it. The verification's three findings are
+pinned by four real-PTY cases, each red on the first build: "… after C-c, a soft pause queued behind the interrupted one
+never ran …", "… a poll after C-c with a soft pause queued behind the interrupted one reads both as ended …", "… a poll
+of a soft pause the shell has not started yet hands over nothing of the earlier command's as its own", and "… the
+window's interrupt while a call waits behind a soft-paused command ends that call as never run …". The pure case "…
+a paused call's share ends at the first later line's printed marker …" pins the cut over every two-chunk split. The case
+"… a soft-paused command that ends the shell ends a call waiting behind it as never run …" pins OQ-144's shell-exit case
+in this arrangement. Five A10 cases that read the paused
 command's end from a poll after the next call now read it from the next call's report. Each keeps its assertion: the
 paused command's own status, nothing of the later calls, the echo or the end frames in what is carried of it, and no
 marker anywhere.

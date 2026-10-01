@@ -41,7 +41,17 @@ root's figure.
 Pinned by: `packages/engine/src/agent-links.test.ts`, describe "engine — the run-level agent's tool-call count while its
 turn runs" — the driven case (2 while the turn runs with the total at 0; 2 again from the total once it returns) and the
 projection case (7 total, a child's 3, a live root's 2 uncounted → 6), both red before the repair (`entryToolCalls`
-undefined); `packages/ui/src/agents.test.ts` "REQ-MONITOR-044/052 (acceptance A20) …", red without the surface change
+undefined); the two cases "REQ-MONITOR-044/052: once the root's turn returns / raises and the run is still live, its
+calls are counted from the total alone, never twice" in the same describe, which hold the run live in its `iteration_end`
+hook after the root's execution is over and read 2 (3 for the root whose turn raised) where the total holds the same calls;
+and `packages/engine/src/children/children.test.ts` "REQ-MONITOR-044/052: while the rest waits for a child after the root
+returned, the run-level agent's count holds the root's calls once", which reads it in the window between the root's return
+and the end of the rest that waits for its child. Those three pin the "no call counted twice" claim: with both of `Run.turn`'s
+clearings of `rootUncountedFrom` removed the first two read 4 and 6; with only the clearing at the root's outcome removed
+the third reads 4; with only the one in `turn`'s `finally` removed the root that raised reads 6. *(Added 2026-10-01 at
+verification: the driven case alone read its post-return figure after the session had let go of the run, where no run's
+uncounted term is added whether or not it was cleared, so nothing pinned the claim.)* `packages/ui/src/agents.test.ts`
+"REQ-MONITOR-044/052 (acceptance A20) …", red without the surface change
 (0 where 2 is due); and `pnpm artifacts-proof` item 2's new meta-line assertion, which failed on a build without the
 surface change and passed with it (`running · 8s · 3 tool calls`: the root's `artifact_write` and two `delegate` calls).
 

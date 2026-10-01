@@ -56,11 +56,14 @@ export function slotPreferences(config: LoadedConfiguration): readonly SlotPrefe
     if (fromWorkspace !== undefined) return { slot, value: fromWorkspace, origin: 'workspace', thinking: thinkingRaw };
     if (fromGlobal !== undefined) return { slot, value: fromGlobal, origin: 'global', thinking: thinkingRaw };
     const resolved = config.slots[slot];
-    // REQ-CONFIG-341: a value the snapshot layer supplied is `discovered`.
-    const origin: Origin = resolved !== null && config.discoveredSlots[slot] === resolved ? 'discovered' : 'built-in';
     // REQ-CONFIG-253: a synthetic copy unwraps to the `models:` key the loader recorded it was copied from — never to another
     // key that happens to name the same provider model (REQ-CONFIG-094: two keys are two entries).
-    return { slot, value: resolved === null ? null : syntheticOriginOf(resolved, config.syntheticOrigins), origin, thinking: thinkingRaw };
+    const value = resolved === null ? null : syntheticOriginOf(resolved, config.syntheticOrigins);
+    // REQ-CONFIG-341: a value the snapshot layer supplied is `discovered`. The comparison is made against the unwrapped
+    // value: a reasoning level a file states wraps the snapshot's key in the loader's synthetic copy (REQ-CONFIG-076),
+    // and that copy still carries the value the snapshot contributed.
+    const origin: Origin = value !== null && config.discoveredSlots[slot] === value ? 'discovered' : 'built-in';
+    return { slot, value, origin, thinking: thinkingRaw };
   });
 }
 

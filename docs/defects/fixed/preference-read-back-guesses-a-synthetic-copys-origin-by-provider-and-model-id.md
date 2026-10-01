@@ -58,4 +58,4 @@ reads `small_model` back as `openai-compatible--beta/qwen` and the verifier's ef
 reading — and the live run cannot show it: one endpoint (`katalyst`) is registered, so no two keys collide.
 
 The same read-back names that slot's origin `built-in` although the discovery snapshot supplied it; recorded, not repaired
-here: [`../a-discovered-slot-with-a-reasoning-level-reads-back-as-built-in.md`](../a-discovered-slot-with-a-reasoning-level-reads-back-as-built-in.md).
+here: [`a-discovered-slot-with-a-reasoning-level-reads-back-as-built-in.md`](a-discovered-slot-with-a-reasoning-level-reads-back-as-built-in.md), since repaired (2026-10-01).

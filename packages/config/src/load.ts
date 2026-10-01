@@ -164,14 +164,21 @@ function appendIgnoreLines(file: string, existing: string, dirs: readonly string
   else appendFileSync(file, `${existing.endsWith('\n') ? '' : '\n'}${block}`, 'utf8');
 }
 
+/** Whether `path` is an existing directory; never throws. */
+const isDirectory = (path: string): boolean => { try { return statSync(path).isDirectory(); } catch { return false; } };
+/** Whether `path` is an existing regular file; never throws. */
+const isFile = (path: string): boolean => { try { return statSync(path).isFile(); } catch { return false; } };
+
 /**
  * The repository-local exclude file (`info/exclude` in the repository's common directory) of the repository whose top
  * level is `workspaceRoot`: the workspace's own `.git` — a directory, or a file naming the git directory (`gitdir: …`, a
  * linked worktree or a submodule), whose `commondir` names the shared one. Null when the workspace is not a repository's
- * top level or the pointer cannot be read. A repository that holds the workspace further down is never looked for: the
- * first execution walked up as Git does, and `config-proof`'s scratch workspace inside this checkout wrote the line into
- * the checkout's own exclude file — a write outside the workspace the user opened. Never spawns Git: the load is
- * synchronous.
+ * top level, the pointer cannot be read, or what it names is not a git directory as Git itself recognises one: the git
+ * directory holds `HEAD`, and the common directory holds `objects/` and `refs/`. A stale pointer (the repository moved or
+ * deleted) or one naming any other directory therefore yields null, and nothing outside a real repository is written.
+ * A repository that holds the workspace further down is never looked for: the first execution walked up as Git does,
+ * and `config-proof`'s scratch workspace inside this checkout wrote the line into the checkout's own exclude file — a
+ * write outside the workspace the user opened. Never spawns Git: the load is synchronous.
  */
 export function repositoryExcludeFile(workspaceRoot: string): string | null {
   const dotGit = join(resolve(workspaceRoot), '.git');
@@ -185,8 +192,10 @@ export function repositoryExcludeFile(workspaceRoot: string): string | null {
       gitDir = resolve(dirname(dotGit), pointer[1]!);
     } else return null;
   } catch { return null; }
+  if (!isDirectory(gitDir) || !isFile(join(gitDir, 'HEAD'))) return null;
   let common = gitDir;
   try { common = resolve(gitDir, readFileSync(join(gitDir, 'commondir'), 'utf8').trim()); } catch { /* no commondir: the git directory is the common one */ }
+  if (!isDirectory(join(common, 'objects')) || !isDirectory(join(common, 'refs'))) return null;
   return join(common, 'info', 'exclude');
 }
 
@@ -200,8 +209,9 @@ export function repositoryExcludeFile(workspaceRoot: string): string | null {
  * and every agent that checked its work then found a `.gitignore` change nobody had told it of (OQ-161; the live runs of
  * 2026-10-01). The reading taken under OQ-161 since 2026-10-01: the marker's directory goes to the repository-local
  * exclude file instead, which Git honours and nobody tracks, so `git status` stays clean and no file the user tracks
- * changes. Skipped when either file already names it; nothing is written unless the workspace is a repository's top
- * level. The name comes from the generated manifest (REQ-MCP-116), never a literal.
+ * changes. Skipped when either file already names it; nothing is written unless the workspace is the top level of a
+ * repository Git would recognise (`repositoryExcludeFile`), and nothing is created there but `info/` and its file. The
+ * name comes from the generated manifest (REQ-MCP-116), never a literal.
  */
 export function keepScopeDirIgnored(workspaceRoot: string): void {
   try {
@@ -223,7 +233,8 @@ function keepMarkerExcluded(workspaceRoot: string, marker: string): void {
     let existing = '';
     try { existing = readFileSync(file, 'utf8'); } catch (cause) { if ((cause as NodeJS.ErrnoException).code !== 'ENOENT') return; }
     if (ignoreLinesOf(existing).includes(marker)) return;
-    mkdirSync(dirname(file), { recursive: true });
+    // At most the `info` directory, inside a common directory `repositoryExcludeFile` found to exist: never a chain.
+    if (!isDirectory(dirname(file))) mkdirSync(dirname(file));
     appendIgnoreLines(file, existing, [marker]);
   } catch { /* best-effort: never fails the load */ }
 }

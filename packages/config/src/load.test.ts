@@ -1,10 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { canonicaliseRoles, mergeLayers, overlaySection, PLAIN_OPS } from './merge.js';
-import { loadConfiguration, readDelegationStrategy, type LoadedConfiguration } from './load.js';
+import { loadConfiguration, readDelegationStrategy, repositoryExcludeFile, type LoadedConfiguration } from './load.js';
 import { parseConfig } from './document.js';
 import { referentialMessages, renderFatal, renderProblems } from './validate.js';
 import { resolveSlotsAndReasoning, registeredAliases, resolveSlotBase, syntheticOriginOf } from './slots.js';
@@ -456,6 +456,48 @@ describe('the rest of the load', () => {
       loadConfiguration(old);
       expect(readFileSync(join(old.workspaceRoot, '.gitignore'), 'utf8')).toBe(`.rotaris/\n${marker}/\n`);
       expect(readFileSync(join(old.workspaceRoot, '.git', 'info', 'exclude'), 'utf8')).not.toContain(`\n${marker}/\n`);
+    });
+
+    it("a stale `gitdir:` pointer (the repository moved or deleted) creates nothing and writes nothing", () => {
+      const s = scopes(null, null);
+      const gone = join(tmp(), 'gone', 'repo', '.git', 'worktrees', 'ws');
+      writeFileSync(join(s.workspaceRoot, '.git'), `gitdir: ${gone}\n`);
+      loadConfiguration(s);
+      expect(existsSync(dirname(dirname(dirname(dirname(gone)))))).toBe(false);
+      expect(repositoryExcludeFile(s.workspaceRoot)).toBeNull();
+      expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('.rotaris/\n');
+    });
+
+    it('a `gitdir:` pointer to a directory that is not a git directory writes nothing into it', () => {
+      const parent = tmp();
+      const workspaceRoot = join(parent, 'ws');
+      const notARepo = join(parent, 'not-a-repo');
+      mkdirSync(join(workspaceRoot, '.rotaris'), { recursive: true });
+      mkdirSync(notARepo);
+      writeFileSync(join(notARepo, 'notes.txt'), 'not a repository\n');
+      writeFileSync(join(workspaceRoot, '.git'), 'gitdir: ../not-a-repo\n');
+      loadConfiguration({ ...scopes(null, null), workspaceRoot });
+      expect(readdirSync(notARepo)).toEqual(['notes.txt']);
+      expect(repositoryExcludeFile(workspaceRoot)).toBeNull();
+    });
+
+    it("a git directory whose `commondir` names a directory that is not one writes nothing there", () => {
+      const s = scopes(null, null);
+      git(s.workspaceRoot, 'init', '-q');
+      const elsewhere = tmp();
+      writeFileSync(join(s.workspaceRoot, '.git', 'commondir'), `${elsewhere}\n`);
+      loadConfiguration(s);
+      expect(readdirSync(elsewhere)).toEqual([]);
+      expect(repositoryExcludeFile(s.workspaceRoot)).toBeNull();
+    });
+
+    it('a repository without an `info` directory gains only that directory and its exclude file', () => {
+      const s = scopes(null, null);
+      git(s.workspaceRoot, 'init', '-q', '--template=');
+      expect(existsSync(join(s.workspaceRoot, '.git', 'info'))).toBe(false);
+      loadConfiguration(s);
+      expect(readFileSync(join(s.workspaceRoot, '.git', 'info', 'exclude'), 'utf8')).toBe(`${marker}/\n`);
+      expect(readdirSync(join(s.workspaceRoot, '.git', 'info'))).toEqual(['exclude']);
     });
   });
   it('rotaris.delegation_strategy is a separate workspace-only lookup with no validation', () => {

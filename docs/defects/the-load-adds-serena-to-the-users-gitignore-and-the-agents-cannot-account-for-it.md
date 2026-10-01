@@ -71,8 +71,12 @@ load appends `.rotaris/` alone to the workspace's `.gitignore`, the one line REQ
 marker's directory goes to the repository-local exclude file (`info/exclude` in the common directory of the repository
 whose top level is the workspace, a linked worktree's included), which Git honours and nobody tracks: `git status`
 stays clean, and no file the user tracks changes, so there is nothing left for an agent to account for. Best-effort and
-idempotent; nothing is written for a workspace below a repository's top level or in none (OQ-161 states why). Pinned by
-five cases in `load.test.ts` (`OQ-161's reading: …`) and the amended REQ-CONFIG-013 case.
+idempotent; nothing is written for a workspace below a repository's top level or in none (OQ-161 states why), nor
+through a `.git` file whose `gitdir:` names no git directory Git would recognise (a stale pointer, or one to any other
+directory), and nothing is created in the repository but `info/` and its file. Pinned by nine cases in `load.test.ts`
+(`OQ-161's reading: …`) and the amended REQ-CONFIG-013 case; the four added at verification (a stale pointer, a pointer
+to a directory that is not a repository, a `commondir` naming one, a repository without `info/`) — the first three red
+on the lookup before.
 
 **Shown in a live run.** `pnpm build`, then `live-run.mjs --confirm --skip-build --only=edit,frictions` against the
 registered `katalyst` endpoint (pack `.live-run/runs/2026-10-01T11-11-22-487Z/` of the `fin2-config-readings` worktree;

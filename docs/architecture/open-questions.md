@@ -7973,7 +7973,11 @@ changed the file: 319.4 s, 6.3 % of the run's wall time, and about 393 thousand 
 appends only `.rotaris/` to the workspace's `.gitignore` (REQ-CONFIG-013, REQ-MCP-089). The marker's directory goes to
 the repository-local exclude file instead: `info/exclude` in the common directory of the repository whose top level is
 the workspace (the workspace's own `.git`, a directory or a `gitdir:` file, then its `commondir`), without spawning Git
-(`repositoryExcludeFile`, `keepScopeDirIgnored`, `packages/config/src/load.ts`). The line is written only when neither
+(`repositoryExcludeFile`, `keepScopeDirIgnored`, `packages/config/src/load.ts`). It is written only into a git directory
+Git itself would recognise — the git directory holds `HEAD`, the common directory `objects/` and `refs/` — and nothing is
+created there but `info/` and its file: the verifier of the first execution found that a stale `gitdir:` pointer (a
+linked worktree whose repository was moved or deleted) made the load create the whole missing chain, and that a pointer
+to any other directory (a submodule copied out of its superproject) put the line into that directory. The line is written only when neither
 `.gitignore` nor the exclude file already names the directory, best-effort and idempotent, every failure swallowed, and
 nothing is removed from a `.gitignore` an earlier build amended. Git honours the exclude file and nobody tracks it, so
 `git status` stays clean and no file the user tracks changes. This is strictly narrower than the reading below and

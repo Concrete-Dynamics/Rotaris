@@ -91,18 +91,31 @@ const MARKUP = project(MARKUP_NAME);
  * workspace configuration, read through the ordinary resolution.
  */
 const STAND_IN = join(output, 'code-intelligence-stand-in.mjs');
+/**
+ * The pid a stand-in wrote to `file`, or 0 while there is none. Read as a positive integer only: an empty file read as
+ * `Number('')` is 0, and pid 0 names the proof's own process group (`process.kill(0, 0)` always succeeds), which once made
+ * a check read a stand-in as running when it had not been read at all. The stand-in writes each file whole besides.
+ */
+const pidIn = (file) => {
+  let text;
+  try { text = readFileSync(file, 'utf8').trim(); } catch { return 0; }
+  return /^[1-9]\d*$/.test(text) ? Number(text) : 0;
+};
 writeFileSync(STAND_IN, [
   "import { spawn } from 'node:child_process';",
-  "import { existsSync, writeFileSync } from 'node:fs';",
+  "import { existsSync, renameSync, writeFileSync } from 'node:fs';",
   "import { join } from 'node:path';",
   'const [group, verb, root] = process.argv.slice(2);',
   "if (group === 'project' && verb === 'create') {",
-  "  writeFileSync(join(root, '.stand-in-create.pid'), String(process.pid));",
+  '  // Each pid file is written whole (a temporary file, then a rename): a reader never sees one created and still empty.',
+  "  writeFileSync(join(root, '.stand-in-create.pid.tmp'), String(process.pid));",
+  "  renameSync(join(root, '.stand-in-create.pid.tmp'), join(root, '.stand-in-create.pid'));",
   '  // In a project carrying STUBBORN (8f) the step, and a process it starts, ignore the ask to terminate: only the force-kill ends them.',
   "  if (existsSync(join(root, 'STUBBORN'))) {",
   "    process.on('SIGTERM', () => undefined);",
   "    const pidFile = JSON.stringify(join(root, '.stand-in-descendant.pid'));",
-  "    spawn(process.execPath, ['-e', `process.on('SIGTERM', () => undefined); require('node:fs').writeFileSync(${pidFile}, String(process.pid)); setInterval(() => undefined, 1_000);`], { stdio: 'ignore' });",
+  "    const pidTmp = JSON.stringify(join(root, '.stand-in-descendant.pid.tmp'));",
+  "    spawn(process.execPath, ['-e', `process.on('SIGTERM', () => undefined); const fs = require('node:fs'); fs.writeFileSync(${pidTmp}, String(process.pid)); fs.renameSync(${pidTmp}, ${pidFile}); setInterval(() => undefined, 1_000);`], { stdio: 'ignore' });",
   '    setInterval(() => undefined, 1_000);',
   '  }',
   "  else if (!existsSync(join(root, 'SLOW'))) process.exit(0);",
@@ -680,11 +693,11 @@ try {
       }
       return true;
     };
-    const slowStarted = await waitUntil(() => startedFor('init-slow') === 1 && existsSync(join(INIT_SLOW, '.stand-in-create.pid')), 30_000);
+    const slowStarted = await waitUntil(() => startedFor('init-slow') === 1 && pidIn(join(INIT_SLOW, '.stand-in-create.pid')) > 0, 30_000);
     if (!slowStarted) {
       skip('REQ-WORKSPACE-013: a switch cancels the outgoing workspace\'s initialization run', `the first project's setup never started within 30 s, so there was no run to cancel (log tail: ${JSON.stringify(logOf(s).slice(-600))})`);
     } else {
-      const pid = Number(readFileSync(join(INIT_SLOW, '.stand-in-create.pid'), 'utf8'));
+      const pid = pidIn(join(INIT_SLOW, '.stand-in-create.pid'));
       await s.driver.command({ kind: 'workspace.choose' });
       // The switch has closed the outgoing window by the time the command answers, so the cancellation was asked before now.
       const answeredAt = Date.now();
@@ -743,7 +756,7 @@ try {
       }
       return true;
     };
-    const backgroundStarted = await waitUntil(() => startedFor() === 1 && existsSync(join(INIT_HELD, '.stand-in-create.pid')), 30_000);
+    const backgroundStarted = await waitUntil(() => startedFor() === 1 && pidIn(join(INIT_HELD, '.stand-in-create.pid')) > 0, 30_000);
     if (!backgroundStarted) {
       skip('REQ-WORKSPACE-093 / REQ-WORKSPACE-094: a refused setup start is a retryable failure', `the open's background setup never started within 30 s (log tail: ${JSON.stringify(logOf(s).slice(-600))})`);
     } else {
@@ -813,8 +826,8 @@ try {
       }
       return null;
     };
-    const lostStarted = await waitUntil(() => startedFor('init-lost') === 1 && existsSync(join(INIT_LOST, '.stand-in-create.pid')), 30_000);
-    const createPid = lostStarted ? Number(readFileSync(join(INIT_LOST, '.stand-in-create.pid'), 'utf8')) : 0;
+    const lostStarted = await waitUntil(() => startedFor('init-lost') === 1 && pidIn(join(INIT_LOST, '.stand-in-create.pid')) > 0, 30_000);
+    const createPid = lostStarted ? pidIn(join(INIT_LOST, '.stand-in-create.pid')) : 0;
     let queued = false;
     if (lostStarted) {
       await s.driver.command({ kind: 'workspace.choose', newWindow: true });
@@ -868,8 +881,8 @@ try {
       }
       return true;
     };
-    const firstStarted = await waitUntil(() => startedFor('init-two-a') === 1 && existsSync(join(INIT_TWO_A, '.stand-in-create.pid')), 30_000);
-    const pid = firstStarted ? Number(readFileSync(join(INIT_TWO_A, '.stand-in-create.pid'), 'utf8')) : 0;
+    const firstStarted = await waitUntil(() => startedFor('init-two-a') === 1 && pidIn(join(INIT_TWO_A, '.stand-in-create.pid')) > 0, 30_000);
+    const pid = firstStarted ? pidIn(join(INIT_TWO_A, '.stand-in-create.pid')) : 0;
     let queued = false;
     if (firstStarted) {
       await s.driver.command({ kind: 'workspace.choose', newWindow: true });
@@ -933,8 +946,8 @@ try {
     };
     const createFile = join(INIT_QUIT, '.stand-in-create.pid');
     const descendantFile = join(INIT_QUIT, '.stand-in-descendant.pid');
-    const running = await waitUntil(() => /mcp setup: started for [^\n]*init-quit/.test(logOf(s)) && existsSync(createFile) && existsSync(descendantFile), 30_000);
-    const pids = running ? [Number(readFileSync(createFile, 'utf8')), Number(readFileSync(descendantFile, 'utf8'))] : [];
+    const running = await waitUntil(() => /mcp setup: started for [^\n]*init-quit/.test(logOf(s)) && pidIn(createFile) > 0 && pidIn(descendantFile) > 0, 30_000);
+    const pids = running ? [pidIn(createFile), pidIn(descendantFile)] : [];
     /** Whether a process still runs: present, and not a zombie (one ended whose parent has not reaped it yet). */
     const alive = (pid) => {
       if (process.platform === 'linux') {

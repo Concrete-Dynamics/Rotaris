@@ -104,7 +104,10 @@ ran, as root under Xvfb, Node 24.
   `create` with a process of its own, both ignoring SIGTERM. It asserts the quit ends within 5000 ms through the run
   host's shutdown ending the setup, neither process running 5 s after the exit, and no warning that the close's
   cancellation could not be delivered. On the build with the call replaced by `Promise.resolve()` it failed: the quit
-  took 138 ms, the shutdown never reached the setup, and both pids were still running 5 s later.
+  took 138 ms, the shutdown never reached the setup, and both pids were still running 5 s later. On the verifier's second
+  round its stand-in writes each pid file whole (a temporary file, then a rename) and the proof reads only a positive
+  pid: a file read between its creation and its write gave pid 0, which would have made 8f skip instead of fail and 8e's
+  `process.kill(0, 0)` read a stand-in as running.
 
 **Shown by:**
 

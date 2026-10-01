@@ -78,8 +78,45 @@ export const SETUP_FOLLOW_BOUND_MS = CODE_INTELLIGENCE_SETUP_STEPS.reduce((sum, 
  */
 export const STEP_STOPPED_BY_CANCEL = 'Setup was stopped before this step finished.';
 export const STEP_STOPPED_BY_BUDGET = 'This step did not finish within its time budget.';
-const stepDetail = (s: McpSetupStatus['steps'][number]): string =>
-  s.stopped === 'cancelled' ? STEP_STOPPED_BY_CANCEL : s.stopped === 'budget' ? STEP_STOPPED_BY_BUDGET : s.detail;
+/** REQ-WORKSPACE-091: creation skipped because the runtime's marker file is present reports success with this output. */
+export const STEP_MARKER_PRESENT = 'project file already exists; left as is';
+/** REQ-WORKSPACE-091: the two stages a `non-code` workspace skips, each with its own fixed detail. */
+export const STEP_NO_CODE: Readonly<Record<string, string>> = {
+  index: 'No source files found, so there are no symbols to index.',
+  memory: 'No source files found, so no memory layout was seeded.',
+};
+/** REQ-WORKSPACE-092: "every other step's detail SHALL be the last 400 bytes of its combined standard output and standard error". */
+export const STEP_DETAIL_BYTES = 400;
+
+/**
+ * The last `bytes` bytes of `text` as UTF-8, cut where a character begins, so a character is never split (REQ-WORKSPACE-092:
+ * non-ASCII characters survive into the detail).
+ */
+export function lastUtf8Bytes(text: string, bytes: number): string {
+  const encoded = Buffer.from(text, 'utf8');
+  if (encoded.length <= bytes) return text;
+  let from = encoded.length - bytes;
+  // A UTF-8 continuation byte is 10xxxxxx: the character it belongs to began before the cut, so it is left out whole.
+  while (from < encoded.length && (encoded[from]! & 0xc0) === 0x80) from += 1;
+  return encoded.subarray(from).toString('utf8');
+}
+
+/**
+ * REQ-WORKSPACE-091/092: a setup step's detail in this domain's words, read from the facts the run host's status carries
+ * beside its own `detail` — which stays the MCP category's (REQ-MCP-099/112) and is never shown here
+ * (`docs/defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`). A stopped step and a
+ * skipped one read in the requirements' fixed sentences; every other step's detail is the last 400 bytes of its output, with
+ * no prefix, empty for a step that wrote nothing or never ran. A step whose command could not be started has no output and
+ * reads in the launch's own error (OQ-174 records that reading and the empty ones).
+ */
+const stepDetail = (s: McpSetupStatus['steps'][number]): string => {
+  if (s.stopped === 'cancelled') return STEP_STOPPED_BY_CANCEL;
+  if (s.stopped === 'budget') return STEP_STOPPED_BY_BUDGET;
+  if (s.skipped === 'marker-present') return STEP_MARKER_PRESENT;
+  if (s.skipped === 'no-code' || s.status === 'skipped-no-code') return STEP_NO_CODE[s.id] ?? '';
+  if (s.startError !== undefined) return s.startError;
+  return lastUtf8Bytes(s.output ?? '', STEP_DETAIL_BYTES);
+};
 
 /** REQ-WORKSPACE-095: the two success summaries, by classification. */
 export const CODE_INTELLIGENCE_SUCCESS_CODE = 'Code intelligence is set up for this project and its symbols are indexed.';

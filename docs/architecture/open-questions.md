@@ -8654,3 +8654,34 @@ manual compression (Part AO) runs beside the step in flight and is not a wait of
 **What a ruling decides.** Whether a wait the run imposes, and a compression's model call, are outside the stall watch
 (as built), are stalls as REQ-MONITOR-119 reads literally, or are reported in words of their own — which REQ-ORCH-139's
 vocabulary does not have — and whether the dispatch layer's retry delays are such a wait too.
+
+**OQ-174 — What is a code-intelligence setup step's detail when REQ-WORKSPACE-092's "last 400 bytes of its output" has
+nothing to give?** *(REQ-WORKSPACE-092, "every other step's detail SHALL be the last 400 bytes of its combined standard
+output and standard error"; REQ-WORKSPACE-091, "where a stage's subcommand is unavailable, that stage SHALL fail and be
+reported under REQ-WORKSPACE-093 as any other stage failure is"; REQ-WORKSPACE-093, "{reason}: {detail}"; REQ-MCP-099 and
+REQ-MCP-112, whose words for the same steps stay the MCP category's. Raised 2026-10-01 by the repair of
+[`the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`](../defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md).
+Open.)*
+
+`code-intelligence-setup`'s step rows now read in this domain's words: a stopped step in REQ-WORKSPACE-092's two fixed
+sentences, a creation the marker skipped and the two stages a `non-code` workspace skips in REQ-WORKSPACE-091's, and every
+other step in the last 400 bytes of its output, with no prefix. Three kinds of step have no output to give: a step **not
+attempted** (an earlier one failed, or the setup was cancelled between steps), a step whose command **could not be
+started** (the launch itself failed — no such file, no permission), and one that ran and **wrote nothing**, whether it
+succeeded or exited non-zero. Read literally, each detail is empty, and a failed stage's error is then "{reason}: " with
+nothing after it.
+
+**What the build proceeds under** (`apps/desktop/src/main/initialization.ts`, `stepDetail`, from the facts the run host's
+status carries beside its own `detail`: `skipped`, `output` and `startError` on `McpSetupStep`): a step not attempted and a
+step that wrote nothing have an **empty** detail — the step's status (`not-attempted`, `succeeded`, `failed`) says what
+happened. A step that could not be started reads in the **launch's own error text** (for example "spawn /opt/ci ENOENT"),
+without the run host's "the setup command could not be started: " — the nearest thing to output such a step has, and the
+only account of why the stage failed. A failed stage whose detail is empty takes the setup's final sentence as the error's
+"{detail}" ("A step failed, so the workspace is only partly set up."), as `resultOf` already did for a failed setup with no
+failed step; that sentence is the run host's (REQ-MCP-112's final outcome). The output's tail is cut where a UTF-8
+character begins, so a cut never splits one (`lastUtf8Bytes`), and it is the captured output trimmed of its leading and
+trailing blank space.
+
+**What a ruling decides.** Whether an empty detail is what REQ-WORKSPACE-092 means for these steps or each has a sentence
+of the specification's own; whether a step that could not be started reads in the launch's error, in a fixed sentence, or
+empty; and what a failed stage's "{reason}: {detail}" reads when its detail is empty.

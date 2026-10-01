@@ -413,7 +413,7 @@ workspace, by the identifier main was handed at its open, never the focused wind
 status). Main's setup port carries a refusal's code and words to the initialization coordinator, which reports it as a
 retryable failure and keeps REQ-WORKSPACE-094's "not a local launch" for the `unavailable` status alone (OQ-167;
 2026-10-01, R-067). A step stopped before it finished carries `stopped: cancelled | budget` beside the run host's own
-`detail`, from which the coordinator writes REQ-WORKSPACE-092's two fixed sentences (2026-10-01, R-067). REQ-MCP-099's three steps run in the
+`detail`, from which the coordinator writes REQ-WORKSPACE-092's two fixed sentences (2026-10-01, R-067). Beside it a step carries `skipped: marker-present | no-code` when it had no need to run, `output` (its output's trimmed tail, at most 400 characters, without the prose) when its command ran, and `startError` when its command could not be started; the coordinator writes REQ-WORKSPACE-091's fixed sentences and REQ-WORKSPACE-092's last 400 bytes from them, and the MCP category keeps `detail` (OQ-174; 2026-10-01). REQ-MCP-099's three steps run in the
 run host as children of the derived invocation (`Rotaris.exe builtin:code-intelligence -- project create <root>`, then
 `project index`, then `memories initialize`), each polled at 0.25 s on the clock port under 300 / 1800 / 120 s, asked to
 terminate then tree-killed after 5 s on cancel or timeout — on POSIX each step leads a process group of its own and the

@@ -91,6 +91,8 @@ const MARKUP = project(MARKUP_NAME);
  * workspace configuration, read through the ordinary resolution.
  */
 const STAND_IN = join(output, 'code-intelligence-stand-in.mjs');
+/** REQ-MCP-116: the runtime's marker file, as the binding manifest generated into the configuration package names it. */
+const MARKER_FILE = readFileSync(join(appDirectory, '..', '..', 'packages', 'config', 'src', 'mcp', 'code-intelligence-manifest.generated.ts'), 'utf8').match(/markerFile: '([^']+)'/)[1];
 /**
  * The pid a stand-in wrote to `file`, or 0 while there is none. Read as a positive integer only: an empty file read as
  * `Number('')` is 0, and pid 0 names the proof's own process group (`process.kill(0, 0)` always succeeds), which once made
@@ -110,14 +112,21 @@ writeFileSync(STAND_IN, [
   '  // Each pid file is written whole (a temporary file, then a rename): a reader never sees one created and still empty.',
   "  writeFileSync(join(root, '.stand-in-create.pid.tmp'), String(process.pid));",
   "  renameSync(join(root, '.stand-in-create.pid.tmp'), join(root, '.stand-in-create.pid'));",
+  '  // In a project carrying FAILS (8g) creation writes to both streams, non-ASCII included, and exits 3.',
+  "  if (existsSync(join(root, 'FAILS'))) {",
+  "    process.stdout.write('stand-in: Sprache nicht erkannt — ä\\n');",
+  "    process.stderr.write('stand-in: no language could be configured\\n');",
+  '    process.exitCode = 3;',
+  '  }',
   '  // In a project carrying STUBBORN (8f) the step, and a process it starts, ignore the ask to terminate: only the force-kill ends them.',
-  "  if (existsSync(join(root, 'STUBBORN'))) {",
+  "  else if (existsSync(join(root, 'STUBBORN'))) {",
   "    process.on('SIGTERM', () => undefined);",
   "    const pidFile = JSON.stringify(join(root, '.stand-in-descendant.pid'));",
   "    const pidTmp = JSON.stringify(join(root, '.stand-in-descendant.pid.tmp'));",
   "    spawn(process.execPath, ['-e', `process.on('SIGTERM', () => undefined); const fs = require('node:fs'); fs.writeFileSync(${pidTmp}, String(process.pid)); fs.renameSync(${pidTmp}, ${pidFile}); setInterval(() => undefined, 1_000);`], { stdio: 'ignore' });",
   '    setInterval(() => undefined, 1_000);',
   '  }',
+  "  else if (existsSync(join(root, 'SAYS'))) { process.stdout.write('stand-in: project created\\n'); process.exitCode = 0; }",
   "  else if (!existsSync(join(root, 'SLOW'))) process.exit(0);",
   '  // Asked to terminate, it takes 2 s to go: the outgoing setup is still ending when the replacement resolves.',
   "  else {",
@@ -131,12 +140,17 @@ writeFileSync(STAND_IN, [
   '}',
   '',
 ].join('\n'));
-function initProject(name, { slow = false, stubborn = false } = {}) {
+function initProject(name, { slow = false, stubborn = false, fails = false, says = false, marker = false, code = false } = {}) {
   const root = join(output, name);
   mkdirSync(join(root, '.rotaris'), { recursive: true });
   writeFileSync(join(root, 'README.md'), `# ${name}\n`);
   if (slow) writeFileSync(join(root, 'SLOW'), 'the stand-in holds project create here\n');
   if (stubborn) writeFileSync(join(root, 'STUBBORN'), 'the stand-in and a process it starts ignore the ask to terminate here\n');
+  if (fails) writeFileSync(join(root, 'FAILS'), 'the stand-in fails project create here\n');
+  if (says) writeFileSync(join(root, 'SAYS'), 'the stand-in reports its project create here\n');
+  if (code) writeFileSync(join(root, 'main.py'), 'print("hello")\n');
+  // The runtime's own per-project marker, its name read from the binding manifest (REQ-MCP-116), never written out here.
+  if (marker) { const at = join(root, ...MARKER_FILE.split('/')); mkdirSync(join(at, '..'), { recursive: true }); writeFileSync(at, 'languages: []\n'); }
   writeFileSync(join(root, '.rotaris', 'agents.yaml'), AGENTS.replace('  code_intelligence: { enabled: false }',
     `  code_intelligence: { command: ${JSON.stringify(process.execPath)}, args: [${JSON.stringify(STAND_IN)}, start-mcp-server] }`));
   return root;
@@ -149,6 +163,14 @@ const INIT_QUEUED = initProject('init-queued');
 const INIT_TWO_A = initProject('init-two-a', { slow: true });
 const INIT_TWO_B = initProject('init-two-b');
 const INIT_QUIT = initProject('init-quit', { stubborn: true });
+const INIT_FAILS = initProject('init-fails', { fails: true });
+/*
+ * The marker's project holds a source file: in a documentation-only project carrying the marker every step ends without
+ * waiting, and the coordinator never sees that setup finish
+ * (`docs/defects/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`).
+ */
+const INIT_MARKER = initProject('init-marker', { marker: true, code: true });
+const INIT_SAYS = initProject('init-says', { says: true });
 // The second window's workspace has been initialized before, so the two windows' states tell apart by `lastRun` alone;
 // its setup is still pending, as no list names it.
 writeFileSync(join(INIT_TWO_B, '.rotaris', 'agents.yaml'), `${readFileSync(join(INIT_TWO_B, '.rotaris', 'agents.yaml'), 'utf8')}initialization:\n  completed: []\n  skipped: []\n  last_run: "2026-09-01T00:00:00.000+00:00"\n  classification: code\n`);
@@ -989,6 +1011,66 @@ try {
         undelivered.length === 0 ? `no warning that a cancellation could not be delivered${/did not reach the run host at the quit/.test(log) ? ' (it was said at info, as expected at a quit)' : ''}` : `warned: ${JSON.stringify(undelivered[0].slice(0, 300))}`);
     }
     for (const pid of pids) { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 8g — the setup's step details in this domain's words (REQ-WORKSPACE-091/092/093), the run host's kept for the MCP category.
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    /*
+     * The coordinator passed the run host's own sentences through as the steps' details: "the project already exists (its
+     * marker file is present); …", "skipped: the workspace contains no file the runtime indexes" and "exited with code N;
+     * its last output: …" (`docs/defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`).
+     * Three projects: one carrying the runtime's marker (and a source file, so its other steps run), one holding
+     * documentation only whose stand-in creation reports itself, and one whose creation writes to both streams and exits 3.
+     */
+    const waitUntil = async (predicate, timeoutMs) => {
+      const began = Date.now();
+      while (!predicate()) {
+        if (Date.now() - began > timeoutMs) return false;
+        await sleep(100);
+      }
+      return true;
+    };
+    const outcome = (s) => logOf(s).match(/initialization: code-intelligence-setup → [^\n]*/)?.[0] ?? null;
+    const NO_SYMBOLS = 'No source files found, so there are no symbols to index.';
+    const NO_MEMORY = 'No source files found, so no memory layout was seeded.';
+    {
+      const s = await launch('init-marker', { workspace: INIT_MARKER });
+      const ended = await waitUntil(() => outcome(s) !== null, 30_000);
+      const read = await s.driver.command({ kind: 'initialization.read' });
+      const task = read?.value?.report?.tasks?.find((t) => t.id === 'code-intelligence-setup');
+      const details = (task?.steps ?? []).map((step) => step.detail);
+      check('REQ-WORKSPACE-091 / REQ-WORKSPACE-092: creation with the marker present reports "project file already exists; left as is", and a step that wrote nothing an empty detail',
+        ended && task?.status === 'success' && JSON.stringify(details) === JSON.stringify(['project file already exists; left as is', '', ''])
+          && /mcp setup: create succeeded — the project already exists/.test(logOf(s)),
+        `the run ${ended ? `ended: ${JSON.stringify(outcome(s))}` : 'NEVER ended'}; its step details ${JSON.stringify(details)}; the run host's own words ${/mcp setup: create succeeded — the project already exists/.test(logOf(s)) ? 'kept in its log line' : 'NOT in its log line'}`);
+    }
+    {
+      const s = await launch('init-says', { workspace: INIT_SAYS });
+      const ended = await waitUntil(() => outcome(s) !== null, 30_000);
+      const read = await s.driver.command({ kind: 'initialization.read' });
+      const task = read?.value?.report?.tasks?.find((t) => t.id === 'code-intelligence-setup');
+      const details = (task?.steps ?? []).map((step) => step.detail);
+      check('REQ-WORKSPACE-091 / REQ-WORKSPACE-092: a succeeded step reads as its output, and the two stages a non-code workspace skips read their fixed sentences',
+        ended && task?.status === 'success' && JSON.stringify(details) === JSON.stringify(['stand-in: project created', NO_SYMBOLS, NO_MEMORY])
+          && /mcp setup: index skipped-no-code — skipped: the workspace contains no file the runtime indexes/.test(logOf(s)),
+        `the run ${ended ? `ended: ${JSON.stringify(outcome(s))}` : 'NEVER ended'}; its step details ${JSON.stringify(details)}; the run host's own words ${/mcp setup: index skipped-no-code — skipped: the workspace/.test(logOf(s)) ? 'kept in its log line' : 'NOT in its log line'}`);
+    }
+    {
+      const s = await launch('init-fails', { workspace: INIT_FAILS });
+      const ended = await waitUntil(() => outcome(s) !== null, 30_000);
+      const read = await s.driver.command({ kind: 'initialization.read' });
+      const task = read?.value?.report?.tasks?.find((t) => t.id === 'code-intelligence-setup');
+      const create = task?.steps?.[0]?.detail ?? '';
+      const line = outcome(s) ?? '';
+      check('REQ-WORKSPACE-092 / REQ-WORKSPACE-093: a stage that exits non-zero reads as its output\'s tail, non-ASCII intact and with no prefix, in its row and in the error',
+        ended && task?.status === 'failure' && task?.retryable === true
+          && create.includes('Sprache nicht erkannt — ä') && create.includes('no language could be configured') && !create.includes('exited with')
+          && line.includes("→ failure — Code intelligence could not create this project's configuration: ") && !line.includes('exited with')
+          && /mcp setup: create failed — exited with code 3; its last output: /.test(logOf(s)),
+        `the run ${ended ? `ended: ${JSON.stringify(line.slice(0, 320))}` : 'NEVER ended'}; the creation row reads ${JSON.stringify(create.slice(0, 200))}; the run host's own words ${/mcp setup: create failed — exited with code 3/.test(logOf(s)) ? 'kept in its log line' : 'NOT in its log line'}`);
+    }
   }
 
   // ───────────────────────────────────────────────────────────────────────────────────────────────────────────

@@ -17,7 +17,24 @@ function workspace(): { root: string; agents: string } {
   return { root, agents: join(root, '.rotaris', 'agents.yaml') };
 }
 
-const step = (id: McpSetupStep['id'], status: McpSetupStep['status'], detail = ''): McpSetupStep => ({ id, label: id, status, detail, elapsedMs: null });
+const step = (id: McpSetupStep['id'], status: McpSetupStep['status'], detail = '', facts: Partial<McpSetupStep> = {}): McpSetupStep => ({ id, label: id, status, detail, elapsedMs: null, ...facts });
+
+/**
+ * The run host's own details and facts for a step, as `runSetupSteps` writes them (`packages/mcp/src/setup.ts`) — the
+ * MCP category's words (REQ-MCP-099/112), which this domain must not show (REQ-WORKSPACE-091/092).
+ */
+const RUN_HOST = {
+  markerPresent: (): McpSetupStep => step('create', 'succeeded', 'the project already exists (its marker file is present); creation skipped, nothing overwritten', { skipped: 'marker-present' }),
+  noCode: (id: 'index' | 'memory'): McpSetupStep => step(id, 'skipped-no-code', 'skipped: the workspace contains no file the runtime indexes', { skipped: 'no-code' }),
+  succeeded: (id: McpSetupStep['id'], output: string): McpSetupStep => step(id, 'succeeded', '', { output }),
+  exited: (id: McpSetupStep['id'], code: number, output: string): McpSetupStep => step(id, 'failed', `exited with code ${code}${output ? `; its last output: ${output.slice(-400)}` : ''}`, { output: output.slice(-400) }),
+  notStarted: (id: McpSetupStep['id'], error: string): McpSetupStep => step(id, 'failed', `the setup command could not be started: ${error}`, { startError: error }),
+  notAttempted: (id: McpSetupStep['id']): McpSetupStep => step(id, 'not-attempted', 'not attempted: an earlier step failed and this one depends on it'),
+};
+/** REQ-WORKSPACE-091's fixed sentences. */
+const MARKER_PRESENT_OUTPUT = 'project file already exists; left as is';
+const NO_SYMBOLS = 'No source files found, so there are no symbols to index.';
+const NO_MEMORY = 'No source files found, so no memory layout was seeded.';
 
 /** The run host's refusal while its one setup slot is taken (`McpHost.startSetup`). */
 const RUNNING_REFUSAL = { code: 'mcp.setup.running', reason: 'A code-intelligence setup is already running for this workspace; wait for it to finish or cancel it first.' };
@@ -167,18 +184,47 @@ describe('resolution on workspace open', () => {
     expect(h.banners).toEqual([]);
   });
 
-  /** REQ-WORKSPACE-095: the non-code summary, and REQ-WORKSPACE-091's skip token surviving into the step. */
+  /**
+   * REQ-WORKSPACE-095: the non-code summary, and REQ-WORKSPACE-091's skip token surviving into the step with its fixed
+   * sentences — chosen by the step's stage — where the run host wrote its own
+   * (`docs/defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`).
+   */
   it('summarises a documentation-only workspace in its own words', async () => {
     const h = harness();
     const run = h.coordinator.resolve(h.root, true);
     await new Promise((r) => setImmediate(r));
-    h.push(status({ state: 'finished', outcome: 'completed', containsCode: false, steps: [step('create', 'succeeded', 'made'), step('index', 'skipped-no-code', 'No source files found, so there are no symbols to index.'), step('memory', 'skipped-no-code', 'No source files found, so no memory layout was seeded.')] }));
+    const steps = [RUN_HOST.succeeded('create', 'Created project at /w'), RUN_HOST.noCode('index'), RUN_HOST.noCode('memory')];
+    h.push(status({ state: 'running', containsCode: false, steps }));
+    await settle();
+    expect(h.published.at(-1)!.report.currentSteps.map((s) => s.detail)).toEqual(['Created project at /w', NO_SYMBOLS, NO_MEMORY]);
+    h.push(status({ state: 'finished', outcome: 'completed', containsCode: false, steps }));
     await run;
     await new Promise((r) => setImmediate(r));
     const last = h.published.at(-1)!;
     expect(last.report.tasks[0]?.summary).toBe(CODE_INTELLIGENCE_SUCCESS_NON_CODE);
     expect(last.report.tasks[0]?.steps.map((s) => s.status)).toEqual(['succeeded', 'skipped-no-code', 'skipped-no-code']);
+    expect(last.report.tasks[0]?.steps.map((s) => s.detail)).toEqual(['Created project at /w', NO_SYMBOLS, NO_MEMORY]);
+    expect(JSON.stringify(h.published)).not.toContain('the workspace contains no file the runtime indexes');
     expect(readInitializationState(h.agents).classification).toBe('non-code');
+  });
+
+  /** REQ-WORKSPACE-091: creation with the marker present reports success with its fixed output, not the run host's sentence. */
+  it('reports a creation the marker skipped as "project file already exists; left as is"', async () => {
+    const h = harness();
+    const run = h.coordinator.resolve(h.root, true);
+    await new Promise((r) => setImmediate(r));
+    const steps = [RUN_HOST.markerPresent(), RUN_HOST.succeeded('index', 'Indexed 12 files'), RUN_HOST.succeeded('memory', '')];
+    h.push(status({ state: 'running', containsCode: true, steps: [steps[0]!, step('index', 'running'), step('memory', 'pending')] }));
+    await settle();
+    expect(h.published.at(-1)!.report.currentSteps[0]?.detail).toBe(MARKER_PRESENT_OUTPUT);
+    h.push(status({ state: 'finished', outcome: 'completed', containsCode: true, steps }));
+    await run;
+    await new Promise((r) => setImmediate(r));
+    const task = h.published.at(-1)!.report.tasks[0]!;
+    expect(task.status).toBe('success');
+    // REQ-WORKSPACE-092: every other step's detail is its output's tail — a silent step's is empty.
+    expect(task.steps.map((s) => s.detail)).toEqual([MARKER_PRESENT_OUTPUT, 'Indexed 12 files', '']);
+    expect(JSON.stringify(h.published)).not.toContain('marker file is present');
   });
 
   /** REQ-WORKSPACE-093 / REQ-WORKSPACE-103: a failed stage reports "{reason}: {detail}" and reaches a banner. */
@@ -186,12 +232,12 @@ describe('resolution on workspace open', () => {
     const h = harness();
     const run = h.coordinator.resolve(h.root, true);
     await new Promise((r) => setImmediate(r));
-    h.push(status({ state: 'finished', outcome: 'failed', containsCode: true, message: 'A step failed', steps: [step('create', 'succeeded', 'made'), step('index', 'failed', 'exit 1'), step('memory', 'not-attempted', '')] }));
+    h.push(status({ state: 'finished', outcome: 'failed', containsCode: true, message: 'A step failed', steps: [RUN_HOST.succeeded('create', 'made'), RUN_HOST.exited('index', 1, 'indexer: no such language'), RUN_HOST.notAttempted('memory')] }));
     await run;
     await new Promise((r) => setImmediate(r));
     const task = h.published.at(-1)!.report.tasks[0]!;
     expect(task.status).toBe('failure');
-    expect(task.error).toBe("Code intelligence could not index this project's symbols: exit 1");
+    expect(task.error).toBe("Code intelligence could not index this project's symbols: indexer: no such language");
     expect(task.summary).toBe(CODE_INTELLIGENCE_FAILED_SUMMARY);
     expect(task.retryable).toBe(true);
     // REQ-WORKSPACE-084: a failure records nothing, so the task stays pending.
@@ -234,17 +280,72 @@ describe('resolution on workspace open', () => {
     expect(JSON.stringify(h.published)).not.toContain(runHost);
   });
 
-  /** REQ-WORKSPACE-092: a step that ran to completion and exited non-zero keeps its own output, told apart from a stopped one. */
-  it('keeps a non-zero exit\'s own detail', async () => {
+  /**
+   * REQ-WORKSPACE-092: a step that ran to completion and exited non-zero reads as its output's last 400 bytes, with no
+   * prefix — told apart from a stopped one, whose fixed sentence it is not — and the run host's "exited with code N; its
+   * last output: …" stays the MCP category's (REQ-MCP-099).
+   */
+  it('reports a non-zero exit as its output\'s tail, with no prefix', async () => {
     const h = harness();
     const run = h.coordinator.resolve(h.root, true);
     await new Promise((r) => setImmediate(r));
-    h.push(status({ state: 'finished', outcome: 'failed', containsCode: true, message: 'A step failed', steps: [step('create', 'failed', 'exited with code 1; its last output: boom'), step('index', 'not-attempted'), step('memory', 'not-attempted')] }));
+    h.push(status({ state: 'finished', outcome: 'failed', containsCode: true, message: 'A step failed', steps: [RUN_HOST.exited('create', 1, 'boom'), RUN_HOST.notAttempted('index'), RUN_HOST.notAttempted('memory')] }));
     await run;
     await new Promise((r) => setImmediate(r));
     const task = h.published.at(-1)!.report.tasks[0]!;
-    expect(task.error).toBe("Code intelligence could not create this project's configuration: exited with code 1; its last output: boom");
-    expect(task.steps[0]?.detail).toBe('exited with code 1; its last output: boom');
+    expect(task.error).toBe("Code intelligence could not create this project's configuration: boom");
+    // A step never attempted wrote nothing, so its detail is empty; its status says why (OQ-174).
+    expect(task.steps.map((s) => s.detail)).toEqual(['boom', '', '']);
+    expect(JSON.stringify(h.published)).not.toContain('exited with code');
+  });
+
+  /** REQ-WORKSPACE-092: the last 400 BYTES of the output, cut where a UTF-8 character begins, its non-ASCII characters intact. */
+  it.each([
+    { name: 'a short non-ASCII output whole', output: 'Fehler: Datei ä nicht gefunden', detail: 'Fehler: Datei ä nicht gefunden' },
+    { name: 'the last 400 bytes of a longer output', output: `${'x'.repeat(380)}${'y'.repeat(20)}END`, detail: `${'x'.repeat(377)}${'y'.repeat(20)}END` },
+    // 250 two-byte characters and one ASCII: 501 bytes, the 400-byte window starting inside a character, which is dropped.
+    { name: 'no half character at the cut', output: `${'é'.repeat(250)}!`, detail: `${'é'.repeat(199)}!` },
+  ])('reports $name', async ({ output, detail }) => {
+    const h = harness();
+    const run = h.coordinator.resolve(h.root, true);
+    await new Promise((r) => setImmediate(r));
+    h.push(status({ state: 'finished', outcome: 'failed', containsCode: true, message: 'A step failed', steps: [RUN_HOST.exited('create', 2, output), RUN_HOST.notAttempted('index'), RUN_HOST.notAttempted('memory')] }));
+    await run;
+    await new Promise((r) => setImmediate(r));
+    const task = h.published.at(-1)!.report.tasks[0]!;
+    expect(task.steps[0]?.detail).toBe(detail);
+    expect(Buffer.byteLength(task.steps[0]!.detail, 'utf8')).toBeLessThanOrEqual(400);
+    expect(task.error).toBe(`Code intelligence could not create this project's configuration: ${detail}`);
+  });
+
+  /**
+   * REQ-WORKSPACE-092/093 (OQ-174): a stage that exited non-zero and wrote nothing has an empty detail, so its error's
+   * "{detail}" is the setup's final sentence, as for a failed setup with no failed step — the build's reading.
+   */
+  it('reports a silent non-zero exit with an empty step detail and the setup\'s final sentence in the error', async () => {
+    const h = harness();
+    const run = h.coordinator.resolve(h.root, true);
+    await new Promise((r) => setImmediate(r));
+    h.push(status({ state: 'finished', outcome: 'failed', containsCode: true, message: 'A step failed, so the workspace is only partly set up.', steps: [RUN_HOST.succeeded('create', ''), RUN_HOST.exited('index', 1, ''), RUN_HOST.notAttempted('memory')] }));
+    await run;
+    await new Promise((r) => setImmediate(r));
+    const task = h.published.at(-1)!.report.tasks[0]!;
+    expect(task.steps.map((s) => s.detail)).toEqual(['', '', '']);
+    expect(task.error).toBe("Code intelligence could not index this project's symbols: A step failed, so the workspace is only partly set up.");
+  });
+
+  /** REQ-WORKSPACE-091/093 (OQ-174): a stage whose command could not be started has no output; its detail is the launch's own error. */
+  it('reports a stage whose command could not be started in the launch\'s own error', async () => {
+    const h = harness();
+    const run = h.coordinator.resolve(h.root, true);
+    await new Promise((r) => setImmediate(r));
+    h.push(status({ state: 'finished', outcome: 'failed', containsCode: true, message: 'A step failed', steps: [RUN_HOST.notStarted('create', 'spawn /opt/ci ENOENT'), RUN_HOST.notAttempted('index'), RUN_HOST.notAttempted('memory')] }));
+    await run;
+    await new Promise((r) => setImmediate(r));
+    const task = h.published.at(-1)!.report.tasks[0]!;
+    expect(task.steps[0]?.detail).toBe('spawn /opt/ci ENOENT');
+    expect(task.error).toBe("Code intelligence could not create this project's configuration: spawn /opt/ci ENOENT");
+    expect(task.retryable).toBe(true);
   });
 
   /**

@@ -405,7 +405,7 @@ create this project's configuration: cancelled while running; the child was term
 was stopped before this step finished.", in 8b's outgoing run too (41 passed, 0 failed, 2 skipped; as root under Xvfb,
 Node 24, `--skip-build` after `pnpm build`). **Not shown in the built app:** the budget sentence, which needs a step held for
 its whole budget; the unit cases pin it. **Found besides:** the other step details are not this domain's words either
-(`../../defects/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`, recorded, not repaired).
+(`../../defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`, recorded, not repaired here; repaired in the fifteenth round).
 
 **Tenth round (2026-10-01, R-067): a closed workspace's failed resolution is no window's.** The sixth round's rule — nothing
 of a workspace no window holds is published or bannered (REQ-WORKSPACE-013, OQ-141) — was honoured by `publish` and by the
@@ -481,3 +481,23 @@ run's outcome and report: "… could not complete this project's setup: the run 
 reply to mcp.setup within 15000 ms)", retryable, REQ-WORKSPACE-093's summary (47 passed, 0 failed, 2 skipped; as root
 under Xvfb, Node 24, `--skip-build` after `pnpm build`, load average about 7 to 8 from other agents). The scenario was
 not run on a build of the code before; the note records what it read there on the same day.
+
+**Fifteenth round (2026-10-01): every setup step in REQ-WORKSPACE-091/092's words.** The ninth round mapped a stopped
+step's detail and left the others the run host's: a creation the marker skipped ("the project already exists (its marker
+file is present); …"), the two `skipped-no-code` stages ("skipped: the workspace contains no file the runtime indexes")
+and a non-zero exit ("exited with code N; its last output: …"), all the MCP category's sentences
+(`../../defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`). The ninth round's choice
+holds: the run host's status carries facts beside its own `detail` — `McpSetupStep.skipped` (`marker-present`, `no-code`),
+`output` (the trimmed tail of a step whose command ran, without the prose) and `startError` (a launch that failed) — and the
+runner's `stepDetail` writes REQ-WORKSPACE-091's fixed sentences and REQ-WORKSPACE-092's last 400 bytes of the output, cut
+where a UTF-8 character begins, with no prefix, in the live rows, the step rows and the error. Steps with no output to give
+read empty, a launch that failed in its own error (OQ-174). **Measured** by the unit cases, which now push the run host's
+real details and facts (eight red on the code before), and by `workspace-proof`'s new scenario 8g: a project carrying the
+marker read "project file already exists; left as is", a documentation-only one its creation's output and the two
+`skipped-no-code` sentences, and one whose creation wrote to both streams and exited 3 its output, "ä" intact, in the row
+and the error, the run host's log lines keeping its own words (50 passed, 0 failed, 2 skipped; as root under Xvfb, Node 24,
+`--skip-build` after `pnpm build`, load average about 6 from other agents). Not run on a build of the code before.
+**Found besides:** in a documentation-only project carrying the marker every step ends without waiting, and the follow
+never saw that setup finish — its run still under way 30 s later, as it would be until the 2235 s bound
+(`../../defects/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`, recorded, not repaired;
+8g's marker project holds a source file so that its steps wait).

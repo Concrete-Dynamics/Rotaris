@@ -35,6 +35,15 @@ export interface SetupStepReport {
   readonly elapsedMs: number | null;
   /** Set only on a step stopped before it finished: by the setup's cancellation, or by its exhausted budget. */
   readonly stopped?: 'cancelled' | 'budget';
+  /** Set only on a step that did not run its command because it had no need to: the marker present, or no code. */
+  readonly skipped?: 'marker-present' | 'no-code';
+  /**
+   * Set only on a step whose command ran: the end of its combined output, trimmed, at most `SETUP_OUTPUT_TAIL` characters,
+   * without `detail`'s prose — a caller that owes its own words for a step (REQ-WORKSPACE-092) reads it rather than `detail`.
+   */
+  readonly output?: string;
+  /** Set only on a step whose command could not be started: the launch's own error text. */
+  readonly startError?: string;
 }
 
 export interface SetupReport {
@@ -174,8 +183,8 @@ export async function runSetupSteps(o: RunSetupOptions): Promise<SetupReport> {
     const step = o.steps[i]!;
     if (stopped !== null) { set(i, { status: 'not-attempted', detail: stopped === 'cancelled' ? 'not attempted: the setup was cancelled before this step' : 'not attempted: an earlier step failed and this one depends on it' }); continue; }
     if (stopAsked()) { stopped = 'cancelled'; set(i, { status: 'not-attempted', detail: 'not attempted: the setup was cancelled before this step' }); continue; }
-    if (step.id === o.creationStepId && o.markerPresent) { set(i, { status: 'succeeded', detail: 'the project already exists (its marker file is present); creation skipped, nothing overwritten', elapsedMs: 0 }); continue; }
-    if (step.needsCode && !o.containsCode) { set(i, { status: 'skipped-no-code', detail: 'skipped: the workspace contains no file the runtime indexes', elapsedMs: 0 }); continue; }
+    if (step.id === o.creationStepId && o.markerPresent) { set(i, { status: 'succeeded', detail: 'the project already exists (its marker file is present); creation skipped, nothing overwritten', elapsedMs: 0, skipped: 'marker-present' }); continue; }
+    if (step.needsCode && !o.containsCode) { set(i, { status: 'skipped-no-code', detail: 'skipped: the workspace contains no file the runtime indexes', elapsedMs: 0, skipped: 'no-code' }); continue; }
     set(i, { status: 'running' });
     const started = clocks.monotonic.now();
     const env = { ...o.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' };
@@ -197,7 +206,8 @@ export async function runSetupSteps(o: RunSetupOptions): Promise<SetupReport> {
       child.stdin?.end('\n'.repeat(SETUP_STDIN_ANSWERS), 'utf8');
     } catch (cause) {
       stopped = 'failed';
-      set(i, { status: 'failed', detail: `the setup command could not be started: ${String(cause instanceof Error ? cause.message : cause)}`, elapsedMs: clocks.monotonic.now() - started });
+      const startError = String(cause instanceof Error ? cause.message : cause);
+      set(i, { status: 'failed', detail: `the setup command could not be started: ${startError}`, elapsedMs: clocks.monotonic.now() - started, startError });
       continue;
     }
     let output = '';
@@ -217,13 +227,14 @@ export async function runSetupSteps(o: RunSetupOptions): Promise<SetupReport> {
     if (exceeded || cancelled) await terminateSetupChild(child, clocks, shuttingDown() && o.shutdown !== undefined ? o.shutdown.graceMs : graceMs, env, o.shutdown);
     const elapsedMs = clocks.monotonic.now() - started;
     const tail = output.trim().slice(-SETUP_OUTPUT_TAIL);
-    if (cancelled) { stopped = 'cancelled'; set(i, { status: 'failed', detail: `cancelled while running; the child was terminated${tail ? `; its last output: ${tail}` : ''}`, elapsedMs, stopped: 'cancelled' }); continue; }
-    if (exceeded) { stopped = 'failed'; set(i, { status: 'failed', detail: `exceeded its budget of ${Math.round(step.budgetMs / 1000)} s and was terminated${tail ? `; its last output: ${tail}` : ''}`, elapsedMs, stopped: 'budget' }); continue; }
-    if (spawnError !== null) { stopped = 'failed'; set(i, { status: 'failed', detail: `the setup command could not be started: ${spawnError}`, elapsedMs }); continue; }
-    if (child.exitCode !== 0) { stopped = 'failed'; set(i, { status: 'failed', detail: `exited with ${child.signalCode ? `signal ${child.signalCode}` : `code ${child.exitCode}`}${tail ? `; its last output: ${tail}` : ''}`, elapsedMs }); continue; }
+    if (cancelled) { stopped = 'cancelled'; set(i, { status: 'failed', detail: `cancelled while running; the child was terminated${tail ? `; its last output: ${tail}` : ''}`, elapsedMs, stopped: 'cancelled', output: tail }); continue; }
+    if (exceeded) { stopped = 'failed'; set(i, { status: 'failed', detail: `exceeded its budget of ${Math.round(step.budgetMs / 1000)} s and was terminated${tail ? `; its last output: ${tail}` : ''}`, elapsedMs, stopped: 'budget', output: tail }); continue; }
+    if (spawnError !== null) { stopped = 'failed'; set(i, { status: 'failed', detail: `the setup command could not be started: ${spawnError}`, elapsedMs, startError: spawnError }); continue; }
+    if (child.exitCode !== 0) { stopped = 'failed'; set(i, { status: 'failed', detail: `exited with ${child.signalCode ? `signal ${child.signalCode}` : `code ${child.exitCode}`}${tail ? `; its last output: ${tail}` : ''}`, elapsedMs, output: tail }); continue; }
     // A step's outcome is logged by the caller's `onStep` (the run host's step reporter), never here as well:
     // PD-MONITOR-002, live-run finding a71-9 — each success had reached the application log twice.
-    set(i, { status: 'succeeded', detail: '', elapsedMs });
+    // The MCP category shows a success with no detail (REQ-MCP-112); the output travels for REQ-WORKSPACE-092's reader.
+    set(i, { status: 'succeeded', detail: '', elapsedMs, output: tail });
   }
   const outcome: SetupOutcome = stopped ?? (reports.every((r) => r.status === 'succeeded' || r.status === 'skipped-no-code') ? 'completed' : 'failed');
   return { steps: reports, outcome };

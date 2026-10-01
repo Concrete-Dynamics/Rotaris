@@ -62,4 +62,27 @@ action classifies at all, and whether the grant may change mid-iteration, are ra
   inherits the prior intent.
 - `packages/engine/src/run/run.ts:785-791` — the pre-flight before the resumed iteration, and the "Intent classified"
   row.
-- `packages/engine/src/sessions.ts:849-858` — `intentStatusOf`, which reads the launch audit only.
+- ~~`packages/engine/src/sessions.ts:849-858` — `intentStatusOf`, which reads the launch audit only.~~ Repaired
+  2026-10-01: see below.
+
+## Partly repaired: the header (2026-10-01)
+
+The header half is repaired; the rest stays open under [OQ-162](../architecture/open-questions.md), the owner's.
+
+- **Repaired.** The record's intent status (REQ-ORCH-014) is the intent in effect: the newest `run_continuation_intent`
+  entry's payload, else the launch audit's (`intentPayloadOf` in `packages/engine/src/sessions.ts`, read by both
+  `readSession`s, over `StoreDal.latestTimelineEntry` in `packages/store/src/dal.ts`). After the live run's Continue the
+  header would read the continuation's `explicit_trivial`, not the launch's fallback `moderate_feature`. Pinned by
+  `packages/engine/src/run/preflight.test.ts`, "REQ-ORCH-014 (OQ-162, live-run finding a71-3): after the Continue action
+  the status is the intent the continuation classified, not the launch's" (the launch falls back to `moderate_feature`,
+  the Continue classifies `explicit_trivial`, the last published record reads `explicit_trivial`; it fails with the
+  `readSession`s reading the launch audit alone), and "… the status reads the newest continuation intent over the launch
+  audit …"; the DAL read's query plan by `packages/store/src/store.test.ts`. OQ-162's built reading is changed in place.
+- **Open, the owner's (OQ-162).** The Continue action still classifies the last user prompt again; a successful fresh
+  classification still replaces a fallback launch intent; the new grant still reaches the resumed root in the middle of
+  its iteration (24 tools to 29 in the live run), and clause 14's fingerprint still raises
+  `resumed_under_changed_instructions` although no persona changed; the classification still adds its time (6.6 s in
+  the live run) to the Continue. Whether any of this changes is the ruling's.
+- **Not shown in the built app.** The live-run `resume` scenario that would show the header in `resume.png` was not run
+  for this repair (see the round's report).
+

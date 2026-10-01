@@ -116,7 +116,9 @@ REQ-WORKSPACE-065's "every agent built for a session sees the same catalog" hold
 
 `Run.start()` in order (REQ-SESSION-087): save `starting` → the pre-flight (intent classification through the
 small slot's rung ladder; the grant; the playbooks; the BUDGET cell) → **the plan gate's hold settled** → the
-launch audit (once per session, REQ-SESSION-138) → `run_start` timeline entry → hook trust announced → the
+launch audit (once per session, REQ-SESSION-138; a continuation's run records its payload as a
+`run_continuation_intent` timeline entry instead, and the record's intent status, REQ-ORCH-014, reads the newest of
+those, else the launch audit — `intentPayloadOf`, since 2026-10-01; OQ-162) → `run_start` timeline entry → hook trust announced → the
 effective permission posture (PD-TOOLS-002: the requested mode, never a downgrade row) → save `running` → `session_start` hooks → **the plan cycle
 if the gate holds**, otherwise the loop — for a run that resumes an open iteration, the loop, holding before its
 first new iteration if the gate would hold (PD-ORCH-003 revision 2).

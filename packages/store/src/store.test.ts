@@ -645,6 +645,25 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     r.db.close();
     forgetSpelling(r.dir);
   });
+
+  it('REQ-ORCH-014: the newest entry of one name is read under the primary key, newest first, with no sort', () => {
+    const id = mintWorkspaceId('00000000000000000000000000000092');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    const dal = new StoreDal(r.db);
+    const sid = asSessionId('S-latest');
+    dal.upsertSession({ session_id: sid, execution_status: 'idle', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    expect(dal.latestTimelineEntry(sid, 'run_continuation_intent')).toBeUndefined();
+    dal.insertTimeline(sid, 1, 't1', 'run_continuation_intent', 'rotaris', 'first', '{"n":1}', 'aaaaaaaa', 'info');
+    dal.insertTimeline(sid, 2, 't2', 'run_start', 'rotaris', 'started', '{}', 'bbbbbbbb', 'info');
+    dal.insertTimeline(sid, 3, 't3', 'run_continuation_intent', 'rotaris', 'second', '{"n":3}', 'cccccccc', 'info');
+    dal.insertTimeline(sid, 4, 't4', 'run_start', 'rotaris', 'started', '{}', 'dddddddd', 'info');
+    expect(dal.latestTimelineEntry(sid, 'run_continuation_intent')).toMatchObject({ ordinal: 3, metadata: '{"n":3}' });
+    const plan = (r.db.prepare('EXPLAIN QUERY PLAN SELECT * FROM timeline WHERE session_id = ? AND name = ? ORDER BY ordinal DESC LIMIT 1').all(sid, 'x') as { detail: string }[]).map((p) => p.detail).join(' | ');
+    expect(plan).toMatch(/PRIMARY KEY|USING INDEX sqlite_autoindex_timeline_1/);
+    expect(plan).not.toMatch(/TEMP B-TREE/);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
 });
 
 describe('store - a declared index is a claim about a query plan; the plan is asserted (spike 8)', () => {

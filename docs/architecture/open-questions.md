@@ -8091,8 +8091,15 @@ warning followed, and the header went on showing the launch's intent. The classi
 or on the message for a continue by message. The launch's category, fallback or not, is REQ-ORCH-013's prior intent. The
 result is in effect for the resumed iteration and every iteration after it, grant included (`Sessions.launchContinuation`,
 `Run.start`). The resumed root is offered the tools of the new grant, and clause 14's warning is raised when they differ
-from its fingerprint (OQ-105). The intent status the surfaces read is the launch audit's (`intentStatusOf`); a
-continuation's intent is recorded as a `run_continuation_intent` timeline entry and a transcript row.
+from its fingerprint (OQ-105). ~~The intent status the surfaces read is the launch audit's (`intentStatusOf`); a
+continuation's intent is recorded as a `run_continuation_intent` timeline entry and a transcript row.~~ A continuation's
+intent is recorded as a `run_continuation_intent` timeline entry and a transcript row, and since 2026-10-01 the intent
+status the surfaces read is the intent in effect: the newest continuation's, else the launch audit's (`intentPayloadOf`,
+`preflight.test.ts`, "REQ-ORCH-014 (OQ-162, live-run finding a71-3) …"). *Changed in place 2026-10-01 by the repair of
+the header half of the note:* REQ-ORCH-014 asks the status to convey the classified intent, and whatever the ruling below
+decides about classifying again, the intent the resumed run is using is the one in effect; the first form showed the
+launch's after a continue that had replaced it. Should the ruling keep the launch's intent across a continue, the
+continuation records that intent and the status still reads it.
 
 **What a ruling decides.** Whether the Continue action, which brings no message, classifies at all or carries the
 launch's intent and grant. Whether a resumed iteration keeps the grant it started with, so that a new classification

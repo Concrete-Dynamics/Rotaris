@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
-import { answer, DefaultAgentBackend, ScriptedModelClient, type ScriptedCall } from '@rotaris/model';
-import { intentStatusOf, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type Publisher, type ToolPort, type ToolPortContext } from '../index.js';
+import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
+import { intentPayloadOf, intentStatusOf, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type Publisher, type ToolPort, type ToolPortContext } from '../index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000c') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -31,17 +31,17 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
       playbookFor: (role) => (role === 'orchestrator' ? 'PLAYBOOK\nROUTE: routed text' : ''), budgetCell: { maxActive: 2, maxTotal: 6, maxDepth: 2 }, warnings: [],
     };
   }
-  function sessionsWith(calls: ScriptedCall[], preflight: Preflight | null, onTools?: (ctx: ToolPortContext) => void, onPreflight?: (ctx: PreflightContext) => void) {
+  function sessionsWith(calls: ScriptedCall[], preflight: Preflight | (() => Preflight) | null, onTools?: (ctx: ToolPortContext) => void, onPreflight?: (ctx: PreflightContext) => void, publisher: Publisher = NONE) {
     const client = new ScriptedModelClient(calls);
     let n = 0;
     const seen: string[] = [];
     const port: ToolPort = { specs: () => [], dispatch: async () => ({ text: '', isError: false, status: 'ok', durationMs: 0, label: '', args: {} }), cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false };
     const sessions = new Sessions({
-      clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => `P${++n}`,
+      clocks: clock, publisher, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => `P${++n}`,
       model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' } }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       tools: (ctx) => { onTools?.(ctx); return port; }, attended: () => true,
       runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' },
-      ...(preflight ? { preflight: async (ctx) => { seen.push(ctx.prompt); onPreflight?.(ctx); return preflight; } } : {}),
+      ...(preflight ? { preflight: async (ctx) => { seen.push(ctx.prompt); onPreflight?.(ctx); return typeof preflight === 'function' ? preflight() : preflight; } } : {}),
     });
     return { sessions, client, seen };
   }
@@ -86,6 +86,49 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     expect(dal.getSession(sid)).toMatchObject({ tokens_input: 50, tokens_output: 5, cost: '0.0014' });
     expect(dal.eventsOfKind(sid, 'usage.update')).toHaveLength(2);
   });
+  it('REQ-ORCH-014 (OQ-162, live-run finding a71-3): after the Continue action the status is the intent the continuation classified, not the launch\'s', async () => {
+    const fallback: Preflight = { ...preflightOf('none', 'whole_project'), intent: { category: 'moderate_feature', confidence: 0, reason: 'the classification call timed out after 12 s', fallback: true, carried_over: false } };
+    const classified: Preflight = { ...preflightOf('direct-work', 'single_file_change'), intent: { category: 'explicit_trivial', confidence: 0.92, reason: 'a one-line edit', fallback: false, carried_over: false } };
+    const answers = [fallback, classified];
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const snapshots: { intent: unknown }[] = [];
+    const publisher: Publisher = { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } };
+    const { sessions, seen } = sessionsWith([{ parts: [{ hold: held }, ...toolCalls([{ callId: 'c1', name: 'read_file', args: { path: 'README.md' } }], 'looking').parts] }, answer('done')], () => answers.shift() ?? classified, undefined, undefined, publisher);
+    const sid = (sessions.start(dal, 'C:/ws', 'fix the typo') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && dal.getSession(sid)!.execution_status !== 'running'; i++) await new Promise((r) => setTimeout(r, 5));
+    expect(snapshots.at(-1)!.intent).toMatchObject({ phase: 'classified', category: 'moderate_feature', fallback: true });
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await sessions.running(sid)!;
+    expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+    expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    // The Continue action classified the last user prompt again (OQ-162's built reading) …
+    expect(seen).toEqual(['fix the typo', 'fix the typo']);
+    expect(dal.timelineOf(sid).filter((t) => t.name === 'run_continuation_intent').map((t) => (JSON.parse(t.metadata) as { run_intent: { category: string } }).run_intent.category)).toEqual(['explicit_trivial']);
+    // … and the status shows that intent, the one in effect for the resumed iteration; the launch audit is unchanged.
+    expect(snapshots.at(-1)!.intent).toEqual({ phase: 'classified', category: 'explicit_trivial', confidence: 0.92, reason: 'a one-line edit', fallback: false, carried_over: false });
+    expect(JSON.parse(dal.getLaunchAudit(sid)!.payload)).toMatchObject({ run_intent: { category: 'moderate_feature', fallback: true } });
+    expect(intentStatusOf(dal.getSession(sid)!, intentPayloadOf(dal, sid))).toMatchObject({ phase: 'classified', category: 'explicit_trivial' });
+  });
+
+  it('REQ-ORCH-014: the status reads the newest continuation intent over the launch audit, and the launch audit where no continuation recorded one', async () => {
+    const { sessions } = sessionsWith([answer('done')], preflightOf('direct-work', 'single_file_change'));
+    const sid = (sessions.start(dal, 'C:/ws', 'fix the typo') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    const running = { execution_status: 'running' } as Parameters<typeof intentStatusOf>[0];
+    expect(intentPayloadOf(dal, sid)).toBe(dal.getLaunchAudit(sid)!.payload);
+    expect(intentStatusOf(running, intentPayloadOf(dal, sid))).toMatchObject({ category: 'single_file_change' });
+    const append = (name: string, metadata: unknown) => { const n = dal.nextTimelineOrdinal(sid); dal.insertTimeline(sid, n, `t${n}`, name, 'rotaris', name, JSON.stringify(metadata), `0000000${n}`.slice(-8), 'info'); };
+    append('run_continuation_intent', { run_intent: { category: 'question', confidence: 0.8, reason: 'r', fallback: false, carried_over: false } });
+    append('run_start', {});
+    append('run_continuation_intent', { run_intent: { category: 'exploration', confidence: 0.7, reason: 'r', fallback: false, carried_over: true } });
+    append('run_start', {});
+    expect(intentStatusOf(running, intentPayloadOf(dal, sid))).toMatchObject({ phase: 'classified', category: 'exploration', carried_over: true });
+    expect(intentPayloadOf({ getLaunchAudit: () => undefined, latestTimelineEntry: () => undefined }, 'S-none' as SessionId)).toBeNull();
+  });
+
   it('REQ-ORCH-014: classifying while starting with no audit; null for a session that never ran', () => {
     const row = { execution_status: 'starting' } as Parameters<typeof intentStatusOf>[0];
     expect(intentStatusOf(row, null)).toEqual({ phase: 'classifying' });

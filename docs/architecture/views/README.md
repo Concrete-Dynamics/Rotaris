@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**The intent status after a continue is the continuation's (REQ-ORCH-014, OQ-162).** The record's `intent` reads the
+newest `run_continuation_intent` entry's payload, else the launch audit's (`intentPayloadOf`, `sessions.ts`, over the
+new `StoreDal.latestTimelineEntry`, a read under the timeline's primary key whose plan `store.test.ts` asserts). This
+repairs the header half of `continue-classifies-the-intent-again-and-widens-the-resumed-roots-tools-mid-iteration.md`,
+whose other half stays OQ-162's. The **runtime view**'s `Run.start()` order says so. No package, edge, process, message
+kind, channel, command or store column changed.
+
 **A wait the run imposes is not a stall (REQ-MONITOR-117..119, REQ-ORCH-091, REQ-ORCH-092, REQ-ORCH-093, ADR-0060,
 OQ-173).** `StallWatch.imposedWait` (`children/stall.ts`) holds a stall watch's evaluation off the silence while the run
 holds the agent between two model steps: `resilientStep`'s backoff and suspended wait (`LadderDeps.imposedWait`) and a

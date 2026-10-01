@@ -116,9 +116,11 @@ plain process with no React and the restore run against a fake run host with a c
 - **A timeline name is a vocabulary's word** — `REQ-ORCH-139`. `tools/check-timeline-vocabulary.mjs` (in `pnpm lint`)
   reads every timeline write in the product's source — the writer's calls, a sink's `timeline`, the store's
   `insertTimeline`, main's `timeline.append` — and fails on a name in no vocabulary. Its `VOCABULARY` cites the
-  requirement fixing each word, and domain 01's list is read from the specification so the two cannot drift. **Owed:**
-  twenty-eight names the product writes have no word in any list; they are held in its `AWAITING`, a list that can only
-  shrink, by OQ-157 (since 2026-10-01, acceptance A29, R-067).
+  requirement fixing each word, and domain 01's list is read from the specification so the two cannot drift. Its
+  `FORBIDDEN` fails a name a directive withdrew though the displaced requirement still states it (PD-TOOLS-002's
+  `permission_mode_downgraded`). **Owed:** twenty-eight names the product writes have no word in any list; they are held
+  in its `AWAITING` by OQ-157 — an entry nothing writes fails the gate, and the test pins the list's names, so adding one
+  is a deliberate test edit (since 2026-10-01, acceptance A29, R-067).
 - **A whole-session update keeps the transcript rows** — `REQ-MONITOR-216` omits the transcript from it, so
   it cannot say which rows survived; the increment after an attach or a reconcile upserts by index. The
   first run loop's status saves emptied a transcript still being written before this was so (ADR-0043

@@ -8,6 +8,8 @@
  *   - VOCABULARY: every timeline name the specification fixes, each with the requirement that fixes it. Domain 01's list
  *     (Data & Formats, "Timeline event vocabulary") is read from `docs/spec/01-run-orchestration.md` as well, and a word
  *     there that is missing here fails the gate, so the two cannot drift.
+ *   - FORBIDDEN: a name a requirement still states but a product directive withdrew, with the directive that governs; a
+ *     write of it fails the gate (PD-TOOLS-002's `permission_mode_downgraded`).
  *   - AWAITING: the names the product writes that no list in `docs/spec/` or `docs/product/` has, each held by
  *     OQ-157 until the owner rules whether the specification gains a word for the fact or the fact moves to another
  *     record (the session log is OQ-76's and OQ-127's channel). The list is closed: a new name fails the gate, and an entry
@@ -36,13 +38,23 @@ export const VOCABULARY = {
   // Domain 07: run startup's and teardown's entries, the stale-session repair's, and the entry every issue writes.
   run_start: 'REQ-SESSION-087', run_end: 'REQ-SESSION-094', 'session.interrupted_recovered': 'REQ-SESSION-062', issue: 'REQ-SESSION-135',
   // Domain 05's Data & Formats ("Session evidence"), and domain 10's for the two mode events.
-  permission_approved: 'REQ-TOOLS-081', permission_mode_changed: 'REQ-SANDBOX-106', permission_mode_downgraded: 'REQ-SANDBOX-104',
+  // (REQ-SANDBOX-104's `permission_mode_downgraded` is not a word: PD-TOOLS-002 withdrew it — see FORBIDDEN.)
+  permission_approved: 'REQ-TOOLS-081', permission_mode_changed: 'REQ-SANDBOX-106',
   // Domain 06: the two checkpoint entries REQ-EVENTS-072 pairs with their events.
   checkpoint_created: 'REQ-GIT-048', checkpoint_restored: 'REQ-GIT-062',
   // Domain 09: one entry per completed hook invocation.
   hook_run: 'REQ-HOOKS-119',
   // Domain 14: the entry a materialized child report links back onto its artifact.
   artifact_published: 'REQ-LIBRARY-092',
+};
+
+/**
+ * Names a requirement once fixed and a product directive has since withdrawn, each with the directive that governs: a
+ * write of one fails the gate even though the displaced requirement still states it, and none may be a word or AWAITING.
+ */
+export const FORBIDDEN = {
+  // PD-TOOLS-002: "There are no downgrade artifacts: no `permission_mode_downgraded` timeline event" (narrows REQ-SANDBOX-104/110).
+  permission_mode_downgraded: 'PD-TOOLS-002',
 };
 
 /**
@@ -158,7 +170,7 @@ export function specVocabulary(root) {
 }
 
 /** The offending writes, the AWAITING and PASS_THROUGH entries that excuse nothing, and spec words missing here. */
-export function checkProduct(root, vocabulary = VOCABULARY, awaiting = AWAITING, passThrough = PASS_THROUGH) {
+export function checkProduct(root, vocabulary = VOCABULARY, awaiting = AWAITING, passThrough = PASS_THROUGH, forbidden = FORBIDDEN) {
   const problems = [];
   const written = new Set();
   const usedPass = new Set();
@@ -172,6 +184,10 @@ export function checkProduct(root, vocabulary = VOCABULARY, awaiting = AWAITING,
         continue;
       }
       written.add(w.name);
+      if (Object.hasOwn(forbidden, w.name)) {
+        problems.push(`${rel}:${w.line}: '${w.name}' is withdrawn by ${forbidden[w.name]} — no timeline event of that name may be written`);
+        continue;
+      }
       if (Object.hasOwn(vocabulary, w.name) || Object.hasOwn(awaiting, w.name)) continue;
       problems.push(`${rel}:${w.line}: '${w.name}' is in no timeline vocabulary (REQ-ORCH-139)`);
     }
@@ -179,6 +195,7 @@ export function checkProduct(root, vocabulary = VOCABULARY, awaiting = AWAITING,
   const stale = [
     ...Object.keys(awaiting).filter((name) => !written.has(name)).map((name) => `AWAITING '${name}' is written nowhere — remove it, and say so in OQ-157`),
     ...Object.keys(awaiting).filter((name) => Object.hasOwn(vocabulary, name)).map((name) => `AWAITING '${name}' is a word of the vocabulary — remove it from AWAITING`),
+    ...Object.keys(forbidden).filter((name) => Object.hasOwn(vocabulary, name) || Object.hasOwn(awaiting, name)).map((name) => `FORBIDDEN '${name}' (${forbidden[name]}) is also a word or AWAITING — remove it there`),
     ...passThrough.filter((_, i) => !usedPass.has(i)).map((p) => `${p.file}: PASS_THROUGH \`${p.expression}\` matches nothing — remove it`),
   ];
   const spec = specVocabulary(root);

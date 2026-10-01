@@ -7768,10 +7768,15 @@ one mechanism each. Raised 2026-10-01 under [R-067](../product/requests.md#r-067
 acceptance finding A29. Open.)*
 
 REQ-ORCH-139 closes the names of timeline events and of issues to the vocabularies of domain 01's Data & Formats and the
-words other domains fix (domain 07's `run_start`, `run_end`, `session.interrupted_recovered` and `issue`; domain 05's and
-domain 10's permission entries; domain 06's two checkpoint entries; domain 09's `hook_run`; domain 14's
-`artifact_published`). **Where a vocabulary has the word for the fact, the repair used it:** the ladder's same-tier change
-writes `quota_fallback_model` and the `quota_fallback` issue (REQ-NOTIFY-090's "timeline entry for a quota-driven model
+words other domains fix (domain 07's `run_start`, `run_end`, `session.interrupted_recovered` and `issue`; domain 05's
+`permission_approved` and domain 10's `permission_mode_changed`; domain 06's two checkpoint entries; domain 09's
+`hook_run`; domain 14's `artifact_published`). Domain 10's other permission entry, REQ-SANDBOX-104's `permission_mode_downgraded`, is not a
+word: `PD-TOOLS-002` withdrew it ("no `permission_mode_downgraded` timeline event"), so the gate holds it in `FORBIDDEN`,
+citing the directive, and fails a write of it. *(Corrected 2026-10-01 at verification: this paragraph first counted
+"domain 05's and domain 10's permission entries" as words, and the gate's `VOCABULARY` accepted the withdrawn one, citing
+the requirement the directive displaced.)*
+
+**Where a vocabulary has the word for the fact, the repair used it:** the ladder's same-tier change writes `quota_fallback_model` and the `quota_fallback` issue (REQ-NOTIFY-090's "timeline entry for a quota-driven model
 change"; REQ-NOTIFY-082's "usage limit" covers a rate limit too, and the metadata's `condition` still says which), its
 unresponsive-model fallback writes `llm_unresponsive` as both entry and issue (REQ-ORCH-090's "a timeline event and an
 issue"), and the children's hard-timeout retry writes `fallback_model` and the `timeout_fallback` issue (REQ-ORCH-088 —
@@ -7810,8 +7815,9 @@ Two readings were weighed for the twenty-eight:
 
 **What the build proceeds under:** the names stay as they are written, and the list is closed.
 `tools/check-timeline-vocabulary.mjs`, in `pnpm lint`, reads every timeline write in the product's source and fails on a
-name that is neither a vocabulary's word nor in `AWAITING`; an `AWAITING` entry nothing writes fails it too, so the list
-can only shrink as rulings land, and domain 01's list is read from the specification so the two cannot drift. Until a
+name that is neither a vocabulary's word nor in `AWAITING`, and on a `FORBIDDEN` name; an `AWAITING` entry nothing writes
+fails it too, and its test pins the list's names, so the list shrinks as rulings land and grows only by a deliberate test
+edit, and domain 01's list is read from the specification so the two cannot drift. Until a
 ruling, the twenty-eight are a recorded departure from REQ-ORCH-139's "MUST NOT", kept open in the note this question was
 raised by.
 

@@ -45,8 +45,10 @@ entry and issue (was `unresponsive_model_fallback` and `unresponsive_model`); th
 the old names) and by `apps/desktop/scripts/resilience-proof.mjs`, which reads the three in the built app.
 
 **The vocabulary is now closed in the source.** `tools/check-timeline-vocabulary.mjs`, run by `pnpm lint`, reads every
-timeline write in the product's source and fails on a name in no vocabulary; domain 01's list is read from the
-specification so the two cannot drift. Its test (`tools/check-timeline-vocabulary.test.ts`) fails on the old code.
+timeline write in the product's source and fails on a name in no vocabulary, and on `permission_mode_downgraded`, which
+REQ-SANDBOX-104 still states but `PD-TOOLS-002` withdrew (its `FORBIDDEN`); domain 01's list is read from the
+specification so the two cannot drift. Its test (`tools/check-timeline-vocabulary.test.ts`) fails on the old code, pins
+`AWAITING`'s names, and checks that each other domain's word is stated by the requirement cited for it.
 
 **Not repaired: twenty-eight names** with no word in any list, held by the gate's `AWAITING` and raised as
 [OQ-157](../architecture/open-questions.md) — whether the specification gains their words or the facts move to another

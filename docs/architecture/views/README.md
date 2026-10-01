@@ -45,6 +45,17 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**Every backend task and phase id is 8 lowercase hexadecimal characters (REQ-CHAT-089, REQ-CHAT-040).** `mintTodoId`
+(`run/todo.ts`) mints each, unique within the todo and among the task ids the session's iterations recorded: the first
+run's task (was `<session>:main:1`), a continue's (`continuedTaskId`, was `<session>:continued:<n>`), a queued prompt's
+(`Run.consumeQueued`, was the prompt's UUID — the prompt is found by its task's name and the `prompt_triggered` entry),
+and a todo edit's added task (the id a request sends is no longer recorded). A planner phase gains an optional `id`
+(`Phase.id`), minted where `Todo` creates the phase; the plan shows it (`projectPlannerTodo`), and an edit names a phase by
+it or, for a phase an earlier build created with none, by its name. Records under the old forms read back unchanged.
+This repairs `a-queued-prompts-task-id-is-not-eight-hex-characters.md`; `part-j-proof`'s queue scenario asserts it. The
+**runtime view**'s loop diagram and §2 iteration paragraph say so. No package, edge, process, message kind, channel,
+command or store column changed (the todo column's JSON gains the phase's `id`).
+
 **A later run's teardown no longer re-arms the crash record's ring settle over an earlier parked run's rows
 (REQ-MONITOR-105, REQ-MONITOR-228, REQ-SESSION-129, REQ-ORCH-153, REQ-ORCH-087, ADR-0024, OQ-170).** `Sessions` keeps, per
 live session, every run of this process that parked without closing its tool ports (`Live.portsOpen`); a continue passes

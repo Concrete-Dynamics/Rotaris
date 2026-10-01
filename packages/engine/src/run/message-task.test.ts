@@ -94,7 +94,7 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'succeeded']]);
     // Its id is a continued prompt's own, never the resumed iteration's task id.
     const [own, message] = tasksOf(sid);
-    expect(message!.id).toBe(`${sid}:continued:2`);
+    expect(message!.id).toMatch(/^[0-9a-f]{8}$/);
     expect(message!.id).not.toBe(own!.id);
   });
 
@@ -421,5 +421,37 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     // REQ-ORCH-004: the message is a new request, appended beside the pending one — unlike the Continue action's restatement.
     expect(shape(sid)).toEqual([['first', 'complete', undefined], ['first', 'complete', undefined]]);
     expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'cancelled'], [2, 'succeeded'], [3, 'succeeded']]);
+  });
+
+  /*
+   * REQ-CHAT-089 (the repair of a-queued-prompts-task-id-is-not-eight-hex-characters.md): every task id the backend
+   * assigns is 8 lowercase hexadecimal characters, fixed when the task is created — the first run's task, a queued prompt's
+   * task and a continue's task alike, each unique within the todo. The queued prompt stays traceable by its name and by the
+   * `prompt_triggered` timeline entry, which carries its full id.
+   */
+  it('every task and phase id a run appends is 8 lowercase hexadecimal characters: the first run\'s, a queued prompt\'s and a continue\'s (REQ-CHAT-089)', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const { sessions } = sessionsWith([{ parts: [{ hold }, ...answer('first, done').parts] }, answer('queued, done'), answer('second, done')]);
+    const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    const queued = sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'then this' } });
+    const promptId = queued.ok ? queued.value! : '';
+    expect(promptId).toHaveLength(36);
+    release();
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(sessions.prompt(sid, 'second').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const tasks = tasksOf(sid);
+    expect(tasks.map((t) => [t.text, t.name])).toEqual([['first', undefined], ['then this', `Queued Prompt: ${promptId.slice(0, 8)}`], ['second', undefined]]);
+    for (const t of tasks) expect(t.id).toMatch(/^[0-9a-f]{8}$/);
+    expect(new Set(tasks.map((t) => t.id)).size).toBe(tasks.length);
+    // And every phase the backend created carries an id of the same form, the plan's id for it (REQ-CHAT-089).
+    const phases = decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases;
+    expect(phases.map((p) => p.name)).toEqual(['main', 'Queued Prompts', 'Continued Prompts']);
+    for (const p of phases) expect(p.id).toMatch(/^[0-9a-f]{8}$/);
+    expect(new Set([...phases.map((p) => p.id), ...tasks.map((t) => t.id)]).size).toBe(phases.length + tasks.length);
+    // Each iteration names the task it took by that id; the prompt is found by the timeline entry its trigger wrote.
+    expect(dal.iterationsOf(sid).map((r) => r.todo_task_id)).toEqual(tasks.map((t) => t.id));
+    expect(dal.timelineOf(sid).some((e) => e.name === 'prompt_triggered' && (JSON.parse(e.metadata) as { prompt_id?: string }).prompt_id === promptId)).toBe(true);
   });
 });

@@ -35,7 +35,7 @@ export function isAgentTodoDocument(value: unknown): value is AgentTodoDocument 
 
 export function isPlannerTodoDocument(value: unknown): value is TodoDocument {
   const phases = phasesOf(value);
-  return phases !== null && phases.every((phase) => object(phase) && typeof phase['name'] === 'string' && Array.isArray(phase['tasks'])
+  return phases !== null && phases.every((phase) => object(phase) && typeof phase['name'] === 'string' && (phase['id'] === undefined || typeof phase['id'] === 'string') && Array.isArray(phase['tasks'])
     && phase['tasks'].every((task) => object(task) && typeof task['id'] === 'string' && typeof task['text'] === 'string' && typeof task['state'] === 'string'
       && (task['name'] === undefined || typeof task['name'] === 'string')));
 }
@@ -92,7 +92,8 @@ export function projectPlannerTodo(document: TodoDocument): TaskPlan {
   return {
     source: 'planner', ownerId: null, sourceLabel: 'Planner plan',
     phases: document.phases.map((phase, phaseIndex) => ({
-      id: phase.name || `phase-${phaseIndex + 1}`,
+      // REQ-CHAT-089: the phase's backend id; a phase an earlier build created carries none and is known by its name.
+      id: phase.id ?? (phase.name || `phase-${phaseIndex + 1}`),
       name: phase.name,
       tasks: phase.tasks.map((task, taskIndex) => ({
         id: task.id || `${phase.name || `phase-${phaseIndex + 1}`}-task-${taskIndex + 1}`,

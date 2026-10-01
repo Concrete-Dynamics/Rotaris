@@ -64,6 +64,14 @@ describe('a named planner task (REQ-CHAT-040, REQ-ORCH-071)', () => {
     expect(todoLinesFromStored(JSON.stringify(planner))).toEqual(['[done] main — first task', '[open] Queued Prompts — Queued Prompt: 0123abcd: then do this']);
   });
 
+  it('REQ-CHAT-089: the plan shows a phase by its backend id, and a phase an earlier build created with none by its name; the stored document with ids reads back as a planner document', () => {
+    const withIds = { ...planner, phases: [{ ...planner.phases[0]!, id: '0a1b2c3d' }, planner.phases[1]!] };
+    expect(projectPlannerTodo(withIds).phases.map((p) => p.id)).toEqual(['0a1b2c3d', 'Queued Prompts']);
+    expect(isPlannerTodoDocument(withIds)).toBe(true);
+    expect(isPlannerTodoDocument({ ...planner, phases: [{ ...planner.phases[0]!, id: 7 }] })).toBe(false);
+    expect(decodeStoredTodo(JSON.stringify(withIds)).planner).toEqual(withIds);
+  });
+
   it('a stored name that is not a string is not a planner document', () => {
     expect(isPlannerTodoDocument(planner)).toBe(true);
     expect(isPlannerTodoDocument({ ...planner, phases: [{ name: 'main', tasks: [{ id: 'a', text: 't', state: 'pending', name: 7 }] }] })).toBe(false);

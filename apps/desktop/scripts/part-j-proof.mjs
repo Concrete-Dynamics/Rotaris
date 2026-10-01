@@ -134,7 +134,11 @@ await launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PR
     const sent = db.prepare("SELECT body FROM agent_messages WHERE session_id = ? AND task_id = ? AND kind = 'message' ORDER BY seq").all(session.session_id, taskId).map((r) => JSON.parse(r.body)).find((m) => m.role === 'user');
     return sent ? sent.content.filter((c) => c.kind === 'text').map((c) => c.text).join('\n') : '';
   };
-  const sent = iterations.map((i) => ({ iteration: i.iteration, queued: i.todo_task_id === prompts[0]?.prompt_id, first: firstUser(i.root_task_id) }));
+  // REQ-CHAT-089: the queued prompt's task carries the backend's own id, so the iteration that took it up is known by that
+  // id (the `prompt_triggered` timeline entry carries the prompt's).
+  const queuedTaskId = JSON.parse(session.todo).phases.find((p) => p.name === 'Queued Prompts')?.tasks[0]?.id;
+  const sent = iterations.map((i) => ({ iteration: i.iteration, queued: i.todo_task_id === queuedTaskId, first: firstUser(i.root_task_id) }));
+  const triggered = db.prepare("SELECT metadata FROM timeline WHERE session_id = ? AND name = 'prompt_triggered'").all(session.session_id).map((r) => JSON.parse(r.metadata).prompt_id);
   db.close();
   if (session.execution_status !== 'completed' || session.iterations_completed < 2) throw new Error(`the queued run did not complete two iterations: ${JSON.stringify(session)}`);
   if (prompts.length !== 1 || prompts[0].content !== 'and then this' || prompts[0].status !== 'TRIGGERED') throw new Error(`the queued prompt was not consumed exactly once: ${JSON.stringify(prompts)}`);
@@ -144,6 +148,13 @@ await launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PR
   // REQ-CHAT-040 / REQ-ORCH-071 (acceptance A28): the task is NAMED "Queued Prompt: <first 8 characters of the prompt id>"
   // and carries the prompt text as its content.
   if (phase.tasks[0].name !== `Queued Prompt: ${prompts[0].prompt_id.slice(0, 8)}` || phase.tasks[0].text !== 'and then this') throw new Error(`the queued prompt's task is not named "Queued Prompt: <id>" with the prompt as its content: ${JSON.stringify(phase.tasks[0])}`);
+  // REQ-CHAT-089 (the repair of a-queued-prompts-task-id-is-not-eight-hex-characters.md): every task and phase id
+  // the backend assigned is 8 lowercase hexadecimal characters — the queued prompt's task's no longer its prompt's UUID —
+  // and the prompt is still found, by the timeline entry its trigger wrote.
+  const hex = /^[0-9a-f]{8}$/;
+  const malformed = todo.phases.flatMap((p) => [p.id, ...p.tasks.map((t) => t.id)]).filter((id) => !hex.test(id));
+  if (malformed.length > 0) throw new Error(`a backend task or phase id is not 8 lowercase hexadecimal characters: ${JSON.stringify(malformed)} in ${session.todo}`);
+  if (triggered.length !== 1 || triggered[0] !== prompts[0].prompt_id) throw new Error(`the queued prompt's trigger is not on the timeline with its id: ${JSON.stringify(triggered)}`);
   const took = sent.filter((s) => s.queued);
   if (took.length !== 1 || !took[0].first.startsWith('first task') || !took[0].first.endsWith('\n\nand then this')) throw new Error(`the iteration that took the queued prompt up was not sent it: ${JSON.stringify(sent)}`);
   if (sent.some((s) => !s.queued && s.first.includes('and then this'))) throw new Error(`an iteration whose task is the launch prompt was sent the queued prompt: ${JSON.stringify(sent)}`);

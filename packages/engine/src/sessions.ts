@@ -40,7 +40,7 @@ import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentS
 import type { PlanDecision, PlanGatePayload, ResumablePayload } from '@rotaris/contracts';
 import { SupervisorRegistry, type LoopClassifier, type SupervisorConfig } from './run/supervisor.js';
 import { meteredBackend, type CountUsage } from './run/metered.js';
-import { taskTitle, Todo, type TodoDocument } from './run/todo.js';
+import { mintTodoId, taskTitle, Todo, type TodoDocument } from './run/todo.js';
 import type { PersonaResolver } from './children/personas.js';
 import type { AgentActivity } from './children/activity.js';
 import type { ModelRef, ThinkingLevel } from '@rotaris/model';
@@ -492,16 +492,16 @@ function previousIntent(dal: StoreDal, sessionId: SessionId): IntentCategory | n
 
 /**
  * REQ-ORCH-004's appended task, and the repair of a-crashed-iteration-number-is-reused-by-the-next-run (PD-ORCH-005): the
- * id a continuation gives the task it appends. A run host that died mid-iteration leaves the stored count behind the
- * iteration rows, so the number is taken past both; and since the dead iteration's task goes back to `pending` and is
- * selected again, the id also steps past every id the todo already holds, so the new prompt never shares one with it.
+ * id a continuation gives the task it appends. REQ-CHAT-089: 8 lowercase hexadecimal characters (the repair of
+ * a-queued-prompts-task-id-is-not-eight-hex-characters.md; this was `<session>:continued:<n>`). A run host that
+ * died mid-iteration leaves the dead iteration's task to go back to `pending` and be selected again, so the id is unique
+ * among every id the todo already holds and every task id an iteration recorded, and the new prompt never shares one
+ * with it. A record written under the old form reads back unchanged: an id is compared, never parsed.
  */
 function continuedTaskId(dal: StoreDal, sessionId: SessionId, todo: TodoDocument | undefined): string {
-  const taken = new Set((todo?.phases ?? []).flatMap((phase) => phase.tasks.map((task) => task.id)));
-  const rows = dal.iterationsOf(sessionId);
-  let n = Math.max(dal.getSession(sessionId)?.iterations_completed ?? 0, rows.at(-1)?.iteration ?? 0) + 1;
-  while (taken.has(`${sessionId}:continued:${n}`)) n += 1;
-  return `${sessionId}:continued:${n}`;
+  const taken = new Set((todo?.phases ?? []).flatMap((phase) => [...(phase.id === undefined ? [] : [phase.id]), ...phase.tasks.map((task) => task.id)]));
+  for (const r of dal.iterationsOf(sessionId)) taken.add(r.todo_task_id);
+  return mintTodoId(taken);
 }
 
 /**
@@ -1291,7 +1291,7 @@ export class Sessions {
     const preflight = this.deps.preflight;
     const slots = this.modelSlotsFor(sessionId, dal, runRef);
     const run = new Run({
-      sessionId, workspaceRoot, effectiveRoot, task: prompt, taskContent: [...(prompt === '' ? [] : [{ kind: 'text' as const, text: prompt }]), ...storedAttachments.content], taskId: `${sessionId}:main:1`, writer, owner, bus: this.bus, clocks: this.deps.clocks,
+      sessionId, workspaceRoot, effectiveRoot, task: prompt, taskContent: [...(prompt === '' ? [] : [{ kind: 'text' as const, text: prompt }]), ...storedAttachments.content], taskId: mintTodoId(new Set()), writer, owner, bus: this.bus, clocks: this.deps.clocks,
       ...(setup.value.personas ? { personas: setup.value.personas } : {}),
       ...(setup.value.models ? { models: setup.value.models } : {}),
       // REQ-WORKSPACE-060 (ADR-0063): the session's always-active context units, as a getter the run calls at
@@ -1853,7 +1853,8 @@ export class Sessions {
       } else {
         if (decoded.planner === null) return { ok: false };
         const planner = Todo.fromDocument(decoded.planner);
-        const nextId = op === 'add' ? mint() : id;
+        // REQ-CHAT-089: an added task takes the backend's id, unique within the todo and the iterations' records.
+        const nextId = op === 'add' ? mintTodoId(new Set([...planner.ids(), ...s.dal.iterationsOf(s.writer.sessionId).map((r) => r.todo_task_id)])) : id;
         if (!planner.editTask(op, nextId, body, phaseId)) return { ok: false };
         assigned = op === 'add' ? nextId : undefined;
         if (!s.writer.save(stored.execution_status, { todo: encodeStoredTodo({ ...decoded, planner: planner.toDocument() }) }).ok) return { ok: false };

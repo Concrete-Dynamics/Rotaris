@@ -193,7 +193,7 @@ refusals answer it.
 flowchart TB
   L0["loop head"] --> S1{"stop requested?<br/>pause requested?"}
   S1 -- yes --> T["teardown(reason)"]
-  S1 -- no --> Q["consumeQueued():<br/>every QUEUED prompt → TRIGGERED (one conditional update),<br/>a task in phase 'Queued Prompts',<br/>named 'Queued Prompt: ' + the id's first 8 characters,<br/>the prompt text its content (REQ-CHAT-040),<br/>supervisor.noteUserInstruction()"]
+  S1 -- no --> Q["consumeQueued():<br/>every QUEUED prompt → TRIGGERED (one conditional update),<br/>a task in phase 'Queued Prompts',<br/>named 'Queued Prompt: ' + the id's first 8 characters,<br/>under a task id of its own, 8 lowercase hex (REQ-CHAT-089),<br/>the prompt text its content (REQ-CHAT-040),<br/>supervisor.noteUserInstruction()"]
   Q --> S2{"stopCondition:<br/>allTasksComplete · iteration limit ·<br/>time limit · no pending tasks"}
   S2 -- reason --> T
   S2 -- keep going --> I["iterate(): selectNext task → in_progress<br/>iteration.start event"]
@@ -406,8 +406,12 @@ and attempts that iteration's one
 checkpoint capture (REQ-GIT-051, no child credited; its hooks' `iteration_end` is not fired — the hooks that saw it
 begin were the dead run's): the task it held goes back to `pending` (`Todo.reopen`) in the close's transaction, and the count moves past it, so
 the run's own first iteration takes the next number rather than the dead one's. The count is also never below the
-highest iteration recorded closed, and a continuation's appended task id is numbered past the count, the highest row
-and every id the todo holds (`continuedTaskId`). The ledger
+highest iteration recorded closed, and a continuation's appended task id is 8 lowercase hexadecimal characters unique
+among every id the todo holds and every task id an iteration recorded (`continuedTaskId`, REQ-CHAT-089; it was
+`<session>:continued:<n>`, and a record under that form, or the first run's `<session>:main:1`, reads back unchanged —
+an id is compared, never parsed). Every task and phase id the backend assigns takes that form (`mintTodoId`,
+`run/todo.ts`): the first run's task, a queued prompt's, a todo edit's added task and each phase `Todo` creates; a phase
+an earlier build created carries none and the plan shows it by its name. The ledger
 holds its own root's tree, walked from the root through the parent links, rather than every child with its iteration's
 number — every plan cycle is numbered 0. Root and child task ids are minted against every child's, every recorded
 root's and every recorded conversation's id in the session (`takenTaskIds`), since the record is keyed by task id

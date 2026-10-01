@@ -644,8 +644,13 @@ renderer errors, then writes its result table under `.proof/theme-proof/`. Since
 only from its on-screen part: its box cut by the window and by every ancestor that clips it. A text with less than one
 em on screen is reported as skipped, with its size, and is not measured (`apps/desktop/scripts/lib/text-sample.mjs`).
 Before that, a status-strip item scrolled 1.2 px onto the screen was read as a glyph's edge
-(`../defects/fixed/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`). Two counterfactual commands lower text or
-focus contrast and must exit non-zero. The first execution and its coverage boundary are
+(`../defects/fixed/theme-proofs-text-contrast-verdict-depends-on-the-checkouts-path.md`). Since 2026-10-01 the contrast
+verdict is bounded by what it measured (`apps/desktop/scripts/lib/contrast-coverage.mjs`): every capture needs at least
+one measured text inside its own surface (the view's root, or the Settings view's) and at most 25% of that surface's
+texts skipped, and the run at most 10% of all its texts skipped; the skips are counted by reason. Before, a surface whose
+own text was gone passed on the shell around it
+(`../defects/fixed/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md`). Three counterfactual commands
+lower text or focus contrast, or push the Workspace view off the screen, and must exit non-zero. The first execution and its coverage boundary are
 `spikes/theme-proof.md`.
 
 **The loop supervisor and `continue`.** `packages/engine/src/run/supervisor.ts` (ADR-0059) and
@@ -1214,7 +1219,10 @@ card and injected; Pause then the composer's Continue run leave the pause row an
 sampling the store while the app runs shows the pause released the lock and the continued run held it throughout
 (ADR-0005, 2026-09-29, R-067) and the paused session's summary naming no stop (REQ-ORCH-082 rule 1, OQ-118); a steer
 submitted while the entry role's step is held, then a pause, reaches the root's record at the rest, injected once, and
-the Continue's resumed root reads it (REQ-MONITOR-134, OQ-128, 2026-09-29, R-067); a `message_limit`
+the Continue's resumed root reads it (REQ-MONITOR-134, OQ-128, 2026-09-29, R-067) — since 2026-10-01 its Pause
+waits for the steer dialog to close (`apps/desktop/scripts/lib/steer-rest.mjs`, the capture grammar's `@from~ms`), the
+launch fails by name on a step it never pressed, and the store must show the steer pending when the pause was asked for
+(`../defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`); a `message_limit`
 of one pauses the run, the dialog answers "double" and the doubled limit persists; a session left paused at the limit
 is resumed on relaunch through the one reap and its dialog answers "cancel"; a user-initiated close during a run
 records `application_shutdown` with the terminal pair and no lock. Its evidence lands under `.proof/part-j-proof/`. The queue

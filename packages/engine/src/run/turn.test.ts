@@ -510,6 +510,27 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
       expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_serve', 'running'], ['ts_build', 'completed']]);
       await sessions.closeAll();
       expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_serve', 'quit'], ['ts_build', 'completed']]);
+      // The pause's teardown released the lock; the quit took it for the record and gave it back.
+      expect(dal.getLock(sid)).toBeUndefined();
+    });
+
+    it('clause 10 with REQ-EVENTS-098 / ADR-0005: the quit records nothing of a session another live process holds, and leaves that holder\'s lock', async () => {
+      const { terminals } = withTerminals();
+      const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
+      const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('never')], port, { terminals, runtime: { permissionMode: 'ask', pauseToolDeadlineMs: 5_000 } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      sessions.control({ op: 'pause', sessionId: sid, args: {} });
+      clock.advance(5_000);
+      await sessions.running(sid)!;
+      expect(dal.getLock(sid)).toBeUndefined();
+      expect(dal.claimLock(sid, 999, HOST, '2026-10-01T00:00:00.000Z').claimed).toBe(true);
+      const events = dal.eventsFrom(sid, 1, 10_000).length;
+      await sessions.closeAll();
+      expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_serve', 'running'], ['ts_build', 'completed']]);
+      expect(dal.eventsFrom(sid, 1, 10_000)).toHaveLength(events);
+      expect(dal.getLock(sid)).toMatchObject({ pid: 999 });
+      expect(warnings.some((w) => w.includes('ts_serve') && w.includes('pid 999'))).toBe(true);
     });
   });
 });

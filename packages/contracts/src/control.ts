@@ -72,7 +72,8 @@ export type ControlRequest = z.infer<typeof ControlRequestSchema>;
  * refused because the workspace store failed — it requires recovery (OQ-103), it could not be read or written to take
  * the session's lock, or the chosen child's move could not be written — or because another live process holds the
  * session's lock (OQ-101). Refusals that say nothing of the agent, so the renderer states them rather than "not
- * cancellable".
+ * cancellable". REQ-CHAT-090's todo edit while its session rests answers the same two codes when the lock it writes
+ * under is held by another live process (in REQ-SESSION-048's words) or could not be taken (ADR-0005, REQ-EVENTS-098).
  */
 export const CONTROL_REFUSAL_CODES = ['no_run', 'no_active_conversations', 'transcript_busy', 'clear_failed', 'run_coming_to_rest', 'store_failed', 'session_locked'] as const;
 export type ControlRefusalCode = (typeof CONTROL_REFUSAL_CODES)[number];

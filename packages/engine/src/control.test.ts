@@ -283,4 +283,49 @@ describe('the control channel (REQ-MONITOR-004/005/008, REQ-CHAT-035..041, REQ-M
     expect(dal.timelineOf(sid).map((t) => t.name)).toContain('todo_edited');
     expect(sessions.control({ op: 'editTodo', sessionId: asSessionId('S-other'), args: { op: 'add', id: 'x', text: 'y' } })).toEqual({ ok: false });
   });
+
+  describe('REQ-CHAT-090 with REQ-EVENTS-098 / ADR-0005: a todo edit at rest is written under the session\'s lock', () => {
+    const planned = (sid: SessionId) => (JSON.parse(dal.getSession(sid)!.todo!) as { phases: { tasks: { text: string }[] }[] }).phases.flatMap((p) => p.tasks.map((t) => t.text));
+    const rested = async () => {
+      const sessions = makeSessions(many(2));
+      const started = sessions.start(dal, 'C:/ws', 'edit me at rest');
+      if (!started.ok) throw new Error(started.error.reason);
+      const sid = started.value;
+      await sessions.running(sid);
+      // The run's teardown released the lock while the session stays loaded here.
+      expect(dal.getSession(sid)!.execution_status).toBe('completed');
+      expect(dal.getLock(sid)).toBeUndefined();
+      return { sessions, sid };
+    };
+
+    it('another live process holding the lock refuses the edit in REQ-SESSION-048\'s words, writing nothing and leaving its lock; once it is free the edit takes the lock for the write and gives it back', async () => {
+      const { sessions, sid } = await rested();
+      const before = dal.getSession(sid)!.todo;
+      expect(dal.claimLock(sid, 999, HOST, '2026-10-01T00:00:00.000Z').claimed).toBe(true);
+      expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', text: 'one more thing' } })).toEqual({ ok: false, refusal: { code: 'session_locked', message: `Session ${sid} is held by another run in this application (pid 999). Finish or stop that run first.` } });
+      expect(dal.getSession(sid)!.todo).toBe(before);
+      expect(dal.getLock(sid)).toMatchObject({ pid: 999 });
+      dal.releaseLock(sid, 999, HOST);
+      expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', text: 'one more thing' } }).ok).toBe(true);
+      expect(planned(sid)).toContain('one more thing');
+      expect(dal.getLock(sid)).toBeUndefined();
+    });
+
+    it('a store error while taking the lock involves no other process: it is refused store_failed, writing nothing', async () => {
+      const { sessions, sid } = await rested();
+      const before = dal.getSession(sid)!.todo;
+      const read = vi.spyOn(dal, 'getLock').mockImplementationOnce(() => { throw new Error('SQLITE_IOERR: disk I/O error'); });
+      expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', text: 'one more thing' } })).toEqual({ ok: false, refusal: { code: 'store_failed', message: 'The workspace store could not take this session\'s lock, so the todo was not edited: Error: SQLITE_IOERR: disk I/O error' } });
+      read.mockRestore();
+      expect(dal.getSession(sid)!.todo).toBe(before);
+      expect(dal.getLock(sid)).toBeUndefined();
+    });
+
+    it('a malformed edit is refused before the lock is touched, so it never names a foreign holder', async () => {
+      const { sessions, sid } = await rested();
+      expect(dal.claimLock(sid, 999, HOST, '2026-10-01T00:00:00.000Z').claimed).toBe(true);
+      expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', text: '   ' } })).toEqual({ ok: false });
+      expect(dal.getLock(sid)).toMatchObject({ pid: 999 });
+    });
+  });
 });

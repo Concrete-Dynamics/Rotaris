@@ -6,7 +6,7 @@
     "skillDir": "{repo}-wt-skillref-{id}/.agents/skills/orchestrated-build",
     "mainBranch": "main",
     "worktreePrefix": "{repo}-wt-",
-    "integ": "{repo}-wt-integ",
+    "integ": "{repo}-wt-integ-{id}",
     "acceptTree": "{repo}-wt-accept",
     "shellPrefix": "{node24}",
     "setup": "pnpm install --prefer-offline && node node_modules/electron/install.js && pnpm symbols",

@@ -58,4 +58,4 @@ read `not used`, `glob:not used` among them, and the proof failed. With the repa
 
 Narrower than this note and left open: after an iteration, a plan cycle whose root runs under another persona (the plan
 mode re-armed after the entry persona changed) still reads the latest iteration root's history. It is recorded in
-[`../a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md`](../a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md).
+[`a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md`](a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md) (repaired 2026-10-01).

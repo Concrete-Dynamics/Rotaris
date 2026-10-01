@@ -42,9 +42,24 @@ every bundle's ending, acceptance); the journal holds every agent's.
 
 ## Concurrency and serialization
 
-- Observed here: two lanes ran two agents at a time, and an unbounded `parallel()` had six builders working at once.
-  Do not rely on the tool to bound load; the template bounds the repair phase with `pool` (the profile's
-  `repairPool`).
+- **A run executes at most two agents at a time here.** The tool's own reference caps concurrent `agent()` calls at
+  min(16, available CPUs − 2) per workflow, a nested `workflow()` sharing its parent's cap: two on a 4-CPU host.
+  None of the sixteen runs of the session this skill came from exceeded two (fourteen peaked at two; measured from
+  each agent transcript's first and last timestamps), whatever their lanes or `parallel()` width; a four-lane run
+  started two lanes and queued the other two. Agents you start yourself (the Agent tool) run beside it. Lanes past
+  the cap only queue, and one lane runs one agent at a time: plan duration on the cap per run.
+- **Two runs at once each run two**: on 2026-09-29 `wf_4da43d03-b3a` and `wf_f722534f-88d` overlapped from 05:27 to
+  11:29 UTC with four workflow agents at once, and every merge either made then had its gate green.
+- **To run more, split the bundles over two plans** that share no bundle, no file and no `after`:
+  - each has its own `id`, so its own branches and integration worktree (`<repo>-wt-integ-<id>`), and its own
+    scratchpad directory (SKILL.md §3: `plan.json`, `RUNS.txt`, rendered scripts) and check-in;
+  - each takes `"acceptance": { "rounds": 0 }`, because every plan shares the profile's acceptance worktree;
+  - when both have settled, one acceptance-only plan (`"bundles": []`, the rounds a single plan would have had,
+    2 by default) runs the acceptance over merged main, and its repairs go through the same loop;
+  - the acceptance live runs stay one at a time, in the acceptance-only plan; a builder's short `--only=<scenario>`
+    run may meet one from the other plan, and two live runs leave each other's sandboxes alone
+    (`references/live-runs.md`), competing only for CPU and the endpoint.
+  Pushes from the two meet at `origin/main` (below).
 - Merges are serialized with a promise-chain lock, proof sweeps with another. Two workflows, or a workflow and you,
   coordinate through `origin/main`: a push that is not a fast-forward is rejected, and whoever is rejected fetches
   and merges. Never run two runs of one `RUNS.txt` at once.

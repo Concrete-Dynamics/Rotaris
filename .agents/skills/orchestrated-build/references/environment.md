@@ -28,9 +28,11 @@ proves false on your host, correct it (SKILL.md, "Improving this skill").
 
 ## Load
 
-- **4 CPUs, 15 GB.** Two lanes ran two agents at a time; an unbounded `parallel()` over 25 repair bundles had six
-  builders working at once (all six left commits), which coincided with restarts and timing reds. Bound concurrency
-  yourself: the template's repair `pool` is 3.
+- **4 CPUs, 15 GB.** A workflow run executes two agents at a time, the tool's cap for four CPUs
+  (`references/workflow-tool.md`). Four agents at once put the load average at 5 to 10: two runs overlapping on
+  2026-09-29 (5 to 7, once 9.65; all eleven merge gates green, one verifier's gate red on a timing bound that passed
+  alone), and on 2026-10-01 a run beside the orchestrator's own agents and gates (about 5, later 8 to 10; two full
+  gates red on timing, each passing alone). Expect timing reds at that load and re-run them alone (next point).
 - **Timing-sensitive tests and proofs flake under load.** Every prompt carries the rule: re-run a timing red once
   alone and say what else was running. A red reproduced alone is real; "flake" is never a root cause.
 

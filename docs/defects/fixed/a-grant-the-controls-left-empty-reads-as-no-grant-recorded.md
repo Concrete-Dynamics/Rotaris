@@ -30,8 +30,10 @@ carried no mark of it.
   `granted_mcp` object it writes beside `granted_tools`. The spawn still writes `[]` and evidence without the marker, so a
   row the port never reported on reads as before. `toAgentRecord` projects the new `AgentRecord.grantRecorded`
   (`grantRecordedOf`, `packages/engine/src/sessions.ts`): `true` where the marker is present, else where the native list is
-  non-empty. A row written before 2026-10-01 has no marker and keeps today's reading: `[]` is no grant recorded, and a
-  non-empty list (the declared set an older spawn wrote) is the grant.
+  non-empty. A row written by any build before this one has no marker and keeps today's reading: `[]` is no grant
+  recorded, and a non-empty list (the declared set an older spawn wrote) is the grant. That includes an empty grant a port
+  recorded earlier on 2026-10-01, under a build from before this marker: such a child still reads as no grant recorded and
+  is drawn with its declared tools, the defect as it stood, for rows already written (the verifier's optional finding).
 - **The surface lets the declared tools stand in only where no grant was recorded.** `resolvedTools`
   (`packages/ui/src/agents.ts`) returns the recorded list, empty or not, when `grantRecorded` is set, so the inspector and the
   persona window (REQ-MONITOR-069's card reads the same set) draw "No tools resolved." for a child whose controls removed

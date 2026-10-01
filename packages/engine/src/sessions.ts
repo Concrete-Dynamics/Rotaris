@@ -40,7 +40,7 @@ import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentS
 import type { PlanDecision, PlanGatePayload, ResumablePayload } from '@rotaris/contracts';
 import { SupervisorRegistry, type LoopClassifier, type SupervisorConfig } from './run/supervisor.js';
 import { meteredBackend, type CountUsage } from './run/metered.js';
-import { taskTitle, Todo, type TodoDocument } from './run/todo.js';
+import { mintTodoId, taskTitle, Todo, type TodoDocument } from './run/todo.js';
 import type { PersonaResolver } from './children/personas.js';
 import type { AgentActivity } from './children/activity.js';
 import type { ModelRef, ThinkingLevel } from '@rotaris/model';
@@ -328,6 +328,26 @@ interface Live {
   modeOverride: { value: string | null };
   /** PD-TOOLS-005: the run's away state, on the same one-holder-per-run terms as `modeOverride`; the control arms clear it. */
   presence: UserPresence;
+  /**
+   * REQ-MONITOR-105 with ADR-0024 (residual 2 of `a-parked-runs-call-that-never-returns-keeps-its-ring-row-running.md`):
+   * every run of this process on the session that parked — the plan gate, the message-limit pause — without closing its
+   * tool ports. A call of any of them that ignored its abort may still hold its `tool_calls` ring row `running`, so the
+   * crash record's ring settle is skipped while one is here (`ownCallsMayRunOf`), not only while the LAST run is parked:
+   * a later run that tore down does not re-arm the settle over an earlier one's rows. A run leaves the set once it has
+   * closed its ports. Which of a parked run's ports a park or a continue should close is OQ-170's.
+   */
+  readonly portsOpen: Set<Run>;
+}
+
+/**
+ * REQ-MONITOR-105 with ADR-0024: whether a call of a run of this process on the session may still be under way — some
+ * run that parked without closing its tool ports. The current run joins the set (it is not running when a continue
+ * launches, so it either tore down or parked) and every run that has closed its ports since leaves it.
+ */
+function ownCallsMayRunOf(s: Live): boolean {
+  if (s.run !== null) s.portsOpen.add(s.run);
+  for (const r of s.portsOpen) if (r.closedItsPorts) s.portsOpen.delete(r);
+  return s.portsOpen.size > 0;
 }
 
 export interface SessionListItem {
@@ -472,16 +492,16 @@ function previousIntent(dal: StoreDal, sessionId: SessionId): IntentCategory | n
 
 /**
  * REQ-ORCH-004's appended task, and the repair of a-crashed-iteration-number-is-reused-by-the-next-run (PD-ORCH-005): the
- * id a continuation gives the task it appends. A run host that died mid-iteration leaves the stored count behind the
- * iteration rows, so the number is taken past both; and since the dead iteration's task goes back to `pending` and is
- * selected again, the id also steps past every id the todo already holds, so the new prompt never shares one with it.
+ * id a continuation gives the task it appends. REQ-CHAT-089: 8 lowercase hexadecimal characters (the repair of
+ * a-queued-prompts-task-id-is-not-eight-hex-characters.md; this was `<session>:continued:<n>`). A run host that
+ * died mid-iteration leaves the dead iteration's task to go back to `pending` and be selected again, so the id is unique
+ * among every id the todo already holds and every task id an iteration recorded, and the new prompt never shares one
+ * with it. A record written under the old form reads back unchanged: an id is compared, never parsed.
  */
 function continuedTaskId(dal: StoreDal, sessionId: SessionId, todo: TodoDocument | undefined): string {
-  const taken = new Set((todo?.phases ?? []).flatMap((phase) => phase.tasks.map((task) => task.id)));
-  const rows = dal.iterationsOf(sessionId);
-  let n = Math.max(dal.getSession(sessionId)?.iterations_completed ?? 0, rows.at(-1)?.iteration ?? 0) + 1;
-  while (taken.has(`${sessionId}:continued:${n}`)) n += 1;
-  return `${sessionId}:continued:${n}`;
+  const taken = new Set((todo?.phases ?? []).flatMap((phase) => [...(phase.id === undefined ? [] : [phase.id]), ...phase.tasks.map((task) => task.id)]));
+  for (const r of dal.iterationsOf(sessionId)) taken.add(r.todo_task_id);
+  return mintTodoId(taken);
 }
 
 /**
@@ -1167,7 +1187,7 @@ export class Sessions {
     });
     entry.owner = owner;
     // Part Q: the memory is rehydrated at the first continuation, when the run's model resolver exists (REQ-SESSION-196's override).
-    this.live.set(sessionId, { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: null, artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null }, presence: new UserPresence({ record: warn }) });
+    this.live.set(sessionId, { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: null, artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null }, presence: new UserPresence({ record: warn }), portsOpen: new Set() });
     return ok({ sessionId });
   }
 
@@ -1226,7 +1246,7 @@ export class Sessions {
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
-    const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: new ResilienceMemory(), artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null }, presence: new UserPresence({ record: warn }) };
+    const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: new ResilienceMemory(), artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null }, presence: new UserPresence({ record: warn }), portsOpen: new Set() };
     this.live.set(sessionId, live);
     const row = writer.appendRow('user', prompt, true, { attachments: storedAttachments.attachments });
     if (!row.ok) return err({ code: row.error.code, reason: 'reason' in row.error ? row.error.reason : String(row.error.code) });
@@ -1271,7 +1291,7 @@ export class Sessions {
     const preflight = this.deps.preflight;
     const slots = this.modelSlotsFor(sessionId, dal, runRef);
     const run = new Run({
-      sessionId, workspaceRoot, effectiveRoot, task: prompt, taskContent: [...(prompt === '' ? [] : [{ kind: 'text' as const, text: prompt }]), ...storedAttachments.content], taskId: `${sessionId}:main:1`, writer, owner, bus: this.bus, clocks: this.deps.clocks,
+      sessionId, workspaceRoot, effectiveRoot, task: prompt, taskContent: [...(prompt === '' ? [] : [{ kind: 'text' as const, text: prompt }]), ...storedAttachments.content], taskId: mintTodoId(new Set()), writer, owner, bus: this.bus, clocks: this.deps.clocks,
       ...(setup.value.personas ? { personas: setup.value.personas } : {}),
       ...(setup.value.models ? { models: setup.value.models } : {}),
       // REQ-WORKSPACE-060 (ADR-0063): the session's always-active context units, as a getter the run calls at
@@ -1421,8 +1441,9 @@ export class Sessions {
     const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, info: (m: string) => { s.log?.info(m); this.deps.log?.(m); }, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     s.tools = null;
     // PD-ORCH-005 clause 3: what a crash left is recorded before the settle, which leaves every `paused` agent as it is.
-    // A run of this process that parked closed no tool port: a ring row still `running` may be its call still under way.
-    this.recordCrashOf(s.dal, s.writer, sessionId, warn, artifacts, s.run !== null && !s.run.closedItsPorts);
+    // A run of this process that parked closed no tool port: a ring row still `running` may be its call still under way —
+    // any such run's, not only the last one's.
+    this.recordCrashOf(s.dal, s.writer, sessionId, warn, artifacts, ownCallsMayRunOf(s));
     // REQ-HOOKS-003: each settled child's `child_completed` is the run's, fired once its `session_start` has.
     const settledBeforeStart: Readonly<Record<string, unknown>>[] = [];
     const stale = settleStaleChildren(s.dal, s.writer, sessionId, warn, artifacts, (fields) => { settledBeforeStart.push(fields); });
@@ -1808,7 +1829,6 @@ export class Sessions {
     const source = requestedSource === 'child' || requestedSource === 'agent' || requestedSource === 'planner' ? requestedSource : 'planner';
     const ownerId = typeof req.args['ownerId'] === 'string' && req.args['ownerId'] !== '' ? req.args['ownerId'] : null;
     const phaseId = typeof req.args['phaseId'] === 'string' ? req.args['phaseId'] : 'main';
-    const mint = () => randomUUID().replaceAll('-', '').slice(0, 8);
     let assigned: string | undefined;
     if (source === 'child') {
       const child = ownerId === null ? undefined : s.dal.childrenOf(s.writer.sessionId).find((candidate) => candidate.task_id === ownerId);
@@ -1816,7 +1836,7 @@ export class Sessions {
       try {
         const current: unknown = JSON.parse(child.todo);
         if (!isAgentTodoDocument(current)) return { ok: false };
-        const edited = editAgentTodo(current, op, id, body, phaseId, mint);
+        const edited = editAgentTodo(current, op, id, body, phaseId);
         if (!edited.changed) return { ok: false };
         s.dal.setChildTodo(s.writer.sessionId, child.task_id, JSON.stringify(edited.document), child.tool_calls);
         assigned = edited.id;
@@ -1825,14 +1845,15 @@ export class Sessions {
       const decoded = decodeStoredTodo(stored.todo);
       if (source === 'agent') {
         if (decoded.agent === null) return { ok: false };
-        const edited = editAgentTodo(decoded.agent, op, id, body, phaseId, mint);
+        const edited = editAgentTodo(decoded.agent, op, id, body, phaseId);
         if (!edited.changed) return { ok: false };
         assigned = edited.id;
         if (!s.writer.save(stored.execution_status, { todo: encodeStoredTodo({ ...decoded, agent: edited.document }) }).ok) return { ok: false };
       } else {
         if (decoded.planner === null) return { ok: false };
         const planner = Todo.fromDocument(decoded.planner);
-        const nextId = op === 'add' ? mint() : id;
+        // REQ-CHAT-089: an added task takes the backend's id, unique within the todo and the iterations' records.
+        const nextId = op === 'add' ? mintTodoId(new Set([...planner.ids(), ...s.dal.iterationsOf(s.writer.sessionId).map((r) => r.todo_task_id)])) : id;
         if (!planner.editTask(op, nextId, body, phaseId)) return { ok: false };
         assigned = op === 'add' ? nextId : undefined;
         if (!s.writer.save(stored.execution_status, { todo: encodeStoredTodo({ ...decoded, planner: planner.toDocument() }) }).ok) return { ok: false };

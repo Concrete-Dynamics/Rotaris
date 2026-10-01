@@ -115,16 +115,26 @@ describe('engine/run — the run loop end to end against a real store and a scri
 
     const session = dal.getSession(started.value)!;
     expect(session.run_type).toBe('improvement_run');
-    expect(JSON.parse(session.todo!)).toEqual({
+    // REQ-CHAT-089: the session's todo carries backend ids — the task's and the phase's 8 lowercase hexadecimal characters,
+    // fixed when the todo is created — not the proposal ids the plan arrived under; the proposal stays named in the text.
+    const stored = JSON.parse(session.todo!) as { schema_version: 1; phases: { id: string; name: string; tasks: { id: string }[] }[] };
+    const [phase] = stored.phases;
+    const ids = [phase!.id, ...phase!.tasks.map((t) => t.id)];
+    for (const id of ids) expect(id).toMatch(/^[0-9a-f]{8}$/);
+    expect(new Set(ids).size).toBe(3);
+    expect(stored).toEqual({
       schema_version: 1,
       phases: [{
+        id: phase!.id,
         name: 'improvement_run',
         tasks: [
-          { id: 'imp_1', text: 'Apply improvement imp_1: first', state: 'complete', consecutiveRetries: 0 },
-          { id: 'imp_2', text: 'Apply improvement imp_2: second', state: 'complete', consecutiveRetries: 0 },
+          { id: ids[1], text: 'Apply improvement imp_1: first', state: 'complete', consecutiveRetries: 0 },
+          { id: ids[2], text: 'Apply improvement imp_2: second', state: 'complete', consecutiveRetries: 0 },
         ],
       }],
     });
+    // Every iteration recorded the task it took up under that id.
+    expect(dal.iterationsOf(started.value).map((r) => r.todo_task_id)).toEqual([ids[1], ids[2]]);
   });
 
   it('A3: holds ownership through terminal inserts and delivery, releasing after detachment', async () => {

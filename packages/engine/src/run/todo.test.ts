@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { taskLine, taskTitle, Todo } from './todo.js';
+import { mintTodoId, taskLine, taskTitle, Todo } from './todo.js';
 
 /** PD-ORCH-005 clause 17: a continue's message as a task the resumed iteration holds, and how it closes. */
 describe('Todo — a task held by an open iteration (PD-ORCH-005 clause 17)', () => {
@@ -163,5 +163,74 @@ describe('Todo — a task named beside its content (REQ-CHAT-040, REQ-ORCH-071)'
     expect(taskTitle({ text: 'first' })).toBe('first');
     expect(taskLine({ text: 'then do this', name: 'Queued Prompt: 0123abcd' })).toBe('Queued Prompt: 0123abcd: then do this');
     expect(taskLine({ text: 'first' })).toBe('first');
+  });
+});
+
+/** REQ-CHAT-089: every task id the backend assigns is 8 lowercase hexadecimal characters, unique within the todo. */
+describe('mintTodoId — a backend task id (REQ-CHAT-089)', () => {
+  it('mints 8 lowercase hexadecimal characters', () => {
+    for (let i = 0; i < 50; i += 1) expect(mintTodoId(new Set())).toMatch(/^[0-9a-f]{8}$/);
+  });
+
+  it('never repeats an id the todo holds, and never yields a candidate of another form', () => {
+    const t = Todo.fresh('0000000a', 'first');
+    t.appendTask('Queued Prompts', 'S-1:continued:2', 'an id an earlier build minted, still read back');
+    // Its tasks' ids, and its phases' (`main`'s, and the phase the append created).
+    const phaseIds = t.toDocument().phases.map((p) => p.id!);
+    expect(t.ids()).toEqual(new Set(['0000000a', 'S-1:continued:2', ...phaseIds]));
+    const draws = ['0000000a', 'ABCDEF01', 'not-hex!', '0000000b'];
+    // An uppercase draw is lowered (REQ-CHAT-089: "The hexadecimal digits MUST be lowercase"); one that is not hex is skipped.
+    expect(mintTodoId(t.ids(), () => draws.shift()!)).toBe('abcdef01');
+    const more = ['0000000a', 'abcdef01', 'zz', '0000000b'];
+    expect(mintTodoId(new Set(['abcdef01', '0000000a']), () => more.shift()!)).toBe('0000000b');
+  });
+});
+
+/** REQ-CHAT-089: a phase the backend creates carries an id of the same form; one an earlier build created is known by its name. */
+describe('Todo — phase ids (REQ-CHAT-089)', () => {
+  it('a fresh todo\'s phase and every phase appendTask creates carry 8 lowercase hexadecimal characters, unique within the todo', () => {
+    const t = Todo.fresh('0000000a', 'first');
+    t.appendTask('Queued Prompts', '0000000b', 'then this', 'Queued Prompt: 12345678');
+    t.appendTask('Queued Prompts', '0000000c', 'and this');
+    const phases = t.toDocument().phases;
+    expect(phases.map((p) => [p.name, p.tasks.length])).toEqual([['main', 1], ['Queued Prompts', 2]]);
+    for (const p of phases) expect(p.id).toMatch(/^[0-9a-f]{8}$/);
+    expect(t.ids().size).toBe(5);
+    // Fixed when created and unchanged thereafter: a document read back keeps them.
+    expect(Todo.fromDocument(t.toDocument()).toDocument()).toEqual(t.toDocument());
+  });
+
+  it('editTask adds to the phase its id names, and to the phase an earlier build\'s document names by its name', () => {
+    const t = Todo.fresh('0000000a', 'first');
+    const main = t.toDocument().phases[0]!.id!;
+    expect(t.editTask('add', '0000000d', 'by id', main)).toBe(true);
+    expect(t.editTask('add', '0000000e', 'nowhere', 'ffffffff')).toBe(false);
+    expect(t.toDocument().phases.map((p) => [p.id, p.tasks.map((x) => x.text)])).toEqual([[main, ['first', 'by id']]]);
+    const old = Todo.fromDocument({ schema_version: 1, phases: [{ name: 'main', tasks: [{ id: 'S-1:main:1', text: 'old', state: 'pending', consecutiveRetries: 0 }] }] });
+    expect(old.editTask('add', '0000000f', 'by name', 'main')).toBe(true);
+    expect(old.toDocument()).toEqual({ schema_version: 1, phases: [{ name: 'main', tasks: [{ id: 'S-1:main:1', text: 'old', state: 'pending', consecutiveRetries: 0 }, { id: '0000000f', text: 'by name', state: 'pending', consecutiveRetries: 0 }] }] });
+  });
+});
+
+/**
+ * REQ-CHAT-089 with REQ-LIBRARY-060: an improvement run's plan arrives built (one `improvement_run` phase, a task per approved
+ * proposal under the proposal's `imp_…` id, the phase with none); the todo the session creates from it carries backend ids.
+ */
+describe('Todo.seeded — a plan the backend built for a new session (REQ-CHAT-089)', () => {
+  const plan = { schema_version: 1 as const, phases: [{ name: 'improvement_run', tasks: [
+    { id: 'imp_1', text: 'Proposal: imp_1 (prompt_update)\nApply improvement imp_1: first', state: 'pending' as const, consecutiveRetries: 0 },
+    { id: 'imp_2', text: 'Proposal: imp_2 (persona_memory_update)\nApply improvement imp_2: second', state: 'pending' as const, consecutiveRetries: 0 },
+  ] }] };
+
+  it('gives every task and the phase 8 lowercase hexadecimal characters, unique within the todo and apart from the ids it is told are taken', () => {
+    const draws = ['0000000a', '0000000a', '0000000b', '0000000c', '0000000d'];
+    const t = Todo.seeded(plan, undefined, new Set(['0000000a']), () => draws.shift()!);
+    const doc = t.toDocument();
+    expect(doc.phases.map((p) => [p.id, p.name, p.tasks.map((x) => x.id)])).toEqual([['0000000b', 'improvement_run', ['0000000c', '0000000d']]]);
+    // The proposal stays named in what the task holds (REQ-LIBRARY-061), and nothing else of the task changes.
+    expect(doc.phases[0]!.tasks.map((x) => [x.text, x.state, x.consecutiveRetries])).toEqual(plan.phases[0]!.tasks.map((x) => [x.text, 'pending', 0]));
+    const random = Todo.seeded(plan).toDocument();
+    for (const id of [random.phases[0]!.id, ...random.phases[0]!.tasks.map((x) => x.id)]) expect(id).toMatch(/^[0-9a-f]{8}$/);
+    expect(Todo.seeded(plan).ids().size).toBe(3);
   });
 });

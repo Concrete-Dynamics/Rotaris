@@ -43,7 +43,28 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-30**
+## Last reconciled with the code: **2026-10-01**
+
+**A crash settles its cut call's ring row (REQ-SESSION-129, REQ-MONITOR-105, ADR-0024, R-067).** An orderly end settles
+every open `tool_calls` row when the run's ports close; a crash closes none, so after the crash record settled a call's
+transcript row its ring row stayed `running` for good. `recordCrash` now settles every ring row still `running`
+(`settleDeadToolCalls`) through `SessionWriter.settleToolCall`, `failed` with the crash's statement and a NULL duration
+(`ToolCallSettle.elapsed_ms` admits null for this case) — except at a continue after a run of this process that parked
+without closing its tool ports (`Run.closedItsPorts`), whose call may still be under way. This repairs
+`a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md` (acceptance A30), and corrects ADR-0024's first-execution
+claim that such a row "needs no repair" in place. The **runtime view**'s §2 crash paragraph and its §7 rings row say so. No
+package, edge, process, message kind, channel, command or column changed.
+
+**A plan cycle's root calls before a crash reach the session total (REQ-MONITOR-102, REQ-ORCH-153, R-067).** A plan cycle
+has no `iterations` row, so the crash record never reached its root. `sessions.plan_root_task_id` / `plan_root_persona`
+(store **v29**) name the plan cycle's root while its turn runs and none of its calls is counted: `Run.turn` records it when
+the plan cycle starts (`SessionWriter.openPlanRoot`) and releases it in the transaction that adds its calls to the total
+(`countToolCalls`'s `planRoot`), or with none counted when its turn raises. `recordCrash` answers the open calls of one still
+recorded and adds its record's calls (`recordPlanRootCrash`). This repairs
+`a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md` (acceptance A19). The **runtime view**'s §2 crash
+paragraph, its §7 `sessions` row and its §7 heading (the store is now v29), and the **state-ownership view**'s tool-call
+row, say so. Two `sessions` columns were added (store v29); no package, edge, process, message kind, channel or command
+changed.
 
 **The run-level agent's tool history at a plan gate no iteration precedes (REQ-MONITOR-060, REQ-MONITOR-069,
 REQ-ORCH-153, acceptance A21, R-067).** With no run live and no iteration recorded, `entryToolsOf` reads the run-level

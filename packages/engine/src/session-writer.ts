@@ -159,7 +159,8 @@ export interface ToolCallOpen {
 }
 export interface ToolCallSettle {
   readonly status: 'ok' | 'failed' | 'blocked';
-  readonly elapsed_ms: number;
+  /** Null only for a call a crash cut, settled by the crash record: no process observed its end, so its duration is not known. */
+  readonly elapsed_ms: number | null;
   readonly is_error: boolean;
   readonly result: string;
   readonly error?: string | null;
@@ -1156,14 +1157,19 @@ export class SessionWriter {
    * is more than it holds) — in one transaction, so no process death leaves a call held by one and not the other. `total`
    * is the session's new total, as a run's aggregates hold it; absent, the stored total is raised by what the agents'
    * counts gained. Returns the total written. The save that follows publishes it.
+   *
+   * `planRoot` (REQ-ORCH-153, the repair of `a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md`): the
+   * plan cycle's root, which has no iteration row, is released (`sessions.plan_root_task_id`) in the same transaction as its
+   * `add` calls join the total — and only a release adds them, so a root released already adds nothing a second time.
    */
-  countToolCalls(counts: { readonly root?: { readonly iteration: number; readonly add: number }; readonly children?: readonly { readonly taskId: string; readonly calls: number }[] }, total?: number): Result<number, WriteFailure> {
+  countToolCalls(counts: { readonly root?: { readonly iteration: number; readonly add: number }; readonly planRoot?: { readonly taskId: string; readonly add: number }; readonly children?: readonly { readonly taskId: string; readonly calls: number }[] }, total?: number): Result<number, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
     const { dal, sessionId } = this.deps;
     try {
       return ok(dal.transaction(() => {
         let gained = 0;
         if (counts.root && counts.root.add > 0 && dal.addIterationRootCalls(sessionId, counts.root.iteration, counts.root.add)) gained += counts.root.add;
+        if (counts.planRoot && dal.clearPlanRoot(sessionId, counts.planRoot.taskId)) gained += Math.max(0, counts.planRoot.add);
         for (const c of counts.children ?? []) {
           const current = dal.getChild(sessionId, c.taskId);
           if (!current || c.calls <= current.tool_calls) continue;
@@ -1176,6 +1182,21 @@ export class SessionWriter {
         dal.updateSessionRun(sessionId, { tool_calls: written });
         return written;
       }));
+    } catch (cause) {
+      return this.fail(cause);
+    }
+  }
+
+  /**
+   * REQ-MONITOR-102 with REQ-ORCH-153 (store v29): the plan cycle's root `taskId` is under way, its rows carrying `persona`,
+   * and none of its calls is counted — until `countToolCalls`'s `planRoot` releases it. Its own transaction.
+   */
+  openPlanRoot(taskId: string, persona: string): Result<void, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId } = this.deps;
+    try {
+      dal.transaction(() => dal.setPlanRoot(sessionId, taskId, persona));
+      return ok(undefined);
     } catch (cause) {
       return this.fail(cause);
     }

@@ -97,6 +97,11 @@ this repository: **`build-ui`** for creating or substantially restyling a surfac
 rendered defect, and **`review-ui`** for a report-only external critique. Their `.claude/skills/` entries are thin
 compatibility routers; the portable files are canonical.
 
+A fourth, **`orchestrated-build`**, drives a large body of work (a release backlog, every open defect) through a
+multi-agent workflow: independent verification per bundle, repair rounds, serialized merges, acceptance with the
+proof sweep and live runs, and recovery from container restarts out of the workflow journals. It improves itself
+under the guardrails its `SKILL.md` states; `pnpm check` runs its self-test.
+
 `build-ui` and `debug-ui` may change source within the authority of the current task. `review-ui` writes only
 evidence under `.ui-review/`. Its critique is proposed evidence and reaches implementation through a separate,
 authorized build or debug pass. A complete review loop has at most three iterations.

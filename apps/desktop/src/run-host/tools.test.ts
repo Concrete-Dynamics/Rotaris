@@ -663,6 +663,40 @@ ${coder('    tool_restrictions:\n      coding-agent: [read_file, grep, terminal]
     expect(named.promptSection?.()).toBe('## MCP servers\n\n- **`srv`**\n  - `lookup` — a server tool');
   });
 
+  /**
+   * REQ-MCP-062 with REQ-ORCH-153 (the repair of `an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md`):
+   * while the gate holds, the port's MCP loop withheld every server tool from the callable map and the listing, and the
+   * prompt's MCP section, rendered from the surface the loop was given, still printed it — a printed name the agent could
+   * not call. The same shape held for a server tool dropped for colliding with a native name. Approval launches a new run,
+   * whose ports are built with the gate released, so the tool is printed and callable there.
+   */
+  it('REQ-MCP-062 / REQ-ORCH-153: a server tool withheld at the plan gate is not printed in the MCP section; on the approved run\'s port it is printed and callable', async () => {
+    const calls: unknown[] = [];
+    const serverTool = simpleExecutor('lookup', 'a server tool', anySchema, async (a) => { calls.push(a); return { text: 'looked up', isError: false }; });
+    const held = port(coder(''), 'coding-agent', { planGateHeld: () => true, requestedMode: 'autonomous' }, [serverTool]);
+    await held.ready?.();
+    expect(held.specs().map((s) => s.name)).not.toContain('lookup');
+    expect(held.promptSection?.()).toBe('## MCP servers\n\n- `srv`');
+    expect(held.grant?.()?.mcp.granted).toEqual({ srv: [] });
+
+    const approved = port(coder(''), 'coding-agent', { planGateHeld: () => false, requestedMode: 'autonomous' }, [serverTool]);
+    await approved.ready?.();
+    expect(approved.specs().map((s) => s.name)).toContain('lookup');
+    expect(approved.promptSection?.()).toBe('## MCP servers\n\n- **`srv`**\n  - `lookup` — a server tool');
+    const r = await approved.dispatch({ callId: 'l1', name: 'lookup', rawArgs: '{}', persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' }, new AbortController().signal);
+    expect(r).toMatchObject({ status: 'ok', isError: false });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('REQ-MCP-062: a server tool dropped for colliding with a native tool name is not printed under its server', async () => {
+    // The stand-in surface offers the server's tool under the native name itself, the case the port's collision skip guards.
+    const serverGrep = simpleExecutor('grep', 'a server grep', anySchema, async () => ({ text: 'server', isError: false }));
+    const p = port(coder(''), 'coding-agent', {}, [serverGrep]);
+    await p.ready?.();
+    expect(warnings.some((w) => w.includes("the tool name 'grep' collides with a native tool of coding-agent"))).toBe(true);
+    expect(p.promptSection?.()).toBe('## MCP servers\n\n- `srv`');
+    expect(p.grant?.()?.mcp.granted).toEqual({ srv: [] });
+  });
 });
 
 /**

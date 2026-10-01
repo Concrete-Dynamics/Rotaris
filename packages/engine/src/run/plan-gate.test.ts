@@ -7,7 +7,7 @@ import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/stor
 import type { IntentCategory } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
 import { SUPERVISOR_DEFAULTS, type LoopClassifier } from './supervisor.js';
-import { RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type RunConfig, type RuntimePosture, type ToolPort } from '../index.js';
+import { RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type RunConfig, type RuntimePosture, type ToolPort, type ToolPortContext } from '../index.js';
 
 /**
  * REQ-ORCH-152/153/154 (ADR-0062): the plan gate end to end through the session manager — the park, what it
@@ -53,7 +53,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
   });
 
-  function sessionsWith(backend: AgentBackend, opts: { mode?: 'auto' | 'plan'; intent?: IntentCategory; classifier?: LoopClassifier; grep?: boolean; preflightHold?: Promise<void> | (() => Promise<void>); tools?: ToolPort } = {}) {
+  function sessionsWith(backend: AgentBackend, opts: { mode?: 'auto' | 'plan'; intent?: IntentCategory; classifier?: LoopClassifier; grep?: boolean; preflightHold?: Promise<void> | (() => Promise<void>); tools?: ToolPort; toolsFor?: (ctx: ToolPortContext) => ToolPort } = {}) {
     const runtime: RuntimePosture = {
       permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' },
       sessionLogLevel: 'WARNING', runStartMode: opts.mode ?? 'plan',
@@ -70,6 +70,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
       // "no supervisor is attached" is observable at all — a run without it looks the same from the outside.
       ...(opts.classifier ? { supervisor: () => ({ config: { ...SUPERVISOR_DEFAULTS, repetitionThreshold: 3 }, classifier: opts.classifier! }), tools: () => grepPort() } : opts.grep ? { tools: () => grepPort() } : {}),
       ...(opts.tools ? { tools: () => opts.tools! } : {}),
+      ...(opts.toolsFor ? { tools: opts.toolsFor } : {}),
     });
     return sessions;
   }
@@ -387,6 +388,30 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     // Only one cycle exists: a plan produced later in the same run must not block execution.
     expect(dal.planCyclesOf(sid)).toHaveLength(1);
     expect(dal.timelineOf(sid).map((t) => t.name)).toContain('plan_gate_resolved');
+  });
+
+  /**
+   * REQ-ORCH-153 with REQ-MCP-062 (traced for the repair of `an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md`):
+   * a port resolves its MCP surface, its listing and its prompt section once, so a port built while the gate held would go
+   * on withholding a tool-server tool after the approval. Approval launches a new run, and that run builds its ports anew
+   * with the gate released: every agent of the approved segment holds its execution grants from its first listing.
+   */
+  it('approve: the approved segment builds its tool ports anew, with the gate released, so its listing and prompt are resolved without the hold', async () => {
+    const built: { readonly port: ToolPort; readonly heldAtBuild: boolean }[] = [];
+    const sessions = sessionsWith(scripted([answer('a plan'), answer('carried out')]).backend, {
+      toolsFor: (ctx) => { const port = grepPort(); built.push({ port, heldAtBuild: ctx.planGateHeld?.() ?? false }); return port; },
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    const parked = built.length;
+    expect(parked).toBeGreaterThan(0);
+    expect(built.every((b) => b.heldAtBuild)).toBe(true);
+    expect(sessions.planDecision(sid, 'approve')).toMatchObject({ ok: true, value: { relaunched: true } });
+    await sessions.running(sid)!;
+    const approved = built.slice(parked);
+    expect(approved.length).toBeGreaterThan(0);
+    expect(approved.every((b) => !b.heldAtBuild)).toBe(true);
+    for (const b of approved) expect(built.slice(0, parked).some((p) => p.port === b.port)).toBe(false);
   });
 
   it('revise starts a further cycle with the plan as it stands and the changes stated; there is no limit on cycles', async () => {

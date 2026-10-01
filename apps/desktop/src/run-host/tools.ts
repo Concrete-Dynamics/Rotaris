@@ -462,8 +462,18 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
         joined.add(e.name);
         specs.push(toolSpec(e));
       }
-      mcpSection = mcp.section(surface);
-      grant = { tools: nativeResolved, mcp: grantEvidence(surface, (_server, name) => joined.has(name)) };
+      /*
+       * REQ-MCP-062: "a printed name SHALL be callable". The section and the grant are drawn from the surface narrowed to the
+       * tools that joined the callable map, so what the loop above withheld — at the plan gate (REQ-ORCH-153), for a
+       * collision with a native name — is neither printed nor granted. Until 2026-10-01 the section was rendered from
+       * `surface`, which still held them, and printed names the agent could not call
+       * (`docs/defects/fixed/an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md`). The hold is read when the
+       * port is built and its readiness resolved once; approval launches a new run, whose ports are built with the gate
+       * released, so the approved segment prints and calls the tool (traced in `run/plan-gate.test.ts`).
+       */
+      const callableSurface = { ...surface, active: surface.active.map((s) => ({ ...s, tools: s.tools.filter((t) => joined.has(t.callable)) })) };
+      mcpSection = mcp.section(callableSurface);
+      grant = { tools: nativeResolved, mcp: grantEvidence(callableSurface) };
     })();
     return readiness;
   };

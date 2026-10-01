@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**The MCP section prints only what the agent can call (REQ-MCP-062, REQ-ORCH-153).** While the plan gate held, the port's MCP
+loop withheld every server tool from the callable map and the listing, and the section, rendered from the surface the loop
+was given, still printed it; a tool dropped for colliding with a native name was printed the same way. `ready()` now renders
+the section, and draws the grant, from the surface narrowed to the tools that joined the callable map. Approval launches a
+new run whose ports are built with the gate released (pinned in `run/plan-gate.test.ts`). This repairs
+`an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md`; the **runtime view**'s MCP surface says so. No
+package, edge, process, message kind, channel, command or store column changed.
+
 **A child's row records the grant its port put in force, not its persona's declared tools (REQ-MCP-065, REQ-TOOLS-006,
 REQ-MCP-114).** The spawn wrote `children.granted_tools` from the persona's declared tools and `granted_mcp` from its MCP
 surface before any control, so a tool `coordinator_only`, `read_only`, `tool_restrictions`, the `restricted` preset or the

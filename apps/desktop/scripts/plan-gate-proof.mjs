@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import Database from 'better-sqlite3';
@@ -28,6 +28,11 @@ import { parseEvals, readEval } from './lib/capture-evals.mjs';
  *  9. **REQ-MONITOR-060 at a gate no iteration precedes** — a fresh session's plan cycle root calls a tool and parks;
  *     reopened in the next launch, the inspector's run-level agent marks that tool `used` from the store's history
  *     (acceptance A21).
+ * 10. **REQ-MCP-062 with REQ-ORCH-153: a tool-server tool withheld at the gate is not printed** — the entry role carries
+ *     the MCP fixture server `alpha`; every model request of the held cycle (launch 1, captured by the scripted client)
+ *     lists the server with no tool under it, and the approved run's requests (launch 4) print and offer its tools. Until
+ *     2026-10-01 the held cycle's prompt printed tools the agent could not call
+ *     (docs/defects/fixed/an-mcp-tool-withheld-at-the-plan-gate-is-still-printed-in-the-prompt.md).
  *
  * Every assertion reads the store, the workspace or the app's own log. The PNGs are read back so a launch
  * that painted nothing cannot pass.
@@ -72,6 +77,11 @@ const GLOBAL = [
   '',
   'mcp_servers:',
   '  code_intelligence: { enabled: false }',
+  // Assertion 10: the hand-written fixture server, carried by the entry role, whose tools declare no facet (ADR-0016).
+  `  alpha: { command: ${JSON.stringify(process.execPath)}, args: ${JSON.stringify([join(app, 'scripts', 'fixtures', 'mcp-fixture-server.mjs')])} }`,
+  '',
+  'personas:',
+  '  orchestrator: { mcp_servers: [alpha] }',
   '',
 ].join('\n');
 
@@ -157,7 +167,14 @@ const results = {};
 const PLANNED_FILE = join(workspace, 'planned.txt');
 
 // 1. The run starts in `plan` mode and holds. Nothing the plan names has been written.
+const HELD_REQUESTS = join(output, 'held.requests.jsonl');
+const APPROVED_REQUESTS = join(output, 'approved.requests.jsonl');
+/** Every captured request's system text (the scripted client's `ROTARIS_CAPTURE_MODEL_REQUESTS`), in call order. */
+const systemsOf = (file) => (existsSync(file) ? readFileSync(file, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l).system) : []);
+/** The prompt's `## MCP servers` section of one system text, or null when it carries none. */
+const mcpSectionOf = (system) => { const at = system.indexOf('## MCP servers'); return at < 0 ? null : system.slice(at).split(/\n(?=## )/)[0].trim(); };
 const log1 = await launch('held', {
+  ROTARIS_CAPTURE_MODEL_REQUESTS: HELD_REQUESTS,
   ROTARIS_CAPTURE_PROMPT: 'create planned.txt with the word done in it',
   ROTARIS_CAPTURE_WAIT: 'js:document.querySelector(\'[data-testid="plan-gate-plan"]\') !== null',
   ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
@@ -178,9 +195,13 @@ if (!held.timeline.includes('plan_gate_opened')) throw new Error(`no plan_gate_o
 if (!(inspected(log1, '[data-testid="plan-gate"]')?.matches?.length > 0)) throw new Error(`the gate surface was not found in the primary view:\n${log1}`);
 if (!(inspected(log1, '[data-testid="plan-gate-plan"]')?.matches?.length > 0)) throw new Error('the gate drew no plan');
 if (readEval(parseEvals(log1), GATE_DEADLINE_MS, GATE_TEXT) !== true) throw new Error('the gate does not say "Plan ready for your decision"');
+// 10. REQ-MCP-062 with REQ-ORCH-153: every request of the held cycle carries alpha with no tool printed under it.
+const heldSections = systemsOf(HELD_REQUESTS).map(mcpSectionOf).filter((x) => x !== null);
+if (heldSections.length === 0) throw new Error(`the held cycle's requests carry no MCP section — the fixture server did not reach the entry role:\n${log1}`);
+for (const section of heldSections) if (section !== '## MCP servers\n\n- `alpha`') throw new Error(`the held cycle's prompt prints a tool-server tool the gate withholds (REQ-MCP-062):\n${section}`);
 results.held = {
   status: held.session.execution_status, cycle: held.session.plan_cycle, released: held.session.plan_released,
-  plan: held.cycles[0].plan.slice(0, 200), plannedFileExists: false,
+  plan: held.cycles[0].plan.slice(0, 200), plannedFileExists: false, mcpSection: heldSections[0], requests: heldSections.length,
 };
 
 // 2. Reopened after the window is gone: the decision is still pending and still answerable (REQ-ORCH-153).
@@ -273,6 +294,7 @@ results.revised = { cycles: revised.cycles.length, firstDecision: revised.cycles
 
 // 4. Approve: execution released, the release recorded, and the work actually done.
 const log4 = await launch('approved', {
+  ROTARIS_CAPTURE_MODEL_REQUESTS: APPROVED_REQUESTS,
   ROTARIS_CAPTURE_RESUME: 'latest',
   ROTARIS_CAPTURE_AFTER_MS: '30000',
   ROTARIS_CAPTURE_CLICKS: '[data-testid="plan-approve"]@6000',
@@ -283,9 +305,13 @@ if (approved.session.plan_released !== 1) throw new Error('approval did not rele
 if (approved.session.plan_cycle !== null) throw new Error('the gate is still pending after approval');
 if (approved.session.execution_status === 'awaiting_plan_decision') throw new Error('the run returned to the gate after approval (REQ-ORCH-154: approval is one-way)');
 if (approved.cycles.length !== 2) throw new Error(`a plan produced after approval opened a gate: ${approved.cycles.length} cycles`);
+// 10. The approved run builds its ports with the gate released: its requests print alpha's tools, which it may call.
+const approvedSections = systemsOf(APPROVED_REQUESTS).map(mcpSectionOf).filter((x) => x !== null);
+if (!approvedSections.some((section) => section.startsWith('## MCP servers\n\n- **`alpha`**\n  - `echo`'))) throw new Error(`the approved run's prompt does not print alpha's tools: ${JSON.stringify(approvedSections)}\n${log4}`);
 results.approved = {
   decision: approved.cycles[1].decision, released: approved.session.plan_released, status: approved.session.execution_status,
   cycles: approved.cycles.length, plannedFileExists: existsSync(PLANNED_FILE), log: /ended \w+/.exec(log4)?.[0] ?? null,
+  mcpSection: approvedSections.find((section) => section.includes('`echo`')) ?? null,
 };
 
 /*

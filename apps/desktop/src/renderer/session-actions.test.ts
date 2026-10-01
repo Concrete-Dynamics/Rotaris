@@ -204,4 +204,31 @@ describe('PD-ORCH-005 clauses 3 and 15: the stop comes to rest, and the confirme
     const next = { ...record, agents: [{ ...parent, presentationState: 'cancelled' }, { ...child, presentationState: 'cancelled' }] } as SessionRecord;
     expect(shownSession(next, cancels.getState())).toBe(next);
   });
+
+  /*
+   * REQ-MONITOR-127 / REQ-MONITOR-130 (acceptance A35, the note "the Mission view and a persona window do not show a
+   * confirmed run cancel as cancelling"): every surface's confirmed "Cancel the run?" comes here — the Workspace, the Mission
+   * view's "Cancel selection" on the run row, a persona window's Cancel on the run's own instance — and the session is shown
+   * `cancelling` while the control is in flight, restored on a refusal, and still shown so once the engine accepts.
+   */
+  it('REQ-MONITOR-127: a confirmed cancel of the run is shown cancelling before the engine answers, and restored on its refusal', async () => {
+    const record = { id: 'S1', executionStatus: 'running', runStartedAt: '2026-09-29T09:58:00.000Z', agents: [], resumable: null } as unknown as SessionRecord;
+    const cancels = createCancelOverlayStore();
+    const seen: string[] = [];
+    const replies: CommandOutcome[] = [{ ok: true, value: { ok: false } }, { ok: false, code: 'command.unreachable', headline: 'The application did not answer' }, { ok: true, value: { ok: true } }];
+    let n = 0;
+    const a = createSessionActions({
+      bridge: { command: async () => { seen.push(shownSession(record, cancels.getState())!.executionStatus); return replies[n++]!; } },
+      replica: { getState: () => ({ sessionId: 'S1', follow: () => undefined, session: record }) },
+      cancels, now: () => '2026-09-29T10:00:00.000Z',
+    });
+    expect(await a.cancelRun()).toEqual({ ok: false, reason: 'The run is no longer cancellable.' });
+    expect(shownSession(record, cancels.getState())).toBe(record);
+    expect(await a.cancelRun()).toEqual({ ok: false, reason: 'The application did not answer' });
+    expect(shownSession(record, cancels.getState())).toBe(record);
+    expect(await a.cancelRun()).toEqual({ ok: true });
+    expect(seen).toEqual(['cancelling', 'cancelling', 'cancelling']);
+    // Accepted: the engine's records of the run keep reading `running` through the graceful stop, and are shown cancelling.
+    expect(shownSession({ ...record }, cancels.getState())!.executionStatus).toBe('cancelling');
+  });
 });

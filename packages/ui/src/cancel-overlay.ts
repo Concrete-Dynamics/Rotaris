@@ -1,5 +1,5 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
-import type { AgentRecord, SessionRecord } from '@rotaris/contracts';
+import { isBusy, RUN_AGENT_ID, type AgentRecord, type SessionRecord } from '@rotaris/contracts';
 import { cancelCascade } from './agents.js';
 
 /**
@@ -28,6 +28,16 @@ import { cancelCascade } from './agents.js';
  * next delivery. So the store numbers every record the replica takes, in the order it takes them (`witness`, called from
  * the replica's own subscription), and an accepted overlay covers every record of its session numbered at or below the
  * newest one witnessed when the engine answered — any record a lagging reader can still be drawing — and none after.
+ *
+ * REQ-MONITOR-127 / REQ-MONITOR-130 — the optimistic cancel of the whole run (acceptance A35). On confirmation "the session
+ * status is optimistically set to `cancelling`", and a refusal restores it. Before this only the Workspace set anything —
+ * its stop button's "Force stop" — and no surface showed `cancelling`, because the engine writes no `cancelling` for the
+ * explicit cancel: the reserved run id's `cancelAgent` raises the final stop in memory, and the run's records keep reading
+ * `running` (or `waiting`) through the graceful stop until the teardown writes the run's end. So a run overlay (`run` set,
+ * no agent ids) covers every ACTIVE record of the run it was confirmed against (`runStartedAt`), unanswered or accepted,
+ * and none at rest and none of a later run: the run's own final read overwrites it (REQ-MONITOR-296), and a lagging
+ * reader's older record of that run is still covered. The session's status is shown `cancelling`; no agent is shown
+ * cancelled by it, since the engine settles them in the teardown (OQ-158).
  */
 export interface CancelOverlay {
   readonly token: number;
@@ -43,6 +53,11 @@ export interface CancelOverlay {
    * covers every record of its session numbered at or below it, and none taken after (the note above).
    */
   readonly acceptedThrough?: number;
+  /**
+   * REQ-MONITOR-127: set on the run's own cancel — the `runStartedAt` of the run it was confirmed against. Such an overlay
+   * names no agent (`agentIds` is empty) and shows the session's status `cancelling` (the note above).
+   */
+  readonly run?: { readonly startedAt: string };
 }
 
 /** REQ-MONITOR-128's activity line: the user cancelled the agent, or the agent was cancelled with the one the user cancelled. */
@@ -60,6 +75,8 @@ export type RecordOrder = (session: SessionRecord) => number | undefined;
  */
 function covers(overlay: CancelOverlay, session: SessionRecord, orderOf: RecordOrder): boolean {
   if (overlay.sessionId !== session.id) return false;
+  // REQ-MONITOR-127: the run's cancel covers its run's active records, answered or not, until the run's final read.
+  if (overlay.run !== undefined) return session.runStartedAt === overlay.run.startedAt && isBusy(session.executionStatus);
   if (overlay.acceptedThrough === undefined) return true;
   const n = orderOf(session);
   return n !== undefined && n <= overlay.acceptedThrough;
@@ -76,7 +93,9 @@ export function shownSession(session: SessionRecord | null, held: Pick<CancelOve
   if (covering.length === 0) return session;
   const byAgent = new Map<string, CancelOverlay>();
   for (const o of covering) for (const id of o.agentIds) if (!byAgent.has(id)) byAgent.set(id, o);
-  let changed = false;
+  // REQ-MONITOR-127: the run's confirmed cancel shows the session cancelling.
+  const cancellingRun = covering.some((o) => o.run !== undefined) && session.executionStatus !== 'cancelling';
+  let changed = cancellingRun;
   let pausedCancelled = 0;
   const agents = session.agents.map((a) => {
     const o = byAgent.get(a.id);
@@ -88,7 +107,7 @@ export function shownSession(session: SessionRecord | null, held: Pick<CancelOve
   if (!changed) return session;
   // PD-ORCH-005 clause 16: the Continue action's count drops by as many paused agents as were cancelled.
   const resumable = session.resumable && pausedCancelled > 0 ? { ...session.resumable, agents: Math.max(0, session.resumable.agents - pausedCancelled) } : session.resumable;
-  return { ...session, agents, resumable };
+  return { ...session, ...(cancellingRun ? { executionStatus: 'cancelling' } : {}), agents, resumable };
 }
 
 export interface CancelOverlayState {
@@ -107,7 +126,12 @@ export interface CancelOverlayActions {
    * settles, or null when the session or the agent is not held (nothing is shown then).
    */
   begin(session: SessionRecord | null, agentId: string, nowIso: string): number | null;
-  /** The engine refused: the overlay is removed, so the prior state shows again (REQ-MONITOR-128). */
+  /**
+   * REQ-MONITOR-127: the confirmation of the run's own cancel — the session is shown `cancelling` from now. Returns the token
+   * the answer settles, or null when no session is held or its run is not active (nothing is shown then).
+   */
+  beginRun(session: SessionRecord | null, nowIso: string): number | null;
+  /** The engine refused: the overlay is removed, so the prior state shows again (REQ-MONITOR-127, REQ-MONITOR-128). */
   refuse(token: number): void;
   /**
    * The engine accepted: the overlay covers `current`, the record held now, and every record witnessed before it — what a
@@ -139,6 +163,13 @@ export function createCancelOverlayStore(): CancelOverlayStore {
       // An accepted overlay is kept, inert once every reader has drawn a later record: it is a handful of numbers and
       // names, it holds no record, and the window knows no bound on how far behind a reader may draw.
       set({ overlays: [...get().overlays, { token, sessionId: session.id, agentId, agentName: agent.name, agentIds, at: nowIso }] });
+      return token;
+    },
+    beginRun(session, nowIso) {
+      if (session === null || session.runStartedAt === null || !isBusy(session.executionStatus)) return null;
+      witness(session);
+      const token = next++;
+      set({ overlays: [...get().overlays, { token, sessionId: session.id, agentId: RUN_AGENT_ID, agentName: 'the run', agentIds: [], at: nowIso, run: { startedAt: session.runStartedAt } }] });
       return token;
     },
     refuse(token) {

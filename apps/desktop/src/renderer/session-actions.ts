@@ -28,8 +28,8 @@ export interface SessionActionDeps {
     readonly getState: () => { readonly sessionId: string | null; readonly follow: (sessionId: string | null) => void; readonly session?: SessionRecord | null };
   };
   /**
-   * REQ-MONITOR-128 / REQ-MONITOR-296: the overlay a confirmed cancel of one agent is shown through before the engine
-   * answers (`cancel-overlay.ts`). The window's own; a test that does not exercise it hands none.
+   * REQ-MONITOR-127/128 / REQ-MONITOR-296: the overlay a confirmed cancel of one agent, or of the run, is shown through
+   * before the engine answers (`cancel-overlay.ts`). The window's own; a test that does not exercise it hands none.
    */
   readonly cancels?: CancelOverlayStore;
   /** The instant an optimistic cancel stamps as its agents' end. */
@@ -102,13 +102,24 @@ export function createSessionActions({ bridge, replica, cancels, now = () => new
    * reserved run id. PD-ORCH-005 clause 3 keeps it final — every agent ends `cancelled` and none is resumed — which is
    * what tells it apart from the stop above; every confirmed "Cancel the run?" sends it (clause 15). A refusal says the
    * run is no longer cancellable (REQ-MONITOR-127).
+   *
+   * REQ-MONITOR-127 / REQ-MONITOR-130 (acceptance A35): the session is shown `cancelling` from the moment the cancel is sent,
+   * on every surface of this window — the Workspace, the Mission view's run row and subtitle, a persona window — through the
+   * overlay's run cancel (`cancel-overlay.ts`), and its own status again on a refusal; an acceptance leaves it to the run's
+   * final read. Every confirmed "Cancel the run?" comes here, so no surface sets a state of its own for it.
    */
   async function cancelRun(): Promise<{ ok: true } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;
     if (!sessionId) return { ok: false, reason: 'No run is active.' };
+    const token = cancels?.getState().beginRun(replica.getState().session ?? null, now()) ?? null;
     const r = await send({ kind: 'session.control', request: { op: 'cancelAgent', sessionId, args: { agentId: RUN_AGENT_ID } } });
+    const accepted = r.ok && (r.value as { ok: boolean }).ok;
+    if (cancels && token !== null) {
+      if (accepted) cancels.getState().accept(token, replica.getState().session ?? null);
+      else cancels.getState().refuse(token);
+    }
     if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
-    return (r.value as { ok: boolean }).ok ? { ok: true } : { ok: false, reason: 'The run is no longer cancellable.' };
+    return accepted ? { ok: true } : { ok: false, reason: 'The run is no longer cancellable.' };
   }
 
   /**

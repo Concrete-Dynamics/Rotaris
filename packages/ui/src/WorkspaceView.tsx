@@ -1031,7 +1031,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     // REQ-MONITOR-006: on a refusal the state is rolled back and the refusal named.
     if (!r.ok) { setStopRequested(false); setError(r.reason); }
   };
-  // REQ-MONITOR-127: on confirmation the run is shown cancelling at once; a refusal restores it and says why.
+  // REQ-MONITOR-127: on confirmation the run is shown cancelling at once — by the renderer's `cancelRun`, through the window's
+  // overlay, as from every surface (acceptance A35, OQ-158); `stopRequested` arms the stop's force. A refusal says why.
   const cancelRun = async () => {
     if (!onCancelRun) return;
     setStopRequested(true);

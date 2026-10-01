@@ -126,3 +126,65 @@ describe('REQ-MONITOR-128: a confirmed cancel of one agent is shown at once', ()
     expect(resting.resumable).toEqual({ iteration: 1, agents: 4 });
   });
 });
+
+/**
+ * REQ-MONITOR-127 / REQ-MONITOR-130 / REQ-MONITOR-296 — the optimistic cancel of the whole run (acceptance A35, the note "the
+ * Mission view and a persona window do not show a confirmed run cancel as cancelling"). On confirmation the session's status
+ * is shown `cancelling`; a refusal restores the record's own; an accepted cancel is shown until the run's record leaves the
+ * active statuses, because the engine writes no `cancelling` for the explicit cancel and its records keep reading `running`
+ * through the graceful stop (OQ-158).
+ */
+describe('REQ-MONITOR-127: a confirmed cancel of the run is shown cancelling at once', () => {
+  const RUN = '2026-09-29T09:58:00.000Z';
+  it('shows the session cancelling from the confirmation, and no agent cancelled by it', () => {
+    const store = createCancelOverlayStore();
+    const s = record({ runStartedAt: RUN });
+    expect(store.getState().beginRun(s, AT)).not.toBeNull();
+    const shown = shownSession(s, store.getState())!;
+    expect(shown.executionStatus).toBe('cancelling');
+    expect(states(shown)).toEqual(states(s));
+    expect(s.executionStatus).toBe('running');
+  });
+
+  it('a refusal restores the record\'s own status (REQ-MONITOR-296)', () => {
+    const store = createCancelOverlayStore();
+    const s = record({ runStartedAt: RUN });
+    const token = store.getState().beginRun(s, AT)!;
+    store.getState().refuse(token);
+    expect(shownSession(s, store.getState())).toBe(s);
+  });
+
+  it('accepted: shown over every active record of that run, and overwritten by its final read or another run\'s record', () => {
+    const store = createCancelOverlayStore();
+    const s = record({ runStartedAt: RUN });
+    const token = store.getState().beginRun(s, AT)!;
+    store.getState().accept(token, s);
+    // The engine's next record of the same run still reads `running` (or `waiting`) through the graceful stop.
+    const later = record({ runStartedAt: RUN, executionStatus: 'waiting', updatedAt: '2026-09-29T10:00:05.000Z' });
+    expect(shownSession(later, store.getState())!.executionStatus).toBe('cancelling');
+    // The final read: the run's record at rest is shown as the engine wrote it.
+    const ended = record({ runStartedAt: RUN, executionStatus: 'stopped' });
+    expect(shownSession(ended, store.getState())).toBe(ended);
+    // A later run of the session is never shown cancelling by this cancel.
+    const next = record({ runStartedAt: '2026-09-29T10:01:00.000Z' });
+    expect(shownSession(next, store.getState())).toBe(next);
+    expect(shownSession(record({ id: 's2', runStartedAt: RUN }), store.getState())!.executionStatus).toBe('running');
+  });
+
+  it('is begun only against a held session whose run is active', () => {
+    const store = createCancelOverlayStore();
+    expect(store.getState().beginRun(null, AT)).toBeNull();
+    expect(store.getState().beginRun(record({ runStartedAt: RUN, executionStatus: 'completed' }), AT)).toBeNull();
+    expect(store.getState().beginRun(record({ runStartedAt: null }), AT)).toBeNull();
+  });
+
+  it('lays over one agent\'s cancel without disturbing it', () => {
+    const store = createCancelOverlayStore();
+    const s = record({ runStartedAt: RUN });
+    store.getState().begin(s, alpha.id, AT);
+    store.getState().beginRun(s, AT);
+    const shown = shownSession(s, store.getState())!;
+    expect(shown.executionStatus).toBe('cancelling');
+    expect(states(shown)).toEqual(['alpha:cancelled', 'sub:cancelled', 'done:done', 'beta:running']);
+  });
+});

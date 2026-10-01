@@ -7831,3 +7831,38 @@ same question, and the three issue kinds. Recommendation: one ruling that adds t
 chat controls to the chat domain's Data & Formats, the rest to domain 01's list — with OQ-76's and OQ-127's words beside
 them, and names REQ-NOTIFY-268's entry type, because the timeline is what an autopsy reads first and the export reaches
 it, and the session log is neither.
+
+**OQ-158 — What is the optimistic `cancelling` of the run's cancel: where is it shown, and until when?** *(REQ-MONITOR-127,
+"On confirmation the session status is optimistically set to `cancelling` … Given a refusal, the status is restored to
+`running`"; REQ-MONITOR-296, "eventually be overwritten by the authoritative final read"; REQ-MONITOR-130, "whichever surface
+asked for it"; REQ-MONITOR-126; `PD-ORCH-005` clauses 3 and 15, which make every confirmed "Cancel the run?" the explicit,
+final cancel; OQ-129, the same question for one agent's cancel. Raised 2026-10-01 under [R-067](../product/requests.md#r-067)
+by the repair of
+[`the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md`](../defects/fixed/the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md),
+acceptance finding A35. Open.)*
+
+The requirement sets an optimistic status and its rollback. It does not say what overwrites it, and the engine gives it
+nothing to be overwritten by: the explicit cancel (the reserved run id's `cancelAgent`, `Run.cancelAgent`) raises the final
+stop in memory and writes the cancel's durable mark, but writes no `cancelling` status. The session's records keep reading
+`running` (or `waiting`) through the graceful stop, up to REQ-MONITOR-129's 30 seconds, until the teardown writes the run's
+end. Only the stop (`op: 'cancel'`) writes `cancelling`, and a stop is not a cancel (`PD-ORCH-005` clause 3). Shown until
+"the next authoritative read", as OQ-129's one-agent cancel is, the run would read `Cancelling` for one record interval and
+`Running` again for the rest of the graceful stop.
+
+**What the build proceeds under** (`packages/ui/src/cancel-overlay.ts`, `beginRun`, written by the renderer's `cancelRun`):
+- **Where.** Every confirmed "Cancel the run?" goes through the renderer's `cancelRun` — the Workspace's run header and wait
+  header, the Mission view's "Cancel selection" on the run row, a persona window's Cancel on the run's own instance — and
+  each surface of that window reads the session through the overlay. The session's status is shown `cancelling` there: the
+  run header and the composer (`Cancelling…`), the status strip, the Mission view's subtitle and run row (`Cancelling`), and
+  a persona window. As with OQ-129, only the window that sent the cancel shows it before the engine's record does; no agent
+  is shown cancelled by it, since the engine settles them in the teardown.
+- **Until when.** From the confirmation, over every record of the run it was confirmed against (`runStartedAt`) whose status
+  is active, answered or not. A refusal removes it, and the record's own status shows again. An acceptance keeps it until
+  the run's final read — its first record at rest — and it never covers a later run of the session. "The authoritative
+  final read" is read as that final record, not the next record, because the next one is still `running`.
+
+**What a ruling decides.** Whether the engine should write `cancelling` when it accepts the explicit cancel, as the stop
+does, so the authoritative record agrees with the optimistic one and every window shows it, not only the one that sent it;
+and, if so, whether the overlay then yields to the next record as OQ-129's does. Recommendation: the engine writes it, because
+REQ-MONITOR-130 asks for identical observable state from every surface, and another window shows the run `Running` until
+the run's end today.

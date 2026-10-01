@@ -45,6 +45,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A confirmed run cancel is shown cancelling on every surface of the window that sent it (REQ-MONITOR-127/130/296, OQ-158,
+R-067).** The renderer's `cancelRun` lays a run overlay (`cancel-overlay.ts`, `beginRun`) over the window's record before it
+sends the reserved run id's `cancelAgent`: the session's status reads `cancelling` in the run header, the composer, the
+status strip, the Mission view's subtitle and run row, and a persona window. A refusal removes it; an acceptance keeps it
+over the run's active records until its first record at rest, because the engine writes no `cancelling` for the explicit
+cancel. Until then only the Workspace set anything — its stop button's "Force stop" — and no surface read `cancelling`. This
+repairs `the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md` (acceptance A35). The
+**runtime view**'s `cancelAgent` row and the **state ownership** view's optimistic-cancel row say so. No package, edge,
+process, message kind, channel, command or store column changed.
+
 **A queued prompt's task is named "Queued Prompt: <id>" (REQ-CHAT-040, REQ-ORCH-071, OQ-117, R-067).** A planner todo
 task carries an optional `name` beside its text (`run/todo.ts`), and `consumeQueued` names a queued prompt's task
 `Queued Prompt: <first 8 characters of the prompt id>` with the prompt as its text. The pane and the handoff's todo list

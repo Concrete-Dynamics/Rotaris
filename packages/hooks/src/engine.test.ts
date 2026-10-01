@@ -13,6 +13,9 @@ import { hook } from './hooks.test.js';
  * so it measures the host's load as much as the operation. The fastest of a handful of runs is the run nearest the
  * reference condition, and an operation genuinely over its bound is over it in every run, so the best of them is too
  * (the repair of the-hooks-payload-bound-test-reads-one-wall-clock-sample-and-fails-under-host-load.md).
+ * The fastest run is a warm one: a cost paid only on an operation's first call, such as a lazy one-time setup, is not in
+ * it. The reference condition times the operation "excluding application start-up" with "a warm file-system cache", and
+ * a one-time setup is start-up's, not the operation's; a cost paid on every call is in every run, the fastest included.
  */
 const BOUND_SAMPLES = 7;
 function bestOfMs<T>(samples: number, operation: () => T): { ms: number; result: T } {

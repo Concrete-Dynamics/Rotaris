@@ -8309,3 +8309,24 @@ killed by signal; whether they outlive it was not measured, and `workspace-proof
 one (it adds nothing for the run host's own work around the stages, which the budgets do not cover); whether the
 coordinator should instead ask the run host for the setup's status when the bound passes; and whether REQ-WORKSPACE-092's
 "nothing the step launched SHALL still be running 5 s later" binds a step whose run host was lost.
+
+**OQ-170 — With two main windows open, which window shows a workspace's initialization banners?** *(REQ-WORKSPACE-103,
+"A failed background run SHALL reach an error banner \"Project setup did not finish\""; REQ-WORKSPACE-102's "Project setup
+could not be checked" error surface; REQ-WORKSPACE-013, "The replacement window SHALL resolve initialization for its own
+workspace independently"; PD-SHELL-001's two main windows, one per project. Raised 2026-10-01 by the repair of
+[`initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`](../defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md).
+Open.)*
+
+Initialization now answers, records and publishes for each window's own workspace: channel 12 reaches only the windows
+holding the workspace the state is about. Its two banners do not travel on channel 12. They are notices, and the
+application has one notice store (ADR-0049): the current notice goes to every live window. With two main windows open, a
+failed background run of the first window's project raises "Project setup did not finish" in the second window too,
+carrying the task's summary ("Code intelligence setup did not complete for this project. …") but no project name. The
+specification states both surfaces for a workspace with one window in mind and says nothing of a second.
+
+**What the build proceeds under** (`apps/desktop/src/main/initialization.ts`, `deps.banner`; `apps/desktop/src/main/index.ts`,
+`raiseNotice`): each banner is an ordinary application notice, shown in every window as every other notice is. A banner
+for a workspace no window holds any more is not raised (OQ-141's reading).
+
+**What a ruling decides.** Whether these banners are the window's (shown only in the windows holding the workspace) or
+the application's; and, if the application's, whether they name the project they concern.

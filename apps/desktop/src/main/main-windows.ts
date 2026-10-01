@@ -166,6 +166,19 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     return undefined;
   }
 
+  /**
+   * The live main windows holding `workspace` (REQ-STARTUP-163 keeps it to one; a switch's two windows hold two roots).
+   * A message about one workspace's state goes to these and to no other window (REQ-WORKSPACE-105, PD-SHELL-001).
+   */
+  holding(workspace: string): readonly MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>[] {
+    const holders: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>[] = [];
+    for (const record of this.#records.values()) {
+      if (this.dependencies.adapter.isDestroyed(record.win) || record.workspace === '(no workspace)') continue;
+      if (this.dependencies.samePath(workspace, record.workspace)) holders.push(this.#view(record));
+    }
+    return holders;
+  }
+
   ordered(): readonly MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>[] {
     const ordered: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>[] = [];
     const seen = new Set<number>();

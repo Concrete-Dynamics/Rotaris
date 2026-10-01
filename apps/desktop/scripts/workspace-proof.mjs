@@ -122,6 +122,11 @@ const INIT_QUICK = initProject('init-quick');
 const INIT_HELD = initProject('init-held', { slow: true });
 const INIT_LOST = initProject('init-lost', { slow: true });
 const INIT_QUEUED = initProject('init-queued');
+const INIT_TWO_A = initProject('init-two-a', { slow: true });
+const INIT_TWO_B = initProject('init-two-b');
+// The second window's workspace has been initialized before, so the two windows' states tell apart by `lastRun` alone;
+// its setup is still pending, as no list names it.
+writeFileSync(join(INIT_TWO_B, '.rotaris', 'agents.yaml'), `${readFileSync(join(INIT_TWO_B, '.rotaris', 'agents.yaml'), 'utf8')}initialization:\n  completed: []\n  skipped: []\n  last_run: "2026-09-01T00:00:00.000+00:00"\n  classification: code\n`);
 
 const launches = [];
 /** Quit every app still running, keeping its log as evidence. Idempotent, so `finally` may call it again. */
@@ -822,6 +827,70 @@ try {
     }
     // Nothing in main ends a step's processes when the run host that launched them is killed (OQ-169): end the stand-in here.
     if (createPid > 0) { try { process.kill(createPid, 'SIGKILL'); } catch { /* already gone */ } }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // 8e — two main windows, one per project (PD-SHELL-001): each window's initialization is its own (REQ-WORKSPACE-013/105).
+  // ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+  {
+    /*
+     * The coordinator held one "active" root, the one opened last, and answered every window's `initialization.*` with it;
+     * channel 12 reached every window; and main addressed the setup port by the focused window's workspace
+     * (`docs/defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`). Here the first
+     * window's setup holds `create`, the second window opens on another project, focused and opened last, and its setup
+     * queues behind the first. The first window then reads its state and presses Cancel: before the repair the read
+     * answered the second project's state, and the Cancel cancelled the second project's queued run while the first
+     * project's setup ran on for its 90 s.
+     */
+    const s = await launch('init-two-windows', { workspace: INIT_TWO_A, folders: [INIT_TWO_B] });
+    const startedFor = (name) => (logOf(s).match(new RegExp(`mcp setup: started for [^\\n]*${name}`, 'g')) ?? []).length;
+    const waitUntil = async (predicate, timeoutMs) => {
+      const began = Date.now();
+      while (!predicate()) {
+        if (Date.now() - began > timeoutMs) return false;
+        await sleep(100);
+      }
+      return true;
+    };
+    const firstStarted = await waitUntil(() => startedFor('init-two-a') === 1 && existsSync(join(INIT_TWO_A, '.stand-in-create.pid')), 30_000);
+    const pid = firstStarted ? Number(readFileSync(join(INIT_TWO_A, '.stand-in-create.pid'), 'utf8')) : 0;
+    let queued = false;
+    if (firstStarted) {
+      await s.driver.command({ kind: 'workspace.choose', newWindow: true });
+      queued = await waitUntil(() => /init-two-b waits for the setup under way to end/.test(logOf(s)), 30_000);
+    }
+    if (!firstStarted || !queued) {
+      skip('PD-SHELL-001 / REQ-WORKSPACE-013 / REQ-WORKSPACE-105: each of two windows reads and cancels its own workspace\'s initialization',
+        !firstStarted ? `the first project's setup never started within 30 s (log tail: ${JSON.stringify(logOf(s).slice(-600))})` : 'the second window\'s setup never queued behind the first');
+    } else {
+      const windows = await windowsOf(s.driver);
+      await s.driver.useWindow('init-two-a');
+      const readA = await s.driver.command({ kind: 'initialization.read' });
+      await s.driver.useWindow('init-two-b');
+      const readB = await s.driver.command({ kind: 'initialization.read' });
+      // `lastRun` is null for a workspace never initialized, so absence is told from it by the view itself.
+      const lastRunA = readA?.value?.view === undefined ? 'absent' : readA.value.view.lastRun;
+      const lastRunB = readB?.value?.view === undefined ? 'absent' : readB.value.view.lastRun;
+      check('PD-SHELL-001 / REQ-WORKSPACE-105: each window reads its own workspace\'s initialization state, whichever was opened last',
+        windows.length === 2 && lastRunA === null && lastRunB === '2026-09-01T00:00:00.000+00:00',
+        `${windows.length} main window(s), the second opened last${windows[0]?.workspace?.endsWith('init-two-b') ? ' and focused' : ''}; the first window read lastRun ${JSON.stringify(lastRunA)} (its project was never initialized), the second ${JSON.stringify(lastRunB)}`);
+      // The first window's Cancel, pressed while the second window is the one opened last.
+      await s.driver.useWindow('init-two-a');
+      await s.driver.command({ kind: 'initialization.cancel' });
+      const answeredAt = Date.now();
+      const alive = () => { try { process.kill(pid, 0); return true; } catch { return false; } };
+      const ended = await waitUntil(() => !alive(), 5_000);
+      const endedAfter = Date.now() - answeredAt;
+      const recorded = await waitUntil(() => readFileSync(join(INIT_TWO_B, '.rotaris', 'agents.yaml'), 'utf8').includes('code-intelligence-setup'), 30_000);
+      const log = logOf(s);
+      const fileA = readFileSync(join(INIT_TWO_A, '.rotaris', 'agents.yaml'), 'utf8');
+      const fileB = readFileSync(join(INIT_TWO_B, '.rotaris', 'agents.yaml'), 'utf8');
+      check('PD-SHELL-001 / REQ-WORKSPACE-013 / REQ-WORKSPACE-092 / REQ-WORKSPACE-109: the first window\'s Cancel cancels the first workspace\'s run and setup, and the second workspace\'s queued setup then runs to its own recorded outcome',
+        ended && recorded && log.includes('mcp setup: cancellation requested') && startedFor('init-two-b') === 1
+          && fileB.includes('code-intelligence-setup') && !fileA.includes('code-intelligence-setup'),
+        `the first project's create (pid ${pid}) ${ended ? `ended ${endedAfter} ms after the Cancel answered` : 'was STILL running 5 s after the Cancel'}; cancellation ${log.includes('mcp setup: cancellation requested') ? 'requested' : 'NEVER requested'}; the second project's setup started ${startedFor('init-two-b')} time(s) and its outcome is ${recorded ? `recorded (${JSON.stringify(fileB.slice(fileB.indexOf('initialization:')).slice(0, 160))})` : 'NOT recorded'}${/init-two-b was closed|cancelled before it started/.test(log) ? '; the second project\'s run was cancelled instead' : ''}`);
+    }
+    if (pid > 0) { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } }
   }
 
   // ───────────────────────────────────────────────────────────────────────────────────────────────────────────

@@ -221,7 +221,7 @@ describe('the task registry', () => {
   it('treats a raising predicate as not applicable, and logs it', async () => {
     const lines: string[] = [];
     const bad = task('x', { applicable: () => { throw new Error('boom'); } });
-    expect(await isApplicable(bad, (m) => lines.push(m))).toBe(false);
+    expect(await isApplicable(bad, (m) => lines.push(m), { workspaceRoot: 'C:/ws' })).toBe(false);
     expect(lines[0]).toContain('boom');
   });
 
@@ -236,6 +236,18 @@ describe('the task registry', () => {
 /** REQ-WORKSPACE-081/082/105. */
 describe('the task sets and the nine values', () => {
   const log = () => undefined;
+  const at = { workspaceRoot: 'C:/ws' };
+
+  /** REQ-WORKSPACE-013/102, PD-SHELL-001: the sets are one workspace's, and every predicate is told which. */
+  it('asks every predicate about the workspace the sets are derived for', async () => {
+    const r = new TaskRegistry();
+    const asked: string[] = [];
+    r.register(task('only-alpha', { applicable: ({ workspaceRoot }) => { asked.push(workspaceRoot); return workspaceRoot === 'C:/alpha'; } }));
+    const state: InitializationState = { completed: [], skipped: [], lastRun: null, classification: null };
+    expect((await deriveSets(r, state, log, { workspaceRoot: 'C:/alpha' })).applicable.map((t) => t.id)).toEqual(['only-alpha']);
+    expect((await deriveSets(r, state, log, { workspaceRoot: 'C:/beta' })).applicable).toEqual([]);
+    expect(asked).toEqual(['C:/alpha', 'C:/beta']);
+  });
 
   it('separates applicable, pending, runnable, background and consent', async () => {
     const r = new TaskRegistry();
@@ -245,7 +257,7 @@ describe('the task sets and the nine values', () => {
     r.register(task('skip'));
     r.register(task('gone', { applicable: () => false }));
     const state: InitializationState = { completed: ['done'], skipped: ['skip'], lastRun: 'x', classification: null };
-    const sets = await deriveSets(r, state, log);
+    const sets = await deriveSets(r, state, log, at);
     expect(sets.applicable.map((t) => t.id)).toEqual(['bg', 'ask', 'done', 'skip']);
     expect(sets.pending.map((t) => t.id)).toEqual(['bg', 'ask']);
     // A skipped task stays runnable; a completed one does not.
@@ -258,7 +270,7 @@ describe('the task sets and the nine values', () => {
   it('counts an id in both lists at once as completed', async () => {
     const r = new TaskRegistry();
     r.register(task('a'));
-    const sets = await deriveSets(r, { completed: ['a'], skipped: ['a'], lastRun: 'x', classification: null }, log);
+    const sets = await deriveSets(r, { completed: ['a'], skipped: ['a'], lastRun: 'x', classification: null }, log, at);
     expect(sets.pending).toEqual([]);
     expect(sets.runnable).toEqual([]);
   });
@@ -266,7 +278,7 @@ describe('the task sets and the nine values', () => {
   it('owes the prompt on a consent task pending whatever the workspace has done before', async () => {
     const r = new TaskRegistry();
     r.register(task('ask', { requiresConsent: true }));
-    const sets = await deriveSets(r, { completed: ['other'], skipped: [], lastRun: 'x', classification: 'code' }, log);
+    const sets = await deriveSets(r, { completed: ['other'], skipped: [], lastRun: 'x', classification: 'code' }, log, at);
     expect(promptOwed(sets)).toBe(true);
   });
 
@@ -275,7 +287,7 @@ describe('the task sets and the nine values', () => {
     r.register(task('a'));
     r.register(task('b'));
     const state: InitializationState = { completed: ['a', 'b'], skipped: [], lastRun: 'x', classification: 'code' };
-    const sets = await deriveSets(r, state, log);
+    const sets = await deriveSets(r, state, log, at);
     const one = viewOf(state, sets, false, null);
     const other = viewOf({ ...state, completed: ['b', 'a'] }, sets, false, null);
     expect(sameView(one, other)).toBe(true);
@@ -288,7 +300,7 @@ describe('the task sets and the nine values', () => {
     const r = new TaskRegistry();
     r.register(task('gone', { applicable: () => false }));
     const state: InitializationState = { completed: ['gone', 'ghost'], skipped: [], lastRun: 'x', classification: null };
-    const view = viewOf(state, await deriveSets(r, state, log), false, null);
+    const view = viewOf(state, await deriveSets(r, state, log, at), false, null);
     expect(view.completed).toEqual([]);
   });
 });

@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**Initialization is each window's own workspace's (REQ-WORKSPACE-013/102/105, PD-SHELL-001, ADR-0064).** The
+`initialization.*` commands answer for the sending window's workspace. The coordinator keys every method by root and
+publishes channel 12 to the windows holding that root (`MainWindows.holding`). Its setup port addresses the run host by
+the run's own workspace identifier, and `config`'s registry tells an applicability predicate which workspace it is
+judged for (`ApplicabilityContext`). See the process view, `mcp.setup`, `initialization.*` and channel 12. This repairs
+`initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`. No package, edge, process, message
+kind, channel, command or store column changed.
+
 **A setup whose finished status never arrives still ends (REQ-WORKSPACE-084/109, OQ-169, ADR-0064).** Main tells the
 initialization coordinator when the run host exits (`onRunHostExit`), and a follow is bounded by the stage budgets plus
 REQ-WORKSPACE-092's 5 s each (`SETUP_FOLLOW_BOUND_MS`); either ends it as a retryable failure and the next setup's turn

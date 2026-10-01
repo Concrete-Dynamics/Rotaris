@@ -434,3 +434,20 @@ besides:** the queued run's start, sent to the run host that is gone, ends 15 s 
 than in REQ-WORKSPACE-093's words (`../../defects/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`,
 recorded, not repaired).
 
+
+**Twelfth round (2026-10-01): one coordinator, a workspace per window.** "Why main owns it" put the coordinator where main
+brokers between the workspace service and the run host. It held one "active" root, set by every window's open, and
+answered every window with it. Channel 12 went to every live window, and main's setup port addressed the run host by the
+focused window's workspace. With two main windows open (PD-SHELL-001), the first window's surfaces showed the second
+workspace once it had opened. A Skip or a Cancel pressed in the first acted on the second, and a run's setup could be
+started against the focused window's configuration and root
+(`../../defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`). Now every method
+names the root it is asked for, and the commands pass the sender's window's root. The state is published to the windows
+holding that root (`MainWindows.holding`). The setup port is addressed by the run's own workspace identifier, which
+`open` now takes. The registry's predicate is told which workspace it is judged for (`ApplicabilityContext`).
+
+**Measured** by the unit cases (three command-level cases red on the code before) and by `workspace-proof`'s new
+scenario 8e. In 8e the first window reads its own state and cancels its own run while the second window, opened last and
+focused, holds the other workspace: 44 passed, 0 failed, 2 skipped, as root under Xvfb, Node 24, `--skip-build` after
+`pnpm build`. **Found besides:** the two initialization banners are application notices, shown in every window. Which
+window should show a workspace's banner is raised as OQ-170.

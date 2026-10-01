@@ -50,7 +50,7 @@ describe('the answered project-setup section a proof writes (REQ-WORKSPACE-081, 
   });
 
   it('REQ-WORKSPACE-083: without the section the task is background, so it starts by itself at open', async () => {
-    const sets = await deriveSets(registry(), readInitializationState(agentsFile(false)), () => undefined);
+    const sets = await deriveSets(registry(), readInitializationState(agentsFile(false)), () => undefined, { workspaceRoot: 'C:/ws' });
     expect(sets.background.map((t) => t.id)).toEqual([CODE_INTELLIGENCE_TASK_ID]);
   });
 
@@ -59,7 +59,7 @@ describe('the answered project-setup section a proof writes (REQ-WORKSPACE-081, 
     expect(state.skipped).toEqual([CODE_INTELLIGENCE_TASK_ID]);
     expect(state.completed).toEqual([]);
     expect(state.lastRun).not.toBeNull();
-    const sets = await deriveSets(registry(), state, () => undefined);
+    const sets = await deriveSets(registry(), state, () => undefined, { workspaceRoot: 'C:/ws' });
     expect(sets.pending).toEqual([]);
     expect(sets.background).toEqual([]);
   });

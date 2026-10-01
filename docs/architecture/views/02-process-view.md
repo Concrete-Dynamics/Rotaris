@@ -407,7 +407,8 @@ like every other MCP child: one per session, one transient per discovery or prob
 `--` is Electron's, not ours: a scheme-looking positional followed by another positional exits the binary before any
 JavaScript (spike `code-intelligence-branch.md`). The transport tolerates the one CR LF Electron writes to standard
 output at start. **`mcp.setup`** — renderer → main `{action: start | cancel | status}`; main → run host
-`{workspaceId, action}` → `mcp.setup {status}` (or `refused` with `mcp.setup.running`, `workspace.unknown` or
+`{workspaceId, action}` → `mcp.setup {status}` (the initialization coordinator's setup port names the run's own
+workspace, by the identifier main was handed at its open, never the focused window's — 2026-10-01, PD-SHELL-001) (or `refused` with `mcp.setup.running`, `workspace.unknown` or
 `mcp.configuration`; an entry that is not a local launch is not refused but answered with a finished `unavailable`
 status). Main's setup port carries a refusal's code and words to the initialization coordinator, which reports it as a
 retryable failure and keeps REQ-WORKSPACE-094's "not a local launch" for the `unavailable` status alone (OQ-167;
@@ -422,7 +423,11 @@ terminate then tree-killed after 5 s on cancel or timeout; the category polls th
 (REQ-WORKSPACE-115's refresh — the persisted section as it is on disk, nothing else disturbed),
 `initialization.resolve` (REQ-WORKSPACE-102's "Check again", additional to the one automatic resolution per
 workspace open), `initialization.start`, `initialization.skip {ids}` and `initialization.cancel`. Each answers with
-the whole state. A skip records every listed id except one the live run is attempting, which it logs (ADR-0064,
+the whole state of the sending window's own workspace: the coordinator keeps one entry per workspace a window holds, keyed
+by its canonical root, and every one of its methods names the root it is asked for — there is no "current" workspace, so
+with two main windows open (PD-SHELL-001) a Skip, an Initialize or a Cancel in one acts on that window's workspace alone,
+each open's automatic resolution is its own, and a task's applicability is judged against the asked workspace's
+configuration (`ApplicabilityContext`, `config`'s registry) (REQ-WORKSPACE-013/102/105; 2026-10-01). A skip records every listed id except one the live run is attempting, which it logs (ADR-0064,
 finding (2)), and one already recorded completed, which it leaves completed (REQ-WORKSPACE-084/086; 2026-09-29,
 R-062). Main makes every marker write through one queue per workspace root, one at a time in the order asked, and builds each patch
 (a skip's, each of a run's recordings, the silent stamp) inside its turn from the file as the previous write left it,
@@ -462,8 +467,8 @@ sequence stamped in the run host and relayed unchanged (REQ-MONITOR-214); `termi
 per-stream sequence; `notice:current` is the single notice or null; `acknowledgement:publish` (channel 8, Part V) is a transient for ONE
 window's own stack — the stack is per window and is not the notice store (ADR-0049); `library:changed` (channel 9,
 Part X) is the library revision, to every live window; `initialization:state` (channel 12, Part AS) is
-the nine values of REQ-WORKSPACE-105, their labels and descriptions, and the live run report, to every live
-window whichever view it is showing; `theme:changed` and `config:changed`
+one workspace's nine values of REQ-WORKSPACE-105, their labels and descriptions, and its live run report, to the main
+windows holding that workspace (`MainWindows.holding`) whichever view each is showing, and to no other (2026-10-01); `theme:changed` and `config:changed`
 repaint or repopulate every live window.
 
 **Main ↔ run host (`RunHostRequestSchema` / `ProcessReplySchema` / `ProcessEventSchema`).** Since 2026-09-09 (Part AL): the seven `terminal.*` requests, the `terminal.streams` reply and the `publish.terminal` event, listed above. Requests:

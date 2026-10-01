@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
 import type { InitializationStateView, McpSetupStatus, McpSetupStep } from '@rotaris/contracts';
-import { readInitializationState, writeConfigFields, type PlainMap } from '@rotaris/config';
+import { readInitializationState, writeConfigFields, type InitializationTask, type PlainMap } from '@rotaris/config';
 import {
   CANCELLED_BEFORE_SETUP_ERROR, CODE_INTELLIGENCE_FAILED_SUMMARY, CODE_INTELLIGENCE_SUCCESS_CODE, CODE_INTELLIGENCE_SUCCESS_NON_CODE,
   CODE_INTELLIGENCE_TASK_ID, deliverSetupCancel, InitializationCoordinator, NOT_A_LOCAL_LAUNCH_ERROR, NOT_A_LOCAL_LAUNCH_SUMMARY,
@@ -40,12 +40,15 @@ const unavailableSetup = (): McpSetupStatus => status({
 interface Harness {
   readonly coordinator: InitializationCoordinator;
   readonly published: InitializationStateView[];
+  readonly publishedTo: string[];
   readonly banners: { headline: string; detail: string }[];
   readonly writes: PlainMap[];
   readonly logs: { message: string; level: string }[];
   readonly root: string;
   readonly agents: string;
   readonly clock: FakeClock;
+  /** Every setup-port call, with the workspace identifier it addressed the run host by. */
+  readonly addressed: { readonly call: 'start' | 'cancel' | 'status'; readonly workspaceId: string }[];
   push(s: McpSetupStatus): void;
 }
 
@@ -55,9 +58,12 @@ interface StatusHold { current: Promise<void> | null }
 function harness(options: { applicable?: boolean; startRefusal?: { code: string; reason: string }; startStatus?: McpSetupStatus; writeFails?: string | null; modelReachable?: boolean; statusGate?: Promise<void>; hold?: StatusHold; onStart?: () => void; onCancel?: () => void; writeHold?: StatusHold; startHold?: StatusHold } = {}): Harness {
   const { root, agents } = workspace();
   const published: InitializationStateView[] = [];
+  /** The root each entry of `published` was sent for, index for index. */
+  const publishedTo: string[] = [];
   const banners: { headline: string; detail: string }[] = [];
   const writes: PlainMap[] = [];
   const logs: { message: string; level: string }[] = [];
+  const addressed: { call: 'start' | 'cancel' | 'status'; workspaceId: string }[] = [];
   const clock = new FakeClock(0, Date.parse('2026-09-15T12:00:00Z'));
   // Each workspace's own service applies its marker writes one at a time, in the order they are sent; a write sent
   // while `writeHold` is set lands only once it is released, and every write sent after it to the same root lands after
@@ -80,16 +86,16 @@ function harness(options: { applicable?: boolean; startRefusal?: { code: string;
       return landed;
     },
     setup: {
-      start: async () => { options.onStart?.(); await options.startHold?.current; return options.startRefusal ? { ok: false, ...options.startRefusal } : { ok: true, status: options.startStatus ?? status() }; },
-      cancel: async () => { options.onCancel?.(); },
-      status: async () => { await options.statusGate; await options.hold?.current; return status({ applicable: options.applicable !== false }); },
+      start: async (workspaceId) => { addressed.push({ call: 'start', workspaceId }); options.onStart?.(); await options.startHold?.current; return options.startRefusal ? { ok: false, ...options.startRefusal } : { ok: true, status: options.startStatus ?? status() }; },
+      cancel: async (workspaceId) => { addressed.push({ call: 'cancel', workspaceId }); options.onCancel?.(); },
+      status: async (workspaceId) => { addressed.push({ call: 'status', workspaceId }); await options.statusGate; await options.hold?.current; return status({ applicable: options.applicable !== false }); },
     },
-    publish: (s) => published.push(s),
+    publish: (publishedRoot, s) => { publishedTo.push(publishedRoot); published.push(s); },
     banner: (headline, detail) => banners.push({ headline, detail }),
     modelReachable: () => options.modelReachable !== false,
   });
-  coordinator.open(root, agents);
-  return { coordinator, published, banners, writes, logs, root, agents, clock, push: (s) => coordinator.onSetupStatus(s) };
+  coordinator.open(root, agents, 'ws-h');
+  return { coordinator, published, publishedTo, banners, writes, logs, root, agents, clock, addressed, push: (s) => coordinator.onSetupStatus(s) };
 }
 
 /** REQ-WORKSPACE-088: the one registered task, its id and its label, and that it needs no consent. */
@@ -103,8 +109,14 @@ describe('the default task set', () => {
   });
 
   it('is applicable exactly when the setup status says the entry is launchable (REQ-WORKSPACE-090)', async () => {
-    expect(await harness({ applicable: true }).coordinator.registry.all()[0]!.applicable()).toBe(true);
-    expect(await harness({ applicable: false }).coordinator.registry.all()[0]!.applicable()).toBe(false);
+    const yes = harness({ applicable: true });
+    const no = harness({ applicable: false });
+    expect(await yes.coordinator.registry.all()[0]!.applicable({ workspaceRoot: yes.root })).toBe(true);
+    expect(await no.coordinator.registry.all()[0]!.applicable({ workspaceRoot: no.root })).toBe(false);
+    // Judged against the asked workspace's own configuration, by its own identifier; a root no window holds has none.
+    expect(yes.addressed).toEqual([{ call: 'status', workspaceId: 'ws-h' }]);
+    expect(await yes.coordinator.registry.all()[0]!.applicable({ workspaceRoot: workspace().root })).toBe(false);
+    expect(yes.addressed).toHaveLength(1);
   });
 });
 
@@ -112,7 +124,7 @@ describe('resolution on workspace open', () => {
   /** REQ-WORKSPACE-083: a never-initialized workspace with no applicable task is marked silently. */
   it('marks a workspace with nothing applicable, stamping last_run and starting nothing', async () => {
     const h = harness({ applicable: false });
-    const state = await h.coordinator.resolve(true);
+    const state = await h.coordinator.resolve(h.root, true);
     expect(state.view.neverInitialized).toBe(false);
     expect(state.view.pending).toEqual([]);
     expect(h.writes).toHaveLength(1);
@@ -123,14 +135,14 @@ describe('resolution on workspace open', () => {
   /** REQ-WORKSPACE-102: automatic exactly once per open; a user-requested check is additional. */
   it('resolves automatically once and lets a check-again run beside it', async () => {
     const h = harness({ applicable: false });
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     expect(h.writes).toHaveLength(1);
     const publishedAfterFirst = h.published.length;
     // A second AUTOMATIC resolution is not made; the one per workspace open has been used.
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     expect(h.published).toHaveLength(publishedAfterFirst);
     // A user-requested check IS made — and writes nothing, the marker already standing (REQ-WORKSPACE-079).
-    await h.coordinator.resolve(false);
+    await h.coordinator.resolve(h.root, false);
     expect(h.published.length).toBeGreaterThan(publishedAfterFirst);
     expect(h.writes).toHaveLength(1);
   });
@@ -138,7 +150,7 @@ describe('resolution on workspace open', () => {
   /** REQ-WORKSPACE-083: background work starts by itself and no marker is written up front. */
   it('starts the background task and records its outcome when it finishes', async () => {
     const h = harness();
-    const run = h.coordinator.resolve(true);
+    const run = h.coordinator.resolve(h.root, true);
     // The run host pushes each step, then the finish.
     await new Promise((r) => setImmediate(r));
     h.push(status({ steps: [step('create', 'succeeded', 'made'), step('index', 'pending'), step('memory', 'pending')] }));
@@ -157,7 +169,7 @@ describe('resolution on workspace open', () => {
   /** REQ-WORKSPACE-095: the non-code summary, and REQ-WORKSPACE-091's skip token surviving into the step. */
   it('summarises a documentation-only workspace in its own words', async () => {
     const h = harness();
-    const run = h.coordinator.resolve(true);
+    const run = h.coordinator.resolve(h.root, true);
     await new Promise((r) => setImmediate(r));
     h.push(status({ state: 'finished', outcome: 'completed', containsCode: false, steps: [step('create', 'succeeded', 'made'), step('index', 'skipped-no-code', 'No source files found, so there are no symbols to index.'), step('memory', 'skipped-no-code', 'No source files found, so no memory layout was seeded.')] }));
     await run;
@@ -171,7 +183,7 @@ describe('resolution on workspace open', () => {
   /** REQ-WORKSPACE-093 / REQ-WORKSPACE-103: a failed stage reports "{reason}: {detail}" and reaches a banner. */
   it('reports a failed stage with its own reason and raises the background banner', async () => {
     const h = harness();
-    const run = h.coordinator.resolve(true);
+    const run = h.coordinator.resolve(h.root, true);
     await new Promise((r) => setImmediate(r));
     h.push(status({ state: 'finished', outcome: 'failed', containsCode: true, message: 'A step failed', steps: [step('create', 'succeeded', 'made'), step('index', 'failed', 'exit 1'), step('memory', 'not-attempted', '')] }));
     await run;
@@ -202,7 +214,7 @@ describe('resolution on workspace open', () => {
     },
   ])('reports a step stopped by $stop in REQ-WORKSPACE-092\'s words', async ({ stop, outcome, sentence, runHost }) => {
     const h = harness();
-    const run = h.coordinator.resolve(true);
+    const run = h.coordinator.resolve(h.root, true);
     await new Promise((r) => setImmediate(r));
     const steps = [step('create', 'succeeded', 'made'), { ...step('index', 'failed', runHost), stopped: stop }, step('memory', 'not-attempted', 'not attempted')];
     // REQ-WORKSPACE-109: the stopped step is published live the moment the run host reports it, before the setup's finish.
@@ -224,7 +236,7 @@ describe('resolution on workspace open', () => {
   /** REQ-WORKSPACE-092: a step that ran to completion and exited non-zero keeps its own output, told apart from a stopped one. */
   it('keeps a non-zero exit\'s own detail', async () => {
     const h = harness();
-    const run = h.coordinator.resolve(true);
+    const run = h.coordinator.resolve(h.root, true);
     await new Promise((r) => setImmediate(r));
     h.push(status({ state: 'finished', outcome: 'failed', containsCode: true, message: 'A step failed', steps: [step('create', 'failed', 'exited with code 1; its last output: boom'), step('index', 'not-attempted'), step('memory', 'not-attempted')] }));
     await run;
@@ -240,7 +252,7 @@ describe('resolution on workspace open', () => {
    */
   it('fails non-retryably when the entry is not a local launch', async () => {
     const h = harness({ startStatus: unavailableSetup() });
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await new Promise((r) => setImmediate(r));
     const task = h.published.at(-1)!.report.tasks[0]!;
     expect(task.error).toBe(NOT_A_LOCAL_LAUNCH_ERROR);
@@ -260,7 +272,7 @@ describe('resolution on workspace open', () => {
     { code: 'mcp.configuration', reason: 'The configuration could not be loaded' },
   ])('fails retryably, in its own words, when the run host refuses the start ($code)', async (refusal) => {
     const h = harness({ startRefusal: refusal });
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await new Promise((r) => setImmediate(r));
     await new Promise((r) => setImmediate(r));
     const task = h.published.at(-1)!.report.tasks[0]!;
@@ -281,19 +293,19 @@ describe('the skip path and the start refusals', () => {
   /** REQ-WORKSPACE-086/111: every id recorded, and the marker stamped even for an empty list. */
   it('records a skip and stamps the marker even with nothing listed', async () => {
     const h = harness();
-    expect(await h.coordinator.skip([])).toEqual({ ok: true });
+    expect(await h.coordinator.skip(h.root, [])).toEqual({ ok: true });
     expect(readInitializationState(h.agents).lastRun).not.toBeNull();
-    expect(await h.coordinator.skip(['a', 'b'])).toEqual({ ok: true });
+    expect(await h.coordinator.skip(h.root, ['a', 'b'])).toEqual({ ok: true });
     expect(readInitializationState(h.agents).skipped).toEqual(['a', 'b']);
   });
 
   /** The other half of the same defect: a task the live run is attempting is not the user's to skip. */
   it('leaves a task the live run is attempting out of a skip', async () => {
     const h = harness();
-    const run = h.coordinator.resolve(true);
+    const run = h.coordinator.resolve(h.root, true);
     await new Promise((r) => setImmediate(r));
     // The prompt lists the runnable tasks, which includes the background one that started at open.
-    expect(await h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent'])).toEqual({ ok: true });
+    expect(await h.coordinator.skip(h.root, [CODE_INTELLIGENCE_TASK_ID, 'verification-consent'])).toEqual({ ok: true });
     expect(readInitializationState(h.agents).skipped).toEqual(['verification-consent']);
     h.push(status({ state: 'finished', outcome: 'completed', containsCode: false, steps: [step('create', 'succeeded', 'made')] }));
     await run;
@@ -321,16 +333,16 @@ describe('the skip path and the start refusals', () => {
     const h = harness();
     h.coordinator.registry.register(consentTask);
     // The mount read: a consent task pending and no run in progress, so the window opens the dialog.
-    const mounted = await h.coordinator.read();
+    const mounted = await h.coordinator.read(h.root);
     expect(mounted.view.consentPending).toEqual(['verification-consent']);
     expect(mounted.view.running).toBe(false);
     // Escape, before the slot: the dialog listed both runnable tasks.
-    expect(await h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent'])).toEqual({ ok: true });
+    expect(await h.coordinator.skip(h.root, [CODE_INTELLIGENCE_TASK_ID, 'verification-consent'])).toEqual({ ok: true });
     expect(readInitializationState(h.agents).skipped).toEqual(['verification-consent']);
     expect(h.published.at(-1)!.view.running).toBe(true);
     // The 800 ms slot: the one automatic resolution of this open has been made, so none is made again.
     const publishedBefore = h.published.length;
-    const slot = await h.coordinator.resolve(true);
+    const slot = await h.coordinator.resolve(h.root, true);
     expect(h.published).toHaveLength(publishedBefore);
     expect(slot.view.running).toBe(true);
     h.push(status({ state: 'finished', outcome: 'completed', containsCode: false, steps: [step('create', 'succeeded', 'made')] }));
@@ -346,8 +358,8 @@ describe('the skip path and the start refusals', () => {
     let release: () => void = () => undefined;
     const h = harness({ statusGate: new Promise<void>((r) => { release = r; }) });
     h.coordinator.registry.register(consentTask);
-    const slot = h.coordinator.resolve(true);
-    const skipped = h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
+    const slot = h.coordinator.resolve(h.root, true);
+    const skipped = h.coordinator.skip(h.root, [CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
     await new Promise((r) => setImmediate(r));
     // Nothing is recorded while the resolution has not decided what it starts.
     expect(readInitializationState(h.agents).skipped).toEqual([]);
@@ -365,7 +377,7 @@ describe('the skip path and the start refusals', () => {
   it('records every given id when the resolution a skip performs first starts nothing (REQ-WORKSPACE-086)', async () => {
     const h = harness({ applicable: false });
     h.coordinator.registry.register(consentTask);
-    expect(await h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent'])).toEqual({ ok: true });
+    expect(await h.coordinator.skip(h.root, [CODE_INTELLIGENCE_TASK_ID, 'verification-consent'])).toEqual({ ok: true });
     expect(h.published.at(-1)!.view.running).toBe(false);
     expect(readInitializationState(h.agents).skipped).toEqual([CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
   });
@@ -379,9 +391,9 @@ describe('the skip path and the start refusals', () => {
   it('marks every view published during a skip that shows a run in progress as a background run (REQ-WORKSPACE-083, REQ-WORKSPACE-103)', async () => {
     const h = harness();
     h.coordinator.registry.register(consentTask);
-    expect((await h.coordinator.read()).backgroundRun).toBe(false);
+    expect((await h.coordinator.read(h.root)).backgroundRun).toBe(false);
     const before = h.published.length;
-    expect(await h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent'])).toEqual({ ok: true });
+    expect(await h.coordinator.skip(h.root, [CODE_INTELLIGENCE_TASK_ID, 'verification-consent'])).toEqual({ ok: true });
     const during = h.published.slice(before);
     expect(during.some((v) => v.view.running)).toBe(true);
     for (const v of during.filter((x) => x.view.running || x.report.running)) expect(v.backgroundRun).toBe(true);
@@ -401,9 +413,9 @@ describe('the skip path and the start refusals', () => {
     let finish: () => void = () => undefined;
     const held = new Promise<void>((r) => { finish = r; });
     h.coordinator.registry.register({ ...consentTask, run: async () => { await held; return await consentTask.run(); } });
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     const before = h.published.length;
-    expect(await h.coordinator.start()).toEqual({ ok: true });
+    expect(await h.coordinator.start(h.root)).toEqual({ ok: true });
     await new Promise((r) => setImmediate(r));
     finish();
     await new Promise((r) => setImmediate(r));
@@ -424,13 +436,13 @@ describe('the skip path and the start refusals', () => {
     const hold: StatusHold = { current: null };
     const h = harness({ hold });
     h.coordinator.registry.register(consentTask);
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await new Promise((r) => setImmediate(r));
     expect(h.published.at(-1)!.view.running).toBe(true);
     // Every status read from here on is held until the run has ended.
     let release: () => void = () => undefined;
     hold.current = new Promise<void>((r) => { release = r; });
-    const skipped = h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
+    const skipped = h.coordinator.skip(h.root, [CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
     h.push(status({ state: 'finished', outcome: 'completed', containsCode: false, steps: [step('create', 'succeeded', 'made')] }));
     for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
     release();
@@ -452,7 +464,7 @@ describe('the skip path and the start refusals', () => {
     // The run's start is the moment to hold every later status read, the resolution's own last one among them.
     const h = harness({ hold, onStart: () => { hold.current = new Promise<void>((r) => { release = r; }); } });
     h.coordinator.registry.register(consentTask);
-    const skipped = h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
+    const skipped = h.coordinator.skip(h.root, [CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
     for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
     expect(hold.current).not.toBeNull();
     h.push(status({ state: 'finished', outcome: 'completed', containsCode: false, steps: [step('create', 'succeeded', 'made')] }));
@@ -477,7 +489,7 @@ describe('the skip path and the start refusals', () => {
     const writeHold: StatusHold = { current: null };
     const h = harness({ writeHold });
     h.coordinator.registry.register(consentTask);
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await new Promise((r) => setImmediate(r));
     expect(h.published.at(-1)!.view.running).toBe(true);
     let release: () => void = () => undefined;
@@ -486,7 +498,7 @@ describe('the skip path and the start refusals', () => {
     for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
     // The run's completion write is sent and held; nothing is on disk yet.
     expect(readInitializationState(h.agents).completed).toEqual([]);
-    const skipped = h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
+    const skipped = h.coordinator.skip(h.root, [CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
     for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
     release();
     expect(await skipped).toEqual({ ok: true });
@@ -504,12 +516,12 @@ describe('the skip path and the start refusals', () => {
     const writeHold: StatusHold = { current: null };
     const h = harness({ writeHold });
     h.coordinator.registry.register(consentTask);
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await new Promise((r) => setImmediate(r));
     expect(h.published.at(-1)!.view.running).toBe(true);
     let release: () => void = () => undefined;
     writeHold.current = new Promise<void>((r) => { release = r; });
-    const skipped = h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
+    const skipped = h.coordinator.skip(h.root, [CODE_INTELLIGENCE_TASK_ID, 'verification-consent']);
     for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
     // The skip's write is sent and held; nothing is on disk yet.
     expect(readInitializationState(h.agents).skipped).toEqual([]);
@@ -533,14 +545,14 @@ describe('the skip path and the start refusals', () => {
     let release: () => void = () => undefined;
     writeHold.current = new Promise<void>((r) => { release = r; });
     // The first workspace's silent stamp is sent and held.
-    const first = h.coordinator.resolve(true);
+    const first = h.coordinator.resolve(h.root, true);
     for (let i = 0; i < 4; i += 1) await new Promise((r) => setImmediate(r));
     expect(readInitializationState(h.agents).lastRun).toBeNull();
     writeHold.current = null;
     const other = workspace();
-    h.coordinator.open(other.root, other.agents);
+    h.coordinator.open(other.root, other.agents, 'ws-other');
     let secondDone = false;
-    const second = h.coordinator.resolve(true).then((s) => { secondDone = true; return s; });
+    const second = h.coordinator.resolve(other.root, true).then((s) => { secondDone = true; return s; });
     for (let i = 0; i < 8; i += 1) await new Promise((r) => setImmediate(r));
     expect(secondDone).toBe(true);
     expect(readInitializationState(other.agents).lastRun).toBe('2026-09-15T12:00:00.000Z');
@@ -555,23 +567,23 @@ describe('the skip path and the start refusals', () => {
   it('records a listed background task as skipped once the open has resolved and nothing is running (REQ-WORKSPACE-086, REQ-WORKSPACE-111)', async () => {
     const h = harness({ startRefusal: RUNNING_REFUSAL });
     // The resolution starts the background task, which fails and records nothing, so it stays pending (REQ-WORKSPACE-084).
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await new Promise((r) => setImmediate(r));
     await new Promise((r) => setImmediate(r));
     expect(readInitializationState(h.agents).completed).toEqual([]);
-    expect(await h.coordinator.skip([CODE_INTELLIGENCE_TASK_ID])).toEqual({ ok: true });
+    expect(await h.coordinator.skip(h.root, [CODE_INTELLIGENCE_TASK_ID])).toEqual({ ok: true });
     expect(readInitializationState(h.agents).skipped).toEqual([CODE_INTELLIGENCE_TASK_ID]);
   });
 
   it('reports a persistence failure rather than absorbing it', async () => {
     const h = harness({ writeFails: 'the file is read-only' });
-    expect(await h.coordinator.skip(['a'])).toEqual({ ok: false, reason: 'the file is read-only' });
+    expect(await h.coordinator.skip(h.root, ['a'])).toEqual({ ok: false, reason: 'the file is read-only' });
   });
 
   /** REQ-WORKSPACE-110: nothing left to run says so. */
   it('refuses a start with nothing runnable', async () => {
     const h = harness({ applicable: false });
-    expect(await h.coordinator.start()).toEqual({ ok: false, headline: 'Everything in this workspace is already set up.', detail: '' });
+    expect(await h.coordinator.start(h.root)).toEqual({ ok: false, headline: 'Everything in this workspace is already set up.', detail: '' });
   });
 
   /** REQ-WORKSPACE-110: a consent task with no reachable model fails fast. */
@@ -582,7 +594,7 @@ describe('the skip path and the start refusals', () => {
       applicable: () => true,
       run: async () => ({ status: 'success', steps: [], classification: null, error: '', retryable: false, summary: '' }),
     });
-    expect(await h.coordinator.start()).toEqual({
+    expect(await h.coordinator.start(h.root)).toEqual({
       ok: false,
       headline: 'Project setup needs a provider',
       detail: 'This setup step runs an agent, so it needs a model provider. Authenticate one in Settings, then start it again.',
@@ -595,7 +607,7 @@ describe('the refresh', () => {
   it('shows an edit made to the section on disk', async () => {
     const h = harness({ applicable: false });
     writeFileSync(h.agents, 'initialization:\n  completed: [code-intelligence-setup]\n  skipped: []\n  last_run: "2026-09-01T00:00:00.000+00:00"\n  classification: code\nruntime:\n  permission_mode: ask\n');
-    const state = await h.coordinator.read();
+    const state = await h.coordinator.read(h.root);
     expect(state.view.lastRun).toBe('2026-09-01T00:00:00.000+00:00');
     expect(state.view.classification).toBe('code');
     // In-progress and last-error describe this session only, never disk.
@@ -623,11 +635,11 @@ describe('closing a workspace', () => {
   it('cancels the closed workspace\'s live run, records nothing for it even when the task under way succeeds, and publishes nothing of it (REQ-WORKSPACE-013, REQ-WORKSPACE-109, REQ-WORKSPACE-092)', async () => {
     let cancels = 0;
     const h = harness({ onCancel: () => { cancels += 1; } });
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await settle();
     expect(h.published.at(-1)?.view.running).toBe(true);
     const other = workspace();
-    h.coordinator.open(other.root, other.agents);
+    h.coordinator.open(other.root, other.agents, 'ws-other');
     h.coordinator.close(h.root);
     await settle();
     // REQ-WORKSPACE-092: the run host is asked to end what the setup launched.
@@ -645,20 +657,17 @@ describe('closing a workspace', () => {
   });
 
   it('says in the log when the setup\'s cancellation could not be delivered (REQ-WORKSPACE-092, REQ-WORKSPACE-013)', async () => {
-    const h = harness({ onCancel: () => { throw new Error('no window holds a workspace to address the run host through'); } });
-    await h.coordinator.resolve(true);
+    const h = harness({ onCancel: () => { throw new Error('the run host refused it: That workspace is not open in the run host'); } });
+    await h.coordinator.resolve(h.root, true);
     await settle();
     h.coordinator.close(h.root);
     await settle();
-    expect(h.logs).toContainEqual({ level: 'warn', message: "initialization: the setup's cancellation could not be delivered (Error: no window holds a workspace to address the run host through)" });
+    expect(h.logs).toContainEqual({ level: 'warn', message: "initialization: the setup's cancellation could not be delivered (Error: the run host refused it: That workspace is not open in the run host)" });
   });
 
   it('treats a setup cancellation as delivered only when the run host took it (REQ-WORKSPACE-092)', async () => {
     const sent: string[] = [];
     await expect(deliverSetupCancel('ws-1', async (id) => { sent.push(id); return { kind: 'mcp.setup' }; })).resolves.toBeUndefined();
-    expect(sent).toEqual(['ws-1']);
-    // No window holds a workspace: nothing is sent, and the port says it could not deliver.
-    await expect(deliverSetupCancel(undefined, async (id) => { sent.push(id); return { kind: 'mcp.setup' }; })).rejects.toThrow('no window holds a workspace to address the run host through');
     expect(sent).toEqual(['ws-1']);
     // A refusal is an answer, not a delivery.
     await expect(deliverSetupCancel('ws-2', async () => ({ kind: 'refused', headline: 'That workspace is not open in the run host' }))).rejects.toThrow('the run host refused it: That workspace is not open in the run host');
@@ -667,7 +676,7 @@ describe('closing a workspace', () => {
 
   it('raises no banner for a closed workspace\'s background run that ends in failure (REQ-WORKSPACE-013, REQ-WORKSPACE-103)', async () => {
     const h = harness();
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await settle();
     h.coordinator.close(h.root);
     h.push(cancelledSetup());
@@ -679,18 +688,18 @@ describe('closing a workspace', () => {
   it('resolves automatically again when the closed workspace is opened again (REQ-WORKSPACE-102, REQ-WORKSPACE-013)', async () => {
     let starts = 0;
     const h = harness({ onStart: () => { starts += 1; } });
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await settle();
     expect(starts).toBe(1);
     const other = workspace();
-    h.coordinator.open(other.root, other.agents);
+    h.coordinator.open(other.root, other.agents, 'ws-other');
     h.coordinator.close(h.root);
     h.push(cancelledSetup());
     await settle();
     // The switch back: a new open, with its own automatic resolution, which starts the still-pending task again.
     h.coordinator.close(other.root);
-    h.coordinator.open(h.root, h.agents);
-    const state = await h.coordinator.resolve(true);
+    h.coordinator.open(h.root, h.agents, 'ws-h');
+    const state = await h.coordinator.resolve(h.root, true);
     expect(state.view.pending).toEqual([CODE_INTELLIGENCE_TASK_ID]);
     await settle();
     expect(starts).toBe(2);
@@ -705,7 +714,7 @@ describe('closing a workspace', () => {
     const h = harness({ hold, onStart: () => { starts += 1; } });
     let release: () => void = () => undefined;
     hold.current = new Promise<void>((r) => { release = r; });
-    const resolving = h.coordinator.resolve(true);
+    const resolving = h.coordinator.resolve(h.root, true);
     await settle();
     h.coordinator.close(h.root);
     hold.current = null;
@@ -726,7 +735,7 @@ describe('closing a workspace', () => {
     const failing = Promise.reject(new Error('link closed'));
     failing.catch(() => undefined);
     const h = harness({ applicable: false, writeHold: { current: failing } });
-    const state = await h.coordinator.resolve(true);
+    const state = await h.coordinator.resolve(h.root, true);
     expect(state.resolutionFailed).toBe(true);
     expect(h.banners).toEqual([{ headline: 'Project setup could not be checked', detail: 'Rotaris could not work out whether this workspace still needs setting up. Runs are not blocked; you can check again.' }]);
     expect(h.logs).toContainEqual({ level: 'warn', message: `initialization: resolution failed for ${h.root} (Error: link closed)` });
@@ -736,11 +745,11 @@ describe('closing a workspace', () => {
     let fail: (cause: Error) => void = () => undefined;
     const writeHold: StatusHold = { current: new Promise<void>((_, reject) => { fail = reject; }) };
     const h = harness({ applicable: false, writeHold });
-    const resolving = h.coordinator.resolve(true);
+    const resolving = h.coordinator.resolve(h.root, true);
     await settle();
     // The stamp's write is in flight when the switch lands: the replacement opens and this workspace closes.
     const other = workspace();
-    h.coordinator.open(other.root, other.agents);
+    h.coordinator.open(other.root, other.agents, 'ws-other');
     h.coordinator.close(h.root);
     const publishedAtClose = h.published.length;
     fail(new Error('link closed'));
@@ -756,9 +765,9 @@ describe('closing a workspace', () => {
   it('keeps answering for the workspace still open in another window when one of two closes (REQ-WORKSPACE-013)', async () => {
     const h = harness({ applicable: false });
     const other = workspace();
-    h.coordinator.open(other.root, other.agents);
+    h.coordinator.open(other.root, other.agents, 'ws-other');
     h.coordinator.close(other.root);
-    const state = await h.coordinator.resolve(true);
+    const state = await h.coordinator.resolve(h.root, true);
     // The silent stamp lands in the workspace that is still open, and nowhere else.
     expect(state.view.neverInitialized).toBe(false);
     expect(readInitializationState(h.agents).lastRun).toBe('2026-09-15T12:00:00.000Z');
@@ -776,14 +785,14 @@ describe('one setup at a time across a workspace switch', () => {
   it('follows the replacement\'s run to its own recorded outcome while the closed workspace\'s setup is still ending (REQ-WORKSPACE-109, REQ-WORKSPACE-084, REQ-WORKSPACE-013)', async () => {
     let starts = 0;
     const h = harness({ onStart: () => { starts += 1; } });
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await settle();
     expect(starts).toBe(1);
     // The switch: the replacement opens and the outgoing workspace closes; its setup is asked to cancel and is still ending.
     const other = workspace();
-    h.coordinator.open(other.root, other.agents);
+    h.coordinator.open(other.root, other.agents, 'ws-other');
     h.coordinator.close(h.root);
-    const replacement = await h.coordinator.resolve(true);
+    const replacement = await h.coordinator.resolve(other.root, true);
     // The replacement's resolution does not wait on the cancellation (REQ-WORKSPACE-013) …
     expect(replacement.view.pending).toEqual([CODE_INTELLIGENCE_TASK_ID]);
     await settle();
@@ -811,7 +820,7 @@ describe('one setup at a time across a workspace switch', () => {
     // replacement's setup starts, and its end must not clear the replacement's sink.
     const writeHold: StatusHold = { current: null };
     const h = harness({ writeHold });
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await settle();
     let release: () => void = () => undefined;
     writeHold.current = new Promise<void>((r) => { release = r; });
@@ -819,8 +828,8 @@ describe('one setup at a time across a workspace switch', () => {
     await settle();
     writeHold.current = null;
     const other = workspace();
-    h.coordinator.open(other.root, other.agents);
-    await h.coordinator.resolve(true);
+    h.coordinator.open(other.root, other.agents, 'ws-other');
+    await h.coordinator.resolve(other.root, true);
     await settle();
     expect(h.published.at(-1)?.view.running).toBe(true);
     // The first workspace's recording lands and its run ends, after the replacement's setup has started.
@@ -840,7 +849,7 @@ describe('one setup at a time across a workspace switch', () => {
     let cancels = 0;
     const writeHold: StatusHold = { current: null };
     const h = harness({ writeHold, onStart: () => { starts += 1; }, onCancel: () => { cancels += 1; } });
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await settle();
     let release: () => void = () => undefined;
     writeHold.current = new Promise<void>((r) => { release = r; });
@@ -848,8 +857,8 @@ describe('one setup at a time across a workspace switch', () => {
     await settle();
     writeHold.current = null;
     const other = workspace();
-    h.coordinator.open(other.root, other.agents);
-    await h.coordinator.resolve(true);
+    h.coordinator.open(other.root, other.agents, 'ws-other');
+    await h.coordinator.resolve(other.root, true);
     await settle();
     expect(starts).toBe(2);
     h.coordinator.close(h.root);
@@ -867,21 +876,20 @@ describe('one setup at a time across a workspace switch', () => {
     let cancels = 0;
     const writeHold: StatusHold = { current: null };
     const h = harness({ writeHold, onCancel: () => { cancels += 1; } });
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await settle();
     let release: () => void = () => undefined;
     writeHold.current = new Promise<void>((r) => { release = r; });
     h.push(completedSetup());
     await settle();
     writeHold.current = null;
-    // A second window's workspace starts its setup; the first window's Cancel is then pressed (the surfaces ask about
-    // the workspace most recently opened, so the first is made current again to press it).
+    // A second window's workspace starts its setup; the first window's Cancel is then pressed, for the first window's own
+    // workspace.
     const other = workspace();
-    h.coordinator.open(other.root, other.agents);
-    await h.coordinator.resolve(true);
+    h.coordinator.open(other.root, other.agents, 'ws-other');
+    await h.coordinator.resolve(other.root, true);
     await settle();
-    h.coordinator.open(h.root, h.agents);
-    await h.coordinator.cancel();
+    await h.coordinator.cancel(h.root);
     release();
     await settle();
     expect(cancels).toBe(0);
@@ -899,14 +907,14 @@ describe('one setup at a time across a workspace switch', () => {
     let answer: () => void = () => undefined;
     startHold.current = new Promise<void>((r) => { answer = r; });
     const h = harness({ startHold, onStart: () => { starts += 1; }, onCancel: () => { cancels += 1; } });
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await settle();
     expect(starts).toBe(1);
     startHold.current = null;
     const other = workspace();
-    h.coordinator.open(other.root, other.agents);
+    h.coordinator.open(other.root, other.agents, 'ws-other');
     h.coordinator.close(h.root);
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(other.root, true);
     answer();
     await settle();
     // REQ-WORKSPACE-092: the run host is asked to end what the outgoing setup launched …
@@ -929,10 +937,10 @@ describe('one setup at a time across a workspace switch', () => {
     let answer: () => void = () => undefined;
     startHold.current = new Promise<void>((r) => { answer = r; });
     const h = harness({ startHold, onCancel: () => { cancels += 1; } });
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await settle();
     startHold.current = null;
-    await h.coordinator.cancel();
+    await h.coordinator.cancel(h.root);
     answer();
     await settle();
     expect(cancels).toBe(1);
@@ -945,16 +953,16 @@ describe('one setup at a time across a workspace switch', () => {
   it('ends a run cancelled while its setup waits for another as a retryable failure, starting nothing, and keeps the order for the next (REQ-WORKSPACE-109, REQ-WORKSPACE-093)', async () => {
     let starts = 0;
     const h = harness({ onStart: () => { starts += 1; } });
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await settle();
     expect(starts).toBe(1);
     // A second window's workspace: its background run waits behind the first workspace's setup.
     const other = workspace();
-    h.coordinator.open(other.root, other.agents);
-    await h.coordinator.resolve(true);
+    h.coordinator.open(other.root, other.agents, 'ws-other');
+    await h.coordinator.resolve(other.root, true);
     await settle();
     expect(starts).toBe(1);
-    await h.coordinator.cancel();
+    await h.coordinator.cancel(other.root);
     await settle();
     const cancelled = h.published.at(-1)!;
     expect(cancelled.view.running).toBe(false);
@@ -962,7 +970,7 @@ describe('one setup at a time across a workspace switch', () => {
     expect(cancelled.report.tasks[0]).toMatchObject({ status: 'failure', retryable: true, error: CANCELLED_BEFORE_SETUP_ERROR, summary: CODE_INTELLIGENCE_FAILED_SUMMARY });
     expect(starts).toBe(1);
     // Started again, it still waits for the first workspace's setup, and starts once that has ended.
-    expect(await h.coordinator.start()).toEqual({ ok: true });
+    expect(await h.coordinator.start(other.root)).toEqual({ ok: true });
     await settle();
     expect(starts).toBe(1);
     h.push(completedSetup());
@@ -985,15 +993,15 @@ describe('a setup whose finished status never arrives', () => {
   it('ends the follow as a retryable failure when the run host exits, and starts the setup queued behind it (REQ-WORKSPACE-109, REQ-WORKSPACE-084, REQ-WORKSPACE-093)', async () => {
     let starts = 0;
     const h = harness({ onStart: () => { starts += 1; } });
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await settle();
     expect(starts).toBe(1);
     h.push(status({ steps: [step('create', 'succeeded', 'made'), step('index', 'running'), step('memory', 'pending')] }));
     await settle();
     // A second window's workspace: its background run waits behind the first workspace's setup.
     const other = workspace();
-    h.coordinator.open(other.root, other.agents);
-    await h.coordinator.resolve(true);
+    h.coordinator.open(other.root, other.agents, 'ws-other');
+    await h.coordinator.resolve(other.root, true);
     await settle();
     expect(starts).toBe(1);
     h.coordinator.onRunHostExit(1);
@@ -1014,11 +1022,11 @@ describe('a setup whose finished status never arrives', () => {
   it('ends the follow as a retryable failure once the setup has outlasted every stage budget and its stop grace, and starts the setup queued behind it (REQ-WORKSPACE-091, REQ-WORKSPACE-092, REQ-WORKSPACE-109)', async () => {
     let starts = 0;
     const h = harness({ onStart: () => { starts += 1; } });
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await settle();
     const other = workspace();
-    h.coordinator.open(other.root, other.agents);
-    await h.coordinator.resolve(true);
+    h.coordinator.open(other.root, other.agents, 'ws-other');
+    await h.coordinator.resolve(other.root, true);
     await settle();
     expect(starts).toBe(1);
     // 300 + 1800 + 120 s of budgets, and REQ-WORKSPACE-092's 5 s for each stage's processes to be ended.
@@ -1041,7 +1049,7 @@ describe('a setup whose finished status never arrives', () => {
 
   it('leaves a follow that ended in time unaffected by a later run-host exit or the bound (REQ-WORKSPACE-084)', async () => {
     const h = harness();
-    await h.coordinator.resolve(true);
+    await h.coordinator.resolve(h.root, true);
     await settle();
     h.push(completedSetup());
     await settle();
@@ -1050,5 +1058,98 @@ describe('a setup whose finished status never arrives', () => {
     await settle();
     expect(readInitializationState(h.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
     expect(h.banners).toEqual([]);
+  });
+});
+
+/**
+ * PD-SHELL-001: two main windows, one per project, alive at once. Each window's surfaces ask about their own workspace, and
+ * every answer, recording, publication and setup-port call is that workspace's alone (REQ-WORKSPACE-013/102/105). Before,
+ * the coordinator held one "active" root — the one opened last — and answered every window with it, published every state
+ * to every window, and main addressed the setup port by the focused window's workspace
+ * (`docs/defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`).
+ */
+describe('two workspaces open at once, one per window', () => {
+  const consentTask = (id: string): InitializationTask => ({
+    id, label: id, description: 'asks', requiresConsent: true, applicable: () => true,
+    run: async () => ({ status: 'success', steps: [], classification: null, error: '', retryable: false, summary: '' }),
+  });
+
+  it('records a Skip on the first window\'s workspace in that workspace only, and publishes it for that workspace only (REQ-WORKSPACE-013, REQ-WORKSPACE-086, REQ-WORKSPACE-105)', async () => {
+    const h = harness({ applicable: false });
+    h.coordinator.registry.register(consentTask('verification-consent'));
+    const other = workspace();
+    await h.coordinator.resolve(h.root, true);
+    h.coordinator.open(other.root, other.agents, 'ws-other');
+    await h.coordinator.resolve(other.root, true);
+    const before = h.published.length;
+    expect(await h.coordinator.skip(h.root, ['verification-consent'])).toEqual({ ok: true });
+    expect(readInitializationState(h.agents).skipped).toEqual(['verification-consent']);
+    expect(readInitializationState(other.agents).skipped).toEqual([]);
+    expect(readInitializationState(other.agents).lastRun).toBeNull();
+    expect(h.publishedTo.slice(before)).toEqual([h.root]);
+    // Each window still reads its own workspace: the first has answered its prompt, the second still owes it.
+    expect((await h.coordinator.read(h.root)).view.skipped).toEqual(['verification-consent']);
+    expect((await h.coordinator.read(other.root)).view.consentPending).toEqual(['verification-consent']);
+  });
+
+  it('leaves the first window\'s view alone when the second window\'s workspace resolves automatically (REQ-WORKSPACE-102, REQ-WORKSPACE-105)', async () => {
+    const h = harness({ applicable: false });
+    writeFileSync(h.agents, 'initialization:\n  completed: []\n  skipped: []\n  last_run: "2026-09-01T00:00:00.000+00:00"\n  classification: code\n');
+    await h.coordinator.resolve(h.root, true);
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents, 'ws-other');
+    const before = h.published.length;
+    // The second workspace's own automatic resolution: it has never been initialized, so it is stamped silently.
+    await h.coordinator.resolve(other.root, true);
+    expect(readInitializationState(other.agents).lastRun).toBe('2026-09-15T12:00:00.000Z');
+    expect(h.publishedTo.slice(before).every((root) => root === other.root)).toBe(true);
+    // The first window's state is still its own workspace's, and its own automatic resolution is still spent.
+    const first = await h.coordinator.read(h.root);
+    expect(first.view.lastRun).toBe('2026-09-01T00:00:00.000+00:00');
+    expect(first.view.classification).toBe('code');
+    const writes = h.writes.length;
+    await h.coordinator.resolve(h.root, true);
+    expect(h.writes).toHaveLength(writes);
+    expect(readInitializationState(h.agents).lastRun).toBe('2026-09-01T00:00:00.000+00:00');
+  });
+
+  it('starts, follows and cancels each workspace\'s setup by that workspace\'s own identifier, whichever was opened last (REQ-WORKSPACE-013, REQ-WORKSPACE-092, REQ-WORKSPACE-109)', async () => {
+    const h = harness();
+    await h.coordinator.resolve(h.root, true);
+    await settle();
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents, 'ws-other');
+    await h.coordinator.resolve(other.root, true);
+    await settle();
+    expect(h.addressed.filter((a) => a.call !== 'status')).toEqual([{ call: 'start', workspaceId: 'ws-h' }]);
+    // The first window's Cancel: the first workspace's run, and its setup, addressed by its own identifier; what it changes
+    // is published for the first workspace only.
+    const beforeCancel = h.published.length;
+    await h.coordinator.cancel(h.root);
+    await settle();
+    expect(h.addressed.filter((a) => a.call !== 'status')).toEqual([{ call: 'start', workspaceId: 'ws-h' }, { call: 'cancel', workspaceId: 'ws-h' }]);
+    expect(h.publishedTo.slice(beforeCancel).every((root) => root === h.root)).toBe(true);
+    expect((await h.coordinator.read(other.root)).view.running).toBe(true);
+    // The first setup ends cancelled; the second workspace's queued setup starts, for the second workspace.
+    h.push(cancelledSetup());
+    await settle();
+    expect(h.addressed.filter((a) => a.call !== 'status').at(-1)).toEqual({ call: 'start', workspaceId: 'ws-other' });
+    // Each workspace's applicability was judged against its own configuration.
+    expect(new Set(h.addressed.filter((a) => a.call === 'status').map((a) => a.workspaceId))).toEqual(new Set(['ws-h', 'ws-other']));
+    h.push(completedSetup());
+    await settle();
+    expect(readInitializationState(other.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    expect(readInitializationState(h.agents).completed).toEqual([]);
+    expect((await h.coordinator.read(h.root)).report.outcome).toBe('cancelled');
+    expect((await h.coordinator.read(other.root)).report.tasks[0]?.status).toBe('success');
+  });
+
+  it('answers a root no window holds with the empty state and starts nothing for it (REQ-WORKSPACE-105)', async () => {
+    const h = harness();
+    const stranger = workspace();
+    expect((await h.coordinator.read(stranger.root)).view.pending).toEqual([]);
+    expect(await h.coordinator.start(stranger.root)).toEqual({ ok: false, headline: 'No workspace is open', detail: 'Open a workspace before running its setup.' });
+    expect(h.addressed).toEqual([]);
+    expect(h.published).toEqual([]);
   });
 });

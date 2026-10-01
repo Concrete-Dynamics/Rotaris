@@ -775,6 +775,10 @@
 .workspace > .queue { grid-area: queue; }
 .workspace > .composer__divider { grid-area: divider; }
 .agents { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); padding: var(--rt-space-3, 12px); border-right: 1px solid var(--rt-border); background: var(--rt-chrome); overflow: auto; }
+/* REQ-WORKSPACE-113: "Last run failed: {message}" carries the failed task's raw output, whose tokens can have no
+   break opportunity (a process's `[pid:date/time:ERROR:file:line]` prefix). Broken inside the column, as every other
+   surface that shows raw output here breaks it, so the sidebar never grows a sideways scroll to read the hint. */
+.agents__project .settings__hint { overflow-wrap: anywhere; }
 /* Density review 2026-09-13: the mockup draws a 40 px header BAR with a bottom hairline — title, tag and
    counts inline — not a bare kicker line. The bar escapes the panel's own padding by negative margins so
    the hairline runs the panel's full width, as the mockup's does. */

@@ -7,6 +7,9 @@ persona whose id an earlier child's canonical name already spells (a child the m
 `planner` the entry role of the next), the next root's rows carry that child's name. Its rows are then the earlier child's
 in that child's instance tab and "This task" scope, and the child's rows are the run-level agent's. The artifact links mix
 the same way (`artifactNames`), since the root's canonical name is the persona canonicalised.
+The autopsy reader is misled the same way (added 2026-10-01, fin3 repair round 2): it knows a child by its canonical
+name (`childModelKeys`), so such a root's tool calls print under the earlier child's `model_key`, and the ladder's
+fallbacks of the root (`quota_fallback_model`, `llm_unresponsive`) are read as that child's and skipped by `entryModelKeys`.
 
 The ledger cannot prevent it. It names children and keeps every child off every root's names (OQ-158), but a root's name is
 its persona, which no ledger chooses, and the child was named before the root existed.
@@ -26,3 +29,4 @@ OQ-158's second reading, rows that carry an identity the surfaces match instead 
 - `packages/ui/src/agents.ts`: `ownRow`, `rowsOf`, `artifactNames`, `followedAgent`.
 - `packages/engine/src/sessions.ts`: `entryRootsOf`, which names a root by its persona.
 - `packages/engine/src/run/run.ts`: `Run.turn`, where a root's name and canonical name are its persona's.
+- `packages/engine/src/autopsy.ts` and `apps/desktop/scripts/lib/autopsy-entry-model.mjs`: `childModelKeys`, `entryModelKeys`.

@@ -3,7 +3,7 @@ import { isBusy, PERMISSION_PRESETS, resolveTheme, RUN_AGENT_ID, THEME_NAMES, ty
 import { projectSidebarSection } from './settings/project-init.js'; // Part AS
 import { err, ok } from '@rotaris/kernel';
 import {
-  clampComposerHeight, composerChipReason, composerPlaceholderFor, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
+  clampComposerHeight, composerChipReason, composerPlaceholderFor, composerReclaimsFocus, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
   DRAFT_PUBLISH_MS, DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel,
   pausePendingAfter, REASONING_LEVELS, runStateOf, sendRefusal,
   type HistoryWalk, type PauseScope, type RunState,
@@ -901,12 +901,21 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   const activate = (command: SlashCommand) => { if (text === `/${command.name}`) void submit(); else complete(command); };
 
   /**
+   * After an awaited submission settles: focus back to the composer, unless something else took it while the
+   * submission was in flight — a dialog opened meanwhile keeps it (`composerReclaimsFocus`).
+   */
+  const reclaimFocus = (focusAtSubmit: Element | null) => {
+    if (composerReclaimsFocus({ now: document.activeElement, atSubmit: focusAtSubmit, body: document.body, composer: area.current })) area.current?.focus();
+  };
+
+  /**
    * REQ-CHAT-019/020/021/023: a recognised slash submission. The popup is hidden and the composer cleared BEFORE the
    * command runs; exactly one outcome is reported; every outcome but `not-a-command` is handled here and the text never
    * reaches an agent; a non-executed outcome restores the exact typed text with the caret at its end and raises the
    * persistent "Command not run" notice. Nothing here records to prompt history (REQ-LIBRARY-137/142).
    */
   const runSlash = async (value: string, name: string, argument: string) => {
+    const focusAtSubmit = document.activeElement;
     setDismissedFor(value);
     setRowIndex(0);
     setText('');
@@ -932,8 +941,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     if (outcome.kind === 'executed') {
       // The composer keeps focus, unless the command opened a dialog that has already taken it (the stash dialog
       // mounts and focuses Pop between the command's resolution and this line — measured on the first execution).
-      const active = document.activeElement;
-      if (active === null || active === document.body || active === area.current) area.current?.focus();
+      reclaimFocus(focusAtSubmit);
       return;
     }
     setText(value);
@@ -956,6 +964,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   };
   /** The ordinary submission — a queue during a run, else a start or a continue — of `value`, which is the composer's text or a prompt file's expanded body. */
   const submitPrompt = async (value: string) => {
+    const focusAtSubmit = document.activeElement;
     setSetupSubmitRefused(false);
     /*
      * REQ-CHAT-007: refused with its reason readable, and nothing sent; the typed text is untouched.
@@ -979,7 +988,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
       if (q.ok) { setError(null); setStatus('Message queued for the next iteration.'); onRecordPrompt?.(value); }
       else { setText(value); setError('Message could not be queued because the run is no longer active.'); }
       flushDraft(q.ok ? '' : value);
-      area.current?.focus();
+      reclaimFocus(focusAtSubmit);
       return;
     }
     setStopRequested(false);
@@ -1005,7 +1014,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     // REQ-CHAT-014 / REQ-SHELL-159: submit is a flush point — an emptied composer empties the stored draft at once,
     // and a restored one stores exactly what was restored rather than what was typed before it.
     flushDraft(r.ok ? '' : value);
-    area.current?.focus();
+    // REQ-MONITOR-137: the run's events draw "Steer the run" before the start's reply lands here, so its dialog may
+    // already hold the focus; the composer takes it back only when nothing else took it meanwhile.
+    reclaimFocus(focusAtSubmit);
   };
 
   /** The send control's label and accessible name, by composer mode (PD-CHAT-001 revision 2, R-040).

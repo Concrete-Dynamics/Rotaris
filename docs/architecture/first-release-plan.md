@@ -103,6 +103,10 @@ record already decides, and every ruling it needs is named as the owner's rather
   no longer uses that seam (its setup launches open Settings by chord and press only after the notice), after the fix
   round's verifier found its first correction too late for `setup-cancel` (three reds in seven runs). As measured after the last repairs, `init-proof` passes
   three runs in a row as root on Linux and `code-intel-proof` passes four section-5 runs and then three whole runs in a row.
+  **2026-10-01 (fin2):** in a checkout without the bundled code-intelligence runtime `init-proof` still went red as "the
+  background task recorded nothing" ([fixed](../defects/fixed/init-proof-reads-a-missing-code-intelligence-bundle-as-a-task-that-recorded-nothing.md)):
+  it now builds the bundle when it builds, refuses under `--skip-build` naming `pnpm code-intel:bundle`, and quotes the app
+  log's setup failure; green as root on Linux built from nothing and again with `--skip-build`.
 - The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005` (**built 2026-09-28**, R-062), `PD-ORCH-004` and `PD-MONITOR-002`.
 - The macOS and Linux artifacts, which are bound by IC-3 and IC-8 and now also by `PD-STARTUP-001`.
 

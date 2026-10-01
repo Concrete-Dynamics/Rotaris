@@ -6732,7 +6732,7 @@ the stream says the line is done; that is recorded as a defect, not this questio
 ([`a-poll-after-c-c-says-the-interrupted-command-is-still-running`](../defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)).
 *(Repaired 2026-10-01: a poll after an interrupt submits one no-op line once the shell holds its terminal again, and that
 line's printed start marker closes the paused call as a next call's does, so the poll hands it over with this reading;
-whether the product may write that line is OQ-167, raised with it built.)*
+whether the product may write that line is OQ-168, raised with it built.)*
 
 **OQ-151 — Does a retry that restarts a child's conversation carry REQ-ORCH-047's prior-agent-context block again?**
 *(REQ-ORCH-047, "prepend exactly once (never re-prefixed on later state hops …)"; REQ-TOOLS-154, which places the block
@@ -6781,6 +6781,10 @@ and order as a child whose execution settles it, with its report's status and su
 resume its parent (`SchedulerDeps.teardown`, `writeTeardown` in `children/orchestration.ts`; the two cases "REQ-ORCH-098,
 the repair of a-child-that-never-started-gets-no-teardown-timeline-entries" in `children/children.test.ts`). For a child
 that never started, `child_conversation_closed` records that it will have none; no conversation is created to be closed.
+Since 2026-10-01 the same holds on every path that settles a child `cancelled` outside its execution. These are the
+user's cancel, the cancel at rest, "continue without them", the crash record of an accepted cancel and the stale-child
+settle (`writeCancelledTeardown`; `writeTeardown` now lives in `children/ledger.ts`). That change is the repair of
+[`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../defects/fixed/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md).
 
 **What a ruling decides.** Whether a child that never started is torn down as built, or is excepted from the clause (its
 `child_end` and `child_result` kept, its `child_conversation_closed` dropped, or all three dropped), and whether the words
@@ -8175,14 +8179,45 @@ is not edited (a directive is the owner's).
 **What a ruling decides.** Whether PD-CHAT-003 gains a revision whose cost paragraph names the capacity unit as the
 shortest row a slot can hold, or the paragraph stands as written of its date.
 
-**OQ-167 — May a poll after an interrupt write a line of the product's own into the session, to find where the paused
+**OQ-167 — What does REQ-WORKSPACE-093's "{reason}: {detail}" read for a code-intelligence setup in which no stage began?**
+*(REQ-WORKSPACE-093, "Failure reporting SHALL be "{reason}: {detail}" with per-stage reasons …; the result is retryable";
+REQ-WORKSPACE-092, whose fixed details are a stopped **step's**; REQ-WORKSPACE-094, whose non-retryable words are for an
+entry that is not a local launch and nothing else; REQ-WORKSPACE-103; REQ-MCP-112, "SHALL refuse to start a second
+concurrent run". Raised 2026-10-01 under [R-067](../product/requests.md#r-067) by the repair of
+[`a-refused-setup-start-is-reported-as-not-a-local-launch.md`](../defects/fixed/a-refused-setup-start-is-reported-as-not-a-local-launch.md).
+Open.)*
+
+`code-intelligence-setup` can fail before any of REQ-WORKSPACE-091's three stages has begun, in two ways. The run host can
+refuse the setup's start: its one setup slot is taken by a setup the MCP settings category started (`mcp.setup.running`,
+REQ-MCP-112's one run at a time), the workspace is not open there (`workspace.unknown`), or its configuration could not
+be loaded (`mcp.configuration`). Or the run can be cancelled while its setup waits for the setup before it to end
+(`setupTurn`, ADR-0064's seventh round). REQ-WORKSPACE-093 names a reason per stage and REQ-WORKSPACE-092 a detail per
+stopped step; neither names one for a setup that started no stage. Before the repair a refused start was reported in
+REQ-WORKSPACE-094's words, which the requirement reserves for an entry that is not a local launch.
+
+**What the build proceeds under** (`apps/desktop/src/main/initialization.ts`, `SETUP_REASON`): a retryable failure with
+REQ-WORKSPACE-093's summary ("Code intelligence setup did not complete for this project. It runs again the next time this
+workspace is opened."), so a background run reaches REQ-WORKSPACE-103's banner with it. Its reason is the build's
+"Code intelligence could not complete this project's setup" — the one `resultOf` already used for a failed setup with no
+failed step — and its detail is the run host's own refusal ("A code-intelligence setup is already running for this
+workspace; wait for it to finish or cancel it first.", "That workspace is not open in the run host", "The configuration
+could not be loaded") or, for a run cancelled before its setup started, "the setup was cancelled before it started."
+(`CANCELLED_BEFORE_SETUP_ERROR`, as built under R-067 on 2026-09-30). A refused start is not waited out: the task fails
+at once, as any other retryable failure does, and runs again at the next open or on Try again.
+
+**What a ruling decides.** Whether a setup that began no stage has a reason and a detail of the specification's own —
+for the refusal, and for the cancellation, where REQ-WORKSPACE-092's "Setup was stopped before this step finished." is
+the nearest sentence but names a step that never ran; and whether a start refused because another setup holds the run
+host's one slot should instead wait for that setup to end, as the coordinator's own setups wait for one another.
+
+**OQ-168 — May a poll after an interrupt write a line of the product's own into the session, to find where the paused
 command's line ended?** *(REQ-TOOLS-096, under which keystroke input is written "as is"; REQ-TOOLS-098, whose advice is to
 poll a soft-paused command with an empty `command` or to interrupt it with `C-c` and `is_input=true`, and whose soft pause is
 "while its process keeps running"; REQ-TOOLS-179, −1 for a soft pause in the foreground; OQ-147, what the paused call reports
 once a poll hands it over; OQ-144, whose handshake already writes one no-op line of the product's own to a fresh shell.
 Raised 2026-10-01 by the repair of
-[`a-poll-after-c-c-says-the-interrupted-command-is-still-running.md`](../defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md).
-Open.)*
+[`a-poll-after-c-c-says-the-interrupted-command-is-still-running.md`](../defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md),
+as OQ-167, and renumbered OQ-168 at its merge because `origin/main` had taken OQ-167 meanwhile. Open.)*
 
 An interactive shell that takes an interrupt abandons the rest of the wrapper's line, so the paused call's end frame never
 prints, and nothing else in the PTY's stream says the line is done. Before the repair every poll between the `C-c` and the

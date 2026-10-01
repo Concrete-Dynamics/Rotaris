@@ -1166,7 +1166,7 @@ export class ForegroundSession {
    * (`withholdRowsWith`). The wait is bounded (`INTERRUPTED_END_WAIT_MS`); a line still running then — the shell between
    * two of its commands — answers "still running", and the no-op runs after it. That is harmless unless what runs next
    * reads the terminal — `a; cat`, or an INT trap in the session's shell that goes on to `read` — which takes the line as
-   * its input: a narrow window, stated in OQ-167, and not closed by anything here.
+   * its input: a narrow window, stated in OQ-168, and not closed by anything here.
    */
   private async findInterruptedEnd(pc: PausedCall, p: PtyLike): Promise<void> {
     const closed = new Promise<void>((resolve) => {

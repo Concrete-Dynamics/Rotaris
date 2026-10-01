@@ -52,7 +52,7 @@ What changed, in `packages/agent-tools/src/terminal/foreground.ts`:
 - **The line is nobody's output.** Its echo and frames are cut from the paused call's capture (`until`) and withheld from
   the live stream (`CommandRegion.withholdRowsWith`, live-run L9).
 
-Whether the product may write that line is [OQ-167](../../architecture/open-questions.md), raised with this reading built;
+Whether the product may write that line is [OQ-168](../../architecture/open-questions.md), raised with this reading built;
 OQ-147's sentence that recorded this defect is annotated in place, and ADR-0020's note reports the repair back.
 
 Pinned by three cases in `terminal.test.ts`:
@@ -77,7 +77,7 @@ abandons its line on `C-c` are reasoned, not measured.
 ## Outcome, corrected by the repair's first verification (2026-10-01)
 
 **Falsified, kept beside its replacement:** "keystrokes carrying `C-c` … — the agent's `is_input`, or the terminal window's
-interrupt or send-keys — set `interrupted` on it", read above and in OQ-167 as covering the window's interrupt. It covered
+interrupt or send-keys — set `interrupted` on it", read above and in OQ-168 as covering the window's interrupt. It covered
 one ordering only: an interrupt written once the call was soft-paused. The window's interrupt (REQ-SHELL-093) can also
 arrive while the call still RUNS, the natural moment for a user watching a long command, and the shell abandons the
 wrapper's line just as it does under a paused call, so no end frame prints. Nothing was marked then. The verifier measured
@@ -112,6 +112,6 @@ Pinned by three more cases in `terminal.test.ts`:
 - "REQ-TOOLS-098/179 (OQ-147): a poll made at once after C-c reads the interrupted command as ended": red before the
   change (`softPaused` true).
 
-Still not reached, stated in OQ-167: off Linux nothing says who holds the terminal, so nothing is written while a call
+Still not reached, stated in OQ-168: off Linux nothing says who holds the terminal, so nothing is written while a call
 runs. There the window's interrupt is only carried into the soft pause, and a call given a `timeout` still runs out its
 hard cap and is reset. Unmeasured: no Windows host here, and no macOS artifact under IC-3.

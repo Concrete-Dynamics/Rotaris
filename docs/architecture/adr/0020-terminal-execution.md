@@ -391,7 +391,7 @@ closes the paused call as a next call's does, and the poll hands it over with OQ
 the interrupt and holds the terminal is written nothing. The line's echo and frames are cut from the capture and
 withheld from the live stream (`CommandRegion.withholdRowsWith`): with the withholding removed, the live tap carried
 `# printf '%s\n' '__rot_…'`. Whether the product may write that line is
-[OQ-167](../open-questions.md), raised with it built. Pinned by three "(OQ-147)" cases in `terminal.test.ts`; the first is
+[OQ-168](../open-questions.md), raised with it built. Pinned by three "(OQ-147)" cases in `terminal.test.ts`; the first is
 red on the unrepaired code (a soft pause), and red again with the terminal window's interrupt left unmarked; the second
 is red with the terminal-holder check removed (the line went to the surviving `read`). Off Linux nothing says who holds
 the terminal and the line is submitted at the poll; PowerShell's `$null` no-op is reasoned, not measured. The live run's
@@ -409,7 +409,7 @@ then submits the same no-op line (`submitCloser`), whose printed marker (`prints
 no reset. A call that soft-pauses first carries the mark into the paused call. A poll made at once after the `C-c` waits up
 to `INTERRUPT_SETTLE_MS` for the shell before it decides. Pinned by three more "(OQ-147)" cases in `terminal.test.ts`, the
 three red before the change. Off Linux a running call writes nothing, and a timed call still runs out its cap
-([OQ-167](../open-questions.md)).*
+([OQ-168](../open-questions.md)).*
 
 *Reported back 2026-10-01, the repair of
 [`output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll`](../../defects/fixed/output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md)

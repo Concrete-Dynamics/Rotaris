@@ -40,6 +40,7 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
     expect(tail).toHaveLength(400);
     expect(tail.endsWith('END-OF-OUTPUT')).toBe(true);
     expect(r.steps[1]!.detail).toContain('code 3');
+    expect(r.steps[1]!.stopped).toBeUndefined();
   });
 
   it('terminates a step past its budget and reports it failed', async () => {
@@ -47,6 +48,8 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
     expect(r.outcome).toBe('failed');
     expect(r.steps[0]!.status).toBe('failed');
     expect(r.steps[0]!.detail).toContain('exceeded its budget');
+    expect(r.steps[0]!.stopped).toBe('budget');
+    expect(r.steps[1]!.stopped).toBeUndefined();
     expect(r.steps[1]!.status).toBe('not-attempted');
   }, 20_000);
 
@@ -57,6 +60,8 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
     expect(r.outcome).toBe('cancelled');
     expect(r.steps.map((s) => s.status)).toEqual(['failed', 'not-attempted', 'not-attempted']);
     expect(r.steps[0]!.detail).toContain('cancelled');
+    expect(r.steps[0]!.stopped).toBe('cancelled');
     expect(r.steps[1]!.detail).toContain('cancelled before this step');
+    expect(r.steps[1]!.stopped).toBeUndefined();
   }, 20_000);
 });

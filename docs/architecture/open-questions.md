@@ -8078,3 +8078,68 @@ names, waits as REQ-TOOLS-187 has a second call wait (and if so, whether the wai
 and timeout), or interrupts the paused command. And whether the new call's observation says that it waited behind the
 paused command and carries that command's end, meaning its output since the last poll and its exit status, rather than
 leaving it to a poll.
+
+**OQ-165 — What is the optimistic `cancelling` of the run's cancel: where is it shown, and until when?** *(REQ-MONITOR-127,
+"On confirmation the session status is optimistically set to `cancelling` … Given a refusal, the status is restored to
+`running`"; REQ-MONITOR-296, "eventually be overwritten by the authoritative final read"; REQ-MONITOR-130, "whichever surface
+asked for it"; REQ-MONITOR-126; `PD-ORCH-005` clauses 3 and 15, which make every confirmed "Cancel the run?" the explicit,
+final cancel; OQ-129, the same question for one agent's cancel. Raised 2026-10-01 under [R-067](../product/requests.md#r-067)
+by the repair of
+[`the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md`](../defects/fixed/the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md),
+acceptance finding A35. Raised on its branch as OQ-158 and renumbered OQ-165 at the merge, origin/main's OQ-158 keeping its
+number. Open.)*
+
+The requirement sets an optimistic status and its rollback. It does not say what overwrites it, and the engine gives it
+nothing to be overwritten by: the explicit cancel (the reserved run id's `cancelAgent`, `Run.cancelAgent`) raises the final
+stop in memory and writes the cancel's durable mark, but writes no `cancelling` status. The session's records keep reading
+`running` (or `waiting`) through the graceful stop, up to REQ-MONITOR-129's 30 seconds, until the teardown writes the run's
+end. Only the stop (`op: 'cancel'`) writes `cancelling`, and a stop is not a cancel (`PD-ORCH-005` clause 3). Shown until
+"the next authoritative read", as OQ-129's one-agent cancel is, the run would read `Cancelling` for one record interval and
+`Running` again for the rest of the graceful stop.
+
+**What the build proceeds under** (`packages/ui/src/cancel-overlay.ts`, `beginRun`, written by the renderer's `cancelRun`):
+- **Where.** Every confirmed "Cancel the run?" goes through the renderer's `cancelRun` — the Workspace's run header and wait
+  header, the Mission view's "Cancel selection" on the run row, a persona window's Cancel on the run's own instance — and
+  each surface of that window reads the session through the overlay. The session's status is shown `cancelling` there: the
+  run header and the composer (`Cancelling…`), the status strip, the Mission view's subtitle and run row (`Cancelling`), and
+  a persona window. As with OQ-129, only the window that sent the cancel shows it before the engine's record does; no agent
+  is shown cancelled by it, since the engine settles them in the teardown.
+  *Corrected 2026-10-01, at the second verification: "and a persona window" was false as first built. The window draws
+  the run's own instance through the agent vocabulary (`PRESENTATION_CHILD_STATES`), which has no `cancelling`;
+  `runLevelAgent` presents every busy status as `running`, and the window reads no session status of its own, so it read
+  `running` throughout.* The word it now draws is a reading: the run-level agent is the run (REQ-MONITOR-043), so while it
+  is live and the shown session reads `cancelling` its state label and tab tooltip read the run's status, `cancelling`,
+  REQ-NOTIFY-048's member, rather than a word minted for the agent vocabulary (`agentStateLabel`); its dot keeps the live
+  `running` motion (REQ-SHELL-075 (a): it pulses while the instance is live). A child keeps the agent vocabulary. The
+  inspector's meta line does not read it yet
+  ([`the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md`](../defects/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md)).
+- **Until when.** From the confirmation, over every active record of the run it was confirmed against, answered or not,
+  until the session's first record at rest taken after the confirmation; the overlay covers no record taken after that one,
+  so a later run of the session is never shown cancelling by it. A refusal removes it, and the record's own status shows
+  again. "The authoritative final read" is read as that final record, not the next record, because the next one is still
+  `running`.
+  *Corrected 2026-10-01, at the verification of the repair: the first build keyed the overlay on the run's `runStartedAt`
+  alone and claimed it "never covers a later run of the session". That was false. The engine saves a new run `starting`
+  (`packages/engine/src/run/run.ts`, `start`) before it writes that run's `run_started_at` after the pre-flight
+  (`saveRunning`), and the store keeps the column by `coalesce` (`packages/store/src/dal.ts`, `updateSessionRun`), so a
+  follow-up's or a continue's pre-flight records carry the cancelled run's key and are active: the next run read
+  `Cancelling` through its whole pre-flight and the composer refused input. The overlay now ends at the run's record at
+  rest, by the order the window took its records in (`witness`), and a record taken after the confirmation and before the
+  rest is covered whatever key it carries, since a session runs one run at a time.*
+  A record of another session ends it too: the window has followed away and will not take that run's final read, and on
+  its return a run started meanwhile would be covered by order alone. It is then shown as the engine writes it, as a
+  window that never confirmed the cancel shows it.
+- **The status a refusal restores.** REQ-MONITOR-127 says "restored to `running`". The build shows the record's own
+  status again, which is `running` unless the run is in a quota wait (`waiting`) or its pre-flight (`starting`); the
+  requirement's word is read as "the status before the confirmation", which those records are.
+- **A run with no `runStartedAt`.** `beginRun` lays nothing over a record that carries no `runStartedAt` — a session's first
+  run in its pre-flight. The run-level agent is null without it (`runLevelAgent`), so the inspector, the Mission view's
+  run row and a persona window offer no run cancel then; the Workspace's wait header would, if a quota wait came before
+  the key is written, and its cancel would then be sent with nothing shown — not observed, and stated as the guard's one
+  gap. A follow-up's pre-flight carries the previous run's key and is covered.
+
+**What a ruling decides.** Whether the engine should write `cancelling` when it accepts the explicit cancel, as the stop
+does, so the authoritative record agrees with the optimistic one and every window shows it, not only the one that sent it;
+and, if so, whether the overlay then yields to the next record as OQ-129's does. Recommendation: the engine writes it, because
+REQ-MONITOR-130 asks for identical observable state from every surface, and another window shows the run `Running` until
+the run's end today.

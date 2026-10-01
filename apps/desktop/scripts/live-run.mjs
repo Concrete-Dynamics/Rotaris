@@ -1083,6 +1083,8 @@ if (wanted.includes('ask')) {
   const log = await launch('ask', {
     ROTARIS_CAPTURE_PROMPT: 'Read src/todos.js in this workspace and reply, in one sentence, with the names of the functions it exports.',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
+    // Acceptance A36: the inspector's ring caption, which `ask.png` showed denying the reading it stated one line above.
+    ROTARIS_CAPTURE_PROBE: '.inspector__ring-caption',
   }, RUN_WAIT_MS + 90_000);
   const requests = [...new Set((log.match(/model request POST (\S+)/g) ?? []).map((line) => line.replace('model request POST ', '')))];
   check(log.includes(`credentials leased: ${PROVIDER_ID}`), 'main leased the bearer to the run host');
@@ -1099,6 +1101,9 @@ if (wanted.includes('ask')) {
   check(tools.length > 0 && tools.every((row) => row.settled === 1), 'every tool call settled', tools.map((row) => `${row.tool_name}:${row.tool_status}`).join(', '));
   check(/addTodo/.test(answer) && /toggleTodo/.test(answer), 'the answer names the functions the file exports', answer.trim().slice(0, 200));
   check(usage.length > 0, 'usage figures were recorded', JSON.stringify(usage[usage.length - 1] ?? null));
+  // Acceptance A36 (REQ-MONITOR-089/065): the run-level agent's caption states its own context window and never denies it.
+  const caption = JSON.parse(/capture: probe \.inspector__ring-caption → (\[.*\])\s*$/m.exec(log)?.[1] ?? '[]')[0]?.text ?? '';
+  check(/This agent's own context window: [\d,.\s]+ of [\d,.\s]+ tokens\./.test(caption) && !/does not carry/.test(caption), 'the inspector\'s ring caption states the reading and does not deny it', caption);
   /*
    * The recording is itself asserted, not assumed. A proxy that forwarded but recorded nothing would leave the
    * run green and the pack empty — the exact shape of gap this whole change exists to close — so the first

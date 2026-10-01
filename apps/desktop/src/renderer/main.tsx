@@ -993,6 +993,9 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   const groupTools = useStore(displayPrefs, (s) => s.groupTools);
   const changePopOut = useCallback((value: boolean) => { setPopOut(value); void bridge.command({ kind: 'prefs.set', key: 'interface/agentPopOut', value }); }, []);
   const session = useStore(replica, (s) => s.session);
+  // REQ-MONITOR-127/130 (acceptance A35, OQ-165): the strip names the run's state as this window's surfaces show it — a
+  // confirmed run cancel reads `cancelling` from the confirmation, as the run header and the Mission view do.
+  const shownStatus = useShownSession()?.executionStatus ?? null;
   const notice = useStore(notices, (s) => s.current);
   const [theme, setTheme] = useState(initialTheme);
   const [reducedMotion, setReducedMotion] = useState(() => initialReducedMotion ?? motionReduced());
@@ -1187,7 +1190,7 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
     () => [
       // REQ-NOTIFY-048/049: the presentation vocabulary, never a raw persisted string; in REQ-CHAT-008's recovery state the
       // synthetic label, as the run header and the Mission view read it (PD-ORCH-005 clause 13, OQ-100).
-      statusStripRunItem(session?.executionStatus ?? null, needsRecovery),
+      statusStripRunItem(shownStatus, needsRecovery),
       // REQ-SHELL-038 / REQ-GIT-122/161: the checked-out branch, the focused session's worktree branch first.
       { text: branchItem.text, name: 'Checked-out branch', title: branchItem.title, state: branchItem.state, testId: 'strip-branch' },
       // REQ-TOOLS-184: text, never colour alone — the mode, the workspace-scope flag (REQ-TOOLS-131), redaction (REQ-TOOLS-174), background sessions.
@@ -1196,7 +1199,7 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
       ...(circuitBreakerArmed ? ['● CB armed'] : []),
       theme.label, ...processes, `applied ${counters.applied} · reset ${counters.reset} · refused ${counters.refused}`,
     ],
-    [processes, counters, session, needsRecovery, theme, circuitBreakerArmed, branchItem, configuredMode],
+    [processes, counters, session, shownStatus, needsRecovery, theme, circuitBreakerArmed, branchItem, configuredMode],
   );
   // Part W: Ctrl+L (REQ-CHAT-002) and every other chord of REQ-SHELL-049 are the command registry's, bound once by the
   // shell's `useCommandShortcuts`; the Ctrl+L effect that lived here is gone. ADR-0048's application modality: the palette

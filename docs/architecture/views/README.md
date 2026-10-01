@@ -45,6 +45,21 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A confirmed run cancel is shown cancelling on every surface of the window that sent it (REQ-MONITOR-127/130/296, OQ-165,
+R-067).** The renderer's `cancelRun` lays a run overlay (`cancel-overlay.ts`, `beginRun`) over the window's record before it
+sends the reserved run id's `cancelAgent`: the session's status reads `cancelling` in the run header, the composer, the
+status strip, the Mission view's subtitle and run row, and a persona window's run instance (its state label and tab
+tooltip, `agentStateLabel`: the agent vocabulary has no `cancelling`, and as first built the window read `running`
+throughout — corrected at the second verification). A refusal removes it; an acceptance keeps it
+over the run's active records until its first record at rest, because the engine writes no `cancelling` for the explicit
+cancel. That end is the first record of the session at rest the window takes after the confirmation (`witness`), not the
+run's `runStartedAt`, which the next run's pre-flight still carries until the engine writes its own (corrected at the
+verification: keyed on it alone, the next run read `Cancelling` through its pre-flight), or the first record of another
+session it takes. Until then only the Workspace set anything — its stop button's "Force stop" — and no surface read `cancelling`. This
+repairs `the-mission-view-and-a-persona-window-do-not-show-a-confirmed-run-cancel-as-cancelling.md` (acceptance A35). The
+**runtime view**'s `cancelAgent` row and the **state ownership** view's optimistic-cancel row say so. No package, edge,
+process, message kind, channel, command or store column changed.
+
 **The run-level agent's tool-call count is its own while its turn runs (REQ-MONITOR-044/052, R-067).** The surfaces derived
 it as the session's total less the children's, and a root's calls join the total only when its turn returns, so the meta
 line read `0 tool calls` beside the root's used chips. `SessionRecord.entryToolCalls` now carries it: the roots' share of

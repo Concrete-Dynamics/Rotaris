@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AgentRecord, SessionRecord, TranscriptRow } from '@rotaris/contracts';
-import { agentArtifacts, chipStates, countNoun, instancesOf, mcpFateText, personaArtifacts, resolvedTools, rowsOf, stalledText } from './agents.js';
+import { agentArtifacts, agentStateLabel, chipStates, countNoun, instancesOf, mcpFateText, personaArtifacts, resolvedTools, rowsOf, stalledText } from './agents.js';
 import { AgentArtifactLinks, ArtifactLinkList } from './ArtifactLinks.js';
 import { AgentCancelConfirm } from './AgentCancelConfirm.js';
 import { elapsedLabel, elapsedShown } from './AgentTree.js';
@@ -14,7 +14,8 @@ import { Button as DesignButton, EmptyState as DesignEmptyState, PageHeader as D
 /**
  * REQ-SHELL-074/075, REQ-MONITOR-068..071 (Part R): the persona pop-out window's content. The header with the persona
  * name and the instance count with its noun agreeing (REQ-SHELL-044); one tab per instance live or finished, text the
- * agent's name, tooltip `{state} · {activity}`; the "Artifacts by {persona} (all instances)" card with its empty
+ * agent's name, tooltip `{state} · {activity}`, the state being the run's `cancelling` on the run's own instance while the shown
+ * session reads it (`agentStateLabel`, A35, OQ-165); the "Artifacts by {persona} (all instances)" card with its empty
  * sentence; per tab, in order: (a) the heading — the dot pulsing only while live, the name in the persona's colour,
  * the muted state; (b) the "Agent transcript" card (accessible name `{name} transcript`, min height 260 px, the
  * empty sentence) showing only that agent's rows through the ONE row renderer; (c) "Context" with the ring and
@@ -105,7 +106,7 @@ export function PersonaWindow(props: PersonaWindowProps) {
       </DesignPageHeader>
       <div className="tabs persona-window__tabs" role="tablist" aria-label={`${persona} instances`}>
         {instances.map((a) => (
-          <DesignButton key={a.id} type="button" role="tab" className={`tab${shown?.id === a.id ? ' is-active' : ''}`} aria-selected={shown?.id === a.id} data-agent-id={a.id} title={`${a.presentationState} · ${a.activity || '—'}`} onClick={() => onSelectTab(a.id)}>{a.name}</DesignButton>
+          <DesignButton key={a.id} type="button" role="tab" className={`tab${shown?.id === a.id ? ' is-active' : ''}`} aria-selected={shown?.id === a.id} data-agent-id={a.id} title={`${agentStateLabel(a, session)} · ${a.activity || '—'}`} onClick={() => onSelectTab(a.id)}>{a.name}</DesignButton>
         ))}
         {instances.length === 0 && <span className="text-secondary">No instance of {persona} in the followed session.</span>}
       </div>
@@ -118,7 +119,7 @@ export function PersonaWindow(props: PersonaWindowProps) {
           <div className="persona-window__heading">
             <span ref={(element) => { if (element && shown.live) markMotionStart(element); }} className={`agent-row__dot agent-row__dot--${shown.presentationState}`} aria-hidden="true" />
             <span className="persona-window__name" style={{ color: `var(${personaColourToken(persona)}, var(--rt-text))` }} data-testid="persona-agent-name">{shown.name}</span>
-            <span className="text-secondary mono" data-testid="persona-agent-state">{shown.presentationState}</span>
+            <span className="text-secondary mono" data-testid="persona-agent-state">{agentStateLabel(shown, session)}</span>
           </div>
           <section className="card persona-window__transcript" aria-label={`${shown.name} transcript`} data-testid="persona-transcript" data-rows={own.length}>
             <div className="ov-card__head"><span className="card-kicker">Agent transcript</span><span className="card-meta">{countNoun(own.length, 'row')}</span></div>

@@ -1760,19 +1760,41 @@ export class Sessions {
     }
   }
 
-  /** REQ-CHAT-090: a paused or completed session edits the validated stored source and republishes it. */
+  /**
+   * REQ-CHAT-090: a paused or completed session edits the validated stored source and republishes it.
+   *
+   * ADR-0005, REQ-EVENTS-098: the edit is written under the session's lock. A run's teardown releases it while the session
+   * stays loaded here, so the edit claims it the way every other write from outside a run does (`claimHold`): kept when
+   * this process holds it, taken for the write and given back otherwise, and refused with nothing written while another
+   * live process holds it — in REQ-SESSION-048's words (`lockHeldRefusal`, `session_locked`), or `store_failed` when the
+   * store could not be read or written to take it. A malformed request is refused before the lock is touched (the repair
+   * of `a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md`).
+   */
   private editStoredTodo(s: Live | undefined, req: ControlRequest): ControlResult {
     if (!s) return { ok: false };
-    const stored = s.dal.getSession(s.writer.sessionId);
-    if (!stored) return { ok: false };
     const op = req.args['op'];
-    const requestedSource = req.args['source'];
-    const source = requestedSource === 'child' || requestedSource === 'agent' || requestedSource === 'planner' ? requestedSource : 'planner';
     const id = typeof req.args['id'] === 'string' ? req.args['id'] : '';
     const body = typeof req.args['text'] === 'string' ? req.args['text'] : '';
+    if ((op !== 'add' && op !== 'update' && op !== 'remove') || (op !== 'add' && id === '') || (op !== 'remove' && body.trim() === '')) return { ok: false };
+    const sid = s.writer.sessionId;
+    const warn = (m: string) => { s.log?.warn(m); this.deps.warn(m); };
+    const hold = this.claimHold(s.dal, sid, warn);
+    if ('holder' in hold) return { ok: false, refusal: { code: 'session_locked', message: lockHeldRefusal(sid, this.deps.host, hold.holder).reason } };
+    if ('failure' in hold) {
+      warn(`taking the lock of ${sid} for a todo edit failed: ${hold.failure}`);
+      return { ok: false, refusal: { code: 'store_failed', message: `The workspace store could not take this session's lock, so the todo was not edited: ${hold.failure}` } };
+    }
+    try { return this.editStoredTodoUnderLock(s, req, op, id, body); }
+    finally { hold.release(); }
+  }
+
+  private editStoredTodoUnderLock(s: Live, req: ControlRequest, op: 'add' | 'update' | 'remove', id: string, body: string): ControlResult {
+    const stored = s.dal.getSession(s.writer.sessionId);
+    if (!stored) return { ok: false };
+    const requestedSource = req.args['source'];
+    const source = requestedSource === 'child' || requestedSource === 'agent' || requestedSource === 'planner' ? requestedSource : 'planner';
     const ownerId = typeof req.args['ownerId'] === 'string' && req.args['ownerId'] !== '' ? req.args['ownerId'] : null;
     const phaseId = typeof req.args['phaseId'] === 'string' ? req.args['phaseId'] : 'main';
-    if ((op !== 'add' && op !== 'update' && op !== 'remove') || (op !== 'add' && id === '') || (op !== 'remove' && body.trim() === '')) return { ok: false };
     const mint = () => randomUUID().replaceAll('-', '').slice(0, 8);
     let assigned: string | undefined;
     if (source === 'child') {
@@ -2562,10 +2584,8 @@ export class Sessions {
       // running (a pause leaves them) is recorded as ended by the quit. A run that was live recorded its own at its rest,
       // and one a dead process left is the crash's, recorded when the session is next repaired or continued.
       const held = new Map((this.deps.terminals?.(id).list() ?? []).filter((t) => t.status === 'running').map((t) => [t.id, t]));
-      for (const t of s.dal.agentTerminalsOf(id)) {
-        const live = held.get(t.terminal_id);
-        if (t.state === 'running' && live) s.writer.recordAgentTerminal({ terminal_id: t.terminal_id, task_id: t.task_id, command: t.command, started_at: t.started_at, state: 'quit', exit_code: live.exitCode, output_tail: live.tail });
-      }
+      const quit = s.dal.agentTerminalsOf(id).flatMap((t) => { const live = held.get(t.terminal_id); return t.state === 'running' && live ? [{ row: t, live }] : []; });
+      if (quit.length > 0) this.recordQuitTerminals(id, s, quit);
       s.tools?.cancelPending();
       s.owner.flushPending();
       s.writer.release(this.deps.pid, this.deps.host);
@@ -2573,5 +2593,24 @@ export class Sessions {
     }
     this.live.clear();
     for (const id of [...this.slotHolders.keys()]) this.dropModelSlots(id);
+  }
+
+  /**
+   * PD-ORCH-005 clause 10's quit record, made under the session's lock (ADR-0005, REQ-EVENTS-098). A pause's teardown
+   * released the lock while the session stayed loaded, so the record claims it as every other write from outside a run
+   * does (`claimHold`) and gives back what it took. A session another live process holds — or whose lock the store could
+   * not be read or written to take — gets no record from this process, and the skip is warned of: its rows are that
+   * holder's to write, and a background session this process ended stays `running` in the record for the next repair or
+   * continue to settle (the repair of `a-todo-edit-at-rest-and-the-quits-terminal-record-write-with-no-lock.md`).
+   */
+  private recordQuitTerminals(id: SessionId, s: Live, quit: readonly { readonly row: ReturnType<StoreDal['agentTerminalsOf']>[number]; readonly live: { readonly exitCode: number | null; readonly tail: string } }[]): void {
+    const warn = (m: string) => { s.log?.warn(m); this.deps.warn(m); };
+    const hold = this.claimHold(s.dal, id, warn);
+    const terminalIds = quit.map((q) => q.row.terminal_id).join(', ');
+    if ('holder' in hold) { warn(`the quit ended background session(s) ${terminalIds} of ${id} but recorded nothing: the session is held by pid ${hold.holder.pid} on ${hold.holder.host}`); return; }
+    if ('failure' in hold) { warn(`the quit ended background session(s) ${terminalIds} of ${id} but recorded nothing: its lock could not be taken (${hold.failure})`); return; }
+    try {
+      for (const { row: t, live } of quit) s.writer.recordAgentTerminal({ terminal_id: t.terminal_id, task_id: t.task_id, command: t.command, started_at: t.started_at, state: 'quit', exit_code: live.exitCode, output_tail: live.tail });
+    } finally { hold.release(); }
   }
 }

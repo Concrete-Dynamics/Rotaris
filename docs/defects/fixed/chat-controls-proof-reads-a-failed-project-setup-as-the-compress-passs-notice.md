@@ -58,5 +58,5 @@ checks its precondition instead of reading a notice it does not own.
   it), and anything on Windows.
 - **The same shape elsewhere,** recorded, not repaired here: `notice-proof`'s `review-action` scenario reads the setup
   failure's notice in place of "Workspace hooks need review" in the same checkout
-  ([note](../notice-proof-reads-a-failed-project-setup-in-place-of-the-hook-review-notice.md)). `slash-proof` and
+  ([note](notice-proof-reads-a-failed-project-setup-in-place-of-the-hook-review-notice.md); repaired 2026-10-01 the same way, in `fixed/`). `slash-proof` and
   `library-proof`, the other two proofs that read the notice slot without the section, passed in the same checkout.

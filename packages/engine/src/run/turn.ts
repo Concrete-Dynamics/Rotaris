@@ -14,6 +14,7 @@ import { CompressionRunner, type TurnCompression } from './compression.js';
 import { Conversation, type ConversationRecorder } from './conversation.js';
 import { interruptedResult } from './interruption.js';
 import type { FingerprintCheck } from './record.js';
+import type { AgentGrant } from '../children/personas.js';
 
 /**
  * The tool loop inside one iteration (REQ-TOOLS-180, REQ-ORCH-146's non-native case): step the model;
@@ -72,6 +73,12 @@ export interface ToolPort {
    * Optional because a port built without the registry (a test double) has no resolution to report.
    */
   resolvedTools?(): readonly string[];
+  /**
+   * REQ-MCP-065 / REQ-TOOLS-006: the grant in force once `ready()` has resolved — the native set `resolvedTools` reports and
+   * the MCP surface left after every control — or null before then. A child's row records it (`ChildLedger.recordGrant`).
+   * Optional because a test double has no resolution to report; a port without it records no grant.
+   */
+  grant?(): AgentGrant | null;
   /**
    * ADR-0034 (Part S): a port whose surface needs discovery before its listing is complete resolves this first; the turn
    * awaits it before reading `specs()` or the prompt section, bounded by the port (REQ-MCP-053's 35 s at most).

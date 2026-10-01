@@ -74,4 +74,7 @@ and surviving the v29 release) and the cascade listing that now includes `plan_r
 
 Not shown live: the note was established with a throwaway engine case, not a proof or a live run. No live-run scenario runs
 in `plan` mode with a persona id the canonicaliser rewrites (`katalyst`'s scenarios run as built-in roles, each its own
-canonical name, where the defect cannot show), so the repair is shown by the driven engine cases above.
+canonical name, where the defect cannot show), so the repair is shown by the driven engine cases above. The built app was run
+over the new table: `node apps/desktop/scripts/plan-gate-proof.mjs --skip-build` (as root under Xvfb, Node 24) passed and
+left a v30 store whose `plan_roots` held the three plan cycles' roots it drove (`orchestrator`, each its own task id), and
+`sessions-proof` passed its cascade premise and delete scenario with `plan_roots` among the cascading tables.

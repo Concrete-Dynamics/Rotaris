@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "node tools/check-line-endings.mjs && node tools/check-request-log.mjs && node tools/check-directive-register.mjs && node tools/check-record-links.mjs && node tools/check-theme-colours.mjs && node tools/check-ui-language.mjs && node tools/check-plural-markers.mjs && eslint .",
+    "lint": "node tools/check-line-endings.mjs && node tools/check-request-log.mjs && node tools/check-directive-register.mjs && node tools/check-record-links.mjs && node tools/check-theme-colours.mjs && node tools/check-ui-language.mjs && node tools/check-plural-markers.mjs && node tools/check-timeline-vocabulary.mjs && eslint .",
     "mockup": "node tools/mockup.mjs",
     "test": "vitest run",
     "test:watch": "vitest",

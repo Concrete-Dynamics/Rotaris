@@ -46,13 +46,20 @@ const GATE_LAYOUT = {
   actions: { id: 'plan-gate-actions', relations: [{ kind: 'containment', target: 'plan-gate' }, { kind: 'hit-test' }] },
 } satisfies Record<string, UiLayoutContract>;
 
-/** REQ-ORCH-153, PD-ORCH-002: implied todo state deduplicated and stripped of redundant duplicate lines. */
+type ImpliedTask = { state?: string; name?: string; text?: string };
+
+/**
+ * REQ-ORCH-153, PD-ORCH-002: implied todo state deduplicated and stripped of redundant duplicate lines. A task is listed
+ * by what it is called — its name where it has one, else its text — as the Todo pane draws it: a queued prompt's task is
+ * named "Queued Prompt: <id>" and carries the prompt as its content (REQ-CHAT-040, REQ-ORCH-071). The engine's
+ * `taskTitle` states the same rule; this package cannot import it.
+ */
 export function planTodoLines(todo: string): readonly string[] {
   if (todo.trim() === '') return [];
   try {
-    const parsed = JSON.parse(todo) as { planner?: { phases?: { tasks?: { state?: string; text?: string }[] }[] }; phases?: { tasks?: { state?: string; text?: string }[] }[] };
+    const parsed = JSON.parse(todo) as { planner?: { phases?: { tasks?: ImpliedTask[] }[] }; phases?: { tasks?: ImpliedTask[] }[] };
     const phases = parsed.planner?.phases ?? parsed.phases ?? [];
-    const all = phases.flatMap((p) => (p.tasks ?? []).map((t) => `[${t.state ?? 'pending'}] ${t.text ?? ''}`)).filter((l) => l.trim() !== '');
+    const all = phases.flatMap((p) => (p.tasks ?? []).map((t) => `[${t.state ?? 'pending'}] ${t.name ?? t.text ?? ''}`)).filter((l) => l.trim() !== '');
     // PD-ORCH-002: deduplicate identical items in order
     const seen = new Set<string>();
     const deduplicated: string[] = [];

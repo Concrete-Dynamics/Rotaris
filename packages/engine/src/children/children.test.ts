@@ -2838,7 +2838,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       g2.open();
       await sessions.running(sid)!;
       expect(byName(sid, 'work')).toMatchObject({ state: 'succeeded' });
-      expect(dal.timelineOf(sid).map((t) => t.name)).not.toContain('child_timeout_fallback');
+      expect(dal.timelineOf(sid).map((t) => t.name)).not.toContain('fallback_model');
       expect(JSON.parse(byName(sid, 'work').report!).errors).toEqual([]);
     });
 

@@ -27,6 +27,29 @@ describe('PlanGate — planTodoLines (PD-ORCH-002, REQ-ORCH-153)', () => {
     ]);
   });
 
+  it('lists a named task by its name, so a queued prompt\'s task reads "Queued Prompt: <id>" (REQ-CHAT-040, REQ-ORCH-071)', () => {
+    const raw = JSON.stringify({
+      planner: {
+        phases: [
+          { name: 'main', tasks: [{ state: 'completed', text: 'build the parser' }] },
+          {
+            name: 'Queued Prompts',
+            tasks: [
+              { state: 'pending', name: 'Queued Prompt: 0123abcd', text: 'add a test for the parser' },
+              { state: 'pending', name: 'Queued Prompt: 4567ef01', text: 'add a test for the parser' },
+            ],
+          },
+        ],
+      },
+    });
+    // Two queued prompts of the same text are two tasks of two names: PD-ORCH-002 deduplicates identical tasks only.
+    expect(planTodoLines(raw)).toEqual([
+      '[completed] build the parser',
+      '[pending] Queued Prompt: 0123abcd',
+      '[pending] Queued Prompt: 4567ef01',
+    ]);
+  });
+
   it('handles empty or malformed input safely', () => {
     expect(planTodoLines('')).toEqual([]);
     expect(planTodoLines('not-json')).toEqual([]);

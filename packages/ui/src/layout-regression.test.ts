@@ -48,4 +48,11 @@ describe('minimum-window layout regressions', () => {
     // sidebar (scrollWidth 295 in a 235 px box) and gave the column a horizontal scrollbar.
     expect(rule('.agents__project .settings__hint')).toContain('overflow-wrap: anywhere');
   });
+
+  it('breaks an unbroken token in a task\'s text inside the plan column (REQ-SHELL-022)', () => {
+    // A task's text is the rename control, and a token in it with no break opportunity — the live run's quoted
+    // `printf "LINE-%03d xxxx…"` — ran past the sidebar. Measured in the built app by `layout-proof` section 6: a
+    // 200-character token's content 1273 px wide in a 189 px box, the sidebar's scrollWidth 1307 against 259.
+    expect(rule('.todo-task__text')).toContain('overflow-wrap: anywhere');
+  });
 });

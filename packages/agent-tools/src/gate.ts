@@ -284,23 +284,32 @@ export class Gate {
     }
 
     // REQ-TOOLS-032: a payload still unreadable or schema-invalid after repair is a recoverable error, not executed.
-    if (!executor) {
-      return finish({ text: `Unknown tool '${call.name}'. The call was not executed; choose one of the tools listed.`, isError: true, status: 'failed', decision: null, observation: null }, { failure_kind: 'invalid_request' });
-    }
-    if (repaired === null) {
-      return finish({ text: `The arguments for '${call.name}' could not be read as JSON even after repair. Re-issue the call with a well-formed object.`, isError: true, status: 'failed', decision: null, observation: null }, { failure_kind: 'invalid_request' });
-    }
+    /*
+     * REQ-SESSION-136: each such refusal is a failure in the tool-call record (`failed`, `is_error`, `invalid_request`), so
+     * it is REQ-SESSION-136's "any other failure" and files a `tool_error` warning referencing that record, through the
+     * same `outcomeIssues` an executor's observation takes. REQ-TOOLS-032 makes the call recoverable and unexecuted; it
+     * does not except it from the issue record. Before this every refusal here returned before `outcomeIssues`, and the
+     * duress run's two schema-invalid `write_file` calls were the only failures no issue referenced (live-run a71-6,
+     * docs/defects/fixed/a-call-refused-at-the-tool-gates-schema-check-files-no-tool-error-issue.md). The gate's other
+     * refusals — the plan gate, a write scope, a deny, a hook's stop, a withdrawn approval — settle `blocked`, not
+     * `failed`, and file no `tool_error` (a deny files its own `permission_denied`).
+     */
+    const refuseInvalid = (text: string, diagnostic: Observation | null): ToolResult => {
+      const result = finish({ text, isError: true, status: 'failed', decision: null, observation: diagnostic }, diagnostic === null ? { failure_kind: 'invalid_request' } : {
+        failure_kind: 'invalid_request', outcome_kind: diagnostic.outcomeKind ?? 'invalid_request',
+        exit_code: diagnostic.exitCode ?? null, warnings: diagnostic.warnings ?? [],
+      });
+      this.outcomeIssues(call, { ...(diagnostic === null ? {} : { outcomeKind: diagnostic.outcomeKind ?? 'invalid_request' }), text, isError: true, failureKind: 'invalid_request' });
+      return result;
+    };
+    if (!executor) return refuseInvalid(`Unknown tool '${call.name}'. The call was not executed; choose one of the tools listed.`, null);
+    if (repaired === null) return refuseInvalid(`The arguments for '${call.name}' could not be read as JSON even after repair. Re-issue the call with a well-formed object.`, null);
     const parsed = executor.schema.safeParse(repaired);
     if (!parsed.success) {
       const detail = parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
       const diagnostic = executor.validationError?.(repaired, detail);
-      if (diagnostic) {
-        return finish({ text: diagnostic.text, isError: true, status: 'failed', decision: null, observation: diagnostic }, {
-          failure_kind: 'invalid_request', outcome_kind: diagnostic.outcomeKind ?? 'invalid_request',
-          exit_code: diagnostic.exitCode ?? null, warnings: diagnostic.warnings ?? [],
-        });
-      }
-      return finish({ text: `The arguments for '${call.name}' do not match its schema (${detail}). Re-issue the call with corrected arguments.`, isError: true, status: 'failed', decision: null, observation: null }, { failure_kind: 'invalid_request' });
+      if (diagnostic) return refuseInvalid(diagnostic.text, diagnostic);
+      return refuseInvalid(`The arguments for '${call.name}' do not match its schema (${detail}). Re-issue the call with corrected arguments.`, null);
     }
 
     /*

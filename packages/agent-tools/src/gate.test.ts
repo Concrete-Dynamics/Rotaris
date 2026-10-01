@@ -454,6 +454,41 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     expect(h.rec.issues[0]).toMatchObject({ kind: 'tool_error', evidence_ref: 'tool_call_evidence#c-grep' });
   });
 
+  it('REQ-SESSION-136: each call the gate refuses as invalid_request files one tool_error issue referencing its tool-call record (live-run a71-6)', async () => {
+    // Before the repair none of these filed an issue: the gate's refusals returned before `outcomeIssues`, so the duress
+    // run's two schema-invalid `write_file` calls were failures in the record that no issue referenced.
+    const h = harness({ preset: 'autonomous', extraExecutors: [['write_file', writeFileReal()]] });
+    const cases: [ToolCall, RegExp][] = [
+      // The schema refusal with the tool's own diagnostic — the duress run's `write_file` without `operation`.
+      [h.call('write_file', { path: 'notes.txt', content: 'x' }), /write_file requires an operation/],
+      // The schema refusal with the gate's generic text.
+      [{ ...h.call('todo', { operation: 5 }), callId: 'c-todo-schema' }, /do not match its schema/],
+      // Arguments that cannot be read as JSON even after repair.
+      [{ ...h.call('grep', 'not json'), callId: 'c-grep-json' }, /could not be read as JSON/],
+      // A name that is no tool.
+      [h.call('read_path', { path: 'a.ts' }), /Unknown tool 'read_path'/],
+    ];
+    for (const [call, text] of cases) {
+      const before = h.rec.issues.length;
+      const r = await h.gate.dispatch(call, new AbortController().signal);
+      expect(r).toMatchObject({ status: 'failed', isError: true });
+      expect(r.text).toMatch(text);
+      expect(h.rec.settles.at(-1)).toMatchObject({ status: 'failed', failure_kind: 'invalid_request' });
+      expect(h.rec.issues.slice(before)).toHaveLength(1);
+      expect(h.rec.issues.at(-1)).toMatchObject({ kind: 'tool_error', severity: 'warning', actor: 'orchestrator', evidence_ref: `tool_call_evidence#${call.callId}`, metadata: { tool: call.name, failure_kind: 'invalid_request' } });
+      expect(String(h.rec.issues.at(-1)!['message'])).toContain(`The '${call.name}' call failed:`);
+    }
+    expect(h.executed).toEqual([]);
+    expect(h.rec.decisions).toEqual([]);
+  });
+
+  it('REQ-SESSION-136: a refusal that is not a failure — the plan gate\'s `blocked` — files no issue', async () => {
+    const h = harness({ preset: 'autonomous', planGateHeld: true });
+    const r = await h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
+    expect(r.status).toBe('blocked');
+    expect(h.rec.issues).toEqual([]);
+  });
+
   it('REQ-TOOLS-014: the meta tools resolve allow with builtin:meta-tool ahead of everything', async () => {
     const h = harness({ preset: 'restricted', extraExecutors: [['finish', simpleExecutor('finish', 'f', z.object({ message: z.string().optional() }), async () => ({ text: 'ok', isError: false }))]] });
     const r = await h.gate.dispatch(h.call('finish', '{"message": "do'), new AbortController().signal);

@@ -1390,7 +1390,8 @@ export class Run {
     let outcome: TurnOutcome | null = null;
     /**
      * REQ-MONITOR-102: the calls the root's record held when this execution began — every one of them already counted, when
-     * its earlier execution returned or by the crash record — so a root given up on counts only what its record gained.
+     * its earlier execution returned, raised or was given up on, or by the crash record — so a root given up on, or whose
+     * turn raises, counts only what its record gained.
      */
     const recordedAtStart = resume ? callsRun(this.record.load(rootTaskId)) : 0;
     /** An execution iteration's root has a count on its row (`iterations.root_tool_calls`); a plan cycle's has no row. */
@@ -1483,17 +1484,19 @@ export class Run {
          */
         if (this.stop.requested && await children.outlast(this.stopGraceLeft())) this.deps.warn(`iteration ${iteration}: child executions still running at the stop's 30 s grace were given up on (REQ-SESSION-092)`);
       }
-      // A root given up on that no rest paused — the explicit cancel — still leaves no call row running (REQ-SESSION-129):
-      // its open call is recorded cut off, naming no rest (OQ-96, "A call cut by no rest").
-      if (rootDetached && !answered && this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: rootName }, iteration, null);
+      // A root given up on, or whose turn raised, that no rest paused — the explicit cancel, an iteration that closes
+      // failed — still leaves no call row running (REQ-SESSION-129): its open call is recorded cut off, naming no rest
+      // (OQ-96, "A call cut by no rest").
+      if ((rootDetached || outcome === null) && !answered && this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: rootName }, iteration, null);
       /*
-       * REQ-MONITOR-102 (the repair of `a-roots-calls-before-a-crash-never-reach-the-session-total.md`): a root given up on
-       * never returns its count, so its calls are counted from its record — once its open calls are answered, so a call it
-       * asked for and never started is not one — less what the record held when this execution began. Only a root that
-       * never returned: the grace's timer still sets `rootDetached` when it runs out after the root returned — while the
-       * rest waits for its children — and that root's calls were counted with its outcome above.
+       * REQ-MONITOR-102 (the repairs of `a-roots-calls-before-a-crash-never-reach-the-session-total.md` and
+       * `a-root-whose-turn-raises-never-counts-its-calls.md`): a root given up on, or whose turn raised, never returns its
+       * count, so its calls are counted from its record — once its open calls are answered, so a call it asked for and
+       * never started is not one — less what the record held when this execution began. Only a root that never returned:
+       * the grace's timer still sets `rootDetached` when it runs out after the root returned — while the rest waits for its
+       * children — and that root's calls were counted with its outcome above.
        */
-      if (rootDetached && outcome === null && this.deps.dal) {
+      if (outcome === null && this.deps.dal) {
         const gained = Math.max(0, callsRun(this.record.load(rootTaskId)) - recordedAtStart);
         this.aggregates.addToolCalls(gained);
         this.persistToolCalls(rootCount === null ? {} : { root: { iteration: rootCount, add: gained } });

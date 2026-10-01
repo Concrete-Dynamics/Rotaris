@@ -3186,6 +3186,52 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       });
     });
 
+    describe('REQ-MONITOR-102 (the repair of a-root-whose-turn-raises-never-counts-its-calls.md): a root whose turn raises counts its calls from its record', () => {
+      const probed: PortToolResult = { text: 'probed', isError: false, status: 'ok', durationMs: 1, label: 'probe', args: {} };
+      const rootRow = (sid: SessionId, name: string) => dal.residentRows(sid).find((r) => r.kind === 'tool' && r.tool_name === name && r.name === 'orchestrator');
+
+      it('a raise that closes the iteration failed: the calls it ran reach the total and its iteration, the one it never started does not, and no row is left running', async () => {
+        const { sessions } = sessionsWith((persona, turn) => {
+          if (persona !== 'orchestrator') return answer('done');
+          // One call that returns, then a step whose first call raises out of its dispatch and whose second never starts.
+          return turn === 1 ? toolCalls([{ callId: 'q1', name: 'probe', args: {} }]) : toolCalls([{ callId: 'b1', name: 'boom', args: {} }, { callId: 'q2', name: 'probe', args: {} }]);
+        }, { tool: (name) => (name === 'boom' ? Promise.reject(new Error('the port raised')) : name === 'probe' ? Promise.resolve(probed) : undefined) });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await sessions.running(sid);
+        expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'closed' }]);
+        // q1 and the raising b1 — q2 was asked for and never started.
+        expect(dal.getSession(sid)!.tool_calls).toBe(2);
+        expect(dal.iterationsOf(sid)[0]!.root_tool_calls).toBe(2);
+        // REQ-SESSION-129: the call it raised out of is answered, and its row settled, as cut off — naming no rest.
+        expect(rootRow(sid, 'boom')).toMatchObject({ tool_status: 'failed' });
+        expect(rootRow(sid, 'boom')!.output).toMatch(/^This call was cut off before it completed, and it was not re-run\./);
+      });
+
+      it('a raise while the run comes to rest leaves the iteration open; the continue counts only the calls the resumed root adds', async () => {
+        let fail!: () => void;
+        const raised = new Promise<PortToolResult>((_, reject) => { fail = () => reject(new Error('the port raised')); });
+        const { sessions } = sessionsWith((persona, turn) => {
+          if (persona !== 'orchestrator') return answer('done');
+          // q1 returns; b1 raises once the pause is asked for; resumed, the root makes q3 and answers.
+          return turn === 1 ? toolCalls([{ callId: 'q1', name: 'probe', args: {} }]) : turn === 2 ? toolCalls([{ callId: 'b1', name: 'boom', args: {} }]) : turn === 3 ? toolCalls([{ callId: 'q3', name: 'probe', args: {} }]) : answer('Done.');
+        }, { tool: (name) => (name === 'boom' ? raised : name === 'probe' ? Promise.resolve(probed) : undefined) });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await settle(() => rootRow(sid, 'boom') !== undefined);
+        expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+        fail();
+        await sessions.running(sid);
+        expect(warnings.some((w) => /raised while coming to rest, and is left open/.test(w))).toBe(true);
+        // q1 and b1, which no returned turn counted.
+        expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', interruption: 'pause', root_tool_calls: 2 }]);
+        expect(dal.getSession(sid)!.tool_calls).toBe(2);
+        expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+        expect((await sessions.running(sid))!.status).toBe('completed');
+        // q3 added once; the record's first two are not counted again.
+        expect(dal.getSession(sid)!.tool_calls).toBe(3);
+        expect(dal.iterationsOf(sid)[0]).toMatchObject({ state: 'closed', root_tool_calls: 3 });
+      });
+    });
+
     describe('REQ-SESSION-094: a detached call no longer writes through its tool gate or its stream (the repair of a-detached-call-still-writes-through-its-tool-gate.md)', () => {
       it('teardown closes every port the run built, before the terminal pair, each with the statement its open calls settle with', async () => {
         const closed: { agent: string; statement: string; ended: number }[] = [];

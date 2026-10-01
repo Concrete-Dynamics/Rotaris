@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-30**
 
+**A root whose turn raises counts its calls (REQ-MONITOR-102, acceptance A18, R-067).** `Run.turn`'s `finally` counts a root
+whose turn never returned — raised as well as given up on — from its record, less what the record held when the execution
+began (`recordedAtStart`), once its open calls are answered; a raise that no rest paused has its open call answered as cut
+off, naming no rest (OQ-96), as the explicit cancel's give-up already did. This repairs
+`a-root-whose-turn-raises-never-counts-its-calls.md`. The **runtime view**'s §7 `iterations` row and the **state-ownership
+view**'s tool-call row say so. No package, edge, process, message kind, channel, command or store column changed.
+
 **The compressing model reads the history it replaces (REQ-MONITOR-082, REQ-MONITOR-084, REQ-ORCH-110, OQ-156, R-067).**
 `compress` reads `compressorTranscript` (`run/compression.ts`) instead of the report pass's `transcriptText`, which is
 removed: each event whole, the slice whole up to the compressing model's own threshold at `chars_per_token`

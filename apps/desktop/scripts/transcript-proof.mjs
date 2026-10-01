@@ -15,7 +15,16 @@
  *                   column, with a scripted run appended so that something is live while it is sampled: every
  *                   bound slot carries a measurement key, and no slot is drawn through its neighbour — at
  *                   appointments, and on each of the frames after the run's reasoning row is first drawn, before
- *                   the rows it appends have been measured.
+ *                   the rows it appends have been measured — and on each painted frame after a planted user row's
+ *                   image attachment is opened, which grows the row under its unchanged measurement key, and each
+ *                   frame after the activity line is expanded.
+ *   3c. capacity   — a planted run of 400 one-line system notices, the shortest row PD-CHAT-003 draws, in a window
+ *                   resized to 1440x4300 — inside `H_MAX`, and tall enough that the pool's old 30 px capacity unit bound
+ *                   fewer slots than the viewport shows rows: every row on screen is bound, at the tail and in the middle
+ *                   (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md). Xvfb with no
+ *                   window manager does not clamp the window to its screen, so the standard `-screen 0 1600x1000x24` asks
+ *                   it; a host that clamps the window below that height records the stage NOT ASKED, with the height it
+ *                   allowed, and the verdict names it — never as passed.
  *   4/5. append-empty / append-loaded — the same scripted run appended to an empty transcript and to a 1200-row
  *                   one, timed at REQ-CHAT-055's stated point: after the frame showing the update has been
  *                   painted, never a synchronous figure. Since the R-048 measurement round the two are launched
@@ -27,7 +36,9 @@
  *                   attributed to the functions and source modules it ran in, loaded against empty.
  *
  * Evidence under `.proof/transcript-proof/`: one PNG and one log per launch, the two traces, `results.json`.
- * `--skip-build` skips the build.
+ * `--skip-build` skips the build. `--only=<stages>` runs the named stages alone (comma-separated, of `invariance`,
+ * `behaviour`, `geometry`, `capacity`, `append`) after the `empty` launch, which always runs because it creates the store
+ * the others are planted in; the verdict names them, since a partial run is evidence for those stages and no others.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -55,6 +66,10 @@ if (!process.argv.includes('--skip-build')) {
   if (built.status !== 0) throw new Error(`desktop build exited ${built.status ?? built.signal ?? 'unknown'}`);
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
+const STAGES = ['invariance', 'behaviour', 'geometry', 'capacity', 'append'];
+const only = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length).split(',').filter(Boolean) ?? null;
+if (only !== null && only.some((stage) => !STAGES.includes(stage))) throw new Error(`--only names a stage this proof does not have: ${only.join(',')} (stages: ${STAGES.join(', ')})`);
+const wanted = (stage) => only === null || only.includes(stage);
 
 
 
@@ -235,6 +250,39 @@ function plantLiveRun(sid) {
     const last = new Date(Date.UTC(2026, 8, 6, 9, 1, 0, 0)).toISOString();
     planned.push({ sid, i: CALLS, kind: 'agent', settled: 1, body: 'the row the activity line used to be drawn through', at: last, ts: last.slice(11, 19), persona: 'requirements-engineer', name: 'requirements-engineer', toolName: null, toolStatus: null, callKey: null, durationMs: null, startedAt: null, output: null });
     db.transaction((batch) => { for (const row of batch) insert.run(row); })(planned);
+    // docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md: a user row
+    // carrying an image attachment, and a row beneath it. Opening the attachment's native `<details>` grows the row with no
+    // commit and under the SAME measurement key, so only the observer's delivery can move the row beneath. The image's file
+    // was never written, so it projects unavailable (REQ-CHAT-173) and opening it reveals the reason line; that is growth
+    // enough, and it needs no image to load.
+    const asked = new Date(Date.UTC(2026, 8, 6, 9, 1, 30, 0)).toISOString();
+    const withAttachment = db.prepare(`INSERT INTO transcript_rows (session_id, row_index, kind, settled, body, at, ts, page, attachments)
+      VALUES (@sid, @i, @kind, 1, @body, @at, @ts, NULL, @attachments)`);
+    withAttachment.run({ sid, i: CALLS + 1, kind: 'user', body: 'the prompt that carried an image', at: asked, ts: asked.slice(11, 19), attachments: JSON.stringify([{ name: 'sketch.png', mediaType: 'image/png', size: 2048, path: 'attachments/never-written-sketch.png', digest: 'a'.repeat(64) }]) });
+    withAttachment.run({ sid, i: CALLS + 2, kind: 'agent', body: 'the row an opened attachment used to be drawn through', at: asked, ts: asked.slice(11, 19), attachments: '[]' });
+    return sid;
+  });
+}
+
+/**
+ * docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md: a run of one-line system notices,
+ * which REQ-CHAT-057's attribution rule makes ONE block, so every notice after the first is the shortest row PD-CHAT-003
+ * draws — 23.8 px in the built app (2026-09-30).
+ */
+const NOTICES = 400;
+function plantNotices(sid) {
+  return withDb((db) => {
+    const wsRoot = db.prepare('SELECT workspace_root FROM sessions LIMIT 1').get()?.workspace_root ?? workspace;
+    db.prepare('INSERT INTO sessions (session_id, execution_status, workspace_root, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+      .run(sid, 'completed', wsRoot, '2026-09-06T09:00:00.000Z', '2026-09-06T09:05:00.000Z');
+    const insert = db.prepare(`INSERT INTO transcript_rows (session_id, row_index, kind, settled, body, at, ts, page)
+      VALUES (@sid, @i, 'system', 1, @body, @at, @ts, NULL)`);
+    const planned = [];
+    for (let i = 0; i < NOTICES; i += 1) {
+      const at = new Date(Date.UTC(2026, 8, 6, 9, Math.floor(i / 60), i % 60, 0)).toISOString();
+      planned.push({ sid, i, body: `notice ${i + 1} of ${NOTICES}`, at, ts: at.slice(11, 19) });
+    }
+    db.transaction((batch) => { for (const row of batch) insert.run(row); })(planned);
     return sid;
   });
 }
@@ -244,11 +292,13 @@ plant('S601', 601);
 plant('S1200', 1200, { released: 200, foldAt: 400, longAt: 420 });
 plantLiveRun('SLIVE');
 plant('S0', 1);
+plantNotices('SNOTICE');
 
 // ── 2. invariance ───────────────────────────────────────────────────────────────────────────────────────────
 // ADR-0045's own claim, measured in the product: the count of live structural elements the application's layout
 // owns does not move across 0, 1, 601 and 1200 displayed rows, nor across REQ-UIBENCH-060's five window sizes.
 const COUNTS = 'window.__rotarisCounts()';
+if (wanted('invariance')) {
 const invariance = await launch('invariance', {
   ROTARIS_CAPTURE_VIEWS: '2@900',
   ROTARIS_CAPTURE_OPEN_AT: 'S1@3000;;S601@8000;;S1200@13000',
@@ -282,6 +332,7 @@ const invariance = await launch('invariance', {
     png: invariance.png,
   };
 }
+}
 
 // ── 3. behaviour ────────────────────────────────────────────────────────────────────────────────────────────
 const SCROLL = `document.querySelector('[data-testid="transcript-scroll"]')`;
@@ -289,6 +340,7 @@ const SCROLL = `document.querySelector('[data-testid="transcript-scroll"]')`;
 // is not the height they draw: a row positioned by its estimate rather than by its measurement. Statements, for splicing.
 const SLOTS_READ = `const v = s.getBoundingClientRect(); const slots = [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound).map((n) => { const r = n.getBoundingClientRect(); return { key: n.dataset.bound, top: Math.round((r.top - v.top) * 10) / 10, height: Math.round(r.height * 10) / 10 }; }).sort((a, b) => a.top - b.top); const unmeasured = slots.slice(0, -1).map((x, i) => ({ key: x.key, draws: x.height, allotted: Math.round((slots[i + 1].top - x.top) * 10) / 10 })).filter((x) => Math.abs(x.draws - x.allotted) > 0.5);`;
 const GROUPS = `[...document.querySelectorAll('[data-shape="group"]')]`;
+if (wanted('behaviour')) {
 const behaviour = await launch('behaviour', {
   ROTARIS_CAPTURE_RESUME: 'S1200',
   ROTARIS_CAPTURE_EVAL_AT: [
@@ -418,13 +470,14 @@ const behaviour = await launch('behaviour', {
     png: behaviour.png,
   };
 }
+}
 
 // ── 3b. geometry: nothing is drawn through anything else ────────────────────────────────────────────────────
 // REQ-CHAT-058 says heights are MEASURED rather than assumed, and the pool positions every slot from the prefix
 // sum of those heights. The property that makes the sum right is the one a reader actually sees: no two slots
 // overlap. This reads boxes rather than attributes, because a row drawn through another row is in the DOM,
 // focusable, carrying every identifier it should — and unreadable (docs/defects/live-rows-are-never-measured.md).
-{
+if (wanted('geometry')) {
   // One line, deliberately: the log reader's `capture: eval-at (\d+) (.*?) → (.*)$` cannot span newlines, and a
   // multi-line expression parses as no result at all rather than as an error.
   //
@@ -451,14 +504,30 @@ const behaviour = await launch('behaviour', {
   // of this watch, from the reasoning row alone, caught a one-line agent message inside a block doing the same in some
   // runs and not others
   // (docs/defects/fixed/a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md).
-  // Every overlapping pair on those frames is recorded; the ones with a NEW row on either side are what this reading
-  // holds to 1 px. A pair of two rows already drawn is another mechanism — a row that changes shape is positioned by the
-  // height its identity drew last until it is measured again — and is recorded as `otherOverlaps`, not held here
-  // (docs/defects/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md).
+  // Every overlapping pair on those frames is recorded and held to 1 px: the ones with a NEW row on either side, and —
+  // since 2026-10-01 — `otherOverlaps`, a pair of two rows already drawn, which is a row that changed shape positioned by
+  // the height its identity drew last. That pair was recorded and not held while it was a known defect (21.8 px on the
+  // planted activity line turning live again, one run in six); the pane now measures such a row at the commit, before
+  // the frame is painted
+  // (docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md).
   const NEW_ROWS_WATCH_FROM = 2;
   const NEW_ROWS_FRAMES = 12;
   const NEW_ROWS = `(async () => { const until = performance.now() + 9000; const frame = () => new Promise((resolve) => requestAnimationFrame(resolve)); const bound = () => [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound); let seen = null; const fresh = []; const frames = []; let n = 0; let watchTo = -1; while (performance.now() < until) { const slots = bound(); if (slots.length > 0) { const keys = slots.map((x) => x.dataset.bound); if (seen === null) seen = new Set(keys); else { const added = keys.filter((k) => !seen.has(k)); if (added.length > 0) { for (const k of added) { seen.add(k); fresh.push(k); } watchTo = n + ${NEW_ROWS_FRAMES}; } if (n <= watchTo) { const boxes = slots.map((x) => { const r = x.getBoundingClientRect(); return { key: x.dataset.bound, top: r.top, bottom: r.bottom }; }).sort((a, b) => a.top - b.top); const pairs = []; for (let i = 1; i < boxes.length; i += 1) { const o = Math.round((boxes[i - 1].bottom - boxes[i].top) * 10) / 10; if (o > 0) pairs.push({ frame: n, px: o, pair: [boxes[i - 1].key, boxes[i].key] }); } frames.push(pairs); } } } n += 1; await frame(); } const all = frames.flat(); const isNew = (p) => fresh.includes(p.pair[0]) || fresh.includes(p.pair[1]); const mine = all.filter(isNew); const worst = mine.reduce((a, b) => (b.px > a.px ? b : a), { px: 0, pair: null }); return { fresh, frames: frames.length, overlapping: mine, worstOverlapPx: worst.px, pair: worst.pair, otherOverlaps: all.filter((p) => !isNew(p)) }; })()`;
   const OVERLAP = `(() => { const boxes = [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound).map((n) => { const r = n.getBoundingClientRect(); return { key: n.dataset.bound, top: r.top, bottom: r.bottom, keyed: n.dataset.measure !== '' }; }).sort((a, b) => a.top - b.top); let worst = 0; let pair = null; for (let i = 1; i < boxes.length; i += 1) { const o = boxes[i - 1].bottom - boxes[i].top; if (o > worst) { worst = o; pair = [boxes[i - 1].key, boxes[i].key]; } } const seg = document.querySelector('[data-shape="group"] .activity__segments'); const segmentLines = seg ? new Set([...seg.querySelectorAll('.activity__segment')].map((e) => Math.round(e.getBoundingClientRect().top))).size : 0; const roles = [...document.querySelectorAll('.row__role')].map((e) => Math.round(e.getBoundingClientRect().height)); const g = document.querySelector('[data-shape="group"]'); return { bound: boxes.length, unkeyed: boxes.filter((b) => !b.keyed).length, worstOverlapPx: Math.round(worst * 10) / 10, pair, segmentLines, tallestRolePx: Math.max(0, ...roles), live: document.querySelectorAll('.activity__now').length, summaryTail: g ? g.innerText.replace(/\\s+/g, ' ').trim().slice(-90) : null }; })()`;
+  // The same mechanism, asked deterministically: the activity line is EXPANDED by a click once the run has settled, so
+  // the same identity draws its members beneath its header under a measurement key never measured, and the boxes are
+  // read on each of the twelve frames after the click. Before the repair the first of them placed the row beneath by the
+  // collapsed height, the line drawn through it until the observer's delivery rendered a frame later.
+  const GROW_AT = 11_000;
+  const GROW = `(async () => { const frame = () => new Promise((resolve) => requestAnimationFrame(resolve)); const slot = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound && n.dataset.bound.startsWith('group:')); if (!slot) return null; const key = slot.dataset.bound; const beforePx = Math.round(slot.getBoundingClientRect().height * 10) / 10; slot.querySelector('button').click(); const frames = []; for (let n = 0; n < 12; n += 1) { await frame(); const boxes = [...document.querySelectorAll('.transcript__slot')].filter((x) => x.dataset.bound).map((x) => { const r = x.getBoundingClientRect(); return { key: x.dataset.bound, top: r.top, bottom: r.bottom }; }).sort((a, b) => a.top - b.top); let worst = 0; let pair = null; for (let i = 1; i < boxes.length; i += 1) { const o = boxes[i - 1].bottom - boxes[i].top; if (o > worst) { worst = o; pair = [boxes[i - 1].key, boxes[i].key]; } } frames.push({ frame: n, px: Math.round(worst * 10) / 10, pair }); } const grown = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound === key); return { key, beforePx, afterPx: grown ? Math.round(grown.getBoundingClientRect().height * 10) / 10 : null, expanded: grown ? grown.querySelector('button').getAttribute('aria-expanded') : null, frames }; })()`;
+  // The same symptom under an UNCHANGED key: a user row's image attachment is opened by a click on its native `<details>`,
+  // which grows the row with no commit and no new key, so `measureAtCommit` has nothing to read and only the observer's
+  // delivery can move the row beneath. A requestAnimationFrame callback runs BEFORE that frame's layout and its observer
+  // delivery, so each frame is read from a task posted from inside it, which runs after the frame is painted: what the
+  // reading sees is what the reader saw. Before the repair the observer's render was a default-lane update rendered after
+  // the paint, and frame 0 showed the user row drawn through the row beneath it.
+  const ATTACH_AT = 10_400;
+  const ATTACH = `(async () => { const frame = () => new Promise((resolve) => requestAnimationFrame(resolve)); const painted = () => new Promise((resolve) => { const c = new MessageChannel(); c.port1.onmessage = () => resolve(); c.port2.postMessage(0); }); const slot = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound && n.querySelector('.row__attachment details')); if (!slot) return null; const key = slot.dataset.bound; const measure = slot.dataset.measure; const details = slot.querySelector('.row__attachment details'); const beforePx = Math.round(slot.getBoundingClientRect().height * 10) / 10; details.querySelector('summary').click(); const frames = []; for (let n = 0; n < 12; n += 1) { await frame(); await painted(); const boxes = [...document.querySelectorAll('.transcript__slot')].filter((x) => x.dataset.bound).map((x) => { const r = x.getBoundingClientRect(); return { key: x.dataset.bound, top: r.top, bottom: r.bottom }; }).sort((a, b) => a.top - b.top); let worst = 0; let pair = null; for (let i = 1; i < boxes.length; i += 1) { const o = boxes[i - 1].bottom - boxes[i].top; if (o > worst) { worst = o; pair = [boxes[i - 1].key, boxes[i].key]; } } frames.push({ frame: n, px: Math.round(worst * 10) / 10, pair }); } const grown = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound === key); return { key, sameKey: grown ? grown.dataset.measure === measure : null, beforePx, afterPx: grown ? Math.round(grown.getBoundingClientRect().height * 10) / 10 : null, open: details.open, frames }; })()`;
   const geometry = await launch('geometry', {
     // A PLANTED running tool cannot stay running: a resumed session settles its in-flight calls through stale
     // detection (ADR-0002), which is correct and is why the fixture alone cannot produce a live line. The wrap
@@ -466,8 +535,8 @@ const behaviour = await launch('behaviour', {
     ROTARIS_CAPTURE_RESUME: 'SLIVE',
     ROTARIS_SCRIPT: 'think,read,answer',
     ROTARIS_CAPTURE_PROMPT: 'Say something about the notes.',
-    ROTARIS_CAPTURE_EVAL_AT: [`${LIVE_FIRST.replace('OVERLAP_READ', () => OVERLAP)}@${LIVE_WATCH_FROM}`, `${NEW_ROWS}@${NEW_ROWS_WATCH_FROM}`, ...SAMPLE_AT.map((ms) => `${OVERLAP}@${ms}`)].join(';;'),
-    ROTARIS_CAPTURE_AFTER_MS: '11000',
+    ROTARIS_CAPTURE_EVAL_AT: [`${LIVE_FIRST.replace('OVERLAP_READ', () => OVERLAP)}@${LIVE_WATCH_FROM}`, `${NEW_ROWS}@${NEW_ROWS_WATCH_FROM}`, ...SAMPLE_AT.map((ms) => `${OVERLAP}@${ms}`), `${ATTACH}@${ATTACH_AT}`, `${GROW}@${GROW_AT}`].join(';;'),
+    ROTARIS_CAPTURE_AFTER_MS: '12500',
   }, 240_000);
   const samples = [{ ms: 'on the first live line', ...(evalAt(geometry, LIVE_WATCH_FROM) ?? {}) }, ...SAMPLE_AT.map((ms) => ({ ms, ...(evalAt(geometry, ms) ?? {}) }))].filter((s) => typeof s.bound === 'number');
   expect(samples.length >= 4, `the geometry stage took ${samples.length} readable samples, not enough to say anything`);
@@ -490,7 +559,70 @@ const behaviour = await launch('behaviour', {
   const newRows = evalAt(geometry, NEW_ROWS_WATCH_FROM);
   expect(newRows !== null && Array.isArray(newRows.fresh) && newRows.fresh.some((k) => k.startsWith('think:')) && newRows.frames >= NEW_ROWS_FRAMES, `the new-row watch never saw the run's rows drawn, so the frames before their measurement were never read: ${JSON.stringify(newRows)}`);
   expect(newRows.worstOverlapPx <= 1, `a newly appended row overlaps its neighbour by ${newRows.worstOverlapPx} px before its first measurement ${JSON.stringify(newRows.pair)}: ${JSON.stringify(newRows)}`);
-  results.geometry = { samples, wrappedToLines: wrapped, liveSamples: liveSamples.length, worstOverlapPx: worst.worstOverlapPx, newRows, tallestRolePx: Math.max(...samples.map((s) => s.tallestRolePx)), png: geometry.png };
+  // A pair of rows already drawn, on the same frames: a row that changed shape, positioned by its identity's last height.
+  const otherWorst = newRows.otherOverlaps.reduce((a, b) => (b.px > a.px ? b : a), { px: 0, pair: null });
+  expect(otherWorst.px <= 1, `a row that changed shape overlaps the row beneath it by ${otherWorst.px} px on a frame before its new measurement ${JSON.stringify(otherWorst.pair)}: ${JSON.stringify(newRows.otherOverlaps)}`);
+  // The deterministic form: the activity line expanded, read on each frame after the click. The guards first — the line
+  // was found, it opened, and it grew by more than the 1 px held — or the assertion is true of nothing.
+  const grow = evalAt(geometry, GROW_AT);
+  expect(grow !== null && grow.expanded === 'true' && grow.afterPx > grow.beforePx + 1 && grow.frames.length === 12, `the expanded activity line never grew, so the frames after it were never asked: ${JSON.stringify(grow)}`);
+  const growWorst = grow.frames.reduce((a, b) => (b.px > a.px ? b : a));
+  expect(growWorst.px <= 1, `the activity line, expanded from ${grow.beforePx} px to ${grow.afterPx} px, overlaps the row beneath it by ${growWorst.px} px on frame ${growWorst.frame} after the click ${JSON.stringify(growWorst.pair)}: ${JSON.stringify(grow.frames)}`);
+  // The unchanged-key form: the guards first — the attachment row was found, its `<details>` opened, the row grew by more
+  // than the 1 px held, and it grew under the key it had before the click — or the assertion is true of nothing.
+  const attach = evalAt(geometry, ATTACH_AT);
+  expect(attach !== null && attach.open === true && attach.sameKey === true && attach.afterPx > attach.beforePx + 1 && attach.frames.length === 12, `the opened attachment never grew the row under its own key, so the frames after it were never asked: ${JSON.stringify(attach)}`);
+  const attachWorst = attach.frames.reduce((a, b) => (b.px > a.px ? b : a));
+  expect(attachWorst.px <= 1, `the user row, grown from ${attach.beforePx} px to ${attach.afterPx} px by opening its attachment, overlaps the row beneath it by ${attachWorst.px} px on painted frame ${attachWorst.frame} ${JSON.stringify(attachWorst.pair)}: ${JSON.stringify(attach.frames)}`);
+  results.geometry = { samples, wrappedToLines: wrapped, liveSamples: liveSamples.length, worstOverlapPx: worst.worstOverlapPx, newRows, grow, attach, tallestRolePx: Math.max(...samples.map((s) => s.tallestRolePx)), png: geometry.png };
+}
+
+// ── 3c. capacity: every row on screen is bound, however short ───────────────────────────────────────────────
+// ADR-0045 sizes the pool once, as `ceil(H_MAX / unit)` slots plus overscan, and binds no row past the pool. The unit was
+// REQ-CHAT-057's 30 px minimum, which PD-CHAT-003 lifted off the row's box; a viewport showing more than 144 rows shorter
+// than that — 3,430 px of 23.8 px notices at the tail — was left blank below the 154th slot. The window is resized to
+// 1440x4300, inside `H_MAX`, and the transcript read at the tail (the pane follows on open) and in the middle: the bound
+// slots must cover the viewport from its top to its bottom with no gap, and the viewport must have shown more rows than
+// the old unit's pool held, or the stage asked the question of nothing
+// (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
+if (wanted('capacity')) {
+  const TALL = { width: 1440, height: 4300 };
+  const OLD_VISIBLE = Math.ceil(4320 / 30);
+  const COVER = `(() => { const s = ${SCROLL}; const v = s.getBoundingClientRect(); const viewport = s.clientHeight; const slots = [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound).map((n) => { const r = n.getBoundingClientRect(); return { key: n.dataset.bound, top: r.top - v.top, bottom: r.bottom - v.top }; }).sort((a, b) => a.top - b.top); const onScreen = slots.filter((x) => x.bottom > 0.5 && x.top < viewport - 0.5); let reach = 0; const gaps = []; for (const x of slots) { if (x.top > reach + 1 && x.top < viewport) gaps.push({ from: Math.round(reach * 10) / 10, to: Math.round(x.top * 10) / 10, before: x.key }); reach = Math.max(reach, x.bottom); } const heights = onScreen.slice(1, -1).map((x) => x.bottom - x.top); return { window: innerHeight, viewport, scrollTop: Math.round(s.scrollTop), scrollHeight: s.scrollHeight, slots: Number(s.dataset.slots), bound: Number(s.dataset.bound), displayed: Number(s.dataset.displayed), following: s.dataset.following, onScreen: onScreen.length, reach: Math.round(Math.min(reach, viewport) * 10) / 10, gaps, shortestPx: heights.length > 0 ? Math.round(Math.min(...heights) * 10) / 10 : null, lastBound: slots.length > 0 ? slots[slots.length - 1].key : null }; })()`;
+  const capacity = await launch('capacity', {
+    ROTARIS_CAPTURE_RESUME: 'SNOTICE',
+    ROTARIS_CAPTURE_RESIZE: `${TALL.width}x${TALL.height}@2500`,
+    ROTARIS_CAPTURE_EVAL_AT: [
+      `${COVER}@6000`,
+      `(() => { const s = ${SCROLL}; s.scrollTop = Math.round((s.scrollHeight - s.clientHeight) / 2); return { scrollTop: s.scrollTop }; })()@6400`,
+      `${COVER}@7400`,
+    ].join(';;'),
+    ROTARIS_CAPTURE_AFTER_MS: '8000',
+  }, 240_000);
+  const tail = evalAt(capacity, 6000);
+  const middle = evalAt(capacity, 7400);
+  expect(tail !== null && middle !== null, `the capacity stage took no reading (see capacity.log): ${JSON.stringify({ tail, middle })}`);
+  // The guards: the window really is that tall, every notice is displayed, and the screen shows more rows than a pool
+  // counted in 30 px units binds — or the assertions below are true of a question nobody asked.
+  //
+  // A host whose window manager clamps the window below that height cannot ask the question at all — a desktop whose
+  // screen is shorter than 4,300 px, which is most of them. That is recorded as NOT ASKED, with the height the host
+  // allowed, and named in the verdict, rather than failing the proof and stopping it before the append comparison: the
+  // stage is evidence only where the viewport is that tall (Xvfb with no window manager does not clamp it, under
+  // `-screen 0 1600x1000x24` as under a taller screen).
+  if (tail.window < TALL.height - 1) {
+    results.capacity = { notAsked: `the host clamped the window to ${tail.window} px of the ${TALL.height} px asked, so the viewport could not show more rows than a 30 px unit binds`, tail, png: capacity.png };
+  } else {
+    expect(tail.displayed === NOTICES, `expected ${NOTICES} displayed notices, saw ${tail.displayed}`);
+    for (const [where, r] of [['tail', tail], ['middle', middle]]) {
+      // How many rows the viewport shows is its height over the notices' own, not the rows bound — a pool too small
+      // for the viewport binds fewer than it shows, which is the defect.
+      expect(r.shortestPx !== null && r.viewport / r.shortestPx > OLD_VISIBLE, `${where}: a ${r.viewport} px viewport of ${r.shortestPx} px notices shows no more than the ${OLD_VISIBLE} rows a 30 px unit binds, so nothing was asked: ${JSON.stringify(r)}`);
+      expect(r.gaps.length === 0 && r.reach >= r.viewport - 1, `${where}: the bound slots left the viewport blank from ${r.reach} px of ${r.viewport} (${r.bound} bound of a ${r.slots}-slot pool, ${r.onScreen} rows on screen): ${JSON.stringify(r)}`);
+    }
+    expect(tail.following === '1' && tail.lastBound === `row:${NOTICES - 1}`, `the tail's last notice is not bound while the pane follows: ${JSON.stringify(tail)}`);
+    results.capacity = { window: TALL, oldUnitVisibleRows: OLD_VISIBLE, tail, middle, png: capacity.png };
+  }
 }
 
 // ── 4/5. the append comparison ──────────────────────────────────────────────────────────────────────────────
@@ -615,6 +747,7 @@ function side(launches, frameMs) {
     isolatedMs: isolated.map((s) => Math.round(s.ms * 10) / 10),
   };
 }
+if (wanted('append')) {
 const emptyLaunches = [];
 const loadedLaunches = [];
 for (let i = 1; i <= APPEND_LAUNCHES; i += 1) {
@@ -692,7 +825,8 @@ const loadedTraced = await appendRun('append-loaded-traced', 'S1200', loadedTrac
   expect(thinking >= 1, 'the scripted deliberation produced no streamed-reasoning row');
   results.reasoning = { thinkingRows: thinking, note: 'REQ-CHAT-163: reasoning reached a row of its own rather than being discarded by the sink' };
 }
+}
 
-results.verdict = 'PASSED';
+results.verdict = `${only === null ? 'PASSED' : `PASSED (only: empty, ${only.join(', ')})`}${results.capacity?.notAsked ? ` — stage 3c capacity NOT ASKED: ${results.capacity.notAsked}` : ''}`;
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
-console.log(`transcript proof PASSED — evidence under ${relative(repo, output)}`);
+console.log(`transcript proof ${results.verdict} — evidence under ${relative(repo, output)}`);

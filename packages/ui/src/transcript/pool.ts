@@ -1,4 +1,4 @@
-import { measureKey, sourceTextOf } from './cache.js';
+import { identityOf, measureKey, sourceTextOf } from './cache.js';
 import { OVERSCAN, ROW_MIN_HEIGHT } from './constants.js';
 import { FACT_SEPARATOR, segmentFacts } from './project.js';
 import { isMessageRow, isReasoningRow } from './Row.js';
@@ -237,6 +237,45 @@ export function observeAgain(observed: Map<number, string>, slot: number, key: s
   return key !== '';
 }
 
+/**
+ * The commit's measurement (ADR-0045: heights are measured), run by the pane after every commit and before the browser
+ * paints it: every bound slot whose measurement key has no measurement yet — a row first bound, or a row whose content
+ * changed — is read now (`read`, the slot's drawn height), filed under its key and under its identity, and marked in the
+ * ledger, exactly as the observer files a delivery. True when a height differs from what the identity drew last (or the
+ * identity drew nothing yet), which is when the offset table that placed the row was wrong and the pane renders again —
+ * synchronously, inside the same commit, so no frame is painted with the row positioned by a height it does not draw.
+ * A slot whose key is measured is not read, so the pass reads layout only for the rows the update bound or changed, and
+ * walks the pool's slots rather than the transcript's rows (REQ-CHAT-055).
+ *
+ * Before it, such a row was positioned by the height its identity drew last until the observer's delivery rendered, a
+ * frame or more later — and a row that GREW was drawn through the row beneath it for those frames: 21.8 px, the planted
+ * activity line turning live again in `transcript-proof`
+ * (docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md). The identity's
+ * last height still positions the row for the render that binds it — a streaming row is placed by what it drew, never by
+ * an estimate that would move every row below it twice per chunk — but that render is no longer the one painted.
+ */
+export function measureAtCommit(
+  ledger: MeasureLedger,
+  bound: Iterable<{ readonly key: string; readonly read: () => number }>,
+  measurements: { peek(key: string): number | undefined; set(key: string, value: number, sourceCharacters: number): void },
+  lastByIdentity: { peek(identity: string): number | undefined; set(identity: string, value: number, sourceCharacters: number): void },
+): boolean {
+  let begun = false;
+  let changed = false;
+  for (const slot of bound) {
+    if (slot.key === '' || measurements.peek(slot.key) !== undefined) continue;
+    const height = slot.read();
+    if (height <= 0) continue;
+    if (!begun) { beginMeasuring(ledger); begun = true; }
+    const identity = identityOf(slot.key);
+    measurements.set(slot.key, height, 0);
+    markMeasured(ledger, identity);
+    const previous = lastByIdentity.peek(identity);
+    if (previous === undefined || Math.abs(previous - height) > 0.5) { lastByIdentity.set(identity, height, 0); changed = true; }
+  }
+  return changed;
+}
+
 export interface OffsetTable {
   /** `offsets[i]` is the top of displayed row `i`; `offsets[n]` is the total height. */
   readonly offsets: readonly number[];
@@ -372,16 +411,32 @@ export function indexAt(table: OffsetTable, y: number): number {
   return lo;
 }
 
-/** The span of displayed rows a viewport needs, with the overscan margin above and below. */
+/**
+ * The span of displayed rows a viewport needs, with the overscan margin above and below.
+ *
+ * When the span with its overscan is wider than the pool, the OVERSCAN gives way first — below, then above — and only a
+ * span of visible rows wider than the pool itself is cut, from the top of the span. A viewport `H` tall can show
+ * `ceil(H / h) + 1` rows of height `h`, one partly at either edge, which is one more than ADR-0045's `ceil(H_max / unit)`
+ * counts; shedding overscan before a visible row is what keeps that row bound at `H_MAX`
+ * (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
+ */
 export function visibleRange(table: OffsetTable, scrollTop: number, viewportHeight: number, count: number, capacity: number): { first: number; last: number } {
   if (count === 0) return { first: 0, last: -1 };
   const firstVisible = indexAt(table, scrollTop);
   const lastVisible = indexAt(table, scrollTop + viewportHeight);
-  const first = Math.max(0, firstVisible - OVERSCAN);
+  let first = Math.max(0, firstVisible - OVERSCAN);
   let last = Math.min(count - 1, lastVisible + OVERSCAN);
-  // The pool is FIXED: a span wider than the pool binds what fits, starting from the top of the span. This cannot
-  // happen while the viewport is inside `H_MAX` (REQ-CHAT-057's 30 px floor bounds the span by the capacity), and
-  // is the safety rail rather than the design.
+  if (last - first + 1 > capacity) {
+    // The pool is FIXED: the overscan below gives way, then the overscan above.
+    last = Math.max(Math.min(count - 1, lastVisible), first + capacity - 1);
+    if (last - first + 1 > capacity) first = Math.min(firstVisible, last - capacity + 1);
+  }
+  // A span of visible rows wider than the pool binds what fits, starting from the top of the span. This cannot happen
+  // while the viewport is inside `H_MAX` (`SHORTEST_ROW_HEIGHT`, the shortest a row can draw, bounds the visible span by
+  // the capacity less its overscan), and is the safety rail rather than the design. **Falsified 2026-10-01, kept beside
+  // its replacement: "REQ-CHAT-057's 30 px floor bounds the span by the capacity".** PD-CHAT-003 draws rows shorter than
+  // 30 px — a one-line system notice inside a block, 23.8 px — and this rail cut the bottom of a tall viewport of them
+  // (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
   if (last - first + 1 > capacity) last = first + capacity - 1;
   return { first, last };
 }

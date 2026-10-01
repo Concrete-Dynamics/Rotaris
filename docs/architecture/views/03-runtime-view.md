@@ -1333,9 +1333,10 @@ reader's place is kept. Six steps, in order, on every publication:
 publications for that session rather than queueing them, so exactly one `refused` and one `reset` are counted per
 episode however many arrive — an arrival-timing dependency would break the benchmark's determinism claim outright.
 
-**What paints it (ADR-0045).** A scroll container of **154 absolutely positioned slots** — `ceil(H_max ÷ 30 px) + 10`
-with `H_max` a declared product constant of 4,320 px — allocated at window construction, never added to or removed
-from, **emptied rather than unmounted**, and rendered whether or not the transcript holds any rows. The slot index is
+**What paints it (ADR-0045).** A scroll container of **226 absolutely positioned slots** — `ceil(H_max ÷ 20 px) + 10`
+with `H_max` a declared product constant of 4,320 px and 20 px the shortest a row's slot holds (`SHORTEST_ROW_HEIGHT`:
+the 4 px row gap, the border and the 14 px continuation bar; 30 px until 2026-10-01, taller than a row PD-CHAT-003 draws)
+— allocated at window construction, never added to or removed from, **emptied rather than unmounted**, and rendered whether or not the transcript holds any rows. The slot index is
 the framework key, never the row identity. Heights are **measured** by a `ResizeObserver` into a bounded cache and fed
 to a prefix-sum offset table — rebuilt from the first height that changed, not from the top (REQ-CHAT-055) — which is
 what makes the anchor of REQ-CHAT-071 exact. A row not yet measured is positioned by `estimateHeight`, built from
@@ -1343,7 +1344,14 @@ the parts of its box the stylesheet draws — the 4 px row gap or 12 px block ga
 from `places` at its position, `readHeight`), the border, a user row's padding, a Markdown body's block margins, one
 19.5 px line per drawn line — so that for every row kind measured it is not short of what the row draws, because a row
 appended at the tail while the pane follows is inside the viewport for the frames before its first measurement. A slot
-a scroll rebinds is observed again (`observeAgain`), since an observer reports only a size that changed. The anchor is
+a scroll rebinds is observed again (`observeAgain`), since an observer reports only a size that changed. And a bound
+slot whose key has no measurement yet — a row first bound, or one whose content changed — is read at the commit, before
+the paint (`measureAtCommit`), the pane rendering again inside the commit when it draws other than what placed it; until
+2026-10-01 a row that grew was painted through the row beneath it for the frame before the observer's delivery rendered.
+A size that changes under an unchanged key — an image attachment's `<details>` opened, the image loading, a block start's
+margin — runs no commit, so the observer's delivery renders it synchronously (`flushSync`), after layout and before the
+paint, where it used to render a frame later. A span wider
+than the pool sheds its overscan, below and then above, before it cuts a visible row (`visibleRange`). The anchor is
 the identity and viewport offset
 of the top visible row, restored by finding that row again, never by re-applying a stored pixel offset. A retained
 rendering is reused only while identity, content, laid-out width and expansion state are all unchanged; a live row is

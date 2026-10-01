@@ -111,7 +111,7 @@ differ by 4.1 px there: a row bound for a frame in the pool's bottom overscan, m
 **Not this note's, found by its watch.** Before the watch held only the pairs with a new row, it went red once on the
 first round's build and once in six runs of this round's at 21.8 px on `group:tool:live-0` / `row:24` — two rows
 already drawn, the planted activity line turning live again and positioned by the height it drew settled. Recorded, not
-repaired: [`a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md`](../a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md).
+repaired: [`a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md`](a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md) (repaired 2026-10-01).
 The watch records such pairs as `otherOverlaps`; there were none in the ten runs above. Not shown: Windows or macOS
 fonts (the line height and the effective advance are this host's, the box terms the stylesheet's), a live run, and the
 neighbouring transcript proofs.

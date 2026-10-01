@@ -44,3 +44,42 @@ row's box. Whether the capacity unit or the growth condition moves is ADR-0045's
 - `packages/ui/src/transcript/pool.ts` — `visibleRange`'s clamp and the comment that says it cannot bind.
 - `packages/ui/src/shell.css` — `.row`'s 4 px margin, `.row--block-start`'s 12 px and `.row--system .row__body`'s `--rt-text-xs`, which set a one-line notice's height.
 - `docs/architecture/adr/0045-what-paints-the-transcript.md` — the capacity rule.
+
+## Outcome
+
+**Repaired 2026-10-01 under R-067** (acceptance finding A38). The capacity unit moved, not the growth condition: ADR-0045's
+rule is the declared maximum viewport over the minimum row height, and PD-CHAT-003 moved the minimum. `SHORTEST_ROW_HEIGHT`
+(`packages/ui/src/transcript/constants.ts`) is the shortest a row can draw whatever it carries — `.row`'s 4 px top margin,
+its 1 px border either side and REQ-CHAT-057's continuation bar at its 14 px `min-height`, 20 px (the first row of a block
+carries 12 px above it and a role line instead, so it is taller) — and `POOL_CAPACITY` and `capacityFor` count in it:
+`ceil(4320 / 20) + 10`, **226 slots**, fixed for the life of the window as before; the growth branch still opens only above
+`H_MAX`. `ROW_MIN_HEIGHT` stays 30 px as the estimate's floor, which is what PD-CHAT-003's cost paragraph also calls it.
+And `visibleRange` (`pool.ts`) now sheds the overscan — below, then above — before it cuts a visible row: a viewport `H`
+tall shows up to `ceil(H / h) + 1` rows of height `h`, one partly at each edge, one more than the rule counts, and the old
+rail cut that one first. Both falsified comments ("REQ-CHAT-057's 30 px floor bounds the span by the capacity", "At
+REQ-CHAT-057's 30 px minimum row height that is 144 slots") are kept beside their replacements.
+
+**Pinned by** `transcript.test.ts`: "REQ-CHAT-165 / PD-CHAT-003: inside H_MAX the pool binds every visible row, however
+short a row PD-CHAT-003 draws" (23.8 px and 20 px rows at viewports of 900 to 4,320 px, at the tail and in the middle —
+red on the code before: 23.8 px rows at 3,430 px bound rows 1845..1998 with row 1999 on screen); "PD-CHAT-003: the
+capacity unit is no taller than the shortest row the stylesheet can draw", which reads the three figures from `shell.css`
+and fails if a stylesheet change makes a row shorter than the unit; and the visible-span case's two new expectations
+(the overscan gives way before a visible row), red on the code before.
+
+**Shown in the built app** by `transcript-proof`'s new stage 3c, `capacity` (`--only=capacity`, under
+`xvfb-run -s "-screen 0 1600x4400x24"`, as root, Node 24): 400 planted one-line system notices, the window resized to
+1440x4300, so a 3,890 px transcript viewport of 23.8 px rows — 164 on screen. **On the code before**, the same stage went
+red: a 154-slot pool binding 144 of the 164 rows on screen (and 10 of overscan above), the last bound `row:379` of 400 while the pane followed the tail, and the viewport
+blank from 3,414.5 px to 3,890 px — what this note had computed and not measured, now measured. **On the repair**, green:
+226 slots, 174 bound at the tail and 184 in the middle, the bound slots covering the viewport from 0 to 3,890 px with no
+gap at both, the last notice bound at the tail.
+
+**A host that cannot ask it** (fix round 1, 2026-10-01): Xvfb with no window manager does not clamp the window to its
+screen, so the stage asks its question under the standard `-screen 0 1600x1000x24` as well (window 4,300, viewport 3,890,
+green); a desktop whose window manager clamps the window below 4,300 px could not, and the stage now records itself NOT
+ASKED there, with the height the host allowed, and the proof's verdict names it, instead of failing its own guard and
+stopping the proof before the append comparison.
+
+**Not shown:** a real portrait panel (the tall viewport is Xvfb's), Windows or macOS fonts (the 23.8 px is this host's
+line height; the 20 px floor is the stylesheet's and does not depend on a font), and the growth branch above `H_MAX`,
+which this repair does not touch.

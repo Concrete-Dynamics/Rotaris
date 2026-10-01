@@ -50,3 +50,64 @@ export class GeometryReporter {
 
   get reported(): GridGeometry | null { return this.last; }
 }
+
+/** The monospace face the grid's cell is drawn in (the shape `colours.ts`'s `TerminalFont` resolves). */
+export interface GridFace { readonly family: string; readonly sizePx: number }
+
+export interface RemeasurePorts {
+  /** The face the theme names now, read from the document root. */
+  readonly face: () => GridFace;
+  /** Hand the library the theme with this face; it re-measures its own cell synchronously on the option change. */
+  readonly apply: (face: GridFace) => void;
+  /** Measure the host against the library's cell and offer the proposal to the `GeometryReporter`. */
+  readonly measure: () => void;
+  /** Run once in the next frame, after the library has repainted; returns the cancel. */
+  readonly nextFrame: (run: () => void) => () => void;
+}
+
+/**
+ * REQ-SHELL-100's re-measure on a theme change: the grid is measured only against the cell of the face the theme names
+ * now, so a shape no settled layout had is never reported.
+ *
+ * A face change re-lays the tab's header in the same frame, so the host shrinks before the library has the new face.
+ * Defect fifty-five (ADR-0047) kept the resize observer quiet while a re-measure was pending, but the flag was raised by
+ * the layout effect React runs for the theme change, and React renders that change in a task of its own. When a frame
+ * falls between the root's style change and that task (always, for a change made in the frame's own callbacks; often,
+ * under load) the observer ran first, measured the shrunk host against the OLD cell and reported it: `118×25` between
+ * `118×26` and `89×19` (`docs/defects/fixed/a-font-change-under-load-reports-an-intermediate-terminal-geometry.md`).
+ * Every observation now compares the face the theme names with the face the library was given. A difference applies the
+ * new face there and then and measures once, in the frame after, whichever path saw the change first.
+ */
+export class RemeasureGate {
+  private applied: GridFace | null = null;
+  private cancel: (() => void) | null = null;
+  constructor(private readonly ports: RemeasurePorts) {}
+
+  /** A theme change, and the mount: give the library the theme and measure once, in the next frame. */
+  retheme(): void {
+    this.cancel?.();
+    const face = this.ports.face();
+    this.ports.apply(face);
+    this.applied = face;
+    this.cancel = this.ports.nextFrame(() => { this.cancel = null; this.observe(); });
+  }
+
+  /**
+   * A resize or a visibility change. Quiet while a re-measure is pending, since that frame measures with the new cell; a
+   * face the library has not been given is applied first and measured in the next frame; otherwise it measures now.
+   */
+  observe(): void {
+    if (this.cancel !== null) return;
+    const face = this.ports.face();
+    if (this.applied === null || face.family !== this.applied.family || face.sizePx !== this.applied.sizePx) { this.retheme(); return; }
+    this.ports.measure();
+  }
+
+  /** Whether a re-measure is waiting for its frame. */
+  get pending(): boolean { return this.cancel !== null; }
+
+  dispose(): void {
+    this.cancel?.();
+    this.cancel = null;
+  }
+}

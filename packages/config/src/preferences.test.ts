@@ -57,6 +57,22 @@ describe('the read-back unwraps a synthetic copy to the models: key it was copie
     expect(small).toMatchObject({ value: 'openai-compatible--beta/qwen', thinking: 'high' });
   });
 
+  it('REQ-CONFIG-341: a slot the snapshot supplied, whose reasoning level a file states, reads back with origin discovered', () => {
+    const c = loadTwoEndpoints('small_model_thinking: high\n');
+    // The snapshot supplied the slot, and the reasoning level made the loader wrap it in a synthetic copy (REQ-CONFIG-076).
+    expect(c.discoveredSlots).toEqual({ small_model: 'openai-compatible--beta/qwen' });
+    expect(c.slots.small_model).toBe('__startup_slot__:small_model');
+    const small = slotPreferences(c).find((p) => p.slot === 'small_model')!;
+    expect(small).toEqual({ slot: 'small_model', value: 'openai-compatible--beta/qwen', origin: 'discovered', thinking: 'high' });
+  });
+
+  it('REQ-CONFIG-341: a slot the snapshot did not supply, whose reasoning level a file states, stays built-in', () => {
+    const c = loadTwoEndpoints('large_model_thinking: high\n');
+    expect(c.discoveredSlots).toEqual({ small_model: 'openai-compatible--beta/qwen' });
+    const large = slotPreferences(c).find((p) => p.slot === 'large_model')!;
+    expect(large).toMatchObject({ origin: 'built-in', thinking: 'high' });
+  });
+
   it('REQ-CONFIG-255: a role with a reasoning level on the second endpoint reads back its effective model on that endpoint', () => {
     const c = loadTwoEndpoints('personas:\n  verifier:\n    model: openai-compatible--beta/qwen\n    thinking: low\n  tester:\n    model: openai-compatible--alpha/qwen\n    thinking: high\n');
     expect(c.personas['verifier']?.model).toBe('__persona__:verifier');

@@ -6,7 +6,8 @@ import { Worker } from 'node:worker_threads';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { unpressedClicks } from './lib/capture-clicks.mjs';
-import { STEER_REST_CLICKS, STEER_REST_TYPE, STEER_REST_WHATS, steerPendingAtPause } from './lib/steer-rest.mjs';
+import { STEER_CLICKS, STEER_REST_CLICKS, STEER_REST_TYPE, STEER_REST_WHATS, STEER_TYPE, STEER_WHATS, steerPendingAtPause } from './lib/steer-rest.mjs';
+import { STEER_EARLY_CLICKS, STEER_EARLY_TYPE, SUBSCRIBE_HOLD_MS, steerEarlyReading } from './lib/steer-early.mjs';
 
 /**
  * The control channel's first execution in the built app (Part J step 3): a queued message consumed at the
@@ -164,16 +165,49 @@ await launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PR
   results.queue = { iterations: session.iterations_completed, prompt: prompts[0], task: phase.tasks[0], sent };
 }
 
-// 2. A steer reaches the entry role at its next step.
+// 2. A steer reaches the entry role at its next step. The schedule is `lib/steer-rest.mjs`'s steer: Steer the run waits for
+// its control and the composer's settled send, the text and the dialog's Steer follow that deadline, and a step the log
+// does not show pressed fails by name. Until 2026-10-01 the presses were fixed appointments (1900, 2300, 2600 ms) that a
+// run starting late misses, and the proof then read "the steer was not submitted and injected", a red about the proof
+// (docs/defects/fixed/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md). The second
+// step is held 5 s, so the run is still at it when the steer is submitted at the latest, and injects it at the step after.
 const s2 = scenario('steer', []);
-await launch('steer', s2, { ROTARIS_SCRIPT: 'read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'steer me', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Steer the run"]@1900;;.dialog-actions .btn-primary>>Steer@2600', ROTARIS_CAPTURE_TYPE: 'go left>>no-enter@2300', ROTARIS_CAPTURE_AFTER_MS: '9000' });
+const steerLog = await launch('steer', s2, { ROTARIS_SCRIPT: 'read,wait:5000,read,read', ROTARIS_CAPTURE_PROMPT: 'steer me', ROTARIS_CAPTURE_CLICKS: STEER_CLICKS, ROTARIS_CAPTURE_TYPE: STEER_TYPE, ROTARIS_CAPTURE_AFTER_MS: '11000' });
 {
+  const unpressed = unpressedClicks(steerLog, Object.values(STEER_WHATS));
+  if (unpressed.length > 0) throw new Error(`the steer launch did not press every step on its own control: ${JSON.stringify(unpressed)} (see steer.log)`);
   const db = open(s2);
   const sid = db.prepare('SELECT session_id FROM sessions').get().session_id;
   const list = names(db, sid);
   db.close();
   if (!list.includes('steering_submitted') || !list.includes('steering_injected')) throw new Error(`the steer was not submitted and injected: ${list.join(',')}`);
   results.steer = { timeline: list.filter((n) => n.startsWith('steering')) };
+}
+
+// 2b. A steer whose dialog opened while the composer's send was still settling (the repair of
+// a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md, REQ-MONITOR-137). The run is
+// drawn active before the `session.subscribe` reply settles the composer's send; a dialog opened in between had its focus
+// taken back by the composer when the reply landed, so the steer's text went into the composer behind the modal and the
+// steer was never submitted. That window is a few milliseconds wide on its own, so main holds the reply
+// (`ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS`) and the schedule is `lib/steer-early.mjs`'s: Steer the run pressed while the send
+// is unsettled, the text typed after the reply went, and the order read back from the log. The second step is held 6 s,
+// so the steer submitted during it is injected at the step after, and the root's record must hold the text typed.
+const s2b = scenario('steer-early', []);
+const steerEarlyLog = await launch('steer-early', s2b, { ROTARIS_SCRIPT: 'read,wait:6000,read,read', ROTARIS_CAPTURE_PROMPT: 'steer me early', ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS: String(SUBSCRIBE_HOLD_MS), ROTARIS_CAPTURE_CLICKS: STEER_EARLY_CLICKS, ROTARIS_CAPTURE_TYPE: STEER_EARLY_TYPE, ROTARIS_CAPTURE_AFTER_MS: '12000' });
+{
+  const wrong = steerEarlyReading(steerEarlyLog, unpressedClicks);
+  if (wrong !== null) throw new Error(`the steer-early launch did not open the dialog inside the settling send's window: ${wrong} (see steer-early.log)`);
+  const db = open(s2b);
+  const sid = db.prepare('SELECT session_id FROM sessions').get().session_id;
+  const list = names(db, sid);
+  const root = db.prepare('SELECT root_task_id FROM iterations WHERE session_id = ? ORDER BY iteration').get(sid)?.root_task_id ?? '';
+  const record = db.prepare("SELECT body FROM agent_messages WHERE session_id = ? AND task_id = ? AND kind = 'message' ORDER BY seq").all(sid, root).map((r) => JSON.parse(r.body));
+  db.close();
+  if (list.filter((n) => n === 'steering_submitted').length !== 1 || !list.includes('steering_injected')) throw new Error(`the steer whose dialog opened before the send settled was not submitted once and injected: ${list.join(',')} (see steer-early.log and steer-early.png)`);
+  // The text typed into the dialog is the text the root read — none of it went into the composer behind the modal.
+  const text = (m) => (m?.content ?? []).filter((c) => c.kind === 'text').map((c) => c.text).join('');
+  if (!record.some((m) => m.role === 'user' && text(m) === '[Steering prompt] go left')) throw new Error(`the root's record does not hold the steer typed into the dialog: ${JSON.stringify(record.map((m) => [m.role, text(m).slice(0, 60)]))}`);
+  results.steerEarly = { timeline: list.filter((n) => n.startsWith('steering')) };
 }
 
 // 3. A graceful pause, then the paused Continue. The pause click WAITS for the run to be pausable

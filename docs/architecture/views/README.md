@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A dialog opened while the composer's send is settling keeps its focus (REQ-MONITOR-137, REQ-CHAT-002).** The
+composer's awaited submissions (a queue, a start or continue, an executed slash command) return the focus through one
+rule, `composerReclaimsFocus` (`ui/src/composer.ts`): to the composer only when the focus is nowhere, in the composer, or
+still on what held it when the submission began. Main's `session.subscribe` gains a verification seam,
+`ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS`, which holds its reply after the attach; the **process view**'s subscription
+paragraph says both. This repairs `a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`;
+`part-j-proof`'s steer-early launch (scenario 2b) shows it. No package, edge, process, message kind, channel, command or
+store column changed.
+
 **The intent status after a continue is the continuation's (REQ-ORCH-014, OQ-162).** The record's `intent` reads the
 newest `run_continuation_intent` entry's payload, else the launch audit's (`intentPayloadOf`, `sessions.ts`, over the
 new `StoreDal.latestTimelineEntry`, a read under the timeline's primary key whose plan `store.test.ts` asserts), and

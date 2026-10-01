@@ -59,6 +59,7 @@ loaded runs the Steer pressed 3.5 to 5.6 s after the launch, and the Pause follo
 every time. The whole `part-j-proof` then passed, every scenario, with the other plan's agents on the host (load
 average 9.7 at its start, 4.8 at its end).
 
-Not repaired here: the `steer` launch (scenario 2) keeps the fixed appointments this launch had
-([`part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss`](../part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md),
+Not repaired here: the `steer` launch (scenario 2) keeps the fixed appointments this launch had (repaired later the
+same day in the fin4 round, when it took this launch's steer)
+([`part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss`](part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md),
 recorded).

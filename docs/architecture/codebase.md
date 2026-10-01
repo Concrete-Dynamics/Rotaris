@@ -1218,7 +1218,10 @@ set has no `paused`); the pause at the limit writes no terminal pair; operations
 **What `pnpm part-j-proof` does.** It builds Electron and launches the app eleven times against scratch stores (seven
 until scenario 6 and the steer-early launch were added): a
 message typed during a run is queued and consumed once as a completed task; a steer is submitted from the composer's
-card and injected; a steer whose dialog opened while the composer's send was still settling reaches the root's record
+card and injected — since 2026-10-01 with the steer-rest launch's steer (`STEER_CLICKS` in `lib/steer-rest.mjs`: Steer
+the run waits for its control and the settled send, and the launch fails by name on a step it never pressed), where it
+had pressed at fixed appointments a late run start misses
+(`../defects/fixed/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md`); a steer whose dialog opened while the composer's send was still settling reaches the root's record
 with the text typed into it — since 2026-10-01 the composer takes the focus back after a submission only when nothing
 else took it meanwhile (`composerReclaimsFocus`), and main holds the `session.subscribe` reply under
 `ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS` so the launch opens the dialog inside that window every time

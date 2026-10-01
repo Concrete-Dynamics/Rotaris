@@ -6,7 +6,7 @@ import { Worker } from 'node:worker_threads';
 import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { unpressedClicks } from './lib/capture-clicks.mjs';
-import { STEER_REST_CLICKS, STEER_REST_TYPE, STEER_REST_WHATS, steerPendingAtPause } from './lib/steer-rest.mjs';
+import { STEER_CLICKS, STEER_REST_CLICKS, STEER_REST_TYPE, STEER_REST_WHATS, STEER_TYPE, STEER_WHATS, steerPendingAtPause } from './lib/steer-rest.mjs';
 import { STEER_EARLY_CLICKS, STEER_EARLY_TYPE, SUBSCRIBE_HOLD_MS, steerEarlyReading } from './lib/steer-early.mjs';
 
 /**
@@ -165,10 +165,17 @@ await launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PR
   results.queue = { iterations: session.iterations_completed, prompt: prompts[0], task: phase.tasks[0], sent };
 }
 
-// 2. A steer reaches the entry role at its next step.
+// 2. A steer reaches the entry role at its next step. The schedule is `lib/steer-rest.mjs`'s steer: Steer the run waits for
+// its control and the composer's settled send, the text and the dialog's Steer follow that deadline, and a step the log
+// does not show pressed fails by name. Until 2026-10-01 the presses were fixed appointments (1900, 2300, 2600 ms) that a
+// run starting late misses, and the proof then read "the steer was not submitted and injected", a red about the proof
+// (docs/defects/fixed/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md). The second
+// step is held 5 s, so the run is still at it when the steer is submitted at the latest, and injects it at the step after.
 const s2 = scenario('steer', []);
-await launch('steer', s2, { ROTARIS_SCRIPT: 'read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'steer me', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Steer the run"]@1900;;.dialog-actions .btn-primary>>Steer@2600', ROTARIS_CAPTURE_TYPE: 'go left>>no-enter@2300', ROTARIS_CAPTURE_AFTER_MS: '9000' });
+const steerLog = await launch('steer', s2, { ROTARIS_SCRIPT: 'read,wait:5000,read,read', ROTARIS_CAPTURE_PROMPT: 'steer me', ROTARIS_CAPTURE_CLICKS: STEER_CLICKS, ROTARIS_CAPTURE_TYPE: STEER_TYPE, ROTARIS_CAPTURE_AFTER_MS: '11000' });
 {
+  const unpressed = unpressedClicks(steerLog, Object.values(STEER_WHATS));
+  if (unpressed.length > 0) throw new Error(`the steer launch did not press every step on its own control: ${JSON.stringify(unpressed)} (see steer.log)`);
   const db = open(s2);
   const sid = db.prepare('SELECT session_id FROM sessions').get().session_id;
   const list = names(db, sid);

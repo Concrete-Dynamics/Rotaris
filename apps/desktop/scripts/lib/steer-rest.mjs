@@ -47,16 +47,38 @@ export const STEER_REST_WHATS = Object.freeze({
   continue: '.composer__strip .btn-primary[aria-label="Continue run"]',
 });
 
+/** The steer's two presses, shared with the `steer` launch below: Steer the run waits, the dialog's Steer is an appointment. */
+const STEER_STEP = `${STEER_REST_WHATS.steer}@~3500`;
+const SEND_STEP = `.dialog.steer .dialog-actions .btn-primary>>${STEER_REST_WHATS.send}@4200`;
+
 /** `ROTARIS_CAPTURE_CLICKS` for the launch. */
 export const STEER_REST_CLICKS = [
-  `${STEER_REST_WHATS.steer}@~3500`,
-  `.dialog.steer .dialog-actions .btn-primary>>${STEER_REST_WHATS.send}@4200`,
+  STEER_STEP,
+  SEND_STEP,
   `${STEER_REST_WHATS.pause}@4300~8500`,
   `${STEER_REST_WHATS.continue}@~24000`,
 ].join(';;');
 
 /** `ROTARIS_CAPTURE_TYPE` for the launch: the steer's text, typed into the dialog's focused field, not submitted. */
 export const STEER_REST_TYPE = 'go left>>no-enter@3800';
+
+/**
+ * `part-j-proof`'s `steer` launch (scenario 2): a steer reaching the entry role at its next step (REQ-MONITOR-133/137).
+ * Until 2026-10-01 it pressed Steer the run at a fixed 1900 ms, typed at 2300 ms and pressed the dialog's Steer at
+ * 2600 ms, appointments a run starting after 1.9 s misses: the press found no control, the text went to whatever held
+ * focus, and the proof failed with "the steer was not submitted and injected", a red that says nothing about the
+ * product (`docs/defects/fixed/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md`).
+ * It now takes the steer-rest launch's steer: Steer the run waits for its control and for the composer's settled send,
+ * the text and the dialog's Steer are appointments after that deadline, and the proof names a step it never pressed.
+ * The dialog opened while the send is still settling is the steer-early launch's (`steer-early.mjs`), not this one's.
+ */
+export const STEER_WHATS = Object.freeze({ steer: STEER_REST_WHATS.steer, send: STEER_REST_WHATS.send });
+
+/** `ROTARIS_CAPTURE_CLICKS` for the `steer` launch. */
+export const STEER_CLICKS = [STEER_STEP, SEND_STEP].join(';;');
+
+/** `ROTARIS_CAPTURE_TYPE` for the `steer` launch. */
+export const STEER_TYPE = STEER_REST_TYPE;
 
 /**
  * Whether the store says the steer was PENDING when the pause was asked for: submitted before `run_pause_requested`,

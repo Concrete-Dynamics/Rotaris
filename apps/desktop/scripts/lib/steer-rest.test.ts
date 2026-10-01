@@ -4,10 +4,11 @@
  * (`docs/defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`). The schedule is read
  * through the capture seam's own parser, so a step written in the waiting form is seen as one.
  */
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseSteps } from '../../src/main/capture/host.js';
 // @ts-expect-error — the schedule is plain ESM beside the proof that runs it.
-import { NO_STEER_DIALOG, SEND_SETTLED, STEER_REST_CLICKS, STEER_REST_TYPE, STEER_REST_WHATS, steerPendingAtPause } from './steer-rest.mjs';
+import { NO_STEER_DIALOG, SEND_SETTLED, STEER_CLICKS, STEER_REST_CLICKS, STEER_REST_TYPE, STEER_REST_WHATS, STEER_TYPE, STEER_WHATS, steerPendingAtPause } from './steer-rest.mjs';
 
 const clicks = parseSteps(STEER_REST_CLICKS as string);
 const typed = parseSteps(STEER_REST_TYPE as string)[0]!;
@@ -66,5 +67,48 @@ describe('the steer was pending when the pause was asked for', () => {
   it('names a launch that recorded no steer or no pause', () => {
     expect(steerPendingAtPause(['run_start', 'run_pause_requested'])).toBe('no steer was submitted');
     expect(steerPendingAtPause(['run_start', 'steering_submitted', 'run_end'])).toBe('no pause was requested');
+  });
+});
+
+describe("part-j-proof's steer schedule, scenario 2 (REQ-MONITOR-133, REQ-MONITOR-137)", () => {
+  // docs/defects/fixed/part-j-proofs-steer-launch-presses-steer-at-an-appointment-the-runs-start-can-miss.md: the launch
+  // pressed Steer the run at a fixed 1900 ms, which a run starting later than that misses.
+  const steps = parseSteps(STEER_CLICKS as string);
+  const text = parseSteps(STEER_TYPE as string)[0]!;
+  const w = STEER_WHATS as { steer: string; send: string };
+  const at = (what: string) => {
+    const found = steps.find((s) => (s.arg ?? s.selector) === what);
+    if (!found) throw new Error(`no step logs as ${what}`);
+    return found;
+  };
+
+  it('waits for Steer the run and for the composer\'s settled send, instead of pressing at an appointment', () => {
+    expect(at(w.steer).until).toBe(true);
+    expect(at(w.steer).selector.startsWith(`${SEND_SETTLED as string} `)).toBe(true);
+  });
+
+  it('types after the Steer step\'s deadline, and sends after typing', () => {
+    expect(text.arg).toBe('no-enter');
+    expect(text.at).toBeGreaterThan(at(w.steer).at);
+    expect(at(w.send).until).toBe(false);
+    expect(at(w.send).at).toBeGreaterThan(text.at);
+  });
+
+  it('is the steer-rest launch\'s steer, so the two launches cannot drift apart', () => {
+    expect(steps).toEqual(clicks.slice(0, 2));
+    expect(STEER_TYPE).toBe(STEER_REST_TYPE);
+  });
+
+  it('logs every step under the name the proof reads its press back by', () => {
+    expect(steps.map((s) => s.arg ?? s.selector)).toEqual([w.steer, w.send]);
+  });
+
+  it('is the schedule part-j-proof\'s steer launch runs, and the proof asks that every step was pressed', () => {
+    const proof = readFileSync(new URL('../part-j-proof.mjs', import.meta.url), 'utf8');
+    const line = proof.split('\n').find((l) => l.includes("await launch('steer', s2,")) ?? '';
+    expect(line).toContain('ROTARIS_CAPTURE_CLICKS: STEER_CLICKS');
+    expect(line).toContain('ROTARIS_CAPTURE_TYPE: STEER_TYPE');
+    expect(line).not.toMatch(/@\d/);
+    expect(proof).toContain('unpressedClicks(steerLog, Object.values(STEER_WHATS))');
   });
 });

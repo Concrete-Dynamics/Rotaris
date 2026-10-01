@@ -713,7 +713,7 @@ sheds its overscan, below and then above, before it cuts a visible row: a viewpo
 `ceil(H ÷ h)` (one partly at either edge), which the rule does not count and the old rail cut first. On the repair the stage
 is green — 226 slots, the bound rows covering the viewport with no gap at the tail and in the middle. A larger pool is more
 empty containers allocated at construction, which the memory tripwire subtracts away; nothing else this record decided
-moved (`docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`; OQ-160 asks whether
+moved (`docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md`; OQ-166 asks whether
 PD-CHAT-003's cost paragraph, which describes the capacity arithmetic as keeping 30 px, needs a revision).
 
 **A row that grows, 2026-10-01 (R-067, acceptance finding A37).** "Heights are measured" held for every row the observer had

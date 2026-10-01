@@ -7913,7 +7913,7 @@ with its lag during a pass, or the persisted total plus every live agent's calls
 agent as REQ-MONITOR-044 presents one, carrying its own count and history, and REQ-MONITOR-101's synthetic root node is
 some other surface — the run header, or the run-wide totals of REQ-MONITOR-098.
 
-**OQ-160 — Does PD-CHAT-003's cost paragraph still describe the pool's capacity arithmetic?** *(PD-CHAT-003, "Why, and what
+**OQ-166 — Does PD-CHAT-003's cost paragraph still describe the pool's capacity arithmetic?** *(PD-CHAT-003, "Why, and what
 it costs": "the recycled pool's capacity arithmetic (`ROW_MIN_HEIGHT` in `packages/ui/src/transcript/constants.ts`) keeps
 the 30 px figure as a conservative slot-size floor while real rows may be shorter"; REQ-CHAT-057's 30 px minimum row height,
 which the directive narrows off the row's box; REQ-CHAT-165; ADR-0045's capacity rule. Raised 2026-10-01 under

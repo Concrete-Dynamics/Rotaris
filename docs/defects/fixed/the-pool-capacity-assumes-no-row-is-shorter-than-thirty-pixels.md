@@ -69,10 +69,16 @@ and fails if a stylesheet change makes a row shorter than the unit; and the visi
 **Shown in the built app** by `transcript-proof`'s new stage 3c, `capacity` (`--only=capacity`, under
 `xvfb-run -s "-screen 0 1600x4400x24"`, as root, Node 24): 400 planted one-line system notices, the window resized to
 1440x4300, so a 3,890 px transcript viewport of 23.8 px rows — 164 on screen. **On the code before**, the same stage went
-red: a 154-slot pool, 144 rows bound, the last bound `row:379` of 400 while the pane followed the tail, and the viewport
+red: a 154-slot pool binding 144 of the 164 rows on screen (and 10 of overscan above), the last bound `row:379` of 400 while the pane followed the tail, and the viewport
 blank from 3,414.5 px to 3,890 px — what this note had computed and not measured, now measured. **On the repair**, green:
 226 slots, 174 bound at the tail and 184 in the middle, the bound slots covering the viewport from 0 to 3,890 px with no
 gap at both, the last notice bound at the tail.
+
+**A host that cannot ask it** (fix round 1, 2026-10-01): Xvfb with no window manager does not clamp the window to its
+screen, so the stage asks its question under the standard `-screen 0 1600x1000x24` as well (window 4,300, viewport 3,890,
+green); a desktop whose window manager clamps the window below 4,300 px could not, and the stage now records itself NOT
+ASKED there, with the height the host allowed, and the proof's verdict names it, instead of failing its own guard and
+stopping the proof before the append comparison.
 
 **Not shown:** a real portrait panel (the tall viewport is Xvfb's), Windows or macOS fonts (the 23.8 px is this host's
 line height; the 20 px floor is the stylesheet's and does not depend on a font), and the growth branch above `H_MAX`,

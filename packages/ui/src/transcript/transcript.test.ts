@@ -90,7 +90,7 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
 
   it('PD-CHAT-003: the capacity unit is no taller than the shortest row the stylesheet can draw', () => {
     // A continuation row is `.row`'s 4 px top margin, its 1 px border either side and a grid whose role column holds the
-    // 2 px continuation bar at its `min-height`; the first row of a block carries 12 px above it and a role line instead.
+    // continuation bar (2 px wide) at its 14 px `min-height`; the first row of a block carries 12 px above it and a role line instead.
     const css = readFileSync(new URL('../shell.css', import.meta.url), 'utf8');
     const rule = (selector: string): string => new RegExp(`^${selector.replace(/\./g, '\\.')} \\{([^}]*)\\}`, 'm').exec(css)?.[1] ?? '';
     const marginTop = Number(/margin:\s*(\d+)px/.exec(rule('.row'))?.[1]);

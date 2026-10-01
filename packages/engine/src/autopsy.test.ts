@@ -75,6 +75,60 @@ describe('R-043 — the run-autopsy snapshot', () => {
     expect(s.counts).toMatchObject({ timeline: 1, children: 1, checkpoints: 0 });
   });
 
+  describe('the entry agent\'s model key comes from what the store records of the entry agent, never from its children (live-run finding a71-13)', () => {
+    const child = (sid: SessionId, task: string, name: string, modelKey: string) => dal.insertChild({ session_id: sid, task_id: task, canonical_name: name, given_name: name, persona: 'coding-agent', state: 'succeeded', parent_id: 'root', depth: 1, iteration: 1, model_key: modelKey, category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
+    const call = (sid: SessionId, id: string, agent: string) => dal.ringInsert('tool_calls', sid, (o) => dal.insertToolCall({ session_id: sid, ordinal: o, call_id: id, agent_name: agent, tool_name: 'read_file', status: 'ok', started_at: 't', elapsed_ms: 1, is_error: 0, entry: toolEntry(agent, 'read_file', 'ok') }));
+    const snapshot = (model: string, models: Record<string, unknown> = {}) => ({ default_persona: 'orchestrator', personas: { orchestrator: { model } }, models });
+    const audit = (sid: SessionId, model: string, models: Record<string, unknown> = {}) => dal.insertLaunchAudit(sid, 't0', JSON.stringify({ session_id: sid, config_snapshot: snapshot(model, models) }));
+    const run = (sid: SessionId) => {
+      call(sid, 'r1', 'orchestrator'); call(sid, 'r2', 'orchestrator'); call(sid, 'r3', 'orchestrator');
+      child(sid, 'bg_00000001', 'impl', 'child-model'); child(sid, 'bg_00000002', 'tests', 'child-model');
+      call(sid, 'c1', 'impl'); call(sid, 'c2', 'tests');
+    };
+
+    it('a root on a different model from its children is attributed to the model its launch audit records', () => {
+      const sid = plant('S-root-model', 'completed');
+      dal.transaction(() => { run(sid); audit(sid, 'root-model'); });
+      expect(readAutopsy(dal, sid, clock.wall)!.requests).toEqual([
+        { endpoint: 'root-model', agents: ['orchestrator'], tool_calls: 3 },
+        { endpoint: 'child-model', agents: ['impl', 'tests'], tool_calls: 2 },
+      ]);
+    });
+
+    it('with no launch audit the root reads `session`, even when every child shares one key', () => {
+      const sid = plant('S-no-audit', 'completed');
+      dal.transaction(() => run(sid));
+      expect(readAutopsy(dal, sid, clock.wall)!.requests).toEqual([
+        { endpoint: 'session', agents: ['orchestrator'], tool_calls: 3 },
+        { endpoint: 'child-model', agents: ['impl', 'tests'], tool_calls: 2 },
+      ]);
+    });
+
+    it('a recorded switch and a continuation\'s own snapshot name every key the root ran on, in order, without splitting its calls by guess', () => {
+      const sid = plant('S-switched', 'completed');
+      dal.transaction(() => {
+        run(sid); audit(sid, 'root-model');
+        dal.insertTimeline(sid, 1, 't1', 'entry_model_switched', 'user', 'The entry model switched to child-model.', JSON.stringify({ model: 'child-model' }), 'aaaaaaaaaaa1', 'info');
+        dal.insertTimeline(sid, 2, 't2', 'run_continuation_intent', 'rotaris', 'Continuation intent: answer.', JSON.stringify({ config_snapshot: snapshot('child-model') }), 'aaaaaaaaaaa2', 'info');
+        dal.insertTimeline(sid, 3, 't3', 'run_continuation_intent', 'rotaris', 'Continuation intent: answer.', JSON.stringify({ config_snapshot: snapshot('third-model') }), 'aaaaaaaaaaa3', 'info');
+      });
+      expect(readAutopsy(dal, sid, clock.wall)!.requests).toEqual([
+        { endpoint: 'root-model → child-model → third-model', agents: ['orchestrator'], tool_calls: 3 },
+        { endpoint: 'child-model', agents: ['impl', 'tests'], tool_calls: 2 },
+      ]);
+    });
+
+    it('a loader-made copy (a role\'s `thinking`) reads as the one key it copies, and as its own name when two keys match', () => {
+      const base = { provider: 'openai-compatible', model_id: 'm', base_url: 'http://e', thinking: null };
+      const one = plant('S-synthetic', 'completed');
+      dal.transaction(() => { run(one); audit(one, '__persona__:orchestrator', { 'root-model': base, '__persona__:orchestrator': { ...base, thinking: 'high' } }); });
+      expect(readAutopsy(dal, one, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model', agents: ['orchestrator'], tool_calls: 3 });
+      const two = plant('S-ambiguous', 'completed');
+      dal.transaction(() => { run(two); audit(two, '__persona__:orchestrator', { 'root-model': base, 'same-model': base, '__persona__:orchestrator': { ...base, thinking: 'high' } }); });
+      expect(readAutopsy(dal, two, clock.wall)!.requests[0]).toEqual({ endpoint: '__persona__:orchestrator', agents: ['orchestrator'], tool_calls: 3 });
+    });
+  });
+
   it('a NULL summary on a stopped run flags; identical commands retried group', () => {
     const sid = plant('S-flag', 'stopped');
     dal.updateSessionRun(sid, { summary_text: '' });

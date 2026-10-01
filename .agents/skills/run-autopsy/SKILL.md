@@ -38,8 +38,9 @@ Quantify before judging. Run the product reader first —
 REQ-SESSION-139/199/153/136/134/135, REQ-EVENTS-056). It emits the session
 row, per-tool breakdown (failed vs blocked partitioned, elapsed sums),
 failure detail grouped by cause, usage curve with largest jumps, coherence
-warnings, and per-model-key tool-call attribution from the children record,
-in one read-only pass:
+warnings, and per-model-key tool-call attribution (children from the children
+record, the entry agent from its own launch audit and switches), in one
+read-only pass:
 
 ```bash
 node apps/desktop/scripts/autopsy.mjs              # newest db + latest started session
@@ -47,8 +48,11 @@ node apps/desktop/scripts/autopsy.mjs DB [SESSION_ID]
 ```
 
 Two facts the reader bakes in: the `usage.update` payload carries tokens and
-cost alone — no provider or model — so attribution reads `children.model_key`,
-and every printed line is truncated to 220 columns, so one catalogue dump
+cost alone — no provider or model — so attribution reads `children.model_key`
+for a child and, for the entry agent, the key its launch audit's configuration
+snapshot, its continuations and its `entry_model_switched` entries record,
+joined in order when it ran on more than one (`session` means none is recorded;
+it is never borrowed from the children), and every printed line is truncated to 220 columns, so one catalogue dump
 cannot take the transcript.
 
 Then supplement from the store by hand for anything the snapshot doesn't

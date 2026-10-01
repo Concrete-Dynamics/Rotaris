@@ -23,10 +23,11 @@
  * - `coherence`: the checks the autopsy ran by hand — a NULL summary on a
  *   stopped run, a cost of zero beside non-zero tokens, duplicate reads of
  *   the same path, identical commands retried.
- * - `requests`: per-model-key tool-call attribution from the children
- *   record (the usage.update payload carries tokens and cost alone, so the
- *   model_key the children carry is the identity the store keeps), newest
- *   totals last.
+ * - `requests`: per-model-key tool-call attribution — a child's calls under
+ *   the model_key the children record carries (the usage.update payload
+ *   carries tokens and cost alone), the entry agent's under the key the
+ *   launch audit, its continuations and its switches record for it
+ *   (`entryModelKeys`), newest totals last.
  */
 
 import type { SessionId, WallClock } from '@rotaris/kernel';
@@ -129,6 +130,55 @@ function failureDetail(tool: string, entry: Record<string, unknown> | undefined)
   return head(str(entry?.['result']), 220);
 }
 
+/** The loader's own prefixes for the models it copies (`packages/config/src/keys.ts`; REQ-CONFIG-076..081). */
+const SYNTHETIC_PREFIXES = ['__startup_slot__:', '__persona__:'] as const;
+const isSynthetic = (name: string): boolean => SYNTHETIC_PREFIXES.some((p) => name.startsWith(p));
+/** A `models:` entry with the two fields the loader's copy changes taken out, so a copy compares equal to its original. */
+const copiedFields = (entry: unknown): string => {
+  if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) return '';
+  const { thinking: _t, reasoning_effort: _r, ...rest } = entry as Record<string, unknown>;
+  return JSON.stringify(Object.keys(rest).sort().map((k) => [k, rest[k]]));
+};
+
+/**
+ * The model key one configuration snapshot (REQ-SESSION-138's `config_snapshot`) records for its entry role: the
+ * entry persona's resolved `model`. A loader-made copy (a slot's or a role's reasoning synthesis, REQ-CONFIG-076..081)
+ * reads as the one non-copy `models:` key it was copied from — the key a child on that model is recorded under
+ * (REQ-CONFIG-094) — and as its own recorded name when none or more than one matches. `null` when nothing is recorded.
+ */
+function snapshotEntryKey(snapshot: unknown): string | null {
+  if (snapshot === null || typeof snapshot !== 'object' || Array.isArray(snapshot)) return null;
+  const s = snapshot as Record<string, unknown>;
+  const role = str(s['default_persona']);
+  const personas = s['personas'];
+  const persona = role !== '' && personas !== null && typeof personas === 'object' && !Array.isArray(personas) ? (personas as Record<string, unknown>)[role] : undefined;
+  const model = persona !== null && typeof persona === 'object' && !Array.isArray(persona) ? str((persona as Record<string, unknown>)['model']) : '';
+  if (model === '') return null;
+  if (!isSynthetic(model)) return model;
+  const models = s['models'] !== null && typeof s['models'] === 'object' && !Array.isArray(s['models']) ? (s['models'] as Record<string, unknown>) : {};
+  const copied = copiedFields(models[model]);
+  const origins = copied === '' ? [] : Object.keys(models).filter((k) => !isSynthetic(k) && copiedFields(models[k]) === copied);
+  return origins.length === 1 ? origins[0]! : model;
+}
+
+/**
+ * Live-run finding a71-13: every model key the entry agent ran on, in order, from what the store records of the entry
+ * agent itself — the launch audit's configuration snapshot (REQ-SESSION-138), then each continuation's own snapshot
+ * (`run_continuation_intent`) and each switch (`entry_model_switched`, REQ-MONITOR-142), consecutive repeats folded.
+ * Empty when none of them records one. Never read from the children: a child's key says nothing about the root's.
+ * A `model_override` (REQ-ORCH-091 d) names no agent, so it is not read as the root's.
+ */
+export function entryModelKeys(launchAuditPayload: string | undefined, timeline: readonly Pick<TimelineRow, 'name' | 'metadata'>[]): string[] {
+  const keys: string[] = [];
+  const add = (key: string | null): void => { if (key !== null && key !== '' && keys[keys.length - 1] !== key) keys.push(key); };
+  if (launchAuditPayload !== undefined) add(snapshotEntryKey(parseJson(launchAuditPayload)?.['config_snapshot']));
+  for (const t of timeline) {
+    if (t.name === 'run_continuation_intent') add(snapshotEntryKey(parseJson(t.metadata)?.['config_snapshot']));
+    else if (t.name === 'entry_model_switched') add(str(parseJson(t.metadata)?.['model']) || null);
+  }
+  return keys;
+}
+
 /**
  * R-043: one read-only pass over the session's own records. `undefined` for
  * no such session. Every table read runs inside one `readTransaction`, so the
@@ -145,6 +195,7 @@ export function readAutopsy(dal: StoreDal, sessionId: SessionId, _wall: WallCloc
     const children = dal.childrenOf(sessionId);
     const checkpoints = dal.listCheckpoints(sessionId);
     const events = dal.eventsOf(sessionId);
+    const launchAudit = dal.getLaunchAudit(sessionId);
 
     // Per-tool totals with elapsed sums; failed vs blocked partitioned by status.
     const byTool = new Map<string, AutopsyToolRow>();
@@ -240,16 +291,19 @@ export function readAutopsy(dal: StoreDal, sessionId: SessionId, _wall: WallCloc
 
     // Per-model-key attribution: the store records no provider or model on
     // the usage.update payload (REQ-EVENTS-053's payload is tokens and cost
-    // alone), so the snapshot attributes tool calls to the model_key the
-    // children record carries. The entry agent's own calls read as the
-    // session's own model key: the children record names every key the run
-    // used, and the entry agent is the one no child names.
+    // alone), so a child's tool calls go to the model_key the children record
+    // carries. The entry agent — the one no child names — is attributed to the
+    // key(s) its own records name (`entryModelKeys`), joined in order when it
+    // ran on more than one, and to `session` when none is recorded. Its calls
+    // are never split between keys by guess, and its key is never taken from
+    // its children (live-run finding a71-13: it had been, whenever they shared one).
     const callsByAgent = new Map<string, number>();
     for (const t of toolCalls) callsByAgent.set(t.agent_name, (callsByAgent.get(t.agent_name) ?? 0) + 1);
     const childAgents = new Set(children.map((c) => c.given_name));
     const keyByAgent = new Map<string, string>();
     for (const c of children) keyByAgent.set(c.given_name, c.model_key);
-    const entryKey = [...new Set(children.map((c) => c.model_key))].length === 1 ? children[0]!.model_key : 'session';
+    const recordedEntryKeys = entryModelKeys(launchAudit?.payload, timeline);
+    const entryKey = recordedEntryKeys.length > 0 ? recordedEntryKeys.join(' → ') : 'session';
     const requests: AutopsyEndpointRow[] = [...callsByAgent.entries()]
       .map(([agent, calls]) => ({
         endpoint: childAgents.has(agent) ? keyByAgent.get(agent)! : entryKey,

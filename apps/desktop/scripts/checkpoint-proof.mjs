@@ -22,6 +22,9 @@
  *   isolated    `checkpoints:` unset, a run through the launch dialog in a worktree → the ref in the shared repository's
  *               namespace, `.rotaris/` in no checkpoint tree; then a restore rewrites the worktree only.
  *   disabled    `enabled: false` + isolation → no checkpoint (REQ-GIT-044).
+ *   loaded-restore  the isolated session resumed and run in the launch, so it stays loaded after its run releases the
+ *               lock; a lock naming another machine planted once the run has ended; then a restore → refused at gate 5
+ *               under that holder's lock, the hand edit untouched, the planted lock kept (ADR-0005, REQ-EVENTS-098).
  *
  * Evidence under `.proof/checkpoint-proof/`: one PNG and one log per launch, the confirmation dialog's PNG, `results.json`
  * with the capture, preview and restore times and the Git invocation counts. `--skip-build` skips the build.
@@ -433,6 +436,52 @@ const disabled = await launch('disabled', workspace, local, preferences, {
   if (!/checkpoints: disabled for session .* \(checkpoints.enabled=false, isolated/.test(disabled.log)) throw new Error('the port did not log the explicit false');
   if (text(disabled.probes, '[data-testid="git-checkpoints-empty"]')[0] !== 'No checkpoints are recorded for this session. Rotaris records one after each iteration of a worktree-isolated run.') throw new Error('the card is not empty for the disabled session');
   results.disabled = { sessionId: s.session_id, rows: 0, refs: 0, png: disabled.png };
+}
+
+// 9. A restore of a session loaded here after its run ended (ADR-0005, REQ-EVENTS-098; the repair of
+// `docs/defects/fixed/a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`, R-067). The run's
+// teardown releases the lock while the session stays loaded in the run host, so the restore's two writes — the safety
+// checkpoint's row and the outcome — go through the loaded writer. Once the run has ended, this script plants a lock
+// naming another machine (a second instance on the same store), and the restore is driven after it: the safety
+// checkpoint's row is refused under the other holder's lock, so the restore stops at gate 5, the hand edit is left
+// where it was, and the planted lock is untouched. Before the repair the loaded writer wrote without looking at the
+// lock, and the restore rewrote the file under the other instance's lock.
+{
+  const binding = JSON.parse(iso.worktree);
+  writeFileSync(join(binding.worktree_path, 'NOTES.md'), NOTES_HAND);
+  const OTHER_HOST = 'm1-0000000000000000000000000000000b';
+  const db = new Database(findDatabases(local)[0]);
+  db.pragma('busy_timeout = 5000');
+  const runStarts = () => db.prepare("SELECT count(*) AS c FROM timeline WHERE session_id = ? AND name = 'run_start'").get(iso.session_id).c;
+  const startsBefore = runStarts();
+  const launchedAt = Date.now();
+  let planted = null;
+  const planter = setInterval(() => {
+    if (planted !== null) return;
+    try {
+      const row = db.prepare('SELECT execution_status FROM sessions WHERE session_id = ?').get(iso.session_id);
+      const lock = db.prepare('SELECT pid FROM session_locks WHERE session_id = ?').get(iso.session_id);
+      if (runStarts() > startsBefore && row?.execution_status === 'completed' && !lock) {
+        db.prepare('INSERT INTO session_locks (session_id, pid, host, acquired_at) VALUES (?, ?, ?, ?)').run(iso.session_id, 4242, OTHER_HOST, new Date().toISOString());
+        planted = Date.now() - launchedAt;
+      }
+    } catch { /* the store is busy: the next tick reads again */ }
+  }, 100);
+  const loaded = await launch('loaded-restore', workspace, local, preferences, {
+    ROTARIS_SCRIPT: 'read,answer', ROTARIS_CAPTURE_RESUME: iso.session_id, ROTARIS_CAPTURE_PROMPT: 'Read the notes.',
+    ROTARIS_CAPTURE_CLICKS: '.nav-item>>Git@16000;;[data-testid="git-checkpoint-row"][data-sequence="1"]@18500;;[data-testid="git-restore"]@19200;;[data-testid="checkpoint-overwrite"]@24500;;[data-testid="checkpoint-restore-confirm"]@25200',
+    ROTARIS_CAPTURE_END_VIEW: '5', ROTARIS_CAPTURE_END_VIEW_MS: '800', ROTARIS_CAPTURE_AFTER_MS: '32000',
+  }, 180_000);
+  clearInterval(planter);
+  const lock = db.prepare('SELECT pid, host FROM session_locks WHERE session_id = ?').get(iso.session_id);
+  db.close();
+  if (planted === null) throw new Error('the loaded session\'s run never ended with its lock released, so no second holder was planted (see loaded-restore.log)');
+  if (planted > 15_000) throw new Error(`the second holder was planted ${planted} ms into the launch, after the restore's first click was due`);
+  const refusal = new RegExp(`checkpoint restore ${iso.session_id}/1 refused: Could not persist the safety checkpoint on the session: Session ${iso.session_id} is held by pid 4242 on ${OTHER_HOST}`);
+  if (!refusal.test(loaded.log)) throw new Error(`the restore of the loaded session was not refused under the other holder's lock (see loaded-restore.log)${restoreLine(loaded.log) ? '; it restored the file under that lock' : ''}`);
+  if (readFileSync(join(binding.worktree_path, 'NOTES.md'), 'utf8') !== NOTES_HAND) throw new Error('the restore rewrote the file under another holder\'s lock');
+  if (!lock || lock.pid !== 4242 || lock.host !== OTHER_HOST) throw new Error(`the other holder's lock was not left as it was: ${JSON.stringify(lock)}`);
+  results.loadedRestore = { sessionId: iso.session_id, plantedAfterMs: planted, refused: true, fileUntouched: true, otherHolderKept: true, png: loaded.png };
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

@@ -25,6 +25,9 @@ import { parseEvals, readEval } from './lib/capture-evals.mjs';
  *     the gate stays shut, because the release belongs to the session and not to the run that took it.
  *  8. **PD-ORCH-003: choosing `plan` again on the run-start chip re-arms it** — driven through the chip's own
  *     popover, after which the next prompt is held at a third cycle.
+ *  9. **REQ-MONITOR-060 at a gate no iteration precedes** — a fresh session's plan cycle root calls a tool and parks;
+ *     reopened in the next launch, the inspector's run-level agent marks that tool `used` from the store's history
+ *     (acceptance A21).
  *
  * Every assertion reads the store, the workspace or the app's own log. The PNGs are read back so a launch
  * that painted nothing cannot pass.
@@ -340,6 +343,51 @@ results.reArmed = {
   chipChoice: rearmChoice, released: rearmed.session.plan_released, status: rearmed.session.execution_status,
   cycle: rearmed.session.plan_cycle, cycles: rearmed.cycles.length,
 };
+
+/*
+ * 7. REQ-MONITOR-060 with REQ-ORCH-153: at a gate no iteration precedes, the run-level agent's chips are marked from the
+ * plan cycle's root's calls. A fresh session's root calls a tool and parks; reopened by the next launch, the inspector
+ * draws the run-level agent from the store's history alone. Before the repair of
+ * docs/defects/fixed/the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md (acceptance A21,
+ * R-067) that history was read under the latest iteration's root, and a plan cycle has no iteration, so every chip read
+ * `not used` while the user reviewed the plan.
+ */
+const INSPECTOR_NAME = '[data-testid="inspector-name"]';
+const INSPECTOR_CHIPS = '[data-testid="inspector-chips"] .chip';
+// The process that parked it last published the record while the run was still its own, so the reading that shows the
+// defect is the one a fresh process makes: the session reopened at its gate, its record read from the store alone.
+await launch('tools-at-gate', {
+  ROTARIS_SCRIPT: 'glob,answer',
+  ROTARIS_CAPTURE_PROMPT: 'plan a change to the readme',
+  ROTARIS_CAPTURE_WAIT: 'js:document.querySelector(\'[data-testid="plan-gate-plan"]\') !== null',
+  ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
+  ROTARIS_CAPTURE_AFTER_MS: '1500',
+});
+const log7 = await launch('tools-at-gate-reopened', {
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ROTARIS_CAPTURE_WAIT: 'js:document.querySelector(\'[data-testid="plan-gate-plan"]\') !== null',
+  ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
+  ROTARIS_CAPTURE_AFTER_MS: '2500',
+  ROTARIS_CAPTURE_PROBE: [INSPECTOR_NAME, INSPECTOR_CHIPS].join(';;'),
+});
+const probed = (selector) => {
+  const line = log7.split('\n').find((l) => l.includes(`capture: probe ${selector} → `));
+  if (!line) return [];
+  try { return JSON.parse(line.slice(line.indexOf(' → ') + 3)); } catch { return []; }
+};
+const gated = readStore();
+if (gated.session?.execution_status !== 'awaiting_plan_decision' || gated.session.plan_cycle !== 1) throw new Error(`the fresh session did not park at its first gate: ${gated.session?.execution_status}\n${log7}`);
+const ringDb = new Database(findStore(join(local, 'rotaris')), { readonly: true });
+const rootCalls = ringDb.prepare('SELECT agent_name, tool_name FROM tool_calls WHERE session_id = ? ORDER BY ordinal').all(gated.session.session_id);
+const iterations = ringDb.prepare('SELECT count(*) AS c FROM iterations WHERE session_id = ?').get(gated.session.session_id).c;
+ringDb.close();
+if (iterations !== 0) throw new Error(`the fresh session recorded ${iterations} iteration(s) before its gate`);
+if (rootCalls.length === 0) throw new Error(`the plan cycle's root called no tool, so there is no history to show (the scripted step found no such tool):\n${log7}`);
+const calledTool = rootCalls[0].tool_name;
+const chips7 = probed(INSPECTOR_CHIPS).map((c) => `${c.data['data-tool']}:${c.data['data-state']}`);
+const shown7 = probed(INSPECTOR_NAME)[0]?.text ?? null;
+if (!chips7.includes(`${calledTool}:used`)) throw new Error(`at the gate the run-level agent's chips do not mark the plan cycle root's ${calledTool} call used (REQ-MONITOR-060): ${JSON.stringify(chips7)} (inspector shows ${JSON.stringify(shown7)})`);
+results.toolsAtGate = { rootCalls, inspector: shown7, chips: chips7 };
 
 /*
  * The write half of assertion 6 is reported rather than enforced: whether the scripted role chooses to call

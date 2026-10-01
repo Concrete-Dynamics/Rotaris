@@ -64,7 +64,8 @@ case reads a total of **2** where **1** is due without that guard. The double co
 
 What it does not do: a record a compression replaced holds fewer calls than were made, so what the crash record adds from
 it may fall short (never over); a plan cycle has no `iterations` row, so a crash during one still loses its root's calls
-([`a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md`](../a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md));
+([`a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md`](a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md);
+repaired 2026-09-30: the session records the plan cycle's root under way, store v29, and the crash record counts it);
 a child the stop's grace gave up on and a continue then declined still counts nothing
 ([`a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md`](a-child-the-stops-grace-gave-up-on-and-the-continue-declined-never-counts-its-calls.md);
 repaired 2026-09-30: such a child is now counted from its record at the rest);
@@ -72,7 +73,7 @@ and the total still lags during a pass (OQ-116, open). The agents panel still de
 the children's. A store a pre-v26 build crashed, continued and let crash again — a child credited from its record at that
 continue, its `tool_calls` never persisted with the credit — has that credit counted a second time when a v26 build records
 the second crash; the case is narrow and is not repaired. A root whose turn raises (neither a crash nor given up on)
-counts none of its calls: [`a-root-whose-turn-raises-never-counts-its-calls.md`](../a-root-whose-turn-raises-never-counts-its-calls.md).
+counted none of its calls: [`a-root-whose-turn-raises-never-counts-its-calls.md`](a-root-whose-turn-raises-never-counts-its-calls.md) (repaired 2026-09-29: such a root is now counted from its record, as one given up on is).
 
 Pinned by: `packages/engine/src/run/crash.test.ts` — "the root's beyond its iteration's count and each unfinished child's
 beyond its own…", "a root whose count is not known…", "the calls the root and a child made before the crash reach the
@@ -94,5 +95,5 @@ crash — and its store read as D4's did: `sessions.tool_calls` **178** against 
 throwaway harness not committed) recorded the crash and brought the total to **247**, equal to the rows, with
 `root_tool_calls` **36** and `d2`'s `tool_calls` **33**, `d2` paused. The built app itself never repaired the store: the
 live run ends at the crash and does not reopen the session. The same repair left the cut call's ring row `running`, a
-defect of its own: [`a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md`](../a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md).
+defect of its own: [`a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md`](a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md) (repaired 2026-09-30: the crash record settles every ring row still `running`).
 

@@ -64,6 +64,57 @@ vocabulary; the names the product writes that no list has are held there by OQ-1
 `the-run-writes-timeline-events-outside-its-closed-vocabulary.md` (acceptance A29). The **runtime view**'s ladder paragraph
 and its `timeline` row say so. No package, edge, process, message kind, channel, command or store column changed.
 
+**A crash settles its cut call's ring row (REQ-SESSION-129, REQ-MONITOR-105, ADR-0024, R-067).** An orderly end settles
+every open `tool_calls` row when the run's ports close; a crash closes none, so after the crash record settled a call's
+transcript row its ring row stayed `running` for good. `recordCrash` now settles every ring row still `running`
+(`settleDeadToolCalls`) through `SessionWriter.settleToolCall`, `failed` with the crash's statement and a NULL duration
+(`ToolCallSettle.elapsed_ms` admits null for this case) — except at a continue after a run of this process that parked
+without closing its tool ports (`Run.closedItsPorts`), whose call may still be under way. This repairs
+`a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md` (acceptance A30), and corrects ADR-0024's first-execution
+claim that such a row "needs no repair" in place. The **runtime view**'s §2 crash paragraph and its §7 rings row say so. No
+package, edge, process, message kind, channel, command or column changed.
+
+**A plan cycle's root calls before a crash reach the session total (REQ-MONITOR-102, REQ-ORCH-153, R-067).** A plan cycle
+has no `iterations` row, so the crash record never reached its root. `sessions.plan_root_task_id` / `plan_root_persona`
+(store **v29**) name the plan cycle's root while its turn runs and none of its calls is counted: `Run.turn` records it when
+the plan cycle starts (`SessionWriter.openPlanRoot`) and releases it in the transaction that adds its calls to the total
+(`countToolCalls`'s `planRoot`), or with none counted when its turn raises. `recordCrash` answers the open calls of one still
+recorded and adds its record's calls (`recordPlanRootCrash`). This repairs
+`a-plan-cycles-root-calls-before-a-crash-never-reach-the-session-total.md` (acceptance A19). The **runtime view**'s §2 crash
+paragraph, its §7 `sessions` row and its §7 heading (the store is now v29), and the **state-ownership view**'s tool-call
+row, say so. Two `sessions` columns were added (store v29); no package, edge, process, message kind, channel or command
+changed.
+
+**The run-level agent's tool history at a plan gate no iteration precedes (REQ-MONITOR-060, REQ-MONITOR-069,
+REQ-ORCH-153, acceptance A21, R-067).** With no run live and no iteration recorded, `entryToolsOf` reads the run-level
+agent's history under every name the tracker holds that is no child's (`AgentActivity.calledToolsWhere`): only a root or
+a child dispatches a call, and before any iteration every root was a plan cycle's, which no row names. This repairs
+`the-run-level-agents-tool-history-is-empty-at-a-plan-gate-no-iteration-precedes.md`. The **runtime view**'s
+`entryTools` paragraph says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A write through a loaded session from outside a run holds the lock (ADR-0005, REQ-EVENTS-098, REQ-SESSION-060,
+REQ-GIT-094, acceptance A14, R-067).** `Sessions.withWriter`'s live branch — the repair, the safety checkpoint and the
+restore's outcome for a session loaded here — writes under the lock `claimHold` gives (kept, or taken with the one reap
+and given back) and answers `lock-held` with nothing written while another live process holds it. This repairs
+`a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md`. The **runtime view**'s §6 lock paragraphs, §6a
+and the `session_locks` row, and the **state-ownership view**'s session-lock row say so. No package, edge, process,
+message kind, channel, command or store column changed.
+
+**A root steer is announced under the root that will take it (REQ-MONITOR-133/134, PD-ORCH-005 clause 4, OQ-97, acceptance
+A24, R-067).** `Run.steer` names a root steer by `Run.rootSteerName`: `rootName` while the current root can still step, the
+run's persona once its execution is over (`rootDone`, set as each root's turn settles unless a rest leaves it `paused`), so a steer submitted after a root
+resumed as the entry role finishes is announced for the fresh root that injects it. Each pending steer keeps the name it
+was announced under, which `reportUndeliveredSteering` repeats. This repairs
+`a-root-steer-after-a-resumed-iteration-closes-is-announced-under-the-resumed-roots-name.md`. The **runtime view**'s §5
+steer row says so. No package, edge, process, message kind, channel, command or store column changed.
+
+**A root whose turn raises counts its calls (REQ-MONITOR-102, acceptance A18, R-067).** `Run.turn`'s `finally` counts a root
+whose turn never returned — raised as well as given up on — from its record, less what the record held when the execution
+began (`recordedAtStart`), once its open calls are answered; a raise that no rest paused has its open call answered as cut
+off, naming no rest (OQ-96), as the explicit cancel's give-up already did. This repairs
+`a-root-whose-turn-raises-never-counts-its-calls.md`. The **runtime view**'s §7 `iterations` row and the **state-ownership
+view**'s tool-call row say so. No package, edge, process, message kind, channel, command or store column changed.
+
 **The compressing model reads the history it replaces (REQ-MONITOR-082, REQ-MONITOR-084, REQ-ORCH-110, OQ-156, R-067).**
 `compress` reads `compressorTranscript` (`run/compression.ts`) instead of the report pass's `transcriptText`, which is
 removed: each event whole, the slice whole up to the compressing model's own threshold at `chars_per_token`

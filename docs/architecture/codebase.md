@@ -1074,7 +1074,7 @@ lands in `.rotaris/worktrees/<sid>` and not in the base; the manual worktree del
 against Git's real refusal; a relaunch restoring the split; `PATH` without Git (the empty header, the notice, no
 dialog); a plain folder in the OS temp directory (no notice). Evidence under `.proof/git-proof/`.
 
-**What `pnpm checkpoint-proof` does.** It builds Electron and launches the app twelve times against a scratch repository:
+**What `pnpm checkpoint-proof` does.** It builds Electron and launches the app thirteen times against a scratch repository:
 two scripted iterations capture checkpoints 1 and 2 (the refs, the fixed identity, the message, HEAD and the index bytes
 unchanged, the card's rows); a read-only run records nothing; a hand edit then a restore of checkpoint 1 through the
 preview-first dialog (the warning, the checkbox, the safety checkpoint holding the edit, `last_restored_sequence`, the
@@ -1085,7 +1085,11 @@ restore — land in `.proof/checkpoint-proof/results.json`. The Git proof's isol
 empty sentence: an isolated run records a checkpoint by REQ-GIT-044's default, which the merge found by failing that launch. The live
 run's lock is probed dead the moment that launch returns, so a lock that outlived its application fails there, naming
 REQ-SESSION-047/056, and not one launch later as a failed repair (2026-09-28, R-062;
-[the note](../defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md)).
+[the note](../defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md)). The
+thirteenth launch, `loaded-restore`, restores a session that stays loaded after its run released the lock, once a second
+holder naming another machine has taken it: the restore stops at gate 5 with the file untouched and that lock kept
+(ADR-0005, REQ-EVENTS-098; 2026-09-29, R-067, acceptance A14;
+[the note](../defects/fixed/a-write-through-a-loaded-sessions-writer-outside-a-run-claims-no-lock.md)).
 
 **What `pnpm resilience-proof` does.** It builds Electron and launches the app nine times with scripted fault steps: a 429
 with `retry-after: 2` (the countdown, the auto-resume); a 429 with no header (the 60 s local wait, cancelled from the

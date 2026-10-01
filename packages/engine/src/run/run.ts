@@ -386,8 +386,9 @@ export class Run {
    */
   private rootName: string;
   /**
-   * Whether the current root's execution is over — its turn returned, raised or was given up on — so it takes no other
-   * step. Set as each root's turn settles and cleared as the next begins; false before the run's first root.
+   * Whether the current root's execution is over — its turn returned, raised or was given up on, and no rest left it
+   * `paused` to be resumed — so it takes no other step. Set as each root's turn settles and cleared as the next begins;
+   * false before the run's first root.
    */
   private rootDone = false;
 
@@ -1418,7 +1419,6 @@ export class Run {
        * open call answered as interrupted, below — and a turn that returns after that writes nothing more.
        */
       const settled = await Promise.race([running, this.stopGraceSpent.then(() => { rootDetached = true; return null; })]);
-      this.rootDone = true;
       if (settled === null) {
         // The turn's end is no longer awaited, so its raise must be handled here or it is an unhandled rejection.
         running.catch(() => undefined);
@@ -1441,7 +1441,6 @@ export class Run {
       // A root given up on reports nothing of its own: `iterate` reads the stop before the report (REQ-SESSION-092).
       return outcome?.report ?? { status: 'succeeded', text: '', usage: { input: 0, output: 0 } };
     } finally {
-      this.rootDone = true;
       // The root's execution is over, or given up on: its watch is disarmed and its figure cleared (REQ-MONITOR-120).
       rootWatch.stop();
       this.rootStallEvaluated(rootName, null);
@@ -1454,7 +1453,11 @@ export class Run {
       const rootFinished = outcome !== null && outcome.paused !== true && !this.abort.signal.aborted && outcome.report.status !== 'failed';
       /** Whether the root's open calls were answered as interrupted by a rest. */
       let answered = false;
-      if (rest !== null && (!rootFinished || (children?.scheduler.hasNonTerminal ?? false))) {
+      const resting = rest !== null && (!rootFinished || (children?.scheduler.hasNonTerminal ?? false));
+      // A root the rest leaves `paused` is the root a continue resumes, and a root steer pending at the rest is delivered to
+      // it (`deliverSteeringAtRest`): it can still step. Every other root's execution is over (`rootSteerName`).
+      this.rootDone = !resting;
+      if (resting) {
         // Every child's execution had the stop's grace beside the root's, counted from the same first request: the rest
         // is given what is left of it — none after a root given up on, and never a fresh 30 s after a root that returned
         // late — so the stop stays bounded at the one 30 s (REQ-SESSION-092).

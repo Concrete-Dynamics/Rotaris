@@ -42,7 +42,7 @@ name of its own. The timeline then names two agents for one prompt.
 
 ## Outcome
 
-Confirmed on `fix-accept1-17` (from `origin/main` `f4ae181`) by two cases, both red before the repair: a continue run set up
+Confirmed on `fix-accept1-17` (from `origin/main` `f4ae181`) by the first two cases below, both red before the repair: a continue run set up
 as `coding-agent` resumed iteration 2's root `orchestrator`, which answered; with the iteration's `iteration_end` hook held, a
 root steer was announced "for orchestrator" — and, when a queued prompt gave the run iteration 3, injected by that
 iteration's fresh root as `coding-agent`.
@@ -50,7 +50,10 @@ iteration's fresh root as `coding-agent`.
 `Run.steer` now names a root steer by `Run.rootSteerName`, the root that will take it, as the note proposed: `rootName`
 while the current root can still step (its turn running, or a resumed root before its first turn), the run's persona once
 that root's execution is over. `Run.rootDone` is set as each root's turn settles — returned, raised or given up on — and
-cleared as the next turn begins. `rootName` itself is unchanged, so `currentRoot`, `entryContext` and `entryTools` still read
+cleared as the next turn begins, except for a root a rest leaves `paused`: that root is the one a continue resumes, and a
+root steer pending at the rest is delivered into its record (`deliverSteeringAtRest`), so it still names the steer. *Found
+by building, and kept beside its replacement:* the first form set `rootDone` as soon as the root's race settled, which split
+a steer submitted while a stop's rest waited on a child — announced for `coding-agent`, delivered to `orchestrator`. `rootName` itself is unchanged, so `currentRoot`, `entryContext` and `entryTools` still read
 the last root between iterations. Each pending steer keeps the name it was announced under, and the not-delivered line
 repeats it, so a steer announced while a resumed root ran and left pending when it finished is still reported under that
 name.
@@ -58,7 +61,9 @@ name.
 Pinned by: `packages/engine/src/run/crash.test.ts` — "REQ-MONITOR-133/134 with clause 4 and OQ-97 (the repair of
 a-root-steer-after-a-resumed-iteration-closes-is-announced-under-the-resumed-roots-name.md) …" — "an iteration follows:
 announced and injected under the fresh root's name, the entry role" and "no iteration follows: announced, and reported not
-delivered, under the same name" (the second fails when the not-delivered line names the root by `rootName` again). Not
+delivered, under the same name" (the second fails when the not-delivered line names the root by `rootName` again), and "a
+stop rests the resumed root: a steer after its turn ended, while the rest waits on a child, is announced and delivered under
+its name" (fails on the first form above). Not
 driven in the built app or live: no proof or live-run scenario resumes a root whose persona is no longer configured, and the
 note was found by reading the code.
 

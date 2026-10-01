@@ -551,6 +551,43 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(messages(sid, 'steering_submitted')).toEqual([expect.stringMatching(/^A steering prompt was submitted for coding-agent \(/)]);
         expect(messages(sid, 'steering_not_delivered')).toEqual([expect.stringMatching(/^The steering prompt for coding-agent \(.*before coding-agent took another step\.$/)]);
       });
+
+      it('a stop rests the resumed root: a steer after its turn ended, while the rest waits on a child, is announced and delivered under its name', async () => {
+        const sid = await crashed();
+        // The resumed root answers at once; every child's step is held and ignores its abort, so the stop's rest waits on
+        // the children for the grace — after the root's turn has ended, before the rest leaves it `paused`.
+        const client = new ScriptedModelClient([]);
+        const original = client.stream.bind(client);
+        let childAsked = false;
+        client.stream = (req) => {
+          const root = req.messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text === 'second'));
+          if (root) { client.push(answer('Answered.')); return original(req); }
+          childAsked = true;
+          client.push({ parts: [{ hold: new Promise<void>(() => undefined) }, ...answer('late').parts] });
+          return original({ ...req, signal: new AbortController().signal });
+        };
+        const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, persona: 'coding-agent', model: MODEL, credentialFor: () => async () => 'k' };
+        const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' as const };
+        const next = new Sessions({
+          clocks: clock, publisher: NONE, pid: 88, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
+          model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s),
+          tools: () => ({ specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed' as const, durationMs: 0, label: '', args: {} }), cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false }),
+          configure: () => ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }),
+        });
+        expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        expect(next.prompt(sid, 'second').ok).toBe(true);
+        for (let i = 0; i < 400 && !childAsked; i++) await new Promise((r) => setTimeout(r, 5));
+        expect(childAsked).toBe(true);
+        expect(next.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+        // The root's turn ends on the stop's abort; its children hold the rest until the grace runs out.
+        await new Promise((r) => setTimeout(r, 50));
+        expect(next.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: RUN_AGENT_ID, text: 'mind the tests' } }).ok).toBe(true);
+        clock.advance(30_000);
+        await next.running(sid);
+        expect(dal.iterationsOf(sid).find((r) => r.iteration === 2)).toMatchObject({ state: 'open', interruption: 'stop' });
+        expect(messages(sid, 'steering_submitted')).toEqual([expect.stringMatching(/^A steering prompt was submitted for orchestrator \(/)]);
+        expect(messages(sid, 'steering_injected')).toEqual([expect.stringMatching(/^A steering prompt reached orchestrator \(/)]);
+      });
     });
 
     /*

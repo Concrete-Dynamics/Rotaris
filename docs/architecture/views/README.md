@@ -47,7 +47,7 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 **A root steer is announced under the root that will take it (REQ-MONITOR-133/134, PD-ORCH-005 clause 4, OQ-97, acceptance
 A24, R-067).** `Run.steer` names a root steer by `Run.rootSteerName`: `rootName` while the current root can still step, the
-run's persona once its execution is over (`rootDone`, set as each root's turn settles), so a steer submitted after a root
+run's persona once its execution is over (`rootDone`, set as each root's turn settles unless a rest leaves it `paused`), so a steer submitted after a root
 resumed as the entry role finishes is announced for the fresh root that injects it. Each pending steer keeps the name it
 was announced under, which `reportUndeliveredSteering` repeats. This repairs
 `a-root-steer-after-a-resumed-iteration-closes-is-announced-under-the-resumed-roots-name.md`. The **runtime view**'s §5

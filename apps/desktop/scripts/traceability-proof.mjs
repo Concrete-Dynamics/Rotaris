@@ -27,6 +27,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { growthVerdict } from './lib/growth-verdict.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -49,22 +50,24 @@ const expect = (condition, message) => { if (!condition) throw new Error(message
  *  - **Work, asserted always.** The half-size tree must really be about half — the documents parsed, the files swept
  *    or the files parsed on each side. No clock can tell a proof that, and if it is wrong the timing ratio means
  *    nothing whatever it reads. This is the assertion that cannot be bought off by load.
- *  - **Time, taken as the minimum of three readings and floored.** Load can only make a pass slower, never faster,
- *    so the minimum is the least contaminated estimate (`msMin`, in `traceability.proof.test.ts`). Below the floor,
- *    a wall clock cannot tell two passes apart at all, so the ratio is RECORDED and not asserted, and the line says
- *    so rather than passing silently — a proof that cannot fail is not evidence, and neither is one that pretends
- *    a 3 ms reading measured something.
+ *  - **Time, taken as the minimum of repeated readings and floored.** Load can only make a pass slower, never faster,
+ *    so the minimum is the least contaminated estimate. Below the floor, a wall clock cannot tell two passes apart
+ *    at all, so the ratio is RECORDED and not asserted, and the line says so rather than passing silently — a proof
+ *    that cannot fail is not evidence, and neither is one that pretends a 3 ms reading measured something.
+ *
+ * 2026-10-01 (R-067): the two sides are now read EVENLY — seven readings each after one warm-up each, interleaved
+ * and alternating which side goes first (`interleavedMinima`, `packages/workspace/src/traceability/growth-readings.ts`).
+ * Reading the full tree first and the half tree afterwards had let the half side run hotter and read cheap, and the
+ * parse went red at 3.04 to 3.37, twice in a row on an idle host. The verdict and its message are `growthVerdict`
+ * (`lib/growth-verdict.mjs`), which prints each side's readings as that side's
+ * (`docs/defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).
  */
-const GROWTH_FLOOR_MS = 25;
-const GROWTH_CEILING = 3.0;
+const growthLines = [];
 const linear = (label, pair, lower) => {
-  const workRatio = Math.round((pair.work.full / Math.max(pair.work.half, 1)) * 100) / 100;
-  expect(workRatio > 1.5 && workRatio < 2.6, `${label}: the half-size tree is not about half the work (${pair.work.full} against ${pair.work.half}, ratio ${workRatio})`);
-  if (pair.fullMinMs < GROWTH_FLOOR_MS || pair.halfMinMs < GROWTH_FLOOR_MS) {
-    console.log(`  NOTE  ${label} growth ratio ${pair.ratio} recorded, NOT asserted: ${pair.fullMinMs} ms against ${pair.halfMinMs} ms is below the ${GROWTH_FLOOR_MS} ms floor at which a wall clock can tell two passes apart (work ratio ${workRatio} asserted instead)`);
-    return;
-  }
-  expect(pair.ratio > lower && pair.ratio < GROWTH_CEILING, `${label} growth ratio ${pair.ratio} is not linear — minimum of the readings ${JSON.stringify(pair.warmRunsMs ?? [])} full against ${JSON.stringify(pair.halfWarmRunsMs ?? pair.warmRunsMs ?? [])} half, work ratio ${workRatio}`);
+  const verdict = growthVerdict(label, pair, lower);
+  expect(verdict.ok, verdict.message);
+  if (!verdict.asserted) console.log(`  NOTE  ${verdict.message}`);
+  growthLines.push(verdict.message);
 };
 
 /**
@@ -207,6 +210,7 @@ console.log(`  parse ${results.spike.parse.documents} documents: ${results.spike
 console.log(`  sweep ${results.spike.sweep.files} files / ${results.spike.sweep.sites} sites: ${results.spike.sweep.warmMs} ms warm (${results.spike.sweep.coldMs} ms cold); half-size ratio ${results.spike.sweepHalf.ratio}`);
 console.log(`  parser (TypeScript ${results.spike.parser.version}) over ${results.spike.parser.files} files: ${results.spike.parser.warmMs} ms warm (${results.spike.parser.coldMs} ms cold), ${results.spike.parser.perFileMs} ms/file, load ${results.spike.parser.loadMs} ms; inside the sweep ${results.spike.parser.sweepParsedFiles} files in ${results.spike.parser.sweepParseMs} ms; half-size ratio ${results.spike.parser.ratio}`);
 console.log(`  process path: check ${results.process.check.elapsedMs} ms, regenerate ${results.process.regenerate1.elapsedMs} ms, cancelled check ${results.process.cancelledCheck.elapsedMs} ms`);
+for (const line of growthLines) console.log(`  growth: ${line}`);
 console.log(`  board path (requirements.operation): check ${results.boardPath.checkMs} ms, regenerate ${results.boardPath.regenerateMs} ms, baselines ${results.boardPath.baselinesMs} ms; generation ${results.boardPath.generation}; the card's sentences asserted over the real replies`);
 
 /** The Electron driver: fork the built workspace service as a utilityProcess and speak the process protocol to it. */

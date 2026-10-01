@@ -837,3 +837,20 @@ the assertion unfalsifiable in exactly the case it exists for — a genuinely qu
 
 **Found nothing else.** The engine, the parser, the sweep and the four operations are unchanged by this execution,
 and the fixture and process stages of `pnpm traceability-proof` pass as Part AJ′ left them.
+
+**Corrected 2026-10-01 (R-067): point 2 described the readings, and they were not taken that way.** The falsified
+claim was "each paired timing is therefore measured three times (`msMin`), the ratio is computed from the two
+minima". The parse and the parser took three readings of the full tree first and three of the half tree afterwards.
+The sweep's full side was **one** reading against a minimum of three. The minimum's rationale held only for readings
+taken under the same conditions, and these were not: the half side ran after the full side, on a hotter JIT, and read
+cheap. Acceptance round 1 saw the parse ratio at 3.04 and 3.16, twice in a row on an idle host, against a work ratio of
+2.14. This branch saw 3.37. The failure message also printed the half readings on both sides.
+
+The replacement: each pair is read by `interleavedMinima` (`packages/workspace/src/traceability/growth-readings.ts`),
+seven readings a side after one warm-up each. The sides are interleaved, and each round swaps which side goes first.
+The ratio is still the quotient of the two minima, and `growthVerdict` (`apps/desktop/scripts/lib/growth-verdict.mjs`)
+prints each side's readings as that side's. Point 1, the 25 ms floor and the 3.0 ceiling are unchanged. Six runs after
+the repair read the parse ratio at 2.24 to 2.35 and the parser's at 1.89 to 2.06; a seventh, and five more on a quieter
+host in the verification's repair round, read the parse at 2.19 to 2.33 and the parser at 2.03 to 2.09. On this host the half-size sweep reads
+18 to 23 ms, under the floor, so its ratio stays recorded and not asserted. The note is
+[`traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`](../../defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md).

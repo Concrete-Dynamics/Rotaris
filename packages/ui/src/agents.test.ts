@@ -13,7 +13,7 @@ const row = (over: Partial<TranscriptRow>): TranscriptRow => ({ index: 0, kind: 
 const session = (over: Partial<SessionRecord>): SessionRecord => ({
   id: 's1', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-09-05T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [],
   tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: null, runType: 'task_run', improvementArtifactIds: [], runStartedAt: '2026-09-05T10:00:00.000Z', iterationsCompleted: 0, summary: null, permissionMode: 'ask', sandboxed: false, backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
-  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryStalledSeconds: null, ...over,
+  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryStalledSeconds: null, entryToolCalls: null, ...over,
 });
 
 describe('agents — the shared selection (REQ-MONITOR-042) and the run-level agent (REQ-MONITOR-043/057)', () => {
@@ -38,6 +38,16 @@ describe('agents — the shared selection (REQ-MONITOR-042) and the run-level ag
     expect(runLevelAgent(session({ entryStalledSeconds: 90 }), entry, false)?.stalledSeconds).toBe(90);
     expect(runLevelAgent(session({ executionStatus: 'completed', entryStalledSeconds: 90 }), entry, false)?.stalledSeconds).toBeNull();
     expect(runLevelAgent(null, entry, false)).toBeNull();
+  });
+  it('REQ-MONITOR-044/052 (acceptance A20): the run-level agent\'s count is the session\'s own figure for it, which holds the calls its running turn has made; with none, the total less the children', () => {
+    const entry = { persona: 'orchestrator', model: 'scripted/alpha', reasoning: 'high', tools: [] };
+    // The artifacts-proof screenshot's state: the root's turn has made two calls the total does not hold yet, and a child's
+    // live count is ahead of the total too. The total less the children read 0 beside the root's used chips.
+    const live = session({ toolCalls: { total: 0, agents: 1, byTool: [] }, agents: [agent({ toolCalls: 1 })], entryTools: { resolved: ['delegate', 'artifact_write'], called: ['delegate', 'artifact_write'], active: [] }, entryToolCalls: 2 });
+    expect(runLevelAgent(live, entry, false)?.toolCalls).toBe(2);
+    expect(metaLine(runLevelAgent(live, entry, false)!, '8s')).toBe('running · 8s · 2 tool calls');
+    // A record with no projection still derives it.
+    expect(runLevelAgent(session({ agents: [agent({ toolCalls: 2 })] }), entry, false)?.toolCalls).toBe(3);
   });
 });
 

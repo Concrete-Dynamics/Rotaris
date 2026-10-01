@@ -629,11 +629,11 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
       cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
     });
     /** A persona id the canonicaliser rewrites, in `plan` mode: every run of a new session is held for a plan first. */
-    const planSessions = (pid: number, backend: AgentBackend, snapshots: SessionRecord[] = []) => new Sessions({
+    const planSessions = (pid: number, backend: AgentBackend, snapshots: SessionRecord[] = [], portOf: (ops: ArtifactOps | undefined) => ToolPort = publishing) => new Sessions({
       clocks: clock, publisher: { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } }, pid, host: HOST,
       retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-plan-root',
       model: null, sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid), attended: () => true,
-      tools: (ctx) => publishing(ctx.artifacts),
+      tools: (ctx) => portOf(ctx.artifacts),
       configure: () => ({ ok: true, value: {
         model: { backend, config: { ...RUN_CONFIG_DEFAULTS, persona: 'Lead Planner', model: MODEL, credentialFor: () => async () => '' } },
         runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, runStartMode: 'plan' },
@@ -674,6 +674,65 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
       const sid = (sessions.start(dal, 'C:/ws', 'plan it') as { value: SessionId }).value;
       for (let i = 0; i < 200 && !published; i++) { await new Promise((r) => setTimeout(r, 5)); published = dal.artifactsOf(sid).length > 0; }
       expect(published).toBe(true);
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      expect((await sessions.running(sid)!).execution_status).not.toBe('awaiting_plan_decision');
+      await sessions.closeAll();
+      expect(dal.planCyclesOf(sid)).toEqual([]);
+      expect(dal.iterationsOf(sid)).toEqual([]);
+      expect(entryRootsOf(dal, sid, undefined)).toEqual([ROOT]);
+    });
+
+    /*
+     * docs/defects/fixed/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md (acceptance A22, R-067):
+     * a plan cycle's root that READ an artifact of the session and published none was named only by its live run, so at
+     * the gate the artifact's consumer — its canonical name, `Lead-Planner` (REQ-LIBRARY-099, REQ-LIBRARY-093) — was no
+     * agent's, and the run-level agent lost its received link (REQ-MONITOR-044/052/069). The session records each plan
+     * cycle's root when it starts (`plan_roots`, store v30), so it is named however the cycle ends.
+     */
+    const reading = (sid: SessionId) => (ops: ArtifactOps | undefined): ToolPort => ({
+      specs: () => [{ name: 'artifact_read', description: 'read', parameters: { type: 'object' } }],
+      dispatch: async () => {
+        // An artifact of the session the root did not write: a report an earlier agent left (no conversation of this root's).
+        if (dal.artifactsOf(sid).length === 0) artifact(sid, 'a0000001', 'child_report', 'bg_child001', '2026-09-27T00:00:00.000Z');
+        const r = ops?.read('a0000001', ['summary']);
+        return { text: r?.ok ? r.text : 'failed', isError: !r?.ok, status: r?.ok ? 'ok' : 'failed', durationMs: 1, label: 'read', args: {} };
+      },
+      cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+    });
+
+    it('REQ-MONITOR-044/052/069 with REQ-LIBRARY-099: parked at the gate, a plan cycle\'s root that only read is named — live, and reopened in a fresh process — so what it read is the run-level agent\'s received link', async () => {
+      const sid = asSessionId('S-plan-root');
+      const backend = new DefaultAgentBackend(new ScriptedModelClient([toolCalls([{ callId: 'r1', name: 'artifact_read', args: {} }], 'Reading.'), answer('Step 1: the plan.')]));
+      const live: SessionRecord[] = [];
+      const first = planSessions(82, backend, live, reading(sid));
+      expect((first.start(dal, 'C:/ws', 'plan it') as { value: SessionId }).value).toBe(sid);
+      expect((await first.running(sid)!).execution_status).toBe('awaiting_plan_decision');
+      // The root published nothing, sits on no iteration row, and is recorded a consumer under its canonical name.
+      expect(dal.iterationsOf(sid)).toEqual([]);
+      expect(dal.artifactsOf(sid).map((a) => [a.kind, a.consumed_by])).toEqual([['child_report', '["Lead-Planner"]']]);
+      first.owner(sid)!.reconcile();
+      expect(live.at(-1)!.entryRoots).toEqual([ROOT]);
+      expect(live.at(-1)!.artifacts.map((a) => a.consumedBy)).toEqual([[ROOT.canonical]]);
+      await first.closeAll();
+      expect(entryRootsOf(dal, sid, undefined)).toEqual([ROOT]);
+      const reopened: SessionRecord[] = [];
+      const second = planSessions(83, backend, reopened, reading(sid));
+      expect(second.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      second.owner(sid)!.reconcile();
+      expect(reopened.at(-1)!.entryRoots).toEqual([ROOT]);
+    });
+
+    it('stopped before its gate opened: a plan cycle\'s root that only read is still named, with no plan cycle and no iteration recorded', async () => {
+      const sid = asSessionId('S-plan-root');
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      const client = new ScriptedModelClient([toolCalls([{ callId: 'r1', name: 'artifact_read', args: {} }], 'Reading.'), { parts: [{ hold }, ...answer('Step 1: the plan.').parts] }]);
+      const sessions = planSessions(82, new DefaultAgentBackend(client), [], reading(sid));
+      sessions.start(dal, 'C:/ws', 'plan it');
+      let consumed = false;
+      for (let i = 0; i < 200 && !consumed; i++) { await new Promise((r) => setTimeout(r, 5)); consumed = dal.artifactsOf(sid).some((a) => a.consumed_by !== '[]'); }
+      expect(consumed).toBe(true);
       expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
       release();
       expect((await sessions.running(sid)!).execution_status).not.toBe('awaiting_plan_decision');

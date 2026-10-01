@@ -434,6 +434,7 @@ export async function selfTest({ quiet = false } = {}) {
     assert.equal(settledStatus(unpushed, 'b3'), 'merge-failed', 'a merge whose push failed ends merge-failed, never sent to repair')
     assert.ok(!unpushed.calls.includes('fix:b3#1 [high]'))
     assert.match(run.prompts['implement:a1'], /Live runs are NOT authorised/, 'without authorization agents are told not to launch live runs')
+    assert.match(run.prompts['implement:a1'], /Bash tool's own `timeout` parameter/, 'agents give a long background job an explicit timeout')
     assert.ok(!run.calls.some((c) => c.startsWith('accept:live')), 'no live-runner without authorization')
     assert.equal(run.result.acceptance.length, 2)
     assert.ok(run.calls.includes('implement:accept1-1 [high]') && run.calls.includes('implement:accept1-2 [high]') && !run.calls.includes('implement:accept1-3 [high]'), 'findings that share a directory pair; the rest stand alone')

@@ -5438,6 +5438,14 @@ before a crash that never reach the total — is a defect of its own,
 record during a pass, which would amend or narrow REQ-ORCH-097's timing; or whether the lag stands and the surface says
 the total is as of the last completed pass.
 
+*Reported 2026-10-01 by the repair of
+[`the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`](../defects/fixed/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md)
+(acceptance A20, R-067), which leaves this cadence and the displayed total as they were.* The per-agent figures no longer
+wait for it: a child's count already read the tracker's live count beside its persisted one, and the run-level agent's now
+reads the roots' persisted share plus the live root's calls not yet counted (`SessionRecord.entryToolCalls`). So during a
+pass the per-agent figures may sum to more than the displayed total; a ruling that accumulates per call would close that
+gap as well. Whether the run-level agent's figure is its own at all, or REQ-MONITOR-101's aggregate run count, is OQ-159.
+
 **OQ-117 — What is an iteration told of a task it takes up that is not the run's own, and with what?** *(REQ-CHAT-040, whose queued prompt becomes a task "carrying the prompt text as its content"; REQ-ORCH-004 and REQ-ORCH-135, whose task a resumed session carries on and "stays anchored"; REQ-ORCH-072, which gives the root execution record "the task's execution payload"; REQ-CHAT-090 and REQ-CHAT-091, which let the user rename a task; and `PD-ORCH-005` clause 17 with OQ-102, whose message is told in words of its own. Raised 2026-09-29 by the repair of [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md) under [R-067](../product/requests.md#r-067). Open.)*
 
 No requirement says what an iteration's first message holds when the task it selected is not the one the launch
@@ -5703,8 +5711,10 @@ root publishes under". The repair of
 [`the-run-level-agent-is-known-by-its-entry-persona-alone.md`](../defects/fixed/the-run-level-agent-is-known-by-its-entry-persona-alone.md).
 A plan cycle's root, which no iteration row records, is named by its publishes; one that published nothing is named only
 while its run is live
-([`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`](../defects/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md),
-open).* A superseded artifact is listed nowhere, as the Library's table lists it nowhere. The ready flag is stated in
+([`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`](../defects/fixed/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md),
+open). Reported back 2026-10-01, at the repair's first execution (acceptance A22, R-067): no longer true — every plan
+cycle's root is recorded when its turn starts (`plan_roots`, store v30) and named from there, whether or not it
+published, so what such a root read is the run-level agent's received link at the gate and after it.* A superseded artifact is listed nowhere, as the Library's table lists it nowhere. The ready flag is stated in
 words: "ready" (REQ-LIBRARY-136), else the status.
 
 **What a ruling decides.** Whether a link should open the Library (as built in the main window), an inspector in place
@@ -7868,6 +7878,40 @@ name is its persona and no ledger names it
 
 **What a ruling decides.** Whether a root's names count as in use under every parent, or the surfaces must tell a child
 from a root by an identity the rows carry; with the second, whether rows recorded before keep the name-only rule.
+
+**OQ-159 — Is the run-level agent's tool-call count its own, or the run's aggregate?** *(REQ-MONITOR-101, "Each agent node
+exposes its live tool-call count and the set of tool names it has called; the synthetic root node exposes the aggregate run
+count and the aggregate called-tool history"; REQ-MONITOR-044, under which each agent as presented carries its tool-call
+count; REQ-MONITOR-052's meta line, `{state} · {elapsed or em-dash} · {N} tool calls`; REQ-MONITOR-043 and REQ-MONITOR-089,
+which call the run's own agent its synthetic root, as ADR-0012 does; REQ-MONITOR-086 and REQ-MONITOR-060; REQ-MONITOR-102
+with REQ-ORCH-097's cadence (OQ-116). Raised 2026-10-01 under [R-067](../product/requests.md#r-067) by the verification of
+the repair of
+[`the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`](../defects/fixed/the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md),
+acceptance finding A20. Raised on its branch as OQ-158 and renumbered OQ-159 at the merge, origin/main's OQ-158 keeping its number. Open.)*
+
+The inspector, the Mission view and the persona windows present the run's own agent as the run-level agent
+(`runLevelAgent`, `packages/ui/src/agents.ts`), and the record calls that agent the run's synthetic root (REQ-MONITOR-043,
+REQ-MONITOR-089, ADR-0012). REQ-MONITOR-101 gives that node "the aggregate run count and the aggregate called-tool history";
+REQ-MONITOR-044 and REQ-MONITOR-052 give every agent as presented its own tool-call count on its meta line, and do not
+except the run-level agent. The two part whenever a child has called a tool: the aggregate is the session's total, the
+agent's own count is the roots' share of it. The build already takes both readings, one per figure: the run-level agent's
+compression count is the run-wide sum ("what the synthetic root shows", REQ-MONITOR-086), while its tool chips and called
+history are the root's own (`SessionRecord.entryTools`, REQ-MONITOR-060) and so is its tool-call count. Neither reading
+would have avoided A20: the session's total also read 0 while the root's turn ran, since a root's calls join it only when
+the turn returns (REQ-ORCH-097, OQ-116).
+
+**What the build proceeds under.** The agent's own count, as before the repair: the run-level agent's `{N} tool calls` is
+the roots' share of the persisted total — the total less every child's persisted `children.tool_calls` — plus the live
+root's calls not yet counted (`SessionRecord.entryToolCalls`, `entryToolCallsOf` in `packages/engine/src/sessions.ts`,
+`Run.entryUncountedToolCalls`). The run's aggregate count is the displayed total of REQ-MONITOR-102
+(`SessionRecord.toolCalls.total`), and the run-level agent's called history stays the root's own. Nothing about either
+figure changes until a ruling.
+
+**What a ruling decides.** Whether the run-level agent is REQ-MONITOR-101's synthetic root node, so its tool-call count
+and called-tool history are the run's aggregate — and then whether that aggregate is the persisted total of REQ-MONITOR-102,
+with its lag during a pass, or the persisted total plus every live agent's calls not yet counted; or whether it is an
+agent as REQ-MONITOR-044 presents one, carrying its own count and history, and REQ-MONITOR-101's synthetic root node is
+some other surface — the run header, or the run-wide totals of REQ-MONITOR-098.
 
 **OQ-160 — Does the sidebar's "Last run failed: {message}" carry the failed task's whole output, or a bounded form of it?**
 *(REQ-WORKSPACE-113, "a recorded failure appends 'Last run failed: {message}' to the hint"; REQ-WORKSPACE-093, which fixes a

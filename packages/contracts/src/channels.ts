@@ -340,8 +340,9 @@ export const SessionRecordSchema = z.object({
   artifacts: z.array(SessionArtifactLinkSchema),
   /**
    * REQ-MONITOR-071, REQ-CHAT-069, REQ-MONITOR-053 and REQ-MONITOR-044 with PD-ORCH-005 clause 4 (OQ-97) and REQ-LIBRARY-093:
-   * the entry role's root agents of this session — each iteration's, each root no iteration records that published (a plan
-   * cycle's, OQ-106), and the live run's — each pair once, in that order. The run-level agent owns the rows and the artifacts
+   * the entry role's root agents of this session — each iteration's, each plan cycle's (recorded when it starts, store v30),
+   * each root no row records that published (a plan cycle's from before v30, OQ-106), and the live run's — each pair once, in
+   * that order. The run-level agent owns the rows and the artifacts
    * they name, not only those of the entry persona a surface knows it by: a root resumed as the entry role keeps its own
    * persona's name on its rows, and a root's publishes and reads record its canonical name.
    */
@@ -351,6 +352,15 @@ export const SessionRecordSchema = z.object({
    * no model event or token while its watch finds it stalled, else null. Null for a record read with no live run.
    */
   entryStalledSeconds: z.number().int().nonnegative().nullable(),
+  /**
+   * REQ-MONITOR-044/052 (the repair of `the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`, acceptance
+   * A20, R-067): the run-level agent's tool-call count — the roots' calls the session's total holds (the total less every
+   * child's persisted count), plus the live root's calls that have not joined it yet, since a root's calls join the total
+   * only when its turn returns (REQ-ORCH-097's cadence, OQ-116). Null for a record read with no projection; a surface then
+   * derives it from the total. The agent's own count, not REQ-MONITOR-101's aggregate run count for the synthetic root:
+   * which of the two the run-level agent shows is OQ-159's, and this figure stays the agent's own until it is ruled.
+   */
+  entryToolCalls: z.number().int().nonnegative().nullable(),
 });
 export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 

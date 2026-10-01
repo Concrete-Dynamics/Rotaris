@@ -855,6 +855,10 @@
 .todo-task--abandoned .todo-task__glyph { color: var(--rt-danger-300); }
 .todo-task__text, .todo-phase__add { min-width: 0; border: 0; background: transparent; color: var(--rt-text); font: inherit; font-size: var(--rt-text-xs, 12px); text-align: left; cursor: pointer; padding: 3px 4px; border-radius: var(--rt-radius-sm, 4px); }
 .todo-task__text:hover, .todo-phase__add:hover { background: var(--rt-hover); }
+/* REQ-SHELL-022, "no control requires horizontal scrolling to reach": a task's text is the rename control, and a token
+   in it with no break opportunity (a path, a hash, a quoted command's `xxxx…`) ran past the plan column and gave the
+   sidebar a sideways scroll. Broken inside the column, as the Project section's hint above is. */
+.todo-task__text { overflow-wrap: anywhere; }
 .todo-task--done .todo-task__text, .todo-task--abandoned .todo-task__text { text-decoration: line-through; color: var(--rt-text-tertiary); }
 .todo-task__remove { width: 20px; height: 20px; padding: 0; border: 0; background: transparent; color: var(--rt-text-tertiary); cursor: pointer; opacity: 0; }
 .todo-task:hover .todo-task__remove, .todo-task:focus-within .todo-task__remove { opacity: 1; }

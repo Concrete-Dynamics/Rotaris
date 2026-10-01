@@ -437,7 +437,7 @@ tasks. The window reads it twice. A background run neither withdraws the setup p
 2026-09-29, R-062). When the last main window holding a workspace closes — a switch's outgoing window, a replacement
 discarded after a veto, one of several windows — `MainWindows` says so (`workspaceClosed`) and main calls
 `initialization.close`: the run under way is cancelled (`mcp.setup {action: cancel}`, so the run host ends what the step
-launched; one that no window can address or that the run host refuses is logged as not delivered), its recordings are refused, nothing of it is published or bannered, and the entry is dropped, so a return to
+launched; one that no window can address or that the run host refuses is logged as not delivered), its recordings are refused, nothing of it is published or bannered — nor of a resolution still under way for it, whose failure is said in the log only (2026-10-01) — and the entry is dropped, so a return to
 the root is a new open with its own automatic resolution (REQ-WORKSPACE-013/092/102/109, OQ-141 for a close that is
 not a switch's; 2026-09-30, R-067). The run
 host holds one setup and pushes `mcp.setupStatus` with no workspace on it, so the coordinator runs its setups one at a
@@ -445,7 +445,10 @@ time (`setupTurn`): a run's `code-intelligence-setup` starts once the setup befo
 outgoing one, still ending — the one step sink is cleared only by the follow that set it, and a run's abort reaches the
 run host's one cancel only while that run's own setup is live, never once the next run's has started behind it — and
 an abort that lands while the setup's start request is in flight is sent as soon as the start answers (REQ-WORKSPACE-084/092/109;
-2026-09-30, R-067). Main is the coordinator because REQ-WORKSPACE-085 gives the marker **one writer** and that file
+2026-09-30, R-067). A follow whose finished status can never come still ends, as a retryable failure that releases the
+next setup's turn: main tells the coordinator when the run host exits (`onRunHostExit`, from the run host's `exit`; it is
+never forked again), and a follow with no finished status 2235 s after it began — every stage budget plus 5 s each —
+ends on its own (`SETUP_FOLLOW_BOUND_MS`; REQ-WORKSPACE-084/091/092/109, OQ-169; 2026-10-01). Main is the coordinator because REQ-WORKSPACE-085 gives the marker **one writer** and that file
 is the workspace service's (`config.setField`, Tier A) while the one shipped task's work is the run host's
 (`mcp.setup`) — and the matrix gives neither of those two an edge to the other. The run host gained one event,
 `mcp.setupStatus`, pushed on every change of the setup's status: the task follows a live setup through it rather

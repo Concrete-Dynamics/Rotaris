@@ -87,7 +87,8 @@ export interface CrashRecord {
  * - a plan cycle's root the session still records as under way (REQ-ORCH-153; a plan cycle has no iteration row) has its
  *   open calls answered the same way and the calls its record holds join the session total (`recordPlanRootCrash`);
  * - every call's row in the `tool_calls` ring still `running` settles `failed` with the crash's statement, as its
- *   transcript row does (`settleDeadToolCalls`, REQ-SESSION-129 with ADR-0024);
+ *   transcript row does (`settleDeadToolCalls`, REQ-SESSION-129 with ADR-0024) — unless `ownCallsMayRun`: a continue
+ *   after a run of this process that parked without closing its tool ports, whose call may still be under way;
  * - every approval still listed as pending is withdrawn by the crash, never denied (clause 9);
  * - every background terminal session still recorded as running, and not held by this process, is recorded as ended by
  *   the crash (clause 10: a crash ends them).
@@ -102,7 +103,7 @@ export interface CrashRecord {
  * leaves unfinished. Loading a session to view it never calls it (clause 8). `artifacts` materialises the reports of the
  * agents an accepted cancel ends (REQ-LIBRARY-092); without it they are stored on their rows only.
  */
-export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, liveTerminals: ReadonlySet<string>, warn: (m: string) => void, artifacts?: ArtifactStore): CrashRecord {
+export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, liveTerminals: ReadonlySet<string>, warn: (m: string) => void, artifacts?: ArtifactStore, ownCallsMayRun = false): CrashRecord {
   let iteration: number | null = null;
   let paused = 0;
   let cancelled = 0;
@@ -130,7 +131,7 @@ export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: Ses
     writer.appendTimeline('iteration_paused', 'rotaris', `Iteration ${open.iteration} was left open by ${interruptionPhrase('crash')}; its unfinished agents are paused and resume when the session is continued.`, { iteration: open.iteration, interruption: 'crash', paused_agents: paused });
   }
   recordPlanRootCrash(dal, writer, sessionId, warn);
-  settleDeadToolCalls(dal, writer, sessionId, warn);
+  if (!ownCallsMayRun) settleDeadToolCalls(dal, writer, sessionId, warn);
   const withdrawn = withdrawStoredApprovals(dal, writer, sessionId);
   let terminals = 0;
   for (const t of dal.agentTerminalsOf(sessionId)) {
@@ -228,9 +229,13 @@ function recordPlanRootCrash(dal: StoreDal, writer: SessionWriter, sessionId: Se
 /**
  * REQ-SESSION-129 with ADR-0024 (the repair of `a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md`): a call
  * has two records, its transcript row and its row in the `tool_calls` ring. An orderly end settles every ring row still open
- * when the run's tool ports close (the run host's gate sink); a crash closes none of them. Every ring row still `running`
- * when a crash is recorded is a dead run's — a repair runs only when no process holds the session, and a continue's run is
- * not built yet, while a run of this process closed its ports when it ended — so each settles `failed` with the statement
+ * when the run's tool ports close (the run host's gate sink); a crash closes none of them. A ring row still `running` when a
+ * crash is recorded is a dead run's when no run of this process may still hold it: a repair runs only when no process holds
+ * the session, and a continue's own run is not built yet. A run of this process closes its ports only at its teardown
+ * (`Run.closedItsPorts`); one that parked — the message-limit pause, the plan gate — closed none, and a call of its that
+ * ignored its abort may still be under way, its real settle still to come, so the caller passes `ownCallsMayRun` and the
+ * ring is left as it is (corrected 2026-10-01: this read "a run of this process closed its ports when it ended", which
+ * holds only for a teardown). Every row this settles settles `failed` with the statement
  * that the crash interrupted it and it was not re-run, as its transcript row does (`answerOpenCalls`), with REQ-EVENTS-057's
  * `tool.finish`. The ring row recorded no output, so the statement carries none; no process observed the call's end, so its
  * duration is not known (null). Every agent's, the crash record's paused agents' and the stale-child settle's alike: a

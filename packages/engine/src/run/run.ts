@@ -396,6 +396,13 @@ export class Run {
   }
   /** Every tool port this run created — the root's and each child's — so an answer, a cancel or a mode change reaches all of them (REQ-TOOLS-030). */
   private readonly ports = new Set<ToolPort>();
+  private portsClosed = false;
+  /**
+   * REQ-MONITOR-105 with ADR-0024: whether this run closed its tool ports (`closePorts`, its teardown). A run that parked —
+   * at the message-limit pause or the plan gate — closed none, so a call of its that ignored its abort may still be under
+   * way, and its `tool_calls` ring row `running` is that call's, not a dead run's (the crash record's ring settle).
+   */
+  get closedItsPorts(): boolean { return this.portsClosed; }
   /** Live-run finding K1: the port the current iteration's root dispatches through — the one resolution `entryTools` reports. */
   private rootPort: ToolPort | null = null;
   /** REQ-HOOKS-087: the session's hook attachment, removed at the end of the run. */
@@ -1519,6 +1526,7 @@ export class Run {
    * caller handed it — its open calls settled with what cut them off: the rest the run came to, or none named.
    */
   private closePorts(): void {
+    this.portsClosed = true;
     const cutOff = interruptedResult(this.restCause, true, '');
     for (const p of this.ports) {
       if (p === this.deps.tools) continue;

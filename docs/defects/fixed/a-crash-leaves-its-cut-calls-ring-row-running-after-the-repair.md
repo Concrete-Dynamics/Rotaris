@@ -51,15 +51,21 @@ falsified reason kept beside the correction.
 still `running` in the session, through the ring's one settling update (`SessionWriter.settleToolCall`, with its
 `tool.finish`): `failed`, `is_error`, the result and the error the statement its transcript row is given (interrupted by a
 crash before it completed, not re-run). Every such row is a dead run's — a repair runs only when no process holds the
-session, a continue records the crash before its run is built, and a run of this process closed its ports when it ended —
-so the rows of the paused agents, of a plan cycle's root and of an orphan the stale-child settle will cancel settle alike.
+session, and a continue records the crash before its run is built — so the rows of the paused agents, of a plan cycle's
+root and of an orphan the stale-child settle will cancel settle alike. The one exception is a continue after a run of this
+process that parked without closing its tool ports (the message-limit pause, the plan gate; `Run.closedItsPorts` is false):
+a row still `running` then may be a call of that run that ignored its abort and is still under way, so the continue passes
+`ownCallsMayRun` and the ring is left to that call's own settle. (This read "and a run of this process closed its ports when
+it ended", which holds only for a run that ended at its teardown; corrected at review on 2026-10-01.)
 No process observed the call's end, so its duration is NULL (`ToolCallSettle.elapsed_ms` admits null for this case alone),
 never invented. The ring's settle-once trigger is unchanged; a second recording finds none running.
 
 Pinned by: `packages/engine/src/run/crash.test.ts` — "REQ-SESSION-129 with ADR-0024 (the repair of
 a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md): the ring row of every call a dead run left running settles
 `failed` with the crash's statement, once; a settled one keeps what it returned" — which fails with the settle removed (both
-rows `running`) and passes with it.
+rows `running`) and passes with it — and "a continue after a run of this process parked at the plan gate leaves a ring row
+its call may still hold `running`", which fails with the continue's `ownCallsMayRun` forced false (the row settles `failed`)
+and passes with it.
 
 **Shown on the pack's store.** The same harness over a fresh copy of the pack, on the repaired branch: ordinal 294 `running`
 before the repair, `failed` with the statement and a NULL duration after, no ring row left `running`. With the one call

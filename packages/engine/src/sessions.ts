@@ -1375,7 +1375,8 @@ export class Sessions {
     const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, info: (m: string) => { s.log?.info(m); this.deps.log?.(m); }, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     s.tools = null;
     // PD-ORCH-005 clause 3: what a crash left is recorded before the settle, which leaves every `paused` agent as it is.
-    this.recordCrashOf(s.dal, s.writer, sessionId, warn, artifacts);
+    // A run of this process that parked closed no tool port: a ring row still `running` may be its call still under way.
+    this.recordCrashOf(s.dal, s.writer, sessionId, warn, artifacts, s.run !== null && !s.run.closedItsPorts);
     const stale = settleStaleChildren(s.dal, s.writer, sessionId, warn, artifacts);
     if (stale > 0) warn(`${stale} child record(s) from a previous run were settled cancelled before the first continuation iteration (REQ-ORCH-053)`);
     const open = s.dal.openIterationOf(sessionId);
@@ -2230,9 +2231,9 @@ export class Sessions {
    * PD-ORCH-005 clause 3: a crash is recorded when the session is next repaired or continued (`run/crash.ts`). The
    * background sessions this process still holds are alive, so the crash ended none of them.
    */
-  private recordCrashOf(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, warn: (m: string) => void, artifacts: ArtifactStore): void {
+  private recordCrashOf(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, warn: (m: string) => void, artifacts: ArtifactStore, ownCallsMayRun = false): void {
     const live = new Set((this.deps.terminals?.(sessionId).list() ?? []).filter((t) => t.status === 'running').map((t) => t.id));
-    const r = recordCrash(dal, writer, sessionId, live, warn, artifacts);
+    const r = recordCrash(dal, writer, sessionId, live, warn, artifacts, ownCallsMayRun);
     // OQ-103 (R-067): an iteration whose explicit cancel was accepted is closed as that cancel, its agents never paused.
     const cancelledIteration = r.iteration !== null && dal.getIteration(sessionId, r.iteration)?.state === 'closed';
     if (cancelledIteration) warn(`iteration ${r.iteration} of ${sessionId} was closed cancelled: its run's cancel had been accepted before the process ended; ${r.cancelled} agent(s) recorded cancelled (PD-ORCH-005 clause 3)`);

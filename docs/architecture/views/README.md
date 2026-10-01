@@ -49,7 +49,8 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 every open `tool_calls` row when the run's ports close; a crash closes none, so after the crash record settled a call's
 transcript row its ring row stayed `running` for good. `recordCrash` now settles every ring row still `running`
 (`settleDeadToolCalls`) through `SessionWriter.settleToolCall`, `failed` with the crash's statement and a NULL duration
-(`ToolCallSettle.elapsed_ms` admits null for this case). This repairs
+(`ToolCallSettle.elapsed_ms` admits null for this case) — except at a continue after a run of this process that parked
+without closing its tool ports (`Run.closedItsPorts`), whose call may still be under way. This repairs
 `a-crash-leaves-its-cut-calls-ring-row-running-after-the-repair.md` (acceptance A30), and corrects ADR-0024's first-execution
 claim that such a row "needs no repair" in place. The **runtime view**'s §2 crash paragraph and its §7 rings row say so. No
 package, edge, process, message kind, channel, command or column changed.

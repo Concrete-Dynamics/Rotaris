@@ -832,10 +832,14 @@ sink, `close`); a crash closes none, and no other path settled one.
 with its `tool.finish` in the same transaction (REQ-EVENTS-072) — as `failed`, `is_error`, with the statement its transcript
 row is given (the call was interrupted by a crash before it completed and was not re-run). Three readings:
 
-- **Every running row is a dead run's.** The crash is recorded at a repair, which runs only when no process holds the
-  session, and at a continue before its run is built; a run of this process closed its ports when it ended. So no row is
+- **Every running row is a dead run's — unless a parked run of this process may still hold it.** The crash is recorded at
+  a repair, which runs only when no process holds the session, and at a continue before its run is built. So no row is
   singled out by agent: the paused agents', a plan cycle's root's and an orphan the stale-child settle will cancel all
-  settle alike.
+  settle alike. A run of this process closes its tool ports only at its teardown; one that parked — the message-limit
+  pause, the plan gate — closed none (`Run.closedItsPorts` false), and a call of its that ignored its abort may still be
+  under way. A continue after such a run passes `ownCallsMayRun` and leaves the ring to that call's own settle. (This
+  reading first said "a run of this process closed its ports when it ended", which holds only for a teardown; the review
+  of 2026-10-01 found the two parks that close none, and it was corrected here.)
 - **No duration is invented.** No process observed the call's end, so `elapsed_ms` is NULL on the row, its entry and its
   `tool.finish` (`ToolCallSettle.elapsed_ms` admits null for this case alone). Every reader of the column already treats
   NULL as unknown (the export's slowest list skips it, the autopsy sums it as nothing).

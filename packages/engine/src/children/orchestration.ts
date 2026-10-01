@@ -324,7 +324,7 @@ export class IterationChildren implements DelegationOps {
     }
     const r = this.ledger.spawn({
       parentId, parentDepth, persona: req.persona, taskName: req.taskName, task: req.task, dependsOn: req.dependsOn, inheritedContext: req.inheritedContext,
-      category: req.category, background: req.runInBackground, modelKey: childModelKey(persona, this.deps), grantedTools: persona?.tools ?? [],
+      category: req.category, background: req.runInBackground, modelKey: childModelKey(persona, this.deps),
       ...(continuationOf !== '' ? { continuationOf } : {}),
       ...(scope.patterns.length > 0 ? { writeScope: scope.patterns } : {}),
       ...(req.suppressAutoContext === true ? { suppressAutoContext: true } : {}),
@@ -1065,6 +1065,21 @@ export class IterationChildren implements DelegationOps {
     const compression = deps.compressionFor?.({ model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking }, () => todoLinesFromStored(this.ledger.get(row.task_id)?.todo ?? null));
     // REQ-TOOLS-006 (4), OQ-145: the delegating agent's persona, whose `tool_restrictions` may name this child's.
     const tools = deps.toolsFor(row.persona, row.canonical_name, this, row.task_id, row.depth, undefined, this.parentPersonaOf(row.parent_id));
+    /*
+     * REQ-MCP-065 with REQ-TOOLS-006: the grant this execution's port puts in force — what the controls left of the persona's
+     * declared tools and of its MCP surface — recorded on the child's row once the port is ready, before its first model
+     * step (the turn awaits the same readiness, so nothing is resolved twice). A resumed or followed-up child builds a new
+     * port, and its grant is recorded again. Until 2026-10-01 the spawn recorded the declared set instead.
+     */
+    let grantRecorded = false;
+    const recordGrant = async (): Promise<void> => {
+      if (grantRecorded || !tools) return;
+      grantRecorded = true;
+      // A readiness that fails records nothing here; the turn awaits the same promise and meets the failure as it always did.
+      if (tools.ready) { try { await tools.ready(); } catch { return; } }
+      const grant = tools.grant?.() ?? null;
+      if (grant !== null && !this.detached) this.ledger.recordGrant(row.task_id, grant);
+    };
     const dispatched = new Map<string, string>();
     // REQ-ORCH-047 / REQ-TOOLS-154: the prior-agent-context block, exactly once, ahead of everything.
     const depRows = (): ChildRow[] => (JSON.parse(row.depends_on) as string[]).map((d) => this.ledger.get(d)).filter((d): d is ChildRow => d !== undefined);
@@ -1133,12 +1148,13 @@ export class IterationChildren implements DelegationOps {
         backstop.handle = deps.clocks.timers.after(CHILD_LANDING_GRACE, () => { controller.abort(); });
       });
       let firstCall = true;
-      const turn = (task: string | null, history: readonly ChatMessage[]) => {
+      const turn = async (task: string | null, history: readonly ChatMessage[]) => {
         const wasFirst = firstCall; firstCall = false;
         // REQ-NOTIFY-112: the run hands the child something to answer — its payload, its record, its children's reports, a
         // re-prompt or the corrective message — so the silence it could be blamed for starts now. A wait on its own children
         // before this asked it for no output.
         stallWatch.activity();
+        await recordGrant();
         return runTurn({
         writer: deps.writer, owner: deps.owner, backend: deps.backend, tools, clocks: deps.clocks, persona: row.persona, agentName: row.canonical_name,
         // REQ-WORKSPACE-060 (ADR-0063): the session's context units follow the role's instructions and its playbook,

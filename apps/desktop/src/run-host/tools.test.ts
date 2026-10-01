@@ -605,6 +605,50 @@ ${coder('    tool_restrictions:\n      coding-agent: [read_file, grep, terminal]
     expect(child.resolvedTools?.()).toEqual(['read_file']);
   });
 
+  /**
+   * REQ-MCP-065 with REQ-TOOLS-006 (the repair of `a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`):
+   * the grant a child's row records is what its port reports once ready — the native set the controls left and, per carried
+   * server, the tools that joined its callable map — never the persona's declared list.
+   */
+  it('REQ-MCP-065 / REQ-TOOLS-006: the port reports the grant its controls left — coordinator_only and tool_restrictions removed, an unnamed server tool not granted', async () => {
+    const serverTool = simpleExecutor('lookup', 'a server tool', anySchema, async () => ({ text: 'ok', isError: false }));
+    const personas = `  coding-agent:
+    name: coding-agent
+    model: selected
+    coordinator_only: true
+    tools: [read_file, grep, write_file, terminal, todo, delegate]
+    tool_restrictions:
+      coding-agent: [read_file, write_file, terminal, delegate]
+`;
+    const child = port(personas, 'coding-agent', { parentPersona: 'orchestrator', parentId: 'bg_0a1b2c3d', depth: 1, delegation: {} as NonNullable<ToolPortContext['delegation']> }, [serverTool]);
+    expect(child.grant?.()).toBeNull();
+    await child.ready?.();
+    const grant = child.grant?.();
+    expect(grant?.tools).toEqual(child.resolvedTools?.());
+    expect(grant?.tools).toContain('read_file');
+    expect(grant?.tools).toContain('delegate');
+    // coordinator_only's two and tool_restrictions' two are not granted.
+    for (const removed of ['write_file', 'terminal', 'grep', 'todo']) expect(grant?.tools).not.toContain(removed);
+    // The server is carried and connected, and lists no tool: the allowed-tool list does not name `lookup`.
+    expect(grant?.mcp).toEqual({ granted: { srv: [] }, servers: [{ name: 'srv', transport: 'stdio', origin: 'workspace', fate: 'connected' }] });
+  });
+
+  it('REQ-MCP-065 / REQ-MCP-114: a read_only persona\'s carried server is listed with no granted tool; an unrestricted one lists what it can call', async () => {
+    const serverTool = simpleExecutor('lookup', 'a server tool', anySchema, async () => ({ text: 'ok', isError: false }));
+    const reader = port(`  coding-agent:
+    name: coding-agent
+    model: selected
+    read_only: true
+    tools: [read_file, grep, write_file]
+`, 'coding-agent', { parentId: 'bg_0a1b2c3d', depth: 1 }, [serverTool]);
+    await reader.ready?.();
+    expect(reader.grant?.()).toEqual({ tools: ['read_file', 'grep'], mcp: { granted: { srv: [] }, servers: [{ name: 'srv', transport: 'stdio', origin: 'workspace', fate: 'connected' }] } });
+
+    const open = port(coder(''), 'coding-agent', { parentId: 'bg_0a1b2c3e', depth: 1 }, [serverTool]);
+    await open.ready?.();
+    expect(open.grant?.()).toEqual({ tools: ['read_file', 'grep', 'write_file', 'haet_edit'], mcp: { granted: { srv: ['lookup'] }, servers: [{ name: 'srv', transport: 'stdio', origin: 'workspace', fate: 'connected' }] } });
+  });
+
   it('OQ-145 / REQ-MCP-062: an MCP tool the list does not name is withheld from a restricted agent\'s listing and its prompt section, as a withholding rule withholds a tool outside the registry (ADR-0016)', async () => {
     const serverTool = simpleExecutor('lookup', 'a server tool', anySchema, async () => ({ text: 'ok', isError: false }));
     const restricted = port(coder('    tool_restrictions:\n      coding-agent: [read_file]\n'), 'coding-agent', {}, [serverTool]);
@@ -618,6 +662,7 @@ ${coder('    tool_restrictions:\n      coding-agent: [read_file, grep, terminal]
     expect(named.specs().map((s) => s.name)).toEqual(['read_file', 'lookup']);
     expect(named.promptSection?.()).toBe('## MCP servers\n\n- **`srv`**\n  - `lookup` — a server tool');
   });
+
 });
 
 /**

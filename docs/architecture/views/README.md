@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A child's row records the grant its port put in force, not its persona's declared tools (REQ-MCP-065, REQ-TOOLS-006,
+REQ-MCP-114).** The spawn wrote `children.granted_tools` from the persona's declared tools and `granted_mcp` from its MCP
+surface before any control, so a tool `coordinator_only`, `read_only`, `tool_restrictions`, the `restricted` preset or the
+plan gate removed was recorded as granted. The spawn now writes neither, and the child's execution records the port's
+`ToolPort.grant` once the port is ready (`ChildLedger.recordGrant` → `SessionWriter.recordChildGrant`, a `save`
+republished; `McpHost.evidenceFor` and `Persona.mcpEvidence` removed for the run host's `grantEvidence`). This repairs
+`a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`; the **runtime view**'s MCP surface and its
+`children` row say so. No package, edge, process, message kind, channel, command or store column changed.
+
 **A row that grows is measured at the commit, before it is painted (PD-CHAT-003, REQ-CHAT-058, ADR-0045, R-067).** A row whose
 content changed was placed by the height its identity drew last until the observer's delivery rendered a frame later, and a
 row that grew was painted through the row beneath it. The pane now reads every bound slot with no measurement of its present

@@ -42,12 +42,6 @@ export interface Persona {
    */
   readonly skipAutoSiblingContext?: boolean | undefined;
   /**
-   * REQ-MCP-065 / REQ-MCP-114 (Part S): the MCP grant evidence recorded on a child's row at spawn — the granted tools per
-   * server and every carried server's fate. Supplied by the run host's resolver from the same memoised resolution the
-   * tool port reads; absent for the built-in table, which carries no MCP surface.
-   */
-  readonly mcpEvidence?: (() => McpGrantEvidence) | undefined;
-  /**
    * REQ-CONFIG-103 / REQ-TOOLS-006 (4): the role's `tool_restrictions` — role names (REQ-CONFIG-062) mapped to allowed-tool
    * lists. Absent for the built-in table, which restricts nothing. Read through `toolRestrictionsFor`.
    */
@@ -78,6 +72,18 @@ export interface McpGrantEvidence {
   readonly servers: readonly { readonly name: string; readonly transport: string; readonly origin: string; readonly fate: 'connected' | 'dropped'; readonly reason?: string }[];
 }
 export const EMPTY_MCP_EVIDENCE: McpGrantEvidence = Object.freeze({ granted: {}, servers: [] });
+
+/**
+ * REQ-MCP-065 with REQ-TOOLS-006: the grant an agent's tool port put in force — the native tools its one resolution kept
+ * after the controls, and its MCP evidence: the tools each carried server grants it after `read_only`, the `restricted`
+ * preset, `tool_restrictions` and the plan gate, and every carried server's fate (REQ-MCP-114). A child's row records it
+ * once its port is ready (`ToolPort.grant`). Until 2026-10-01 the row recorded, at spawn, the persona's declared tools and
+ * its MCP surface before any control (`docs/defects/fixed/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
+ */
+export interface AgentGrant {
+  readonly tools: readonly string[];
+  readonly mcp: McpGrantEvidence;
+}
 
 /** ADR-0036: the configured `personas:` overlaid on the built-in table, resolved per run by the root. */
 export interface PersonaResolver {

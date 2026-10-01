@@ -589,6 +589,8 @@ export class StoreDal {
       setChildObserved: db.prepare('UPDATE children SET observed = 1 WHERE session_id = ? AND task_id = ?'),
       setChildContextInjected: db.prepare('UPDATE children SET context_injected = 1 WHERE session_id = ? AND task_id = ?'),
       setChildTodo: db.prepare('UPDATE children SET todo = ?, tool_calls = ? WHERE session_id = ? AND task_id = ?'),
+      // REQ-MCP-065 / REQ-TOOLS-006: the grant the child's tool port put in force, written once the port is ready.
+      setChildGrant: db.prepare('UPDATE children SET granted_tools = ?, granted_mcp = ? WHERE session_id = ? AND task_id = ?'),
       // PD-ORCH-005: the two facts a rest records beside the move to `paused`, and their clearing when the child resumes.
       setChildRest: db.prepare('UPDATE children SET interruption = ?, resume_state = ? WHERE session_id = ? AND task_id = ?'),
       pausedChildrenOfIteration: db.prepare("SELECT * FROM children WHERE session_id = ? AND iteration = ? AND state = 'paused' ORDER BY spawned_at, rowid"),
@@ -756,6 +758,10 @@ export class StoreDal {
   }
   setChildTodo(id: SessionId, taskId: string, todo: string | null, toolCalls: number): void {
     this.stmts['setChildTodo']!.run(todo, toolCalls, id, taskId);
+  }
+  /** REQ-MCP-065: the child's grant in force — its native tools as a JSON array, its MCP evidence as a JSON object. */
+  setChildGrant(id: SessionId, taskId: string, grantedTools: string, grantedMcp: string): void {
+    this.stmts['setChildGrant']!.run(grantedTools, grantedMcp, id, taskId);
   }
   /** PD-ORCH-005: the interruption and the resume state a rest records, or both cleared (null) when the child resumes. */
   setChildRest(id: SessionId, taskId: string, interruption: string | null, resumeState: string | null): void {

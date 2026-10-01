@@ -11,7 +11,10 @@
  *   2. call        — `echo` end to end (tool.start before tool.finish, the result text, the row succeeded); `slow` beyond
  *                    `request_timeout: 2` fails naming the server and the connection serves the following `echo` (003/069).
  *   3. one process — two children calling alpha concurrently share one connection and one fixture process; a third
- *                    child after they end uses the same pid (067/068).
+ *                    child after they end uses the same pid (067/068). The children's persona carries a `tool_restrictions`
+ *                    list naming `read_file` and `echo`, and each child's row records that grant — `read_file` alone of its
+ *                    native tools and `echo` alone under alpha — not its declared tools (REQ-MCP-065 with REQ-TOOLS-006;
+ *                    the row recorded the declared set until 2026-10-01).
  *   4. narrowing   — `--rename-after` withdraws `extra` mid-run; calling it is refused; the prompt is not re-rendered.
  *   5. crash       — `--crash-after` fails the call in flight, one warning issue, the next call re-establishes (069).
  *   6. drop rules  — an unknown server, an unavailable command, `enabled: false`, and a session toggle off from the
@@ -349,11 +352,11 @@ const ROUND_OVER = `(() => {
 {
   const r = await launch('one-process', {
     ROTARIS_CAPTURE_PROMPT: 'fan out', ROTARIS_SCRIPT: 'delegate:coding-agent:one,delegate:coding-agent:two,wait:2500,delegate:coding-agent:three,wait:2500,answer', ROTARIS_CHILD_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '16000', ROTARIS_INTENT_SCRIPT: 'moderate_feature',
-  }, { files: { global: globalYaml({ personas: { 'coding-agent': '{ mcp_servers: [alpha] }' } }), workspace: WORKSPACE.replace('  delegation_strategy: single\n', '  delegation_strategy: orchestrator\n') } });
+  }, { files: { global: globalYaml({ personas: { 'coding-agent': '{ mcp_servers: [alpha], tool_restrictions: { coding-agent: [read_file, echo] } }' } }), workspace: WORKSPACE.replace('  delegation_strategy: single\n', '  delegation_strategy: orchestrator\n') } });
   const db = new Database(oneDatabase(), { readonly: true });
   const s = latestSession(db);
   const echo = toolRows(db, s.session_id, 'echo');
-  const children = db.prepare('SELECT canonical_name, state, granted_mcp FROM children WHERE session_id = ? ORDER BY spawned_at').all(s.session_id);
+  const children = db.prepare('SELECT canonical_name, state, granted_tools, granted_mcp FROM children WHERE session_id = ? ORDER BY spawned_at').all(s.session_id);
   db.close();
   const connected = lines(r.log, /mcp alpha: connected for the session \(pid (\d+)/).map((l) => /pid (\d+)/.exec(l)[1]);
   if (echo.length !== 3 || echo.some((e) => e.status !== 'ok')) throw new Error(`three children should each have called echo once: ${JSON.stringify(echo.map((e) => e.status))}`);
@@ -363,7 +366,14 @@ const ROUND_OVER = `(() => {
   if (launches.length !== 2) throw new Error(`alpha was launched ${launches.length} times (one discovery, one session expected)`);
   const evidence = JSON.parse(children[0].granted_mcp);
   if (!evidence.granted?.alpha?.includes('echo') || !evidence.servers?.some((x) => x.name === 'alpha' && x.fate === 'connected')) throw new Error(`the child's evidence is wrong: ${children[0].granted_mcp}`);
-  results.oneProcess = { children: children.map((c) => `${c.canonical_name}:${c.state}`), sessionPid: connected[0], launches: launches.length, evidence };
+  // REQ-MCP-065 with REQ-TOOLS-006: each row records the grant its port put in force — what the allowed-tool list left.
+  for (const c of children) {
+    const tools = JSON.parse(c.granted_tools);
+    const mcp = JSON.parse(c.granted_mcp);
+    if (JSON.stringify(tools) !== '["read_file"]') throw new Error(`${c.canonical_name}'s recorded native grant is not what tool_restrictions left: ${c.granted_tools}`);
+    if (JSON.stringify(mcp.granted) !== '{"alpha":["echo"]}') throw new Error(`${c.canonical_name}'s recorded MCP grant is not what tool_restrictions left: ${JSON.stringify(mcp.granted)}`);
+  }
+  results.oneProcess = { children: children.map((c) => `${c.canonical_name}:${c.state}`), sessionPid: connected[0], launches: launches.length, evidence, grantedTools: children.map((c) => JSON.parse(c.granted_tools)) };
 }
 
 // ---- 4. Narrowing ---------------------------------------------------------------------------------------------

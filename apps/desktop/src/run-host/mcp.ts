@@ -253,18 +253,6 @@ export class McpHost {
     return r.value;
   }
 
-  /** REQ-MCP-065 / REQ-MCP-114: the evidence written on the child's row at spawn, from the same memoised surface. */
-  evidenceFor(cfg: LoadedConfiguration, workspaceRoot: string, role: string): McpGrantEvidence {
-    const s = this.surfaceFor(cfg, workspaceRoot, role, null);
-    return {
-      granted: Object.fromEntries(s.active.map((a) => [a.name, a.tools.map((t) => t.callable)])),
-      servers: [
-        ...s.active.map((a) => ({ name: a.name, transport: a.entry.type, origin: a.origin, fate: 'connected' as const })),
-        ...s.dropped.map((d) => ({ name: d.name, transport: d.transport, origin: d.origin ?? '', fate: 'dropped' as const, reason: d.reason })),
-      ],
-    };
-  }
-
   // ---- the session's executors ----------------------------------------------------------------------------------
 
   connectionsFor(sessionId: string, workspaceRoot: string, ctx: McpSessionContext): SessionConnections {
@@ -478,4 +466,22 @@ export class McpHost {
     const all = [...this.sessions.keys()];
     await Promise.all([...all.map((id) => this.closeSession(id)), this.discovery.closeAll()]);
   }
+}
+
+/**
+ * REQ-MCP-065 / REQ-MCP-114: the MCP evidence of an agent's grant — every server its persona carries with its fate, and under
+ * each carried server the tools the agent can call there: `granted(server, callable)` answers which survived what the surface
+ * does not know of (the plan gate, a collision with a native name). Read from the surface its tool port resolved, after the
+ * controls, so the record lists what the agent could call. Until 2026-10-01 this was `McpHost.evidenceFor`, resolved for the
+ * spawn with no names reserved and before any control
+ * (`docs/defects/fixed/a-childs-recorded-grant-is-its-declared-tools-not-the-narrowed-set.md`).
+ */
+export function grantEvidence(surface: PersonaMcpSurface, granted: (server: string, callable: string) => boolean = () => true): McpGrantEvidence {
+  return {
+    granted: Object.fromEntries(surface.active.map((a) => [a.name, a.tools.map((t) => t.callable).filter((c) => granted(a.name, c))])),
+    servers: [
+      ...surface.active.map((a) => ({ name: a.name, transport: a.entry.type, origin: a.origin, fate: 'connected' as const })),
+      ...surface.dropped.map((d) => ({ name: d.name, transport: d.transport, origin: d.origin ?? '', fate: 'dropped' as const, reason: d.reason })),
+    ],
+  };
 }

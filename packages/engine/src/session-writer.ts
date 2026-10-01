@@ -5,6 +5,7 @@ import { FOLLOW_UP_STATE, interruptionPhrase, isLegalChildMove, isLegalFollowUp,
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus, summarise } from './run/stop-conditions.js';
 import { AgentActivity } from './children/activity.js';
+import type { AgentGrant } from './children/personas.js';
 
 /**
  * ADR-0008 — one ordered session writer per session, owning the session's
@@ -1006,6 +1007,24 @@ export class SessionWriter {
     if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
     this.trimIfOverflowed(at);
     return ok(dal.getChild(sessionId, row.task_id)!);
+  }
+
+  /**
+   * REQ-MCP-065 with REQ-TOOLS-006: the grant a child's tool port put in force once it was ready — the native tools the
+   * controls left and the MCP evidence after them — over whatever the row held. The spawn records none, since no port has
+   * resolved a grant yet. The whole-session update is republished, so the inspector and the persona window read it at once
+   * (REQ-MCP-100/114).
+   */
+  recordChildGrant(taskId: string, grant: AgentGrant): Result<void, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId } = this.deps;
+    try {
+      dal.setChildGrant(sessionId, taskId, JSON.stringify(grant.tools), JSON.stringify(grant.mcp));
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    this.deps.onCommitted({ kind: 'save' });
+    return ok(undefined);
   }
 
   /**

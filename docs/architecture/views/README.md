@@ -45,6 +45,23 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**The run host's shutdown ends the setup, and a step's termination reaches what it started (REQ-WORKSPACE-092/109,
+ADR-0035, ADR-0064).** On POSIX each code-intelligence setup step now leads a process group, and its ask and force-kill
+go to the group. The run host's `shutdown` ends a setup under way with a 2 s grace (`McpHost.endSetup`) before it exits.
+The initialization coordinator says a cancellation undelivered at a quit at `info`, reading `QuitState`. See the process
+view, `mcp.setup` and `initialization.*`, and the runtime view's paragraph on the application's end; the 2 s grace
+overrides REQ-MCP-099's 5 s at a close, the build's reading of OQ-172. This repairs
+`an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`. No package, edge,
+process, message kind, channel, command or store column changed.
+
+**Initialization is each window's own workspace's (REQ-WORKSPACE-013/102/105, PD-SHELL-001, ADR-0064).** The
+`initialization.*` commands answer for the sending window's workspace. The coordinator keys every method by root and
+publishes channel 12 to the windows holding that root (`MainWindows.holding`). Its setup port addresses the run host by
+the run's own workspace identifier, and `config`'s registry tells an applicability predicate which workspace it is
+judged for (`ApplicabilityContext`). See the process view, `mcp.setup`, `initialization.*` and channel 12. This repairs
+`initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`. No package, edge, process, message
+kind, channel, command or store column changed.
+
 **Every task and phase id the engine assigns is 8 lowercase hexadecimal characters (REQ-CHAT-089, REQ-CHAT-040).**
 `mintTodoId` (`run/todo.ts`) mints each, unique within the todo and, for a planner task, among the task ids the session's
 iterations recorded: the first run's task (was `<session>:main:1`), a continue's (`continuedTaskId`, was

@@ -1,5 +1,5 @@
 import type { InitializationView } from '@rotaris/contracts';
-import { isApplicable, type InitializationTask, type TaskRegistry } from './registry.js';
+import { isApplicable, type ApplicabilityContext, type InitializationTask, type TaskRegistry } from './registry.js';
 import { isNeverInitialized, type InitializationState } from './state.js';
 
 /**
@@ -27,9 +27,10 @@ export interface TaskSets {
   readonly consent: readonly InitializationTask[];
 }
 
-export async function deriveSets(registry: TaskRegistry, state: InitializationState, log: (message: string) => void): Promise<TaskSets> {
+/** `context` names the workspace the sets are derived for; every predicate is asked about that workspace and no other. */
+export async function deriveSets(registry: TaskRegistry, state: InitializationState, log: (message: string) => void, context: ApplicabilityContext): Promise<TaskSets> {
   const applicable: InitializationTask[] = [];
-  for (const task of registry.all()) if (await isApplicable(task, log)) applicable.push(task);
+  for (const task of registry.all()) if (await isApplicable(task, log, context)) applicable.push(task);
   const completed = new Set(state.completed);
   const skipped = new Set(state.skipped);
   const pending = applicable.filter((t) => !completed.has(t.id) && !skipped.has(t.id));

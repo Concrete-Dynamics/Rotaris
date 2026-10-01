@@ -87,8 +87,10 @@ it waited, and carries that command's end and output", and "… a paused command
 command, and a second soft pause no longer loses the first one's end". The second covers the replaced-pause case: the poll
 after reads "ahead of the polled one ended … with exit code 7". Five A10 cases now read the paused command's end from the
 next call's report and keep their assertions. The live run's `terminal` scenario carries `wedge-again` and `behind-paused`
-(`lib/terminal-shapes.mjs`, `pausedBehindReading`). The
-[first-executions row](../architecture/first-executions.md) records what it read.
+(`lib/terminal-shapes.mjs`, `pausedBehindReading`). Its first run (2026-10-01, the self-hosted endpoint, pack
+`.live-run/runs/2026-10-01T11-09-06-837Z` of the `fin1-termshellend` worktree) read the command issued behind the paused
+`sleep 45` as "… waited behind it: that command ended 12.5 seconds after this command was submitted, with exit code 0",
+with the paused command's `slept` carried ([first-executions row](../architecture/first-executions.md)).
 
 **Left open, the owner's (OQ-164):** whether such a call is refused with REQ-TOOLS-098's remedy, waits as built, or
 interrupts the paused command; whether the wait counts against the new call's no-output window and timeout (it still

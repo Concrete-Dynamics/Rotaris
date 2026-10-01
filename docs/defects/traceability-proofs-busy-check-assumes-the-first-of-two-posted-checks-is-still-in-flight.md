@@ -13,7 +13,9 @@ Six consecutive runs of `node apps/desktop/scripts/traceability-proof.mjs --skip
 Node 24, with another worktree's `vitest run` on the host (load average 3.5 to 4.4). Run 4 stopped at
 `two concurrent checks did not yield exactly one busy refusal (REQ-TRACE-512): [true,true]`. Runs 1 to 3, 5 and 6
 passed the same check. The run's `process-results.json` was overwritten by run 5, so the two replies' timings were not
-kept. Which side of the race the service was on is inferred from the guard's code, not measured.
+kept. Which side of the race the service was on is inferred from the guard's code, not measured. A seventh run followed
+the six, and five more were taken in the verification's repair round on a quieter host (load average 0.7 to 1.2); the
+five passed the check, and the seventh's verdict was not kept.
 
 ## Specs
 

@@ -850,6 +850,7 @@ The replacement: each pair is read by `interleavedMinima` (`packages/workspace/s
 seven readings a side after one warm-up each. The sides are interleaved, and each round swaps which side goes first.
 The ratio is still the quotient of the two minima, and `growthVerdict` (`apps/desktop/scripts/lib/growth-verdict.mjs`)
 prints each side's readings as that side's. Point 1, the 25 ms floor and the 3.0 ceiling are unchanged. Six runs after
-the repair read the parse ratio at 2.24 to 2.35 and the parser's at 1.89 to 2.06. On this host the half-size sweep reads
+the repair read the parse ratio at 2.24 to 2.35 and the parser's at 1.89 to 2.06; a seventh, and five more on a quieter
+host in the verification's repair round, read the parse at 2.19 to 2.33 and the parser at 2.03 to 2.09. On this host the half-size sweep reads
 18 to 23 ms, under the floor, so its ratio stays recorded and not asserted. The note is
 [`traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`](../../defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md).

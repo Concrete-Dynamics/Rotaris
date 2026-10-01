@@ -67,13 +67,20 @@ one `pnpm build`. Another worktree's `vitest run` was on the host throughout (lo
 | before, run 1 | 2.65 | 2.23 | 3.00 (below the floor) | passed |
 | before, run 2 | **3.37** | 2.56 | 4.74 (below the floor) | **red**: the message printed `[39.1,29.2,39.3]` on both sides |
 | after, six runs | 2.24 – 2.35 | 1.89 – 2.06 | 1.78 – 2.15 (below the floor) | five passed; run 4 failed on the process stage's busy check, not on growth |
+| after, a seventh run | 2.20 | 2.09 | 1.95 (below the floor) | taken after the six above were written down; its `spike-results.json` survived, its verdict was not kept |
+| after, the verification's repair round, five runs | 2.19 – 2.33 | 2.03 – 2.08 | 1.95 – 2.22 (below the floor) | all five passed, the busy check included |
 
-The parse ratio now sits between 2.24 and 2.35, against a document ratio of 2.14 and a byte ratio of 2.11. Before the
-repair it read 2.65 to 3.37.
+The first six runs and the seventh had another worktree's `vitest run` on the host. The repair round's five were taken
+on a quieter host (load average 0.7 to 1.2), with nothing else of this branch's running. Across all twelve the parse
+ratio sits between 2.19 and 2.35, against a document ratio of 2.14 and a byte ratio of 2.11, and the parser's between
+1.89 and 2.09, against 2.00. Before the repair the parse read 2.65 to 3.37.
 
 **What this repair does not reach.** On this host the half-size sweep reads 18 to 23 ms. That is below the 25 ms floor,
 so the sweep's growth ratio is recorded and not asserted here, as ADR-0040's third execution decided. The repair
-changed nothing about that. Run 4's red was the board path's busy check: two concurrent checks both answered `ok`.
+changed nothing about that. The parse pair is close to the same line: its half side's minimum read 26.7 to 27.6 ms in
+the repair round, just above the floor, so on a faster host the parse ratio too would move to recorded and not asserted,
+leaving the work ratio as the only assertion. That is the floor's own rule (ADR-0040), not this repair's doing. Run 4's
+red was the process stage's busy check (two `requirements.operation` checks on the board path): both answered `ok`.
 That is a different harness race, recorded in
 [`traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md`](../traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md)
 and not repaired here.

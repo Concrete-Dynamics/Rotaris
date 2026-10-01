@@ -35,9 +35,13 @@ columns holds it.
 
 - **`Run.turn`** records a plan cycle's root when it starts (`SessionWriter.openPlanRoot`), and releases it in the same
   transaction that adds its calls to the total (`SessionWriter.countToolCalls`'s `planRoot`): when its turn returns, and
-  when the stop's grace gives up on it (its calls counted from its record, as an execution root's are). A root whose turn
+  when the stop's grace gives up on it (its calls counted from its record, as an execution root's are). ~~A root whose turn
   raises is released with none counted, as an execution root's turn that raises counts none
-  ([`a-root-whose-turn-raises-never-counts-its-calls.md`](../a-root-whose-turn-raises-never-counts-its-calls.md), open).
+  (`a-root-whose-turn-raises-never-counts-its-calls.md`, open).~~ *Corrected 2026-10-01, at the merge with origin/main:*
+  that note was repaired on main ([`a-root-whose-turn-raises-never-counts-its-calls.md`](a-root-whose-turn-raises-never-counts-its-calls.md),
+  fixed), so a root whose turn raises is now counted from its record, less what it held when the execution began, and a
+  plan cycle's root is released in that same transaction (`rootCounts`'s `planRoot`); the release in `Run.turn`'s
+  `finally` writes nothing for a root already released.
 - **`recordCrash`** (`recordPlanRootCrash`, at the next repair or continue) finds a plan cycle's root still recorded — one
   a crash ended — answers its open calls as a crash's under the plan cycle's 0 (`answerOpenCalls`: the call the crash cut
   settles its row `failed`, REQ-SESSION-129; a call it asked for and never started is answered as not run and is not one),

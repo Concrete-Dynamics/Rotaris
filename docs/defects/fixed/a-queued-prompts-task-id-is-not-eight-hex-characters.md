@@ -13,16 +13,27 @@ Noticed 2026-10-01 by the verifier of the repair of
 
 **Repaired 2026-10-01.** The other callers had the same fault: the first run's task was `<session>:main:1` (`Sessions.start`)
 and a continue's `<session>:continued:<n>` (`continuedTaskId`); a planner phase had no id at all, the plan showing its name
-in that place. Every backend task and phase id is now minted by `mintTodoId` (`packages/engine/src/run/todo.ts`): 8
-lowercase hexadecimal characters, unique within the todo (its tasks' and phases' ids) and among the task ids the session's
-iterations recorded — the first run's task, a continue's, a queued prompt's (`Run.consumeQueued`), a todo edit's added task
-(live and at rest; the id a request sends is no longer recorded), and each phase `Todo` creates (`Phase.id`, shown by
-`projectPlannerTodo`, by which an edit names its phase). The queued prompt stays traceable by its task's name and by the
+in that place; and an improvement run's plan (REQ-LIBRARY-060) was stored as main built it, each task under its proposal's
+`imp_…` id and its `improvement_run` phase with none. Every task and phase id the engine assigns is now minted by
+`mintTodoId` (`packages/engine/src/run/todo.ts`): 8 lowercase hexadecimal characters, unique within the todo (its tasks' and
+phases' ids) and, for a planner task, among the task ids the session's iterations recorded. The paths repaired: the first
+run's task (`Sessions.start`), a continue's (`continuedTaskId`), a queued prompt's (`Run.consumeQueued`), a planner todo
+edit's added task (live `Run.editTodo` and at rest; the id a request sends is no longer recorded), each phase `Todo` creates
+(`Phase.id`, shown by `projectPlannerTodo`, by which an edit names its phase), an improvement run's tasks and phase
+(`Todo.seeded`, when the run creates its todo from the plan main sends; the proposal stays named in each task's payload,
+REQ-LIBRARY-061's `Proposal: <id> (<category>)`), and a user's added task in an agent's or a child's todo (`editAgentTodo`,
+live and at rest, now minted against every id of that document; it was 8 hexadecimal characters already, unchecked for a
+repeat). An agent's own `todo` tool already gave a phase or task it left without an id 8 hexadecimal characters
+(`packages/agent-tools/src/tools/todo.ts`); an id an agent supplies is its own, not the backend's, and is untouched. (The
+first version of this outcome said "every backend task and phase id" with the improvement run's plan unrepaired; its
+verifier found the path, and the outcome was corrected in place.) The queued prompt stays traceable by its task's name and by the
 `prompt_triggered` timeline entry, which carries its full id. A record written under the old forms reads back unchanged:
 an id is compared, never parsed, and a phase with no id is shown and edited by its name. Pinned by
 `packages/engine/src/run/message-task.test.ts` ("every task and phase id a run appends is 8 lowercase hexadecimal
 characters…", which failed on `S-msg-1:main:1` before the repair), `run/todo.test.ts` (`mintTodoId`, phase ids, an old
-document edited by phase name), `todo-view.test.ts` and `control.test.ts`; `part-j-proof`'s queue scenario asserts every
+document edited by phase name, `Todo.seeded`), `run.test.ts` ("starts an improvement run from its supplied
+approved-proposal todo…", which stored `imp_1` before the repair), `todo-view.test.ts` (an agent todo add repeats no id of
+its document) and `control.test.ts`; `part-j-proof`'s queue scenario asserts every
 stored task and phase id has the form, finds the iteration that took the prompt up by its task's id (it compared the
 iteration's `todo_task_id` with the prompt's UUID), and finds the prompt by its timeline entry.
 
@@ -39,3 +50,6 @@ first eight characters of two prompt ids may collide.
 - `packages/engine/src/run/todo.ts` — `Todo.appendTask`, which stores the id it is given; `mintTodoId` since the repair.
 - `packages/engine/src/sessions.ts` — `start`'s `<session>:main:1` and `continuedTaskId`'s `<session>:continued:<n>`.
 - `packages/engine/src/session-writer.ts` — `triggerQueuedPrompts`, where the prompt id is recorded on the timeline.
+- `apps/desktop/src/main/commands/improvements.ts` — the improvement run's plan, its tasks under their proposals' ids;
+  `Todo.seeded` (`run/todo.ts`) since the repair.
+- `packages/engine/src/todo-view.ts` — `editAgentTodo`, an agent's or a child's todo edit.

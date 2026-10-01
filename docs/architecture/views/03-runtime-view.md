@@ -409,9 +409,12 @@ the run's own first iteration takes the next number rather than the dead one's. 
 highest iteration recorded closed, and a continuation's appended task id is 8 lowercase hexadecimal characters unique
 among every id the todo holds and every task id an iteration recorded (`continuedTaskId`, REQ-CHAT-089; it was
 `<session>:continued:<n>`, and a record under that form, or the first run's `<session>:main:1`, reads back unchanged —
-an id is compared, never parsed). Every task and phase id the backend assigns takes that form (`mintTodoId`,
-`run/todo.ts`): the first run's task, a queued prompt's, a todo edit's added task and each phase `Todo` creates; a phase
-an earlier build created carries none and the plan shows it by its name. The ledger
+an id is compared, never parsed). Every task and phase id the engine assigns takes that form (`mintTodoId`,
+`run/todo.ts`): the first run's task, a queued prompt's, a planner todo edit's added task, each phase `Todo` creates, an
+improvement run's tasks and phase (`Todo.seeded`, when the run creates its todo from the plan main sends under the
+proposals' ids — the proposal stays named in each task's payload), and a user's add to an agent's or a child's todo
+(`editAgentTodo`, unique within that document); a phase an earlier build created carries none and the plan shows it by
+its name. The ledger
 holds its own root's tree, walked from the root through the parent links, rather than every child with its iteration's
 number — every plan cycle is numbered 0. Root and child task ids are minted against every child's, every recorded
 root's and every recorded conversation's id in the session (`takenTaskIds`), since the record is keyed by task id

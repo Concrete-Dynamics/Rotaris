@@ -105,6 +105,22 @@ export class Todo {
     return t;
   }
 
+  /**
+   * REQ-CHAT-089 with REQ-LIBRARY-060: a plan the backend built for a new session (an improvement run's approved-proposal
+   * tasks). The ids the request carried are the builder's own, not the session's — a proposal's `imp_…` id for each task,
+   * none for the phase — so every task and every phase is given a backend id here, when the todo is created: 8 lowercase
+   * hexadecimal characters, unique within the todo and apart from `taken`. The proposal stays named in the task's text
+   * (REQ-LIBRARY-061's `Proposal: <id> (<category>)`). A stored plan is read back with `fromDocument`, its ids kept. `draw`
+   * is `mintTodoId`'s source of candidates (a test may pass its own).
+   */
+  static seeded(doc: TodoDocument, limit?: number, taken: ReadonlySet<string> = new Set(), draw?: () => string): Todo {
+    const t = new Todo(limit);
+    const used = new Set(taken);
+    const mint = (): string => { const id = mintTodoId(used, draw); used.add(id); return id; };
+    for (const p of doc.phases) t.phases.push({ id: mint(), name: p.name, tasks: p.tasks.map((x) => ({ ...x, id: mint() })) });
+    return t;
+  }
+
   static fromDocument(doc: TodoDocument, limit?: number): Todo {
     const t = new Todo(limit);
     for (const p of doc.phases) t.phases.push({ ...(p.id === undefined ? {} : { id: p.id }), name: p.name, tasks: p.tasks.map((x) => ({ ...x })) });

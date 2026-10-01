@@ -1829,7 +1829,6 @@ export class Sessions {
     const source = requestedSource === 'child' || requestedSource === 'agent' || requestedSource === 'planner' ? requestedSource : 'planner';
     const ownerId = typeof req.args['ownerId'] === 'string' && req.args['ownerId'] !== '' ? req.args['ownerId'] : null;
     const phaseId = typeof req.args['phaseId'] === 'string' ? req.args['phaseId'] : 'main';
-    const mint = () => randomUUID().replaceAll('-', '').slice(0, 8);
     let assigned: string | undefined;
     if (source === 'child') {
       const child = ownerId === null ? undefined : s.dal.childrenOf(s.writer.sessionId).find((candidate) => candidate.task_id === ownerId);
@@ -1837,7 +1836,7 @@ export class Sessions {
       try {
         const current: unknown = JSON.parse(child.todo);
         if (!isAgentTodoDocument(current)) return { ok: false };
-        const edited = editAgentTodo(current, op, id, body, phaseId, mint);
+        const edited = editAgentTodo(current, op, id, body, phaseId);
         if (!edited.changed) return { ok: false };
         s.dal.setChildTodo(s.writer.sessionId, child.task_id, JSON.stringify(edited.document), child.tool_calls);
         assigned = edited.id;
@@ -1846,7 +1845,7 @@ export class Sessions {
       const decoded = decodeStoredTodo(stored.todo);
       if (source === 'agent') {
         if (decoded.agent === null) return { ok: false };
-        const edited = editAgentTodo(decoded.agent, op, id, body, phaseId, mint);
+        const edited = editAgentTodo(decoded.agent, op, id, body, phaseId);
         if (!edited.changed) return { ok: false };
         assigned = edited.id;
         if (!s.writer.save(stored.execution_status, { todo: encodeStoredTodo({ ...decoded, agent: edited.document }) }).ok) return { ok: false };

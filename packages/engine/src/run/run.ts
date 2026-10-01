@@ -514,7 +514,7 @@ export class Run {
     const stored = deps.readSession();
     this.agentTodo = decodeStoredTodo(stored?.todo ?? null).agent;
     this.todo = deps.initialTodo
-      ? Todo.fromDocument(deps.initialTodo, deps.config.consecutiveRetryLimit)
+      ? Todo.seeded(deps.initialTodo, deps.config.consecutiveRetryLimit, new Set([deps.taskId]))
       : deps.resumeTodo
         ? Todo.fromDocument(deps.resumeTodo, deps.config.consecutiveRetryLimit)
         : Todo.fresh(deps.taskId, deps.taskLabel ?? deps.task, deps.config.consecutiveRetryLimit);
@@ -1792,7 +1792,7 @@ export class Run {
     } else {
       const current = source === 'agent' ? this.agentTodo : this.agentTodoFor(ownerId, false);
       if (current !== null) {
-        const edited = editAgentTodo(current, op, id, text, phaseId, () => randomUUID().replaceAll('-', '').slice(0, 8));
+        const edited = editAgentTodo(current, op, id, text, phaseId);
         if (edited.changed) {
           result = { changed: true, ...(edited.id === undefined ? {} : { id: edited.id }) };
           if (source === 'agent') this.agentTodo = edited.document;

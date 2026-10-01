@@ -1,6 +1,6 @@
 import type { TaskPlan } from '@rotaris/contracts';
 import type { ChildRow, SessionRow } from '@rotaris/store';
-import { taskLine, taskTitle, type TodoDocument } from './run/todo.js';
+import { mintTodoId, taskLine, taskTitle, type TodoDocument } from './run/todo.js';
 
 /** REQ-TOOLS-144's persisted shape, repeated structurally across the package boundary. */
 export interface AgentTodoDocument {
@@ -121,13 +121,18 @@ export function projectSessionTodos(row: SessionRow, children: readonly ChildRow
   return { todo, childTodos };
 }
 
-export function editAgentTodo(document: AgentTodoDocument, op: 'add' | 'update' | 'remove', id: string, text: string, phaseId: string, mintId: () => string): { changed: boolean; document: AgentTodoDocument; id?: string } {
+/**
+ * A user's edit of an agent's or a child's todo. REQ-CHAT-089: an added task takes a backend id — 8 lowercase hexadecimal
+ * characters — that no phase or task of the document already carries; `mintId` is handed those ids (`mintTodoId` by
+ * default, as the planner's adds are minted).
+ */
+export function editAgentTodo(document: AgentTodoDocument, op: 'add' | 'update' | 'remove', id: string, text: string, phaseId: string, mintId: (taken: ReadonlySet<string>) => string = (taken) => mintTodoId(taken)): { changed: boolean; document: AgentTodoDocument; id?: string } {
   const phases = document.phases.map((phase) => ({ ...phase, tasks: phase.tasks.map((task) => ({ ...task })) }));
   const body = text.trim();
   if (op === 'add') {
     const phase = phases.find((candidate) => candidate.id === phaseId);
     if (!phase || body === '') return { changed: false, document };
-    const newId = mintId().toLowerCase();
+    const newId = mintId(new Set(phases.flatMap((p) => [p.id, ...p.tasks.map((t) => t.id)]))).toLowerCase();
     phase.tasks.push({ id: newId, name: body, description: '', state: 'PENDING' });
     return { changed: true, document: { schema_version: 1, phases }, id: newId };
   }

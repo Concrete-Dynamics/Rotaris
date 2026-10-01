@@ -211,3 +211,26 @@ describe('Todo — phase ids (REQ-CHAT-089)', () => {
     expect(old.toDocument()).toEqual({ schema_version: 1, phases: [{ name: 'main', tasks: [{ id: 'S-1:main:1', text: 'old', state: 'pending', consecutiveRetries: 0 }, { id: '0000000f', text: 'by name', state: 'pending', consecutiveRetries: 0 }] }] });
   });
 });
+
+/**
+ * REQ-CHAT-089 with REQ-LIBRARY-060: an improvement run's plan arrives built (one `improvement_run` phase, a task per approved
+ * proposal under the proposal's `imp_…` id, the phase with none); the todo the session creates from it carries backend ids.
+ */
+describe('Todo.seeded — a plan the backend built for a new session (REQ-CHAT-089)', () => {
+  const plan = { schema_version: 1 as const, phases: [{ name: 'improvement_run', tasks: [
+    { id: 'imp_1', text: 'Proposal: imp_1 (prompt_update)\nApply improvement imp_1: first', state: 'pending' as const, consecutiveRetries: 0 },
+    { id: 'imp_2', text: 'Proposal: imp_2 (persona_memory_update)\nApply improvement imp_2: second', state: 'pending' as const, consecutiveRetries: 0 },
+  ] }] };
+
+  it('gives every task and the phase 8 lowercase hexadecimal characters, unique within the todo and apart from the ids it is told are taken', () => {
+    const draws = ['0000000a', '0000000a', '0000000b', '0000000c', '0000000d'];
+    const t = Todo.seeded(plan, undefined, new Set(['0000000a']), () => draws.shift()!);
+    const doc = t.toDocument();
+    expect(doc.phases.map((p) => [p.id, p.name, p.tasks.map((x) => x.id)])).toEqual([['0000000b', 'improvement_run', ['0000000c', '0000000d']]]);
+    // The proposal stays named in what the task holds (REQ-LIBRARY-061), and nothing else of the task changes.
+    expect(doc.phases[0]!.tasks.map((x) => [x.text, x.state, x.consecutiveRetries])).toEqual(plan.phases[0]!.tasks.map((x) => [x.text, 'pending', 0]));
+    const random = Todo.seeded(plan).toDocument();
+    for (const id of [random.phases[0]!.id, ...random.phases[0]!.tasks.map((x) => x.id)]) expect(id).toMatch(/^[0-9a-f]{8}$/);
+    expect(Todo.seeded(plan).ids().size).toBe(3);
+  });
+});

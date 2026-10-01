@@ -45,11 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
-**Every backend task and phase id is 8 lowercase hexadecimal characters (REQ-CHAT-089, REQ-CHAT-040).** `mintTodoId`
-(`run/todo.ts`) mints each, unique within the todo and among the task ids the session's iterations recorded: the first
-run's task (was `<session>:main:1`), a continue's (`continuedTaskId`, was `<session>:continued:<n>`), a queued prompt's
-(`Run.consumeQueued`, was the prompt's UUID — the prompt is found by its task's name and the `prompt_triggered` entry),
-and a todo edit's added task (the id a request sends is no longer recorded). A planner phase gains an optional `id`
+**Every task and phase id the engine assigns is 8 lowercase hexadecimal characters (REQ-CHAT-089, REQ-CHAT-040).**
+`mintTodoId` (`run/todo.ts`) mints each, unique within the todo and, for a planner task, among the task ids the session's
+iterations recorded: the first run's task (was `<session>:main:1`), a continue's (`continuedTaskId`, was
+`<session>:continued:<n>`), a queued prompt's (`Run.consumeQueued`, was the prompt's UUID — the prompt is found by its
+task's name and the `prompt_triggered` entry), a planner todo edit's added task (the id a request sends is no longer
+recorded), an improvement run's tasks and phase (`Todo.seeded`, at the run's creation of its todo from main's plan; they were
+the proposals' `imp_…` ids and no phase id — the proposal stays named in each task's payload), and a user's add to an
+agent's or a child's todo (`editAgentTodo`, now minted against the document's ids). A planner phase gains an optional `id`
 (`Phase.id`), minted where `Todo` creates the phase; the plan shows it (`projectPlannerTodo`), and an edit names a phase by
 it or, for a phase an earlier build created with none, by its name. Records under the old forms read back unchanged.
 This repairs `a-queued-prompts-task-id-is-not-eight-hex-characters.md`; `part-j-proof`'s queue scenario asserts it. The

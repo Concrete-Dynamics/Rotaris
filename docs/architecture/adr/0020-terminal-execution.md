@@ -398,6 +398,19 @@ the terminal and the line is submitted at the poll; PowerShell's `$null` no-op i
 `terminal` scenario carries the interrupt now (`interrupt` in `lib/terminal-shapes.mjs`), and its first run (2026-10-01,
 the self-hosted endpoint) read the poll 1,346 ms after the model's `C-c` as −1, `execution_error`, OQ-147's reason.*
 
+*Reported back 2026-10-01, the same repair's first verification: **~~an interrupt written while a command is soft-paused —
+the agent's `is_input`, the terminal window's interrupt or send-keys — marks the paused call~~, read as covering the window's
+interrupt, covered one ordering only** (kept beside its replacement). The window's interrupt (REQ-SHELL-093) can arrive while
+the call still runs, and the shell abandons the line just the same. Unmarked, the call soft-paused over a dead process and
+every poll read "still running"; given `timeout: 8`, it waited 8,017 ms and reset the session for a process that died at
+1 s (the verifier, dash through a real PTY). Now a `C-c` written while a foreground call runs marks that call
+(`ActiveCall.onInterrupt`). The call watches for its shell holding the terminal again (`INTERRUPT_WATCH_MS`, Linux) and
+then submits the same no-op line (`submitCloser`), whose printed marker (`printsMarker`) ends it with −1, `execution_error`,
+no reset. A call that soft-pauses first carries the mark into the paused call. A poll made at once after the `C-c` waits up
+to `INTERRUPT_SETTLE_MS` for the shell before it decides. Pinned by three more "(OQ-147)" cases in `terminal.test.ts`, the
+three red before the change. Off Linux a running call writes nothing, and a timed call still runs out its cap
+([OQ-167](../open-questions.md)).*
+
 *Reported back 2026-10-01, the repair of
 [`output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll`](../../defects/fixed/output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md)
 (reasoned when it was recorded, measured now with a PTY double): **the soft pause handed its call over across an await.**

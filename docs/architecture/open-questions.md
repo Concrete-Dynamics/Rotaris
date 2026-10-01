@@ -8191,11 +8191,22 @@ way to learn from the stream that the shell has finished the line is to give it 
 requirement says whether the product may write a line the agent did not send, and REQ-TOOLS-096 writes the agent's input as
 is: a line written while a program other than the shell still reads the terminal becomes that program's input.
 
-**What the build proceeds under** (`ForegroundSession.poll`, `findInterruptedEnd`, `noteInterrupt` and
-`shellHoldsTerminal` in `packages/agent-tools/src/terminal/foreground.ts`):
+**What the build proceeds under** (`ForegroundSession.poll`, `findInterruptedEnd`, `submitCloser`, `noteInterrupt`,
+`ActiveCall.onInterrupt` and `shellHoldsTerminal` in `packages/agent-tools/src/terminal/foreground.ts`):
 - **An interrupt marks the paused call.** Keystrokes carrying `C-c` (the byte 0x03) written while a command is soft-paused —
   the agent's `is_input`, or the terminal window's interrupt or send-keys (REQ-SHELL-093) — mark it. No other keystroke
   does, so a paused command waiting in `read` is never handed a line by a plain poll.
+- **An interrupt marks the running call too** *(added 2026-10-01 by the repair's first verification; "an interrupt marks
+  the paused call" alone was read as covering the window's interrupt, and covered only the one sent after the pause)*. The
+  window's interrupt or send-keys can arrive while the foreground call still runs (the agent's own calls are sequential, so
+  its `is_input` cannot). The shell abandons the line just the same, and the call used to wait out the no-output window
+  and soft-pause over a dead process, or wait out its hard cap and reset the session. The running call now looks every
+  100 ms (`INTERRUPT_WATCH_MS`) for its shell holding the terminal again, on Linux, and at that moment submits the same
+  no-op line. Its printed start marker ends the call with −1, `execution_error`, "the command ended without an exit status
+  of its own", with no reset and the shell's state kept. A call that soft-pauses first carries the mark, and any line
+  already submitted, into the paused call.
+- **A poll waits briefly for the shell.** A poll made at once after the `C-c` could meet a shell still waiting on the dying
+  program; it waits up to 500 ms (`INTERRUPT_SETTLE_MS`) for the shell to take its terminal back before it decides.
 - **A poll of a marked call submits one no-op line, once the shell holds its terminal again.** On Linux the poll reads
   `/proc/<pid>/stat`: when the terminal's foreground process group is the shell's own, the interrupted program has gone,
   and the poll submits `:` wrapped in fresh markers, as OQ-144's handshake does, and waits for it at most 2 s
@@ -8207,19 +8218,29 @@ is: a line written while a program other than the shell still reads the terminal
 - **What the line writes is the product's, and nobody reads it.** Its echo and its two frames are cut from the paused
   call's capture (`until`, `withoutEchoedWrappers`) and withheld from the live stream (`CommandRegion.withholdRowsWith`,
   live-run L9). A paused line still running when the line arrives — the shell between two of its commands — closes on its
-  own frame with its own status, and the no-op runs after it. A call issued after the line closes the paused call at the
-  line's marker, which the shell prints first.
+  own frame with its own status, and the no-op runs after it. That is harmless unless what the line runs next reads the
+  terminal (`a; cat`, or an INT trap in the session's shell that goes on to `read`), which takes the no-op as its input: a
+  narrow window this reading leaves open. A call issued after the line closes the paused call at the line's marker, which
+  the shell prints first.
 
 **What it does not reach.** `/proc` is Linux's: on Windows (ConPTY, PowerShell, where the no-op is `$null`) and macOS
 nothing says who holds the terminal, so a poll of a marked call submits the line whatever holds it, and a program that
-survived the interrupt and reads its input receives it. Neither host has run it (no Windows host here; no macOS artifact
-is built, IC-3), and whether PowerShell abandons the rest of its line on `C-c` as `sh` does is reasoned, not measured.
+survived the interrupt and reads its input receives it; a REPL's partial-line prompts after it would also be withheld from
+the live stream, since they share a row with the line's echo. A RUNNING call there writes nothing: the window's interrupt
+is only carried into the soft pause, and a call given a `timeout` still runs out its hard cap and is reset. Neither host
+has run it (no Windows host here; no macOS artifact is built, IC-3), and whether PowerShell abandons the rest of its line
+on `C-c` as `sh` does is reasoned, not measured. Windows is the one release target IC-3 leaves, so this is where the
+reading's risk lies.
 
 The cases "REQ-TOOLS-098/179 (OQ-147): a poll after C-c reports …", "REQ-TOOLS-096/098 (OQ-147): a poll after C-c writes
-nothing into a program that survived …" and "REQ-TOOLS-127 (OQ-147): the no-op line a poll after an interrupt submits …" in
-`terminal/terminal.test.ts` pin this reading.
+nothing into a program that survived …", "REQ-TOOLS-127 (OQ-147): the no-op line a poll after an interrupt submits …",
+"REQ-SHELL-093/REQ-TOOLS-098/179 (OQ-147): the terminal window's interrupt while the call still runs …",
+"REQ-SHELL-093/REQ-TOOLS-098 (OQ-147): an interrupt that reached the call before its soft pause is carried …" and
+"REQ-TOOLS-098/179 (OQ-147): a poll made at once after C-c …" in `terminal/terminal.test.ts` pin this reading.
 
 **What a ruling decides.** Whether the product may write a line of its own after an interrupt (as built), only on a poll or
-at the interrupt itself, and on which hosts; or whether a poll that cannot see the line's end must say only that the
-command may have ended, the advice then naming a next command as the way to learn it; and whether the terminal window's
-interrupt marks the call as the agent's does.
+also while the interrupted call still runs (as built, on Linux), and on which hosts. Where nothing says who holds the
+terminal, the choices are: write it anyway (as built for a poll); write it only while the shell process has no live
+child process; or write nothing off Linux until a host has measured it. Or whether a poll that cannot see the line's end
+must say only that the command may have ended, the advice then naming a next command as the way to learn it. And whether
+the terminal window's interrupt marks the call as the agent's does.

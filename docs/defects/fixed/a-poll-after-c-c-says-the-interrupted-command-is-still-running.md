@@ -73,3 +73,45 @@ without an exit status of its own", output `^C`, and the scenario passed with no
 
 Not reached: Windows and macOS, where nothing says who holds the terminal; PowerShell's no-op (`$null`) and whether it
 abandons its line on `C-c` are reasoned, not measured.
+
+## Outcome, corrected by the repair's first verification (2026-10-01)
+
+**Falsified, kept beside its replacement:** "keystrokes carrying `C-c` … — the agent's `is_input`, or the terminal window's
+interrupt or send-keys — set `interrupted` on it", read above and in OQ-167 as covering the window's interrupt. It covered
+one ordering only: an interrupt written once the call was soft-paused. The window's interrupt (REQ-SHELL-093) can also
+arrive while the call still RUNS, the natural moment for a user watching a long command, and the shell abandons the
+wrapper's line just as it does under a paused call, so no end frame prints. Nothing was marked then. The verifier measured
+it with dash through a real PTY: without a `timeout`, an interrupt 0.8 s into `sleep 20; printf done-later` soft-paused the
+call (`^C`, `#`), and both polls after it, 1.5 s and 3 s later, read `soft_pause` — this note's own symptom; with
+`timeout: 8` and the interrupt at 1 s, the call waited 8,017 ms and returned `timeout`, exit 124, a session reset with its
+shell state lost for a process that had died at 1 s. Reproduced on the branch before the change by the first two cases
+below (both `soft_pause`).
+
+What changed, in `packages/agent-tools/src/terminal/foreground.ts`:
+- **An interrupt marks the running call too.** A `C-c` written while a foreground call runs and no call is paused calls
+  `ActiveCall.onInterrupt`; the call then looks every 100 ms (`INTERRUPT_WATCH_MS`) for its shell holding the terminal
+  again, and at that moment submits the same no-op line (`submitCloser`). Its printed start marker (`printsMarker`, told
+  from the echo as `pausedShare` tells it) ends the call: −1, `execution_error`, "the command ended without an exit status
+  of its own", no reset, the shell's state kept, and the snapshot refreshed as after any exit. The line's echo and frames
+  are cut from the capture (`until`) and withheld from the live stream as before. A line that reaches its own frame first
+  keeps its own status.
+- **The mark is carried into the soft pause.** A running call that soft-pauses before its shell holds the terminal hands
+  `interrupted` (and any no-op line already submitted) to the paused call, and a poll after the program died reads it as
+  a `C-c` sent after the pause.
+- **A poll made at once after the `C-c`** (the verifier's optional VS1) waits up to 500 ms (`INTERRUPT_SETTLE_MS`) for the
+  shell to take its terminal back before it looks, so it no longer depends on the model's latency.
+
+Pinned by three more cases in `terminal.test.ts`:
+- "REQ-SHELL-093/REQ-TOOLS-098/179 (OQ-147): the terminal window's interrupt while the call still runs ends it …" (dash,
+  real PTY): no timeout, interrupt at 0.8 s, the call ends before its 4 s window with OQ-147's reading; `timeout: 8`,
+  interrupt at 1 s, it ends within 6 s with no `kill_status`, and a variable set before both interrupts is still `[kept]`
+  with no reinitialization. Red before the change (`soft_pause`).
+- "REQ-SHELL-093/REQ-TOOLS-098 (OQ-147): an interrupt that reached the call before its soft pause is carried …": a child
+  `sh` that runs an INT trap for 4 s and then dies of the interrupt, so the line is abandoned after the pause; the poll
+  after it reads −1, `execution_error`. Red before the change (`soft_pause`).
+- "REQ-TOOLS-098/179 (OQ-147): a poll made at once after C-c reads the interrupted command as ended": red before the
+  change (`softPaused` true).
+
+Still not reached, stated in OQ-167: off Linux nothing says who holds the terminal, so nothing is written while a call
+runs. There the window's interrupt is only carried into the soft pause, and a call given a `timeout` still runs out its
+hard cap and is reset. Unmeasured: no Windows host here, and no macOS artifact under IC-3.

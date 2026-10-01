@@ -711,6 +711,17 @@ order across sessions is **OQ-148**, and the key is the string alone whichever w
 `slotFree` check reads every other joined session's children from its store — one query per session per scheduling
 decision.
 
+**A child's name is never a root's (REQ-ORCH-044 with OQ-158, acceptance A23, 2026-10-01).** `ChildLedger.spawn` names a
+child under REQ-ORCH-044's rule against a set that holds, beside its parent's children's canonical names, its root's
+canonical name and the entry persona it runs as, and the persona and canonical name of every root the session has recorded
+(`recordedRootNames`, `children/naming.ts`: each iteration's, and each publishing root no iteration records — the sources
+`entryRootsOf` reads), at every depth. The surfaces give the run-level agent every row and artifact carrying a root's name
+(§3, `SessionRecord.entryRoots`), so a child carrying one was drawn as both; until this only the root's direct children were
+kept off its canonical name
+([`a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`](../../defects/fixed/a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md)).
+A root named like an earlier child is still drawn as both
+([`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../../defects/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md)).
+
 **The eleventh state (PD-ORCH-005).** `CHILD_TRANSITIONS` admits `paused` from every non-terminal state and leaves it
 for exactly the state the child resumes into (`RESUME_STATES`, `resumeStateFor`: where it waited, `queued` again for a
 child claimed but not started, `running`, `summarizing`); either settling path still ends it. It presents as `paused`,

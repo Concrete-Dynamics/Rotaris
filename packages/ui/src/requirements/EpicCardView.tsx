@@ -51,8 +51,8 @@ export const EpicCardView = memo(function EpicCardView({ card, epic, cards, sele
     >
       <div className="req-card__head">
         <span className="req-card__id mono">{card.id}</span>
-        <DesignTag className="tag tag-accent">epic</DesignTag>
-        <DesignTag className="tag tag-outline" data-testid="req-lifecycle">{card.lifecycle}</DesignTag>
+        <DesignTag kind="accent">epic</DesignTag>
+        <DesignTag kind="outline" data-testid="req-lifecycle">{card.lifecycle}</DesignTag>
       </div>
       <span className="req-card__title">{card.title}</span>
       {selected && <span className="req-card__selected" data-testid="req-selected">{SELECTED_WORD} — {SELECTED_EXPLANATION}</span>}

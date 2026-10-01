@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { createElement, type FunctionComponent, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -128,6 +130,43 @@ describe('production design-system layer', () => {
       expect(markup).toContain('aria-labelledby=');
       expect(markup).not.toContain('aria-describedby=');
       expect(markup).not.toContain('chip-menu__hint');
+    });
+  });
+
+  /*
+   * The repair of docs/defects/fixed/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md
+   * (acceptance A40): half the Tag's kinds named classes the adopted sheet does not define, a className replaced the
+   * foundation, and the StatusDot's kind was read by no stylesheet. The kinds and states are the design components'
+   * own (`docs/design/system/components/core/Tag.d.ts`, `StatusDot.d.ts`), and each must paint.
+   */
+  describe('Tag and StatusDot draw the language\'s tones (docs/design/README.md §1.3, §2, §7)', () => {
+    const adopted = readFileSync(fileURLToPath(new URL('../../../../docs/design/system/components.css', import.meta.url)), 'utf8');
+    const shell = readFileSync(fileURLToPath(new URL('../shell.css', import.meta.url)), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+
+    it('every Tag kind is a tone the adopted stylesheet defines, and they are the design Tag\'s seven', () => {
+      expect([...design.TAG_KINDS]).toEqual(['accent', 'neutral', 'outline', 'run', 'wait', 'done', 'fail']);
+      for (const kind of design.TAG_KINDS) {
+        expect(render(design.Tag, { kind }), kind).toContain(`class="tag tag-${kind}"`);
+        expect(adopted, kind).toMatch(new RegExp(`(^|\\n)\\.tag-${kind}\\{`));
+      }
+      expect(render(design.Tag, {})).toContain('class="tag tag-neutral"');
+    });
+
+    it('a className joins the Tag\'s foundation and its tone, as the design Tag composes them, rather than replacing them', () => {
+      expect(render(design.Tag, { kind: 'run', className: 'improvement-activity' })).toContain('class="tag tag-run improvement-activity"');
+      expect(render(design.Tag, { className: 'mono' })).toContain('class="tag tag-neutral mono"');
+    });
+
+    it('every StatusDot state paints the token the design StatusDot gives it — `idle` the info colour docs/design/README.md §4.1 resolves it to — below any surface\'s own dot rule', () => {
+      const tokens: Record<string, string> = { run: '--rt-run', wait: '--rt-wait', done: '--rt-done', fail: '--rt-fail', ok: '--rt-ok', warn: '--rt-warn', idle: '--rt-info-500' };
+      expect([...design.STATUS_DOT_STATES]).toEqual(Object.keys(tokens));
+      for (const state of design.STATUS_DOT_STATES) {
+        expect(render(design.StatusDot, { state }), state).toContain(`data-state="${state}"`);
+        // `:where` keeps the rule at the specificity of `.status-dot` alone, so a surface that paints its dot
+        // otherwise (`.improvement-activity .status-dot`, the tag's ink) still does.
+        expect(shell, state).toContain(`.status-dot:where([data-state='${state}']) { background: var(${tokens[state]}); }`);
+      }
+      expect(render(design.StatusDot, {})).toContain('data-state="idle"');
     });
   });
 

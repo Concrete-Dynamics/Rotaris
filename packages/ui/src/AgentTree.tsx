@@ -132,7 +132,7 @@ export function AgentTree({ agents, selected, onSelect, nowIso = null }: AgentTr
               <span className="agent-row__task">{a.givenName}</span>
             </span>
             {/* REQ-ORCH-089's badge: the stall watch's figure closes the meta label, as the mockup's agents panel closes a waiting row with a `tag-wait` qualifier. */}
-            <span className="agent-row__meta mono">{a.presentationState}{elapsedShown(a) ? ` · ${elapsedLabel(a, nowIso)}` : ''}{a.stalledSeconds !== null && <>{' '}<DesignTag className="tag tag-wait agent-row__stalled" data-testid="agent-stalled">{stalledText(a.stalledSeconds)}</DesignTag></>}</span>
+            <span className="agent-row__meta mono">{a.presentationState}{elapsedShown(a) ? ` · ${elapsedLabel(a, nowIso)}` : ''}{a.stalledSeconds !== null && <>{' '}<DesignTag kind="wait" className="agent-row__stalled" data-testid="agent-stalled">{stalledText(a.stalledSeconds)}</DesignTag></>}</span>
           </div>
         );
       })}

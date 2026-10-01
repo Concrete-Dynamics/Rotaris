@@ -144,7 +144,7 @@ export function PersonaWindow(props: PersonaWindowProps) {
             <div className="persona-window__context-body">
               <ContextRing used={shown.contextUsed} limit={shown.contextLimit} thresholdPercent={compressionThresholdPercent} label={`${shown.name}'s context window`} />
               <div>
-                <div className="mono" data-testid="persona-context-line">{countNoun(shown.toolCalls, 'tool call')} · {elapsed ?? '-'}{shown.stalledSeconds !== null && <>{' '}<DesignTag className="tag tag-wait agent-row__stalled" data-testid="agent-stalled">{stalledText(shown.stalledSeconds)}</DesignTag></>}</div>
+                <div className="mono" data-testid="persona-context-line">{countNoun(shown.toolCalls, 'tool call')} · {elapsed ?? '-'}{shown.stalledSeconds !== null && <>{' '}<DesignTag kind="wait" className="agent-row__stalled" data-testid="agent-stalled">{stalledText(shown.stalledSeconds)}</DesignTag></>}</div>
                 <div className="text-secondary">{shown.contextUsed.toLocaleString()} of {shown.contextLimit.toLocaleString()} tokens; compression at {compressionThresholdPercent}%.</div>
               </div>
             </div>

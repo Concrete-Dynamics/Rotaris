@@ -7831,3 +7831,40 @@ same question, and the three issue kinds. Recommendation: one ruling that adds t
 chat controls to the chat domain's Data & Formats, the rest to domain 01's list — with OQ-76's and OQ-127's words beside
 them, and names REQ-NOTIFY-268's entry type, because the timeline is what an autopsy reads first and the export reaches
 it, and the session log is neither.
+
+**OQ-158 — May a child be renamed off a root's name when no sibling under its parent holds that name?**
+*(REQ-ORCH-044, "Child task names MUST be scoped per parent. A reused name is deterministically renamed `<name>_<n>` … and
+the canonical name is used everywhere the task is referenced (transcripts, dependency resolution, artifacts)";
+REQ-MONITOR-071, REQ-CHAT-069 and REQ-MONITOR-044, which the surfaces meet by name; PD-ORCH-005 clause 4 with OQ-97, under
+which a root keeps its own persona's name; REQ-LIBRARY-093. Raised 2026-10-01 under [R-067](../product/requests.md#r-067)
+by the repair of
+[`a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md`](../defects/fixed/a-child-named-like-a-root-is-presented-as-the-run-level-agent-too.md),
+acceptance finding A23. Open.)*
+
+A transcript row, a tool call and an artifact know their agent by a name alone. The surfaces give the run-level agent every
+row and artifact carrying the entry persona or a name one of the session's roots carries (`ownRow`, `artifactNames`,
+`SessionRecord.entryRoots`), and a child every row carrying its canonical name. A child whose canonical name is a root's is
+therefore drawn as both agents, and a name-only rule cannot tell them apart: the root's own rows carry the same name.
+REQ-ORCH-044 makes a name unique under its parent and renames only a name "reused" there. The ledger already read the
+root's own canonical name as in use under the root, so a direct child was never named after it; it did not for a deeper
+child, nor for the names of an earlier root (a resumed root's persona, a root of a persona the canonicaliser rewrites).
+Two readings were weighed:
+- **A root's names are in use under every parent.** No child at any depth takes the canonical name or the persona of any
+  root the session has recorded, or of the root it works under; it is renamed `<name>_<n>` by REQ-ORCH-044's own rule.
+  A child the model names `orchestrator` two levels down is `orchestrator_1`, which the specification renames only when a
+  sibling holds the name.
+- **Only siblings' names are in use.** A child keeps the model's name unless a sibling holds it, and the rows carry an
+  identity the ledger keeps unique across the session — a task id on every transcript row and tool call — which the surfaces
+  match instead of the name. This widens the transcript row's envelope, and every row recorded before carries none.
+
+**What the build proceeds under:** the first. `ChildLedger.spawn` (`packages/engine/src/children/ledger.ts`) counts as
+taken, beside the parent's children's names, its root's canonical name and the entry persona it runs as, and every
+recorded root's two names (`recordedRootNames` in `children/naming.ts`: each iteration's `root_persona` and
+`root_canonical_name`, and each publishing root no iteration records, by its publish — the sources `entryRootsOf` reads).
+Two edges are left as they are. A child named before this repair keeps its name. And a **root named like an earlier child**
+— the entry persona changed to one an earlier child's canonical name already spells — is drawn as both, since the root's
+name is its persona and no ledger names it
+([`a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md`](../defects/a-root-named-like-an-earlier-child-is-presented-as-that-child-too.md)).
+
+**What a ruling decides.** Whether a root's names count as in use under every parent, or the surfaces must tell a child
+from a root by an identity the rows carry; with the second, whether rows recorded before keep the name-only rule.

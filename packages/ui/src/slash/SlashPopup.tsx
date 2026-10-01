@@ -107,7 +107,7 @@ export function SlashPopup({ commands, selected, ctx, listId, anchor, onHover, o
               <span className="slash-popup__sep">—</span>{' '}
               <span className="slash-popup__desc">{c.description}</span>{' '}
               {c.argumentHint && <><span className="slash-popup__hint mono">[{c.argumentHint}]</span>{' '}</>}
-              <DesignTag className="tag tag-neutral slash-popup__kind" data-testid="slash-kind">{c.kind}</DesignTag>
+              <DesignTag kind="neutral" className="slash-popup__kind" data-testid="slash-kind">{c.kind}</DesignTag>
               {reason !== null && <>{' '}<span className="slash-popup__reason" id={`${slashRowId(listId, i)}-reason`}>{reason}</span></>}
             </div>
           );

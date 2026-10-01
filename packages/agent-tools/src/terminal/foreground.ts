@@ -74,6 +74,29 @@ export function processIdentity(pid: number): string | null {
   }
 }
 
+/**
+ * The repair of `a-poll-after-c-c-says-the-interrupted-command-is-still-running` (OQ-147): whether the session's shell holds
+ * its terminal — the terminal's foreground process group is the shell's own — read from `/proc/<pid>/stat` (`pgrp` and
+ * `tpgid`). An interactive shell gives the terminal to the job it runs and takes it back when the job is done, so after an
+ * interrupt this says whether the interrupted program has gone or is still reading the terminal (a REPL that caught the
+ * `C-c`). Null where `/proc` does not say: every host but Linux, or a process that has gone.
+ */
+export function shellHoldsTerminal(pid: number): boolean | null {
+  if (process.platform !== 'linux') return null;
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'latin1');
+    // `pid (comm) state ppid pgrp session tty_nr tpgid …` — `comm` may hold spaces and parentheses, so the fields are
+    // counted from the last `)`.
+    const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+    const pgrp = Number(fields[2]);
+    const tpgid = Number(fields[5]);
+    if (!Number.isInteger(pgrp) || !Number.isInteger(tpgid) || tpgid <= 0) return null;
+    return tpgid === pgrp;
+  } catch {
+    return null;
+  }
+}
+
 /** How a raw round trip was ended before the shell answered it: its call's cancel, or a kill from the terminal window. */
 type RawCut = { readonly kind: 'abort' } | { readonly kind: 'kill'; readonly reset: boolean };
 
@@ -93,6 +116,12 @@ export const FOREGROUND_CAP = 100_000;
  */
 const PAUSED_ENDED_WITHOUT_STATUS = 'the paused command ended without an exit status of its own: the shell abandoned the rest of its line, as an interrupt (C-c) makes it do, before the next command ran';
 export const NO_OUTPUT_WINDOW_MS = 30_000;
+/**
+ * OQ-147: how long a poll after an interrupt waits for the shell to answer the no-op line that finds the paused line's end
+ * (`findInterruptedEnd`). The shell already holds its terminal then, so the round trip is one line through an idle shell;
+ * a poll that outwaits the bound answers "still running", and the next poll reads the end the line found meanwhile.
+ */
+export const INTERRUPTED_END_WAIT_MS = 2_000;
 /**
  * The retained-line budget of a call's screen. A screen retains LINES where REQ-TOOLS-097's cap counts
  * CHARACTERS, so the budget must be the number of lines that leaves 100,000 characters reachable, and it was
@@ -179,6 +208,19 @@ interface PausedCall {
    * paused call collected stops.
    */
   until: string | null;
+  /**
+   * True once keystrokes carrying an interrupt (`C-c`, REQ-TOOLS-098's advice) were written while the call was paused: a
+   * poll may then look for the end of its line (`findInterruptedEnd`).
+   */
+  interrupted: boolean;
+  /**
+   * The printed start marker of the product's own no-op line that a poll after an interrupt submitted to find where the
+   * paused line ended; null until one is submitted. The shell reaches it only once the paused line is done, so it closes
+   * the paused call as the next call's marker would, and it prints ahead of any later call's.
+   */
+  closer: string | null;
+  /** Called once when `onData` closes the call — what a poll waiting on `closer` resolves on. */
+  onClose: (() => void) | null;
   /** Monotonic time the command last wrote anything (live-run L2). */
   lastOutputAt: number;
   /** Monotonic time of the previous observation of the command: its soft pause, then each poll (live-run L2). */
@@ -209,8 +251,29 @@ export class CommandRegion {
   get ended(): boolean {
     return this.phase === 'after';
   }
+  /**
+   * OQ-147: rows carrying `fragment` — the product's own no-op line after an interrupt (`findInterruptedEnd`): its echo,
+   * which shares a row with the prompt before it, its printed start marker and its end frame — are withheld from here on.
+   * A row is passed only once its line end has arrived, so a fragment split across two chunks is decided whole.
+   */
+  withholdRowsWith(fragment: string): void {
+    if (this.phase !== 'after') this.withheld = fragment;
+  }
+  private withheld: string | null = null;
+  /** The row being withheld until its line end decides it (`withholdRowsWith`). */
+  private row = '';
   /** The part of `chunk` (with whatever an earlier chunk left undecided) that the command wrote; '' when none. */
   push(chunk: string): string {
+    const out = this.pass(chunk);
+    const fragment = this.withheld;
+    if (fragment === null) return out;
+    const text = this.row + out;
+    // Whole rows are decided; a partial row waits for its line end, unless the end frame closed the region.
+    const cut = this.phase === 'after' ? text.length : text.lastIndexOf('\n') + 1;
+    this.row = text.slice(cut);
+    return text.slice(0, cut).split(/(?<=\n)/).filter((r) => !r.includes(fragment)).join('');
+  }
+  private pass(chunk: string): string {
     if (this.phase === 'after') return '';
     this.held += chunk;
     if (this.phase === 'before') {
@@ -617,6 +680,7 @@ export class ForegroundSession {
    */
   interrupt(): void {
     this.ensure().write('\x03');
+    this.noteInterrupt('\x03');
   }
   endInput(): void {
     this.ensure().write('\x04');
@@ -664,7 +728,9 @@ export class ForegroundSession {
     // printed start marker, whichever the shell reaches (A10).
     let share: ReturnType<typeof pausedShare> | null = null;
     if (paused) {
-      share = pausedShare(paused.undecided, chunk, paused.end, active?.start ?? null);
+      // The no-op line a poll after an interrupt submitted (`closer`) was written before any later call's, so its marker
+      // is the first the shell can print once the paused line is done.
+      share = pausedShare(paused.undecided, chunk, paused.end, paused.closer ?? active?.start ?? null);
       if (share.take !== '') { paused.hold.push(share.take); paused.lastOutputAt = this.deps.monotonic.now(); }
       paused.undecided = share.undecided;
     }
@@ -704,9 +770,11 @@ export class ForegroundSession {
       if (paused.undecided !== '') paused.hold.push(paused.undecided);
       paused.undecided = '';
       paused.code = pausedCode;
-      if (pausedCode === null && active) paused.until = active.start;
+      const next = paused.closer ?? active?.start ?? null;
+      if (pausedCode === null && next !== null) paused.until = next;
       this.pausedDone = paused;
       this.pausedCommand = null;
+      paused.onClose?.();
     }
     if (active && activeCode !== null) {
       this.active = null;
@@ -892,7 +960,7 @@ export class ForegroundSession {
       this.pausedCommand?.screen.dispose();
       // It is fed by `onData` from here, its share of each chunk only (`pausedShare`), until its own frame or the next
       // call's start marker closes it (A10).
-      const paused: PausedCall = { start, end, screen, hold, delivered: lines.join('\n').replace(/\s+$/, ''), undecided: '', code: null, until: null, lastOutputAt, observedAt: monotonic.now() };
+      const paused: PausedCall = { start, end, screen, hold, delivered: lines.join('\n').replace(/\s+$/, ''), undecided: '', code: null, until: null, interrupted: false, closer: null, onClose: null, lastOutputAt, observedAt: monotonic.now() };
       this.pausedCommand = paused;
       this.active = null;
       this.state = 'idle';
@@ -938,6 +1006,10 @@ export class ForegroundSession {
    * end frame on the same unanchored terms as the capture — the anchored form left the marker here too.
    */
   async poll(): Promise<ForegroundResult> {
+    const open = this.pausedCommand;
+    if (open !== null && open.interrupted && open.closer === null && this.active === null && this.pty !== null && shellHoldsTerminal(this.pty.pid) !== false) {
+      await this.findInterruptedEnd(open, this.pty);
+    }
     const done = this.pausedDone;
     if (done) {
       this.pausedDone = null;
@@ -958,6 +1030,30 @@ export class ForegroundSession {
     const waited = { sinceObservedMs: Math.max(0, now - pc.observedAt), silentMs: Math.max(0, now - pc.lastOutputAt) };
     pc.observedAt = now;
     return { output, exitCode: -1, timedOut: false, softPaused: true, killStatus: null, sessionReinitialized: false, truncated: pc.screen.truncated || pc.hold.dropped, error: null, restore: { status: 'none' }, waited };
+  }
+
+  /**
+   * The repair of `a-poll-after-c-c-says-the-interrupted-command-is-still-running` (OQ-147). An interrupt makes an
+   * interactive `sh` abandon the rest of the paused call's line, so its end frame never prints, and until the next call's
+   * printed start marker closed it every poll read "still running" over a process that had died. A poll after an
+   * interrupt, once the shell holds its terminal again (`shellHoldsTerminal`; unknown where `/proc` does not say), submits
+   * one no-op line of the product's own, as OQ-144's handshake does: the shell reaches it only once the paused line is
+   * done, so its printed start marker closes the paused call (`onData`, `closer`) and the poll hands it over with OQ-147's
+   * reading. Its echo and its frames are dropped from the poll (`until`, `withoutEchoedWrappers`) and from the live stream
+   * (`withholdRowsWith`). The wait is bounded (`INTERRUPTED_END_WAIT_MS`); a line still running then — the shell between
+   * two of its commands — answers "still running", and the no-op runs after it, harmlessly.
+   */
+  private async findInterruptedEnd(pc: PausedCall, p: PtyLike): Promise<void> {
+    const nonce = randomBytes(12).toString('hex');
+    const start = `__rot_${nonce}_s`;
+    pc.closer = start;
+    this.region?.withholdRowsWith(`__rot_${nonce}_`);
+    const closed = new Promise<void>((resolve) => {
+      const bound = this.deps.timers.after(INTERRUPTED_END_WAIT_MS as Millis, () => { pc.onClose = null; resolve(); });
+      pc.onClose = () => { bound.cancel(); pc.onClose = null; resolve(); };
+    });
+    this.submit(p, wrapCommand(this.deps.backend, this.deps.backend.kind === 'powershell' ? '$null' : ':', start, `__rot_${nonce}_e`));
+    await closed;
   }
 
   /**
@@ -1012,6 +1108,17 @@ export class ForegroundSession {
   sendInput(text: string): void {
     this.ensure().write(text);
     if (text !== '') this.typeahead = !/[\r\n]$/.test(text);
+    this.noteInterrupt(text);
+  }
+
+  /**
+   * OQ-147: an interrupt written while a command is soft-paused — the agent's `C-c` with `is_input` (REQ-TOOLS-098's
+   * advice), or the terminal window's interrupt or send-keys (REQ-SHELL-093) — marks the paused call, so the next poll
+   * looks for the end of its line (`findInterruptedEnd`). Any other keystroke marks nothing: a poll must not write a line
+   * of its own into a command that is still reading its input.
+   */
+  private noteInterrupt(text: string): void {
+    if (this.pausedCommand !== null && text.includes('\x03')) this.pausedCommand.interrupted = true;
   }
 
   /**

@@ -23,7 +23,7 @@ Live-run finding: a71-8
 No requirement covers this third move. It is raised as [OQ-164](../architecture/open-questions.md).
 [OQ-147](../architecture/open-questions.md) covers a paused call's status only once a poll hands it over. The open notes
 [`output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md`](output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md)
-and [`a-poll-after-c-c-says-the-interrupted-command-is-still-running.md`](a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)
+and [`a-poll-after-c-c-says-the-interrupted-command-is-still-running.md`](fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md)
 are neighbours, and neither describes this case. Recorded, not repaired.
 
 ## Specs

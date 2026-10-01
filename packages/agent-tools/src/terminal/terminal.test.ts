@@ -182,6 +182,33 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     const region = new CommandRegion(S, E);
     expect(region.push(`${S}\r\n__rot_deadbeefdeadbeefdeadbeef_e:0\r\n`)).toBe('__rot_deadbeefdeadbeefdeadbeef_e:0\r\n');
   });
+  it('REQ-TOOLS-127 (OQ-147): the no-op line a poll after an interrupt submits reaches the live stream in no row, however the bytes arrive', () => {
+    const S = '__rot_0123456789abcdef01234567_s';
+    const E = '__rot_0123456789abcdef01234567_e';
+    const C = '__rot_fedcba9876543210fedcba98_';
+    const before = `${S}\r\nearly\r\n`;
+    const after = [
+      'late\r\n^C\r\n',
+      `# printf '%s\\n' '${C}s'; command eval ':'; printf '${C}e:%s\\n' "$?"\r\n`,
+      `${C}s\r\n`,
+      `${C}e:0\r\n# `,
+    ].join('');
+    const splits: string[][] = [[after], [...after]];
+    for (let i = 1; i < after.length; i += 1) splits.push([after.slice(0, i), after.slice(i)]);
+    for (const chunks of splits) {
+      const region = new CommandRegion(S, E);
+      expect(region.push(before)).toBe('early\r\n');
+      region.withholdRowsWith(C);
+      expect(chunks.map((c) => region.push(c)).join('')).toBe('late\r\n^C\r\n');
+    }
+    // The paused call's own end frame still ends the region, and the row it ends is given whole.
+    const own = new CommandRegion(S, E);
+    own.push(before);
+    own.withholdRowsWith(C);
+    expect(own.push('tail')).toBe('');
+    expect(own.push(`-no-newline${E}:0\r\n`)).toBe('tail-no-newline');
+    expect(own.ended).toBe(true);
+  });
   it('REQ-TOOLS-098/127 (A10): a soft-paused call collects up to its own end frame or the next call\'s printed start marker, and nothing after either, however the bytes arrive', () => {
     const P = '__rot_aaaaaaaaaaaaaaaaaaaaaaaa_e';
     const N = '__rot_bbbbbbbbbbbbbbbbbbbbbbbb_s';
@@ -647,6 +674,69 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       for (const leaked of ['__rot_', 'AAA', 'BBB', 'done-later']) expect(poll.text).not.toContain(leaked);
       // The paused call was handed over once; there is nothing left to poll.
       expect((await t.execute(args({ command: '' }), ctx())).text).toContain('No paused command to poll.');
+    } finally { await m.dispose(); }
+  }, 60_000);
+
+  // docs/defects/fixed/a-poll-after-c-c-says-the-interrupted-command-is-still-running.md: REQ-TOOLS-098's advice is to poll
+  // or to interrupt with `C-c` and `is_input=true`. The interrupt makes an interactive `sh` abandon the rest of the wrapper's
+  // line, so the paused call's end frame never prints, and before the repair nothing else in the stream said the line was
+  // done: every poll between the interrupt and the next command read −1, `soft_pause`, "The process may still be running",
+  // over a process that had died. A poll after an interrupt now hands the call over as OQ-147's reading reports it.
+  it.skipIf(PS)('REQ-TOOLS-098/179 (OQ-147): a poll after C-c reports the interrupted command as ended, not as still running, and leaves the session answering', async () => {
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
+    try {
+      await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
+      expect(diag((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      const session = m.session('s1:orchestrator', root);
+      let tapped = '';
+      const untap = session.onOutput((chunk) => { tapped += chunk; });
+      expect(diag((await t.execute(args({ command: 'C-c', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+      await new Promise((res) => setTimeout(res, 1_500));
+      const poll = await t.execute(args({ command: '' }), ctx());
+      untap();
+      expect(diag(poll.text)['outcome_kind']).not.toBe('soft_pause');
+      expect(diag(poll.text)).toMatchObject({ exit_code: -1, outcome_kind: 'execution_error' });
+      expect(poll.text).toContain('without an exit status of its own');
+      expect(poll.text).not.toContain('may still be running');
+      for (const leaked of ['__rot_', 'done-later', "printf '%s"]) expect(poll.text).not.toContain(leaked);
+      // The product's own line that found the end is in neither the poll nor the live stream (live-run L9).
+      expect(tapped).not.toContain('__rot_');
+      // The paused call was handed over once, and the session answers the next command with its own output alone.
+      expect((await t.execute(args({ command: '' }), ctx())).text).toContain('No paused command to poll.');
+      const next = await t.execute(args({ command: SH.echo('after'), timeout: 15 }), ctx());
+      expect(diag(next.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+      expect(output(next.text)).toBe('after');
+      // The terminal window's interrupt (REQ-SHELL-093) is the same interrupt, and a poll after it finds the end the same way.
+      expect(diag((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(m.streams.interrupt(foregroundStreamId('orchestrator')).ok).toBe(true);
+      await new Promise((res) => setTimeout(res, 1_000));
+      const windowPoll = await t.execute(args({ command: '' }), ctx());
+      expect(diag(windowPoll.text)).toMatchObject({ exit_code: -1, outcome_kind: 'execution_error' });
+      for (const leaked of ['__rot_', 'done-later']) expect(windowPoll.text).not.toContain(leaked);
+    } finally { await m.dispose(); }
+  }, 60_000);
+
+  // The other half of that repair: the no-op line is written only once the shell holds its terminal again. A program that
+  // survives the interrupt and reads its input — here a child `sh` that ignores SIGINT and waits in `read` — keeps the
+  // terminal, so the poll after the `C-c` answers "still running" and writes nothing: a line written then would have been
+  // that program's input (`got:printf …`), and the agent's own answer would have gone to the shell as a command.
+  it.skipIf(PS)('REQ-TOOLS-096/098 (OQ-147): a poll after C-c writes nothing into a program that survived the interrupt and still reads its input', async () => {
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
+    try {
+      await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
+      expect(diag((await t.execute(args({ command: `sh -c 'trap "" INT; read line; printf "got:%s\\n" "$line"'` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: 'C-c', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+      await new Promise((res) => setTimeout(res, 1_000));
+      const poll = await t.execute(args({ command: '' }), ctx());
+      expect(diag(poll.text)).toMatchObject({ exit_code: -1, outcome_kind: 'soft_pause' });
+      expect(diag((await t.execute(args({ command: 'hello\r', is_input: true }), ctx())).text)['exit_code']).toBe(0);
+      await new Promise((res) => setTimeout(res, 1_000));
+      const answered = await t.execute(args({ command: '' }), ctx());
+      expect(diag(answered.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+      expect(output(answered.text)).toContain('got:hello');
+      expect(answered.text).not.toContain('__rot_');
     } finally { await m.dispose(); }
   }, 60_000);
 

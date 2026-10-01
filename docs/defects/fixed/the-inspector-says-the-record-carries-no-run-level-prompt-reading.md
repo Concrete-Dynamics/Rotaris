@@ -7,7 +7,7 @@ REQ-MONITOR-089), and the same caption states the figure one line above — the 
 the sentence denying it. Seen 2026-09-29 while repairing live-run finding K1, the same class as that finding's false "no
 artifact store" sentence; not repaired here, because K1 named the tools and the artifacts.
 
-**Outcome.** Repaired 2026-09-29 under R-067 (acceptance finding A36). Confirmed on `fix-accept1-22` (base `610f7fe`)
+**Outcome.** Repaired 2026-10-01 under R-067 (acceptance finding A36). Confirmed on `fix-accept1-22` (base `610f7fe`)
 first: a unit case rendering the inspector on the run-level agent with `entryContext` 4,505 of 262,144 drew the figure
 and the sentence beneath it, and went red on the sentence. The `isRunLevel &&` note is removed from the ring caption in
 `packages/ui/src/Inspector.tsx`; the caption now states the run-level agent's own context window, as it does for every

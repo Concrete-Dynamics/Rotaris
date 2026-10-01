@@ -6763,7 +6763,10 @@ holds for a poll that closes it. The A10 cases now read the hand-over from that 
 interrupted one, OQ-164's arrangement, briefly re-opened this question's defect: the poll looked for the end only of the
 polled call, which is queued behind the interrupted one, and read "still running" over a dead command. It was corrected
 before its merge: the poll looks at every open paused call, its no-op line closes them all, and a line the interrupt
-discarded is reported as never run (OQ-164's reading).)*
+discarded is reported as never run (OQ-164's reading). ~~Its no-op line closes them all~~ was still false while the
+interrupt marked the interrupted call alone: when that command survived the interrupt and ended on its own, the queued
+call, unmarked, read "still running" on every poll. Found by the second verification on 2026-10-01 and corrected before
+the merge: the interrupt marks every open paused call.)*
 
 **What a ruling decides.** Which exit status and outcome that poll carries: −1 with the reason, as built; a status
 the product recovers from the shell (which would need the wrapper to carry the previous `$?`, on both backends); or a
@@ -8205,14 +8208,37 @@ for a poll nobody is prompted to make:
     code: "… never ran, so it has no exit code: its line was gone before the shell reached it (an interrupt (C-c)
     discards a line the shell has not read yet, and a command that reads its input takes it)". Its poll is an
     `execution_error` saying the same.
-  - A poll after the interrupt looks at every open paused call. When any is interrupted, its no-op line (OQ-147) goes
-    after all of them, so its printed marker closes them all.
+  - ~~A poll after the interrupt looks at every open paused call. When any is interrupted, its no-op line (OQ-147) goes
+    after all of them, so its printed marker closes them all.~~ *(False of the second build, found by its verification
+    on 2026-10-01: the interrupt marked the oldest open paused call alone. A command that handles or ignores SIGINT
+    (`trap '' INT`, a graceful-shutdown handler) ends on its own frame after the interrupt, and its call closes with
+    its own status. The queued call, whose line the same interrupt discarded, was then the only open paused call and
+    was unmarked, so no poll wrote a no-op line, and every poll read it "still running" over an idle prompt until the
+    next command.)*
+    The interrupt marks every open paused call, since it discards every line queued behind the one the shell is running
+    (`noteInterrupt`). A poll after it looks at every open paused call; when any is marked, its no-op line (OQ-147) goes
+    after all of them, so its printed marker closes whichever are still open, whether the interrupted command died of
+    the interrupt or ended on its own.
   - A call that was waiting behind the paused command when the terminal window's interrupt (REQ-SHELL-093) came is
     discarded the same way. It looks for the end of the line ahead of it as a running call does (OQ-147), and ends at once
     as never run, with no reset.
   - A call submitted after the interrupt is not said to have waited. Its detail says that an interrupt had been sent
     before it was submitted, how the paused command ended, and that the shell was past that line when it started this
     command, N seconds after it was submitted.
+  - Without an interrupt, a line queued behind a paused command can still go unrun: a paused command that reads its
+    input takes the queued line, and ends on its own frame. Its call closes with its own status. The queued call's
+    start marker never prints, and nothing tells the product the shell is past that line until a later line's marker
+    prints, so it reads "still running" until the next command, which reports it as never run. The poll writes no
+    no-op line there, since with no interrupt sent it cannot tell a line the command took from one the shell is about to
+    read, and a no-op line written into a command still reading its input is OQ-168's hazard. This was so before the
+    repair too; it is stated here, not built.
+- **A queued call that the session's reset or the shell's end closes before its line ran** is reported in the never-ran
+  form: "… never ran, so it has no exit code: the terminal session was reset before its shell reached that line", or
+  "… the session's shell was gone before it reached that line" (`reset-before` and `never-ran` in `PausedEnd`).
+  ~~"This command was submitted while the soft-paused command `…` was still running, and waited behind it: that command
+  ended N seconds after …, without having run, the session's shell being gone before it".~~ *(False of the second build,
+  found by its verification on 2026-10-01: it called a command that never ran "still running", and blamed the shell
+  where the session's reset had ended it.)*
 - **What is carried of a paused command is not counted in REQ-TOOLS-097's 100,000-character cap** on the call's own
   output. It is bounded by the paused call's own screen, `FOREGROUND_SCREEN_LINES` rows at the session's width, once per
   paused command reported. The cap is applied to the call's own output section alone. Whether a call's whole observation
@@ -8229,7 +8255,10 @@ of a soft pause the shell has not started yet hands over nothing of the earlier 
 window's interrupt while a call waits behind a soft-paused command ends that call as never run …". The pure case "…
 a paused call's share ends at the first later line's printed marker …" pins the cut over every two-chunk split. The case
 "… a soft-paused command that ends the shell ends a call waiting behind it as never run …" pins OQ-144's shell-exit case
-in this arrangement. Five A10 cases that read the paused
+in this arrangement. The second verification's finding is pinned by "… after C-c, a command that survives the interrupt
+ends with its own status, and the soft pause queued behind it reads never run on the next poll", and the reset's sentence
+by "… a soft pause queued behind a running one that a reset closes is reported as never run, by the reset"; both are red
+on the code before them. Five A10 cases that read the paused
 command's end from a poll after the next call now read it from the next call's report. Each keeps its assertion: the
 paused command's own status, nothing of the later calls, the echo or the end frames in what is carried of it, and no
 marker anywhere.

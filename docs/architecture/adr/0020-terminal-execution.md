@@ -454,6 +454,16 @@ A line whose marker never printed when a later one did is reported as never run,
 discarded while it waited (the window's interrupt, REQ-SHELL-093). Measured with dash through a real PTY: the four
 cases named in OQ-164 were red on the first build and are green on the correction.*
 
+*Corrected again 2026-10-01, before its merge, by its second verification: **the interrupt was taken to reach the
+interrupted line alone.** It discards every line queued behind that one too, but only the oldest open paused call was
+marked. A command that survives the interrupt (`trap '' INT`, a SIGINT handler) ends on its own frame, its call closes
+with its own status, and the queued call was left open and unmarked: no poll wrote the no-op line, and every poll read it
+"still running" over an idle prompt, so "its no-op line closes them all" above was still false. The interrupt now marks
+every open paused call (`noteInterrupt`, the old reading kept struck beside it). The same verification found that a queued
+call closed by the session's reset before its line ran was reported as "still running" and as having lost its shell; it is
+reported in the never-ran form now, naming the reset (`reset-before`). Both cases named in OQ-164 for this correction were
+red before it and are green on it, with dash through a real PTY.*
+
 *Reported back 2026-10-01, the repair of
 [`a-command-that-exits-the-session-shell-reads-as-a-soft-pause`](../../defects/fixed/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md)
 (OQ-144's sibling case): **the marker protocol also assumed that the shell outlives the command.** A command that ends

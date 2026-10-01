@@ -219,8 +219,7 @@ export function earlierSentence(e: PausedEnd, polled: boolean): string {
   const how = e.end === 'exit' ? `with exit code ${e.exitCode}`
     : e.end === 'no-status' ? 'with no exit status of its own (the shell abandoned the rest of its line, as an interrupt (C-c) makes it do)'
       : e.end === 'shell' ? 'by ending the session\'s shell, with no exit code'
-        : e.end === 'reset' ? 'when the terminal session was reset, with no exit code'
-          : 'without having run, the session\'s shell being gone before it';
+        : 'when the terminal session was reset, with no exit code';
   if (e.end === 'running') {
     return polled
       ? `${capital(name)} ahead of the polled one is still running, so the shell has not started the polled command yet.`
@@ -229,6 +228,15 @@ export function earlierSentence(e: PausedEnd, polled: boolean): string {
   // The verifier's finding on OQ-164's repair: a line the terminal discarded unread never ran — no status, no wait behind it.
   if (e.end === 'discarded') {
     return `${capital(name)}${polled ? ' ahead of the polled one' : ''} never ran, so it has no exit code: its line was gone before the shell reached it (an interrupt (C-c) discards a line the shell has not read yet, and a command that reads its input takes it).`;
+  }
+  // The same form for a line whose shell went first — the command ahead of it ended the shell, or the session was reset. It
+  // was never "still running", and nothing it did ended it.
+  // FALSIFIED, kept beside its replacement (OQ-164's second verification, 2026-10-01): the "waited behind it: that command
+  // ended N seconds after …, without having run, the session's shell being gone before it" form. It called a command that
+  // never ran "still running", and blamed the shell where the session's reset had ended it.
+  if (e.end === 'never-ran' || e.end === 'reset-before') {
+    const why = e.end === 'never-ran' ? 'the session\'s shell was gone before it reached that line' : 'the terminal session was reset before its shell reached that line';
+    return `${capital(name)}${polled ? ' ahead of the polled one' : ''} never ran, so it has no exit code: ${why}.`;
   }
   if (polled || e.endedAfterSubmitMs === null) return `${capital(name)} ahead of the polled one ended ${seconds(e.endedAgoMs ?? 0)} ago, ${how}.`;
   if (e.endedAfterSubmitMs < 0) return `${capital(name)} had ended ${seconds(-e.endedAfterSubmitMs)} before this command was submitted, ${how}, and no poll had reported it.`;

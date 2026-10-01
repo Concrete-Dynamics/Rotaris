@@ -88,6 +88,15 @@ not ruled):
   never run with no exit code, and the poll's no-op line closes every open paused call. A call waiting behind the paused
   command when the terminal window's interrupt comes ends at once as never run, with no reset. The detail of a call
   submitted after the interrupt says that the interrupt came first, not that the call waited.
+  *(~~The poll's no-op line closes every open paused call~~ was still false of that correction, as the second
+  verification found on 2026-10-01: the interrupt marked the interrupted call alone, so when that command survived the
+  interrupt (`trap '' INT`, a SIGINT handler) and ended on its own, the queued call was left unmarked and every poll read
+  it "still running" over an idle prompt. Corrected before the merge: the interrupt marks every open paused call. The
+  same verification found that a queued call closed by the session's reset before it ran was called "still running" and
+  said to have lost its shell; it is now reported in the never-ran form, naming the reset.)*
+- A paused command that reads its input can take the line queued behind it, with no interrupt; the queued call then
+  reads "still running" until the next command reports it as never run. That was so before this repair, and is stated
+  in OQ-164's reading, not built.
 - The tool description states the third move: "a new command issued meanwhile waits behind it, and its result reports
   how the paused one ended".
 
@@ -99,7 +108,10 @@ next call's report and keep their assertions. The verification's corrections are
 each red on the first build: "… after C-c, a soft pause queued behind the interrupted one never ran …", "… a poll after C-c
 with a soft pause queued behind the interrupted one reads both as ended …", "… a poll of a soft pause the shell has not
 started yet hands over nothing of the earlier command's as its own", and "… the window's interrupt while a call waits
-behind a soft-paused command ends that call as never run …". The live run's `terminal` scenario carries `wedge-again` and `behind-paused`
+behind a soft-paused command ends that call as never run …". The second verification's corrections are pinned by "… after
+C-c, a command that survives the interrupt ends with its own status, and the soft pause queued behind it reads never run on
+the next poll" and "… a soft pause queued behind a running one that a reset closes is reported as never run, by the
+reset", both red on the code before them. The live run's `terminal` scenario carries `wedge-again` and `behind-paused`
 (`lib/terminal-shapes.mjs`, `pausedBehindReading`). Its first run (2026-10-01, the self-hosted endpoint, pack
 `.live-run/runs/2026-10-01T11-09-06-837Z` of the `fin1-termshellend` worktree) read the command issued behind the paused
 `sleep 45` as "… waited behind it: that command ended 12.5 seconds after this command was submitted, with exit code 0",

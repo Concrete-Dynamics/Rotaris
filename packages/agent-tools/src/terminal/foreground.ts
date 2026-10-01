@@ -82,13 +82,13 @@ export interface ForegroundResult {
  * OQ-164: what an observation reports of a soft-paused command other than its own subject. `end` says how it ended: its
  * own exit status (`exit`); none of its own, the shell having abandoned its line (`no-status`, OQ-147); by ending the
  * session's shell (`shell`); by the session's reset (`reset`); never having run, the shell being gone before its line
- * (`never-ran`) or its line gone unread — an interrupt discards what the shell has not read (`discarded`); or not yet
- * (`running`).
+ * (`never-ran`), the session reset before its line (`reset-before`), or its line gone unread — an interrupt discards what
+ * the shell has not read (`discarded`); or not yet (`running`).
  */
 export interface PausedEnd {
   /** The command as the agent issued it. */
   readonly label: string;
-  readonly end: 'exit' | 'no-status' | 'shell' | 'reset' | 'never-ran' | 'discarded' | 'running';
+  readonly end: 'exit' | 'no-status' | 'shell' | 'reset' | 'never-ran' | 'reset-before' | 'discarded' | 'running';
   /**
    * True when an interrupt (`C-c`) had been sent to it before the reporting call was submitted, and it ended with no status
    * of its own (`no-status`): it ended at that interrupt or after it, and the call did not simply wait behind it.
@@ -343,11 +343,11 @@ interface PausedCall {
   observedAt: number;
   /**
    * How the call closed when not by its own end frame (OQ-164): the session's shell ended while its command ran (`shell`,
-   * OQ-144's shell-exit case), or before its line ran (`never-ran`); the session was reset under it (`reset`); or a later
-   * line started though its own never had, its line gone unread (`discarded`, `unstartedShare`). Null while open, and when it
-   * closed on its own frame or at a later line's start marker.
+   * OQ-144's shell-exit case), or before its line ran (`never-ran`); the session was reset under it (`reset`), or before its
+   * line ran (`reset-before`); or a later line started though its own never had, its line gone unread (`discarded`,
+   * `unstartedShare`). Null while open, and when it closed on its own frame or at a later line's start marker.
    */
-  endedBy: 'shell' | 'never-ran' | 'reset' | 'discarded' | null;
+  endedBy: 'shell' | 'never-ran' | 'reset' | 'reset-before' | 'discarded' | null;
   /** OQ-164: the command as the agent issued it, for the observation that reports its end. */
   readonly label: string;
   /** OQ-164: monotonic time the call closed; null while open. */
@@ -1587,7 +1587,7 @@ export class ForegroundSession {
     const now = this.deps.monotonic.now();
     this.openPaused().forEach((paused, i) => {
       paused.code = null;
-      paused.endedBy = i === 0 && paused.started ? 'reset' : 'never-ran';
+      paused.endedBy = i === 0 && paused.started ? 'reset' : 'reset-before';
       paused.endedAt = now;
       paused.onClose?.();
     });
@@ -1637,12 +1637,17 @@ export class ForegroundSession {
   private noteInterrupt(text: string): void {
     if (!text.includes('\x03')) return;
     // OQ-164: the interrupt reaches the line the shell is running — the oldest open paused call's — and the terminal discards
-    // every line the shell has not read yet, a call waiting behind it included: that call is marked too, so it looks for
-    // the end of the line ahead of it as a running call does, and reads as never having run.
-    const head = this.pausedAhead[0] ?? this.pausedCommand;
-    if (head !== null) {
-      head.interrupted = true;
-      head.interruptedAt ??= this.deps.monotonic.now();
+    // every line the shell has not read yet: every paused call queued behind it, and a call waiting behind them. Each is
+    // marked, so a poll writes the closer whichever of them is still open once the shell holds its terminal again, and a
+    // call waiting looks for the end of the line ahead of it as a running call does; a discarded line reads as never run.
+    // FALSIFIED, kept beside its replacement (OQ-164's second verification, 2026-10-01): "the head alone is marked". A
+    // command that handles or ignores SIGINT ends on its own frame, the head closes with its own status, and the queued
+    // call — its line discarded by the same interrupt — was left the only open paused call, unmarked: no poll wrote a
+    // closer, and every poll read it "still running" over an idle prompt until the next command.
+    const at = this.deps.monotonic.now();
+    for (const paused of this.openPaused()) {
+      paused.interrupted = true;
+      paused.interruptedAt ??= at;
     }
     this.active?.onInterrupt?.();
   }

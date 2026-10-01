@@ -58,3 +58,35 @@ if it may, whether anyone is told. Recorded, not repaired.
 - `docs/architecture/codebase.md:456-460` — the same flag in the codebase map.
 - `apps/desktop/scripts/fixtures/todo-app/.gitignore` — the live run's fixture. It already carries `.rotaris/`, so
   `.serena/` is the only line the load appends to it.
+
+## Repaired in part — 2026-10-01; open for OQ-161's ruling
+
+**Found true on the branch** (`fin2-config-readings`, from `origin/main` at `f41dc2a`): a repository whose committed
+`.gitignore` already named `.rotaris/` read ` M .gitignore` in `git status --porcelain` after one configuration load
+(`packages/config/src/load.test.ts`, "a repository whose committed .gitignore already names `.rotaris/` stays clean
+once the runtime's marker exists", red on the code before, with the other four new cases and the amended REQ-CONFIG-013 case).
+
+**The part repaired, under a reading recorded in [OQ-161](../architecture/open-questions.md) and not a ruling.** The
+load appends `.rotaris/` alone to the workspace's `.gitignore`, the one line REQ-CONFIG-013 and REQ-MCP-089 name. The
+marker's directory goes to the repository-local exclude file (`info/exclude` in the common directory of the repository
+whose top level is the workspace, a linked worktree's included), which Git honours and nobody tracks: `git status`
+stays clean, and no file the user tracks changes, so there is nothing left for an agent to account for. Best-effort and
+idempotent; nothing is written for a workspace below a repository's top level or in none (OQ-161 states why), nor
+through a `.git` file whose `gitdir:` names no git directory Git would recognise (a stale pointer, or one to any other
+directory), and nothing is created in the repository but `info/` and its file. Pinned by nine cases in `load.test.ts`
+(`OQ-161's reading: …`) and the amended REQ-CONFIG-013 case; the four added at verification (a stale pointer, a pointer
+to a directory that is not a repository, a `commondir` naming one, a repository without `info/`) — the first three red
+on the lookup before.
+
+**Shown in a live run.** `pnpm build`, then `live-run.mjs --confirm --skip-build --only=edit,frictions` against the
+registered `katalyst` endpoint (pack `.live-run/runs/2026-10-01T11-11-22-487Z/` of the `fin2-config-readings` worktree;
+git-ignored): both scenarios passed. In `edit`, a child's own `git status --porcelain` (transcript step 44) listed only
+`src/todos.js`, and the script's `git diff` counted the two files the task changed; neither transcript mentions
+`.gitignore`. After the verifier's repair (only a git directory Git would recognise), `--only=edit` passed again on the
+rebuilt head (pack `2026-10-01T12-07-54-539Z`), and nothing in its pack mentions `.gitignore`. The `duress` run, where
+the unrequested child appeared, was not run in this round (the acceptance plan's).
+
+**Left to the owner.** OQ-161's ruling: whether the load may write the marker's directory anywhere at all, and if so
+whether the exclude file is the place, or whether the runtime should be started so that it creates no marker in the
+workspace root. A `.gitignore` an earlier build amended keeps its `.serena/` line: the product never removes a line from
+a file the user owns. The note stays open until the ruling.

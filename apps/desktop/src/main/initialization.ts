@@ -1,4 +1,4 @@
-import { toIsoUtc, type Clocks } from '@rotaris/kernel';
+import { millis, toIsoUtc, type Clocks, type TimerHandle } from '@rotaris/kernel';
 import {
   BACKGROUND_BROKE_DOWN, BACKGROUND_FAILED_FALLBACK, BACKGROUND_FAILED_HEADLINE,
   EMPTY_INITIALIZATION_VIEW, EMPTY_RUN_REPORT, NEEDS_PROVIDER_DETAIL, NEEDS_PROVIDER_HEADLINE,
@@ -6,7 +6,7 @@ import {
   type InitializationStateView, type InitRunReport, type McpSetupStatus,
 } from '@rotaris/contracts';
 import {
-  deriveSets, executeTasks, labelFor, promptOwed, readInitializationState, recordSkip, stampOnly,
+  CODE_INTELLIGENCE_SETUP_STEPS, deriveSets, executeTasks, labelFor, promptOwed, readInitializationState, recordSkip, stampOnly,
   TaskRegistry, viewOf, type InitializationState, type InitializationTask, type MarkerCommit, type PlainMap,
   type TaskResult, type TaskSets, type WorkspaceClassification,
 } from '@rotaris/config';
@@ -48,6 +48,23 @@ const SETUP_REASON = "Code intelligence could not complete this project's setup"
  * The detail is the build's: REQ-WORKSPACE-092's cancelled sentence names a step, and none began (OQ-167).
  */
 export const CANCELLED_BEFORE_SETUP_ERROR = `${SETUP_REASON}: the setup was cancelled before it started.`;
+
+/**
+ * REQ-WORKSPACE-109/084/093: the two ways a setup's follow ends without the run host's `finished` status — the run host
+ * exited (main never forks another), or no outcome arrived within `SETUP_FOLLOW_BOUND_MS`. Each is a retryable failure in
+ * REQ-WORKSPACE-093's summary, under the reason of the stage that was running (or `SETUP_REASON` when none was); the
+ * details are the build's, under OQ-169.
+ */
+export const SETUP_RUN_HOST_EXITED_DETAIL = 'the run host exited before the setup finished.';
+export const SETUP_OVERDUE_DETAIL = 'no outcome arrived within the setup\'s time budgets.';
+/** REQ-WORKSPACE-092: once a step is stopped, nothing it launched is still running 5 s later. */
+const SETUP_STOP_GRACE_MS = 5_000;
+/**
+ * REQ-WORKSPACE-091/092: the longest a setup can take while its run host keeps the budgets — every stage's budget
+ * (300 + 1800 + 120 s) and, for each, the 5 s in which what it launched is ended. A follow still open after it has lost
+ * its finished status, and ends (OQ-169 records the reading).
+ */
+export const SETUP_FOLLOW_BOUND_MS = CODE_INTELLIGENCE_SETUP_STEPS.reduce((sum, s) => sum + s.budgetMs + SETUP_STOP_GRACE_MS, 0);
 
 /**
  * REQ-WORKSPACE-092: a step stopped before it finished reads in one of two fixed sentences, so it is told apart from one
@@ -164,6 +181,12 @@ export class InitializationCoordinator {
    */
   private setupListener: ((status: McpSetupStatus) => void) | null = null;
   /**
+   * The live follow's way to end without a `finished` status, set and cleared beside `setupListener`: the run host's exit
+   * (`onRunHostExit`) calls it, so the run ends and its turn of `setupTurn` passes on
+   * (`docs/defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`).
+   */
+  private setupAbandon: ((detail: string) => void) | null = null;
+  /**
    * REQ-WORKSPACE-109/084/013: the tail of the coordinator's setups, one at a time. A run's `code-intelligence-setup`
    * starts only once the setup before it has ended — after a workspace switch, the outgoing workspace's, still ending
    * under its cancellation. Before this, the replacement's start was refused as already running, or its follow took the
@@ -254,7 +277,23 @@ export class InitializationCoordinator {
     return new Promise<TaskResult>((resolve) => {
       const seen = new Map<string, string>();
       let ended = false;
+      let last = first;
+      let overdue: TimerHandle | null = null;
+      /** Ends this follow once, whichever way; only this follow's own sinks are cleared (see `setupTurn`). */
+      const end = (result: TaskResult): void => {
+        if (ended) return;
+        ended = true;
+        if (this.setupListener === drain) this.setupListener = null;
+        if (this.setupAbandon === abandon) this.setupAbandon = null;
+        overdue?.cancel();
+        signal.removeEventListener('abort', onAbort);
+        resolve(result);
+      };
+      // REQ-WORKSPACE-084/093: a setup whose finished status will never arrive still ends, as a retryable failure.
+      const abandon = (detail: string): void => { if (!ended) end(this.unfinished(last, detail)); };
       const drain = (status: McpSetupStatus): void => {
+        if (ended) return;
+        last = status;
         for (const step of status.steps) {
           if (step.status === 'pending' || step.status === 'running') continue;
           if (seen.get(step.id) === step.status) continue;
@@ -262,21 +301,25 @@ export class InitializationCoordinator {
           onStep({ name: STEP_LABEL[step.id] ?? step.label, status: step.status, detail: stepDetail(step) });
         }
         if (status.state !== 'finished') return;
-        // Only this follow's own sink is cleared: another may have been installed since (see `setupTurn`).
-        if (this.setupListener === drain) this.setupListener = null;
-        // Nor may this run's abort reach the run host once its setup has ended. The run host's cancel is not a workspace's
-        // but its one setup's, and `setupTurn` lets the next run's setup start while this run is still recording its
-        // outcome — so a close or a Cancel landing in that interval cancelled the next workspace's setup
-        // (ADR-0064's seventh round).
-        signal.removeEventListener('abort', onAbort);
-        ended = true;
-        resolve(this.resultOf(status));
+        // `end` clears only this follow's own sink: another may have been installed since (see `setupTurn`). Nor may this
+        // run's abort reach the run host once its setup has ended. The run host's cancel is not a workspace's but its one
+        // setup's, and `setupTurn` lets the next run's setup start while this run is still recording its outcome — so a
+        // close or a Cancel landing in that interval cancelled the next workspace's setup (ADR-0064's seventh round).
+        end(this.resultOf(status));
       };
       // REQ-WORKSPACE-092: the run host ends what the setup launched. A cancel whose request fails is said, not dropped.
       const onAbort = (): void => { this.deps.setup.cancel().catch((cause: unknown) => this.deps.log(`initialization: the setup's cancellation could not be delivered (${String(cause)})`, 'warn')); };
       this.setupListener = drain;
+      this.setupAbandon = abandon;
       signal.addEventListener('abort', onAbort, { once: true });
       drain(first);
+      // REQ-WORKSPACE-091/092: a lost push must not hold every later setup behind this one for the life of the process.
+      if (!ended) {
+        overdue = this.deps.clocks.timers.after(millis(SETUP_FOLLOW_BOUND_MS), () => {
+          this.deps.log(`initialization: no finished status for ${CODE_INTELLIGENCE_TASK_ID}'s setup arrived within ${SETUP_FOLLOW_BOUND_MS / 1000} s; the run ends as a failure`, 'warn');
+          abandon(SETUP_OVERDUE_DETAIL);
+        });
+      }
       // An abort that landed while the start request was in flight fired before the listener was added, and an aborted
       // signal fires no more: without this, the setup ran to the end of its stages uncancelled, and `setupTurn` held every
       // later setup behind it (ADR-0064's sixth round). A setup that had already ended in its first status is left be.
@@ -311,9 +354,33 @@ export class InitializationCoordinator {
     return this.failure(`${reason}: ${detail}`, CODE_INTELLIGENCE_FAILED_SUMMARY, true, steps);
   }
 
+  /**
+   * REQ-WORKSPACE-093: a setup that ended without its finished status — the steps that finished, and the reason of the
+   * stage that was running when it was lost, or `SETUP_REASON` when none was.
+   */
+  private unfinished(last: McpSetupStatus, detail: string): TaskResult {
+    const steps = last.steps
+      .filter((s) => s.status !== 'pending' && s.status !== 'running')
+      .map((s) => ({ name: STEP_LABEL[s.id] ?? s.label, status: s.status, detail: stepDetail(s) }));
+    const running = last.steps.find((s) => s.status === 'running');
+    const reason = running ? STAGE_REASON[running.id] ?? `Code intelligence could not complete ${running.label}` : SETUP_REASON;
+    return this.failure(`${reason}: ${detail}`, CODE_INTELLIGENCE_FAILED_SUMMARY, true, steps);
+  }
+
   /** The run host pushes here; main routes it in. */
   onSetupStatus(status: McpSetupStatus): void {
     this.setupListener?.(status);
+  }
+
+  /**
+   * Main calls this when the run host exits; it is never forked again, so a setup it held can never send its finished
+   * status. The follow under way ends as a retryable failure and the next setup's turn comes (REQ-WORKSPACE-084/093/109).
+   */
+  onRunHostExit(code: number): void {
+    if (this.setupAbandon === null) return;
+    // PD-MONITOR-002: 0 is an orderly end — the quit, which has already closed the workspace — and any other the run host lost.
+    this.deps.log(`initialization: the run host exited (${code}) while ${CODE_INTELLIGENCE_TASK_ID}'s setup was under way; the run ends as a failure`, code === 0 ? 'info' : 'warn');
+    this.setupAbandon(SETUP_RUN_HOST_EXITED_DETAIL);
   }
 
   // ---- per workspace -----------------------------------------------------------------------------
@@ -476,6 +543,14 @@ export class InitializationCoordinator {
     } catch (cause) {
       // REQ-WORKSPACE-102: the window stays fully usable and the composer gate stays OFF.
       e.resolutionFailed = true;
+      // REQ-WORKSPACE-013 (OQ-141's reading): a workspace closed while its resolution was under way is no window's, and the
+      // banner reaches every live window — so it is said in the log only, as `publish` shows nothing of it. The silent stamp's
+      // write is one way there: main's marker request rejects when the service gives no reply within its bound
+      // (`docs/defects/fixed/a-closed-workspaces-resolution-can-still-raise-the-resolution-failed-banner.md`).
+      if (e.closed) {
+        this.deps.log(`initialization: resolution failed for ${e.root}, which was closed while it was under way, so nothing is shown (${String(cause)})`);
+        return await this.viewFor(e);
+      }
       this.deps.log(`initialization: resolution failed for ${e.root} (${String(cause)})`, 'warn');
       this.deps.banner(RESOLUTION_FAILED_HEADLINE, RESOLUTION_FAILED_DETAIL);
       await this.publish(e);

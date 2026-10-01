@@ -8279,3 +8279,33 @@ terminal, the choices are: write it anyway (as built for a poll); write it only 
 child process; or write nothing off Linux until a host has measured it. Or whether a poll that cannot see the line's end
 must say only that the command may have ended, the advice then naming a next command as the way to learn it. And whether
 the terminal window's interrupt marks the call as the agent's does.
+
+**OQ-169 — How does a code-intelligence setup end when its finished status never arrives — the run host lost, or a
+status push lost?** *(REQ-WORKSPACE-109, "A run SHALL end in exactly one of three ways"; REQ-WORKSPACE-084, "A task that
+ends without reporting any of those three outcomes SHALL be treated as a failure and SHALL be reported with an error
+message describing what went wrong"; REQ-WORKSPACE-091's three stage budgets, 300 / 1800 / 120 s; REQ-WORKSPACE-092's
+5 s; REQ-WORKSPACE-093. Raised 2026-10-01 under [R-067](../product/requests.md#r-067) by the repair of
+[`nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`](../defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md),
+as OQ-168, and renumbered OQ-169 at its merge because `origin/main` had taken OQ-168 meanwhile. Open.)*
+
+The initialization coordinator follows a setup through the run host's pushed `mcp.setupStatus` and ends the task on the
+status whose state is `finished`; its setups run one at a time, so every later workspace's setup waits for that end. The
+run host can be lost mid-setup — main never forks another — and a push can be lost; the specification bounds every stage
+but says nothing of a setup whose outcome never reaches the task, nor of what its failure reads.
+
+**What the build proceeds under** (`apps/desktop/src/main/initialization.ts`): the follow ends as a retryable failure
+with REQ-WORKSPACE-093's summary ("Code intelligence setup did not complete for this project. It runs again the next time
+this workspace is opened."), its reason the running stage's ("Code intelligence could not index this project's symbols",
+…) or, with no stage running, the build's "Code intelligence could not complete this project's setup" (OQ-167), and its
+detail the build's own: "the run host exited before the setup finished." when main sees the run host exit, and "no
+outcome arrived within the setup's time budgets." when no finished status has come 2235 s after the follow began — every
+stage's budget plus REQ-WORKSPACE-092's 5 s for each (`SETUP_FOLLOW_BOUND_MS`). The steps that finished are reported; the
+one that was running is not, since it never finished (REQ-WORKSPACE-109). Nothing is recorded, so the task stays pending.
+On the bound, no cancellation is sent: the run host's one setup may by then be another's (the MCP category's), and its
+own budgets already end every stage. Nothing in main ends a step's processes when the run host that launched them is
+killed by signal; whether they outlive it was not measured, and `workspace-proof`'s scenario 8d ends its stand-in itself.
+
+**What a ruling decides.** Whether these two cases have words of the specification's own; whether the bound is the right
+one (it adds nothing for the run host's own work around the stages, which the budgets do not cover); whether the
+coordinator should instead ask the run host for the setup's status when the bound passes; and whether REQ-WORKSPACE-092's
+"nothing the step launched SHALL still be running 5 s later" binds a step whose run host was lost.

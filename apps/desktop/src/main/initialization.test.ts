@@ -8,6 +8,7 @@ import { readInitializationState, writeConfigFields, type PlainMap } from '@rota
 import {
   CANCELLED_BEFORE_SETUP_ERROR, CODE_INTELLIGENCE_FAILED_SUMMARY, CODE_INTELLIGENCE_SUCCESS_CODE, CODE_INTELLIGENCE_SUCCESS_NON_CODE,
   CODE_INTELLIGENCE_TASK_ID, deliverSetupCancel, InitializationCoordinator, NOT_A_LOCAL_LAUNCH_ERROR, NOT_A_LOCAL_LAUNCH_SUMMARY,
+  SETUP_FOLLOW_BOUND_MS, SETUP_OVERDUE_DETAIL, SETUP_RUN_HOST_EXITED_DETAIL,
 } from './initialization.js';
 
 function workspace(): { root: string; agents: string } {
@@ -44,6 +45,7 @@ interface Harness {
   readonly logs: { message: string; level: string }[];
   readonly root: string;
   readonly agents: string;
+  readonly clock: FakeClock;
   push(s: McpSetupStatus): void;
 }
 
@@ -87,7 +89,7 @@ function harness(options: { applicable?: boolean; startRefusal?: { code: string;
     modelReachable: () => options.modelReachable !== false,
   });
   coordinator.open(root, agents);
-  return { coordinator, published, banners, writes, logs, root, agents, push: (s) => coordinator.onSetupStatus(s) };
+  return { coordinator, published, banners, writes, logs, root, agents, clock, push: (s) => coordinator.onSetupStatus(s) };
 }
 
 /** REQ-WORKSPACE-088: the one registered task, its id and its label, and that it needs no consent. */
@@ -714,6 +716,43 @@ describe('closing a workspace', () => {
     expect(readInitializationState(h.agents).lastRun).toBeNull();
   });
 
+  /**
+   * REQ-WORKSPACE-102's error surface is the failing window's; once its workspace is closed there is none, and channel 12's
+   * banner reaches every live window. The silent stamp of a workspace with nothing applicable is the resolution's one write,
+   * and main's marker request rejects when the service gives no reply within its bound; here the write is made to reject
+   * (`docs/defects/fixed/a-closed-workspaces-resolution-can-still-raise-the-resolution-failed-banner.md`).
+   */
+  it('raises the resolution-failed banner when an open workspace\'s silent stamp throws (REQ-WORKSPACE-102)', async () => {
+    const failing = Promise.reject(new Error('link closed'));
+    failing.catch(() => undefined);
+    const h = harness({ applicable: false, writeHold: { current: failing } });
+    const state = await h.coordinator.resolve(true);
+    expect(state.resolutionFailed).toBe(true);
+    expect(h.banners).toEqual([{ headline: 'Project setup could not be checked', detail: 'Rotaris could not work out whether this workspace still needs setting up. Runs are not blocked; you can check again.' }]);
+    expect(h.logs).toContainEqual({ level: 'warn', message: `initialization: resolution failed for ${h.root} (Error: link closed)` });
+  });
+
+  it('raises no resolution-failed banner when a workspace closed while its silent stamp was in flight then fails it, and says so in the log (REQ-WORKSPACE-013, REQ-WORKSPACE-102, OQ-141)', async () => {
+    let fail: (cause: Error) => void = () => undefined;
+    const writeHold: StatusHold = { current: new Promise<void>((_, reject) => { fail = reject; }) };
+    const h = harness({ applicable: false, writeHold });
+    const resolving = h.coordinator.resolve(true);
+    await settle();
+    // The stamp's write is in flight when the switch lands: the replacement opens and this workspace closes.
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents);
+    h.coordinator.close(h.root);
+    const publishedAtClose = h.published.length;
+    fail(new Error('link closed'));
+    await resolving;
+    await settle();
+    expect(h.banners).toEqual([]);
+    expect(h.published).toHaveLength(publishedAtClose);
+    expect(h.logs).toContainEqual({ level: 'info', message: `initialization: resolution failed for ${h.root}, which was closed while it was under way, so nothing is shown (Error: link closed)` });
+    expect(h.logs.filter((l) => l.level === 'warn')).toEqual([]);
+    expect(readInitializationState(h.agents).lastRun).toBeNull();
+  });
+
   it('keeps answering for the workspace still open in another window when one of two closes (REQ-WORKSPACE-013)', async () => {
     const h = harness({ applicable: false });
     const other = workspace();
@@ -933,5 +972,83 @@ describe('one setup at a time across a workspace switch', () => {
     h.push(completedSetup());
     await settle();
     expect(readInitializationState(other.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+  });
+});
+
+/**
+ * REQ-WORKSPACE-109/084/093: a setup's follow ends only on a `finished` status, and every later setup waits for it
+ * (`setupTurn`). When that status can never arrive — the run host exits mid-setup, and main never forks another — or a push
+ * is lost, the follow must still end, as a retryable failure, and release its turn
+ * (`docs/defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`).
+ */
+describe('a setup whose finished status never arrives', () => {
+  it('ends the follow as a retryable failure when the run host exits, and starts the setup queued behind it (REQ-WORKSPACE-109, REQ-WORKSPACE-084, REQ-WORKSPACE-093)', async () => {
+    let starts = 0;
+    const h = harness({ onStart: () => { starts += 1; } });
+    await h.coordinator.resolve(true);
+    await settle();
+    expect(starts).toBe(1);
+    h.push(status({ steps: [step('create', 'succeeded', 'made'), step('index', 'running'), step('memory', 'pending')] }));
+    await settle();
+    // A second window's workspace: its background run waits behind the first workspace's setup.
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents);
+    await h.coordinator.resolve(true);
+    await settle();
+    expect(starts).toBe(1);
+    h.coordinator.onRunHostExit(1);
+    await settle();
+    // The first run ends as REQ-WORKSPACE-093's retryable failure, under the stage that was running; nothing is recorded.
+    const error = `Code intelligence could not index this project's symbols: ${SETUP_RUN_HOST_EXITED_DETAIL}`;
+    expect(h.logs).toContainEqual({ level: 'info', message: `initialization: ${CODE_INTELLIGENCE_TASK_ID} → failure — ${error}` });
+    expect(readInitializationState(h.agents).completed).toEqual([]);
+    expect(readInitializationState(h.agents).lastRun).toBeNull();
+    expect(h.banners).toEqual([{ headline: 'Project setup did not finish', detail: CODE_INTELLIGENCE_FAILED_SUMMARY }]);
+    // The queued run's setup starts, and is followed to its own outcome.
+    expect(starts).toBe(2);
+    h.push(completedSetup());
+    await settle();
+    expect(readInitializationState(other.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+  });
+
+  it('ends the follow as a retryable failure once the setup has outlasted every stage budget and its stop grace, and starts the setup queued behind it (REQ-WORKSPACE-091, REQ-WORKSPACE-092, REQ-WORKSPACE-109)', async () => {
+    let starts = 0;
+    const h = harness({ onStart: () => { starts += 1; } });
+    await h.coordinator.resolve(true);
+    await settle();
+    const other = workspace();
+    h.coordinator.open(other.root, other.agents);
+    await h.coordinator.resolve(true);
+    await settle();
+    expect(starts).toBe(1);
+    // 300 + 1800 + 120 s of budgets, and REQ-WORKSPACE-092's 5 s for each stage's processes to be ended.
+    expect(SETUP_FOLLOW_BOUND_MS).toBe(2_235_000);
+    h.clock.advance(SETUP_FOLLOW_BOUND_MS - 1);
+    await settle();
+    expect(starts).toBe(1);
+    h.clock.advance(1);
+    await settle();
+    const error = `Code intelligence could not complete this project's setup: ${SETUP_OVERDUE_DETAIL}`;
+    expect(h.logs).toContainEqual({ level: 'info', message: `initialization: ${CODE_INTELLIGENCE_TASK_ID} → failure — ${error}` });
+    expect(h.logs.some((l) => l.level === 'warn' && l.message.includes('no finished status'))).toBe(true);
+    expect(starts).toBe(2);
+    // The queued run's setup is followed to its own outcome.
+    h.push(completedSetup());
+    await settle();
+    expect(readInitializationState(other.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    expect(readInitializationState(h.agents).completed).toEqual([]);
+  });
+
+  it('leaves a follow that ended in time unaffected by a later run-host exit or the bound (REQ-WORKSPACE-084)', async () => {
+    const h = harness();
+    await h.coordinator.resolve(true);
+    await settle();
+    h.push(completedSetup());
+    await settle();
+    h.coordinator.onRunHostExit(0);
+    h.clock.advance(SETUP_FOLLOW_BOUND_MS);
+    await settle();
+    expect(readInitializationState(h.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    expect(h.banners).toEqual([]);
   });
 });

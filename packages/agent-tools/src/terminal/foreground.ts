@@ -930,8 +930,28 @@ export class ForegroundSession {
     if (outcome.kind !== 'pause') this.region = null;
     this.clearers.get(nonce)?.();
     this.clearers.delete(nonce);
+    // REQ-TOOLS-098: a soft-paused call is opened BEFORE its listener goes and before the emulator's write is awaited, in
+    // the same turn, so a chunk the PTY delivers during that write is given to the paused call by `onData` — into the same
+    // `hold`, which the next poll feeds to the screen — and a chunk carrying the command's own end frame closes it with its
+    // own status. Opened after the write, as it was, such a chunk reached neither the listener nor the paused call: no poll
+    // returned it, and its end frame resolved the call already settled, so the paused call read "still running" until a
+    // later call's marker closed it with no status (`output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll`).
+    let paused: PausedCall | null = null;
+    if (outcome.kind === 'pause') {
+      this.pausedDone?.screen.dispose();
+      this.pausedDone = null;
+      // A pause nobody ever polled is replaced here: release its screen rather than leave it.
+      this.pausedCommand?.screen.dispose();
+      // It is fed by `onData` from here, its share of each chunk only (`pausedShare`), until its own frame or the next
+      // call's start marker closes it (A10). `delivered` is what this call returns, set once the screen has it.
+      paused = { start, end, screen, hold, delivered: '', undecided: '', code: null, until: null, interrupted: false, closer: null, onClose: null, lastOutputAt, observedAt: monotonic.now() };
+      this.pausedCommand = paused;
+      this.active = null;
+      this.state = 'idle';
+    }
     this.listeners = this.listeners.filter((l) => l !== listener);
-    await screen.write(hold.take());
+    const taken = hold.take();
+    await screen.write(taken);
     const lines = ForegroundSession.cleanLines(screen.text(), start, end);
     const finish = (r: Omit<ForegroundResult, 'output' | 'truncated' | 'sessionReinitialized' | 'restore'>): ForegroundResult => {
       let text = lines.join('\n').replace(/\s+$/, '');
@@ -951,19 +971,10 @@ export class ForegroundSession {
       await this.refreshState();
       return r;
     }
-    if (outcome.kind === 'pause') {
+    if (paused !== null) {
       // REQ-TOOLS-098: return −1, the process keeps running; a later empty command polls what it produced since.
       // The call's screen is kept and keeps filling, so the poll reads the same emulated screen further along.
-      this.pausedDone?.screen.dispose();
-      this.pausedDone = null;
-      // A pause nobody ever polled is replaced here: release its screen rather than leave it.
-      this.pausedCommand?.screen.dispose();
-      // It is fed by `onData` from here, its share of each chunk only (`pausedShare`), until its own frame or the next
-      // call's start marker closes it (A10).
-      const paused: PausedCall = { start, end, screen, hold, delivered: lines.join('\n').replace(/\s+$/, ''), undecided: '', code: null, until: null, interrupted: false, closer: null, onClose: null, lastOutputAt, observedAt: monotonic.now() };
-      this.pausedCommand = paused;
-      this.active = null;
-      this.state = 'idle';
+      paused.delivered = lines.join('\n').replace(/\s+$/, '');
       return finish({ exitCode: -1, timedOut: false, softPaused: true, killStatus: null, error: null });
     }
     if (outcome.kind === 'kill') {

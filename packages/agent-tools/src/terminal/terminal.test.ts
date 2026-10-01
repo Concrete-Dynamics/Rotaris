@@ -7,7 +7,7 @@ import { foregroundStreamId } from '@rotaris/contracts';
 import { nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
 import { CommandRegion, ForegroundSession, parseSnapshot, pausedShare, processIdentity, snapshotCommand, wrapCommand, type PtyFactory, type ShellBackend } from './foreground.js';
-import { xtermEmulatorFactory } from './emulator.js';
+import { xtermEmulatorFactory, type EmulatorFactory } from './emulator.js';
 import { endOfExit } from './background.js';
 import { execFileSync } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
@@ -286,6 +286,50 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     // A signal nobody here sent — a crash, another process's kill — is a failure, and −1 stays `killed`'s alone.
     expect(endOfExit(null, 'SIGTERM', none)).toEqual({ status: 'failed', exitCode: 143 });
     expect(endOfExit(null, 'SIGSEGV', new Set(['SIGINT']))).toEqual({ status: 'failed', exitCode: 139 });
+  });
+  // docs/defects/fixed/output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md: at the soft pause `execute` removed
+  // the call's listener, awaited the emulator's write of what it held, and only then opened the paused call that `onData`
+  // feeds. A chunk the PTY delivered inside that await reached neither, so no poll returned it; a chunk carrying the
+  // command's own end frame resolved the already-settled call instead, and the paused call read "still running" with no
+  // status. The double delivers its chunk from inside that very write.
+  it('REQ-TOOLS-098/179: output and the end frame a command writes while its soft pause is handed over reach the poll, with the command\'s own status', async () => {
+    const session = (late: (nonce: string) => string) => {
+      let emit: (d: string) => void = () => undefined;
+      let nonce: string | null = null;
+      let armed = true;
+      const factory: PtyFactory = {
+        spawn: () => ({
+          // Never disposed: `dispose` signals the pid's process group, and this PTY has no process behind it.
+          pid: 2 ** 30, onData: (cb) => { emit = cb; }, onExit: () => undefined, resize: () => undefined, kill: () => undefined,
+          write: (data) => {
+            nonce = /__rot_([0-9a-f]+)_s/.exec(data)?.[1] ?? nonce;
+            // The command prints its start marker and then nothing, so the call soft-pauses.
+            if (nonce) setImmediate(() => emit(`__rot_${nonce}_s\r\n`));
+          },
+        }),
+      };
+      // The call's screen is first written at the pause; the PTY's next chunk arrives while that write is in flight.
+      const emulator: EmulatorFactory = (spec) => {
+        const inner = xtermEmulatorFactory(spec);
+        return {
+          get cols() { return inner.cols; }, get rows() { return inner.rows; }, get truncated() { return inner.truncated; },
+          resize: (c, r) => inner.resize(c, r), serialize: () => inner.serialize(), text: () => inner.text(), dispose: () => inner.dispose(),
+          write: (data) => {
+            if (armed && nonce !== null && data.includes(`__rot_${nonce}_s`)) { armed = false; emit(late(nonce)); }
+            return inner.write(data);
+          },
+        };
+      };
+      return new ForegroundSession({ factory, backend: { kind: 'posix', file: '/bin/sh' }, cwd: root, env: {}, monotonic: clocks.monotonic, timers: clocks.timers, noOutputWindowMs: 100, emulator, warn: () => undefined });
+    };
+    // The command ends inside the handover: its output and its own status reach the poll.
+    const ended = session((n) => `late-output\r\n__rot_${n}_e:7\r\n`);
+    expect(await ended.run('sleep 1; echo late-output; exit 7', { timeoutMs: null, hardMs: 5_000 })).toMatchObject({ softPaused: true, exitCode: -1 });
+    expect(await ended.poll()).toMatchObject({ output: 'late-output', exitCode: 7, softPaused: false, error: null });
+    // It keeps running: what it wrote inside the handover is what the next poll returns.
+    const running = session(() => 'late-output\r\n');
+    expect(await running.run('sleep 1; echo late-output; sleep 60', { timeoutMs: null, hardMs: 5_000 })).toMatchObject({ softPaused: true, output: '' });
+    expect(await running.poll()).toMatchObject({ output: 'late-output', exitCode: -1, softPaused: true });
   });
   it('REQ-TOOLS-096 (A10): keystrokes with no line end after them are cleared from the shell\'s input before the next POSIX line, and only then', async () => {
     // A PTY that answers every wrapped line with its two frames at once, and remembers what was written to it.

@@ -398,6 +398,16 @@ the terminal and the line is submitted at the poll; PowerShell's `$null` no-op i
 `terminal` scenario carries the interrupt now (`interrupt` in `lib/terminal-shapes.mjs`), and its first run (2026-10-01,
 the self-hosted endpoint) read the poll 1,346 ms after the model's `C-c` as −1, `execution_error`, OQ-147's reason.*
 
+*Reported back 2026-10-01, the repair of
+[`output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll`](../../defects/fixed/output-a-command-writes-as-it-soft-pauses-is-lost-to-its-poll.md)
+(reasoned when it was recorded, measured now with a PTY double): **the soft pause handed its call over across an await.**
+`execute` removed the call's listener, awaited the emulator's write of what it held, and only then opened the paused call
+`onData` feeds, so a chunk delivered inside that write reached neither: no poll returned it, and its end frame resolved the
+call already settled, leaving the paused call "still running" until a later call closed it with no status. The paused
+call is now opened in the same turn as the pause, before the listener goes and the write is awaited. Pinned by
+"REQ-TOOLS-098/179: output and the end frame a command writes while its soft pause is handed over …" in
+`terminal.test.ts`, red on the old order in both its halves.*
+
 *Reported back 2026-09-30 (R-067), from the verifier's live run of the `fix-terminal-output` branch
 ([`a-command-that-replaces-the-shell-reads-as-a-soft-pause`](../../defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md),
 acceptance finding A9): **the marker protocol's premise — that the shell which printed the start frame is the one left

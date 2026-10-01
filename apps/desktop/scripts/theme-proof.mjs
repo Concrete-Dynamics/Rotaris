@@ -2,6 +2,17 @@
  * REQ-SHELL-128..160 — rendered theme/scale proof through the same driver used
  * for interactive built-app debugging. Each capture waits finite animations,
  * two animation frames, and the requested primary view or Settings category.
+ *
+ * REQ-SHELL-145/160 — the contrast verdict is bounded by what it measured (`lib/contrast-coverage.mjs`). Each capture
+ * needs at least one measured text inside its own surface (the view's root element, or the Settings view's), and at
+ * most 25% of the texts discovered inside that surface skipped; the run needs at most 10% of every discovered text
+ * skipped. The skips are counted by reason (`skippedByReason`, and per surface under `surfaces`). The bounds come from
+ * two full matrices of 2026-10-01 (15 of 15 cells each, as root under Xvfb, Node 24): the largest share skipped overall
+ * was 1.42% and 1.51% (`rotaris-dim` at 150 %, then `high-contrast` at 175 %, status-strip slivers), the largest inside
+ * one surface 9.5% (`settings-03` at 125 %, 4 of 42 rows cut by their pane), and the fewest measured texts inside a
+ * surface 7 (`view-1`, every cell). Before the bound, a surface whose own text was all skipped or gone passed on the
+ * shell's texts around it (`docs/defects/fixed/theme-proofs-contrast-verdict-sets-no-bound-on-the-texts-it-skips.md`);
+ * `--counterfactual=offscreen` pushes the Workspace view's text off the screen and must exit non-zero.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -10,6 +21,7 @@ import { createRequire } from 'node:module';
 import { buildDesktop, evidenceDirectory } from './lib/harness.mjs';
 import { startApp } from './lib/driver.mjs';
 import { clipRect, textSample } from './lib/text-sample.mjs';
+import { contrastCoverage } from './lib/contrast-coverage.mjs';
 
 const require = createRequire(import.meta.url);
 const { decodePng, textContrast, focusContrast } = require('./pixels.cjs');
@@ -44,7 +56,11 @@ const METADATA = `(() => {
   // A control disabled by aria-disabled is disabled to a reader and wears the disabled colour;
   // REQ-SHELL-145's floor follows the appearance, not the attribute that produced it.
   const OFF = ':disabled,[aria-disabled="true"]';
-  const texts = [...document.body.querySelectorAll('*')].filter((element) => element.children.length===0 && (element.textContent||'').trim() && visible(element)).map((element) => { const s=getComputedStyle(element); return { text:(element.textContent||'').trim(), rect:rect(element), shown:shownOf(element), color:s.color, background:s.backgroundColor, fontSize:parseFloat(s.fontSize), fontWeight:s.fontWeight, disabled:element.matches(OFF) || Boolean(element.closest(OFF)), animating:animating(element) }; });
+  // \`inSurface\`: the text sits inside the capture's own surface (a primary view's root, or the Settings view's), not in
+  // the shell around it, so the contrast verdict can ask that every surface had text of its own measured
+  // (lib/contrast-coverage.mjs).
+  const SURFACE = ${JSON.stringify(ROOTS.join(','))};
+  const texts = [...document.body.querySelectorAll('*')].filter((element) => element.children.length===0 && (element.textContent||'').trim() && visible(element)).map((element) => { const s=getComputedStyle(element); return { text:(element.textContent||'').trim(), rect:rect(element), shown:shownOf(element), color:s.color, background:s.backgroundColor, fontSize:parseFloat(s.fontSize), fontWeight:s.fontWeight, disabled:element.matches(OFF) || Boolean(element.closest(OFF)), animating:animating(element), inSurface:element.closest(SURFACE)!==null }; });
   const controls = [...document.querySelectorAll('button,input,select,textarea,[tabindex]')].filter(visible).map((element) => ({ name:element.getAttribute('aria-label') || (element.textContent||'').trim() || element.getAttribute('name') || element.tagName, rect:rect(element), focused:element===document.activeElement }));
   const icons = [...document.querySelectorAll('.nav-item i')].map((element) => ({ rect:rect(element), color:getComputedStyle(element).color }));
   const labels = [...document.querySelectorAll('.nav-item span')].map((element) => ({ text:(element.textContent||'').trim(), rect:rect(element), scrollWidth:element.scrollWidth, clientWidth:element.clientWidth }));
@@ -91,6 +107,11 @@ for (const theme of selectedThemes) {
       };
       if (counterfactual === 'text') await d.eval(`document.documentElement.style.setProperty('--rt-text', 'oklch' + '(45% 0 0)')`);
       if (counterfactual === 'focus') await d.eval(`document.documentElement.style.setProperty('--rt-focus', 'oklch' + '(40% 0 0)')`);
+      // The coverage bound's counterfactual: the Workspace view's own text is pushed off the screen, the shell's stays.
+      // The contrast item must turn red on view-2 ("no text inside the surface was measured"); before the bound it passed.
+      // The pane that holds the view is clipped as well: left scrollable, it scrolled the view back into sight to show the
+      // focused composer, and the counterfactual measured the Workspace view as before.
+      if (counterfactual === 'offscreen') await d.eval(`(() => { const sheet = new CSSStyleSheet(); sheet.replaceSync('.view:has(> .workspace) { overflow: clip !important; } .workspace { position: relative !important; left: 100vw !important; }'); document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]; return true; })()`);
       /**
        * A capture that must be NEW when the state it photographs has moved.
        *
@@ -196,6 +217,8 @@ for (const theme of selectedThemes) {
     let railFit = true;
     let iconScale = true;
     const skippedText = [];
+    /** Per capture, every discovered text: inside the surface or not, and why it was skipped (null when measured). */
+    const coverageSurfaces = [];
     let railLabels = 0;
     let railLabelsSkipped = 0;
     let railIcons = 0;
@@ -204,18 +227,22 @@ for (const theme of selectedThemes) {
       if (!existsSync(pngFile) || !existsSync(jsonFile)) { complete = false; continue; }
       const metadata = JSON.parse(readFileSync(jsonFile, 'utf8'));
       const png = decodePng(pngFile);
+      const coverage = { name, texts: [] };
+      coverageSurfaces.push(coverage);
       for (const text of metadata.texts) {
-        if (text.rect.width < 2 || text.rect.height < 2) { skippedText.push({ text: text.text.slice(0, 40), why: 'smaller than two pixels' }); continue; }
+        const skip = (why) => { skippedText.push({ capture: name, text: text.text.slice(0, 40), why }); coverage.texts.push({ inSurface: text.inSurface === true, skip: why }); };
+        if (text.rect.width < 2 || text.rect.height < 2) { skip('smaller than two pixels'); continue; }
         // A string photographed mid-fade is a photograph of a quarter of its own colour. The startup
         // notice mounts after the settle that preceded the capture, so waiting is not enough on its
         // own: a text whose own subtree is still animating is reported as skipped, never as a floor
         // violation. Diagnosed 2026-09-08 as five strings near 1.26:1 "on every theme at every scale";
         // repaired here, where the metadata carries whether the element was moving when it was shot.
-        if (text.animating === true) { skippedText.push({ text: text.text.slice(0, 40), why: 'the element was animating when the frame was taken' }); continue; }
+        if (text.animating === true) { skip('the element was animating when the frame was taken'); continue; }
         // REQ-SHELL-160 (a): read only the part of the text that is on screen, and skip a fragment smaller than a glyph.
         // The status strip scrolls past the window's edge, and a sliver of its last item used to decide the verdict.
         const sample = textSample(text);
-        if (sample.skip !== undefined) { skippedText.push({ text: text.text.slice(0, 40), why: sample.skip }); continue; }
+        if (sample.skip !== undefined) { skip(sample.skip); continue; }
+        coverage.texts.push({ inSurface: text.inSurface === true, skip: null });
         const measured = textContrast(png, { ...text, rect: sample.rect }, metadata.dpr);
         const weight = Number.parseInt(text.fontWeight, 10) || 400;
         const floor = text.disabled ? 3 : (text.fontSize >= 18 || (text.fontSize >= 14 && weight >= 700)) ? 3 : 4.5;
@@ -228,7 +255,10 @@ for (const theme of selectedThemes) {
       iconScale = iconScale && metadata.icons.every((icon) => Math.abs(icon.rect.width - 17) <= 1 && Math.abs(icon.rect.height - 17) <= 1);
     }
     const badText = contrast.filter((entry) => entry.ratio + 0.02 < entry.floor);
-    record.items.contrast = { pass: badText.length === 0 && contrast.length > 0 && incoherentCaptures.length === 0, incoherentCaptures, discovered: contrast.length + skippedText.length, tested: contrast.length, skipped: skippedText.length, skippedExamples: skippedText.slice(0, 5), measured: contrast.length, minimum: contrast.length === 0 ? null : Math.min(...contrast.map((entry) => entry.ratio)), failures: badText.slice(0, 20) };
+    // REQ-SHELL-145/160: a verdict over texts the proof did not measure is not one. The coverage bound (lib/contrast-coverage.mjs)
+    // fails a capture whose own surface had no text measured or too many skipped, and a run that skipped too many overall.
+    const coverage = contrastCoverage(coverageSurfaces);
+    record.items.contrast = { pass: badText.length === 0 && contrast.length > 0 && incoherentCaptures.length === 0 && coverage.pass, incoherentCaptures, discovered: contrast.length + skippedText.length, tested: contrast.length, skipped: skippedText.length, skippedByReason: coverage.byReason, skippedShare: coverage.share, coverageBounds: coverage.bounds, coverageFailures: coverage.failures, surfaces: coverage.surfaces.map((surface) => ({ name: surface.name, discovered: surface.discovered, measured: surface.measured, skipped: surface.skipped, inSurface: { discovered: surface.surface.discovered, measured: surface.surface.measured, skipped: surface.surface.skipped, byReason: surface.surface.byReason } })), skippedExamples: skippedText.slice(0, 5), measured: contrast.length, minimum: contrast.length === 0 ? null : Math.min(...contrast.map((entry) => entry.ratio)), failures: badText.slice(0, 20) };
     // A section that names no sample size cannot be told apart from one that found nothing to look at.
     record.items.railLabelFit = { pass: railFit && railLabels > 0, discovered: railLabels + railLabelsSkipped, tested: railLabels, skipped: railLabelsSkipped };
     record.items.iconScaling = { pass: iconScale && railIcons > 0, discovered: railIcons, tested: railIcons, skipped: 0 };

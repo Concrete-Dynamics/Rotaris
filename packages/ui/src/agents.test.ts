@@ -13,7 +13,7 @@ const row = (over: Partial<TranscriptRow>): TranscriptRow => ({ index: 0, kind: 
 const session = (over: Partial<SessionRecord>): SessionRecord => ({
   id: 's1', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-09-05T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [],
   tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: null, runType: 'task_run', improvementArtifactIds: [], runStartedAt: '2026-09-05T10:00:00.000Z', iterationsCompleted: 0, summary: null, permissionMode: 'ask', sandboxed: false, backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
-  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryStalledSeconds: null, entryToolCalls: null, ...over,
+  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], entryRoots: [], entryPersona: null, entryStalledSeconds: null, entryToolCalls: null, ...over,
 });
 
 describe('agents — the shared selection (REQ-MONITOR-042) and the run-level agent (REQ-MONITOR-043/057)', () => {
@@ -132,6 +132,27 @@ describe('entryRole — the run-level agent is drawn as the latest root (REQ-MON
     // OQ-97: a root resumed under a fallback keeps its own name on its rows while their persona is the role it runs as.
     const resumed = [row({ index: 0, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }), row({ index: 1, kind: 'agent', name: 'house-style', persona: 'reviewer' })];
     expect(entryRole(roles, resumed, [], [{ name: 'orchestrator' }, { name: 'house-style' }]).persona).toBe('reviewer');
+  });
+  /*
+   * The verifier's finding on the first repair: a turn writes an `agent` row only when text arrives, and its tool calls,
+   * reasoning and diffs carry the same persona and name. Read from `agent` rows alone, a switched root whose first steps were
+   * tool calls was drawn as the previous root, under the chips its own calls marked, until its first text.
+   */
+  it('a latest root that has written only tool, reasoning or diff rows is drawn, not the root before it', () => {
+    const roots = [{ name: 'orchestrator' }, { name: 'reviewer' }];
+    const before = [row({ index: 0, kind: 'user', body: 'read the readme' }), row({ index: 1, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }), row({ index: 2, kind: 'user', body: 'now review it' })];
+    for (const kind of ['tool', 'thinking', 'diff'] as const) {
+      const rows = [...before, row({ index: 3, kind, name: 'reviewer', persona: 'reviewer', ...(kind === 'tool' ? { toolName: 'glob' } : {}) })];
+      expect(entryRole(roles, rows, [], roots)).toEqual({ persona: 'reviewer', model: 'scripted', reasoning: 'medium', tools: ['glob', 'read_file', 'todo'] });
+    }
+    // A row that names no author (a system notice) is no root's.
+    expect(entryRole(roles, [...before, row({ index: 3, kind: 'system', body: 'Intent classified: question' })], [], roots).persona).toBe('orchestrator');
+  });
+  it('while a run is live, the persona its root runs as (`SessionRecord.entryPersona`) is drawn, before that root has written any row', () => {
+    const rows = [row({ index: 0, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }), row({ index: 1, kind: 'user', body: 'now review it' })];
+    expect(entryRole(roles, rows, [], [{ name: 'orchestrator' }], 'reviewer')).toEqual({ persona: 'reviewer', model: 'scripted', reasoning: 'medium', tools: ['glob', 'read_file', 'todo'] });
+    // At rest (no live run) the transcript decides.
+    expect(entryRole(roles, rows, [], [{ name: 'orchestrator' }], null).persona).toBe('orchestrator');
   });
   it('one root, a child\'s rows after it, or no root row at all', () => {
     const rows = [row({ index: 0, kind: 'agent', name: 'orchestrator', persona: 'orchestrator' }), row({ index: 1, kind: 'agent', name: 'helper', persona: 'coding-agent' })];

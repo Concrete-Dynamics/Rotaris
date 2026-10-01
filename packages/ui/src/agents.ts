@@ -129,28 +129,34 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
 /** The entry role as `runLevelAgent` draws it: its persona, model, reasoning and the declared tools that stand in for its grant. */
 export interface EntryRole { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }
 /**
- * The entry role as the run-level agent presents it (REQ-MONITOR-057/058): the persona the LATEST root ran as — the
- * `persona` of the transcript's last agent row that no child carries, preferring a row named for one of the session's
- * roots (`SessionRecord.entryRoots`, so a child's row that reaches the window before its record cannot pass for one), else
- * `orchestrator`; its model, reasoning and declared tools (REQ-MONITOR-060's stand-in) from the snapshot's role view.
+ * The entry role as the run-level agent presents it (REQ-MONITOR-057/058): the persona the LATEST root runs or ran as —
+ * while a run is live, the persona its root runs as (`SessionRecord.entryPersona`, passed as `live`); else the `persona` of
+ * the transcript's last row a root authored, of any kind that names its author (`agent`, `tool`, `thinking`, `diff`: every
+ * row a turn writes carries the persona and the name), no child's, preferring a row named for one of the session's roots
+ * (`SessionRecord.entryRoots`, so a child's row that reaches the window before its record cannot pass for one); else
+ * `orchestrator`. Its model, reasoning and declared tools (REQ-MONITOR-060's stand-in) come from the snapshot's role view.
  *
  * The latest root, because the entry persona can change between runs (`default_persona` is read for every run, and
- * PD-ORCH-003 lets a plan cycle run fresh after an iteration), and the run-level agent's chips are marked from the latest
- * root's history (`entryToolsOf`): the name and the stand-in come from the persona whose calls mark them. The
- * specification does not say which persona is drawn once the entry persona has changed; this is the build's reading,
- * recorded beside OQ-97. Until 2026-10-01 the FIRST such row was read, so after an iteration as `orchestrator` and a plan
- * cycle as `reviewer` the inspector drew `orchestrator`'s tools with `reviewer`'s calls marking them
- * (docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
+ * PD-ORCH-003 lets a plan cycle run fresh after an iteration), and the run-level agent's chips are the latest root's
+ * (`entryToolsOf`: the live run's port and history, else the latest root's history): the name and the stand-in come from
+ * the persona whose tools the chips show. The specification does not say which persona is drawn once the entry persona has
+ * changed; this is the build's reading, recorded beside OQ-97. Until 2026-10-01 the FIRST root's `agent` row was read, so
+ * after an iteration as `orchestrator` and a plan cycle as `reviewer` the inspector drew `orchestrator`'s tools with
+ * `reviewer`'s calls marking them; the first repair read the last root's `agent` row alone, and a live root whose first
+ * steps were tool calls was drawn as the previous root until its first text, and one that had written no row at all
+ * until then too (the verifier's finding; docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
  */
-export function entryRole(roles: readonly Pick<ConfigSnapshot['roles'][number], 'role' | 'effectiveModel' | 'rawThinking' | 'declaredTools'>[], rows: readonly TranscriptRow[], agents: readonly Pick<AgentRecord, 'name'>[], roots: readonly Pick<EntryRoot, 'name'>[] = []): EntryRole {
+export function entryRole(roles: readonly Pick<ConfigSnapshot['roles'][number], 'role' | 'effectiveModel' | 'rawThinking' | 'declaredTools'>[], rows: readonly TranscriptRow[], agents: readonly Pick<AgentRecord, 'name'>[], roots: readonly Pick<EntryRoot, 'name'>[] = [], live: string | null = null): EntryRole {
   const childNames = new Set(agents.map((a) => a.name));
   const rootNames = new Set(roots.map((r) => r.name));
-  const candidates = rows.filter((r) => r.kind === 'agent' && r.persona !== undefined && r.name !== undefined && !childNames.has(r.name));
+  const candidates = rows.filter((r) => AUTHORED_KINDS.has(r.kind) && r.persona !== undefined && r.name !== undefined && !childNames.has(r.name));
   const latest = candidates.findLast((r) => rootNames.has(r.name!)) ?? candidates.at(-1);
-  const persona = latest?.persona ?? 'orchestrator';
+  const persona = live ?? latest?.persona ?? 'orchestrator';
   const role = roles.find((r) => r.role === persona);
   return { persona, model: role?.effectiveModel ?? '', reasoning: role?.rawThinking ?? 'medium', tools: role?.declaredTools ?? [] };
 }
+/** The row kinds a turn writes under its agent's persona and name (`run/turn.ts`): the rows an agent authors. */
+const AUTHORED_KINDS = new Set(['agent', 'tool', 'thinking', 'diff']);
 
 /**
  * PD-ORCH-005 clauses 13 and 16 (OQ-100, OQ-101): what a surface drawing the run-level agent and a paused child's Cancel

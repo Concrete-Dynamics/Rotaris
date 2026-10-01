@@ -37,7 +37,7 @@ same set.
 Confirmed first by a test that failed on the unrepaired lookup (moved verbatim into `packages/ui` so a test could reach
 it): rows for an `orchestrator` root then a `reviewer` root gave `orchestrator`, its model, reasoning and declared tools.
 
-- **The run-level agent is drawn as the latest root.** The lookup is now `entryRole` (`packages/ui/src/agents.ts`), which
+- **The run-level agent is drawn as the latest root** (the first repair; the section below refines it). The lookup is now `entryRole` (`packages/ui/src/agents.ts`), which
   the renderer's `entryOf` (`apps/desktop/src/renderer/session-view.ts`) hands to with the session: the persona of the
   transcript's **last** agent row that no child carries, a row named for one of `SessionRecord.entryRoots` preferred (so a
   child's row that reaches the window before its record cannot pass for a root), else `orchestrator`. Its model,
@@ -53,3 +53,33 @@ preferred…") and `apps/desktop/src/renderer/agent-links-wiring.test.ts` (the t
 the built app by `pnpm plan-gate-proof`'s `persona-switch-reopened` launch, whose step 10 now also requires the run-level
 agent named `reviewer` with exactly `glob`, `read_file` and `todo` as chips: 2026-10-01, the inspector read `reviewer`
 with `glob:used`, `read_file:not used`, `todo:not used`, the whole proof green, exit 0.
+
+### The verifier's finding on the first repair, repaired 2026-10-01 (fin3, repair round 1)
+
+The first repair read the last **`agent`** row a root wrote. A turn writes an `agent` row only when text arrives
+(`packages/engine/src/run/turn.ts`); its tool calls, reasoning and diffs carry the same `persona` and `name` in `tool`,
+`thinking` and `diff` rows. So while a switched root's first steps were tool calls, the run-level agent was still named,
+and given a model, reasoning and stand-in tools, from the root before it, while its chips came from the new root's live
+`entryTools`: this note's mismatch, for the whole stretch before the new root's first text. And before the new root had
+written any row at all, from its port's resolution to its first streamed step, no row could name it. Confirmed by tests
+that failed on the first repair: a latest root with only a `tool` (or `thinking`, or `diff`) row gave `orchestrator`, not
+`reviewer`; and the session record carried nothing that named the live root before its first row.
+
+- **While a run is live, the run's own root persona.** `SessionRecord.entryPersona` (new, nullable,
+  `packages/contracts/src/channels.ts`) is `Run.entryPersona` — the run's `config.persona`, the persona its root's rows
+  carry and its port resolves `entryTools` for — projected by both `readSession`s in `packages/engine/src/sessions.ts`;
+  null with no live run. `entryRole` takes it first (`live`), so the name and the chips come from one snapshot, from the
+  run's start.
+- **At rest, every row a root authored.** `entryRole` reads the last row of any kind a turn writes under its agent's persona
+  and name (`agent`, `tool`, `thinking`, `diff`) that no child carries, a row named for one of `SessionRecord.entryRoots`
+  preferred. A row that names no author (`system`, `user`) is no root's.
+- **What stays.** At rest, a latest root that wrote no row at all (it failed in its first model call) is drawn as the root
+  before it; its chips then show nothing it called, under that earlier persona's stand-in. No requirement covers it, and it
+  is left as the build's reading beside OQ-97.
+
+Pinned by `packages/ui/src/agents.test.ts` ("a latest root that has written only tool, reasoning or diff rows is drawn…",
+"while a run is live, the persona its root runs as… is drawn, before that root has written any row") and
+`packages/engine/src/session-resume.test.ts` ("REQ-MONITOR-060: while a run is live the record names the persona its root
+runs as, before that root has written a row; at rest none"), each failing on the first repair; and
+`apps/desktop/src/renderer/agent-links-wiring.test.ts` (`entryOf` hands `entryPersona` in). The OQ-97 addendum, the runtime
+view's `entryTools` paragraph and the first-executions row are corrected in place.

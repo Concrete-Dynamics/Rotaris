@@ -18,9 +18,9 @@ describe('live-run finding K1: the renderer roots wire the declared tools and th
     expect(view).toContain('tools: r.declaredTools,');
     expect(view).not.toMatch(/tools: (r|role\?)\.tools\b/);
     // The entry role is `entryRole`'s, which takes the role's declared tools (pinned in `packages/ui/src/agents.test.ts`),
-    // drawn as the latest root, the session's roots handed in (the repair of
+    // drawn as the latest root, the session's roots and the live run's root persona handed in (the repair of
     // after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
-    expect(view).toContain('return entryRole(snapshot?.roles ?? [], rows, session?.agents ?? [], session?.entryRoots ?? []);');
+    expect(view).toContain('return entryRole(snapshot?.roles ?? [], rows, session?.agents ?? [], session?.entryRoots ?? [], session?.entryPersona ?? null);');
     expect(source('main.tsx').match(/entryOf\(snapshot, rows, session\)/g)).toHaveLength(2);
     expect(source('windows.tsx')).toContain('entryOf(snapshot, state.rows, session)');
     expect(source('windows.tsx')).toContain('?.declaredTools ?? [];');

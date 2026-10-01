@@ -747,6 +747,16 @@ export class Run {
   get currentRoot(): EntryRoot | null {
     return this.rootRecord === null ? null : { name: this.rootName, canonical: this.rootRecord.canonicalName };
   }
+  /**
+   * REQ-MONITOR-057/060 with PD-ORCH-003: the persona this run's root runs as — the persona its rows carry and its port
+   * resolves `entryTools` for, a resumed root's included (it keeps its name, `rootName`, and runs as the entry role, OQ-97).
+   * `SessionRecord.entryPersona`, so the run-level agent is named from the root whose tools its chips show before that root
+   * has written a row (the second repair of
+   * `after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`).
+   */
+  get entryPersona(): string {
+    return this.deps.config.persona;
+  }
   /** REQ-MONITOR-048 (Part R): the persona's configured thinking level as this run resolved it; null when the persona is unknown or states none. */
   reasoningFor(persona: string): string | null {
     const resolved = this.deps.personas?.resolve(persona) ?? null;

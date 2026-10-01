@@ -48,12 +48,12 @@ export function personasOf(snapshot: ConfigSnapshot | null): PersonaEntry[] {
 }
 /**
  * The entry role as the run-level agent presents it (REQ-MONITOR-057/058): `entryRole` over the snapshot's role view — the
- * persona the latest root ran as, its model, its reasoning and its declared tools (`declaredTools`, REQ-MONITOR-060's
- * stand-in). The first root's persona was drawn until 2026-10-01
+ * persona the latest root runs or ran as (the live run's `entryPersona`, else the transcript's latest root row), its model,
+ * its reasoning and its declared tools (`declaredTools`, REQ-MONITOR-060's stand-in). The first root's persona was drawn until 2026-10-01
  * (docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
  */
-export function entryOf(snapshot: ConfigSnapshot | null, rows: readonly TranscriptRow[], session: Pick<SessionRecord, 'agents' | 'entryRoots'> | null): EntryRole {
-  return entryRole(snapshot?.roles ?? [], rows, session?.agents ?? [], session?.entryRoots ?? []);
+export function entryOf(snapshot: ConfigSnapshot | null, rows: readonly TranscriptRow[], session: Pick<SessionRecord, 'agents' | 'entryRoots' | 'entryPersona'> | null): EntryRole {
+  return entryRole(snapshot?.roles ?? [], rows, session?.agents ?? [], session?.entryRoots ?? [], session?.entryPersona ?? null);
 }
 /** REQ-SHELL-072/073: open or raise the persona window for an agent; the run-level agent's persona is the entry role's. */
 export async function openPersona(agent: AgentRecord, focusSteer: boolean): Promise<void> {

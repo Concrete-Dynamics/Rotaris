@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**One fact, one emitter in the application log (PD-MONITOR-002, live-run finding a71-9).** Main's `repository.read` and
+`git.read` handlers no longer restate the workspace service's repository and Git-view lines, main's credentials ask no
+longer writes "credentials leased: …" beside the run host's `LeaseReportLog`, and `runSetupSteps` no longer writes
+"succeeded in N ms" beside the run host's step reporter. The **process view**'s application-log paragraph names each
+fact's owner. This repairs `the-repository-git-view-and-setup-step-lines-are-each-logged-twice.md`. No package, edge,
+process, message kind, channel, command or store column changed.
+
 **A paused child cancelled while `session_end` runs fires no `child_completed` (REQ-HOOKS-076, REQ-HOOKS-081,
 REQ-HOOKS-003, REQ-ORCH-133, OQ-154, R-067).** `Run`'s teardown calls `IterationChildren.endLifecycle` once it has awaited
 the outside hooks (`childCompletionsSettled`) and before it fires `session_end`; from then `completedOutside` queues none,

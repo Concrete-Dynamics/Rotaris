@@ -498,7 +498,13 @@ column of its own ahead of the message: `[main <instant>] <level> <source>: <mes
 `info`, `warning` (the protocol's `warn`) and `error`, the source present only on a forwarded line (`run host`,
 `workspace service`); main's own line about the run host's handshake reads `run host hello:` so it is never taken for
 one. A forwarded line keeps the level its child gave it — the event's `level` is the logger's own type, so no mapping
-stands between them. Main's own lines are `info`, except its reports of a loss — a crash, a renderer or child process
+stands between them. **One fact, one emitter** (live-run finding a71-9, repaired 2026-10-01): a fact is written by the
+process that did the work, and the process it answers relays the answer without saying it again — the repository read
+(`repository <root>: …`) and the Git view (`git view: N reads in M ms (…)`) are the workspace service's lines, not main's
+command handlers'; the credentials lease's report is the run host's `LeaseReportLog` (REQ-PROVIDER-068), not main's ask
+handler; a setup step's outcome is the run host's step reporter (`mcp setup: <id> succeeded (N ms)`), not
+`runSetupSteps`, which logs only the command a step spawns. `scripts/lib/restated-facts.mjs` reads a launch's log for a
+restatement of any of the four; `git-proof` and every live-run launch assert there is none. Main's own lines are `info`, except its reports of a loss — a crash, a renderer or child process
 gone for any reason but `clean-exit`, a child exiting with any status but 0, a `shutdown` a child refused or left
 unanswered, still running, when its bound elapsed at quit, a failed hand-over, a refused launch — which are `error`, and
 a dialog it could not present, which is `warning`. An exit status of 0 is not proof of an orderly `shutdown`: Electron

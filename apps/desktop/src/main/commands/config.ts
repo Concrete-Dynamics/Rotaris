@@ -58,9 +58,9 @@ export function configCommands(
       // REQ-GIT-102: five reads at 15 s each is the bound; the request waits for all of them.
       const r = await svc.link.request({ kind: 'repository.read', workspaceRoot: canonicalPath(w.workspace) }, millis(80_000));
       if (r.kind !== 'repository.state') return refusal(r, 'The repository could not be read');
-      const st = r.state;
-      log(`repository ${canonicalPath(w.workspace)}: git=${st.gitAvailable} repo=${st.isRepository} branch=${st.branch ?? '-'} base=${st.base ?? '-'} +${st.ahead}/-${st.behind} touched=${st.touched} uncommitted=${st.uncommitted}${st.failed.length > 0 ? ` failed=${st.failed.join(',')}` : ''} in ${st.readMs} ms`);
-      return { ok: true, value: st };
+      // PD-MONITOR-002, live-run finding a71-9: the read's line is the workspace service's, which performed it; main relays
+      // the answer and does not write the same fact a second time.
+      return { ok: true, value: r.state };
     },
     'config.save': onConfigSave,
     'config.setField': onConfigSave,

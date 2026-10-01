@@ -18,8 +18,8 @@ when it receives (`duress/app.log` lines 36/37).
 Live-run finding: a71-9
 
 Its sibling, the fixed
-[`a-personas-mcp-lines-are-logged-twice-on-first-spawn.md`](fixed/a-personas-mcp-lines-are-logged-twice-on-first-spawn.md),
-was a different pair. Recorded, not repaired.
+[`a-personas-mcp-lines-are-logged-twice-on-first-spawn.md`](a-personas-mcp-lines-are-logged-twice-on-first-spawn.md),
+was a different pair.
 
 ## Specs
 
@@ -44,3 +44,28 @@ was a different pair. Recorded, not repaired.
 - `packages/mcp/src/setup.ts:154` — `runSetupSteps`' "succeeded in N ms".
 - `apps/desktop/src/run-host/mcp.ts:446` — the run host's step reporter's "succeeded (N ms)".
 - `apps/desktop/src/main/index.ts:272-273` and `apps/desktop/src/run-host/launch.ts:81-82` — the credentials pair.
+
+## Repaired — 2026-10-01
+
+One emitter per fact; the process that did the work keeps the line, the process it answers stops restating it:
+
+- **The repository read** and **the Git view** are the workspace service's lines (`workspace-service/index.ts`, which
+  performed the reads and whose lines carry more: the root, the upstream, the uncommitted count). Main's `repository.read`
+  (`main/commands/config.ts`) and `git.read` (`main/commands/git.ts`) relay the answer and write nothing of it; `git.read`
+  keeps its own "notice: Working without Git", which is main's fact.
+- **A setup step's outcome** is the run host's step reporter's (`run-host/mcp.ts`, `onStep`), which says every status and
+  not only success. `runSetupSteps` (`packages/mcp/src/setup.ts`) keeps only the command line a step spawns.
+- **The credentials lease** is the run host's `LeaseReportLog` (`run-host/launch.ts`), REQ-PROVIDER-068's report: whole
+  once per workspace root, then only what changed. Main's ask handler (`main/index.ts`) no longer writes "credentials
+  leased: …"; `live-run.mjs`'s ask check and `slice-proof.mjs`'s lease check read the run host's line instead.
+
+Pinned by:
+
+- `apps/desktop/src/main/commands/git.test.ts` and `apps/desktop/src/main/commands/config.test.ts` — the handlers answer
+  with the service's state and write no repository or Git-view line (both red before the repair);
+- `packages/mcp/src/setup.test.ts` — "a step's outcome is the caller's to log (its onStep), never the runner's as well"
+  (red before the repair);
+- `apps/desktop/scripts/lib/restated-facts.mjs` (with its test) — the reader that names a restatement of any of the four
+  facts in a launch's log; `git-proof` asserts none in its painted and no-git launches, and every live-run launch checks
+  "each fact reaches the application log from one emitter". The lease has no unit test of its own: main's ask handler is
+  inline in `main/index.ts`, so the live-run check is its pin.

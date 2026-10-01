@@ -9,8 +9,10 @@ then, both probes read `[]`, and the proof fails with "the persona window: undef
 after show — after the probe both times. The item reads one fixed instant where it means "once the window has painted":
 the same class as item 4b's sampling race, corrected there by reading snapshots gated on the state they need.
 
-Noticed while running mission-proof for the inspector's meta line repair; not repaired (not that bundle's task). Whether
-it also goes red on a quiet host is not known: no quiet window came during the bundle.
+Noticed while running mission-proof for the inspector's meta line repair; not repaired (not that bundle's task). A third
+run of the same build, at a load average of about 6 to 11, went green whole: the window logged its first paint 795 ms
+after show and the probe 700 ms later read `zombie` / `done`. So the item passes when the host is less loaded, and the
+fixed instant is the margin that host load spends.
 
 ## Specs
 

@@ -30,8 +30,9 @@ and not repaired: the repair asked for was the persona window's, and the one fun
   as "Cancel the run?", the run header and the meta line read in one snapshot. Green on the repair (three snapshots
   `Cancelling…` beside `cancelling · 5s · 1 tool call`, then `Paused` beside `cancelled · …`); red on a build of the base's
   `agents.ts` and `Inspector.tsx` (four snapshots `Cancelling…` beside `running · 5s · 1 tool call`). How many snapshots
-  land inside the `Cancelling…` window is host timing and is recorded, not asserted. Both runs of the whole proof on the
-  repair then went red at item 8 (the reconcile pop-out), a proof timing defect under the host's load, recorded as
+  land inside the `Cancelling…` window is host timing and is recorded, not asserted. The first two runs of the whole proof
+  on the repair then went red at item 8 (the reconcile pop-out) under a load average near 15, and a third, at about 6 to
+  11, went green whole (item 4d again three snapshots `cancelling`): a proof timing defect under the host's load, recorded as
   [`mission-proofs-reconcile-launch-probes-the-persona-window-before-its-first-paint.md`](../mission-proofs-reconcile-launch-probes-the-persona-window-before-its-first-paint.md).
 
 ## Specs

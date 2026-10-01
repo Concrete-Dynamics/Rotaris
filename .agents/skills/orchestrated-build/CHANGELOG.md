@@ -8,8 +8,8 @@ verified. An entry that turns out wrong is corrected by a new entry, never edite
 **Prompted by** two background tasks of the same session. One given no `timeout` (task `by0p2inlx`, a waiter on the
 duress live run) was stopped thirty minutes after launch, at 03:45:34 UTC. One given `timeout: 5400000` (task
 `bw0152q7w`, the same waiter re-armed) ran from 03:47:06 to 04:40:37 UTC (53 minutes) and ended on its own
-condition; the duress run it waited on took 5078 s. The skill had said a job longer than thirty minutes must run detached, which
-also kept agents from launching duress under the live-run allow rules.
+condition; the duress run it waited on took 5078 s. The skill had said a job longer than thirty minutes must run
+detached, which also kept agents from launching duress under the live-run allow rules.
 
 **Changed** `references/environment.md` (Long jobs), `references/live-runs.md` (Running, and the permission
 section's pointer to the detached launch), SKILL.md §5 and the template's grounding line: a long background job

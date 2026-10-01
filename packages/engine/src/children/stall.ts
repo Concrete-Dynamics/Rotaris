@@ -43,7 +43,9 @@ const OUTPUT_EVENTS: ReadonlySet<string> = new Set(['text', 'reasoning', 'tool-c
 /**
  * OQ-173: a wait the run imposes on an agent between its model steps — a transient or validation retry's backoff
  * (REQ-ORCH-092), the suspended wait on a provider limit (REQ-ORCH-091 (c)), or a context compression's own model call,
- * automatic or on a rejection (REQ-MONITOR-076, REQ-ORCH-093).
+ * automatic or on a rejection (REQ-MONITOR-076, REQ-ORCH-093). "Imposed wait" is not the specification's word: the
+ * specification names the backoff, the suspended wait and the compression one by one and has no word for the three
+ * together; the term is OQ-173's to settle with its ruling.
  */
 export type ImposedWait = 'backoff' | 'provider_limit' | 'compression';
 

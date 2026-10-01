@@ -8596,7 +8596,8 @@ before the force-kill.
 reported "at informational level as waiting on N active tool calls instead of as a stall"; REQ-MONITOR-119, "no model
 event or token"; REQ-ORCH-089; REQ-ORCH-091 (c) and REQ-ORCH-092, the suspended wait on a provider limit and the retry
 backoffs; REQ-NOTIFY-083 to REQ-NOTIFY-087, the suspended wait's own notice; REQ-MONITOR-076 and REQ-ORCH-093 with
-ADR-0060, the automatic compression and the condensation on a rejection; OQ-153; OQ-155. Raised 2026-10-01 by the
+ADR-0060, the automatic compression and the condensation on a rejection; OQ-153; OQ-155; REQ-NOTIFY-112 and OQ-127,
+whose no-output window the wait's end also restarts. Raised 2026-10-01 by the
 repair of
 [`a-provider-wait-or-a-compression-is-counted-as-a-stall.md`](../defects/fixed/a-provider-wait-or-a-compression-is-counted-as-a-stall.md).
 Open.)*

@@ -9,7 +9,7 @@ import { choose, startApp, stopApp, stopOverrunMessage, until } from './lib/driv
 /**
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
  * (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..093/263), and since OQ-173 that a wait the run imposes is not a stall
- * (REQ-MONITOR-117..119). Eight scenarios, each asserting the store's events, issues,
+ * (REQ-MONITOR-117..119). Eleven scenarios, each asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
  *

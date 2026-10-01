@@ -118,6 +118,7 @@ import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsola
 import { startRecordingProxy } from './lib/model-traffic.mjs';
 import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
 import { restatedFacts } from './lib/restated-facts.mjs';
+import { refusalIssues } from './lib/refusal-issues.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
 import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
@@ -855,7 +856,8 @@ function readToolCalls(sessionId) {
         let entry = {};
         try { entry = JSON.parse(call.entry); } catch { /* a row that will not parse is still a call that happened */ }
         // `elapsed_ms` is the call's own duration and `timestamp` its end, both as the product recorded them.
-        return { ...call, args: entry.args ?? {}, result: String(entry.result ?? ''), elapsedMs: typeof entry.elapsed_ms === 'number' ? entry.elapsed_ms : null, endedAt: typeof entry.timestamp === 'string' ? Date.parse(entry.timestamp) : null };
+        // `call_id` and `failure_kind` are what an issue's `evidence_ref` and REQ-SESSION-136's mapping read (a71-6).
+        return { ...call, args: entry.args ?? {}, result: String(entry.result ?? ''), callId: typeof entry.call_id === 'string' ? entry.call_id : null, failureKind: typeof entry.failure_kind === 'string' ? entry.failure_kind : null, elapsedMs: typeof entry.elapsed_ms === 'number' ? entry.elapsed_ms : null, endedAt: typeof entry.timestamp === 'string' ? Date.parse(entry.timestamp) : null };
       });
   } finally { db.close(); }
 }
@@ -871,8 +873,19 @@ function readSessionLog(sessionId) {
 function readIssues(sessionId) {
   const Database = require('better-sqlite3');
   const db = new Database(oneDatabase(), { readonly: true });
-  try { return db.prepare('SELECT ordinal, id, kind, severity, actor, message FROM issues WHERE session_id = ? ORDER BY ordinal').all(sessionId); }
+  try { return db.prepare('SELECT ordinal, id, kind, severity, actor, message, evidence_ref FROM issues WHERE session_id = ? ORDER BY ordinal').all(sessionId); }
   finally { db.close(); }
+}
+/**
+ * REQ-SESSION-136 for the tool gate's own refusals (live-run finding a71-6): every call the gate refused as
+ * `invalid_request` — an unknown tool, unreadable arguments, a schema violation — is a failure in the record, and files
+ * a `tool_error` issue referencing it. The duress run of 2026-10-01 held two that no issue named. A run with no such
+ * call asked nothing, which is a NOTE, not a pass.
+ */
+function checkRefusalIssues(scenario, sessionId, calls) {
+  const { refused, unfiled } = refusalIssues(calls, readIssues(sessionId));
+  if (refused.length === 0) noted(`${scenario}: no call was refused at the tool gate as invalid_request`, 'REQ-SESSION-136\'s issue for such a refusal was not observed this run');
+  else check(unfiled.length === 0, `${scenario}: every call refused at the tool gate as invalid_request filed a tool_error issue referencing it`, unfiled.length === 0 ? `${refused.length} refusal(s), e.g. ordinal ${refused[0].ordinal} (${refused[0].tool_name})` : `${unfiled.length} of ${refused.length} filed none, e.g. ordinal ${unfiled[0].ordinal} (${unfiled[0].tool_name})`);
 }
 
 /**
@@ -1569,6 +1582,7 @@ if (wanted.includes('frictions')) {
   const resultOf = (call) => String(entryOf(call).result ?? '');
   const argsOf = (call) => entryOf(call).args ?? {};
   const writeOp = calls.filter((call) => call.tool_name === 'write_file' && call.status !== 'ok' && resultOf(call).includes('requires an operation'));
+  if (read) checkRefusalIssues('frictions', read.session.session_id, readToolCalls(read.session.session_id));
   check(writeOp.length === 0, 'write_file needed no operation repair on first use', writeOp.length === 0 ? 'no refusal in the record' : `${writeOp.length} refusal(s), e.g. ordinal ${writeOp[0].ordinal} (${writeOp[0].agent_name})`);
   // Live-run finding L6: `probe-ok\n` was reported "2 line(s) created". A final newline ends a line, so every create
   // reports the lines its content holds as `wc -l` counts them, plus an unterminated last line.
@@ -2184,6 +2198,8 @@ if (wanted.includes('duress')) {
       noted('the long run never compressed its context', compressionNote({ largestPrompt: prompts.length === 0 ? null : Math.max(...prompts), trigger, calls: { withUsage: prompts.length, total: durTraffic.length } }));
     }
     else check(aggregate === compressed, 'the compressions aggregate counted what the timeline recorded', `aggregate ${aggregate} against ${compressed} timeline entr${compressed === 1 ? 'y' : 'ies'}`);
+
+    checkRefusalIssues('duress', sessionId, calls);
 
     const leaked = calls.filter((call) => call.tool_name === 'terminal' && /__rot_/.test(call.result));
     check(leaked.length === 0, 'no end marker leaked into what the model read', leaked.length === 0 ? 'no __rot_ in any terminal result' : `${leaked.length} call(s), e.g. ordinal ${leaked[0].ordinal}`);

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
@@ -97,7 +97,9 @@ describe('the setup at the run host\'s shutdown (REQ-WORKSPACE-092, REQ-WORKSPAC
       'const [group, verb, root] = process.argv.slice(2);',
       "if (group === 'project' && verb === 'create') {",
       "  const g = cp.spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setTimeout(() => {}, 60000)\"], { stdio: 'ignore' });",
-      "  fs.writeFileSync(path.join(root, 'pids'), `${process.pid} ${g.pid}`);",
+      '  // Written whole or not at all: a reader never sees the file created and still empty.',
+      "  fs.writeFileSync(path.join(root, 'pids.tmp'), `${process.pid} ${g.pid}`);",
+      "  fs.renameSync(path.join(root, 'pids.tmp'), path.join(root, 'pids'));",
       "  process.on('SIGTERM', () => {});",
       '  setTimeout(() => {}, 60000);',
       '} else { process.exit(0); }',
@@ -113,9 +115,21 @@ describe('the setup at the run host\'s shutdown (REQ-WORKSPACE-092, REQ-WORKSPAC
       mcp: { servers: { code_intelligence: { name: 'code_intelligence', entry: { type: 'stdio', enabled: true, ...launch }, origin: 'workspace', availability: { available: true }, description: { transport: 'stdio', env: {} }, resolved: launch } }, origins: {}, diagnostics: [] },
     } as unknown as LoadedConfiguration;
     expect(mcp.startSetup(cfg, root).ok).toBe(true);
+    // The pids are read once the file holds both, each a real pid: a file seen between its creation and its write reads
+    // as `[0]`, and pid 0 would name the test's own process group (the race a verifier found at load, 2026-10-01).
+    const pidsWritten = (): number[] => {
+      try {
+        const found = readFileSync(join(root, 'pids'), 'utf8').trim().split(' ').map(Number);
+        return found.length === 2 && found.every((pid) => Number.isInteger(pid) && pid > 0) ? found : [];
+      } catch { return []; }
+    };
     const began = Date.now();
-    while (!existsSync(join(root, 'pids')) && Date.now() - began < 10_000) await new Promise((r) => setTimeout(r, 20));
-    const pids = readFileSync(join(root, 'pids'), 'utf8').split(' ').map(Number);
+    let pids = pidsWritten();
+    while (pids.length === 0 && Date.now() - began < 10_000) {
+      await new Promise((r) => setTimeout(r, 20));
+      pids = pidsWritten();
+    }
+    expect(pids, 'the stand-in wrote its pid and its descendant\'s within 10 s').toHaveLength(2);
     const askedAt = Date.now();
     await mcp.endSetup();
     const tookMs = Date.now() - askedAt;

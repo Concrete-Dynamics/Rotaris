@@ -89,7 +89,11 @@ ran, as root under Xvfb, Node 24.
 - `packages/mcp/src/setup.test.ts`, two cases, both red on the code before: a cancelled step's descendant is ended with
   it, and the shutdown's grace shortens a cancellation's.
 - `apps/desktop/src/run-host/mcp.test.ts`: `endSetup` ends a stubborn step and its descendant within 5 s and answers once
-  they have gone.
+  they have gone. On the verifier's second round it went red under load (`expected [ +0 ] to deeply equal []`): it read
+  the stand-in's pids file as soon as the file existed, a file created and not yet written read as `[0]`, and pid 0
+  names the test's own process group. Its stand-in now writes the file whole (a temporary file, then a rename) and the
+  case reads it only once it holds two positive pids; with the stand-in writing an empty file first and the pids 100 ms
+  later, the old reader failed that way and the new one passes.
 - `apps/desktop/src/main/initialization.test.ts`: no warn line at a quit, and a warn line for the same refusal while the
   application stays.
 - `apps/desktop/src/run-host/dispatch.test.ts` (added on the verifier's finding): `shutdown` calls `McpHost.endSetup`

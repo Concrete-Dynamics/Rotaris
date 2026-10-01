@@ -51,7 +51,9 @@ reads the drawn height of each bound slot whose measurement key has no measureme
 content changed), files it as the observer would, and when it differs from what the identity drew last renders again
 inside the same commit (`measureAtCommit` in `packages/ui/src/transcript/pool.ts`, the layout effect after the
 re-observing one in `TranscriptPane.tsx`). The observer stays and still delivers changes under an unchanged key; for a key
-the commit has measured it delivers the same height and asks for nothing. The read is a forced layout of the slots the
+the commit has measured it delivers the same height and asks for nothing. **Corrected in fix round 1, kept beside its
+replacement: "the observer stays and still delivers changes under an unchanged key" was true and was not a repair** — see
+"Fix round 1" below: until then a row that grew under an unchanged key was still drawn through the row beneath it for a frame. The read is a forced layout of the slots the
 update bound or changed, which the browser would have laid out before that paint anyway, and the pass walks the pool's
 slots, not the transcript's rows (REQ-CHAT-055).
 
@@ -77,6 +79,38 @@ workflow's test suite running, at 112.95 against 136 ms, one frame of slack bein
 build before this repair, at a load of 3.9, read 96.3 against 101.2 ms. The synchronous work per update (`sync`) read 5.3 to
 9.0 ms a side. Absolute figures here move with the host's load more than with either build; no run on this shared host was
 quiet throughout.
+
+**Fix round 1, 2026-10-01 — a row that grows under an UNCHANGED key.** The verifier found that the repair above covered a
+row whose measurement key changed and nothing else. A row can grow while its key stays measured, and then no commit runs
+and `measureAtCommit` has nothing to read: a user row's image attachment opened (`Row.tsx`'s native `<details>`, which
+grows the row with no React commit), the image it reveals loading, and a row whose block start moves its top margin from
+4 to 12 px (the pane builds the key with no `place`, so the key does not change). The only path left was the observer,
+whose `setMeasuredVersion` was a default-lane update rendered after the frame was painted — the row drawn through the row
+beneath it for that frame, this note's symptom. **Repaired:** the observer's delivery comes after layout and before the
+paint, and it now renders synchronously there (`flushSync(() => setMeasuredVersion(...))` in `TranscriptPane.tsx`), so
+the frame is painted with the row beneath placed below what the row draws. The slot is absolutely positioned, so a row's
+top margin is inside the slot's box and a margin change is a size change the observer reports.
+
+**Shown in the built app** by a new reading in `transcript-proof`'s geometry stage: the planted run carries a user row with
+an image attachment (`row:25`, its file never written, so it projects unavailable and opening it reveals the reason line)
+and a row beneath it; the stage clicks the attachment's `<summary>` and reads the boxes on each of twelve frames, each read
+from a task posted inside the frame's animation callback, which runs after that frame is painted (a callback alone runs
+before the frame's layout and observer delivery, and reads what was not yet shown). Its guards hold that the row grew by
+more than 1 px under the key it had before the click. **On a build of the code before this round** (`c352280`): the row
+grew 103.4 → 134.1 px and painted frame 0 drew it **30.7 px** through `row:26`, 0 from frame 1 — red, one run of one.
+**On the repair:** 0 px on all twelve frames in three runs of `--only=geometry` and in the whole proof's run, which passed
+(every update 120.65 ms empty against 99.35 loaded; row appends 118.45 against 92.3; capacity green under a 1600x4400
+screen), and the append comparison alone passed twice more, at host loads of 0.7 to 1.8 (123.9 against 101.35 ms and
+124.7 against 106.65). No unit test pins it: the change is when React renders relative to the browser's paint, which the repository's
+node-environment tests cannot observe, so the proof stage is the test that fails without it. The block-start margin case
+is covered by the same path and was not driven separately.
+
+**What it costs.** A delivery that changes a height now renders before the paint instead of after it — the same render,
+moved earlier. For a row the commit already measured the delivery changes nothing and renders nothing, so streaming and
+appends are not charged it. A render inside a delivery that rebinds or re-observes a slot leaves that slot's size to the
+next frame and Chromium writes "ResizeObserver loop completed with undelivered notifications" to the renderer console:
+once in the whole proof's eleven launches, in the geometry launch as its session was first drawn. Recorded in
+[`../the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`](../the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md).
 
 **Not shown:** a streaming message growing by a chunk at the tail in the built app (the unit test covers the mechanism it
 shares; no proof drives a chunked stream with a row beneath it), Windows or macOS, and a live run.

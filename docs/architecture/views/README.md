@@ -48,7 +48,8 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 **A row that grows is measured at the commit, before it is painted (PD-CHAT-003, REQ-CHAT-058, ADR-0045, R-067).** A row whose
 content changed was placed by the height its identity drew last until the observer's delivery rendered a frame later, and a
 row that grew was painted through the row beneath it. The pane now reads every bound slot with no measurement of its present
-key after the commit and renders again inside it when the height differs (`measureAtCommit`). This repairs
+key after the commit and renders again inside it when the height differs (`measureAtCommit`), and a size that changes under an
+unchanged key, with no commit, is rendered synchronously from the observer's delivery, before the paint (fix round 1). This repairs
 `a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md` (acceptance A37); the **runtime view**'s
 "What paints it" says so. No package, edge, process, message kind, channel, command or store column changed.
 

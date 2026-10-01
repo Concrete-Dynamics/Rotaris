@@ -1,4 +1,5 @@
 import { createElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { flushSync } from 'react-dom';
 import type { ApprovalPayload, ImageAttachment, QuestionPrompt, TranscriptRow } from '@rotaris/contracts';
 import {
   LIVE_REFRESH_MS, PAGE_OLDER_THRESHOLD, POOL_CAPACITY, TAIL_EPSILON, capacityFor, countUiObjects, countWidgets,
@@ -381,7 +382,15 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
         const previous = lastByIdentity.peek(identity);
         if (previous === undefined || Math.abs(previous - height) > 0.5) { lastByIdentity.set(identity, height, 0); markMeasured(ledger, identity); changed = true; }
       }
-      if (changed) setMeasuredVersion((v) => v + 1);
+      // ADR-0045 (heights are measured), for a size that changes under an UNCHANGED key — a native `<details>` opened on a
+      // user row's image attachment, the image it reveals loading, a row's block start changing its top margin — where no
+      // commit runs and `measureAtCommit` has nothing to read. The delivery comes after layout and before the paint, so the
+      // render it asks for is rendered HERE, synchronously, and the frame is painted with the row beneath placed below what
+      // the row draws. **Falsified 2026-10-01, kept beside its replacement: `if (changed) setMeasuredVersion((v) => v + 1)`.**
+      // That is a default-lane update, rendered after the frame was painted, so the row that grew was drawn through the row
+      // beneath it for that frame
+      // (docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md).
+      if (changed) flushSync(() => setMeasuredVersion((v) => v + 1));
     });
     observedKeys.clear();
     for (const [slot, node] of slotNodes) { observer.observe(node); observedKeys.set(slot, node.dataset['measure'] ?? ''); }

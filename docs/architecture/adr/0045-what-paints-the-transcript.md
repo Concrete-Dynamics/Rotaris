@@ -724,7 +724,15 @@ line by a click, and on the build before the repair the first frame after the cl
 it. **The measurement now also happens at the commit**: after every commit and before the browser paints it, the pane reads
 the drawn height of each bound slot whose measurement key has none yet, files it as the observer would, and renders again
 inside the commit when it differs from what placed the row (`measureAtCommit`). The observer stays, for a size that changes
-under an unchanged key. The identity's last height still places the row for the render that binds it, so a streaming row
+under an unchanged key. **Corrected in fix round 1 (2026-10-01), the sentence kept beside its replacement: "the observer
+stays, for a size that changes under an unchanged key" did not keep that size off the painted frame** — the observer's render
+was a default-lane update, rendered after the paint, so a user row whose image attachment was opened (a native `<details>`,
+no commit, no new key) painted 30.7 px through the row beneath it on the first frame in `transcript-proof`'s new attachment
+reading. The observer's delivery comes after layout and before the paint, and it now renders synchronously there
+(`flushSync`); the reading is 0 px on every frame in four runs of four. Its cost is the same render moved before the paint,
+and, where that render rebinds or re-observes a slot, a slot's size deferred to the next frame with Chromium's "loop completed
+with undelivered notifications" line in the renderer console — once in the proof's eleven launches
+(`docs/defects/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`). The identity's last height still places the row for the render that binds it, so a streaming row
 is never placed by an estimate; what changed is that the render is not the one painted. The read forces layout of the slots
 the update bound or changed, before a paint that would have laid them out anyway, and walks the pool's slots rather than the
 rows held (REQ-CHAT-055); what it costs is that a new row's first painted frame carries the second render the delivery used

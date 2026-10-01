@@ -15,7 +15,9 @@
  *                   column, with a scripted run appended so that something is live while it is sampled: every
  *                   bound slot carries a measurement key, and no slot is drawn through its neighbour — at
  *                   appointments, and on each of the frames after the run's reasoning row is first drawn, before
- *                   the rows it appends have been measured.
+ *                   the rows it appends have been measured — and on each painted frame after a planted user row's
+ *                   image attachment is opened, which grows the row under its unchanged measurement key, and each
+ *                   frame after the activity line is expanded.
  *   3c. capacity   — a planted run of 400 one-line system notices, the shortest row PD-CHAT-003 draws, in a window
  *                   resized to 1440x4300 — inside `H_MAX`, and tall enough that the pool's old 30 px capacity unit bound
  *                   fewer slots than the viewport shows rows: every row on screen is bound, at the tail and in the middle
@@ -248,6 +250,16 @@ function plantLiveRun(sid) {
     const last = new Date(Date.UTC(2026, 8, 6, 9, 1, 0, 0)).toISOString();
     planned.push({ sid, i: CALLS, kind: 'agent', settled: 1, body: 'the row the activity line used to be drawn through', at: last, ts: last.slice(11, 19), persona: 'requirements-engineer', name: 'requirements-engineer', toolName: null, toolStatus: null, callKey: null, durationMs: null, startedAt: null, output: null });
     db.transaction((batch) => { for (const row of batch) insert.run(row); })(planned);
+    // docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md: a user row
+    // carrying an image attachment, and a row beneath it. Opening the attachment's native `<details>` grows the row with no
+    // commit and under the SAME measurement key, so only the observer's delivery can move the row beneath. The image's file
+    // was never written, so it projects unavailable (REQ-CHAT-173) and opening it reveals the reason line; that is growth
+    // enough, and it needs no image to load.
+    const asked = new Date(Date.UTC(2026, 8, 6, 9, 1, 30, 0)).toISOString();
+    const withAttachment = db.prepare(`INSERT INTO transcript_rows (session_id, row_index, kind, settled, body, at, ts, page, attachments)
+      VALUES (@sid, @i, @kind, 1, @body, @at, @ts, NULL, @attachments)`);
+    withAttachment.run({ sid, i: CALLS + 1, kind: 'user', body: 'the prompt that carried an image', at: asked, ts: asked.slice(11, 19), attachments: JSON.stringify([{ name: 'sketch.png', mediaType: 'image/png', size: 2048, path: 'attachments/never-written-sketch.png', digest: 'a'.repeat(64) }]) });
+    withAttachment.run({ sid, i: CALLS + 2, kind: 'agent', body: 'the row an opened attachment used to be drawn through', at: asked, ts: asked.slice(11, 19), attachments: '[]' });
     return sid;
   });
 }
@@ -508,6 +520,14 @@ if (wanted('geometry')) {
   // collapsed height, the line drawn through it until the observer's delivery rendered a frame later.
   const GROW_AT = 11_000;
   const GROW = `(async () => { const frame = () => new Promise((resolve) => requestAnimationFrame(resolve)); const slot = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound && n.dataset.bound.startsWith('group:')); if (!slot) return null; const key = slot.dataset.bound; const beforePx = Math.round(slot.getBoundingClientRect().height * 10) / 10; slot.querySelector('button').click(); const frames = []; for (let n = 0; n < 12; n += 1) { await frame(); const boxes = [...document.querySelectorAll('.transcript__slot')].filter((x) => x.dataset.bound).map((x) => { const r = x.getBoundingClientRect(); return { key: x.dataset.bound, top: r.top, bottom: r.bottom }; }).sort((a, b) => a.top - b.top); let worst = 0; let pair = null; for (let i = 1; i < boxes.length; i += 1) { const o = boxes[i - 1].bottom - boxes[i].top; if (o > worst) { worst = o; pair = [boxes[i - 1].key, boxes[i].key]; } } frames.push({ frame: n, px: Math.round(worst * 10) / 10, pair }); } const grown = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound === key); return { key, beforePx, afterPx: grown ? Math.round(grown.getBoundingClientRect().height * 10) / 10 : null, expanded: grown ? grown.querySelector('button').getAttribute('aria-expanded') : null, frames }; })()`;
+  // The same symptom under an UNCHANGED key: a user row's image attachment is opened by a click on its native `<details>`,
+  // which grows the row with no commit and no new key, so `measureAtCommit` has nothing to read and only the observer's
+  // delivery can move the row beneath. A requestAnimationFrame callback runs BEFORE that frame's layout and its observer
+  // delivery, so each frame is read from a task posted from inside it, which runs after the frame is painted: what the
+  // reading sees is what the reader saw. Before the repair the observer's render was a default-lane update rendered after
+  // the paint, and frame 0 showed the user row drawn through the row beneath it.
+  const ATTACH_AT = 10_400;
+  const ATTACH = `(async () => { const frame = () => new Promise((resolve) => requestAnimationFrame(resolve)); const painted = () => new Promise((resolve) => { const c = new MessageChannel(); c.port1.onmessage = () => resolve(); c.port2.postMessage(0); }); const slot = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound && n.querySelector('.row__attachment details')); if (!slot) return null; const key = slot.dataset.bound; const measure = slot.dataset.measure; const details = slot.querySelector('.row__attachment details'); const beforePx = Math.round(slot.getBoundingClientRect().height * 10) / 10; details.querySelector('summary').click(); const frames = []; for (let n = 0; n < 12; n += 1) { await frame(); await painted(); const boxes = [...document.querySelectorAll('.transcript__slot')].filter((x) => x.dataset.bound).map((x) => { const r = x.getBoundingClientRect(); return { key: x.dataset.bound, top: r.top, bottom: r.bottom }; }).sort((a, b) => a.top - b.top); let worst = 0; let pair = null; for (let i = 1; i < boxes.length; i += 1) { const o = boxes[i - 1].bottom - boxes[i].top; if (o > worst) { worst = o; pair = [boxes[i - 1].key, boxes[i].key]; } } frames.push({ frame: n, px: Math.round(worst * 10) / 10, pair }); } const grown = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound === key); return { key, sameKey: grown ? grown.dataset.measure === measure : null, beforePx, afterPx: grown ? Math.round(grown.getBoundingClientRect().height * 10) / 10 : null, open: details.open, frames }; })()`;
   const geometry = await launch('geometry', {
     // A PLANTED running tool cannot stay running: a resumed session settles its in-flight calls through stale
     // detection (ADR-0002), which is correct and is why the fixture alone cannot produce a live line. The wrap
@@ -515,7 +535,7 @@ if (wanted('geometry')) {
     ROTARIS_CAPTURE_RESUME: 'SLIVE',
     ROTARIS_SCRIPT: 'think,read,answer',
     ROTARIS_CAPTURE_PROMPT: 'Say something about the notes.',
-    ROTARIS_CAPTURE_EVAL_AT: [`${LIVE_FIRST.replace('OVERLAP_READ', () => OVERLAP)}@${LIVE_WATCH_FROM}`, `${NEW_ROWS}@${NEW_ROWS_WATCH_FROM}`, ...SAMPLE_AT.map((ms) => `${OVERLAP}@${ms}`), `${GROW}@${GROW_AT}`].join(';;'),
+    ROTARIS_CAPTURE_EVAL_AT: [`${LIVE_FIRST.replace('OVERLAP_READ', () => OVERLAP)}@${LIVE_WATCH_FROM}`, `${NEW_ROWS}@${NEW_ROWS_WATCH_FROM}`, ...SAMPLE_AT.map((ms) => `${OVERLAP}@${ms}`), `${ATTACH}@${ATTACH_AT}`, `${GROW}@${GROW_AT}`].join(';;'),
     ROTARIS_CAPTURE_AFTER_MS: '12500',
   }, 240_000);
   const samples = [{ ms: 'on the first live line', ...(evalAt(geometry, LIVE_WATCH_FROM) ?? {}) }, ...SAMPLE_AT.map((ms) => ({ ms, ...(evalAt(geometry, ms) ?? {}) }))].filter((s) => typeof s.bound === 'number');
@@ -548,7 +568,13 @@ if (wanted('geometry')) {
   expect(grow !== null && grow.expanded === 'true' && grow.afterPx > grow.beforePx + 1 && grow.frames.length === 12, `the expanded activity line never grew, so the frames after it were never asked: ${JSON.stringify(grow)}`);
   const growWorst = grow.frames.reduce((a, b) => (b.px > a.px ? b : a));
   expect(growWorst.px <= 1, `the activity line, expanded from ${grow.beforePx} px to ${grow.afterPx} px, overlaps the row beneath it by ${growWorst.px} px on frame ${growWorst.frame} after the click ${JSON.stringify(growWorst.pair)}: ${JSON.stringify(grow.frames)}`);
-  results.geometry = { samples, wrappedToLines: wrapped, liveSamples: liveSamples.length, worstOverlapPx: worst.worstOverlapPx, newRows, grow, tallestRolePx: Math.max(...samples.map((s) => s.tallestRolePx)), png: geometry.png };
+  // The unchanged-key form: the guards first — the attachment row was found, its `<details>` opened, the row grew by more
+  // than the 1 px held, and it grew under the key it had before the click — or the assertion is true of nothing.
+  const attach = evalAt(geometry, ATTACH_AT);
+  expect(attach !== null && attach.open === true && attach.sameKey === true && attach.afterPx > attach.beforePx + 1 && attach.frames.length === 12, `the opened attachment never grew the row under its own key, so the frames after it were never asked: ${JSON.stringify(attach)}`);
+  const attachWorst = attach.frames.reduce((a, b) => (b.px > a.px ? b : a));
+  expect(attachWorst.px <= 1, `the user row, grown from ${attach.beforePx} px to ${attach.afterPx} px by opening its attachment, overlaps the row beneath it by ${attachWorst.px} px on painted frame ${attachWorst.frame} ${JSON.stringify(attachWorst.pair)}: ${JSON.stringify(attach.frames)}`);
+  results.geometry = { samples, wrappedToLines: wrapped, liveSamples: liveSamples.length, worstOverlapPx: worst.worstOverlapPx, newRows, grow, attach, tallestRolePx: Math.max(...samples.map((s) => s.tallestRolePx)), png: geometry.png };
 }
 
 // ── 3c. capacity: every row on screen is bound, however short ───────────────────────────────────────────────

@@ -768,7 +768,8 @@ card's sentences over those real replies.
   `requirements.cancel` reaches the process's handle through a structural probe, since the seam's engine offers
   no cancel and a fake without one has nothing to stop. Over the process, the direct path's first check measured
   470–798 ms (the first job spawns the worker) and the board path on the warm worker check 13–17 ms, regenerate
-  6–7 ms, a baseline update 20–26 ms; two concurrent checks yielded exactly one `busy` (`REQ-TRACE-512`); every
+  6–7 ms, a baseline update 20–26 ms; ~~two concurrent checks yielded exactly one `busy` (`REQ-TRACE-512`)~~ *(corrected 2026-10-01, see
+  the end of this record: the two checks raced, and the pair is now held in flight)*; every
   card the board then read carried a `verification` state. The card allows one operation at a time across the
   four kinds; the engine's rule is per kind.
 
@@ -854,3 +855,23 @@ the repair read the parse ratio at 2.24 to 2.35 and the parser's at 1.89 to 2.06
 host in the verification's repair round, read the parse at 2.19 to 2.33 and the parser at 2.03 to 2.09. On this host the half-size sweep reads
 18 to 23 ms, under the floor, so its ratio stays recorded and not asserted. The note is
 [`traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`](../../defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md).
+
+**Corrected 2026-10-01 (R-062): the second execution's busy pair raced, and is now held in flight.** The falsified
+claim was "two concurrent checks yielded exactly one `busy` (`REQ-TRACE-512`)". The proof posted two board-path checks
+over the eleven-requirement fixture in one `Promise.all`, and a check there takes about 8 ms, so whenever the first
+finished before the service took the second off its channel both answered `ok`, a correct answer from an engine that
+refuses only while one is in flight. A scratch driver looping that pair through the built service answered both `ok` in
+2, 6 and 9 of 100 pairs beside six CPU-bound loops (0 of 100 without them, the other plan's agents alone on the host); the proof itself went red on it once
+in six at a load average of about 4. What it showed when it passed was the timing lining up, not the guard.
+
+The replacement: the pair runs over the scale tree, opened as the workspace, whose check runs for hundreds of
+milliseconds (275 to 456 ms in the service when nothing cancels it). The second check is posted in the same tick as the
+first; the proof asserts that it is refused `busy`, that it was answered while the first was still unanswered (the
+service takes its requests in order, so it was decided with the first in flight), and that the first answers `ok` or
+`cancelled`. The first is then cancelled through `requirements.cancel`, and both replies' timings are kept in
+`results.json` as `busyPair`, on a red as on a pass. Twelve runs reached the check and passed it, four at a load
+average of 11.8 to 14.1 and eight in a row at 6.0 to 9.4; the second was answered `busy` 7 to 22 ms after the pair was
+posted, the first `cancelled` 12 to 43 ms after. With the engine's guard removed from the built bundle alone, the proof
+goes red on the refusal (`["ok","ok"]`, the first answered at 933 and 1,683 ms in two runs). The engine is unchanged.
+The note is
+[`traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md`](../../defects/fixed/traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md).

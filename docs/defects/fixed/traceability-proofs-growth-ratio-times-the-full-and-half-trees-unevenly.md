@@ -85,5 +85,5 @@ the repair round, just above the floor, so on a faster host the parse ratio too 
 leaving the work ratio as the only assertion. That is the floor's own rule (ADR-0040), not this repair's doing. Run 4's
 red was the process stage's busy check (two `requirements.operation` checks on the board path): both answered `ok`.
 That is a different harness race, recorded in
-[`traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md`](../traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md)
-and not repaired here.
+[`traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md`](traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md)
+and not repaired here (repaired 2026-10-01, and moved beside this one).

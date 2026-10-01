@@ -9,7 +9,7 @@ longer screens the load out: a side can go a whole round without one uncontended
 in either direction.
 
 Seen 2026-10-01 by the fin4 builder while repairing the busy check
-([`traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md`](traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md)),
+([`fixed/traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md`](fixed/traceability-proofs-busy-check-assumes-the-first-of-two-posted-checks-is-still-in-flight.md)),
 as root under Xvfb, Node 24, `node apps/desktop/scripts/traceability-proof.mjs --skip-build` on 4 CPUs, with the builder's
 own CPU-bound `node -e 'for(;;){}'` loops beside the other plan's agents:
 

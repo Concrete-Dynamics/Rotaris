@@ -105,9 +105,15 @@ worktree, `/home/user/Rotaris-crw-wt-accept`, was checked out at `71ad8e8` from 
   each one's next request carried what it had recorded before the pause.
 - **Duress**, `LIVE_RUN_DURESS_MS=5400000`: pack `.live-run/runs/2026-10-01T03-15-27-194Z`. The long run reached its
   result in 5,078 s of the 5,400 s window, with 15 `PASS`, 4 `NOTE` and no `FAIL`. It made 397 tool calls through 9
-  children, using 10,385,578 input and 441,753 output tokens. Three children reached their 1,200 s limit and ended
-  `failed`, each with PD-ORCH-004's continuation offer. The parent took two of the offers, and one of those continuations
-  succeeded. This is PD-ORCH-004's path as the owner ruled it (R-048).
+  children, using 10,385,578 input and 441,753 output tokens. Three children were cut off at their 1,200 s limit while
+  making progress and ended `failed`, as the owner ruled (R-048). The two originals, `reconcile-docs` (`bg_71164543`)
+  and `verify-result` (`bg_5d571a7a`), each carried PD-ORCH-004's continuation offer, and the parent took both. The
+  continuation of `reconcile-docs` (`reconcile-docs-continue`, `continuation_of` `bg_71164543`) was cut off too, and
+  its report's `cut_off.continuation_offer` is `null`: it got no second offer, as PD-ORCH-004 requires of a continuation
+  that itself times out. The continuation of `verify-result` (`verify-result-continue`) succeeded.
+  *(Corrected 2026-10-01 in the verification's fix round. The text first read "Three children reached their 1,200 s
+  limit and ended `failed`, each with PD-ORCH-004's continuation offer. The parent took two of the offers, and one of
+  those continuations succeeded." The third child was itself a continuation and carried no offer.)*
 
 An earlier `duress` launch at 02:58 received SIGTERM before it produced a pack. Its leftover directory,
 `2026-10-01T02-58-14-306Z`, holds no store.
@@ -120,14 +126,23 @@ launch was split into `--only=` pieces to get around a refusal.
 
 A read-only autopsy of every session in both packs re-checked the repaired live-run findings: D1 to D7, and those of
 L1 to L14 that the evidence reaches. None of them recurred. Its new findings were recorded on 2026-10-01 as ten notes
-and OQ-161 to OQ-164 (merge `c34fa70`). WF1 was never repaired, and its open note
-`write-files-first-use-refusal-recurred-under-duress.md` was hit again: 2 of 5 first uses were refused. That evidence is
-added to the note and to OQ-139.
+and OQ-161 to OQ-164 (merge `c34fa70`). WF1 was only partly repaired: since 2026-09-29 `write_file`'s description
+names `operation`, and the run carried that. Its note,
+[`write-files-first-use-refusal-recurred-under-duress.md`](../write-files-first-use-refusal-recurred-under-duress.md),
+stays open under OQ-139, and the run hit it again: 2 of 5 first uses were refused. That evidence is added to the note and
+to OQ-139. *(Corrected 2026-10-01 in the verification's fix round: the text first read "WF1 was never repaired", which
+the note's section "Partly repaired — 2026-09-29 under R-067; still open" contradicts.)*
 
 **What this does not close.** `main` has since moved past `71ad8e8`: `fix-accept1-18`, `-19`, `-20` and `-21` merged
 after it, and so did every later merge of 2026-10-01. No live run has executed on the head that would be released. That
 run is still owed. As `AGENTS.md` says, it runs when the owner asks for it, or when an agent asks the owner and is told
 yes. R-066 is the owner's standing yes for the unmetered `katalyst` endpoint, and the acceptance plan after this round
-is where that run is scheduled. This note's defect was the gap on the round it names, the merged whole of acceptance
-round 1's repairs at `7ae8072`. `71ad8e8` carries all of those repairs, and they have now run live. The note is moved
-to `fixed/`. The row is in `docs/architecture/first-executions.md`.
+is where that run is scheduled. This note's defect was the gap acceptance round 1 found on the head it examined,
+`7ae8072`: the merged whole of the round before it (the repairs of L1–L14 and D1–D7 under R-067, and WF1's partial
+repair), which had never run live. `71ad8e8` carries all of that, and acceptance round 1's own repairs up to
+`fix-accept1-17`, and they have now run live. Acceptance round 1's later repairs, `fix-accept1-18` to `-25`, and every
+other merge since `71ad8e8` have not. The note is moved to `fixed/`. The row is in
+`docs/architecture/first-executions.md`. *(Corrected 2026-10-01 in the verification's fix round. The text first called
+`7ae8072` "the merged whole of acceptance round 1's repairs" and said "`71ad8e8` carries all of those repairs". That
+mislabelled the round: `7ae8072` is the head acceptance round 1 examined, and its repairs are the `fix-accept1-*`
+branches, of which `git log --first-parent 7ae8072..71ad8e8` holds `-1` to `-17`.)*

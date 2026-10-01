@@ -84,7 +84,8 @@ record already decides, and every ruling it needs is named as the owner's rather
   ([note](../defects/fixed/chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md)) *(repaired
   2026-09-29 under R-067: the proof's workspaces now carry an answered project setup and a launch that starts one anyway
   fails by name; green without the bundle. `notice-proof` goes red the same way —
-  [note](../defects/notice-proof-reads-a-failed-project-setup-in-place-of-the-hook-review-notice.md), open)*.
+  [note](../defects/fixed/notice-proof-reads-a-failed-project-setup-in-place-of-the-hook-review-notice.md), ~~open~~ **repaired
+  2026-10-01 (fin2) the same way, green without the bundle**)*.
   **2026-09-28, R-062:** `init-proof`'s later red was a product race, a skip answered before the open's
   resolution swallowing the background task ([fixed](../defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md)),
   and behind it the setup dialog drawing that background run as its own and refusing Escape

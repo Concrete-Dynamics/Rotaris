@@ -4,6 +4,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-marker.mjs';
 
 /**
  * ADR-0049's first execution in full (Part V), in the built application.
@@ -57,7 +58,12 @@ function scenario(name, { globalHooks = null, workspaceHook = false } = {}) {
     'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
     // Part T's shipped code_intelligence entry costs about 4.5 s per run start; this proof measures notices.
     'mcp_servers:', '  code_intelligence: { enabled: false }',
-    'runtime:', '  permission_mode: autonomous', '',
+    'runtime:', '  permission_mode: autonomous',
+    // The project-setup task answered (REQ-WORKSPACE-081/111): `enabled: false` above does not make it inapplicable
+    // (REQ-WORKSPACE-090), and without the bundled runtime its background run (REQ-WORKSPACE-083) fails and publishes
+    // "Project setup did not finish" into the ONE notice slot this proof reads (REQ-NOTIFY-024) — in `review-action`
+    // 0.8 s after the hook-review notice it replaced (REQ-NOTIFY-224).
+    ...SETUP_ANSWERED, '',
     // REQ-HOOKS-013: a WORKSPACE hook is never trusted without review, so the summary reports `review` and
     // REQ-NOTIFY-224's notice is raised once the window is interactive.
     ...(workspaceHook ? ['hooks:', '  entries:', '    - event: pre_tool', '      command: "exit 0"', ''] : []),
@@ -86,6 +92,8 @@ async function launch(name, s, extra, opts = {}) {
   if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
+  // The precondition the section establishes, checked rather than assumed: a background setup's notice is not this proof's subject.
+  if (backgroundSetupStarted(log)) throw new Error(`${name}: the workspace's initialization started code-intelligence-setup in the background, so its notice may stand in the slot this proof reads; see ${name}.log`);
   const errors = log.split('\n').filter((l) => /renderer console:/.test(l));
   return { log, png, elapsedMs: Date.now() - started, errors };
 }

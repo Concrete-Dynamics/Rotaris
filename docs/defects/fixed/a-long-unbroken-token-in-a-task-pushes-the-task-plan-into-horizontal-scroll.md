@@ -62,4 +62,4 @@ on this one.
 ("Delegate ordered command run", "Report results"), so no unbroken token reached the plan. Its `terminal.png` shows the
 sidebar with no horizontal scrollbar, but proves nothing about the repair. The run itself failed on an HTTP 400 that has
 nothing to do with the plan; it is recorded as
-[`a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400`](../a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400.md).
+[`a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400`](a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400.md).

@@ -66,12 +66,23 @@ export function redactHeaders(h: Record<string, string>): Record<string, string>
   return out;
 }
 
-function parseArgs(text: string): unknown {
+/**
+ * A replayed call's input is always a plain object (REQ-TOOLS-032: an unreadable payload never ends the run). The SDK
+ * sends whatever it is handed as the call's arguments, and an endpoint whose chat template iterates them as a mapping
+ * refuses the whole request when they are not one: on 2026-10-01 a model's doubly encoded `delegate` arguments (a JSON
+ * string literal holding the object) parsed without throwing into a string, the next request answered HTTP 400 "Can
+ * only get item pairs from a mapping.", and the run ended before the gate's recoverable answer reached the model. A
+ * parse that yields a string, a number, a boolean, an array or null is therefore wrapped exactly as an unparseable text
+ * is. What the gate judged is unchanged: it reads the call's own text, not this replay.
+ */
+function parseArgs(text: string): Record<string, unknown> {
   try {
-    return JSON.parse(text);
+    const parsed: unknown = JSON.parse(text);
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
   } catch {
-    return { _raw: text };
+    // unreadable: wrapped below
   }
+  return { _raw: text };
 }
 
 /**

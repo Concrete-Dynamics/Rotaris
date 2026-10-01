@@ -6,6 +6,7 @@ import { asSessionId, FakeClock, mintMachineId, type MachineId, type Result, typ
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
 import { buildContinuationPayload, entryRootsOf, offersToldIn, RUN_CONFIG_DEFAULTS, Sessions, type ArtifactOps, type Preflight, type PreflightContext, type RunSetup, type SessionWriter, type TodoDocument, type ToolPort } from './index.js';
+import { recordedRootNames } from './children/naming.js';
 import type { SessionRecord } from '@rotaris/contracts';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
@@ -764,6 +765,8 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
     const planner = { name: 'Lead Planner', canonical: 'Lead-Planner' };
     const reviewer = { name: 'Lead Reviewer', canonical: 'Lead-Reviewer' };
     expect(entryRootsOf(dal, sid, undefined)).toEqual([orchestrator, planner, reviewer]);
+    // OQ-158: the ledger keeps every child off exactly the names these roots carry, read from the same sources.
+    expect(recordedRootNames(dal, sid)).toEqual(new Set(entryRootsOf(dal, sid, undefined).flatMap((r) => [r.name, r.canonical])));
     // A live run's current root comes last, and once.
     expect(entryRootsOf(dal, sid, { currentRoot: planner })).toEqual([orchestrator, planner, reviewer]);
     expect(entryRootsOf(dal, sid, { currentRoot: { name: 'coding-agent', canonical: 'coding-agent' } })).toEqual([orchestrator, planner, reviewer, { name: 'coding-agent', canonical: 'coding-agent' }]);

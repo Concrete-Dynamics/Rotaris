@@ -51,8 +51,8 @@ TASK line and its counter keeps its key — pinned by the compression case.
 
 One reading remains, and it is not a count: a root resumed in a later iteration **before its first reply in that
 iteration** carries no message of its own to read, and is placed as a fresh agent is. An unbroken client would have
-carried on counting. No mark can reach a record that holds nothing the double wrote; it is recorded, open, as
-[`the-scripted-client-places-a-root-resumed-before-its-first-reply-as-a-fresh-agent.md`](../the-scripted-client-places-a-root-resumed-before-its-first-reply-as-a-fresh-agent.md).
+carried on counting. No mark can reach a record that holds nothing the double wrote; it was recorded, open, as
+[`the-scripted-client-places-a-root-resumed-before-its-first-reply-as-a-fresh-agent.md`](the-scripted-client-places-a-root-resumed-before-its-first-reply-as-a-fresh-agent.md).
 
 Pinned by:
 - `apps/desktop/src/run-host/scripted-client.test.ts`: the four cases above, each failing on the unrepaired client; the

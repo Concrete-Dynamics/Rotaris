@@ -164,8 +164,9 @@ try {
     const bundle = readFileSync(join(mainOut, 'index.js'), 'utf8');
     const kept = ['ROTARIS_CAPTURE_PNG', 'ROTARIS_CAPTURE_PROMPT', 'ROTARIS_CAPTURE_AFTER_MS'];
     // The last two are the injection proof's (2026-09-27): one writes every scripted model call's system text to a
-    // file it names, the other points the machine-wide instruction base at any directory — neither may ship.
-    const forbidden = ['ROTARIS_CAPTURE_CLICKS', 'ROTARIS_CAPTURE_DOUBLE_CLICKS', 'ROTARIS_CAPTURE_TYPE', 'ROTARIS_CAPTURE_CHORDS', 'ROTARIS_CAPTURE_EVAL_AT', 'ROTARIS_CAPTURE_OS_INPUT', 'ROTARIS_CAPTURE_SELECT', 'ROTARIS_CAPTURE_NOTICES', 'ROTARIS_CAPTURE_DRAG_AT', 'ROTARIS_CAPTURE_PERSONA_STEER', 'ROTARIS_CAPTURE_PERSONA_CLICKS', 'ROTARIS_THEME_PROOF_DIR', 'ROTARIS_DRIVER', 'ROTARIS_CAPTURE_MODEL_REQUESTS', 'ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE', 'ROTARIS_CAPTURE_SKILLS_MACHINE'];
+    // file it names, the other points the machine-wide instruction base at any directory — neither may ship. The
+    // scripted client's standing ledger (2026-10-01) is a file the run host writes under the same flag.
+    const forbidden = ['scripted-standing.json', 'ROTARIS_CAPTURE_CLICKS', 'ROTARIS_CAPTURE_DOUBLE_CLICKS', 'ROTARIS_CAPTURE_TYPE', 'ROTARIS_CAPTURE_CHORDS', 'ROTARIS_CAPTURE_EVAL_AT', 'ROTARIS_CAPTURE_OS_INPUT', 'ROTARIS_CAPTURE_SELECT', 'ROTARIS_CAPTURE_NOTICES', 'ROTARIS_CAPTURE_DRAG_AT', 'ROTARIS_CAPTURE_PERSONA_STEER', 'ROTARIS_CAPTURE_PERSONA_CLICKS', 'ROTARIS_THEME_PROOF_DIR', 'ROTARIS_DRIVER', 'ROTARIS_CAPTURE_MODEL_REQUESTS', 'ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE', 'ROTARIS_CAPTURE_SKILLS_MACHINE'];
     const missing = kept.filter((name) => !bundle.includes(name));
     const present = [];
     for (const file of emitted) {

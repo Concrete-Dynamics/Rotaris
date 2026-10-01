@@ -16,7 +16,7 @@ import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport,
 import { resolveRole, type Persona, type PersonaResolver } from './personas.js';
 import { fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
-import { correctiveInstruction, correctiveMessageLine, hadCorrectiveMessage, StallWatch, stallRecoveredLine, stallRecoveryDue, stallWaitingLine, stallWarning } from './stall.js';
+import { correctiveInstruction, correctiveMessageLine, hadCorrectiveMessage, StallWatch, stallImposedWaitLine, stallRecoveredLine, stallRecoveryDue, stallWaitingLine, stallWarning } from './stall.js';
 import { fileWriters, scopeWithoutWriterReason, validateWriteScope, WriteClaims, writeScopeBlock, writesFiles, type ClaimHit, type ScopeDisclosure } from './write-scope.js';
 import type { HookPort } from '../hooks-port.js';
 import { withContextUnits, withPlaybook } from '../run/run.js';
@@ -1085,6 +1085,8 @@ export class IterationChildren implements DelegationOps {
         deps.writer.recordIssue({ kind: 'stall', severity: 'warning', actor: row.canonical_name, message, metadata: { task_id: row.task_id, silent_seconds: s.silentS, active_tools: s.activeTools, recent_tool_calls: s.recentCalls, last_model_event: s.lastModelEvent } });
       },
       waiting: (w) => { if (!this.detached) deps.warn(stallWaitingLine(row.canonical_name, row.task_id, w.activeCalls, w.silentS)); },
+      // OQ-173: a backoff, a provider-limit wait or a compression the run holds the child in is a wait, not a stall.
+      imposed: (w) => { if (!this.detached) deps.warn(stallImposedWaitLine(row.canonical_name, row.task_id, w.wait, w.silentS)); },
       recovered: () => { if (!this.detached) deps.warn(stallRecoveredLine(row.canonical_name, row.task_id)); },
       // REQ-ORCH-089's stall callback, at every evaluation: the child's stalled figure reaches its `AgentRecord`, republished
       // when it changes (REQ-MONITOR-119's countdown, REQ-MONITOR-120's recovery notified; REQ-MONITOR-122), and a steer
@@ -1226,6 +1228,8 @@ export class IterationChildren implements DelegationOps {
         onToolCompleted: (call, result) => { stallWatch.toolCompleted(call.callId); progress.completed(deps.clocks.monotonic.now(), call.name, result.args, result.status === 'ok' && !result.isError); },
         onToolStarted: (call) => stallWatch.toolStarted(call.callId, call.name),
         onModelEvent: (kind) => stallWatch.modelEvent(kind),
+        // OQ-173: each wait the run holds the child in between its steps, which is not its silence.
+        onImposedWait: (wait) => stallWatch.imposedWait(wait),
         // PD-ORCH-005 clause 1: the child's conversation, recorded under its task id as it happens.
         ...(deps.record ? { recorder: deps.record.recorder(row.task_id, row.iteration) } : {}),
         ...(fingerprint ? { fingerprint } : {}),

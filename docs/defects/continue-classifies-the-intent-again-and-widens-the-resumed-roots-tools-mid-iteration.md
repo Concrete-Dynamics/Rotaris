@@ -62,4 +62,45 @@ action classifies at all, and whether the grant may change mid-iteration, are ra
   inherits the prior intent.
 - `packages/engine/src/run/run.ts:785-791` — the pre-flight before the resumed iteration, and the "Intent classified"
   row.
-- `packages/engine/src/sessions.ts:849-858` — `intentStatusOf`, which reads the launch audit only.
+- ~~`packages/engine/src/sessions.ts:849-858` — `intentStatusOf`, which reads the launch audit only.~~ Repaired
+  2026-10-01: see below.
+
+## Partly repaired: the header (2026-10-01)
+
+The header half is repaired; the rest stays open under [OQ-162](../architecture/open-questions.md), the owner's.
+
+- **Repaired.** The record's intent status (REQ-ORCH-014) is the intent in effect: the newest `run_continuation_intent`
+  entry's payload, else the launch audit's (`intentPayloadOf` in `packages/engine/src/sessions.ts`, read by both
+  `readSession`s, over `StoreDal.latestTimelineEntry` in `packages/store/src/dal.ts`). After the live run's Continue the
+  header would read the continuation's `explicit_trivial`, not the launch's fallback `moderate_feature`. Pinned by
+  `packages/engine/src/run/preflight.test.ts`, "REQ-ORCH-014 (OQ-162, live-run finding a71-3): after the Continue action
+  the status is the intent the continuation classified, not the launch's" (the launch falls back to `moderate_feature`,
+  the Continue classifies `explicit_trivial`, the last published record reads `explicit_trivial`; it fails with the
+  `readSession`s reading the launch audit alone), and "… the status reads the newest continuation intent over the launch
+  audit …"; the DAL read's query plan by `packages/store/src/store.test.ts`. OQ-162's built reading is changed in place.
+- **Repaired, the transient status.** While a continuation's pre-flight classification is in flight, the status reads
+  `classifying` (REQ-ORCH-014's first clause), not the previous run's intent, and the result replaces it in place: the
+  live run's pre-flight sets `Run.intentClassifying` before the save that publishes `starting` and clears it when the
+  call returns or raises, and `intentStatusOf` reads it first. Before this, a continue by the Continue action showed the
+  launch's fallback for the whole classification call (6.6 s in the live run, up to the 12 s bound). Pinned by
+  `preflight.test.ts`, "REQ-ORCH-014 (OQ-162): while a continue classifies, the status reads `classifying`, and the new
+  intent replaces it in place" (the continuation's classifier is held; every published `starting` record reads
+  `classifying`; it fails without the flag), and the unit case "classifying while starting with no audit …".
+- **Open, the owner's (OQ-162).** The Continue action still classifies the last user prompt again; a successful fresh
+  classification still replaces a fallback launch intent; the new grant still reaches the resumed root in the middle of
+  its iteration (24 tools to 29 in the live run), and clause 14's fingerprint still raises
+  `resumed_under_changed_instructions` although no persona changed; the classification still adds its time (6.6 s in
+  the live run) to the Continue. Whether any of this changes is the ruling's.
+- **Shown in the built app** by the live run's `resume` scenario at this repair (pack `.live-run/runs/2026-10-01T15-19-31-213Z/`
+  of the `fin1-stallandinte` worktree, git-ignored; the self-hosted `katalyst` endpoint): the launch's classification
+  timed out and fell back (`moderate_feature`, "the classification call timed out after 12 s"); the Continue's was
+  unusable too and carried the launch's intent over (timeline #12, `carried_over: true`); and `resume/resume.png`'s header
+  reads "Intent: moderate_feature (continued from the previous run)", the continuation's status, where it read the
+  launch's fallback before. The categories did not diverge this time, so the grant did not change and no warning was
+  raised; the case where they diverge is the test's.
+- **Run again after the transient status** (pack `.live-run/runs/2026-10-01T16-06-59-097Z/`, same worktree and endpoint,
+  `live-run PASSED`): the launch classified `small_feature` (0.72) and the Continue classified `small_feature` again
+  (0.86, timeline #12, written just before the resumed run's `run_start` #13); `resume/resume.png`'s header reads
+  "Intent: small_feature". The harness takes no screenshot while the Continue's classification is in flight, so the
+  `classifying` status in that window is shown by the test alone, not in the built app.
+

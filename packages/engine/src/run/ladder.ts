@@ -4,6 +4,7 @@ import type { SessionWriter } from '../session-writer.js';
 import { classifyFailure, describeCondition, describeError, entryOf, localBackoffMs, pairKey, providerIdentity, retryAfterMs, sameTierCandidates, withSettings, type CatalogueEntry, type ModelChoice, type ResilienceMemory } from './resilience.js';
 import type { WaitRegistry } from './waits.js';
 import { priceRequest, type PricedUsage } from './pricing.js';
+import { duringImposedWait, type ImposedWaitPort } from '../children/stall.js';
 
 /**
  * The ladder over one model step (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..090/094/096/099). It sits at the
@@ -87,6 +88,12 @@ export interface LadderDeps {
    * PD-MONITOR-001 revision 2: the request arrives PRICED — here is where the model it was sent to is known.
    */
   readonly onRequestUsage?: ((usage: PricedUsage) => void) | undefined;
+  /**
+   * OQ-173: the agent's stall watch is told of each wait this ladder holds the agent in between its model steps — a
+   * retry's backoff and the suspended wait on a provider limit — so it reports a wait and not a stall; the returned
+   * release ends it. Absent means nobody is watching.
+   */
+  readonly imposedWait?: ImposedWaitPort | undefined;
 }
 
 function pause(clocks: Clocks, ms: number, signal: AbortSignal): Promise<void> {
@@ -154,7 +161,7 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
       const message = `${cls === 'transient' ? 'Transient' : 'Validation'} model failure for ${agent} on ${provider}/${modelId} (retry ${attempt} of ${limit}): ${describeError(err)}; retrying after ${delayS} s.`;
       writer.recordIssue({ kind: cls === 'transient' ? 'transient_llm_error' : 'validation_llm_error', severity: 'warning', actor: agent, message, metadata: { attempt, limit, delay_seconds: delayS, provider, model: modelId } });
       deps.warn(message);
-      await pause(clocks, delayS * 1000, signal);
+      await duringImposedWait(deps.imposedWait, 'backoff', () => pause(clocks, delayS * 1000, signal));
       if (signal.aborted) return report;
       continue;
     }
@@ -217,7 +224,7 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
     writer.recordIssue({ kind: 'model_wait', severity: 'warning', actor: agent, message, metadata: { attempt: cell.waitAttempt, model: modelId, provider, wait_seconds: seconds, auto_resume: seconds !== null, provider_exhausted: exhausted } });
     writer.appendRow('system', `Waiting on a provider limit — ${reason}`, true);
     deps.warn(message);
-    const decision = await waits.enter({ agent, provider, model: modelId, exhausted, attempt: cell.waitAttempt, reason }, waitMs, signal);
+    const decision = await duringImposedWait(deps.imposedWait, 'provider_limit', () => waits.enter({ agent, provider, model: modelId, exhausted, attempt: cell.waitAttempt, reason }, waitMs, signal));
     if (decision.kind === 'cancelled') return { ...report, error: { ...err, headline: reason } };
     if (decision.kind === 'model') {
       cell.attempted.add(pairKey(provider, modelId));

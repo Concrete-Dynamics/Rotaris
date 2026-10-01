@@ -114,9 +114,12 @@ captured, so a skill invoked between prompts reaches the next agent built while 
 context it was built with (REQ-CONFIG-166). Because the list is a property of the session and not of the role,
 REQ-WORKSPACE-065's "every agent built for a session sees the same catalog" holds by construction.
 
-`Run.start()` in order (REQ-SESSION-087): save `starting` → the pre-flight (intent classification through the
+`Run.start()` in order (REQ-SESSION-087): save `starting` → the pre-flight, during which the record's intent status
+reads `classifying` (`Run.intentClassifying`, REQ-ORCH-014, a continuation's included, since 2026-10-01) (intent classification through the
 small slot's rung ladder; the grant; the playbooks; the BUDGET cell) → **the plan gate's hold settled** → the
-launch audit (once per session, REQ-SESSION-138) → `run_start` timeline entry → hook trust announced → the
+launch audit (once per session, REQ-SESSION-138; a continuation's run records its payload as a
+`run_continuation_intent` timeline entry instead, and the record's intent status, REQ-ORCH-014, reads the newest of
+those, else the launch audit — `intentPayloadOf`, since 2026-10-01; OQ-162) → `run_start` timeline entry → hook trust announced → the
 effective permission posture (PD-TOOLS-002: the requested mode, never a downgrade row) → save `running` → `session_start` hooks → **the plan cycle
 if the gate holds**, otherwise the loop — for a run that resumes an open iteration, the loop, holding before its
 first new iteration if the gate would hold (PD-ORCH-003 revision 2).
@@ -873,11 +876,21 @@ as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds
   takes no step until a child of its own reports, so it is between its turns from the start. (Corrected 2026-09-30: the
   bullet above was first read as covering this path too, but no turn settles before such a wait, so it was counted as
   silence.)
+- each wait the run itself holds the agent in between two model steps (`StallWatch.imposedWait`, through
+  `TurnDeps.onImposedWait` and `LadderDeps.imposedWait`; OQ-173, the repair of
+  [`a-provider-wait-or-a-compression-is-counted-as-a-stall.md`](../../defects/fixed/a-provider-wait-or-a-compression-is-counted-as-a-stall.md),
+  2026-10-01): `resilientStep`'s transient or validation backoff and its suspended wait on a provider limit, and a
+  context compression's own model call, automatic or on a rejection (`runTurn`'s `compressing`). While one is held, an
+  evaluation past the threshold reports the wait and no stall — the callback *not stalled* — and its release restarts the
+  silence, as a call's result does.
 
 What it writes:
 - a silence of the threshold with no call in flight: a `stall` issue at every evaluation (REQ-MONITOR-119), and a
   warning at entry and then every `max(threshold, 30)` s (REQ-MONITOR-120);
 - the same silence with calls in flight: a `child waiting on tools: …` line (REQ-MONITOR-118);
+- the same silence while the run holds the agent in a wait of its own: a `child waiting on a provider limit: …` line
+  (or `a retry backoff`, `a context compression`), at entry and then every `max(threshold, 30)` s, in REQ-MONITOR-118's
+  manner (OQ-173); the suspended wait's own notice and `model_wait` issue (REQ-NOTIFY-083..087) are unchanged;
 - activity resuming after a stall: a `child stall recovered: …` line (REQ-MONITOR-120) — only when the agent was active
   after the evaluation that last found it stalled (a model event that is not an error, or something the run gave it). A
   stall that ends otherwise — a cancel, a stop, a pause, a hard timeout, a failed turn, at the watch's `stop` or at an

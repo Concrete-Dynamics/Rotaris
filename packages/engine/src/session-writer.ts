@@ -1021,12 +1021,17 @@ export class SessionWriter {
    * controls left and the MCP evidence after them — over whatever the row held. The spawn records none, since no port has
    * resolved a grant yet. The whole-session update is republished, so the inspector and the persona window read it at once
    * (REQ-MCP-100/114).
+   *
+   * The evidence is written with `recorded: true` (REQ-MONITOR-049/060): the spawn writes `[]` and evidence with no marker,
+   * and so did every row before 2026-10-01, so the marker is what tells a grant the controls left empty of native tools
+   * from no grant recorded at all, with no migration (`toAgentRecord`'s `grantRecorded`;
+   * docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
    */
   recordChildGrant(taskId: string, grant: AgentGrant): Result<void, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
     const { dal, sessionId } = this.deps;
     try {
-      dal.setChildGrant(sessionId, taskId, JSON.stringify(grant.tools), JSON.stringify(grant.mcp));
+      dal.setChildGrant(sessionId, taskId, JSON.stringify(grant.tools), JSON.stringify({ ...grant.mcp, recorded: true }));
     } catch (cause) {
       return this.fail(cause);
     }

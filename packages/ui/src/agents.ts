@@ -1,4 +1,4 @@
-import { contextPercent, DEFAULT_CONTEXT_CAPACITY, isBusy, presentationStatus, RUN_AGENT_ID, type AgentRecord, type EntryRoot, type SessionArtifactLink, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { contextPercent, DEFAULT_CONTEXT_CAPACITY, isBusy, presentationStatus, RUN_AGENT_ID, type AgentRecord, type ConfigSnapshot, type EntryRoot, type SessionArtifactLink, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { countNoun } from '@rotaris/kernel';
 import { treeRows } from './AgentTree.js';
 
@@ -114,7 +114,9 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
     spawnedAt: session.runStartedAt, completedAt: busy || resting ? null : session.updatedAt, toolCalls: session.entryToolCalls ?? Math.max(0, session.toolCalls.total - childCalls), delegationTask: '',
     // REQ-MONITOR-086: the run-wide count is the sum of the per-agent counts, which is what the synthetic root shows.
     compressions: session.agents.reduce((n, a) => n + a.compressions, 0),
-    reasoning: entry.reasoning, contextUsed: session.entryContext.used, contextLimit: session.entryContext.limit > 0 ? session.entryContext.limit : DEFAULT_CONTEXT_CAPACITY, grantedTools: runLevelGrant(session.entryTools.resolved, entry.tools, busy), calledTools: [...session.entryTools.called], activeTools: busy ? [...session.entryTools.active] : [], delegationSessionId: null, inheritedContext: '', live: busy,
+    reasoning: entry.reasoning, contextUsed: session.entryContext.used, contextLimit: session.entryContext.limit > 0 ? session.entryContext.limit : DEFAULT_CONTEXT_CAPACITY, grantedTools: runLevelGrant(session.entryTools.resolved, entry.tools, busy),
+    // The run-level agent's set is already `runLevelGrant`'s choice; no row records its grant (REQ-MCP-065 is per child).
+    grantRecorded: false, calledTools: [...session.entryTools.called], activeTools: busy ? [...session.entryTools.active] : [], delegationSessionId: null, inheritedContext: '', live: busy,
     // Part S's evidence (REQ-MCP-065/114) is per child; the run-level agent carries none in this build.
     grantedMcp: {}, mcpServers: [],
     // PD-ORCH-005: the interruption belongs to a delegated agent's record; the synthetic run-level agent carries none.
@@ -123,6 +125,38 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
     stalledSeconds: busy ? session.entryStalledSeconds : null,
   };
 }
+
+/** The entry role as `runLevelAgent` draws it: its persona, model, reasoning and the declared tools that stand in for its grant. */
+export interface EntryRole { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }
+/**
+ * The entry role as the run-level agent presents it (REQ-MONITOR-057/058): the persona the LATEST root runs or ran as —
+ * while a run is live, the persona its root runs as (`SessionRecord.entryPersona`, passed as `live`); else the `persona` of
+ * the transcript's last row a root authored, of any kind that names its author (`agent`, `tool`, `thinking`, `diff`: every
+ * row a turn writes carries the persona and the name), no child's, preferring a row named for one of the session's roots
+ * (`SessionRecord.entryRoots`, so a child's row that reaches the window before its record cannot pass for one); else
+ * `orchestrator`. Its model, reasoning and declared tools (REQ-MONITOR-060's stand-in) come from the snapshot's role view.
+ *
+ * The latest root, because the entry persona can change between runs (`default_persona` is read for every run, and
+ * PD-ORCH-003 lets a plan cycle run fresh after an iteration), and the run-level agent's chips are the latest root's
+ * (`entryToolsOf`: the live run's port and history, else the latest root's history): the name and the stand-in come from
+ * the persona whose tools the chips show. The specification does not say which persona is drawn once the entry persona has
+ * changed; this is the build's reading, recorded beside OQ-97. Until 2026-10-01 the FIRST root's `agent` row was read, so
+ * after an iteration as `orchestrator` and a plan cycle as `reviewer` the inspector drew `orchestrator`'s tools with
+ * `reviewer`'s calls marking them; the first repair read the last root's `agent` row alone, and a live root whose first
+ * steps were tool calls was drawn as the previous root until its first text, and one that had written no row at all
+ * until then too (the verifier's finding; docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
+ */
+export function entryRole(roles: readonly Pick<ConfigSnapshot['roles'][number], 'role' | 'effectiveModel' | 'rawThinking' | 'declaredTools'>[], rows: readonly TranscriptRow[], agents: readonly Pick<AgentRecord, 'name'>[], roots: readonly Pick<EntryRoot, 'name'>[] = [], live: string | null = null): EntryRole {
+  const childNames = new Set(agents.map((a) => a.name));
+  const rootNames = new Set(roots.map((r) => r.name));
+  const candidates = rows.filter((r) => AUTHORED_KINDS.has(r.kind) && r.persona !== undefined && r.name !== undefined && !childNames.has(r.name));
+  const latest = candidates.findLast((r) => rootNames.has(r.name!)) ?? candidates.at(-1);
+  const persona = live ?? latest?.persona ?? 'orchestrator';
+  const role = roles.find((r) => r.role === persona);
+  return { persona, model: role?.effectiveModel ?? '', reasoning: role?.rawThinking ?? 'medium', tools: role?.declaredTools ?? [] };
+}
+/** The row kinds a turn writes under its agent's persona and name (`run/turn.ts`): the rows an agent authors. */
+const AUTHORED_KINDS = new Set(['agent', 'tool', 'thinking', 'diff']);
 
 /**
  * PD-ORCH-005 clauses 13 and 16 (OQ-100, OQ-101): what a surface drawing the run-level agent and a paused child's Cancel
@@ -212,10 +246,13 @@ export function mcpFateText(s: { readonly fate: 'connected' | 'dropped'; readonl
  * REQ-MONITOR-049/060: the granted set, else the persona's declared tools stand in — but never for a LIVE run-level agent
  * (REQ-MONITOR-061; see `runLevelGrant`), whose empty set means its root port has not resolved yet, not that no grant was
  * recorded: the persona has a live instance, so REQ-MONITOR-060's stand-in does not apply, and a coordinator's declared set
- * holds the write, terminal and commit tools its policy withholds.
+ * holds the write, terminal and commit tools its policy withholds. A recorded grant is shown as it is, an empty one as no
+ * native tool (`grantRecorded`, REQ-TOOLS-006): until 2026-10-01 an empty list read as no grant recorded, so a child whose
+ * controls removed every native tool listed them all
+ * (docs/defects/fixed/a-grant-the-controls-left-empty-reads-as-no-grant-recorded.md).
  */
-export function resolvedTools(agent: Pick<AgentRecord, 'id' | 'grantedTools' | 'live'>, declared: readonly string[]): string[] {
-  if (agent.grantedTools.length > 0) return [...agent.grantedTools];
+export function resolvedTools(agent: Pick<AgentRecord, 'id' | 'grantedTools' | 'grantRecorded' | 'live'>, declared: readonly string[]): string[] {
+  if (agent.grantedTools.length > 0 || agent.grantRecorded) return [...agent.grantedTools];
   return agent.id === RUN_AGENT_ID && agent.live ? [] : [...declared];
 }
 

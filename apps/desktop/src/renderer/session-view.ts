@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from 'zustand';
 import { isBusy, type AgentRecord, type ConfigSnapshot, type SessionListItemPayload, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
-import { shownSession, type PersonaEntry } from '@rotaris/ui';
+import { entryRole, shownSession, type EntryRole, type PersonaEntry } from '@rotaris/ui';
 import { bridge, cancelOverlays, replica } from './shell.js';
 
 /**
@@ -47,15 +47,13 @@ export function personasOf(snapshot: ConfigSnapshot | null): PersonaEntry[] {
   return (snapshot?.roles ?? []).map((r) => ({ role: r.role, tools: r.declaredTools, thinking: r.rawThinking, effectiveModel: r.effectiveModel }));
 }
 /**
- * The entry role as the run-level agent presents it (REQ-MONITOR-057/058): the persona the transcript's first agent row
- * names when no child carries that name, else `orchestrator`; its model and reasoning from the snapshot's role view.
+ * The entry role as the run-level agent presents it (REQ-MONITOR-057/058): `entryRole` over the snapshot's role view — the
+ * persona the latest root runs or ran as (the live run's `entryPersona`, else the transcript's latest root row), its model,
+ * its reasoning and its declared tools (`declaredTools`, REQ-MONITOR-060's stand-in). The first root's persona was drawn until 2026-10-01
+ * (docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md).
  */
-export function entryOf(snapshot: ConfigSnapshot | null, rows: readonly TranscriptRow[], agents: readonly AgentRecord[]): { persona: string; model: string; reasoning: string; tools: readonly string[] } {
-  const childNames = new Set(agents.map((a) => a.name));
-  const first = rows.find((r) => r.kind === 'agent' && r.persona !== undefined && r.name !== undefined && !childNames.has(r.name));
-  const persona = first?.persona ?? 'orchestrator';
-  const role = snapshot?.roles.find((r) => r.role === persona);
-  return { persona, model: role?.effectiveModel ?? '', reasoning: role?.rawThinking ?? 'medium', tools: role?.declaredTools ?? [] };
+export function entryOf(snapshot: ConfigSnapshot | null, rows: readonly TranscriptRow[], session: Pick<SessionRecord, 'agents' | 'entryRoots' | 'entryPersona'> | null): EntryRole {
+  return entryRole(snapshot?.roles ?? [], rows, session?.agents ?? [], session?.entryRoots ?? [], session?.entryPersona ?? null);
 }
 /** REQ-SHELL-072/073: open or raise the persona window for an agent; the run-level agent's persona is the entry role's. */
 export async function openPersona(agent: AgentRecord, focusSteer: boolean): Promise<void> {

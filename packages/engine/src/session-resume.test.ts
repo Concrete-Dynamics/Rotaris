@@ -610,6 +610,50 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
   });
 
   /*
+   * REQ-MONITOR-057/060 with PD-ORCH-003 (the second repair of
+   * docs/defects/fixed/after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md): the live
+   * run's chips are its root's (`entryTools`) from the run's start, so the record carries the persona that root runs as,
+   * before it has written any row; a surface read the persona from the transcript alone, and drew the previous root's.
+   */
+  it('REQ-MONITOR-060: while a run is live the record names the persona its root runs as, before that root has written a row; at rest none', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const client = new ScriptedModelClient([answer('Done.'), { parts: [{ hold }, ...answer('Reviewed.').parts] }]);
+    const backend = new DefaultAgentBackend(client);
+    const personas = ['orchestrator', 'reviewer'];
+    let runs = 0;
+    const snapshots: SessionRecord[] = [];
+    const sessions = new Sessions({
+      clocks: clock, publisher: { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } }, pid: 84, host: HOST,
+      retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-entry-persona',
+      model: null, sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid), attended: () => true,
+      // `default_persona` is read for every run: the second run's root runs as another persona.
+      configure: () => ({ ok: true, value: {
+        model: { backend, config: { ...RUN_CONFIG_DEFAULTS, persona: personas[Math.min(runs++, 1)]!, model: MODEL, credentialFor: () => async () => '' } },
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0 },
+      } }),
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'read the readme') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    sessions.owner(sid)!.reconcile();
+    expect(snapshots.at(-1)!.entryPersona).toBeNull();
+    expect(sessions.prompt(sid, 'now review it').ok).toBe(true);
+    let held: SessionRecord | undefined;
+    for (let i = 0; i < 200 && held === undefined; i++) {
+      await new Promise((r) => setTimeout(r, 5));
+      sessions.owner(sid)!.reconcile();
+      held = snapshots.at(-1)!.entryPersona === null ? undefined : snapshots.at(-1);
+    }
+    expect(held?.entryPersona).toBe('reviewer');
+    // The second root is held in its first model call: no row of the transcript names it yet.
+    expect(dal.residentRows(sid).filter((r) => r.persona === 'reviewer')).toEqual([]);
+    release();
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    sessions.owner(sid)!.reconcile();
+    expect(snapshots.at(-1)!.entryPersona).toBeNull();
+  });
+
+  /*
    * Found by the fifth review of the repair of the-run-level-agent-is-known-by-its-entry-persona-alone.md: a plan cycle's
    * root has no iteration row (REQ-ORCH-153), so the session named it only through its live run (`Run.currentRoot`), which
    * the session lets go of once `start()` settles — as the park does. A session at the gate named no root, in the process

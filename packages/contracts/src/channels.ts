@@ -348,6 +348,15 @@ export const SessionRecordSchema = z.object({
    */
   entryRoots: z.array(EntryRootSchema),
   /**
+   * REQ-MONITOR-057/060 with PD-ORCH-003 (the second repair of
+   * `after-an-entry-persona-switch-the-run-level-agent-is-drawn-as-the-first-roots-persona.md`): the persona the live run's
+   * root runs as — the persona its rows carry and the one its port resolves `entryTools` for — so a surface names the
+   * run-level agent, and draws its stand-in, from the same root whose tools its chips show, from the run's start and before
+   * that root has written any row. Null for a record read with no live run; a surface then reads the transcript's latest
+   * root row (`entryRole`).
+   */
+  entryPersona: z.string().nullable(),
+  /**
    * REQ-MONITOR-117/119/120: the entry agent's stall, as `AgentRecord.stalledSeconds` carries a child's — the seconds with
    * no model event or token while its watch finds it stalled, else null. Null for a record read with no live run.
    */

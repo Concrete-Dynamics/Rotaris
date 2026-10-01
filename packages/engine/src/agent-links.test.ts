@@ -61,6 +61,26 @@ describe('engine — the run-level agent\'s tools and the session\'s artifact li
     expect(entryToolsOf(dal, sid, undefined, activity)).toEqual({ resolved: [], called: ['delegate', 'todo'], active: [] });
   });
 
+  it('PD-ORCH-003 with REQ-ORCH-153: after an iteration the history is the tracker\'s under whichever root ran last — a plan cycle\'s root recorded later than the latest iteration\'s, or that iteration\'s root', () => {
+    const activity = new AgentActivity();
+    activity.started('Builder', 'c1', 'glob');
+    activity.settled('Builder', 'c1');
+    activity.started('Reviewer', 'c2', 'grep');
+    activity.settled('Reviewer', 'c2');
+    dal.insertIteration({ session_id: sid, iteration: 1, root_task_id: 'root:1', root_canonical_name: 'builder', root_persona: 'Builder', todo_task_id: '', task: 'build', opened_at: '2026-09-29T00:00:01.000Z' });
+    dal.closeIteration(sid, 1, 'succeeded', '2026-09-29T00:00:01.500Z');
+    expect(entryToolsOf(dal, sid, null, activity)).toEqual({ resolved: [], called: ['glob'], active: [] });
+    // A plan cycle re-armed after the iteration, its root under a switched entry persona (the repair of
+    // a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md; it read `glob` before).
+    dal.insertPlanRoot({ session_id: sid, root_task_id: 'root:plan-2', root_canonical_name: 'reviewer', root_persona: 'Reviewer', opened_at: '2026-09-29T00:00:02.000Z' });
+    expect(entryToolsOf(dal, sid, null, activity)).toEqual({ resolved: [], called: ['grep'], active: [] });
+    // That plan approved, an iteration opens after it under its persona's successor: the iteration's root ran last.
+    activity.started('Fixer', 'c3', 'read_file');
+    activity.settled('Fixer', 'c3');
+    dal.insertIteration({ session_id: sid, iteration: 2, root_task_id: 'root:2', root_canonical_name: 'fixer', root_persona: 'Fixer', todo_task_id: '', task: 'fix', opened_at: '2026-09-29T00:00:03.000Z' });
+    expect(entryToolsOf(dal, sid, null, activity)).toEqual({ resolved: [], called: ['read_file'], active: [] });
+  });
+
   it('REQ-MONITOR-044/052: every artifact not superseded, with its producer, ready flag and consumers, in creation order', () => {
     const s = store();
     const plan = s.publish({ slug: 'the-plan', title: 'The plan', body: 'First.', tags: [], supersedes: null, createdBy: 'planner-1', persona: 'planner' });

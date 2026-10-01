@@ -47,5 +47,5 @@ Pinned by `apps/desktop/src/run-host/tools.test.ts` ("REQ-MCP-062 / REQ-ORCH-153
 is not printed in the MCP section; on the approved run's port it is printed and callable"; "REQ-MCP-062: a server tool
 dropped for colliding with a native tool name is not printed under its server"), and by
 `packages/engine/src/run/plan-gate.test.ts` ("approve: the approved segment builds its tool ports anew, with the gate
-released…"). Shown in the built app by `pnpm plan-gate-proof` (assertion 10, 2026-10-01, exit 0). The held cycle's
+released…"). Shown in the built app by `pnpm plan-gate-proof` (assertion 11 since the merge with `origin/main`, which took 10; 2026-10-01, exit 0). The held cycle's
 request printed `## MCP servers\n\n- \`alpha\``. The approved run's request printed alpha's five tools, which it may call.

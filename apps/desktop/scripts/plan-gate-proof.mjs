@@ -28,7 +28,11 @@ import { parseEvals, readEval } from './lib/capture-evals.mjs';
  *  9. **REQ-MONITOR-060 at a gate no iteration precedes** — a fresh session's plan cycle root calls a tool and parks;
  *     reopened in the next launch, the inspector's run-level agent marks that tool `used` from the store's history
  *     (acceptance A21).
- * 10. **REQ-MCP-062 with REQ-ORCH-153: a tool-server tool withheld at the gate is not printed** — the entry role carries
+ * 10. **REQ-MONITOR-060 at a gate an iteration precedes, under a switched entry persona** (PD-ORCH-003) — a fresh
+ *     session runs an iteration as `orchestrator` with `run_start_mode: auto`; `plan` is chosen and the entry persona
+ *     switched before the next prompt, whose plan cycle root calls another tool and parks; reopened, the chips mark the
+ *     plan cycle root's tool `used` and the iteration root's not.
+ * 11. **REQ-MCP-062 with REQ-ORCH-153: a tool-server tool withheld at the gate is not printed** — the entry role carries
  *     the MCP fixture server `alpha`; every model request of the held cycle (launch 1, captured by the scripted client)
  *     lists the server with no tool under it, and the approved run's requests (launch 4) print and offer its tools. Until
  *     2026-10-01 the held cycle's prompt printed tools the agent could not call
@@ -77,7 +81,7 @@ const GLOBAL = [
   '',
   'mcp_servers:',
   '  code_intelligence: { enabled: false }',
-  // Assertion 10: the hand-written fixture server, carried by the entry role, whose tools declare no facet (ADR-0016).
+  // Assertion 11: the hand-written fixture server, carried by the entry role, whose tools declare no facet (ADR-0016).
   `  alpha: { command: ${JSON.stringify(process.execPath)}, args: ${JSON.stringify([join(app, 'scripts', 'fixtures', 'mcp-fixture-server.mjs')])} }`,
   '',
   'personas:',
@@ -195,7 +199,7 @@ if (!held.timeline.includes('plan_gate_opened')) throw new Error(`no plan_gate_o
 if (!(inspected(log1, '[data-testid="plan-gate"]')?.matches?.length > 0)) throw new Error(`the gate surface was not found in the primary view:\n${log1}`);
 if (!(inspected(log1, '[data-testid="plan-gate-plan"]')?.matches?.length > 0)) throw new Error('the gate drew no plan');
 if (readEval(parseEvals(log1), GATE_DEADLINE_MS, GATE_TEXT) !== true) throw new Error('the gate does not say "Plan ready for your decision"');
-// 10. REQ-MCP-062 with REQ-ORCH-153: every request of the held cycle carries alpha with no tool printed under it.
+// 11. REQ-MCP-062 with REQ-ORCH-153: every request of the held cycle carries alpha with no tool printed under it.
 const heldSections = systemsOf(HELD_REQUESTS).map(mcpSectionOf).filter((x) => x !== null);
 if (heldSections.length === 0) throw new Error(`the held cycle's requests carry no MCP section — the fixture server did not reach the entry role:\n${log1}`);
 for (const section of heldSections) if (section !== '## MCP servers\n\n- `alpha`') throw new Error(`the held cycle's prompt prints a tool-server tool the gate withholds (REQ-MCP-062):\n${section}`);
@@ -305,7 +309,7 @@ if (approved.session.plan_released !== 1) throw new Error('approval did not rele
 if (approved.session.plan_cycle !== null) throw new Error('the gate is still pending after approval');
 if (approved.session.execution_status === 'awaiting_plan_decision') throw new Error('the run returned to the gate after approval (REQ-ORCH-154: approval is one-way)');
 if (approved.cycles.length !== 2) throw new Error(`a plan produced after approval opened a gate: ${approved.cycles.length} cycles`);
-// 10. The approved run builds its ports with the gate released: its requests print alpha's tools, which it may call.
+// 11. The approved run builds its ports with the gate released: its requests print alpha's tools, which it may call.
 const approvedSections = systemsOf(APPROVED_REQUESTS).map(mcpSectionOf).filter((x) => x !== null);
 if (!approvedSections.some((section) => section.startsWith('## MCP servers\n\n- **`alpha`**\n  - `echo`'))) throw new Error(`the approved run's prompt does not print alpha's tools: ${JSON.stringify(approvedSections)}\n${log4}`);
 results.approved = {
@@ -414,6 +418,84 @@ const chips7 = probed(INSPECTOR_CHIPS).map((c) => `${c.data['data-tool']}:${c.da
 const shown7 = probed(INSPECTOR_NAME)[0]?.text ?? null;
 if (!chips7.includes(`${calledTool}:used`)) throw new Error(`at the gate the run-level agent's chips do not mark the plan cycle root's ${calledTool} call used (REQ-MONITOR-060): ${JSON.stringify(chips7)} (inspector shows ${JSON.stringify(shown7)})`);
 results.toolsAtGate = { rootCalls, inspector: shown7, chips: chips7 };
+
+/*
+ * 8. PD-ORCH-003 with REQ-MONITOR-060 and REQ-ORCH-153: a plan cycle after an iteration, under a switched entry persona. A
+ * fresh session runs one iteration as `orchestrator` in `auto` mode, its root reading the README. Then the configuration
+ * chooses `plan` and switches the entry persona to `reviewer` before the next prompt, whose plan cycle root runs fresh under
+ * it, lists the files and parks. Reopened by the next launch, the run-level agent's chips are read from the store's history
+ * alone. Before the repair of docs/defects/fixed/a-plan-cycle-after-an-iteration-reads-the-tool-history-of-the-iterations-root.md
+ * that history was read under the latest iteration root's persona whenever an iteration existed, so the plan cycle root's
+ * `glob` read `not used` and the iteration root's `read_file` `used`.
+ */
+const REVIEWER = [
+  'personas:',
+  '  reviewer:',
+  '    name: reviewer',
+  '    model: scripted',
+  "    purpose: 'Reviews the work before it is changed.'",
+  // The scripted double follows ROTARIS_SCRIPT for a system prompt that opens this way (`scripted-client.ts`).
+  "    system_prompt: 'You are the orchestrator, here as the reviewer. Plan the review.'",
+  '    tools: [glob, read_file, todo]',
+  '',
+].join('\n');
+// The run-start chip of step 6 wrote `run_start_mode` into the workspace file, which governs over the global one, so the
+// mode is set where the chip sets it: `auto` for the iteration, then `plan` again — the chip's own re-arm, written as it
+// writes it (PD-ORCH-003, REQ-CONFIG-476).
+const WORKSPACE_FILE = join(workspace, '.rotaris', 'agents.yaml');
+const workspaceBefore = existsSync(WORKSPACE_FILE) ? readFileSync(WORKSPACE_FILE, 'utf8') : null;
+writeFileSync(WORKSPACE_FILE, 'runtime:\n  run_start_mode: auto\n');
+await launch('persona-switch-iteration', {
+  ROTARIS_SCRIPT: 'read,answer',
+  ROTARIS_CAPTURE_PROMPT: 'read the readme and summarise it',
+  ROTARIS_CAPTURE_AFTER_MS: '20000',
+}, 180_000);
+const iterated = readStore();
+if (iterated.session?.execution_status !== 'completed') throw new Error(`the auto-mode session did not complete its iteration: ${iterated.session?.execution_status}`);
+writeFileSync(WORKSPACE_FILE, 'runtime:\n  run_start_mode: plan\n');
+// GLOBAL ends inside its own `personas:` mapping (assertion 11's entry role), so the reviewer joins it under that one key.
+writeFileSync(join(configDir, 'agents.yaml'), `${GLOBAL.replace('large_model: scripted', 'large_model: scripted\ndefault_persona: reviewer')}${REVIEWER.replace(/^personas:\n/, '')}`);
+await launch('persona-switch-plan', {
+  ROTARIS_SCRIPT: 'glob,answer',
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ROTARIS_CAPTURE_PROMPT: 'now review the readme before changing it',
+  ROTARIS_CAPTURE_PROMPT_MS: '10000',
+  ROTARIS_CAPTURE_WAIT: 'js:document.querySelector(\'[data-testid="plan-gate-plan"]\') !== null',
+  ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
+  ROTARIS_CAPTURE_AFTER_MS: '1500',
+}, 180_000);
+const log8 = await launch('persona-switch-reopened', {
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ROTARIS_CAPTURE_WAIT: 'js:document.querySelector(\'[data-testid="plan-gate-plan"]\') !== null',
+  ROTARIS_CAPTURE_WAIT_MS: String(GATE_DEADLINE_MS),
+  ROTARIS_CAPTURE_AFTER_MS: '2500',
+  ROTARIS_CAPTURE_PROBE: [INSPECTOR_NAME, INSPECTOR_CHIPS].join(';;'),
+});
+writeFileSync(join(configDir, 'agents.yaml'), GLOBAL);
+if (workspaceBefore === null) rmSync(WORKSPACE_FILE, { force: true }); else writeFileSync(WORKSPACE_FILE, workspaceBefore);
+const switched = readStore();
+if (switched.session?.session_id !== iterated.session.session_id) throw new Error(`the plan cycle ran in another session than the iteration: ${switched.session?.session_id} after ${iterated.session.session_id}`);
+if (switched.session.execution_status !== 'awaiting_plan_decision') throw new Error(`the re-armed session did not park at a gate: ${switched.session.execution_status}\n${log8}`);
+const switchDb = new Database(findStore(join(local, 'rotaris')), { readonly: true });
+const iterationRoots = switchDb.prepare('SELECT root_persona FROM iterations WHERE session_id = ? ORDER BY iteration').all(switched.session.session_id).map((r) => r.root_persona);
+const planRoots = switchDb.prepare('SELECT root_persona FROM plan_roots WHERE session_id = ? ORDER BY opened_at').all(switched.session.session_id).map((r) => r.root_persona);
+const switchCalls = switchDb.prepare('SELECT agent_name, tool_name FROM tool_calls WHERE session_id = ? ORDER BY ordinal').all(switched.session.session_id);
+switchDb.close();
+if (JSON.stringify(iterationRoots) !== JSON.stringify(['orchestrator'])) throw new Error(`expected one iteration whose root ran as orchestrator: ${JSON.stringify(iterationRoots)}`);
+if (JSON.stringify(planRoots) !== JSON.stringify(['reviewer'])) throw new Error(`expected one plan cycle whose root ran as reviewer: ${JSON.stringify(planRoots)}`);
+const iterationTool = switchCalls.find((c) => c.agent_name === 'orchestrator')?.tool_name;
+const planTool = switchCalls.find((c) => c.agent_name === 'reviewer')?.tool_name;
+if (!iterationTool || !planTool || iterationTool === planTool) throw new Error(`the two roots did not call two different tools under their own names: ${JSON.stringify(switchCalls)}`);
+const probed8 = (selector) => {
+  const line = log8.split('\n').find((l) => l.includes(`capture: probe ${selector} → `));
+  if (!line) return [];
+  try { return JSON.parse(line.slice(line.indexOf(' → ') + 3)); } catch { return []; }
+};
+const chips8 = probed8(INSPECTOR_CHIPS).map((c) => `${c.data['data-tool']}:${c.data['data-state']}`);
+const shown8 = probed8(INSPECTOR_NAME)[0]?.text ?? null;
+if (!chips8.includes(`${planTool}:used`)) throw new Error(`at the gate after an iteration the chips do not mark the plan cycle root's ${planTool} call used (REQ-MONITOR-060): ${JSON.stringify(chips8)} (inspector shows ${JSON.stringify(shown8)})`);
+if (chips8.includes(`${iterationTool}:used`)) throw new Error(`at the gate after an iteration the chips mark the earlier iteration root's ${iterationTool} call used: ${JSON.stringify(chips8)} (inspector shows ${JSON.stringify(shown8)})`);
+results.toolsAtGateAfterIteration = { iterationRoots, planRoots, calls: switchCalls, inspector: shown8, chips: chips8 };
 
 /*
  * The write half of assertion 6 is reported rather than enforced: whether the scripted role chooses to call

@@ -75,3 +75,11 @@ Pinned by `packages/engine/src/autopsy.test.ts`, "a child is known by the name i
 with all five calls), and `apps/desktop/scripts/lib/autopsy-entry-model.test.ts`, "knows a child by its canonical name …"
 (both copies of `childModelKeys` key by `canonical_name`, and the child's moves leave the root on `root-model`). The
 first sizing test's fixture, which planted a child whose calls carried its given name, now carries the product's shape.
+
+A continuation that records no entry model (`config_snapshot: {}`, which `run.ts` writes when the run holds no
+configuration snapshot) is still a new run with a new root cell, so it now ends a move as well: the root reads back on
+its configured key, or `undetermined` when nothing ever named one. Pinned by "a continuation recording no entry model …"
+in `packages/engine/src/autopsy.test.ts` and three rows of the moves table (two fail without it; the third, with no move
+in force, guards the other direction). One reading stays coarse and is recorded as its own note:
+[the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback.md](../the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback.md)
+(a switch onto the model already configured, which the run does not rebuild the root's cell for).

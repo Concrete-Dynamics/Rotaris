@@ -210,6 +210,14 @@ describe('R-043 — the run-autopsy snapshot', () => {
         });
         expect(readAutopsy(dal, later, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model → spare-model → root-model', agents: ['orchestrator'], tool_calls: 3 });
       });
+      it('a continuation recording no entry model (`config_snapshot: {}`) is a new run all the same: the root\'s move ends there', () => {
+        const sid = plant('S-quota-then-bare-continue', 'completed');
+        dal.transaction(() => {
+          run(sid); audit(sid, 'root-model', models); sameTier(sid, 1, 'orchestrator', ['anthropic', 's', 'spare-model']);
+          dal.insertTimeline(sid, 2, 't2', 'run_continuation_intent', 'rotaris', 'Continuation intent: answer.', JSON.stringify({ config_snapshot: {} }), 'aaaaaaaaaaf3', 'info');
+        });
+        expect(readAutopsy(dal, sid, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model → spare-model → root-model', agents: ['orchestrator'], tool_calls: 3 });
+      });
     });
 
     it('a child is known by the name its own records carry (its canonical name), never by the name it was given', () => {

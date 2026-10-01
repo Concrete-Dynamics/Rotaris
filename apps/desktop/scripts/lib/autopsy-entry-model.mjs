@@ -73,13 +73,18 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * REQ-ORCH-091 d; the run resolves the root through every override of the session), and moved by the ladder's two
  * automatic moves of an agent no child is (`childNames`, the canonical names of `childModelKeys`): `quota_fallback_model` to its `to_key` (REQ-ORCH-091 b,
  * REQ-NOTIFY-082) and `llm_unresponsive` to the one `models:` key resolving to its recorded pair, else the pair itself
- * (REQ-ORCH-090). A child's move leaves the root where it is.
+ * (REQ-ORCH-090). A child's move leaves the root where it is; the next continuation ends a move (its snapshot's key, or
+ * the configured key when it records none), and so does a switch — read so even onto the model already configured,
+ * which the run does not rebuild the root's cell for (the engine's copy says why).
  */
 export function entryModelKeys(launchAuditPayload, timeline, childNames) {
   const children = new Set(childNames);
   const keys = [];
   let models = {};
   let base = null;
+  // The key the configuration names (snapshot or switch); `base` departs from it only while a ladder move is in force.
+  let configured = null;
+  let fellBack = false;
   const overrides = new Map();
   const effective = () => {
     if (base === null) return null;
@@ -98,9 +103,14 @@ export function entryModelKeys(launchAuditPayload, timeline, childNames) {
   const add = (key) => { if (key !== null && key !== '' && keys[keys.length - 1] !== key) keys.push(key); };
   const fromSnapshot = (snapshot) => {
     const e = snapshotEntry(snapshot);
-    if (!e) return;
+    if (!e) {
+      // A continuation recording no entry model is still a new run, whose root cell is built from the configured model.
+      if (fellBack) { fellBack = false; base = configured; add(configured === null ? ENTRY_KEY_UNDETERMINED : effective()); }
+      return;
+    }
     models = e.models;
-    base = { label: e.label, pair: e.pair };
+    base = configured = { label: e.label, pair: e.pair };
+    fellBack = false;
     add(effective());
   };
   if (launchAuditPayload !== undefined && launchAuditPayload !== null) fromSnapshot(parseJson(launchAuditPayload)?.config_snapshot);
@@ -109,7 +119,8 @@ export function entryModelKeys(launchAuditPayload, timeline, childNames) {
     else if (t.name === 'entry_model_switched') {
       const key = str(parseJson(t.metadata)?.model);
       if (key === '') continue;
-      base = { label: modelLabel(models, key), pair: modelPair(models, key) };
+      base = configured = { label: modelLabel(models, key), pair: modelPair(models, key) };
+      fellBack = false;
       add(effective());
     } else if (t.name === 'model_override') {
       const meta = parseJson(t.metadata);
@@ -128,6 +139,7 @@ export function entryModelKeys(launchAuditPayload, timeline, childNames) {
         const labels = new Set(Object.keys(models).filter((k) => modelPair(models, k) === pair).map((k) => modelLabel(models, k)));
         base = { label: labels.size === 1 ? [...labels][0] : `${meta.to_provider}/${meta.to_model}`, pair };
       }
+      fellBack = true;
       add(effective());
     }
   }

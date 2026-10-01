@@ -212,19 +212,25 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * (`childNames`: the children record names only the children, by the canonical names their records carry —
  * `childModelKeys` — so every other agent an entry names is the root). The
  * root's cell lives for the run (`rootResilience`), so after either move the root runs on the new model until the next
- * continuation's snapshot or its next switch:
+ * continuation (a new run: its snapshot's key, or the configured key when it records none) or its next switch:
  * - `quota_fallback_model` (REQ-ORCH-091 b, REQ-NOTIFY-082): the same-tier candidate, whose key the entry records
  *   (`to_key`);
  * - `llm_unresponsive` (REQ-ORCH-090): the role's fallback, recorded as a `provider|model` pair with no key, so the key
  *   is the one `models:` key of the snapshot in force that resolves to that pair, and the pair itself
  *   (`provider/model`) when none does or more than one does.
- * A child's move leaves the root where it is.
+ * A child's move leaves the root where it is. One reading is knowingly coarse: a switch to a key resolving to the very
+ * model already configured does not rebuild the root's cell in the run (`sameRef`), so a fallback in force then stands,
+ * while this reads the switch as ending it; the snapshot records `provider|model` pairs, not the reference the run
+ * compares.
  */
 export function entryModelKeys(launchAuditPayload: string | undefined, timeline: readonly Pick<TimelineRow, 'name' | 'metadata'>[], childNames: Iterable<string>): string[] {
   const children = new Set(childNames);
   const keys: string[] = [];
   let models: Record<string, unknown> = {};
   let base: { readonly label: string; readonly pair: string | null } | null = null;
+  // The key the configuration names (snapshot or switch); `base` departs from it only while a ladder move is in force.
+  let configured: { readonly label: string; readonly pair: string | null } | null = null;
+  let fellBack = false;
   const overrides = new Map<string, { readonly key: string; readonly to: string | null }>();
   const effective = (): string | null => {
     if (base === null) return null;
@@ -243,9 +249,16 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
   const add = (key: string | null): void => { if (key !== null && key !== '' && keys[keys.length - 1] !== key) keys.push(key); };
   const fromSnapshot = (snapshot: unknown): void => {
     const e = snapshotEntry(snapshot);
-    if (!e) return;
+    if (!e) {
+      // A continuation recording no entry model (`config_snapshot: {}`) is still a new run with a new root cell, built
+      // from the configured model: a ladder move of the run before it ends there, back to the configured key, or to an
+      // undetermined one when nothing ever named it.
+      if (fellBack) { fellBack = false; base = configured; add(configured === null ? ENTRY_KEY_UNDETERMINED : effective()); }
+      return;
+    }
     models = e.models;
-    base = { label: e.label, pair: e.pair };
+    base = configured = { label: e.label, pair: e.pair };
+    fellBack = false;
     add(effective());
   };
   if (launchAuditPayload !== undefined) fromSnapshot(parseJson(launchAuditPayload)?.['config_snapshot']);
@@ -254,7 +267,8 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
     else if (t.name === 'entry_model_switched') {
       const key = str(parseJson(t.metadata)?.['model']);
       if (key === '') continue;
-      base = { label: modelLabel(models, key), pair: modelPair(models, key) };
+      base = configured = { label: modelLabel(models, key), pair: modelPair(models, key) };
+      fellBack = false;
       add(effective());
     } else if (t.name === 'model_override') {
       const meta = parseJson(t.metadata);
@@ -280,6 +294,7 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
         const labels = new Set(Object.keys(models).filter((k) => modelPair(models, k) === pair).map((k) => modelLabel(models, k)));
         base = { label: labels.size === 1 ? [...labels][0]! : `${toProvider}/${toModel}`, pair };
       }
+      fellBack = true;
       add(effective());
     }
   }

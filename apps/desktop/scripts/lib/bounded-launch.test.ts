@@ -183,12 +183,23 @@ describe('R-062: ending a proof launch within its bound', () => {
   });
 
   it.skipIf(!PROC)('counts a process that has exited but is not yet reaped as gone, where kill(pid, 0) still finds it', async () => {
-    // `sh` starts a child that exits at once and execs into `sleep`, which never waits for it: the child stays a zombie.
-    const holder = spawn('sh', ['-c', 'sleep 0 & echo $!; exec sleep 30'], { stdio: ['ignore', 'pipe', 'ignore'] });
+    // `sh` starts a child and execs into `sleep`, which never waits for it, so the child, once it exits, stays a zombie.
+    // The child must not exit before the exec: a shell that is still a shell reaps it, and no zombie is left. So it blocks
+    // on a pipe from the test (fd 3: a non-interactive shell gives an asynchronous list /dev/null as its standard input),
+    // and the test closes its end only once the holder reads as `sleep`.
+    const holder = spawn('sh', ['-c', '(read _ <&3) & echo $!; exec sleep 30'], { stdio: ['ignore', 'pipe', 'ignore', 'pipe'] });
+    const until = async (done: () => boolean, ms = 10_000): Promise<void> => {
+      for (const deadline = Date.now() + ms; !done() && Date.now() < deadline;) await new Promise((r) => setTimeout(r, 20));
+    };
+    const comm = (pid: number): string | null => { try { return readFileSync(`/proc/${pid}/comm`, 'utf8').trim(); } catch { return null; } };
     try {
       const zombie = await new Promise<number>((resolve) => holder.stdout!.once('data', (d) => resolve(Number(String(d).trim()))));
       expect(zombie).toBeGreaterThan(0);
-      for (const deadline = Date.now() + 10_000; procState(zombie) !== 'Z' && Date.now() < deadline;) await new Promise((r) => setTimeout(r, 20));
+      await until(() => comm(holder.pid!) === 'sleep');
+      expect(comm(holder.pid!)).toBe('sleep');
+      expect(alive(zombie)).toBe(true); // still blocked on the pipe: running, so not gone
+      (holder.stdio[3] as NodeJS.WritableStream & { destroy(): void }).destroy(); // EOF: the child's `read` returns and it exits
+      await until(() => procState(zombie) === 'Z');
       expect(procState(zombie)).toBe('Z');
       expect(() => process.kill(zombie, 0)).not.toThrow(); // what the check used to ask, and why it waited on PID 1's reaping
       expect(alive(zombie)).toBe(false);

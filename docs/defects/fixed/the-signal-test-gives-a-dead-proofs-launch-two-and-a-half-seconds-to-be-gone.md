@@ -44,7 +44,13 @@ a zombie of PID 1 aged 18 hours, so PID 1's reaping is not prompt in general.)
 
 **Pinned by** a new case, "counts a process that has exited but is not yet reaped as gone, where kill(pid, 0) still
 finds it": `sh` execs into `sleep` over a child it never waits for, and the case asserts the child is `Z`, that
-`kill(pid, 0)` still succeeds on it, and that `alive` says gone. With `alive` reverted to `kill(pid, 0)` it fails
+`kill(pid, 0)` still succeeds on it, and that `alive` says gone. ~~The child was `sleep 0 &`.~~ That raced: the
+verifier's gate on the merged result failed it (`expected null to be 'Z'` after the 10 s poll), because when the child
+exits before `sh` (dash 0.5.12) reaches `exec`, the shell reaps it itself and no zombie is ever left; a builtin busy
+loop between the two made it fail 10 of 10. The child now blocks on `read` from a pipe on fd 3 (a non-interactive shell
+gives an asynchronous list `/dev/null` as standard input), and the test closes its end only once
+`/proc/<holder>/comm` reads `sleep`, so the child can only exit after the exec: 10 of 10 left a zombie with the same
+busy loop injected. With `alive` reverted to `kill(pid, 0)` it fails
 (`expected true to be false`). **The bound still guards the handler:** with `track`'s handler removed from
 `bounded-launch.mjs`, all three signal cases fail at the 15 s deadline (`expected false to be true`). The file passed
 13 of 13 in each of 10 runs beside nine busy loops (load 11 to 13), and in the full `pnpm check`.

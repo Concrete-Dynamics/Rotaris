@@ -1111,12 +1111,6 @@ describe('one setup at a time across a workspace switch', () => {
 });
 
 /**
- * REQ-WORKSPACE-109/084/093: a setup's follow ends only on a `finished` status, and every later setup waits for it
- * (`setupTurn`). When that status can never arrive — the run host exits mid-setup, and main never forks another — or a push
- * is lost, the follow must still end, as a retryable failure, and release its turn
- * (`docs/defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`).
- */
-/**
  * REQ-WORKSPACE-084/093/103: main's `mcp.setup` requests reject when the run host gives no reply within their 15 s bound —
  * as when it has exited and is never forked again (`workspace-proof`'s scenario 8d)
  * (`docs/defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`).
@@ -1167,6 +1161,12 @@ describe('a setup request the run host never answers', () => {
   });
 });
 
+/**
+ * REQ-WORKSPACE-109/084/093: a setup's follow ends only on a `finished` status, and every later setup waits for it
+ * (`setupTurn`). When that status can never arrive — the run host exits mid-setup, and main never forks another — or a push
+ * is lost, the follow must still end, as a retryable failure, and release its turn
+ * (`docs/defects/fixed/nothing-bounds-the-wait-of-a-setup-queued-behind-one-that-never-finishes.md`).
+ */
 describe('a setup whose finished status never arrives', () => {
   it('ends the follow as a retryable failure when the run host exits, and starts the setup queued behind it (REQ-WORKSPACE-109, REQ-WORKSPACE-084, REQ-WORKSPACE-093)', async () => {
     let starts = 0;

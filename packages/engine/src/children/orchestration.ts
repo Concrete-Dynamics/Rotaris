@@ -1234,8 +1234,10 @@ export class IterationChildren implements DelegationOps {
         cell.model = fb;
         const seconds = childTimeoutMs / 1000;
         const message = `Child ${row.canonical_name} timed out after ${seconds}s on ${providerIdentity(resilience.catalogue, from.model)}/${from.model.modelId}; retried once on the fallback model ${providerIdentity(resilience.catalogue, cell.model.model)}/${cell.model.model.modelId} (REQ-ORCH-088).`;
-        deps.writer.appendTimeline('child_timeout_fallback', 'rotaris', message, { task_id: row.task_id, from_provider: providerIdentity(resilience.catalogue, from.model), from_model: from.model.modelId, to_provider: providerIdentity(resilience.catalogue, cell.model.model), to_model: cell.model.model.modelId, timeout_seconds: seconds });
-        deps.writer.recordIssue({ kind: 'child_timeout_fallback', severity: 'warning', actor: row.canonical_name, message, metadata: { task_id: row.task_id, requested_model: `${providerIdentity(resilience.catalogue, from.model)}/${from.model.modelId}`, fallback_model: `${providerIdentity(resilience.catalogue, cell.model.model)}/${cell.model.model.modelId}`, timeout_seconds: seconds } });
+        // REQ-ORCH-139: the vocabulary's words for REQ-ORCH-088's retry on the role's fallback — the `fallback_model` entry and
+        // the `timeout_fallback` issue (A29; formerly `child_timeout_fallback` for both, a name no list has).
+        deps.writer.appendTimeline('fallback_model', 'rotaris', message, { task_id: row.task_id, from_provider: providerIdentity(resilience.catalogue, from.model), from_model: from.model.modelId, to_provider: providerIdentity(resilience.catalogue, cell.model.model), to_model: cell.model.model.modelId, timeout_seconds: seconds });
+        deps.writer.recordIssue({ kind: 'timeout_fallback', severity: 'warning', actor: row.canonical_name, message, metadata: { task_id: row.task_id, requested_model: `${providerIdentity(resilience.catalogue, from.model)}/${from.model.modelId}`, fallback_model: `${providerIdentity(resilience.catalogue, cell.model.model)}/${cell.model.model.modelId}`, timeout_seconds: seconds } });
         deps.warn(message);
         outcome = null;
         error = null;

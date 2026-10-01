@@ -43,7 +43,16 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-30**
+## Last reconciled with the code: **2026-10-01**
+
+**The fallbacks are named by REQ-ORCH-139's vocabulary, and the vocabulary is checked (REQ-ORCH-139, REQ-NOTIFY-090,
+OQ-157, R-067).** The ladder's same-tier change writes `quota_fallback_model` and the `quota_fallback` issue, its
+unresponsive-model fallback `llm_unresponsive` (entry and issue), and the children's hard-timeout retry `fallback_model`
+and the `timeout_fallback` issue, where they wrote `model_fallback`, `unresponsive_model_fallback`/`unresponsive_model`
+and `child_timeout_fallback`. `tools/check-timeline-vocabulary.mjs`, in `pnpm lint`, fails on a timeline name in no
+vocabulary; the names the product writes that no list has are held there by OQ-157. This partly repairs
+`the-run-writes-timeline-events-outside-its-closed-vocabulary.md` (acceptance A29). The **runtime view**'s ladder paragraph
+and its `timeline` row say so. No package, edge, process, message kind, channel, command or store column changed.
 
 **The compressing model reads the history it replaces (REQ-MONITOR-082, REQ-MONITOR-084, REQ-ORCH-110, OQ-156, R-067).**
 `compress` reads `compressorTranscript` (`run/compression.ts`) instead of the report pass's `transcriptText`, which is

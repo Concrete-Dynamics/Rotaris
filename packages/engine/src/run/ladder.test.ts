@@ -233,7 +233,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const child = dal.childrenOf(sid)[0]!;
     expect(child).toMatchObject({ state: 'failed', interruption: null });
     expect(JSON.parse(child.report!)).toMatchObject({ status: 'failed', errors: [{ type: 'timeout', message: 'Child timed out after 10s' }, { type: 'summary_failure', message: 'the run was coming to rest, so no summarising call was made' }] });
-    expect(timeline(sid)).not.toContain('child_timeout_fallback');
+    expect(timeline(sid)).not.toContain('fallback_model');
     expect(summaries).toBe(0);
   });
 
@@ -343,10 +343,10 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const result = await sessions.running(sid)!;
     expect(result.status).toBe('completed');
     expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
-    expect(timeline(sid)).toEqual(expect.arrayContaining(['model_exhausted', 'model_fallback']));
-    const fallback = dal.timelineOf(sid).find((t) => t.name === 'model_fallback')!;
+    expect(timeline(sid)).toEqual(expect.arrayContaining(['model_exhausted', 'quota_fallback_model']));
+    const fallback = dal.timelineOf(sid).find((t) => t.name === 'quota_fallback_model')!;
     expect(JSON.parse(fallback.metadata)).toMatchObject({ from_provider: 'a', from_model: 'a1', to_provider: 'b', to_model: 'b1', to_key: 'b1', condition: 'quota_exhausted', provider_exhausted: true });
-    const issue = dal.issuesOf(sid).find((i) => i.kind === 'model_fallback')!;
+    const issue = dal.issuesOf(sid).find((i) => i.kind === 'quota_fallback')!;
     expect(issue.severity).toBe('warning');
     expect(JSON.parse(issue.metadata)).toMatchObject({ requested_model: 'a/a1', fallback_model: 'b/b1', provider_exhausted: true });
     expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'model_exhausted')!.metadata)).toMatchObject({ provider: 'a', model: 'a1' });
@@ -478,9 +478,9 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const result = await withFallback.sessions.running(sid)!;
     expect(result.status).toBe('completed');
     expect(withFallback.client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
-    expect(timeline(sid)).toContain('unresponsive_model_fallback');
-    expect(issues(sid)).toContain('unresponsive_model');
-    expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'unresponsive_model_fallback')!.metadata)).toMatchObject({ from_model: 'a1', to_model: 'f1', threshold_seconds: 30 });
+    expect(timeline(sid)).toContain('llm_unresponsive');
+    expect(issues(sid)).toContain('llm_unresponsive');
+    expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'llm_unresponsive')!.metadata)).toMatchObject({ from_model: 'a1', to_model: 'f1', threshold_seconds: 30 });
 
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
@@ -494,7 +494,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const r2 = await without.sessions.running(sid2)!;
     expect(r2.status).toBe('completed');
     expect(without.client.requests).toHaveLength(1);
-    expect(timeline(sid2)).not.toContain('unresponsive_model_fallback');
+    expect(timeline(sid2)).not.toContain('llm_unresponsive');
   });
 
   it('the threshold is armed only below the agent bound (REQ-ORCH-090) and the role fallback is never the agent\'s own model', async () => {
@@ -550,8 +550,10 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const payloads = (ms: readonly { role: string; content: readonly { kind: string; text?: string }[] }[]) => ms.filter((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && (p.text ?? '').includes('TASK: be slow'))).length;
     expect(payloads(recorded)).toBe(1);
     expect(payloads(dal.agentMessagesOf(sid, child.task_id).filter((r) => r.kind === 'message').map((r) => JSON.parse(r.body) as { role: string; content: { kind: string; text?: string }[] }))).toBe(2);
-    expect(timeline(sid)).toContain('child_timeout_fallback');
-    expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'child_timeout_fallback')!.metadata)).toMatchObject({ from_model: 'a1', to_model: 'f1', timeout_seconds: 10 });
+    // REQ-ORCH-139 (A29): the retry is named by the vocabulary — `fallback_model` on the timeline, `timeout_fallback` as the issue.
+    expect(timeline(sid)).toContain('fallback_model');
+    expect(issues(sid)).toContain('timeout_fallback');
+    expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'fallback_model')!.metadata)).toMatchObject({ from_model: 'a1', to_model: 'f1', timeout_seconds: 10 });
     // a1 hung and timed out, f1 answered; REQ-ORCH-095's one re-prompt of a text-only implementer adds a third call, on f1 still.
     const childRequests = withFallback.client.requests.filter((r) => !/^You are the orchestrator|summarise/i.test(r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? ''));
     expect(childRequests.slice(0, 2).map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
@@ -568,7 +570,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const c2 = dal.childrenOf(sid2)[0]!;
     expect(c2.state).toBe('failed');
     expect((JSON.parse(c2.report!) as { errors: { message: string }[] }).errors.map((e) => e.message)).toContain('Child timed out after 10s');
-    expect(timeline(sid2)).not.toContain('child_timeout_fallback');
+    expect(timeline(sid2)).not.toContain('fallback_model');
   });
 
   /*
@@ -614,7 +616,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       clock.advance(1_000); // attempt 2's limit, at 50 s
       h.open();
       expect((await s.sessions.running(sid)!).status).toBe('completed');
-      expect(timeline(sid)).toContain('child_timeout_fallback');
+      expect(timeline(sid)).toContain('fallback_model');
       expect(dal.childrenOf(sid)[0]!.state).toBe('failed');
       const report = reportOf(sid);
       expect(report.errors).toEqual(expect.arrayContaining([{ type: 'timeout', message: 'Child timed out after 10s' }]));
@@ -641,7 +643,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       clock.advance(9_000); // attempt 2's limit, at 50 s, 9 s after its read: not progressing
       h.open();
       expect((await s.sessions.running(sid)!).status).toBe('completed');
-      expect(timeline(sid)).toContain('child_timeout_fallback');
+      expect(timeline(sid)).toContain('fallback_model');
       expect(dal.childrenOf(sid)[0]!.state).toBe('failed');
       const report = reportOf(sid);
       expect(report.errors).toEqual(expect.arrayContaining([{ type: 'timeout', message: 'Child timed out after 10s' }]));
@@ -720,7 +722,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       clock.advance(30_000); await tick(); // the backstop; the retry starts on f1
       clock.advance(3_000); g2.open();
       expect((await s.sessions.running(sid)!).status).toBe('completed');
-      expect(timeline(sid)).toContain('child_timeout_fallback');
+      expect(timeline(sid)).toContain('fallback_model');
       const requests = childRequests(s);
       expect(requests.map((r) => [r.model.modelId, corrective(r)])).toEqual([['a1', false], ['a1', true], ['f1', false]]);
       expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toHaveLength(1);

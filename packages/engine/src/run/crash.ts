@@ -3,7 +3,7 @@ import type { SessionId } from '@rotaris/kernel';
 import type { ChildRow, IterationRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
 import type { ArtifactStore } from '../artifacts/store.js';
-import { storeChildReport, treeOf } from '../children/ledger.js';
+import { storeChildReport, treeOf, writeCancelledTeardown } from '../children/ledger.js';
 import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
 import { conversationOf } from './record.js';
 import { Todo } from './todo.js';
@@ -176,7 +176,10 @@ function recordAcceptedCancel(dal: StoreDal, writer: SessionWriter, sessionId: S
     const r = writer.transitionChild(c.task_id, 'cancelled', 'cancellation');
     if (!r.ok) { warn(r.error.code === 'illegal-move' ? r.error.reason : `recording ${c.task_id} cancelled by the accepted cancel failed: ${r.error.code}`); continue; }
     cancelled += 1;
-    storeChildReport({ writer, artifacts, warn }, c.task_id, c, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: ACCEPTED_CANCEL_REPORT, key_findings: [], last_response: '', final_response: '', errors: [] });
+    const report = { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: ACCEPTED_CANCEL_REPORT, key_findings: [], last_response: '', final_response: '', errors: [] };
+    storeChildReport({ writer, artifacts, warn }, c.task_id, c, report);
+    // REQ-ORCH-098: torn down as the run's own teardown would have (OQ-152).
+    writeCancelledTeardown(writer, c, report);
   }
   const stored = decodeStoredTodo(dal.getSession(sessionId)?.todo ?? null);
   const todo = stored.planner === null ? null : Todo.fromDocument(stored.planner);

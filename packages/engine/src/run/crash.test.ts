@@ -313,6 +313,30 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       expect({ messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length }).toEqual(before);
     });
 
+    it('REQ-ORCH-098 (the repair of a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries): every agent the record ends cancelled is torn down once, in its report\'s words; a second record writes none', () => {
+      const sid = 'S-cancel-teardown' as SessionId;
+      const writer = created(sid);
+      cancelledThenDied(writer, sid);
+      recordCrash(dal, writer, sid, new Set(), () => undefined);
+      const teardown = ['child_end', 'child_result', 'child_conversation_closed'];
+      const ownOf = (taskId: string) => dal.timelineOf(sid).filter((t) => teardown.includes(t.name) && (JSON.parse(t.metadata) as { task_id?: string }).task_id === taskId);
+      for (const id of ['bg_000000c1', 'bg_000000c2', 'bg_000000c3']) {
+        const name = id.slice(-2);
+        expect(ownOf(id).map((t) => [t.name, t.message]), id).toEqual([
+          ['child_end', `Child ${name} (${id}) ended cancelled.`],
+          ['child_result', `Child ${name} reported cancelled: ${ACCEPTED_CANCEL_REPORT.slice(0, 120)}`],
+          ['child_conversation_closed', `Child ${name}'s conversation closed.`],
+        ]);
+        expect(JSON.parse(ownOf(id)[0]!.metadata), id).toEqual({ task_id: id, state: 'cancelled', at: expect.any(String) });
+      }
+      // The finished child and another root's orphan are not this record's to end.
+      expect(ownOf('bg_000000c4')).toEqual([]);
+      expect(ownOf('bg_000000x1')).toEqual([]);
+      const before = dal.timelineOf(sid).length;
+      recordCrash(dal, writer, sid, new Set(), () => undefined);
+      expect(dal.timelineOf(sid).length).toBe(before);
+    });
+
     it('a cancel that overtook a rest: the iteration a stop had left open is closed too, and the agent the stop paused ends cancelled', () => {
       const sid = 'S-overtaken' as SessionId;
       const writer = created(sid);

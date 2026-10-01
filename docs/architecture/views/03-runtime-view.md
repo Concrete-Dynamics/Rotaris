@@ -765,8 +765,14 @@ Since 2026-09-30 a child the scheduler settles without an execution — one the 
 cancels, started or not — is torn down too: `SchedulerDeps.teardown` writes the same three entries through
 `writeTeardown`, after its report and before the terminal callbacks (REQ-ORCH-098; OQ-152; the repair of
 [`a-child-that-never-started-gets-no-teardown-timeline-entries.md`](../../defects/fixed/a-child-that-never-started-gets-no-teardown-timeline-entries.md)).
-A child cancelled by any other path still gets none
-([`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../../defects/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md)).
+Since 2026-10-01 so is a child every other path settles `cancelled` — the user's cancel of one child and its live
+descendants (`IterationChildren.cancel`, after each one's `child_user_cancelled`), the cancel of a paused child at rest
+(`Sessions.cancelPausedAtRest`), "continue without them" (`Run.cancelPausedAgents`), the crash record of an accepted
+cancel (`recordAcceptedCancel`) and the stale-child settle (`settleStaleChildren`) — each through `writeCancelledTeardown`
+with the report it stored. `writeTeardown` lives in `children/ledger.ts` beside `storeChildReport`, and takes its time from
+the writer's clock (`SessionWriter.wall`), because the last two run from the store alone. A cancelled child's execution
+that returns later finds its record terminal and writes none, so each end is torn down once (the repair of
+[`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../../defects/fixed/a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md)).
 
 **A settle's hook runs in line (REQ-HOOKS-076 / REQ-HOOKS-080; repaired 2026-09-29).** Both settles, the one at the end
 of `execute` and `settleRaised`, make the terminal move and write the teardown. Then they run the `child_completed` hook

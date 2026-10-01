@@ -55,4 +55,4 @@ resumed. Both children the sweep cancels get them once each. Both cases fail on 
 blocks a child or cancels one held on its slot: the dependency graph and the delegation are the model's in a live run.
 The unit cases are the evidence. The paths that settle a child `cancelled` outside both the scheduler and its execution
 still write no teardown entry, and are recorded in
-[`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](../a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md).
+[`a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md`](a-child-cancelled-outside-its-execution-gets-no-teardown-timeline-entries.md).

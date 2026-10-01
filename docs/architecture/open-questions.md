@@ -5474,13 +5474,17 @@ images its prompt was sent with, which needs a task to hold them.
 [`a-queued-prompts-task-is-not-named-queued-prompt.md`](../defects/fixed/a-queued-prompts-task-is-not-named-queued-prompt.md)
 (acceptance A28, R-067).* The task a queued prompt becomes is now named as REQ-CHAT-040 and REQ-ORCH-071 state: a todo task
 carries an optional `name` beside its text, and `Run.consumeQueued` names it "Queued Prompt: <first 8 characters of the
-prompt id>" with the prompt text as its content. The Todo pane draws the name; a plan read as text — the handoff's todo
-list within its 80 characters (REQ-SESSION-115), the entry agent's todo lines across a compression — carries the name and
-then the content, as an agent task's line carries its name and then its description; a rename renames the name and keeps
-the content, as an agent task's rename keeps its description (REQ-CHAT-091). The iteration that takes the task up is
-still sent its content alone, as the first bullet above reads: what the model is to do is the prompt, and the name is the
-plan's. So the naming half of the ruling's first question is answered by the requirements' own words; whether the task
-part should also state the name stays open with the rest.
+prompt id>" with the prompt text as its content. The Todo pane draws the name, and so does the handoff's todo list,
+whose lines REQ-SESSION-115 states as "task display titles cut to 80 characters" (as OQ-104 reads them); the entry
+agent's todo lines across a compression (REQ-MONITOR-084 (4), "todo items carried across one for one", which states no
+display title) carry the name and then the content, as an agent task's line carries its name and then its description.
+A rename renames the name and keeps the content, as an agent task's rename keeps its description (REQ-CHAT-091). The
+iteration that takes the task up is still sent its content alone, as the first bullet above reads: what the model is to
+do is the prompt, and the name is the plan's. That a queued prompt's task is *named* is REQ-CHAT-040's and REQ-ORCH-071's
+own words; which of name and content the compression's lines and the iteration's task part carry is the built reading
+above, not something the requirements state, and whether the task part should also state the name stays open with the
+rest. *Corrected 2026-10-01 at verification:* this note first read the handoff's lines as carrying the name and then the
+content; REQ-SESSION-115 names them display titles, so they now carry the name alone.
 
 **OQ-118 — May the end-of-run summary say which rest a person asked for, and what a continue will resume?** *(REQ-ORCH-082
 rule 1, "not asserting which of the two person-stops it was" and "no rule of this list may distinguish the two";

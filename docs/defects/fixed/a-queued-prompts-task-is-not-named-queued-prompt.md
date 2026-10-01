@@ -34,16 +34,22 @@ text is the prompt (`appendTask`'s fourth argument). Which of the two each reade
 - **the Todo pane** draws the name (`projectPlannerTodo` through `taskTitle`), as it draws an agent task's name
   (REQ-TOOLS-144), so the pane's `TodoPane.tsx` is unchanged; a rename renames the name and keeps the content
   (`Todo.editTask`, REQ-CHAT-091), as an agent task's rename keeps its description;
-- **a plan read as text** — the handoff's todo list (`buildContinuationPayload`, within REQ-SESSION-115's 80 characters)
-  and the entry agent's todo lines across a compression (`Run.plannerTodoLines`, `todoLinesFromStored`) — carries the name
-  and then the content (`taskLine`), as an agent task's line carries its name and then its description;
+- **the handoff's todo list** (`buildContinuationPayload`) carries the name too (`taskTitle`), cut to 80 characters:
+  REQ-SESSION-115 states its lines as "task display titles", and the name is the task's display title;
+- **the entry agent's todo lines across a compression** (`Run.plannerTodoLines`, `todoLinesFromStored`), which
+  REQ-MONITOR-084 (4) carries "one for one" and states no display title for, carry the name and then the content
+  (`taskLine`), as an agent task's line carries its name and then its description — a built reading, not the
+  requirement's words;
 - **the iteration that takes the task up** is still sent its content, as OQ-117's built reading states; whether the task
   part should also state the name stays with OQ-117, to which a dated note says what was built.
 
 A stored todo without names reads as before; a stored name that is not a string is not a planner document. Pinned by
 `packages/engine/src/run/todo.test.ts` ("a task named beside its content"), `packages/engine/src/todo-view.test.ts` ("a named
-planner task"), `packages/engine/src/session-resume.test.ts` (the handoff's line) and `packages/engine/src/control.test.ts`
+planner task"), `packages/engine/src/session-resume.test.ts` (the handoff's line is the display title) and `packages/engine/src/control.test.ts`
 (the consumed prompt's task carries the name), each failing on the old code; and in the built app by
 `apps/desktop/scripts/part-j-proof.mjs`'s queue scenario, which reads the stored task's name and content. Repaired
 2026-10-01 under R-067.
 
+*Corrected 2026-10-01 at verification:* the outcome first had the handoff's todo lines carry the name and then the
+content (`taskLine`), which is not REQ-SESSION-115's "task display titles"; `buildContinuationPayload` now writes
+`taskTitle`, and the session-resume test expects `- [pending] Queued Prompt: 0123abcd`.

@@ -40,7 +40,7 @@ import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentS
 import type { PlanDecision, PlanGatePayload, ResumablePayload } from '@rotaris/contracts';
 import { SupervisorRegistry, type LoopClassifier, type SupervisorConfig } from './run/supervisor.js';
 import { meteredBackend, type CountUsage } from './run/metered.js';
-import { taskLine, Todo, type TodoDocument } from './run/todo.js';
+import { taskTitle, Todo, type TodoDocument } from './run/todo.js';
 import type { PersonaResolver } from './children/personas.js';
 import type { AgentActivity } from './children/activity.js';
 import type { ModelRef, ThinkingLevel } from '@rotaris/model';
@@ -533,7 +533,9 @@ export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt:
   const perEvent = Math.min(700, Math.floor((3_200 - Math.max(0, recentRows.length - 1)) / Math.max(1, recentRows.length)));
   const recent = recentRows.map((event) => `${event.kind}: ${cut(event.body, Math.max(3, perEvent - event.kind.length - 2))}`);
   const history = recent.join('\n');
-  const tasks = (todo?.phases ?? []).flatMap((phase) => phase.tasks.map((task) => `- [${task.state}] ${cut(taskLine(task), 80)}`));
+  // REQ-SESSION-115: "task display titles cut to 80 characters" — the title the Todo pane draws (`taskTitle`), so a queued
+  // prompt's task is its name "Queued Prompt: <id>" (REQ-CHAT-040), not its name and its content.
+  const tasks = (todo?.phases ?? []).flatMap((phase) => phase.tasks.map((task) => `- [${task.state}] ${cut(taskTitle(task), 80)}`));
   const shownTasks = tasks.slice(0, 20);
   if (tasks.length > 20) shownTasks.push('- [... additional todo tasks elided]');
   const iterations = dal.timelineOf(row.session_id as SessionId).filter((entry) => entry.name === 'iteration_end').slice(-5).map((entry) => cut(entry.message, 700));

@@ -56,7 +56,10 @@ export interface TodoDocument {
 
 export const CONSECUTIVE_RETRY_LIMIT_DEFAULT = 3;
 
-/** REQ-CHAT-040: what a task is called — its name where it has one, else its text. What the Todo pane draws. */
+/**
+ * REQ-CHAT-040: what a task is called — its name where it has one, else its text. What the Todo pane draws, and the
+ * handoff's "task display titles" (REQ-SESSION-115).
+ */
 export function taskTitle(task: { readonly text: string; readonly name?: string | undefined }): string {
   return task.name ?? task.text;
 }

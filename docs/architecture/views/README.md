@@ -47,8 +47,9 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 **A queued prompt's task is named "Queued Prompt: <id>" (REQ-CHAT-040, REQ-ORCH-071, OQ-117, R-067).** A planner todo
 task carries an optional `name` beside its text (`run/todo.ts`), and `consumeQueued` names a queued prompt's task
-`Queued Prompt: <first 8 characters of the prompt id>` with the prompt as its text. The pane draws the name (`taskTitle`),
-a plan read as text carries the name and then the content (`taskLine`), and a rename renames the name. This repairs
+`Queued Prompt: <first 8 characters of the prompt id>` with the prompt as its text. The pane and the handoff's todo list
+(REQ-SESSION-115's display titles) draw the name (`taskTitle`), the compression's todo lines carry the name and then the
+content (`taskLine`), and a rename renames the name. This repairs
 `a-queued-prompts-task-is-not-named-queued-prompt.md` (acceptance A28). The **runtime view**'s iteration-boundary diagram
 says so. No package, edge, process, message kind, channel, command or store column changed; the todo document gains an
 optional field inside its existing column.

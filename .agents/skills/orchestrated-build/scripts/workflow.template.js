@@ -104,7 +104,7 @@ function grounding() {
     '- `' + ref('repository.md') + '`: this repository\'s process (worktrees, the gate, records, commits, numbering collisions, what an agent never edits or decides). It points at the authorities; read the ones your work touches.',
     '- `' + ref('environment.md') + '`: the host (toolchain, headless launches, load, what a restart or a refusal looks like).',
     'CLAUDE.md is in your context; its hard boundaries bind every step, every command and every file you open.',
-    'In EVERY shell, first: `' + R.shellPrefix + '`. A command that can run longer than ten minutes runs in the background (wait with an until-loop or the completion notice); one that can run longer than thirty (a duress live run) runs detached and is polled, as environment.md (Long jobs) shows.',
+    'In EVERY shell, first: `' + R.shellPrefix + '`. A command that can run longer than ten minutes runs in the background with the Bash tool\'s own `timeout` parameter (milliseconds, up to 7,200,000) set to cover the longest it may run, its own `timeout` wrapper included (a background task given none is stopped after thirty minutes); wait with an until-loop or the completion notice, as environment.md (Long jobs) shows.',
     R.live
       ? 'Live runs are AUTHORISED for this round (the owner: "' + R.live.ownerWords + '"); `' + ref('live-runs.md') + '` says how. A refused launch is never retried or routed around: report it.'
       : 'Live runs are NOT authorised for this round: never launch one; report every live scenario your work names as not verified, with that reason.',

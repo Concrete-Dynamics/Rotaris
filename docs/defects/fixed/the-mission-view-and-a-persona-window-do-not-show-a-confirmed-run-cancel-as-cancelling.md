@@ -39,13 +39,38 @@ below were red before the change (`beginRun` did not exist, and the renderer's `
   Cancel on the run's own instance — and their roots read the session through the overlay (`useShownSession`,
   `useCancelOverlaid`), so no surface sets a state of its own. The status strip (`apps/desktop/src/renderer/main.tsx`)
   now reads the shown status too; it read the replica's record directly.
+  *Corrected 2026-10-01, at the second verification: reading the session through the overlay did not make a persona
+  window show it, and this bullet claimed it did. The window reads no session status of its own; it draws the run's
+  instance through the agent vocabulary, which has no `cancelling` (`runLevelAgent` presents every busy status as
+  `running`), so its heading's state and its tab's tooltip read `running` until the record at rest arrived — before this
+  repair and after its first build alike. They now read the run's `cancelling` on the run's own live instance while the
+  shown session reads it (`agentStateLabel` in `packages/ui/src/agents.ts`, read by `PersonaWindow`; the dot keeps
+  pulsing, since the instance is live until the run rests; OQ-158 states the word's reading). Pinned by
+  `packages/ui/src/persona-run-cancel.test.ts`, which renders the window under `beginRun` and was red before
+  ("expected 'running' to be 'cancelling'"), and by `pnpm mission-proof` item 4c, new: the inspector pops out the
+  run-level agent, the window's Cancel on the run's own instance is confirmed, and every snapshot after the confirmation
+  was handled reads `cancelling` or the run at rest — green on the repair (six snapshots `cancelling`, then `cancelled`),
+  red on a build of the base's `PersonaWindow.tsx` (six snapshots `running`).*
+- A run overlay also ends when the window follows another session before the run rests (`witness` takes a record of
+  another session): it will not take that run's final read, and on its return a run started meanwhile would read
+  `Cancelling` until it rested. Pinned by "ends when the window follows another session before the run rests…" in
+  `cancel-overlay.test.ts`, red before (the verifier's optional finding at the second verification).
 - Pinned by `packages/ui/src/cancel-overlay.test.ts` ("REQ-MONITOR-127: a confirmed cancel of the run is shown cancelling
   at once", five cases, eight with the correction above) and `apps/desktop/src/renderer/session-actions.test.ts` ("REQ-MONITOR-127: a confirmed cancel of
   the run is shown cancelling before the engine answers, and restored on its refusal"), and by `pnpm mission-proof` item
   4b, new: the run row selected, "Cancel selection" confirmed, and every sample the log records after the confirm click
   reads the subtitle, the run row and the strip `Cancelling` until the run's record at rest — never `Running`. Green on the
   repair (three samples `Cancelling`, then `Paused` from about 50 ms after the confirm); red on a build of the base's
-  `session-actions.ts` and `main.tsx` (see the first-executions row of 2026-10-01).
+  `session-actions.ts` and `main.tsx` (see the first-executions row of 2026-10-01). How long the `Cancelling` window lasts
+  is host timing — the runs of 2026-10-01 measured between about 40 and 80 ms — so the count of samples inside it is
+  recorded, never asserted.
+  *Corrected 2026-10-01, at the second verification: "every sample the log records after the confirm click" did not
+  mean "read after the click was handled". The click is an input event the renderer handles after the main process logs
+  it, and a separate probe can run first: the verifier's run went red on a subtitle probe logged in the same millisecond
+  as the click and reading `Running`, while the run-row probe 6 ms later read `Cancelling` — the product was right. Item
+  4b now reads each sample as one selector list (the dialog, the subtitle, the run row and the strip in one instant)
+  and counts only the snapshots that no longer hold the confirmation, which closes in the same commit that lays the
+  overlay; the "never `Running`" and "no other active status" assertions are unchanged.*
 - What is not repaired: another window shows the cancel only when the run's record at rest reaches it, since the engine
   writes no `cancelling` for the explicit cancel. OQ-158 asks whether it should.
 
@@ -59,9 +84,12 @@ below were red before the change (`beginRun` did not exist, and the renderer's `
 
 - `packages/ui/src/MissionView.tsx`: `confirmCancel`, which awaits `onCancelRun` with no state set first; the run row's
   and the subtitle's `statusLabel`.
-- `packages/ui/src/PersonaWindow.tsx`: the confirmation's `onConfirm`.
+- `packages/ui/src/PersonaWindow.tsx`: the confirmation's `onConfirm`; the heading's state and the tab tooltip, which now
+  read `agentStateLabel` (`packages/ui/src/agents.ts`).
 - `packages/ui/src/WorkspaceView.tsx`: `cancelRun` and `stopRequested`, the Workspace's form.
 - `apps/desktop/src/renderer/session-actions.ts`: `cancelRun`, which now lays the run's overlay
   (`packages/ui/src/cancel-overlay.ts`, `beginRun`).
 - `apps/desktop/src/renderer/main.tsx`: the status strip's run item, which now reads the shown status.
-- `apps/desktop/scripts/mission-proof.mjs` item 4b — the proof.
+- `apps/desktop/scripts/mission-proof.mjs` items 4b and 4c — the proof; item 4c drives the persona window through the
+  capture seam `ROTARIS_CAPTURE_PERSONA_CLICKS` (`apps/desktop/src/main/capture/seams.ts`, forbidden in a package by
+  `apps/desktop/scripts/package.mjs`).

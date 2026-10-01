@@ -146,7 +146,8 @@ export interface CancelOverlayActions {
   /**
    * The replica took `session`: it is numbered after every record taken before it (once — a record seen again keeps its
    * number). Nothing is drawn again for it, except that a record of a session at rest ends that session's open run cancels
-   * (`restedAt`); the window's replica subscription calls it on every change.
+   * (`restedAt`), and a record of another session ends every other session's; the window's replica subscription calls it
+   * on every change.
    */
   witness(session: SessionRecord | null): void;
   /**
@@ -173,16 +174,18 @@ export function createCancelOverlayStore(): CancelOverlayStore {
   let next = 1;
   const order = new WeakMap<SessionRecord, number>();
   let newest = 0;
-  const open = (o: CancelOverlay, sessionId: string): o is CancelOverlay & { readonly run: NonNullable<CancelOverlay['run']> } => o.sessionId === sessionId && o.run !== undefined && o.run.restedAt === undefined;
   const witness = (session: SessionRecord | null): void => {
     if (session === null || order.has(session)) return;
     const n = ++newest;
     order.set(session, n);
     // REQ-MONITOR-296: the session at rest is the run's final read — it ends the session's run cancels still open, which is
-    // the one change drawn again for (the note above).
-    if (isBusy(session.executionStatus)) return;
+    // the one change drawn again for (the note above). A record of ANOTHER session ends them too: the window has followed
+    // away and will not take that run's final read, and on its return every record it takes is newer than the confirmation,
+    // so a run started meanwhile would read `cancelling` until it rested. It is shown as the engine writes it instead, as a
+    // window that never confirmed the cancel shows it (the verifier's optional finding on A35, OQ-158).
+    const ends = (o: CancelOverlay): o is CancelOverlay & { readonly run: NonNullable<CancelOverlay['run']> } => o.run !== undefined && o.run.restedAt === undefined && (o.sessionId === session.id ? !isBusy(session.executionStatus) : true);
     const { overlays } = store.getState();
-    if (overlays.some((o) => open(o, session.id))) store.setState({ overlays: overlays.map((o) => (open(o, session.id) ? { ...o, run: { ...o.run, restedAt: n } } : o)) });
+    if (overlays.some(ends)) store.setState({ overlays: overlays.map((o) => (ends(o) ? { ...o, run: { ...o.run, restedAt: n } } : o)) });
   };
   const orderOf: RecordOrder = (session) => order.get(session);
   const store = createStore<CancelOverlayState & CancelOverlayActions>((set, get) => ({

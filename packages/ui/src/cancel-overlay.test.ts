@@ -220,6 +220,26 @@ describe('REQ-MONITOR-127: a confirmed cancel of the run is shown cancelling at 
     expect(shownSession(rested, store.getState())).toBe(rested);
   });
 
+  it('ends when the window follows another session before the run rests, so a run started meanwhile is shown as written', () => {
+    // The verifier's optional finding on A35: the window followed away before the run's record at rest reached it, and on
+    // its return every record it takes is newer than the confirmation — a new run started from another window would read
+    // `cancelling` until it rested.
+    const store = createCancelOverlayStore();
+    const s = record({ runStartedAt: RUN });
+    store.getState().accept(store.getState().beginRun(s, AT)!, s);
+    store.getState().witness(record({ id: 's2', executionStatus: 'idle' }));
+    const meanwhile = record({ runStartedAt: '2026-09-29T10:05:00.000Z', executionStatus: 'starting' });
+    store.getState().witness(meanwhile);
+    expect(shownSession(meanwhile, store.getState())).toBe(meanwhile);
+    // A busy record of another session ends it as well: following is what ends it, not the other session's status.
+    const store2 = createCancelOverlayStore();
+    store2.getState().beginRun(s, AT);
+    store2.getState().witness(record({ id: 's2' }));
+    const back = record({ runStartedAt: RUN, updatedAt: '2026-09-29T10:00:30.000Z' });
+    store2.getState().witness(back);
+    expect(shownSession(back, store2.getState())).toBe(back);
+  });
+
   it('is begun only against a held session whose run is active', () => {
     const store = createCancelOverlayStore();
     expect(store.getState().beginRun(null, AT)).toBeNull();

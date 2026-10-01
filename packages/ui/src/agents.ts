@@ -1,4 +1,4 @@
-import { contextPercent, DEFAULT_CONTEXT_CAPACITY, isBusy, RUN_AGENT_ID, type AgentRecord, type EntryRoot, type SessionArtifactLink, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { contextPercent, DEFAULT_CONTEXT_CAPACITY, isBusy, presentationStatus, RUN_AGENT_ID, type AgentRecord, type EntryRoot, type SessionArtifactLink, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { countNoun } from '@rotaris/kernel';
 import { treeRows } from './AgentTree.js';
 
@@ -128,6 +128,20 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
  */
 export function restingView(session: SessionRecord | null, entry: Parameters<typeof runLevelAgent>[1] | undefined, recovery: boolean): { readonly runLevel: AgentRecord | null; readonly resting: boolean } {
   return { runLevel: entry ? runLevelAgent(session, entry, recovery) : null, resting: session !== null && runLevelResting(session, recovery) };
+}
+
+/**
+ * REQ-MONITOR-127 / REQ-MONITOR-130 (acceptance A35, OQ-158): the muted state word a surface draws for an agent. The agent
+ * vocabulary (`PRESENTATION_CHILD_STATES`) has no `cancelling`, and `runLevelAgent` presents every busy status as
+ * `running`, so a confirmed cancel of the run reached no word a persona window draws. The run-level agent is the run
+ * (REQ-MONITOR-043), so while it is live and the shown session reads `cancelling` — a confirmed cancel's overlay, or the
+ * stop's own record — its word is the run's, `cancelling`, a member of REQ-NOTIFY-048's vocabulary and no new word. A
+ * child keeps the agent vocabulary: the engine settles children in the teardown, and no agent is shown cancelled by the
+ * run's cancel before it does.
+ */
+export function agentStateLabel(agent: Pick<AgentRecord, 'id' | 'presentationState' | 'live'>, session: Pick<SessionRecord, 'executionStatus'> | null): string {
+  if (agent.id === RUN_AGENT_ID && agent.live && session !== null && presentationStatus(session.executionStatus) === 'cancelling') return 'cancelling';
+  return agent.presentationState;
 }
 
 const NOT_FOLLOWED_KINDS = new Set(['user', 'system', 'intent', 'verifier', 'diff']);

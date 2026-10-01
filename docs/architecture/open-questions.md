@@ -7856,6 +7856,15 @@ end. Only the stop (`op: 'cancel'`) writes `cancelling`, and a stop is not a can
   run header and the composer (`Cancelling…`), the status strip, the Mission view's subtitle and run row (`Cancelling`), and
   a persona window. As with OQ-129, only the window that sent the cancel shows it before the engine's record does; no agent
   is shown cancelled by it, since the engine settles them in the teardown.
+  *Corrected 2026-10-01, at the second verification: "and a persona window" was false as first built. The window draws
+  the run's own instance through the agent vocabulary (`PRESENTATION_CHILD_STATES`), which has no `cancelling`;
+  `runLevelAgent` presents every busy status as `running`, and the window reads no session status of its own, so it read
+  `running` throughout.* The word it now draws is a reading: the run-level agent is the run (REQ-MONITOR-043), so while it
+  is live and the shown session reads `cancelling` its state label and tab tooltip read the run's status, `cancelling`,
+  REQ-NOTIFY-048's member, rather than a word minted for the agent vocabulary (`agentStateLabel`); its dot keeps the live
+  `running` motion (REQ-SHELL-075 (a): it pulses while the instance is live). A child keeps the agent vocabulary. The
+  inspector's meta line does not read it yet
+  ([`the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md`](../defects/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md)).
 - **Until when.** From the confirmation, over every active record of the run it was confirmed against, answered or not,
   until the session's first record at rest taken after the confirmation; the overlay covers no record taken after that one,
   so a later run of the session is never shown cancelling by it. A refusal removes it, and the record's own status shows
@@ -7869,9 +7878,17 @@ end. Only the stop (`op: 'cancel'`) writes `cancelling`, and a stop is not a can
   `Cancelling` through its whole pre-flight and the composer refused input. The overlay now ends at the run's record at
   rest, by the order the window took its records in (`witness`), and a record taken after the confirmation and before the
   rest is covered whatever key it carries, since a session runs one run at a time.*
+  A record of another session ends it too: the window has followed away and will not take that run's final read, and on
+  its return a run started meanwhile would be covered by order alone. It is then shown as the engine writes it, as a
+  window that never confirmed the cancel shows it.
 - **The status a refusal restores.** REQ-MONITOR-127 says "restored to `running`". The build shows the record's own
   status again, which is `running` unless the run is in a quota wait (`waiting`) or its pre-flight (`starting`); the
   requirement's word is read as "the status before the confirmation", which those records are.
+- **A run with no `runStartedAt`.** `beginRun` lays nothing over a record that carries no `runStartedAt` — a session's first
+  run in its pre-flight. The run-level agent is null without it (`runLevelAgent`), so the inspector, the Mission view's
+  run row and a persona window offer no run cancel then; the Workspace's wait header would, if a quota wait came before
+  the key is written, and its cancel would then be sent with nothing shown — not observed, and stated as the guard's one
+  gap. A follow-up's pre-flight carries the previous run's key and is covered.
 
 **What a ruling decides.** Whether the engine should write `cancelling` when it accepts the explicit cancel, as the stop
 does, so the authoritative record agrees with the optimistic one and every window shows it, not only the one that sent it;

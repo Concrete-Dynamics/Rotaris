@@ -200,7 +200,8 @@ const log3 = replay('run') ? readFileSync(join(output, 'run.log'), 'utf8') : awa
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
 }, RUN_WAIT_MS + 60_000);
 assertNoCredential(log3, 'run');
-if (!/credentials leased: openai-compatible--openrouter/.test(log3)) throw new Error('main did not lease the bearer');
+// The lease's report is the run host's (REQ-PROVIDER-068, `LeaseReportLog`); main no longer restates it (a71-9).
+if (!/credentials: leased for openai-compatible--openrouter/.test(log3)) throw new Error('main did not lease the bearer');
 if (!/credentials: 1 provider\(s\) authenticated/.test(log3)) throw new Error('the run host did not report the priming');
 const requests = (log3.match(/model request POST (\S+)/g) ?? []).map((l) => l.replace('model request POST ', ''));
 if (!requests.some((u) => u.startsWith(`${BASE_URL}/chat/completions`))) throw new Error(`no request reached OpenRouter:\n${requests.join('\n')}`);

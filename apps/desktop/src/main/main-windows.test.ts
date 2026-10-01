@@ -360,6 +360,20 @@ describe('MainWindows', () => {
     expect(none.actions.filter((action) => action.startsWith('workspace-closed:'))).toEqual([]);
   });
 
+  it('names the live windows holding a workspace, and no other, so one workspace\'s state reaches its own window only (REQ-WORKSPACE-105, PD-SHELL-001)', async () => {
+    const h = harness();
+    const first = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    const second = await h.mainWindows.build({ workspace: 'C:/b', origin: 'open-request' });
+    const none = await h.mainWindows.build({ workspace: '(no workspace)', origin: 'open-request' });
+    expect(h.mainWindows.holding('c:/a').map((window) => window.wcId)).toEqual([first.wcId]);
+    expect(h.mainWindows.holding('C:/b').map((window) => window.wcId)).toEqual([second.wcId]);
+    expect(h.mainWindows.holding('(no workspace)')).toEqual([]);
+    expect(h.mainWindows.holding('C:/c')).toEqual([]);
+    h.windows.get(second.wcId)!.destroyed = true;
+    expect(h.mainWindows.holding('C:/b')).toEqual([]);
+    expect(none.wcId).not.toBe(first.wcId);
+  });
+
   it('destroys and cleans up a window if loading fails after registration', async () => {
     const h = harness({ failLoads: new Set([1]) });
     await expect(h.mainWindows.build({ workspace: 'C:/broken', origin: 'launch' })).rejects.toThrow('load-failed:1');

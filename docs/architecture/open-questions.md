@@ -8525,6 +8525,59 @@ continue records the crash.
 the parked run it replaces, settling their rows as cut off; or whether the ring rows are stamped with the process that
 opened them, through an appended store migration, so a crash record settles exactly the rows of a dead process.
 
+**OQ-171 — With two main windows open, which window shows a workspace's initialization banners?** *(REQ-WORKSPACE-103,
+"A failed background run SHALL reach an error banner \"Project setup did not finish\""; REQ-WORKSPACE-102's "Project setup
+could not be checked" error surface; REQ-WORKSPACE-013, "The replacement window SHALL resolve initialization for its own
+workspace independently"; PD-SHELL-001's two main windows, one per project. Raised 2026-10-01 by the repair of
+[`initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`](../defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md);
+raised as OQ-170 on its branch and renumbered at the merge, OQ-170 having been taken on `main` meanwhile. Open.)*
+
+Initialization now answers, records and publishes for each window's own workspace: channel 12 reaches only the windows
+holding the workspace the state is about. Its two banners do not travel on channel 12. They are notices, and the
+application has one notice store (ADR-0049): the current notice goes to every live window. With two main windows open, a
+failed background run of the first window's project raises "Project setup did not finish" in the second window too,
+carrying the task's summary ("Code intelligence setup did not complete for this project. …") but no project name. The
+specification states both surfaces for a workspace with one window in mind and says nothing of a second.
+
+**What the build proceeds under** (`apps/desktop/src/main/initialization.ts`, `deps.banner`; `apps/desktop/src/main/index.ts`,
+`raiseNotice`): each banner is an ordinary application notice, shown in every window as every other notice is. A banner
+for a workspace no window holds any more is not raised (OQ-141's reading).
+
+**What a ruling decides.** Whether these banners are the window's (shown only in the windows holding the workspace) or
+the application's; and, if the application's, whether they name the project they concern.
+
+**OQ-172 — At a close, which bounds a setup step's termination: REQ-MCP-099's 5 s grace, or the close's 5 s?**
+*(REQ-MCP-099, "on cancellation or timeout the child SHALL be asked to terminate, given 5 seconds to exit and then
+force-killed"; REQ-WORKSPACE-109, "Closing the application while a run is under way SHALL raise no dialog and SHALL
+complete within 5000 ms, the run being stopped by force if it has not ended by then"; REQ-WORKSPACE-092, "when the
+application is closed while setup is running, nothing the step launched SHALL still be running 5 s later". Raised
+2026-10-01 by the repair of
+[`an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`](../defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md),
+on its verifier's finding; raised as OQ-171 on its branch and renumbered at the merge, OQ-170 having been taken on `main`
+meanwhile. Open.)*
+
+At an orderly quit the window's close cancels the initialization run, so the step in flight is asked to terminate under
+REQ-MCP-099's cancellation: 5 s, then the force-kill. The run host's `shutdown` follows within milliseconds (measured
+2026-10-01 on the built app: "mcp setup: cancellation requested" at 12:08:26.943, "ended by the run host's shutdown" at
+.948). A step that uses its whole 5 s grace is force-killed only when the close's 5000 ms are already spent, with the
+poll, the force-kill's own settling and the host's exit still to come, so REQ-WORKSPACE-109's close and
+REQ-WORKSPACE-092's "5 s later" cannot both be met beside REQ-MCP-099's full grace. The specification states the grace for
+a cancellation and the bound for a close, and says nothing of a cancellation that a close causes.
+
+**What the build proceeds under** (`packages/mcp/src/setup.ts`, `SETUP_SHUTDOWN_GRACE_MS` and `terminateSetupChild`'s
+`hurry`; `apps/desktop/src/run-host/mcp.ts`, `McpHost.endSetup`): at a close, REQ-WORKSPACE-109 and REQ-WORKSPACE-092
+bound the step. The run host's shutdown asks the step's process group to terminate and force-kills it after 2 s, and a
+cancellation already under way when the shutdown arrives has its remaining grace cut to 2 s from that moment. So at every
+orderly quit with a step running, REQ-MCP-099's 5 s grace is not given. A cancellation while the application stays keeps
+the full 5 s. The 2 s is the build's figure: it leaves the close room for the poll, the force-kill's settling and the
+host's exit inside 5000 ms (measured: a step and a descendant that both ignore SIGTERM, force-killed, the quit 2234 ms and
+2274 ms).
+
+**What a ruling decides.** Whether a close's cancellation is REQ-MCP-099's cancellation, with its 5 s grace (and then
+whether REQ-WORKSPACE-109's 5000 ms and REQ-WORKSPACE-092's 5 s give way, or the grace is counted inside them); or the
+close's own, bounded by REQ-WORKSPACE-109 and REQ-WORKSPACE-092 alone; and, if the latter, what grace the step is given
+before the force-kill.
+
 **OQ-173 — Is a wait the run imposes on an agent, or a compression's own model call, silence for the stall watchdog?**
 *(REQ-MONITOR-117, "each agent is evaluated for a stall"; REQ-MONITOR-118, which excepts only "active tool calls",
 reported "at informational level as waiting on N active tool calls instead of as a stall"; REQ-MONITOR-119, "no model

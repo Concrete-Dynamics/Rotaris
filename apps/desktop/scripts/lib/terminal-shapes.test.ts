@@ -357,4 +357,9 @@ describe('how the terminal run ended (docs/defects/fixed/a-tool-call-whose-argum
     expect(terminalRunEndReading({ execution_status: 'completed', stop_reason: null }, 12).kind).toBe('ended');
     expect(terminalRunEndReading(null, 0).kind).toBe('absent');
   });
+  it('a run stopped or interrupted before any terminal call is a NOTE, never a silent end; after a terminal call it is an end', () => {
+    expect(terminalRunEndReading({ execution_status: 'stopped', stop_reason: 'user_cancelled' }, 0)).toEqual({ kind: 'ended-early', detail: 'stopped (user_cancelled) after 0 terminal call(s)' });
+    expect(terminalRunEndReading({ execution_status: 'interrupted', stop_reason: null }, 0).kind).toBe('ended-early');
+    expect(terminalRunEndReading({ execution_status: 'stopped', stop_reason: 'user_cancelled' }, 2).kind).toBe('ended');
+  });
 });

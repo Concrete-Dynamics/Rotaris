@@ -70,7 +70,8 @@
  *                 an exit-0 output carrying docker's lower-case `failed to connect` line, a `git diff` with
  *                 differences exiting 1, and a read-only git pipeline through a pipe. Asserted from
  *                 `tool_calls`, never from the model's prose; a shape the model never attempted is a NOTE,
- *                 not a failure.
+ *                 not a failure, but a run that ended `failed` before any terminal call is a FAILURE (one that
+ *                 stopped otherwise before any is a NOTE), so a dead run never reads green.
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
@@ -1813,8 +1814,9 @@ if (wanted.includes('terminal')) {
   // Reaching a result is not reaching the terminal: a run that ended `failed` before any terminal call asked none of the
   // questions below, and each would read as a NOTE over a green run (`terminalRunEndReading`).
   const runEnd = terminalRunEndReading(read?.session ?? null, terminals.length);
-  check(runEnd.kind === 'ended' || runEnd.kind === 'failed-later', 'the terminal run did not end failed before any terminal call', runEnd.detail);
+  check(runEnd.kind === 'ended' || runEnd.kind === 'failed-later' || runEnd.kind === 'ended-early', 'the terminal run did not end failed before any terminal call', runEnd.detail);
   if (runEnd.kind === 'failed-later') noted('the terminal run ended failed after reaching the terminal', `${runEnd.detail}; the shapes it did not reach read as not attempted`);
+  if (runEnd.kind === 'ended-early') noted('the terminal run ended before any terminal call', `${runEnd.detail}; every shape reads as not attempted`);
   const seen = {};
   for (const shape of SHAPES) seen[shape.id] = attempted(shape.id).length;
   noted('what the model attempted', SHAPES.map((s) => `${s.id}×${seen[s.id]}`).join(', '));

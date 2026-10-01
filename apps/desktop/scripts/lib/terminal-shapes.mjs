@@ -256,12 +256,14 @@ export function longOutputReading(result) {
  *   reached a result, which a failed run does
  *   (`docs/defects/fixed/a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400.md`).
  * - `failed-later`: the run ended `failed` after at least one terminal call — a NOTE: the shapes it reached are asserted.
+ * - `ended-early`: the run ended otherwise than `completed` or `failed` (stopped, interrupted, still running) before any
+ *   terminal call — a NOTE: nothing was refused, but no shape was asked, so the run says nothing about the terminal.
  * - `ended`: any other end.
  */
 export function terminalRunEndReading(session, terminalCalls) {
   if (session === null || session === undefined) return { kind: 'absent', detail: 'no session was read' };
   const status = String(session.execution_status ?? 'unknown');
   const detail = `${status} (${session.stop_reason ?? 'no stop reason'}) after ${terminalCalls} terminal call(s)`;
-  if (status !== 'failed') return { kind: 'ended', detail };
+  if (status !== 'failed') return { kind: status !== 'completed' && terminalCalls === 0 ? 'ended-early' : 'ended', detail };
   return { kind: terminalCalls === 0 ? 'died-early' : 'failed-later', detail };
 }

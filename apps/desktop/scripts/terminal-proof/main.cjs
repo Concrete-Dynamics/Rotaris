@@ -335,6 +335,20 @@ app.whenReady().then(async () => {
     const reportsAfter = Number(await attr('[data-testid="term-grid"]', 'data-geometry-reports'));
     const resizes = s.log.resize.filter((r) => r.streamId === STREAM_A);
     expect('theme.remeasureReportsOnce', resizes.length === reportsSoFar + 1 && reportsAfter === reportsBefore + 1 && resizes.at(-1).cols < resizes.at(-2).cols && s.stream.grid.cols === resizes.at(-1).cols, { resizes, reportsBefore, reportsAfter });
+    // The same face change made inside the frame's own callbacks: the frame lays out the grown header and runs the resize
+    // observer before React has rendered the theme change, which is the order load produced at random
+    // (`docs/defects/fixed/a-font-change-under-load-reports-an-intermediate-terminal-geometry.md`, `118×25` between
+    // `118×26` and `89×19`). The check above leaves that order to chance; this one takes it every time.
+    await exec(`window.__terminalProof.font(null)`);
+    await pause(400);
+    const atFrameSoFar = await resizeCount();
+    const atFrameReportsBefore = Number(await attr('[data-testid="term-grid"]', 'data-geometry-reports'));
+    await exec(`new Promise((resolve) => requestAnimationFrame(() => { window.__terminalProof.font(16); resolve(true); }))`);
+    await pause(400);
+    s = await state();
+    const atFrameReportsAfter = Number(await attr('[data-testid="term-grid"]', 'data-geometry-reports'));
+    const atFrame = s.log.resize.filter((r) => r.streamId === STREAM_A);
+    expect('theme.remeasureReportsOnceAtFrame', atFrame.length === atFrameSoFar + 1 && atFrameReportsAfter === atFrameReportsBefore + 1 && atFrame.at(-1).cols < atFrame.at(-2).cols && s.stream.grid.cols === atFrame.at(-1).cols, { resizes: atFrame.slice(atFrameSoFar - 1), reportsBefore: atFrameReportsBefore, reportsAfter: atFrameReportsAfter });
     await exec(`window.__terminalProof.font(null)`);
     await exec(`window.__terminalProof.theme('rotaris-dim')`);
     await pause(350);

@@ -181,6 +181,37 @@ const TITLE_BAR_LABEL_GEOMETRY = `(() => {
     overflows: tag.scrollWidth > tag.clientWidth + 1, overlapsNext };
 })()`;
 
+/**
+ * Acceptance A40: every design Tag on screen — its foundation and its tone, and whether the loaded stylesheets define
+ * that tone. Half the Tag's kinds named classes the adopted sheet does not define, and one caller spelled `tag-failure`;
+ * a tone with no rule draws a bare tag. The walk reaches imported sheets and grouping rules.
+ */
+const TAG_TONES = `(() => {
+  const defined = new Set();
+  const walk = (rules) => { for (const r of rules) {
+    if (r.styleSheet) { try { walk(r.styleSheet.cssRules); } catch {} }
+    if (r.cssRules && !r.selectorText) walk(r.cssRules);
+    if (r.selectorText) for (const sel of r.selectorText.split(',')) { const m = sel.trim().match(/^\\.(tag-[a-z]+)$/); if (m) defined.add(m[1]); }
+  } };
+  for (const sheet of document.styleSheets) { try { walk(sheet.cssRules); } catch {} }
+  return [...document.querySelectorAll('[data-ui-component="Tag"]')].map((t) => {
+    const tones = [...t.classList].filter((c) => c.startsWith('tag-'));
+    return { text: (t.textContent || '').trim().slice(0, 40), tag: t.classList.contains('tag'), tones, undefinedTones: tones.filter((c) => !defined.has(c)) };
+  });
+})()`;
+const tagsWellFormed = (tags) => Array.isArray(tags) && tags.length > 0 && tags.every((t) => t.tag && t.tones.length === 1 && t.undefinedTones.length === 0);
+const tagsDetail = (tags) => (Array.isArray(tags) ? `${tags.length} tag(s): ${tags.map((t) => `"${t.text}" ${t.tag ? 'tag' : 'NO tag'} ${t.tones.join('+') || 'NO tone'}${t.undefinedTones.length > 0 ? ` (undefined: ${t.undefinedTones.join(', ')})` : ''}`).join('; ').slice(0, 400)}` : 'not read');
+
+/** Acceptance A40: the indicator's design StatusDot — the state it writes and the colour it is painted. */
+const INDICATOR_DOT = `(() => {
+  const dot = document.querySelector('[data-testid="improvement-activity-run-header"] [data-ui-component="StatusDot"]');
+  if (dot === null) return null;
+  // Painted means a background other than the one an unstyled span computes, so no colour is written here.
+  const bare = document.createElement('span'); document.body.append(bare); const none = getComputedStyle(bare).backgroundColor; bare.remove();
+  const background = getComputedStyle(dot).backgroundColor;
+  return { state: dot.getAttribute('data-state'), kind: dot.getAttribute('data-kind'), background, painted: background !== none };
+})()`;
+
 /** Every element matching the selector, with its text and its data/aria attributes. */
 const probe = (d, selector) => d.probe(selector);
 const one = async (d, selector) => (await d.probe(selector))[0] ?? null;
@@ -312,6 +343,10 @@ await (async () => {
       header !== null && header.data['data-pass'] === 'retrospective' && /Reviewing workspace history for improvements/.test(header.text),
       header === null ? 'no run-header indicator while a pass was active' : `"${header.text}" pass=${header.data['data-pass']}`);
     await d.screenshot(join(output, 'activity-run-header.png'));
+    const dot = await d.eval(INDICATOR_DOT);
+    check('the run-header indicator\'s design StatusDot writes the language\'s `run` state and is painted (A40)',
+      dot !== null && dot.state === 'run' && dot.kind === null && dot.painted,
+      dot === null ? 'no StatusDot in the indicator' : `data-state=${dot.state} data-kind=${dot.kind} background ${dot.background}${dot.painted ? '' : ' (unpainted)'}`);
 
     // ── Live-run finding L10: the run header's label was cut mid-word at 1440 px ("Reviewing run for improvem")
     //    with no ellipsis. REQ-LIBRARY-125 with REQ-SHELL-149: the label is carried in words. Every word of the
@@ -350,6 +385,8 @@ await (async () => {
     const rowsAppeared = await until(d, '.library-proposals__proposals tbody tr', (m) => m.some((r) => /Name the build gate/.test(r.text)), 30_000);
     const summaries = (await probe(d, '.library-proposals__proposals tbody tr')).map((r) => r.text);
     check('the proposals reach the Library’s Proposals tab', rowsAppeared, `rows: ${JSON.stringify(summaries).slice(0, 300)}`);
+    const libraryTags = await d.eval(TAG_TONES);
+    check('every design Tag on the Proposals tab carries its foundation and one tone the loaded stylesheet defines (A40)', tagsWellFormed(libraryTags), tagsDetail(libraryTags));
     // The artifact row, selected, so the detail card names what a retrospective belongs to instead of a blank.
     await d.click('.library-proposals__artifacts tbody tr', { timeoutMs: 15_000 });
     const source = await one(d, '[data-testid="library-proposal-source"]');
@@ -363,6 +400,8 @@ await (async () => {
     const onCard = await until(d, '.ov-proposal', (m) => m.some((r) => /Name the build gate/.test(r.text)), 20_000);
     const gesture = await one(d, '[data-testid="overview-retrospective"]');
     check('the proposals reach the Overview card, which carries the gesture too', onCard && gesture !== null, `${(await probe(d, '.ov-proposal')).length} row(s) on the card, gesture ${gesture === null ? 'absent' : `"${gesture.text}"`}`);
+    const overviewTags = await d.eval(TAG_TONES);
+    check('every design Tag on the Overview carries its foundation and one tone the loaded stylesheet defines (A40)', tagsWellFormed(overviewTags), tagsDetail(overviewTags));
     await d.screenshot(join(output, 'overview-card.png'));
 
     // ── Review still works on a retrospective proposal: it is an ordinary proposal (ADR-0065 decision 2).

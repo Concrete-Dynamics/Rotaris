@@ -1,6 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from 'react';
 import { layoutContractAttributes, type UiLayoutContract } from './layout-contract.js';
-import { classes, componentClass } from './shared.js';
+import { classes } from './shared.js';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'warning' | 'link';
 export type ButtonSize = 'default' | 'compact';
@@ -30,27 +30,46 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   );
 });
 
-export type StatusKind = 'waiting' | 'running' | 'done' | 'danger' | 'info' | 'neutral';
+/**
+ * The design StatusDot's states (`docs/design/system/components/core/StatusDot.d.ts`): the lifecycle family — `run`,
+ * `wait`, `done`, `fail` — and the health family — `ok`, `warn`, `fail` — never mixed on one surface, and `idle`.
+ * `shell.css` paints each from the token the design component gives it, `idle` from `--rt-info-500` as
+ * `docs/design/README.md` §4.1 resolves it (`.status-dot:where([data-state=…])`), at the
+ * specificity of `.status-dot` alone, so a surface that paints its dot otherwise still does. Until 2026-10-01 the
+ * product's kinds were written to `data-kind`, which no stylesheet read, so a bare dot drew nothing
+ * (`docs/defects/fixed/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md`).
+ */
+export const STATUS_DOT_STATES = ['run', 'wait', 'done', 'fail', 'ok', 'warn', 'idle'] as const;
+export type StatusDotState = (typeof STATUS_DOT_STATES)[number];
 export interface StatusDotProps extends HTMLAttributes<HTMLSpanElement> {
-  readonly kind?: StatusKind;
+  readonly state?: StatusDotState;
   readonly pulse?: boolean;
   readonly label?: string;
   readonly ui?: UiLayoutContract;
 }
 export const StatusDot = forwardRef<HTMLSpanElement, StatusDotProps>(function StatusDot(
-  { kind = 'neutral', pulse = false, label, className, style, ui, ...rest }, ref,
+  { state = 'idle', pulse = false, label, className, style, ui, ...rest }, ref,
 ) {
-  return <span ref={ref} className={classes('status-dot', pulse && 'is-pulsing', className)} data-kind={kind} aria-label={label} aria-hidden={label === undefined ? 'true' : undefined} style={style} data-ui-component="StatusDot" {...layoutContractAttributes(ui)} {...rest} />;
+  return <span ref={ref} className={classes('status-dot', pulse && 'is-pulsing', className)} data-state={state} aria-label={label} aria-hidden={label === undefined ? 'true' : undefined} style={style} data-ui-component="StatusDot" {...layoutContractAttributes(ui)} {...rest} />;
 });
 
-export type TagKind = 'neutral' | 'accent' | 'running' | 'waiting' | 'done' | 'danger' | 'info' | 'outline';
+/**
+ * The design Tag's kinds (`docs/design/system/components/core/Tag.d.ts`), each a tone the adopted `components.css`
+ * defines: `run` / `wait` / `done` / `fail` from the state colours, `accent`, `neutral`, `outline` otherwise. The language
+ * has no info tone. A `className` joins the foundation and the tone, as the design Tag composes them; the tone is named
+ * by `kind` alone (`tools/check-ui-language.mjs` refuses a Tag whose class spells `tag` or a `tag-` tone). Until
+ * 2026-10-01 four of the kinds (`running`, `waiting`, `danger`, `info`) named classes no stylesheet defines, and a
+ * `className` replaced the foundation (`componentClass`), so every caller spelled `tag tag-…` by hand
+ * (`docs/defects/fixed/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md`).
+ */
+export const TAG_KINDS = ['accent', 'neutral', 'outline', 'run', 'wait', 'done', 'fail'] as const;
+export type TagKind = (typeof TAG_KINDS)[number];
 export interface TagProps extends HTMLAttributes<HTMLSpanElement> {
   readonly kind?: TagKind;
   readonly ui?: UiLayoutContract;
 }
-export const Tag = forwardRef<HTMLSpanElement, TagProps>(function Tag({ kind, className, ui, ...rest }, ref) {
-  const visual = componentClass(className, classes('tag', `tag-${kind ?? 'neutral'}`));
-  return <span ref={ref} className={visual} data-ui-component="Tag" {...layoutContractAttributes(ui)} {...rest} />;
+export const Tag = forwardRef<HTMLSpanElement, TagProps>(function Tag({ kind = 'neutral', className, ui, ...rest }, ref) {
+  return <span ref={ref} className={classes('tag', `tag-${kind}`, className)} data-ui-component="Tag" {...layoutContractAttributes(ui)} {...rest} />;
 });
 
 export interface ToggleSwitchProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onChange'> {

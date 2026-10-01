@@ -338,8 +338,8 @@ export function GitView(props: GitViewProps) {
                         <td className="mono git__cell-branch">
                           {/* UIR-002: elided, never fragmented — the full branch is the tooltip. */}
                           <span className="git__branch-name" title={row.branch ?? 'detached'}>{row.branch ?? 'detached'}</span>
-                          {row.isBase && <DesignTag className="tag tag-outline" data-testid="git-tag-base">base</DesignTag>}
-                          {row.isActive && <DesignTag className="tag tag-accent" data-testid="git-tag-active">active</DesignTag>}
+                          {row.isBase && <DesignTag kind="outline" data-testid="git-tag-base">base</DesignTag>}
+                          {row.isActive && <DesignTag kind="accent" data-testid="git-tag-active">active</DesignTag>}
                         </td>
                         <td className="mono git__cell-session" title={b?.sessionId ?? '-'}>{b?.sessionId ?? '-'}</td>
                         <td className="git__cell-state">{b?.status ?? 'idle'}<span className="git__merge-status text-secondary"> · {b?.mergeStatus ?? 'ready'}</span></td>

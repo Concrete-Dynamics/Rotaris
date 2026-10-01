@@ -228,7 +228,8 @@ it with an ellipsis. `pnpm retrospective-proof` now measures every word of the r
 1440 × 900 and at 1000 × 680. Before the repair it failed at both sizes ("cut: improvements…"). After it, 31 of 31
 checks pass. The live `ask` scenario shows the post-run label whole on two lines at 1440 px. Notes: the repaired
 `../../defects/fixed/the-improvement-label-is-clipped-without-an-ellipsis.md`, and, recorded without a repair,
-`../../defects/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md`. Not shown: Windows or
+`../../defects/fixed/the-design-tags-kinds-name-classes-the-adopted-stylesheet-does-not-define.md` (repaired
+2026-10-01, acceptance A40). Not shown: Windows or
 macOS (IC-3).
 
 *(Added 2026-09-30, the verifier's fix round 1.)* The title-bar label is now measured at the same two sizes too

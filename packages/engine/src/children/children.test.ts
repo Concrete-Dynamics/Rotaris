@@ -5058,12 +5058,18 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         return { parts: [{ hold }, ...answer('late').parts] };
       }, { hooks });
       const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
-      // REQ-EVENTS-165: the open iteration's drain waits on this consumer once the rest is in the timeline.
-      sessions.bus.attach(sid, { mode: 'blocking', deliver: () => { if (dal.timelineOf(sid).some((t) => t.name === 'iteration_paused')) { holding = true; return drainHold; } return undefined; } });
+      // REQ-EVENTS-165: the open iteration's drain waits on this consumer. The hold is taken at the first delivery once the
+      // child is paused, which the rest's own drain — after `iteration_paused` is written — is queued behind. Holding only
+      // once `iteration_paused` was in the timeline left the hold to whichever forward happened to straddle that write, and
+      // one microtask more on a child's turn (the stall watch's `betweenTurns`, OQ-155) let the rest's drain pass first, so
+      // the cancel landed after the run's last wait on the outside hooks — the open defect
+      // `a-child-cancelled-while-session-end-runs-fires-child-completed-after-it.md`, not the path this case pins.
+      sessions.bus.attach(sid, { mode: 'blocking', deliver: () => { if (dal.timelineOf(sid).some((t) => t.name === 'child_paused')) { holding = true; return drainHold; } return undefined; } });
       await settle(() => byName(sid, 'work')?.state === 'running');
       expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
       releaseChild();
-      await settle(() => holding);
+      await settle(() => holding && dal.timelineOf(sid).some((t) => t.name === 'iteration_paused'));
+      expect(dal.timelineOf(sid).some((t) => t.name === 'iteration_paused')).toBe(true);
       expect(byName(sid, 'work').state).toBe('paused');
       expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: byName(sid, 'work').task_id } })).toEqual({ ok: true });
       await settle(() => order.includes('child_completed(work)'));

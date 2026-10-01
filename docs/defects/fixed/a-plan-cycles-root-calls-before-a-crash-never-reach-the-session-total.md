@@ -53,11 +53,23 @@ which is recorded apart:
 Pinned by: `packages/engine/src/run/crash.test.ts`, describe "REQ-MONITOR-102 with REQ-ORCH-153: a plan cycle's root calls
 before a crash reach the session total" — "the repair adds the calls the plan cycle's root made …" (**0** where **2** is due
 before the repair; also the cut row settled and the marker cleared, and a second recording adding nothing), "a plan cycle
-whose root returned … counted its calls once and names no root", and "a plan cycle's root the stop's grace gave up on is
-counted from its record and released" (without the release on that path the marker stays set and a later crash record
-counts its calls a second time: that case fails with the release removed); `packages/store/src/store.test.ts` — the v28 →
-v29 migration. Not pinned by a case: the release with none counted when a plan cycle's root's turn raises (no driven path
-makes a root's turn raise in the engine's test harness).
+whose root returned … counted its calls once and names no root", "a plan cycle's root the stop's grace gave up on is
+counted from its record and released", and "a plan cycle's root the stop's grace gave up on is released in the transaction
+that adds its calls, not by a write apart from it"; `packages/store/src/store.test.ts` — the v28 → v29 migration. Not
+pinned by a case: the release with none counted when a plan cycle's root's turn raises (no driven path makes a root's turn
+raise in the engine's test harness).
+
+*Corrected 2026-10-01 (the verifier's review of the repair, fix round 2).* This paragraph first said of the give-up case:
+"without the release on that path the marker stays set and a later crash record counts its calls a second time: that case
+fails with the release removed". **That was false.** With only the give-up path's release removed (its `rootCounts(gained)`
+put back in the pre-repair form, which names no plan cycle's root), the give-up case still passes: the `finally` block's
+release with none counted clears the marker anyway, and `persistToolCalls` writes the aggregates' total, which reads **2**
+either way. The give-up case fails only with **both** releases removed — it pins that a root given up on is released at
+all, not that its own path releases it. What the give-up path's release adds is that the marker clears **in the
+transaction that adds its calls to the total**, and the fourth case now pins that: a store that drops every release written
+once the total already holds the calls (a temporary trigger) stands in for a process death between two writes. With the
+give-up path's release put back in the pre-repair form, that case fails (1 failed, 75 passed: the marker stays set) and the
+give-up case still passes; with only the `finally` block's release removed, all 76 pass.
 
 Not shown live: the finding was established by reading the code (A19, cosmetic: the calls lost are a plan cycle's reads).
 No live-run scenario runs in `plan` mode (`duress`, the one that ends by a crash, crashes an execution iteration at its

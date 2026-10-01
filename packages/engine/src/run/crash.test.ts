@@ -1392,6 +1392,27 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       recordCrash(dal, writerAs(sid), sid, new Set(), () => undefined);
       expect(dal.getSession(sid)!.tool_calls).toBe(2);
     });
+
+    /*
+     * The give-up path's own release (the verifier's review of the repair): a root given up on is released in the transaction
+     * that adds its calls to the total, not by a later write apart from it. A store that drops every release written once the
+     * total already holds the calls stands in for a process death between two such writes: with the release made apart — the
+     * total first, the marker cleared after — the marker stays set, and a later crash record counts the calls a second time.
+     */
+    it('a plan cycle\'s root the stop\'s grace gave up on is released in the transaction that adds its calls, not by a write apart from it', async () => {
+      const { sessions, sid } = planSession();
+      dal.db.exec(`CREATE TEMP TRIGGER drop_release_apart BEFORE UPDATE OF plan_root_task_id ON sessions
+        WHEN OLD.plan_root_task_id IS NOT NULL AND NEW.plan_root_task_id IS NULL AND OLD.tool_calls > 0 BEGIN SELECT RAISE(IGNORE); END`);
+      await settle(() => cutRow(sid)?.tool_status === 'running');
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(30_000);
+      expect(await Promise.race([sessions.running(sid)!.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 1_000))])).toBe(true);
+      expect(dal.getSession(sid)).toMatchObject({ tool_calls: 2, plan_root_task_id: null });
+      dal.db.exec('DROP TRIGGER drop_release_apart');
+      recordCrash(dal, writerAs(sid), sid, new Set(), () => undefined);
+      expect(dal.getSession(sid)!.tool_calls).toBe(2);
+    });
   });
 
   describe('REQ-MONITOR-105 with ADR-0024: the crash record\'s ring settle at a continue', () => {

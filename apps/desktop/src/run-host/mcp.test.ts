@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
 import type { LoadedConfiguration } from '@rotaris/config';
+import { nodeClocks } from '@rotaris/platform';
 import { grantEvidence, McpHost } from './mcp.js';
 
 /**
@@ -73,4 +77,73 @@ describe('a persona\'s MCP lines on its first spawn (REQ-MCP-059, REQ-MCP-065, R
     expect(surfaceLines(lines)).toHaveLength(2);
     expect(grantLines(lines)).toHaveLength(2);
   });
+});
+
+/**
+ * REQ-WORKSPACE-092/109: the run host's `shutdown` ends the code-intelligence setup under way before the host exits.
+ * Before, nothing in the shutdown reached the setup: at an orderly quit of the built app the step's process and one it had
+ * started were both still running 5 s after the application exited (measured 2026-10-01;
+ * `docs/defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+ * The stand-in runtime here holds `project create`, ignores the ask to terminate, and starts a descendant that ignores it too.
+ */
+describe('the setup at the run host\'s shutdown (REQ-WORKSPACE-092, REQ-WORKSPACE-109)', () => {
+  it.skipIf(process.platform === 'win32')('ends the step under way and what it started, force-killing them after the shutdown\'s grace, and answers once they have gone', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-setup-end-'));
+    const standIn = join(dir, 'stand-in.cjs');
+    writeFileSync(standIn, [
+      "const cp = require('node:child_process');",
+      "const fs = require('node:fs');",
+      "const path = require('node:path');",
+      'const [group, verb, root] = process.argv.slice(2);',
+      "if (group === 'project' && verb === 'create') {",
+      "  const g = cp.spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setTimeout(() => {}, 60000)\"], { stdio: 'ignore' });",
+      '  // Written whole or not at all: a reader never sees the file created and still empty.',
+      "  fs.writeFileSync(path.join(root, 'pids.tmp'), `${process.pid} ${g.pid}`);",
+      "  fs.renameSync(path.join(root, 'pids.tmp'), path.join(root, 'pids'));",
+      "  process.on('SIGTERM', () => {});",
+      '  setTimeout(() => {}, 60000);',
+      '} else { process.exit(0); }',
+      '',
+    ].join('\n'));
+    const root = join(dir, 'project');
+    mkdirSync(join(root, '.rotaris'), { recursive: true });
+    const lines: string[] = [];
+    const mcp = new McpHost({ clocks: nodeClocks(), log: (message) => { lines.push(message); }, acknowledge: () => undefined, parentEnv: process.env as Record<string, string>, productVersion: '0.0.0' });
+    const launch = { command: process.execPath, args: [standIn, 'start-mcp-server'] };
+    const cfg = {
+      files: { workspace: { agents: join(root, '.rotaris', 'agents.yaml') } },
+      mcp: { servers: { code_intelligence: { name: 'code_intelligence', entry: { type: 'stdio', enabled: true, ...launch }, origin: 'workspace', availability: { available: true }, description: { transport: 'stdio', env: {} }, resolved: launch } }, origins: {}, diagnostics: [] },
+    } as unknown as LoadedConfiguration;
+    expect(mcp.startSetup(cfg, root).ok).toBe(true);
+    // The pids are read once the file holds both, each a real pid: a file seen between its creation and its write reads
+    // as `[0]`, and pid 0 would name the test's own process group (the race a verifier found at load, 2026-10-01).
+    const pidsWritten = (): number[] => {
+      try {
+        const found = readFileSync(join(root, 'pids'), 'utf8').trim().split(' ').map(Number);
+        return found.length === 2 && found.every((pid) => Number.isInteger(pid) && pid > 0) ? found : [];
+      } catch { return []; }
+    };
+    const began = Date.now();
+    let pids = pidsWritten();
+    while (pids.length === 0 && Date.now() - began < 10_000) {
+      await new Promise((r) => setTimeout(r, 20));
+      pids = pidsWritten();
+    }
+    expect(pids, 'the stand-in wrote its pid and its descendant\'s within 10 s').toHaveLength(2);
+    const askedAt = Date.now();
+    await mcp.endSetup();
+    const tookMs = Date.now() - askedAt;
+    // A zombie no one has reaped yet is not running (a container's pid 1 may never reap the orphaned descendant).
+    const running = (pid: number): boolean => {
+      try { process.kill(pid, 0); } catch { return false; }
+      try { return !/^\d+ \(.*\) Z/.test(readFileSync(`/proc/${pid}/stat`, 'utf8')); } catch { return true; }
+    };
+    expect(pids.filter(running)).toEqual([]);
+    expect(tookMs).toBeLessThan(5_000);
+    expect(mcp.setupStatus().state).toBe('finished');
+    expect(mcp.setupStatus().outcome).toBe('cancelled');
+    expect(lines).toContain('mcp setup: ended by the run host\'s shutdown');
+    // Nothing under way: the next shutdown answers at once.
+    await mcp.endSetup();
+  }, 20_000);
 });

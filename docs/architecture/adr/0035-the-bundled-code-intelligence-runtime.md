@@ -402,3 +402,45 @@ launches pressed Cancel while `create` ran and read `Cancelled`. Then three whol
 all three: Start 41 to 128 ms after the notice in all 15 setup launches, Cancel pressed and `Cancelled` read in each
 `setup-cancel`, the window check recorded not measured on linux, and the drift refused. **What it could not show:** anything on
 Windows; the packaged branch and section 7 (IC-3), as before.
+
+**The setup at the run host's shutdown, and what a step started (2026-10-01).** REQ-MCP-099's termination (ask, 5 s
+grace, force-kill) reached only the step itself on POSIX. `child.kill` signals one process, and the step was spawned
+without a process group, so a process the step had started outlived its cancellation. The run host's `shutdown` never
+reached the setup at all: the host exited with the step running, and the step and what it had started were orphaned.
+REQ-WORKSPACE-092 says nothing the step launched, "neither the command the step itself started nor anything descended
+from it", may still run 5 s after a cancellation or after the application closes
+(`../../defects/fixed/an-orderly-quit-during-the-background-setup-warns-its-cancellation-could-not-be-delivered.md`).
+
+Each step now leads a process group of its own (`processGroup`), and the ask and the force-kill go to the group. The
+grace ends when no member of the group still runs; a zombie that nobody reaps does not count, because a container's pid 1
+may never reap one. The run host's `shutdown` calls `McpHost.endSetup`: the step is stopped as a cancellation is, but
+with a 2 s grace (`SETUP_SHUTDOWN_GRACE_MS`, the build's figure inside REQ-WORKSPACE-109's 5000 ms close), and that
+grace also shortens a cancellation's grace already under way. The host exits only once the step has gone. Windows keeps
+`taskkill /T`. At an orderly quit the window's close cancels the run a few milliseconds before the shutdown arrives, so
+REQ-MCP-099's 5 s cancellation grace is never given at a close: the build reads REQ-WORKSPACE-109's 5000 ms and
+REQ-WORKSPACE-092's 5 s as binding there, a conflict between the requirements raised as
+[OQ-172](../open-questions.md) (2026-10-01, on the verifier's finding).
+
+**Measured** on the built app at an orderly quit (`driver.quit()`), as root under Xvfb, Node 24, with two kinds of step.
+
+A stand-in `code_intelligence` launch held `project create` and started a descendant. On the build before, both were
+still running 5 s after the application exited, which took 169 ms. With the repair:
+
+- a step that ends on SIGTERM: both were gone, and the quit took 419 ms;
+- a step and descendant that both ignore SIGTERM: both were force-killed, and the quit took 2234 ms.
+
+The bundled runtime, quit during `index` on a 400-file Python project: its sentinel and Python process were gone 5 s
+later on the build before as well. The runtime ends itself when its pipes close, so the bundled runtime alone never
+showed the defect. With the repair the quit took 473 ms and nothing was left.
+
+Unit cases: two in `packages/mcp/src/setup.test.ts` (descendant ended with the step; shutdown grace shortening a
+cancellation's), both red on the code before; one in `apps/desktop/src/run-host/mcp.test.ts` for `endSetup`; one in
+`apps/desktop/src/run-host/dispatch.test.ts` (added on the verifier's finding) that `shutdown` ends the setup before it
+closes a store or schedules the exit, red with the call replaced by `Promise.resolve()`. `workspace-proof` scenario 8f
+(added on the same finding) quits the built app in order while a stand-in step and a process it started both ignore
+SIGTERM, and asserts the quit ends within 5000 ms through the shutdown ending the setup, with neither process running 5 s
+after the exit; on the build with the call replaced it failed (quit in 138 ms, both pids still running). `init-proof`
+passed all five scenarios with the bundle present, and `workspace-proof` passed (44 passed, 0 failed, 2 skipped; with 8f,
+46 passed, 0 failed, 2 skipped). **Not measured:** Windows; a run host killed by a signal, whose step's group still
+survives it (OQ-169); a step that exits by itself and leaves a process it started running in its group: `endSetup`
+reaches only a step still running, so at a quit nothing ends such a process (the fixed note's "Not reached").

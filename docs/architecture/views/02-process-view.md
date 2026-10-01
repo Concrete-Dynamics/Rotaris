@@ -407,7 +407,8 @@ like every other MCP child: one per session, one transient per discovery or prob
 `--` is Electron's, not ours: a scheme-looking positional followed by another positional exits the binary before any
 JavaScript (spike `code-intelligence-branch.md`). The transport tolerates the one CR LF Electron writes to standard
 output at start. **`mcp.setup`** — renderer → main `{action: start | cancel | status}`; main → run host
-`{workspaceId, action}` → `mcp.setup {status}` (or `refused` with `mcp.setup.running`, `workspace.unknown` or
+`{workspaceId, action}` → `mcp.setup {status}` (the initialization coordinator's setup port names the run's own
+workspace, by the identifier main was handed at its open, never the focused window's — 2026-10-01, PD-SHELL-001) (or `refused` with `mcp.setup.running`, `workspace.unknown` or
 `mcp.configuration`; an entry that is not a local launch is not refused but answered with a finished `unavailable`
 status). Main's setup port carries a refusal's code and words to the initialization coordinator, which reports it as a
 retryable failure and keeps REQ-WORKSPACE-094's "not a local launch" for the `unavailable` status alone (OQ-167;
@@ -415,14 +416,23 @@ retryable failure and keeps REQ-WORKSPACE-094's "not a local launch" for the `un
 `detail`, from which the coordinator writes REQ-WORKSPACE-092's two fixed sentences (2026-10-01, R-067). REQ-MCP-099's three steps run in the
 run host as children of the derived invocation (`Rotaris.exe builtin:code-intelligence -- project create <root>`, then
 `project index`, then `memories initialize`), each polled at 0.25 s on the clock port under 300 / 1800 / 120 s, asked to
-terminate then tree-killed after 5 s on cancel or timeout; the category polls the status every 500 ms while it runs.
+terminate then tree-killed after 5 s on cancel or timeout — on POSIX each step leads a process group of its own and the
+signals go to the group, so what the step started is ended with it (REQ-WORKSPACE-092; 2026-10-01) — and the run host's
+`shutdown` ends a setup under way the same way after 2 s (`McpHost.endSetup`, `SETUP_SHUTDOWN_GRACE_MS`), shortening a
+cancellation's grace already running — so REQ-MCP-099's 5 s grace is not given at a close, the build's reading of OQ-172 —
+and exits only once the step has gone (REQ-WORKSPACE-092/109; 2026-10-01); the
+category polls the status every 500 ms while it runs.
 `ROTARIS_SCRIPT_MCP_ARGS` (verification only) hands the scripted client the arguments of an MCP step.
 
 **`initialization.*` (Part AS, ADR-0064).** Five commands, renderer → main and no further: `initialization.read`
 (REQ-WORKSPACE-115's refresh — the persisted section as it is on disk, nothing else disturbed),
 `initialization.resolve` (REQ-WORKSPACE-102's "Check again", additional to the one automatic resolution per
 workspace open), `initialization.start`, `initialization.skip {ids}` and `initialization.cancel`. Each answers with
-the whole state. A skip records every listed id except one the live run is attempting, which it logs (ADR-0064,
+the whole state of the sending window's own workspace: the coordinator keeps one entry per workspace a window holds, keyed
+by its canonical root, and every one of its methods names the root it is asked for — there is no "current" workspace, so
+with two main windows open (PD-SHELL-001) a Skip, an Initialize or a Cancel in one acts on that window's workspace alone,
+each open's automatic resolution is its own, and a task's applicability is judged against the asked workspace's
+configuration (`ApplicabilityContext`, `config`'s registry) (REQ-WORKSPACE-013/102/105; 2026-10-01). A skip records every listed id except one the live run is attempting, which it logs (ADR-0064,
 finding (2)), and one already recorded completed, which it leaves completed (REQ-WORKSPACE-084/086; 2026-09-29,
 R-062). Main makes every marker write through one queue per workspace root, one at a time in the order asked, and builds each patch
 (a skip's, each of a run's recordings, the silent stamp) inside its turn from the file as the previous write left it,
@@ -437,7 +447,8 @@ tasks. The window reads it twice. A background run neither withdraws the setup p
 2026-09-29, R-062). When the last main window holding a workspace closes — a switch's outgoing window, a replacement
 discarded after a veto, one of several windows — `MainWindows` says so (`workspaceClosed`) and main calls
 `initialization.close`: the run under way is cancelled (`mcp.setup {action: cancel}`, so the run host ends what the step
-launched; one that no window can address or that the run host refuses is logged as not delivered), its recordings are refused, nothing of it is published or bannered — nor of a resolution still under way for it, whose failure is said in the log only (2026-10-01) — and the entry is dropped, so a return to
+launched; one the run host refuses or does not answer is logged as not delivered — at `info` while the application is
+quitting, whose run host `shutdown` ends the setup itself, and at `warn` otherwise; 2026-10-01), its recordings are refused, nothing of it is published or bannered — nor of a resolution still under way for it, whose failure is said in the log only (2026-10-01) — and the entry is dropped, so a return to
 the root is a new open with its own automatic resolution (REQ-WORKSPACE-013/092/102/109, OQ-141 for a close that is
 not a switch's; 2026-09-30, R-067). The run
 host holds one setup and pushes `mcp.setupStatus` with no workspace on it, so the coordinator runs its setups one at a
@@ -462,8 +473,8 @@ sequence stamped in the run host and relayed unchanged (REQ-MONITOR-214); `termi
 per-stream sequence; `notice:current` is the single notice or null; `acknowledgement:publish` (channel 8, Part V) is a transient for ONE
 window's own stack — the stack is per window and is not the notice store (ADR-0049); `library:changed` (channel 9,
 Part X) is the library revision, to every live window; `initialization:state` (channel 12, Part AS) is
-the nine values of REQ-WORKSPACE-105, their labels and descriptions, and the live run report, to every live
-window whichever view it is showing; `theme:changed` and `config:changed`
+one workspace's nine values of REQ-WORKSPACE-105, their labels and descriptions, and its live run report, to the main
+windows holding that workspace (`MainWindows.holding`) whichever view each is showing, and to no other (2026-10-01); `theme:changed` and `config:changed`
 repaint or repopulate every live window.
 
 **Main ↔ run host (`RunHostRequestSchema` / `ProcessReplySchema` / `ProcessEventSchema`).** Since 2026-09-09 (Part AL): the seven `terminal.*` requests, the `terminal.streams` reply and the `publish.terminal` event, listed above. Requests:

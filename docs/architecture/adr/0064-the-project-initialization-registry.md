@@ -434,3 +434,34 @@ besides:** the queued run's start, sent to the run host that is gone, ends 15 s 
 than in REQ-WORKSPACE-093's words (`../../defects/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`,
 recorded, not repaired).
 
+
+**Twelfth round (2026-10-01): one coordinator, a workspace per window.** "Why main owns it" put the coordinator where main
+brokers between the workspace service and the run host. It held one "active" root, set by every window's open, and
+answered every window with it. Channel 12 went to every live window, and main's setup port addressed the run host by the
+focused window's workspace. With two main windows open (PD-SHELL-001), the first window's surfaces showed the second
+workspace once it had opened. A Skip or a Cancel pressed in the first acted on the second, and a run's setup could be
+started against the focused window's configuration and root
+(`../../defects/fixed/initialization-answers-for-the-last-opened-workspace-not-the-asking-window.md`). Now every method
+names the root it is asked for, and the commands pass the sender's window's root. The state is published to the windows
+holding that root (`MainWindows.holding`). The setup port is addressed by the run's own workspace identifier, which
+`open` now takes. The registry's predicate is told which workspace it is judged for (`ApplicabilityContext`).
+
+**Measured** by the unit cases (three command-level cases red on the code before) and by `workspace-proof`'s new
+scenario 8e. In 8e the first window reads its own state and cancels its own run while the second window, opened last and
+focused, holds the other workspace: 44 passed, 0 failed, 2 skipped, as root under Xvfb, Node 24, `--skip-build` after
+`pnpm build`. **Found besides:** the two initialization banners are application notices, shown in every window. Which
+window should show a workspace's banner is raised as OQ-171.
+
+**Thirteenth round (2026-10-01): an undelivered cancellation at a quit.** At an orderly quit the close's cancellation
+can reach a run host that is already shutting down. That run host has closed its stores, so it refuses the
+cancellation, or it has exited and never answers. The live run at 71ad8e8 logged this as its sign-in launch's only
+warning, "the setup's cancellation could not be delivered". The warning was half true. No cancellation reached the step,
+and the run host's `shutdown` never ended the setup, so the step and what it had started outlived the application. Main
+and the warning address were not the whole cause.
+
+ADR-0035's report of the same date covers the run host's half: `shutdown` now ends the setup itself. The coordinator's
+half: it now reads `QuitState` (`deps.quitting`). While the application is quitting, an undelivered cancellation is said
+at `info`, because the shutdown ends the setup; otherwise it is said at `warn`, as before. The twelfth round already
+addresses the cancellation by the run's own workspace rather than the focused window's. **Measured** by one unit case,
+red on the code before, which gives no warn line at a quit and still warns for a refusal while the application stays.
+The live-run check is reported in `first-executions.md`'s row of this date.

@@ -455,7 +455,7 @@ export class McpHost {
       clocks: this.deps.clocks, log: this.mcpLog, signal: abort.signal,
       shutdown: { signal: shutdown.signal, graceMs: SETUP_SHUTDOWN_GRACE_MS },
       onStep: (step, all) => {
-        this.setSetup({ ...this.setup, status: { ...this.setup.status, steps: all.map((s) => ({ id: s.id as McpSetupStep['id'], label: s.label, status: s.status, detail: s.detail, elapsedMs: s.elapsedMs, ...(s.stopped === undefined ? {} : { stopped: s.stopped }) })) } });
+        this.setSetup({ ...this.setup, status: { ...this.setup.status, steps: all.map((s) => ({ id: s.id as McpSetupStep['id'], label: s.label, status: s.status, detail: s.detail, elapsedMs: s.elapsedMs, ...(s.stopped === undefined ? {} : { stopped: s.stopped }), ...(s.skipped === undefined ? {} : { skipped: s.skipped }), ...(s.output === undefined ? {} : { output: s.output }), ...(s.startError === undefined ? {} : { startError: s.startError }) })) } });
         this.deps.log(`mcp setup: ${step.id} ${step.status}${step.detail ? ` — ${step.detail.slice(0, 200)}` : ''}${step.elapsedMs === null ? '' : ` (${step.elapsedMs.toFixed(0)} ms)`}`);
       },
     }).then((report) => {

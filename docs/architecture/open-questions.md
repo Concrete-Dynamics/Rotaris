@@ -8418,6 +8418,7 @@ workspace; wait for it to finish or cancel it first.", "That workspace is not op
 could not be loaded") or, for a run cancelled before its setup started, "the setup was cancelled before it started."
 (`CANCELLED_BEFORE_SETUP_ERROR`, as built under R-067 on 2026-09-30). A refused start is not waited out: the task fails
 at once, as any other retryable failure does, and runs again at the next open or on Try again.
+*(2026-10-01: a start the run host never answers takes the same reason, with the build's detail recorded under OQ-169.)*
 
 **What a ruling decides.** Whether a setup that began no stage has a reason and a detail of the specification's own —
 for the refusal, and for the cancellation, where REQ-WORKSPACE-092's "Setup was stopped before this step finished." is
@@ -8518,6 +8519,19 @@ one that was running is not, since it never finished (REQ-WORKSPACE-109). Nothin
 On the bound, no cancellation is sent: the run host's one setup may by then be another's (the MCP category's), and its
 own budgets already end every stage. Nothing in main ends a step's processes when the run host that launched them is
 killed by signal; whether they outlive it was not measured, and `workspace-proof`'s scenario 8d ends its stand-in itself.
+
+*Extended 2026-10-01 by the repair of
+[`a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`](../defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md):*
+a setup whose **start** the run host never answers — main's `mcp.setup` request rejecting on its 15 s bound, as for a
+run queued behind a setup whose run host was lost (scenario 8d) — ends the same way, before any stage: a retryable failure
+with REQ-WORKSPACE-093's summary, under OQ-167's reason, its detail the build's "the run host did not answer the setup's
+start" with the request's own error in parentheses (`SETUP_START_UNANSWERED_DETAIL`), said in the log at `warn`. Before,
+it escaped the task and REQ-WORKSPACE-084's generic report named it a task that ended without an outcome. No
+cancellation follows it: a run host that did take the start late holds a setup the coordinator no longer follows, and the
+MCP category's Cancel or the stage budgets end it. The task's **status read** for applicability is not part of this
+reading: a read that rejects makes the predicate raise, which REQ-WORKSPACE-080 itself says is logged and counted not
+applicable, and the build does that. A ruling on this question also decides whether an unanswered start has words of the
+specification's own, and whether it should be followed by a cancellation.
 
 **What a ruling decides.** Whether these two cases have words of the specification's own; whether the bound is the right
 one (it adds nothing for the run host's own work around the stages, which the budgets do not cover); whether the
@@ -8684,3 +8698,38 @@ record, a different reader, is not rewritten either.
 withdrawn tool dropped from the row when the update narrows it; or keeps it marked as withdrawn mid-run, so a finished
 run's record shows both what was granted and what was taken away — and, for either of the last two, whether the surfaces
 draw a withdrawn tool at all.
+
+**OQ-175 — What is a code-intelligence setup step's detail when REQ-WORKSPACE-092's "last 400 bytes of its output" has
+nothing to give?** *(REQ-WORKSPACE-092, "every other step's detail SHALL be the last 400 bytes of its combined standard
+output and standard error"; REQ-WORKSPACE-091, "where a stage's subcommand is unavailable, that stage SHALL fail and be
+reported under REQ-WORKSPACE-093 as any other stage failure is"; REQ-WORKSPACE-093, "{reason}: {detail}"; REQ-MCP-099 and
+REQ-MCP-112, whose words for the same steps stay the MCP category's. Raised 2026-10-01 by the repair of
+[`the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`](../defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md),
+as OQ-174, and renumbered OQ-175 at its merge because `origin/main` had taken OQ-174 meanwhile. Open.)*
+
+`code-intelligence-setup`'s step rows now read in this domain's words: a stopped step in REQ-WORKSPACE-092's two fixed
+sentences, a creation the marker skipped and the two stages a `non-code` workspace skips in REQ-WORKSPACE-091's, and every
+other step in the last 400 bytes of its output, with no prefix. Three kinds of step have no output to give: a step **not
+attempted** (an earlier one failed, or the setup was cancelled between steps), a step whose command **could not be
+started** (the launch itself failed — no such file, no permission), and one that ran and **wrote nothing**, whether it
+succeeded or exited non-zero. Read literally, each detail is empty, and a failed stage's error is then "{reason}: " with
+nothing after it.
+
+**What the build proceeds under** (`apps/desktop/src/main/initialization.ts`, `stepDetail`, from the facts the run host's
+status carries beside its own `detail`: `skipped`, `output` and `startError` on `McpSetupStep`): a step not attempted and a
+step that wrote nothing have an **empty** detail — the step's status (`not-attempted`, `succeeded`, `failed`) says what
+happened. A step that could not be started reads in the **launch's own error text** (for example "spawn /opt/ci ENOENT"),
+without the run host's "the setup command could not be started: " — the nearest thing to output such a step has, and the
+only account of why the stage failed. A failed stage whose detail is empty takes the setup's final sentence as the error's
+"{detail}" ("A step failed, so the workspace is only partly set up."), as `resultOf` already did for a failed setup with no
+failed step; that sentence is the run host's (REQ-MCP-112's final outcome). The output's tail is cut where a UTF-8
+character begins, so a cut never splits one (`lastUtf8Bytes`), and it is the captured output trimmed of its leading and
+trailing blank space.
+
+**What a ruling decides.** Whether an empty detail is what REQ-WORKSPACE-092 means for these steps or each has a sentence
+of the specification's own; whether a step that could not be started reads in the launch's error, in a fixed sentence, or
+empty; and what a failed stage's "{reason}: {detail}" reads when its detail is empty — the build's reading borrows the
+run host's final sentence there, REQ-MCP-112's words in this domain's error, the same crossing of categories the repair
+removed from every other detail. It also decides whether "the last 400 bytes of its combined standard output and standard
+error" are counted on the output as written or, as built, on the output trimmed of its leading and trailing blank space:
+the two differ for output that ends in blank lines, and for a tail whose first characters are blank.

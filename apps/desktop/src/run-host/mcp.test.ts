@@ -147,3 +147,81 @@ describe('the setup at the run host\'s shutdown (REQ-WORKSPACE-092, REQ-WORKSPAC
     await mcp.endSetup();
   }, 20_000);
 });
+
+/**
+ * REQ-WORKSPACE-091/092, REQ-MCP-099/112: the run host carries each step's facts — `skipped`, `output`, `startError` —
+ * onto the status beside its own `detail`, so the initialization coordinator can write the step in its own domain's
+ * words while the MCP category keeps the run host's (`docs/defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`).
+ * Before this case only `workspace-proof`'s scenario 8g read the mapping, in the built app.
+ */
+describe('the setup step facts on the run host\'s status (REQ-WORKSPACE-091, REQ-WORKSPACE-092, REQ-MCP-099, REQ-MCP-112)', () => {
+  const host = (): McpHost => new McpHost({ clocks: nodeClocks(), log: () => undefined, acknowledge: () => undefined, parentEnv: process.env as Record<string, string>, productVersion: '0.0.0' });
+  const configFor = (root: string, command: string, args: string[]): LoadedConfiguration => {
+    const launch = { command, args: [...args, 'start-mcp-server'] };
+    return {
+      files: { workspace: { agents: join(root, '.rotaris', 'agents.yaml') } },
+      mcp: { servers: { code_intelligence: { name: 'code_intelligence', entry: { type: 'stdio', enabled: true, ...launch }, origin: 'workspace', availability: { available: true }, description: { transport: 'stdio', env: {} }, resolved: launch } }, origins: {}, diagnostics: [] },
+    } as unknown as LoadedConfiguration;
+  };
+  const project = (files: Record<string, string>): string => {
+    const root = join(mkdtempSync(join(tmpdir(), 'rotaris-setup-facts-')), 'project');
+    mkdirSync(join(root, '.rotaris'), { recursive: true });
+    for (const [path, text] of Object.entries(files)) {
+      mkdirSync(join(root, path, '..'), { recursive: true });
+      writeFileSync(join(root, path), text);
+    }
+    return root;
+  };
+  const finished = async (mcp: McpHost) => {
+    const began = Date.now();
+    while (mcp.setupStatus().state !== 'finished' && Date.now() - began < 10_000) await new Promise((r) => setTimeout(r, 20));
+    const status = mcp.setupStatus();
+    expect(status.state, 'the setup finished within 10 s').toBe('finished');
+    return status;
+  };
+
+  it('carries the marker\'s and the no-code skip as `skipped`, beside the run host\'s own detail', async () => {
+    const root = project({ '.serena/project.yml': 'name: p\n', 'README.md': '# docs only\n' });
+    const mcp = host();
+    expect(mcp.startSetup(configFor(root, process.execPath, ['-e', 'process.exit(9)']), root).ok).toBe(true);
+    const status = await finished(mcp);
+    expect(status.steps.map((s) => [s.id, s.status, s.skipped])).toEqual([
+      ['create', 'succeeded', 'marker-present'], ['index', 'skipped-no-code', 'no-code'], ['memory', 'skipped-no-code', 'no-code'],
+    ]);
+    expect(status.steps[0]!.detail).toContain('the project already exists');
+    expect(status.steps.every((s) => s.output === undefined && s.startError === undefined)).toBe(true);
+  });
+
+  it.skipIf(process.platform === 'win32')('carries a step\'s output with no prefix, and leaves a step not attempted without facts', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-setup-facts-'));
+    const standIn = join(dir, 'stand-in.cjs');
+    writeFileSync(standIn, [
+      'const [group, verb] = process.argv.slice(2);',
+      "if (group === 'project' && verb === 'create') { process.stdout.write('made ä\\n'); process.exit(0); }",
+      "process.stderr.write('boom'); process.exit(3);",
+      '',
+    ].join('\n'));
+    const root = project({ 'main.ts': 'export {};\n' });
+    const mcp = host();
+    expect(mcp.startSetup(configFor(root, process.execPath, [standIn]), root).ok).toBe(true);
+    const status = await finished(mcp);
+    const [create, index, memory] = status.steps;
+    expect([create!.status, create!.output, create!.skipped, create!.startError]).toEqual(['succeeded', 'made ä', undefined, undefined]);
+    expect([index!.status, index!.output]).toEqual(['failed', 'boom']);
+    expect(index!.detail).toBe('exited with code 3; its last output: boom');
+    expect([memory!.status, memory!.output, memory!.skipped, memory!.startError]).toEqual(['not-attempted', undefined, undefined, undefined]);
+  });
+
+  it('carries a launch that failed as `startError`, the launch\'s own words', async () => {
+    const root = project({ 'main.ts': 'export {};\n' });
+    const mcp = host();
+    const missing = join(root, 'no-such-runtime');
+    expect(mcp.startSetup(configFor(root, missing, []), root).ok).toBe(true);
+    const status = await finished(mcp);
+    const create = status.steps[0]!;
+    expect(create.status).toBe('failed');
+    expect(create.startError).toContain('ENOENT');
+    expect(create.detail).toBe(`the setup command could not be started: ${create.startError}`);
+    expect(create.output).toBeUndefined();
+  });
+});

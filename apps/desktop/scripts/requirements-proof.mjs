@@ -64,6 +64,10 @@
  *               REQ-TRACE-497 a proof can reach — an epic card offering no delivery action and not draggable, a drag
  *               on a non-delivery axis refused in words, a column count agreeing with the widgets in it, and the card
  *               and its detail agreeing on health. The rotated-rail clause is asserted in `fold`, which has a rail.
+ *   review-rerun — REQ-TRACE-426 with REQ-TRACE-472: a release accepted through the disclosure, the run arrived at
+ *               review, and the review pane's Rerun taken. The disclosure is due again; while it stands the pane says
+ *               nothing has been recorded, as the decision's state and not as a refusal; once it is accepted the pane
+ *               says the re-run was recorded, offers the reload alone and draws no alert; the history holds one rerun.
  *
  * Evidence under `.proof/requirements-proof/`: `vitest.json`, one PNG and one log per launch, `results.json`.
  * `--skip-build` skips the desktop build.
@@ -735,6 +739,56 @@ stage2['end-to-end'] = {
   store: { tables: rows.tables, counts: rows.counts, releases: releases.length, runs: runRows.length, session: String(runRows[0].session_id).slice(0, 8), permissions: runRows[0].permissions },
   afterEdit: { column: after.column, health: after.health },
 };
+
+// ── review-rerun: a review decision that starts a run, taken through the launch's disclosure (REQ-TRACE-426/472) ──
+//
+// Re-run and send-back start a run, so the disclosure stands between the decision and the record: the pane's first
+// answer is that nothing has been recorded yet. Until 2026-10-01 the pane drew that answer as an error alert and was
+// never told what the disclosure came to — accepting it took the decision while the pane went on saying nothing was
+// recorded and offering the six decisions again, with no reload (defect note
+// `a-review-decision-taken-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`). The release here
+// is accepted with "Start the run" and not "always", so the disclosure is still due for the re-run (REQ-TRACE-472).
+/** The pane while a decision is waiting on the disclosure, and once it has been answered. */
+const DECISION_AT = `(() => { const p = document.querySelector('[data-testid="req-pane-review"]'); if (p === null) return null; const text = (sel) => { const el = p.querySelector(sel); return el === null ? null : el.textContent.trim(); }; const d = p.querySelector('[data-testid="req-pane-review-decided"]'); const footer = p.querySelector('[data-testid="req-pane-review-decisions"]'); return { decided: text('[data-testid="req-pane-review-decided"] span'), actions: d === null ? [] : [...d.querySelectorAll('button')].map((b) => b.textContent.trim()), waiting: text('[data-testid="req-pane-review-waiting"]'), refused: text('[data-testid="req-pane-review-refused"]'), alerts: [...p.querySelectorAll('[role="alert"]')].map((a) => a.textContent.trim()), decisions: footer === null ? null : [...footer.querySelectorAll('button')].map((b) => ({ label: b.textContent.trim(), disabled: b.disabled })) }; })()`;
+const rr = profile('review-rerun');
+const rerun = await launch('review-rerun', rr.workspace, rr.local, rr.preferences, {
+  ROTARIS_CAPTURE_RESIZE: '1264x800@300',
+  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_CLICKS: [
+    `${CARD_101}@3000`,
+    '[data-testid="req-move-control"]@4400',
+    '[data-testid="req-confirm"] .btn>>Release@5400',
+    '[data-testid="req-pane-disclosure"] .btn>>Start the run@6800',
+    `${CARD_101}@30000`,
+    '[data-testid="req-detail-review"]@32000',
+    '[data-testid="req-pane-review-decisions"] .btn>>Rerun@34000',
+    '[data-testid="req-pane-review-confirm"] .btn-primary@35600',
+    '[data-testid="req-pane-disclosure"] .btn>>Start the run@37600',
+  ].join(';;'),
+  ROTARIS_CAPTURE_KEYS: 'Return@31000',
+  ROTARIS_CAPTURE_EVAL_AT: [`${BOARD_AT}@29000`, `${DISCLOSURE_AT}@36600`, `${DECISION_AT}@36800`, `${DECISION_AT}@39400`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '40000',
+}, 300_000);
+expect(rerun.evals['29000']?.column === 'review', `REQ-TRACE-499: the release never arrived at review before the re-run (${JSON.stringify(rerun.evals['29000']?.column)})`);
+const rerunDisclosure = rerun.evals['36600'];
+expect(rerunDisclosure !== null && rerunDisclosure !== undefined && rerunDisclosure.buttons.includes('Start the run'), `REQ-TRACE-472: the review's re-run raised no disclosure (${JSON.stringify(rerunDisclosure)})`);
+const waitingPane = rerun.evals['36800'];
+expect(waitingPane !== null && waitingPane !== undefined, 'REQ-TRACE-426: the review pane was not open while the re-run waited on the disclosure');
+// While the disclosure is on screen nothing has been recorded, and the pane says so — as the decision's state, not as
+// a refusal: nothing refused the re-run.
+expect(typeof waitingPane.waiting === 'string' && waitingPane.waiting.startsWith('Nothing has been recorded for REQ-101 yet'), `REQ-TRACE-472: while the disclosure stands the pane reads ${JSON.stringify(waitingPane.waiting)}`);
+expect(waitingPane.alerts.length === 0, `REQ-TRACE-472: a re-run waiting on its disclosure is drawn as a refusal: ${JSON.stringify(waitingPane.alerts)}`);
+const rerunPane = rerun.evals['39400'];
+expect(rerunPane !== null && rerunPane !== undefined, 'REQ-TRACE-426: the review pane was not open after the disclosure was accepted');
+expect(rerunPane.decided === 'Rerun recorded for REQ-101. The review you were reading is out of date.', `REQ-TRACE-426/472: once the disclosure was accepted the pane's notice reads ${JSON.stringify(rerunPane.decided)} (alerts ${JSON.stringify(rerunPane.alerts)})`);
+expect(JSON.stringify(rerunPane.actions) === JSON.stringify(['Reload the review']), `REQ-TRACE-426: the notice after the re-run offers ${JSON.stringify(rerunPane.actions)}, not exactly the reload`);
+expect(rerunPane.alerts.length === 0 && rerunPane.waiting === null, `REQ-TRACE-472: after the disclosure was accepted the pane still says ${JSON.stringify({ alerts: rerunPane.alerts, waiting: rerunPane.waiting })}`);
+expect(rerunPane.decisions === null, `REQ-TRACE-426: after the re-run the pane still offers the decisions on an out-of-date payload: ${JSON.stringify(rerunPane.decisions)}`);
+const rerunRows = deliveryRows(rr.local);
+expect(rerunRows !== null, `no delivery store was written under ${rr.local}`);
+const rerunHistory = rerunRows.query(`select * from "${rerunRows.tables.find((t) => /history/.test(t))}" order by rowid`).map((e) => String(e.action));
+expect(rerunHistory.filter((a) => a === 'rerun').length === 1, `REQ-TRACE-422: the re-run accepted through the disclosure left ${JSON.stringify(rerunHistory)} in the history, not one rerun`);
+stage2['review-rerun'] = { disclosure: rerunDisclosure.buttons, waiting: waitingPane.waiting, afterAccept: { decided: rerunPane.decided, actions: rerunPane.actions, alerts: rerunPane.alerts }, history: rerunHistory };
 
 // ── panes and the graph: the registry's contract, and the rest of REQ-TRACE-497 a proof can reach ────────────────
 // Defect `R2-6`, and the reason this read carries geometry at all: every assertion below once read attributes through

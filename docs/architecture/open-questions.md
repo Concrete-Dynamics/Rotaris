@@ -7912,3 +7912,24 @@ and called-tool history are the run's aggregate — and then whether that aggreg
 with its lag during a pass, or the persisted total plus every live agent's calls not yet counted; or whether it is an
 agent as REQ-MONITOR-044 presents one, carrying its own count and history, and REQ-MONITOR-101's synthetic root node is
 some other surface — the run header, or the run-wide totals of REQ-MONITOR-098.
+
+**OQ-160 — Does the sidebar's "Last run failed: {message}" carry the failed task's whole output, or a bounded form of it?**
+*(REQ-WORKSPACE-113, "a recorded failure appends 'Last run failed: {message}' to the hint"; REQ-WORKSPACE-093, which fixes a
+failure's form as "{reason}: {detail}"; REQ-WORKSPACE-103, under which the recorded outcome is visible in Settings Project. Raised 2026-10-01 under
+[R-067](../product/requests.md#r-067) by the repair of
+[`the-project-sections-failure-hint-runs-out-of-the-sidebar.md`](../defects/fixed/the-project-sections-failure-hint-runs-out-of-the-sidebar.md),
+acceptance finding A39. Open.)*
+
+The recorded failure of the shipped code-intelligence task is its process's raw output: the exit, the platform's own log
+lines (a `[pid:date/time:ERROR:dbus/bus.cc:406]` prefix among them) and the runtime's explanation. Measured in the built
+app at 1440 × 900, the hint holding it is about 267 px tall in a 235 px column, most of the sidebar's free height. The repair
+broke its unbroken tokens inside the column; it did not shorten it. REQ-WORKSPACE-113 names `{message}` and does not say
+whether that is the whole recorded output. Two readings: the whole recorded message, broken to the column; or a bounded
+form in the sidebar (its first line, or REQ-WORKSPACE-093's reason alone), with the whole output left to Settings
+Project, where REQ-WORKSPACE-103 makes the recorded outcome visible.
+
+**What the build proceeds under:** the first. `projectSidebarSection` (`packages/ui/src/settings/project-init.ts`) appends
+`lastError` whole, and `.agents__project .settings__hint` breaks it with `overflow-wrap: anywhere` (`shell.css`).
+
+**What a ruling decides.** Whether the sidebar hint's `{message}` is the recorded failure whole; if not, which part of it
+the sidebar shows.

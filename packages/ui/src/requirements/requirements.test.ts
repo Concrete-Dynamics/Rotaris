@@ -3,7 +3,8 @@ import type { BoardCard, BoardProjection, EpicCard, Reachability } from '@rotari
 import { DELIVERY_COLUMNS, PANE_KEYS, REVIEW_DECISIONS } from '@rotaris/contracts';
 // Part R2 — the pane host's pure half and the registry the board drives it through.
 import { createPaneRegistry } from './panes/registry.js';
-import { PANE_TITLE, consequenceForDecision, disclosurePending, dispatchNothingStarted, installedPanesSentence, launchAbandoned } from './panes-host.js';
+import { PANE_TITLE, consequenceForDecision, disclosurePending, dispatchNothingStarted, heldLaunch, installedPanesSentence, launchAbandoned } from './panes-host.js';
+import { decidedNotice, followDecision } from './panes/presentation.js';
 import { arcPath, segmentArcs } from './EvidenceIndicator.js';
 import { cardDescription } from './Card.js';
 import { DETAIL_SECTIONS, SECTION_EMPTY } from './DetailPanel.js';
@@ -343,6 +344,52 @@ describe('what the pane host says (REQ-TRACE-422/463/472)', () => {
     expect(installedPanesSentence(PANE_KEYS, (k) => registry.installed(k))).toContain('asking builds nothing');
     registry.open('queue', () => ({ openedAt: 1 }));
     expect(installedPanesSentence(PANE_KEYS, (k) => registry.installed(k))).toContain('Delivery queue');
+  });
+});
+
+/**
+ * Defect note `a-review-decision-taken-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`: a
+ * re-run or a send-back from the review pane starts a run, so the disclosure stands between it and the record. The
+ * host answered the pane "nothing has been recorded yet" and then took the decision when the disclosure was accepted
+ * without telling the pane, which kept that sentence as a refusal and offered the decisions again. The host now holds
+ * the launch and settles it with what the disclosure came to; the pane follows it there. `requirements-proof`'s
+ * `review-rerun` stage drives the same path through the built app.
+ */
+describe('a review decision held behind the launch disclosure (REQ-TRACE-426/472)', () => {
+  it('REQ-TRACE-426/472: accepting the disclosure takes the decision, and the pane is told it was recorded — not that nothing was', async () => {
+    const held = heldLaunch('REQ-101');
+    expect(held.result).toMatchObject({ ok: false, reason: disclosurePending('REQ-101') });
+    const waiting: string[] = [];
+    const outcome = followDecision(held.result, (s) => waiting.push(s));
+    held.settle({ ok: true });
+    expect(await outcome).toEqual({ ok: true });
+    expect(waiting).toEqual([disclosurePending('REQ-101')]);
+    expect(decidedNotice('Rerun', 'REQ-101')).toBe('Rerun recorded for REQ-101. The review you were reading is out of date.');
+  });
+  it('REQ-TRACE-472: abandoning the disclosure answers the pane with the abandonment, in the host\'s words', async () => {
+    const held = heldLaunch('REQ-101');
+    const outcome = followDecision(held.result, () => undefined);
+    held.abandon();
+    expect(await outcome).toEqual({ ok: false, reason: launchAbandoned('REQ-101') });
+  });
+  it('REQ-TRACE-423: an act refused after the disclosure was accepted reaches the pane in the engine\'s words', async () => {
+    const held = heldLaunch('REQ-101');
+    const outcome = followDecision(held.result, () => undefined);
+    held.settle({ ok: false, reason: 'REQ-101 cannot be re-run: it has no finished unit.' });
+    expect(await outcome).toEqual({ ok: false, reason: 'REQ-101 cannot be re-run: it has no finished unit.' });
+  });
+  it('REQ-TRACE-472: a held launch settles once, so a launch abandoned by being replaced never later reads as taken', async () => {
+    const held = heldLaunch('REQ-101');
+    const outcome = followDecision(held.result, () => undefined);
+    held.abandon();
+    held.settle({ ok: true });
+    expect(await outcome).toEqual({ ok: false, reason: launchAbandoned('REQ-101') });
+  });
+  it('REQ-TRACE-422: a decision that waits on no disclosure is its own outcome, and the pane is never told it is waiting', async () => {
+    const waiting: string[] = [];
+    expect(await followDecision({ ok: true }, (s) => waiting.push(s))).toEqual({ ok: true });
+    expect(await followDecision({ ok: false, reason: 'refused' }, (s) => waiting.push(s))).toEqual({ ok: false, reason: 'refused' });
+    expect(waiting).toEqual([]);
   });
 });
 

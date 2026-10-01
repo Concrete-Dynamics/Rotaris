@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import type { BoardAction, ReviewPayload } from '@rotaris/contracts';
 import { ConfirmDialog } from '../../ConfirmDialog.js';
-import { CLAIM_ATTRIBUTION, CLAIM_HEADING, MEASUREMENT_ATTRIBUTION, MEASUREMENT_HEADING, RELOAD_REVIEW, REVIEW_BUSY, REVIEW_READING, WORK_HEADING, reviewDecisions, reviewElementDescription, reviewElements, type ReviewElement, type ReviewLink } from './presentation.js';
+import { CLAIM_ATTRIBUTION, CLAIM_HEADING, MEASUREMENT_ATTRIBUTION, MEASUREMENT_HEADING, RELOAD_REVIEW, REVIEW_BUSY, REVIEW_READING, WORK_HEADING, decidedNotice, followDecision, reviewDecisions, type DecisionResult, reviewElementDescription, reviewElements, type ReviewElement, type ReviewLink } from './presentation.js';
 import { Button as DesignButton, Tag as DesignTag, TextArea as DesignTextArea } from '../../design-system/index.js';
 
 /**
@@ -20,8 +20,11 @@ export interface ReviewPaneProps {
   readonly error?: string | undefined;
   /** REQ-TRACE-422: the decision's consequence for the branch and the worktree, stated before it is taken; the engine's sentence. */
   readonly consequenceOf: (action: BoardAction) => string;
-  /** The board's one write path; a refusal comes back in the engine's words (REQ-TRACE-423/432). */
-  readonly onDecision: (action: BoardAction, payload?: Readonly<Record<string, string>>) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  /**
+   * The board's one write path; a refusal comes back in the engine's words (REQ-TRACE-423/432). A decision that starts a
+   * run comes back held behind the launch's disclosure, with the outcome still to come (REQ-TRACE-472).
+   */
+  readonly onDecision: (action: BoardAction, payload?: Readonly<Record<string, string>>) => Promise<DecisionResult>;
   readonly onReload: () => void;
   readonly onNavigate: ReviewNavigate;
   readonly onClose: () => void;
@@ -35,18 +38,24 @@ export function ReviewPane(p: ReviewPaneProps) {
   const [instructions, setInstructions] = useState('');
   const [refusal, setRefusal] = useState<string | null>(null);
   const [decided, setDecided] = useState<string | null>(null);
+  /** REQ-TRACE-472: the decision is waiting on the launch's disclosure — nothing has been recorded yet, and nothing was refused. */
+  const [waiting, setWaiting] = useState<string | null>(null);
   const [inFlight, setInFlight] = useState(false);
   const payload = p.payload === 'reading' || p.payload === null ? null : p.payload;
   const elements = payload === null || payload.refusal !== undefined ? [] : reviewElements(payload);
   const decide = async (action: BoardAction) => {
     setInFlight(true);
-    const r = await p.onDecision(action, action === 'send-back' ? { instructions } : undefined);
-    setInFlight(false);
+    const first = await p.onDecision(action, action === 'send-back' ? { instructions } : undefined);
     setPending(null);
+    // REQ-TRACE-472: a re-run or a send-back waits on the disclosure, and is taken or abandoned THERE; the pane follows
+    // it to that outcome rather than keeping "nothing has been recorded" after the decision was taken.
+    const r = await followDecision(first, (sentence) => { setRefusal(null); setWaiting(sentence); });
+    setWaiting(null);
+    setInFlight(false);
     if (!r.ok) { setRefusal(r.reason); return; }
     setRefusal(null);
     // REQ-TRACE-426: any decision relocates the requirement; the payload is out of date, and the one action offered is the reload.
-    setDecided(`${labelOf(action)} recorded for ${p.id}. The review you were reading is out of date.`);
+    setDecided(decidedNotice(labelOf(action), p.id));
   };
   const side = (name: string, heading: string, attribution: string | null) => {
     const own = elements.filter((e) => e.side === name);
@@ -93,6 +102,7 @@ export function ReviewPane(p: ReviewPaneProps) {
           {reviewDecisions().map((d) => <DesignButton key={d.action} type="button" className={d.action === 'accept' ? 'btn btn-primary' : d.action === 'reject' ? 'btn btn-danger' : 'btn btn-secondary'} disabled={inFlight} onClick={() => setPending(d.action)} aria-label={`${d.label} ${p.id}`}>{d.label}</DesignButton>)}
         </footer>
       )}
+      {waiting !== null && <p className="req-pane__notice" role="status" data-testid="req-pane-review-waiting">{waiting}</p>}
       {refusal !== null && <p className="req-pane__notice req-pane__notice--error" role="alert" data-testid="req-pane-review-refused">{refusal}</p>}
       {pending !== null && pending !== 'send-back' && (
         <ConfirmDialog title={`${labelOf(pending)} ${p.id}`} body={p.consequenceOf(pending)} confirmLabel={labelOf(pending)} destructive={pending === 'reject'} busy={inFlight} onConfirm={() => { void decide(pending); }} onCancel={() => setPending(null)} testId="req-pane-review-confirm" />

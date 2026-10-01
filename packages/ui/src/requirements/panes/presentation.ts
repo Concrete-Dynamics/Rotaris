@@ -89,6 +89,34 @@ export function actionLabel(action: BoardAction): string {
 }
 /** REQ-TRACE-426: the one action the post-decision notice offers. */
 export const RELOAD_REVIEW = 'Reload the review';
+/** REQ-TRACE-426: the notice once a decision is recorded — the payload on screen is the one it was taken against. */
+export function decidedNotice(label: string, id: string): string {
+  return `${label} recorded for ${id}. The review you were reading is out of date.`;
+}
+
+/**
+ * What a decision came to, as the board's one write path answers it (REQ-TRACE-422/423). A decision that would start
+ * a run — re-run, send-back — is held behind the launch's disclosure (REQ-TRACE-472): its first answer is that nothing
+ * has been recorded YET, and `afterDisclosure` carries the rest — the act's own result once the disclosure is
+ * accepted, or the abandonment. Without it the pane kept that first answer as a refusal after the decision had been
+ * taken (`docs/defects/fixed/a-review-decision-taken-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`).
+ */
+export type DecisionResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: string; readonly afterDisclosure?: Promise<DecisionResult> };
+
+/**
+ * Follows a decision to its outcome. While the disclosure stands the pane is told the decision is waiting on it (the
+ * sentence is the host's: nothing has been recorded yet); the outcome returned is what the disclosure came to.
+ */
+export async function followDecision(first: DecisionResult, onWaiting: (sentence: string) => void): Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }> {
+  let r = first;
+  while (!r.ok && r.afterDisclosure !== undefined) {
+    onWaiting(r.reason);
+    r = await r.afterDisclosure;
+  }
+  return r.ok ? { ok: true } : { ok: false, reason: r.reason };
+}
 /** REQ-TRACE-425's two sentences. */
 export const REVIEW_READING = 'Reading the review…';
 export const REVIEW_BUSY = 'A review is already being read; wait for it before asking again.';

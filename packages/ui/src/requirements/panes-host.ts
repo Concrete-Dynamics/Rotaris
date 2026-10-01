@@ -1,4 +1,5 @@
 import type { BoardAction, PaneKey } from '@rotaris/contracts';
+import type { DecisionResult } from './panes/presentation.js';
 
 /**
  * Part R2 — the pure half of hosting Part AP's five panes on the board (spec 08 §Review Surface, §Blockers,
@@ -57,6 +58,29 @@ export function disclosurePending(id: string): string {
   return `Nothing has been recorded for ${id} yet: a run started from the board receives raised permissions, so the launch states them first. The disclosure is on screen; accepting it takes this decision, and abandoning it leaves everything as it stands.`;
 }
 export const DISCLOSURE_PENDING = disclosurePending;
+
+/**
+ * REQ-TRACE-472 with REQ-TRACE-426: a launch held behind its disclosure. `result` is what the surface that asked is
+ * answered at once — nothing recorded yet — carrying the outcome still to come; the host settles it with the act's
+ * own result when the disclosure is accepted, or with the abandonment when it is abandoned. It settles once: a
+ * second settlement is ignored, so a launch abandoned by being replaced cannot later read as taken.
+ */
+export interface HeldLaunch {
+  readonly result: DecisionResult;
+  settle(outcome: DecisionResult): void;
+  abandon(): void;
+}
+export function heldLaunch(id: string): HeldLaunch {
+  let resolve: (outcome: DecisionResult) => void = () => undefined;
+  let settled = false;
+  const afterDisclosure = new Promise<DecisionResult>((r) => { resolve = r; });
+  const settle = (outcome: DecisionResult): void => { if (settled) return; settled = true; resolve(outcome); };
+  return {
+    result: { ok: false, reason: DISCLOSURE_PENDING(id), afterDisclosure },
+    settle,
+    abandon: () => settle({ ok: false, reason: LAUNCH_ABANDONED(id) }),
+  };
+}
 
 /** REQ-TRACE-463: where the act succeeded but nothing was dispatched, the reason is reported on the action's result rather than dropped. */
 export function dispatchNothingStarted(id: string, reason: string): string {

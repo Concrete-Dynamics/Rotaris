@@ -6658,6 +6658,10 @@ gone while it reported `session_reinitialized` false. The build now proceeds und
   call reports `session_reinitialized` true, and its detail opens by saying that the shell had ended and what was restored.
 - **Nothing here depends on `/proc`.** The exit is the PTY's own event, so the reading holds on every host and both
   backends. PowerShell's `exit` takes the same path, which is reasoned and not run on a Windows host.
+- **A background job the exiting command left behind keeps running** after the respawn (`sleep 8 & exit 2`, seen by
+  the repair's verification on 2026-10-01). Nothing kills it, because the shell that owned it has gone and nothing was
+  reset. The fresh shell does not know it, as PD-TOOLS-001 already says of background jobs. A ruling that the shell's end
+  should end its jobs too, as a hard-timeout reset ends the tree, is part of this question.
 
 The two cases "REQ-TOOLS-097/098/100/103 (OQ-144): a command that ends the session's shell …" and "REQ-TOOLS-098/100/103
 (OQ-144): a soft-paused command that ends the shell …" in `terminal/terminal.test.ts` pin it, and both are red on the

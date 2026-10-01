@@ -79,6 +79,9 @@ export function improvementsCommands(
         raiseNotice('success', `Applied approved gate proposals from ${req.artifactId}.`, 'The artifact contained no approved agent tasks.');
         return { ok: true, value: { sessionId: null, gateOnly: true } };
       }
+      // REQ-LIBRARY-060: the plan as the builder shaped it, each task under its proposal's id. Those ids are the request's,
+      // not the session's: the engine gives the session's todo backend ids when it creates it (`Todo.seeded`, REQ-CHAT-089),
+      // and the proposal stays named in each task's payload (REQ-LIBRARY-061).
       const initialTodo = {
         schema_version: 1 as const,
         phases: prepared.plan.phases.map((phase) => ({ name: phase.name, tasks: phase.tasks.map((task) => ({ id: task.proposal_id, text: task.payload, state: 'pending' as const, consecutiveRetries: 0 as const })) })),

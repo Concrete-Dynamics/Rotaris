@@ -8,7 +8,7 @@ import type { Committed, SessionWriter } from '../session-writer.js';
 import { Aggregates } from './aggregates.js';
 import { classifyStop, statusForResult, stopCondition, summarise, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
-import { taskLine, Todo, type Task, type TodoDocument } from './todo.js';
+import { mintTodoId, taskLine, Todo, type Task, type TodoDocument } from './todo.js';
 import { planRequestSection, resumedWorkSection } from './plan-text.js';
 import { recordSteeringInjected, runTurn, steeringMessage, type ToolPort, type TurnOutcome } from './turn.js';
 import { childCompletedFields, IterationChildren, refreshing } from '../children/orchestration.js';
@@ -514,7 +514,7 @@ export class Run {
     const stored = deps.readSession();
     this.agentTodo = decodeStoredTodo(stored?.todo ?? null).agent;
     this.todo = deps.initialTodo
-      ? Todo.fromDocument(deps.initialTodo, deps.config.consecutiveRetryLimit)
+      ? Todo.seeded(deps.initialTodo, deps.config.consecutiveRetryLimit, new Set([deps.taskId]))
       : deps.resumeTodo
         ? Todo.fromDocument(deps.resumeTodo, deps.config.consecutiveRetryLimit)
         : Todo.fresh(deps.taskId, deps.taskLabel ?? deps.task, deps.config.consecutiveRetryLimit);
@@ -1774,7 +1774,9 @@ export class Run {
   private consumeQueued(): void {
     const r = this.deps.writer.triggerQueuedPrompts();
     if (!r.ok || r.value.length === 0) return;
-    for (const p of r.value) this.todo.appendTask('Queued Prompts', p.prompt_id, p.content, `Queued Prompt: ${p.prompt_id.slice(0, 8)}`);
+    // REQ-CHAT-089: the task's id is the backend's own, never the prompt's; the prompt is found by the task's name and by
+    // the `prompt_triggered` timeline entry, which carries its full id.
+    for (const p of r.value) this.todo.appendTask('Queued Prompts', this.mintTaskId(), p.content, `Queued Prompt: ${p.prompt_id.slice(0, 8)}`);
     this.deps.supervisorFor?.(this.rootId).noteUserInstruction();
     this.saveRunning({});
   }
@@ -1784,12 +1786,13 @@ export class Run {
     if (this.ended) return { changed: false };
     let result: { changed: boolean; id?: string } = { changed: false };
     if (source === 'planner') {
-      const assigned = op === 'add' ? (id || randomUUID().replaceAll('-', '').slice(0, 8)) : id;
+      // REQ-CHAT-089: an added task takes the backend's id, never one the caller sent (a temporary id is never recorded).
+      const assigned = op === 'add' ? this.mintTaskId() : id;
       result = this.todo.editTask(op, assigned, text, phaseId) ? { changed: true, ...(op === 'add' ? { id: assigned } : {}) } : { changed: false };
     } else {
       const current = source === 'agent' ? this.agentTodo : this.agentTodoFor(ownerId, false);
       if (current !== null) {
-        const edited = editAgentTodo(current, op, id, text, phaseId, () => randomUUID().replaceAll('-', '').slice(0, 8));
+        const edited = editAgentTodo(current, op, id, text, phaseId);
         if (edited.changed) {
           result = { changed: true, ...(edited.id === undefined ? {} : { id: edited.id }) };
           if (source === 'agent') this.agentTodo = edited.document;
@@ -1802,6 +1805,16 @@ export class Run {
     this.deps.supervisorFor?.(this.rootId).noteUserInstruction();
     this.saveRunning({});
     return result;
+  }
+
+  /**
+   * REQ-CHAT-089: a new planner task's id — 8 lowercase hexadecimal characters, unique within the todo and among the ids
+   * the session's iterations recorded as their task (`todo_task_id`), so no iteration's record names a later task.
+   */
+  private mintTaskId(): string {
+    const taken = this.todo.ids();
+    for (const r of this.deps.dal?.iterationsOf(this.sessionId) ?? []) taken.add(r.todo_task_id);
+    return mintTodoId(taken);
   }
 
   /** The tool port calls these for the exact root or child conversation it belongs to. */

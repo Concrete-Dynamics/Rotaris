@@ -138,7 +138,7 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
     expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
     expect((await sessions.running(sid)!).status).toBe('completed');
     expect(tasksOf(sid).map((t) => [t.text, t.state])).toEqual([['first', 'complete'], ['later', 'complete'], ['go on', 'complete']]);
-    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.todo_task_id, r.outcome])).toEqual([[1, `${sid}:main:1`, 'succeeded'], [2, `${sid}:main:later`, 'succeeded']]);
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.todo_task_id, r.outcome])).toEqual([[1, tasksOf(sid)[0]!.id, 'succeeded'], [2, `${sid}:main:later`, 'succeeded']]);
   });
 
   it('a session that holds a release is not held after the resumed iteration either', async () => {

@@ -55,6 +55,8 @@ command at the default under its own". It passed the file alone, 6 of 6 (`pnpm v
 packages/platform/src/process-group.test.ts`). Beside twelve CPU-bound loops (load average about 21), the old and new
 forms ran 12 times each with `-t "dash -c"`. The comparison (`:107` on the old form) never failed in either form.
 
-Each form failed once, both times at `:103` and not on this note's comparison: the shell read `sigint: 'blocked'`
-where the case expects `'caught'`. That is a separate volatile reading, recorded open in
-[`the-process-group-test-reads-the-shells-sigint-standing-before-dash-unblocks-it.md`](../the-process-group-test-reads-the-shells-sigint-standing-before-dash-unblocks-it.md).
+Each form failed once in those 12 runs, both times at `:103` and not on this note's comparison: the shell read
+`sigint: 'blocked'` where the case expects `'caught'`. Those are the 2 failures in 24 runs that the separate note
+counts. That is a separate volatile reading, recorded in
+[`the-process-group-test-reads-the-shells-sigint-standing-before-dash-unblocks-it.md`](the-process-group-test-reads-the-shells-sigint-standing-before-dash-unblocks-it.md)
+and repaired on the same branch: the case now waits until the shell no longer reads `'blocked'`.

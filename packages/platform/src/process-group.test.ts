@@ -95,8 +95,14 @@ describe('OQ-135: the process table a SIGINT is checked against', () => {
       child = spawn('/bin/sh', ['-c', 'sleep 30'], { detached: true, stdio: 'ignore' });
       const table = linuxProcessTable()!;
       const pid = child.pid!;
+      // Wait for the command's name and for the shell to be past starting it. Seeing `sleep` shows only that the command
+      // has `exec`'d: until `dash` runs again after its `vfork` it can still hold SIGINT in `SigBlk`, rightly read
+      // `'blocked'` (the repair of the-process-group-test-reads-the-shells-sigint-standing-before-dash-unblocks-it.md).
+      // The wait never takes `'blocked'` as the answer: a shell that stays blocked, or never catches SIGINT, fails below.
+      const settled = (read: readonly GroupMember[]) =>
+        read.some((m) => m.comm === 'sleep') && read.find((m) => m.pid === pid)?.sigint !== 'blocked';
       let members = table.group(pid);
-      for (let i = 0; i < 200 && !members.some((m) => m.comm === 'sleep'); i++) { await new Promise((r) => setTimeout(r, 10)); members = table.group(pid); }
+      for (let i = 0; i < 200 && !settled(members); i++) { await new Promise((r) => setTimeout(r, 10)); members = table.group(pid); }
       const shell = members.find((m) => m.pid === pid)!;
       const command = members.find((m) => m.pid !== pid)!;
       expect(members).toHaveLength(2);

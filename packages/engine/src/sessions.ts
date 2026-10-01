@@ -672,6 +672,8 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     entryRoots: [],
     // REQ-MONITOR-117/119: likewise the entry agent's stall, which only a live run's watch knows.
     entryStalledSeconds: null,
+    // REQ-MONITOR-044/052: likewise the run-level agent's own count (`entryToolCallsOf`), which reads the children's rows.
+    entryToolCalls: null,
     id: r.session_id,
     executionStatus: r.execution_status,
     workspaceRoot: r.workspace_root,
@@ -749,21 +751,39 @@ export function artifactLinksOf(dal: StoreDal, sessionId: SessionId): SessionArt
  * the entry role's root agents of the session, each (name, canonical name) pair once — what the run-level agent owns rows and
  * artifacts under (REQ-MONITOR-071, REQ-CHAT-069, REQ-MONITOR-044). First every iteration's root, by the persona it was
  * opened with (`root_persona`, the name its rows and calls carry, which a root resumed as the entry role keeps) and its
- * `root_canonical_name` (which its publishes and reads record). Then each root no iteration row records — a plan cycle's
- * (REQ-ORCH-153) — that published, by its publish (`StoreDal.rootPublishersOf`): a root publishes under its task id as its
- * conversation (OQ-106), always as a fresh root, so the publish's persona is the name its rows carry and `created_by` its
- * canonical name. Its run is gone once it parks at the gate or ends, and with it `Run.currentRoot`, so without this a
- * session at the gate named no root and the plan cycle root's publish was no agent's (found by the fifth review of that
- * repair). Last the live run's current root. A plan cycle's root that published nothing is named only while its run is
- * live (`docs/defects/a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`).
+ * `root_canonical_name` (which its publishes and reads record). Then every plan cycle's root (REQ-ORCH-153: a plan cycle is
+ * not an iteration and has no row there), recorded when its turn started (`StoreDal.planRootsOf`, store v30) by the same
+ * pair, so it is named once its run has parked at the gate or ended whether or not it published — before v30 a plan
+ * cycle's root that only READ an artifact was named only while its run was live, and what it read, which records it by
+ * its canonical name (REQ-LIBRARY-099), was no agent's received link at the gate (the repair of
+ * `a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`, acceptance A22, R-067). Then each root
+ * no row records that published, by its publish (`StoreDal.rootPublishersOf`) — a plan cycle's from before v30: a root
+ * publishes under its task id as its conversation (OQ-106), always as a fresh root, so the publish's persona is the name
+ * its rows carry and `created_by` its canonical name (found by the fifth review of that repair). Last the live run's
+ * current root.
  */
 export function entryRootsOf(dal: StoreDal, sessionId: SessionId, run: { readonly currentRoot: EntryRoot | null } | null | undefined): EntryRoot[] {
   const out: EntryRoot[] = [];
   const add = (root: EntryRoot): void => { if (!out.some((r) => r.name === root.name && r.canonical === root.canonical)) out.push(root); };
   for (const r of dal.iterationsOf(sessionId)) add({ name: r.root_persona, canonical: r.root_canonical_name });
+  for (const r of dal.planRootsOf(sessionId)) add({ name: r.root_persona, canonical: r.root_canonical_name });
   for (const p of dal.rootPublishersOf(sessionId)) if (p.source_persona && p.created_by) add({ name: p.source_persona, canonical: p.created_by });
   if (run?.currentRoot) add(run.currentRoot);
   return out;
+}
+
+/**
+ * REQ-MONITOR-044/052 (the repair of `the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md`, acceptance A20,
+ * R-067): the run-level agent's tool-call count. The session's total holds every root's calls and every child's, each
+ * child's share persisted on its row with it (`SessionWriter.countToolCalls`), so the roots' share is the total less the
+ * children's persisted counts. A root's calls join the total only when its turn returns (REQ-ORCH-097's cadence, OQ-116),
+ * so the live run adds the calls its current root has made and the total does not hold yet (`Run.entryUncountedToolCalls`).
+ * Before this the surfaces read the total less the children's displayed counts, and while the root's turn ran its meta
+ * line read `0 tool calls` beside the tools it had used.
+ */
+export function entryToolCallsOf(row: Pick<SessionRow, 'tool_calls'>, children: readonly Pick<ChildRow, 'tool_calls'>[], run: { readonly entryUncountedToolCalls: number } | null | undefined): number {
+  const childCalls = children.reduce((n, c) => n + c.tool_calls, 0);
+  return Math.max(0, row.tool_calls - childCalls) + (run?.entryUncountedToolCalls ?? 0);
 }
 
 /**
@@ -1129,7 +1149,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(current, children, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -1189,7 +1209,7 @@ export class Sessions {
     if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, cancelLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft, cancelLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: entryToolsOf(dal, sessionId, entry.run, writer.activity), artifacts: artifactLinksOf(dal, sessionId), entryRoots: entryRootsOf(dal, sessionId, entry.run), entryStalledSeconds: entry.run?.entryStalledSeconds ?? null, entryToolCalls: entryToolCallsOf(row, children, entry.run), pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;

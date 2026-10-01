@@ -1189,13 +1189,20 @@ export class SessionWriter {
 
   /**
    * REQ-MONITOR-102 with REQ-ORCH-153 (store v29): the plan cycle's root `taskId` is under way, its rows carrying `persona`,
-   * and none of its calls is counted — until `countToolCalls`'s `planRoot` releases it. Its own transaction.
+   * and none of its calls is counted — until `countToolCalls`'s `planRoot` releases it. In the same transaction the root is
+   * recorded for good under `persona` and its canonical instance name (store v30, REQ-MONITOR-044 with REQ-LIBRARY-093):
+   * what names it to the surfaces once its run has parked or ended, whether or not it published
+   * (`entryRootsOf`; the repair of `a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`).
    */
-  openPlanRoot(taskId: string, persona: string): Result<void, WriteFailure> {
+  openPlanRoot(taskId: string, persona: string, canonicalName: string): Result<void, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
-    const { dal, sessionId } = this.deps;
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
     try {
-      dal.transaction(() => dal.setPlanRoot(sessionId, taskId, persona));
+      dal.transaction(() => {
+        dal.setPlanRoot(sessionId, taskId, persona);
+        dal.insertPlanRoot({ session_id: sessionId, root_task_id: taskId, root_canonical_name: canonicalName, root_persona: persona, opened_at: at });
+      });
       return ok(undefined);
     } catch (cause) {
       return this.fail(cause);

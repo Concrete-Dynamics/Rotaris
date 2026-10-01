@@ -45,6 +45,25 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**The run-level agent's tool-call count is its own while its turn runs (REQ-MONITOR-044/052, R-067).** The surfaces derived
+it as the session's total less the children's, and a root's calls join the total only when its turn returns, so the meta
+line read `0 tool calls` beside the root's used chips. `SessionRecord.entryToolCalls` now carries it: the roots' share of
+the persisted total plus the live root's calls not yet counted (`entryToolCallsOf`, `Run.entryUncountedToolCalls`) — the
+agent's own count, where REQ-MONITOR-101 gives the synthetic root the run's aggregate; **OQ-159** asks which, open. This
+repairs `the-run-level-agents-tool-call-count-reads-zero-while-its-turn-runs.md` (acceptance A20). The **runtime view**'s §3
+entry-record paragraph and the **state-ownership view**'s tool-call row say so. One `SessionRecord` field was added on the
+existing snapshot channel; no package, edge, process, message kind, channel, command or store column changed.
+
+**A plan cycle's root is recorded for good when it starts (REQ-MONITOR-044/052/069, REQ-LIBRARY-093/099, REQ-ORCH-153,
+R-067).** A plan cycle has no `iterations` row, so the session named its root through its live run and, after a park or an
+end, through its publishes alone; one that only read an artifact was no agent's, and the run-level agent lost that received
+link at the gate. `plan_roots` (store **v30**) records each plan cycle's root — task id, canonical name, the name its rows
+carry — in `SessionWriter.openPlanRoot`'s transaction, never released, and `entryRootsOf` names it from there. This repairs
+`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md` (acceptance A22). The **runtime view**'s
+§3 `entryRoots` paragraph, its §7 heading (the store is now v30) and a new §7 `plan_roots` row, and the **state-ownership
+view**'s new plan-root row, say so. One table was added (store v30); no package, edge, process, message kind, channel or
+command changed.
+
 **The design Tag's kinds are the language's tones, and StatusDot paints its state (acceptance A40, R-067).** `Tag`
 takes the design Tag's seven kinds (`TAG_KINDS`: `accent`, `neutral`, `outline`, `run`, `wait`, `done`, `fail`) and joins a
 caller's class to `tag tag-<kind>` instead of letting it replace them; every caller names its tone by `kind`, and

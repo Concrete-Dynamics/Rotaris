@@ -3201,6 +3201,45 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         expect(dal.getLock(sid)).toBeUndefined();
       });
 
+      /*
+       * REQ-MONITOR-044/052 (acceptance A20, the verifier's finding on its repair): between a root's return and the end of
+       * the rest that waits for its children, the root's calls are in the total — they joined it with the root's outcome —
+       * and the run is still live. The run-level agent's figure there is the root's share alone, never that plus the
+       * tracker's count of the same calls (`Run.entryUncountedToolCalls` is cleared as its outcome is counted).
+       */
+      it('REQ-MONITOR-044/052: while the rest waits for a child after the root returned, the run-level agent\'s count holds the root\'s calls once', async () => {
+        // The root's two calls are recorded through the writer as the gate records them, so the tracker counts them too.
+        let ids = 0;
+        const recorded = (ctx: ToolPortContext, name: string, result: Promise<PortToolResult>): Promise<PortToolResult> => {
+          const open = { call_id: `r${++ids}`, agent_name: ctx.agentName, tool_name: name, args: {} };
+          const ordinal = ctx.writer.openToolCall(open);
+          return result.then((r) => { if (ordinal.ok) ctx.writer.settleToolCall(ordinal.value, open, { status: 'ok', elapsed_ms: 1, is_error: false, result: r.text }); return r; });
+        };
+        const tools: TestTool = (name, _a, ctx, builtIn) => {
+          if (name === 'hang') return new Promise<PortToolResult>(() => undefined);
+          if (name === 'slow') return recorded(ctx, name, new Promise<PortToolResult>((r) => { clock.after(millis(29_000), () => r({ text: 'slow', isError: false, status: 'ok', durationMs: 1, label: 'slow', args: {} })); }));
+          if (name === 'delegate' && ctx.agentName === 'orchestrator') return recorded(ctx, name, builtIn());
+          return undefined;
+        };
+        const snapshots: SessionRecord[] = [];
+        const publisher: Publisher = { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } };
+        const { sessions } = sessionsWith((persona, turn) => {
+          if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'stuck', task: 'TASK: stuck' } }, { callId: 's1', name: 'slow', args: {} }]) : answer('never');
+          return toolCalls([{ callId: 'h2', name: 'hang', args: {} }], 'Hanging.');
+        }, { tool: tools, publisher });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool' && r.tool_name === 'slow') && dal.residentRows(sid).some((r) => r.kind === 'tool' && r.tool_name === 'hang'));
+        expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+        // At 29 s the root has returned with its two calls; the rest still waits for the child's call, to 30 s.
+        expect(await endsAfter(sessions, sid, 29_000)).toBe(false);
+        expect(dal.getSession(sid)!.tool_calls).toBe(2);
+        sessions.owner(sid)!.reconcile();
+        const resting = snapshots.at(-1)!;
+        expect(resting.toolCalls.total).toBe(2);
+        expect(resting.entryToolCalls).toBe(2);
+        expect(await endsAfter(sessions, sid, 1_000)).toBe(true);
+      });
+
       it('REQ-SESSION-094: the root\'s call that returns after the run ended writes nothing more into the finished session', async () => {
         let finish!: (r: PortToolResult) => void;
         const late: TestTool = (name) => (name === 'hang' ? new Promise<PortToolResult>((r) => { finish = r; }) : undefined);

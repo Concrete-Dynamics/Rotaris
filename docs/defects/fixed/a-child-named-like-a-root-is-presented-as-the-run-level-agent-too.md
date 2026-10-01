@@ -22,6 +22,15 @@ root's names.
 
 Found by the fifth review of that repair as a lesser finding, and confirmed by reading the code on 2026-09-29. Not driven.
 
+**The engine's figures share the collision (added 2026-10-01).** The writer's activity tracker is keyed by an agent's name
+(`AgentActivity`, `packages/engine/src/children/activity.ts`), and the run-level agent's live figures are read from it under
+the name the root dispatches as (`Run.rootName`): its called and active tools (`Run.entryTools`, `entryToolsOf`) and, since
+the repair of A20, the calls its live root has not yet counted (`Run.entryUncountedToolCalls`, read into
+`SessionRecord.entryToolCalls`). A grandchild whose canonical name equals the root's persona has its calls entered under
+the same key, so while the root's execution runs they are counted in the run-level agent's live figure and its chips too.
+The persisted half is not affected: it subtracts every child's own `children.tool_calls`. Found by the verification of the
+A20 repair as a lesser finding, and confirmed by reading the code. Not driven. It was recorded on its branch while the ledger repair below was built on another, and the two met at the merge: that repair covers it, since `ChildLedger.spawn` now keeps every child off its root's persona, the name (`Run.rootName`) the tracker reads the run-level agent's live figures under, so no child's calls enter under that key.
+
 **Outcome.** Repaired 2026-10-01 under R-067 (acceptance finding A23), by the note's second route: the ledger keeps every
 child off every root's names. Confirmed first on the branch by two failing cases: a grandchild the model named
 `orchestrator` under a root of that name was recorded `orchestrator`, and a grandchild named `Lead Planner` under a root
@@ -58,3 +67,5 @@ artifacts) is not met either. REQ-ORCH-044 makes a name unique only under its pa
 - `packages/ui/src/TranscriptSurface.tsx` — `scopedRows`.
 - `packages/engine/src/children/ledger.ts` — `ChildLedger.spawn`'s sibling names, which hold the current root's canonical
   name for a root's child only.
+- `packages/engine/src/children/activity.ts` — `AgentActivity`, keyed by name; `packages/engine/src/run/run.ts` —
+  `Run.entryTools` and `Run.entryUncountedToolCalls`, which read it under `rootName`.

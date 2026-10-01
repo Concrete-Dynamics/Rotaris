@@ -61,8 +61,9 @@ root's publish, recorded under its canonical name since the repair of
 [`a-roots-publish-names-its-persona-as-its-author.md`](a-roots-publish-names-its-persona-as-its-author.md), was then no
 agent's while the user reviewed the plan. On `main` it had carried the persona the surfaces know the run-level agent by.*
 A plan cycle's root that published nothing is still named only while its run is live. For a persona the canonicaliser
-rewrites, an artifact such a root only read is then not the run-level agent's received link. That residual is open in
-[`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`](../a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md).
+rewrites, an artifact such a root only read is then not the run-level agent's received link. That residual was recorded in
+[`a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md`](a-plan-cycles-root-that-publishes-nothing-is-named-only-while-its-run-is-live.md),
+repaired 2026-10-01 under R-067: every plan cycle's root is recorded when it starts (`plan_roots`, store v30).
 
 The run-level agent owns a named row when the row carries the entry persona or any root's name, and never by a named row's
 persona column, which a child of the entry persona shares (`ownRow` in `packages/ui/src/agents.ts`). That rule serves

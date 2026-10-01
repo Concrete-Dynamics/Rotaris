@@ -62,7 +62,8 @@ export interface CaptureHost {
 export type CaptureReply = ProcessReply;
 
 /**
- * One step of a capture script: `selector>>arg@ms`, or `selector>>arg@~ms` for the waiting form.
+ * One step of a capture script: `selector>>arg@ms`, or `selector>>arg@~ms` for the waiting form, or
+ * `selector>>arg@from~ms` for the waiting form that starts waiting at `from`.
  *
  * `selector` carries whatever the step's own variable means by it — a CSS selector for a click, the
  * text for a typed step, a path for a photograph, a JSON document for a notice. `arg` is the
@@ -85,17 +86,28 @@ export interface CaptureStep {
    * 2026-09-12: 4/5 green quiet, 1/4 green under load).
    */
   readonly until: boolean;
+  /**
+   * `@from~ms`: the waiting form, but the wait STARTS at `from` — nothing before it is looked at. Present only on that
+   * form. It is for a press that must follow another step, where the selector says the other step has had its effect
+   * and could also be true before that step ran: `part-j-proof`'s steer-rest Pause, whose selector (no steer dialog
+   * open) holds from the moment the run starts, and which must wait for the dialog the Steer opened to close again.
+   * The `~ms` form pressed it as the run started, racing the Steer
+   * (`docs/defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`).
+   */
+  readonly from?: number;
 }
 
-/** `"a@100;;b>>c@~200"` — the whole grammar, and the only place it is read. */
+/** `"a@100;;b>>c@~200;;d@150~900"` — the whole grammar, and the only place it is read. */
 export function parseSteps(raw: string | undefined): CaptureStep[] {
   return (raw ?? '').split(';;').map((s) => s.trim()).filter((s) => s !== '').map((s) => {
     const rawAt = s.slice(s.lastIndexOf('@') + 1);
-    const until = rawAt.startsWith('~');
-    const at = Number(until ? rawAt.slice(1) : rawAt);
+    const tilde = rawAt.indexOf('~');
+    const until = tilde !== -1;
+    const at = Number(until ? rawAt.slice(tilde + 1) : rawAt);
     const body = s.slice(0, s.lastIndexOf('@'));
     const sep = body.indexOf('>>');
-    return { selector: sep === -1 ? body : body.slice(0, sep), arg: sep === -1 ? null : body.slice(sep + 2), at, until };
+    const step = { selector: sep === -1 ? body : body.slice(0, sep), arg: sep === -1 ? null : body.slice(sep + 2), at, until };
+    return tilde > 0 ? { ...step, from: Number(rawAt.slice(0, tilde)) } : step;
   });
 }
 
@@ -252,10 +264,15 @@ export async function pressCategory(host: CaptureHost, label: string, timeoutMs:
   }
 }
 
-/** Resolves when the step's selector (and its optional exact text) matches, or at the deadline. Never throws. */
+/**
+ * Resolves when the step's selector (and its optional exact text) matches, or at the deadline. Never throws. A step
+ * with `from` looks at nothing before `from`; its deadline is still `at`, counted from the same start.
+ */
 export async function settleAt(host: CaptureHost, step: CaptureStep): Promise<void> {
   if (!step.until) { await pause(host, step.at); return; }
-  const deadline = Date.now() + step.at;
+  const from = step.from ?? 0;
+  if (from > 0) await pause(host, from);
+  const deadline = Date.now() + Math.max(0, step.at - from);
   const probe = matchProbe(step.selector, step.arg);
   for (;;) {
     const hit = await host.win.webContents.executeJavaScript(probe).catch(() => false) as boolean;

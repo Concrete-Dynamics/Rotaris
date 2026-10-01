@@ -72,6 +72,7 @@
     "migrate:ui-primitives": "node tools/migrate-ui-primitives.mjs",
     "theme-proof:counterfactual:text": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=text",
     "theme-proof:counterfactual:focus": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=focus",
+    "theme-proof:counterfactual:offscreen": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=offscreen",
     "package": "pnpm --filter @rotaris/desktop package",
     "release:guard": "node tools/release-guard/cli.mjs",
     "notices": "node tools/notices/generate.mjs",

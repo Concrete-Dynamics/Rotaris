@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { categoryProbe, chordEvent, matchProbe, parseSelectors, parseSteps, selectWait, targetProbe } from './host.js';
+import { FakeClock } from '@rotaris/kernel';
+import type { CaptureHost } from './host.js';
+import { categoryProbe, chordEvent, matchProbe, parseSelectors, parseSteps, selectWait, settleAt, targetProbe } from './host.js';
 
 /**
  * The capture script's grammar, which every `*-proof` script writes and which — until this module
@@ -76,6 +78,16 @@ describe('the capture script grammar (verification seams)', () => {
     expect(parseSteps('[data-x="~a"]@50')[0]!.until).toBe(false);
   });
 
+  it('reads `@from~ms` as the waiting form whose wait starts at `from`, and only that form carries `from`', () => {
+    // part-j-proof's steer-rest Pause: no steer dialog open is true from the run's start, so the wait must start after
+    // the Steer was pressed (docs/defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md).
+    const [late] = parseSteps('body:not(:has(.dialog.steer)) .pause@3800~9000');
+    expect(late).toEqual({ selector: 'body:not(:has(.dialog.steer)) .pause', arg: null, at: 9000, until: true, from: 3800 });
+    expect(parseSteps('.x>>Go@~900')[0]).not.toHaveProperty('from');
+    expect(parseSteps('.x>>Go@900')[0]).not.toHaveProperty('from');
+    expect(parseSteps('[data-x="1~2"]>>a@0~50')[0]).toEqual({ selector: '[data-x="1~2"]', arg: 'a', at: 50, until: true, from: 0 });
+  });
+
   it('waits a select step on the control alone, keeping its deadline, because its argument is the value to choose', () => {
     const [waiting] = parseSteps('select[aria-label="Egress policy"]>>deny@~6000');
     // The waiting form survives: a select drawn late is chosen when it appears, not missed at an instant.
@@ -95,5 +107,44 @@ describe('the capture script grammar (verification seams)', () => {
     expect(probe).toContain(`.nav-list__item`);
     // The verification half: without it a deflected press reads exactly like a landed one.
     expect(probe).toContain(`classList.contains('is-selected')`);
+  });
+});
+
+/**
+ * The waiting form's start (`@from~ms`): the step looks at nothing before `from`, so a selector already true at the
+ * launch is not taken for the effect of the step it follows
+ * (`docs/defects/fixed/part-j-proofs-steer-rest-presses-pause-as-soon-as-the-run-starts.md`).
+ */
+describe('settleAt — when the waiting form starts looking', () => {
+  const flush = async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); };
+  const harness = () => {
+    const clock = new FakeClock();
+    const probes: string[] = [];
+    const host = { win: { webContents: { executeJavaScript: (code: string) => { probes.push(code); return Promise.resolve(true); } } }, clocks: clock, log: () => undefined } as unknown as CaptureHost;
+    return { clock, probes, host };
+  };
+
+  it('`@~ms` looks at once: a selector true at the launch settles the step at the launch', async () => {
+    const { probes, host } = harness();
+    let settled = false;
+    void settleAt(host, parseSteps('.pause@~9000')[0]!).then(() => { settled = true; });
+    await flush();
+    expect(probes).toHaveLength(1);
+    expect(settled).toBe(true);
+  });
+
+  it('`@from~ms` looks at nothing before `from`, then settles on the first match', async () => {
+    const { clock, probes, host } = harness();
+    let settled = false;
+    void settleAt(host, parseSteps('.pause@3800~9000')[0]!).then(() => { settled = true; });
+    await flush();
+    clock.advance(3_799);
+    await flush();
+    expect(probes).toHaveLength(0);
+    expect(settled).toBe(false);
+    clock.advance(1);
+    await flush();
+    expect(probes).toHaveLength(1);
+    expect(settled).toBe(true);
   });
 });

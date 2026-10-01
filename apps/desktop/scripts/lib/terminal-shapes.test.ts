@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
 // @ts-expect-error — the shapes are plain ESM beside the script that replays them.
-import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, replacedShellReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, replacedShellReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
 
 interface Shape { readonly id: string; readonly match: RegExp; readonly command: string; readonly prompt?: string }
 
@@ -35,9 +35,11 @@ describe('the terminal shapes the live run replays', () => {
         // `replaces-shell` (PowerShell has no `exec`), and it comes first so `unexpandable` shows which shell followed it.
         // Live-run L2's `poll` follows the wedge on both.
         // The interrupt (OQ-147) follows the poll on both, and its prompt asks for the poll after it.
+        // `ends-shell` (OQ-144's sibling case) is POSIX only here, and the wedge after it is the call that must report the
+        // respawn.
         expect(shapes.map((s) => s.id)).toEqual(platform === 'win32'
           ? ['here-string', 'long-output', 'wedge', 'poll', 'interrupt', 'failed-word', 'diff-exit-1', 'pipe-to-shell']
-          : ['here-string', 'long-output', 'replaces-shell', 'unexpandable', 'wedge', 'poll', 'interrupt', 'failed-word', 'diff-exit-1', 'pipe-to-shell']);
+          : ['here-string', 'long-output', 'replaces-shell', 'unexpandable', 'ends-shell', 'wedge', 'poll', 'interrupt', 'failed-word', 'diff-exit-1', 'pipe-to-shell']);
       });
 
       it('matches its own command — the round trip the scenario depends on', () => {
@@ -235,6 +237,27 @@ describe('the shell replacement the replaces-shell shape replays (acceptance A9,
     expect(replacedShellReading(restarted, 30_000).kind).toBe('paused');
     expect(replacedShellReading(notFound, 12)).toMatchObject({ kind: 'not-replaced', exit: 127 });
     expect(replacedShellReading(`[terminal_output]\n(no output)\n${diagnostic({ failure_kind: 'execution_error', outcome_kind: 'execution_error' })}`, 5).kind).toBe('other');
+  });
+});
+
+describe('the shell exit the ends-shell shape replays (OQ-144\'s sibling case)', () => {
+  /*
+   * `docs/defects/fixed/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md`: `exit 3` read as a soft pause after
+   * the whole no-output window (3,007 ms against a 3 s window, measured when it was recorded). The repaired product ends
+   * such a call at once as an `execution_error` with no exit code, and respawns the shell.
+   */
+  const diagnostic = (fields: Record<string, unknown>) => `[terminal_diagnostic] ${JSON.stringify({ backend: 'single-session', command: 'exit 3', timeout: false, timeout_seconds: 100, warnings: [], ...fields })}`;
+  const detail = "Terminal execution failed before completion: the command ended the session's shell (as `exit` or a signal to the shell does), so the command never returned and has no exit code. The terminal session was restarted with `/bin/sh`.";
+  const restarted = `${detail}\n[terminal_output]\n(no output)\n${diagnostic({ detail, error_class: 'ExecutionError', failure_kind: 'execution_error', kill_status: 'session_reset', outcome_kind: 'execution_error', outcome_severity: 'error' })}`;
+  const softPaused = `No output for 30 seconds …\n[terminal_output]\n(no output)\n${diagnostic({ detail: 'No output for 30 seconds in the merged terminal stream.', exit_code: -1, outcome_kind: 'soft_pause', outcome_severity: 'warning' })}`;
+  const ownExit = `The command exited with code 3.\n[terminal_output]\n(no output)\n${diagnostic({ detail: 'The command exited with code 3.', exit_code: 3, outcome_kind: 'shell_failure', outcome_severity: 'error' })}`;
+  it('credits the repair only for an at-once execution_error that says the shell ended; the defect\'s soft pause is a failure', () => {
+    expect(endedShellReading(restarted, 31)).toMatchObject({ kind: 'restarted', exit: null, killStatus: 'session_reset' });
+    expect(endedShellReading(softPaused, 30_007)).toMatchObject({ kind: 'paused', exit: -1 });
+    expect(endedShellReading(restarted, 30_000).kind).toBe('paused');
+    expect(endedShellReading(ownExit, 12)).toMatchObject({ kind: 'other', exit: 3 });
+    // The replaced shell's words are not this shape's.
+    expect(endedShellReading(restarted.replaceAll('ended the session', 'replaced the session'), 31).kind).toBe('other');
   });
 });
 

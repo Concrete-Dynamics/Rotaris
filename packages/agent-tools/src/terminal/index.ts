@@ -6,7 +6,7 @@ import type { Clocks } from '@rotaris/kernel';
 import { errorObservation, observation, type Observation, type ToolContext, type ToolExecutor } from '../tools/types.js';
 import { BackgroundManager, DEFAULT_BACKGROUND_TIMEOUT_S, type BackgroundOwner, type BackgroundSession } from './background.js';
 import { classifyOutcome, diagnosticBlock, outputSection, outputWarnings, renderAction, type FailureKind } from './classify.js';
-import { ForegroundSession, keystroke, type PtyFactory, type ShellBackend } from './foreground.js';
+import { ForegroundSession, keystroke, type PtyFactory, type RestoreOutcome, type ShellBackend } from './foreground.js';
 import { backgroundStreamId, foregroundStreamId, streamDisplayName } from '@rotaris/contracts';
 import { TerminalStreams } from './streams.js';
 import { xtermEmulatorFactory, type EmulatorFactory } from './emulator.js';
@@ -197,6 +197,18 @@ export class TerminalManager {
  * Truncated to the tenth, never rounded, so what an observation says it waited is never more than was measured: the
  * verifier's live run of 2026-09-29 read "1.7 seconds" for 1,686 ms under rounding.
  */
+/**
+ * PD-TOOLS-001's sentence for what a restart re-applied, with a leading space: the directory and the variables restored and
+ * the boundary that is not (aliases, functions, background jobs), a restore that failed, or nothing to restore.
+ */
+function restoreSentence(o: RestoreOutcome): string {
+  return o.status === 'restored'
+    ? ` The working directory and ${o.vars} exported variable${o.vars === 1 ? '' : 's'} were restored (${o.cwd}); aliases, functions and background jobs were not.`
+    : o.status === 'failed'
+      ? ' Restoring the working directory and variables failed; the session is at its defaults.'
+      : ' There was no earlier shell state to restore.';
+}
+
 export function seconds(ms: number): string {
   return ms < 100 ? 'under 0.1 seconds' : `${(Math.floor(ms / 100) / 10).toFixed(1)} seconds`;
 }
@@ -370,11 +382,7 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
       // PD-TOOLS-001 narrows what "lost" means after a reset: the cwd and exported variables snapshotted after the
       // last completed command are re-applied to the fresh shell, and the detail says so, plus the boundary:
       // aliases, functions and background jobs are not restored.
-      const restoreNote = r.restore.status === 'restored'
-        ? ` The working directory and ${r.restore.vars} exported variable${r.restore.vars === 1 ? '' : 's'} were restored (${r.restore.cwd}); aliases, functions and background jobs were not.`
-        : r.restore.status === 'failed'
-          ? ' Restoring the working directory and variables failed; the session is at its defaults.'
-          : ' There was no earlier shell state to restore.';
+      const restoreNote = restoreSentence(r.restore);
       if (failureKind === 'sandbox_unavailable') {
         detail = LAUNCHER_FAILED_DETAIL;
       } else if (r.timedOut) {
@@ -394,10 +402,22 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
         // knows the shell the description names is the one its next call runs in (REQ-TOOLS-104).
         const restarted = r.killStatus === 'session_reset' ? `the terminal session was restarted with \`${manager.backend.file}\`, the shell this tool runs commands in.` : 'restarting the terminal session failed.';
         detail = `Terminal execution failed before completion: ${r.error} (as \`exec <program>\` does), so the command never returned and has no exit code. The program was ended and ${restarted}${r.killStatus === 'session_reset' ? restoreNote : ''} Run a program without \`exec\`, or with background=true if it keeps running.`;
+      } else if (r.shellEnded) {
+        // OQ-144 (the shell-exit case): REQ-TOOLS-103's failure before completion, as for a replaced shell, and what became
+        // of the session. A poll whose session a later call had respawned already restarts nothing (`killStatus` null).
+        const restarted = r.killStatus === 'session_reset'
+          ? ` The terminal session was restarted with \`${manager.backend.file}\`.${restoreNote}`
+          : r.killStatus === 'reset_failed' ? ' Restarting the terminal session failed.' : ' The terminal session has been restarted since.';
+        detail = `Terminal execution failed before completion: ${r.error} (as \`exit\` or a signal to the shell does), so the command never returned and has no exit code.${restarted}`;
       } else if (r.error) {
         detail = `Terminal execution failed before completion: ${r.error}`;
       } else {
         detail = `${resetNote ? `${resetNote} ` : ''}The command exited with code ${r.exitCode}.${warnings.length ? ` ${warnings.join(' ')}` : ''}`;
+      }
+      if (r.respawned) {
+        // OQ-144 (the shell-exit case): the session's shell had ended between calls, so this call respawned it before its
+        // command ran, and says what that cost; `session_reinitialized` is true below.
+        detail = `The session's shell had ended since the previous call, so this command ran in a fresh shell.${restoreSentence(r.respawned)} ${detail}`;
       }
       const diag = diagnosticBlock({
         backend: BACKEND_NAME, command: a.command, detail, exit_code: r.exitCode, failure_kind: failureKind, kill_status: r.killStatus, outcome_kind: outcomeKind, outcome_severity: severity,

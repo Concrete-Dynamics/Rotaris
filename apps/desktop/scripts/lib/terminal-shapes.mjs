@@ -21,7 +21,7 @@ const PAD = 'x'.repeat(100);
 export const LONG_OUTPUT_LINES = 40;
 
 /**
- * The shapes, in the dialect of one platform: eight on Windows, ten elsewhere.
+ * The shapes, in the dialect of one platform: eight on Windows, eleven elsewhere.
  *
  * `match` is a pattern rather than a substring because the question is whether the SHAPE was issued, not
  * whether the model reproduced this file's whitespace. Too strict and a call that happened reads as a call that
@@ -76,6 +76,12 @@ export function terminalShapes(platform = process.platform) {
       // once read as a soft pause, exit −1, after 30 s. POSIX only: PowerShell has no such expansion, and its wrapper's `try` is the
       // guard this one was modelled on.
       { id: 'unexpandable', match: /PIPESTATUS/, command: `printf '%s\\n' ran; echo "EXIT=\${PIPESTATUS[0]}"` },
+      // `docs/defects/fixed/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md` (OQ-144's sibling case): a
+      // command that ENDS the session's shell never prints the end frame, because the shell that would print it is gone, so
+      // it read as a soft pause after 30 s and the next call ran in a fresh shell reporting `session_reinitialized` false.
+      // The shape after it (the wedge) is the next call, which must say the session was reinitialized. POSIX only here:
+      // PowerShell's `exit` takes the same path in the product, reasoned and not run on a Windows host.
+      { id: 'ends-shell', match: /^\s*exit\s+3\s*$/, command: 'exit 3' },
       ...common,
       { id: 'pipe-to-shell', match: /\|\s*(?:sh|bash|zsh)\b/, command: "git status --porcelain | sh -c 'head -5'" },
     ];
@@ -164,6 +170,22 @@ export function replacedShellReading(result, elapsedMs) {
   const restarted = !paused && exit === null && d?.failure_kind === 'execution_error' && /replaced the session's shell/.test(String(d?.detail ?? ''));
   const notReplaced = !paused && !restarted && exit !== null;
   return { kind: paused ? 'paused' : restarted ? 'restarted' : notReplaced ? 'not-replaced' : 'other', exit, killStatus: d?.kill_status ?? null };
+}
+
+/**
+ * What the `ends-shell` shape (OQ-144's sibling case) met, read from one recorded observation.
+ *
+ * - `restarted`: the call ended inside the no-output window as an `execution_error` with no exit code, and its detail
+ *   says the command ended the session's shell — the product saw the shell go and respawned it.
+ * - `paused`: the call soft-paused, or returned exit −1, or took the whole no-output window — the defect's signature, a FAIL.
+ * - `other`: none of those (an exit code of its own: the shell was not ended) — a NOTE.
+ */
+export function endedShellReading(result, elapsedMs) {
+  const d = diagnosticOf(result);
+  const exit = typeof d?.exit_code === 'number' ? d.exit_code : null;
+  const paused = d?.outcome_kind === 'soft_pause' || exit === -1 || !(Number.isFinite(elapsedMs) && elapsedMs < 30_000);
+  const restarted = !paused && exit === null && d?.failure_kind === 'execution_error' && /ended the session's shell/.test(String(d?.detail ?? ''));
+  return { kind: paused ? 'paused' : restarted ? 'restarted' : 'other', exit, killStatus: d?.kill_status ?? null };
 }
 
 /**

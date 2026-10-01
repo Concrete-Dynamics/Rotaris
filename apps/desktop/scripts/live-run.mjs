@@ -63,7 +63,8 @@
  *                 so the ladder half costs nothing but retries.
  *   8. terminal  — the TERMINAL under duress, one run, the named shapes replayed from the record: a
  *                 multi-line here-string, forty lines of long output, off Windows an `exec bash` that replaces the
- *                 session's shell (acceptance A9) and a bash-ism `/bin/sh` cannot expand (live-run L1), a wedge
+ *                 session's shell (acceptance A9), a bash-ism `/bin/sh` cannot expand (live-run L1) and an `exit 3`
+ *                 that ends the session's shell (OQ-144's sibling case), a wedge
  *                 with no `timeout` supplied, one poll of it and a `C-c` with a poll after it (OQ-147),
  *                 an exit-0 output carrying docker's lower-case `failed to connect` line, a `git diff` with
  *                 differences exiting 1, and a read-only git pipeline through a pipe. Asserted from
@@ -116,7 +117,7 @@ import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsola
 import { startRecordingProxy } from './lib/model-traffic.mjs';
 import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
 import { attributeWait, commandsReading, compressionNote, compressionTrigger, deadlineReading, silentFailedChildren, trafficCall, waitRanOutAt } from './lib/duress-checks.mjs';
-import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, replacedShellReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, replacedShellReading, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -1747,6 +1748,7 @@ if (wanted.includes('faults')) {
  * | `long-output`   | the concatenation above, and the agent's capture VT-stripped where the window's was not |
  * | `replaces-shell` | acceptance finding A9 — `a-command-that-replaces-the-shell-reads-as-a-soft-pause.md`: `exec bash` kept the pid and never returned to the end frame, so it read as a soft pause and every later call ran under bash (POSIX only; OQ-144) |
  * | `unexpandable`  | live-run finding L1 — `a-posix-command-that-fails-to-expand-loses-its-end-marker.md`: a bash-ism dash cannot expand abandoned the wrapper's end frame, so a finished command read as a soft pause (POSIX only) |
+ * | `ends-shell`    | `a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md` (OQ-144's sibling case): `exit 3` ended the shell, so no end frame printed and it read as a soft pause, and the next call ran in a fresh shell reporting `session_reinitialized` false (POSIX only) |
  * | `wedge`         | `hardMs` passed and read nowhere: a call supplying no `timeout` had the soft pause and no hard cap (REQ-TOOLS-097) |
  * | `poll`          | live-run finding L2 — `an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md`: an empty poll returned at once and said thirty seconds had passed |
  * | `interrupt`     | `a-poll-after-c-c-says-the-interrupted-command-is-still-running.md` (OQ-147): `C-c` with `is_input`, REQ-TOOLS-098's other advice, and the poll after it read "still running" over a process the interrupt had ended |
@@ -1864,6 +1866,31 @@ if (wanted.includes('terminal')) {
         check(d?.outcome_kind !== 'soft_pause' && d?.exit_code !== -1, 'a command sh could not expand ended with its own status, not a soft pause', `outcome ${d?.outcome_kind ?? 'none'}, exit ${d?.exit_code ?? 'none'}`);
         check(Number.isFinite(elapsed) && elapsed < 30_000, 'it ended inside the no-output window rather than after it', `${Number.isFinite(elapsed) ? Math.round(elapsed) : '?'} ms`);
         check(/\bran\b/.test(reading.printed), 'what the line printed before its error came back', `output ${JSON.stringify(reading.printed.slice(0, 120))}`);
+      }
+    }
+  }
+
+  // OQ-144's sibling case: a command that ends the session's shell ends at once as an execution_error, the shell is
+  // respawned, and the same agent's next call says the session was reinitialized. POSIX only (`terminalShapes`).
+  if (shapeOf('ends-shell') !== undefined) {
+    const ended = attempted('ends-shell')[0];
+    if (ended === undefined) noted('the shell exit was not attempted', 'no terminal call carried `exit 3`; the exit watch is unasked');
+    else {
+      const d = diagnosticOf(ended.result);
+      const elapsed = ended.elapsedMs ?? NaN;
+      const reading = endedShellReading(ended.result, elapsed);
+      const said = `outcome ${d?.outcome_kind ?? 'none'}, exit ${d?.exit_code ?? 'none'}, ${Number.isFinite(elapsed) ? Math.round(elapsed) : '?'} ms`;
+      if (reading.kind === 'other') noted('`exit 3` met neither a respawn nor a pause', said);
+      else {
+        check(reading.kind !== 'paused', 'a command that ended the shell did not read as a soft pause', said);
+        check(reading.kind === 'restarted', 'it ended at once as an execution_error that says the shell ended', said);
+        if (reading.kind === 'restarted') {
+          check(reading.killStatus === 'session_reset', 'the shell was respawned', `kill_status ${reading.killStatus ?? 'none'}`);
+          // Only the SAME agent's next call ran in the respawned shell: each agent's foreground session is its own (REQ-TOOLS-187).
+          const next = terminals.find((call) => call.ordinal > ended.ordinal && call.agent_name === ended.agent_name && call.args.is_input !== true && call.args.background !== true && call.args.session_action === undefined && String(call.args.command ?? '') !== '');
+          if (next === undefined) noted('no later command of the same agent followed the shell exit', 'what the next call reports is unasked');
+          else check(diagnosticOf(next.result)?.session_reinitialized === true, 'the next command the same agent issued reported the session reinitialized', `ordinal ${next.ordinal}: session_reinitialized ${String(diagnosticOf(next.result)?.session_reinitialized ?? 'absent')}`);
+        }
       }
     }
   }

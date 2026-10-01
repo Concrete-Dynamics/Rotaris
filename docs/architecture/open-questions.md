@@ -6635,6 +6635,35 @@ REQ-TOOLS-101 does not list), answered as built, or adopted — the session carr
 description then no longer naming the shell the next command runs in; and whether the call's code is `execution_error`
 with no exit code, as built, or something REQ-TOOLS-179 names.
 
+**The sibling case, a command that ENDS the session's shell** *(added 2026-10-01 by the repair of
+[`a-command-that-exits-the-session-shell-reads-as-a-soft-pause`](../defects/fixed/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md);
+the same question by another road, raised with this reading built and not ruled)*. `exit`, `exit 3`, `logout` or a
+`kill -9 $$` loses the end frame as a replacement does, because the shell that would print it is gone; the call read as a
+soft pause after the whole no-output window, and the next call ran in a fresh shell with the directory and variables
+gone while it reported `session_reinitialized` false. The build now proceeds under the replacement's reading, extended:
+- **The running call ends when the PTY reports the shell's exit** (`ForegroundSession.shellExited`; node-pty emits it
+  once the PTY's output is drained, so what the command wrote first is in the capture). It is REQ-TOOLS-103's failure
+  before completion: `execution_error`, `ExecutionError`, no exit code, and a detail that says the command ended the
+  session's shell. Nothing is killed, since the shell has gone. The session is respawned on its shell with PD-TOOLS-001's
+  snapshot re-applied, `kill_status` `session_reset` (or `reset_failed` when no shell could be started), and the detail
+  names what was restored. The next call reports `session_reinitialized` true. Measured with dash through a real PTY, three runs
+  at a load average of about 3.4: `exit 3` ended the call in 16 to 37 ms and `kill -9 $$` in 12 to 18 ms. Before the
+  repair both took the case's whole 3 s no-output window.
+- **A soft-paused command that ends the shell** is closed with no status of its own. The poll that hands it over reports
+  it the same way, as `the paused command ended the session's shell`, and respawns the shell then. A later call that met
+  the ended shell first has respawned it already, and that poll reports `kill_status` null and says the session has been
+  restarted since.
+- **A shell that ended between calls**, with no call waiting on it (keystrokes the agent or the terminal window wrote,
+  an outside signal), is respawned by the next call before its command is written, with the snapshot re-applied. That
+  call reports `session_reinitialized` true, and its detail opens by saying that the shell had ended and what was restored.
+- **Nothing here depends on `/proc`.** The exit is the PTY's own event, so the reading holds on every host and both
+  backends. PowerShell's `exit` takes the same path, which is reasoned and not run on a Windows host.
+
+The two cases "REQ-TOOLS-097/098/100/103 (OQ-144): a command that ends the session's shell …" and "REQ-TOOLS-098/100/103
+(OQ-144): a soft-paused command that ends the shell …" in `terminal/terminal.test.ts` pin it, and both are red on the
+unrepaired code (`soft_pause`). A ruling on this question rules this case too: whether ending the shell is refused,
+answered as built, or left to end the session; and which code the call carries.
+
 **OQ-145 — Whose grant does a persona's `tool_restrictions` map narrow, and what do its keys and lists mean?**
 *(REQ-TOOLS-006 (4), "the per-persona `tool_restrictions` map"; REQ-CONFIG-103, "map from name to allowed-tool list …
 restricts named entities; an entity absent from the map is unrestricted"; REQ-CONFIG-062, which canonicalises "every key

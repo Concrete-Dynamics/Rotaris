@@ -421,6 +421,21 @@ call is now opened in the same turn as the pause, before the listener goes and t
 "REQ-TOOLS-098/179: output and the end frame a command writes while its soft pause is handed over …" in
 `terminal.test.ts`, red on the old order in both its halves.*
 
+*Reported back 2026-10-01, the repair of
+[`a-command-that-exits-the-session-shell-reads-as-a-soft-pause`](../../defects/fixed/a-command-that-exits-the-session-shell-reads-as-a-soft-pause.md)
+(OQ-144's sibling case): **the marker protocol also assumed that the shell outlives the command.** A command that ends
+the shell (`exit 3`, `kill -9 $$`) loses the end frame as a replacement does, because the shell that would print it is
+gone. The PTY's exit only made the session forget the PTY, so the call soft-paused after the whole window, and the next
+call ran in a fresh shell with the directory and variables gone while it reported `session_reinitialized` false. The
+shell's exit is now an event of the session (`shellExited`): a running call ends at once as an `execution_error` with no
+exit code, a soft-paused call is closed for its poll to hand over the same way, and the shell is respawned with
+PD-TOOLS-001's snapshot re-applied by the first of them to meet it, or by the next call when the shell ended between calls.
+That call says so. Measured with dash through a real PTY: `exit 3` ended the call in 16 to 37 ms and `kill -9 $$` in 12 to
+18 ms (three runs each), where both had taken the case's whole 3 s window. The reading is OQ-144's, extended in place
+([OQ-144](../open-questions.md)). It is pinned by two "(OQ-144)" cases in `terminal.test.ts` beside A9's, both red on the
+unrepaired code. Unlike the replacement watch it needs no `/proc`, so it holds off Linux too, but no other host has run
+it.*
+
 *Reported back 2026-09-30 (R-067), from the verifier's live run of the `fix-terminal-output` branch
 ([`a-command-that-replaces-the-shell-reads-as-a-soft-pause`](../../defects/fixed/a-command-that-replaces-the-shell-reads-as-a-soft-pause.md),
 acceptance finding A9): **the marker protocol's premise — that the shell which printed the start frame is the one left

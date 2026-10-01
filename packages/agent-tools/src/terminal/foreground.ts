@@ -57,6 +57,17 @@ export interface ForegroundResult {
   readonly waited?: { readonly sinceObservedMs: number; readonly silentMs: number };
   /** OQ-144: the command replaced the session's shell; the program was ended and the shell restarted. */
   readonly replaced?: true;
+  /**
+   * OQ-144 (the shell-exit case): the command — or, on a poll, the paused command — ended the session's shell (`exit`, a
+   * signal to it); the shell was respawned with PD-TOOLS-001's snapshot re-applied, or, on a poll whose session had been
+   * respawned already by a later call, nothing more was done (`killStatus` null).
+   */
+  readonly shellEnded?: true;
+  /**
+   * OQ-144 (the shell-exit case): the session's shell had ended between calls — no call was waiting on it — so this call
+   * respawned it, re-applied PD-TOOLS-001's snapshot, and ran in the fresh shell; what the restore did.
+   */
+  readonly respawned?: RestoreOutcome;
 }
 
 /**
@@ -108,6 +119,10 @@ export const REPLACED_ERROR = 'the command replaced the session\'s shell';
 const KILLED_ERROR = 'the command was killed from the terminal window';
 /** The error a call carries when its run cancelled it (the tool context's signal). */
 const CANCELLED_ERROR = 'the call was cancelled';
+/** OQ-144 (the shell-exit case): the error a call carries when its command ended the session's shell. */
+export const SHELL_ENDED_ERROR = 'the command ended the session\'s shell';
+/** OQ-144 (the shell-exit case): the error a poll carries when the soft-paused command ended the session's shell. */
+export const PAUSED_SHELL_ENDED_ERROR = 'the paused command ended the session\'s shell';
 
 export const FOREGROUND_CAP = 100_000;
 /**
@@ -221,6 +236,8 @@ interface ActiveCall {
    */
   closer: string | null;
   readonly onCloser?: () => void;
+  /** OQ-144 (the shell-exit case): the session's shell ended while this call ran — `exit`, a signal to the shell. */
+  readonly onShellExit?: () => void;
 }
 
 /** A call that soft-paused (REQ-TOOLS-098): its screen keeps filling and a later poll reads what is new. */
@@ -262,6 +279,8 @@ interface PausedCall {
   lastOutputAt: number;
   /** Monotonic time of the previous observation of the command: its soft pause, then each poll (live-run L2). */
   observedAt: number;
+  /** OQ-144 (the shell-exit case): the session's shell ended while the command was paused, so it has no status of its own. */
+  endedShell: boolean;
 }
 
 /**
@@ -693,6 +712,13 @@ export class ForegroundSession {
    * place. Null for a shell that has not answered yet, and wherever `/proc` does not say; the watch is off then.
    */
   private shellIdentity: string | null = null;
+  /**
+   * OQ-144 (the shell-exit case, `a-command-that-exits-the-session-shell-reads-as-a-soft-pause`): the session's shell ended
+   * on its own — a command's `exit`, a signal to the shell — rather than by `resetNow` or `dispose`, and has not been
+   * respawned with PD-TOOLS-001's snapshot yet. Whoever meets it first respawns it (`respawnAfterShellEnded`): the call that
+   * was running, the poll that hands the paused command over, or the next call.
+   */
+  private shellEnded = false;
 
   constructor(private readonly deps: SessionDeps, id?: string) {
     this.id = id ?? `ts_${randomBytes(4).toString('hex')}`;
@@ -762,10 +788,60 @@ export class ForegroundSession {
     // A fresh shell's input holds nothing: whatever was typed into the last one went with it.
     this.typeahead = false;
     p.onData((d) => this.onData(d));
-    p.onExit(() => { if (this.pty === p) this.pty = null; });
+    p.onExit(() => this.shellExited(p));
     this.pty = p;
     this.shellIdentity = null;
     return p;
+  }
+
+  /**
+   * OQ-144 (the shell-exit case, `a-command-that-exits-the-session-shell-reads-as-a-soft-pause`): the session's shell ended
+   * while it was still the session's — `resetNow` and `dispose` forget the PTY before they end it, so theirs never reach
+   * here. A command that ends the shell (`exit 3`, `kill -9 $$`) never prints its end frame, because the shell that would
+   * print it is gone; before this, only the PTY was forgotten, the running call waited out the no-output window and read as
+   * a soft pause about a process that had ended, and the next call ran in a fresh shell with the directory and variables
+   * gone while it reported `session_reinitialized` false. node-pty emits the exit once the PTY's output is drained, so what
+   * the command wrote before the shell went has been read. The running call ends at once (`onShellExit`); a soft-paused
+   * call is closed with no status of its own, for its poll to hand over.
+   */
+  private shellExited(p: PtyLike): void {
+    if (this.pty !== p) return;
+    this.pty = null;
+    this.shellIdentity = null;
+    this.shellEnded = true;
+    this.pendingText = '';
+    const paused = this.pausedCommand;
+    if (paused) {
+      if (paused.undecided !== '') paused.hold.push(paused.undecided);
+      paused.undecided = '';
+      paused.code = null;
+      paused.endedShell = true;
+      this.pausedDone = paused;
+      this.pausedCommand = null;
+      paused.onClose?.();
+    }
+    const a = this.active;
+    if (a) {
+      this.active = null;
+      a.onShellExit?.();
+    }
+  }
+
+  /**
+   * OQ-144 (the shell-exit case): a fresh shell for a session whose shell ended, with PD-TOOLS-001's snapshot re-applied as
+   * after a hard-timeout reset, and `reinitialized` set so the call that next runs a command reports it. `reset` is false
+   * when no shell could be started.
+   */
+  private async respawnAfterShellEnded(): Promise<{ readonly reset: boolean; readonly restore: RestoreOutcome }> {
+    this.shellEnded = false;
+    try {
+      this.ensure();
+    } catch (cause) {
+      this.deps.warn(`terminal session ${this.id} could not be restarted after its shell ended: ${String(cause)}`);
+      return { reset: false, restore: { status: 'failed' } };
+    }
+    this.reinitialized = true;
+    return { reset: true, restore: await this.restoreState() };
   }
 
   private onData(chunk: string): void {
@@ -889,10 +965,14 @@ export class ForegroundSession {
 
   private async execute(command: string, opts: { timeoutMs: number | null; hardMs?: number; signal?: AbortSignal }): Promise<ForegroundResult> {
     const { timers, monotonic } = this.deps;
+    // OQ-144 (the shell-exit case): a shell that ended between calls — no call was waiting on it — is respawned here, with
+    // PD-TOOLS-001's snapshot re-applied, and this call says so (`respawned`, `session_reinitialized`).
+    const respawned = this.shellEnded ? await this.respawnAfterShellEnded() : null;
     let p = this.ensure();
     this.state = 'running';
     const reinit = this.reinitialized;
     this.reinitialized = false;
+    const withRespawn = (r: ForegroundResult): ForegroundResult => (respawned === null ? r : { ...r, respawned: respawned.restore });
     // OQ-144: a shell that has not answered yet has no identity to watch against — a fresh one, before its first
     // command. One no-op round trip on it gives one, read once the shell has printed the end frame and so is ours. A
     // shell busy with a soft-paused command cannot answer, and keeps what it had.
@@ -904,7 +984,7 @@ export class ForegroundSession {
       const trip = await this.runRaw(':', SNAPSHOT_TIMEOUT_MS, opts.signal).catch(() => null);
       if (trip?.cut?.kind === 'kill') {
         // `killActive` has ended the tree and restarted the session; the command was never written.
-        return { output: '', exitCode: -1, timedOut: false, softPaused: false, killStatus: trip.cut.reset ? 'session_reset' : 'reset_failed', error: KILLED_ERROR, sessionReinitialized: reinit, truncated: false, restore: { status: 'none' } };
+        return withRespawn({ output: '', exitCode: -1, timedOut: false, softPaused: false, killStatus: trip.cut.reset ? 'session_reset' : 'reset_failed', error: KILLED_ERROR, sessionReinitialized: reinit, truncated: false, restore: { status: 'none' } });
       }
       p = this.ensure();
     }
@@ -915,7 +995,7 @@ export class ForegroundSession {
       this.state = 'resetting';
       const reset = this.resetNow();
       const restore: RestoreOutcome = reset ? await this.restoreState() : { status: 'failed' };
-      return { output: '', exitCode: 124, timedOut: true, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: CANCELLED_ERROR, sessionReinitialized: reinit, truncated: false, restore };
+      return withRespawn({ output: '', exitCode: 124, timedOut: true, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: CANCELLED_ERROR, sessionReinitialized: reinit, truncated: false, restore });
     }
     const nonce = randomBytes(12).toString('hex');
     const start = `__rot_${nonce}_s`;
@@ -946,7 +1026,7 @@ export class ForegroundSession {
     // runs; the mark is carried into the soft pause, and a poll after it reads it as a C-c sent after the pause.
     let interrupted = false;
     let closer: string | null = null;
-    const done = new Promise<{ kind: 'exit'; code: number } | { kind: 'timeout' } | { kind: 'pause' } | { kind: 'abort' } | { kind: 'kill'; reset: boolean } | { kind: 'replaced' } | { kind: 'ended' }>((resolve) => {
+    const done = new Promise<{ kind: 'exit'; code: number } | { kind: 'timeout' } | { kind: 'pause' } | { kind: 'abort' } | { kind: 'kill'; reset: boolean } | { kind: 'replaced' } | { kind: 'ended' } | { kind: 'shellEnded' }>((resolve) => {
       let hard: TimerHandle | null = null;
       let soft: TimerHandle | null = null;
       let watch: TimerHandle | null = null;
@@ -971,6 +1051,7 @@ export class ForegroundSession {
           lookForEnd = timers.after(INTERRUPT_WATCH_MS as Millis, look);
         },
         onCloser: () => resolve({ kind: 'ended' }),
+        onShellExit: () => resolve({ kind: 'shellEnded' }),
       };
       this.active = active;
       // OQ-144 (acceptance A9): a command that replaces the shell — `exec bash` — keeps the pid and never returns to the
@@ -1036,7 +1117,7 @@ export class ForegroundSession {
       // call's start marker closes it (A10). `delivered` is what this call returns, set once the screen has it.
       // An interrupt that reached it while it ran is carried (OQ-147), and so is the no-op line already submitted for it,
       // whose printed marker then closes the paused call as a poll's own would.
-      paused = { start, end, screen, hold, delivered: '', undecided: '', code: null, until: null, interrupted, closer, onClose: null, lastOutputAt, observedAt: monotonic.now() };
+      paused = { start, end, screen, hold, delivered: '', undecided: '', code: null, until: null, interrupted, closer, onClose: null, lastOutputAt, observedAt: monotonic.now(), endedShell: false };
       this.pausedCommand = paused;
       this.active = null;
       this.state = 'idle';
@@ -1051,7 +1132,7 @@ export class ForegroundSession {
       // REQ-TOOLS-097's 100,000-character cap, truncated from the OLDEST end, over what the screen retained.
       let cut = screen.truncated || hold.dropped;
       if (text.length > FOREGROUND_CAP) { text = text.slice(-FOREGROUND_CAP); cut = true; }
-      return { ...r, output: text, truncated: cut, sessionReinitialized: reinit, restore: { status: 'none' } };
+      return withRespawn({ ...r, output: text, truncated: cut, sessionReinitialized: reinit, restore: { status: 'none' } });
     };
     if (outcome.kind === 'exit') {
       this.state = 'idle';
@@ -1083,6 +1164,19 @@ export class ForegroundSession {
     if (outcome.kind === 'kill') {
       // Part AL / REQ-SHELL-092: killed from the terminal window; the tree is gone and the session was restarted by `killActive`.
       const r = finish({ exitCode: -1, timedOut: false, softPaused: false, killStatus: outcome.reset ? 'session_reset' : 'reset_failed', error: KILLED_ERROR });
+      screen.dispose();
+      return r;
+    }
+    if (outcome.kind === 'shellEnded') {
+      // OQ-144 (the shell-exit case): the command ended the session's shell — `exit 3`, `kill -9 $$` — so it never returned
+      // to the line that would have printed its status. The call is REQ-TOOLS-103's failure before completion, as a
+      // replaced shell's is, and the session restarts on a fresh shell with PD-TOOLS-001's snapshot re-applied. Nothing is
+      // killed: the shell has gone already.
+      this.active = null;
+      this.state = 'resetting';
+      const { reset, restore } = await this.respawnAfterShellEnded();
+      this.state = 'idle';
+      const r: ForegroundResult = { ...finish({ exitCode: null, timedOut: false, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: SHELL_ENDED_ERROR }), restore, shellEnded: true };
       screen.dispose();
       return r;
     }
@@ -1139,6 +1233,13 @@ export class ForegroundSession {
       const out = await ForegroundSession.sincePoll(done);
       const truncated = done.screen.truncated || done.hold.dropped;
       done.screen.dispose();
+      if (done.endedShell) {
+        // OQ-144 (the shell-exit case): the paused command ended the session's shell. It has no exit status of its own, and
+        // the poll that hands it over respawns the shell, as the call that was running would have; a later call that met
+        // the ended shell first has respawned it already, and the poll reports that nothing more was done.
+        const respawn = this.shellEnded ? await this.respawnAfterShellEnded() : null;
+        return { output: out, exitCode: null, timedOut: false, softPaused: false, killStatus: respawn === null ? null : respawn.reset ? 'session_reset' : 'reset_failed', sessionReinitialized: false, truncated, error: PAUSED_SHELL_ENDED_ERROR, restore: respawn?.restore ?? { status: 'none' }, shellEnded: true };
+      }
       // A paused call that ended with no frame of its own has no exit status to report (OQ-147): it is reported as the
       // terminal window's kill is, −1 with the reason, and never with a status another command produced (A10).
       if (done.code === null) return { output: out, exitCode: -1, timedOut: false, softPaused: false, killStatus: null, sessionReinitialized: false, truncated, error: PAUSED_ENDED_WITHOUT_STATUS, restore: { status: 'none' } };
@@ -1209,6 +1310,7 @@ export class ForegroundSession {
   resetNow(): boolean {
     const old = this.pty;
     this.pty = null;
+    this.shellEnded = false;
     this.active = null;
     this.region = null;
     this.pausedCommand?.screen.dispose();
@@ -1370,7 +1472,7 @@ export class ForegroundSession {
         });
       };
       this.pendingText = '';
-      this.active = { start, end, onEnd: (code) => finish(code), onKill: (reset) => { cut = { kind: 'kill', reset }; finish(-1, false); }, closer: null };
+      this.active = { start, end, onEnd: (code) => finish(code), onKill: (reset) => { cut = { kind: 'kill', reset }; finish(-1, false); }, closer: null, onShellExit: () => finish(-1, false) };
       this.submit(p, wrapCommand(this.deps.backend, line, start, end));
       if (signal?.aborted) onAbort(); else signal?.addEventListener('abort', onAbort, { once: true });
     });

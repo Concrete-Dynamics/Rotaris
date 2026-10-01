@@ -8728,4 +8728,8 @@ trailing blank space.
 
 **What a ruling decides.** Whether an empty detail is what REQ-WORKSPACE-092 means for these steps or each has a sentence
 of the specification's own; whether a step that could not be started reads in the launch's error, in a fixed sentence, or
-empty; and what a failed stage's "{reason}: {detail}" reads when its detail is empty.
+empty; and what a failed stage's "{reason}: {detail}" reads when its detail is empty — the build's reading borrows the
+run host's final sentence there, REQ-MCP-112's words in this domain's error, the same crossing of categories the repair
+removed from every other detail. It also decides whether "the last 400 bytes of its combined standard output and standard
+error" are counted on the output as written or, as built, on the output trimmed of its leading and trailing blank space:
+the two differ for output that ends in blank lines, and for a tail whose first characters are blank.

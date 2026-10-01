@@ -434,6 +434,13 @@ later on the build before as well. The runtime ends itself when its pipes close,
 showed the defect. With the repair the quit took 473 ms and nothing was left.
 
 Unit cases: two in `packages/mcp/src/setup.test.ts` (descendant ended with the step; shutdown grace shortening a
-cancellation's), both red on the code before; one in `apps/desktop/src/run-host/mcp.test.ts` for `endSetup`.
-`init-proof` passed all five scenarios with the bundle present, and `workspace-proof` passed (44 passed, 0 failed,
-2 skipped). **Not measured:** Windows; a run host killed by a signal, whose step's group still survives it (OQ-169).
+cancellation's), both red on the code before; one in `apps/desktop/src/run-host/mcp.test.ts` for `endSetup`; one in
+`apps/desktop/src/run-host/dispatch.test.ts` (added on the verifier's finding) that `shutdown` ends the setup before it
+closes a store or schedules the exit, red with the call replaced by `Promise.resolve()`. `workspace-proof` scenario 8f
+(added on the same finding) quits the built app in order while a stand-in step and a process it started both ignore
+SIGTERM, and asserts the quit ends within 5000 ms through the shutdown ending the setup, with neither process running 5 s
+after the exit; on the build with the call replaced it failed (quit in 138 ms, both pids still running). `init-proof`
+passed all five scenarios with the bundle present, and `workspace-proof` passed (44 passed, 0 failed, 2 skipped; with 8f,
+46 passed, 0 failed, 2 skipped). **Not measured:** Windows; a run host killed by a signal, whose step's group still
+survives it (OQ-169); a step that exits by itself and leaves a process it started running in its group: `endSetup`
+reaches only a step still running, so at a quit nothing ends such a process (the fixed note's "Not reached").

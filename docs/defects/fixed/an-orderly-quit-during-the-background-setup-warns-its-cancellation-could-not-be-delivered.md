@@ -133,4 +133,9 @@ REQ-WORKSPACE-092's 5 s as binding there; a ruling decides which governs.
   Node's `detached`, so the step also runs in a session of its own: a signal sent to the application's process group (a
   terminal's Ctrl+C on `pnpm dev`, a harness's group kill) no longer reaches it, and only the run host's own ending of
   the setup does. A descendant that calls `setsid()` itself leaves the group too.
+- A step that exits by itself and leaves a process it started running in its group. `terminateSetupChild` is reached
+  only for a step still running (cancelled or over its budget), and `endSetup` only for a setup still under way, so
+  neither a later step nor the quit ends such a process; REQ-WORKSPACE-092's close clause covers "anything descended
+  from it". Not measured: neither the bundled runtime's steps nor the stand-ins leave one behind (on the verifier's
+  second round).
 - Windows was not measured.

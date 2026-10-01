@@ -278,3 +278,44 @@ describe('model — a system message reaches the provider (spike 6, live half: t
     expect(parts.some((p) => p.kind === 'text')).toBe(true);
   });
 });
+
+describe('model — a replayed tool call always carries a mapping (REQ-TOOLS-032; docs/defects/fixed/a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400.md)', () => {
+  /*
+   * The arguments text a model produced is replayed in the next request's assistant message. A text that parses to
+   * something other than a plain object (a JSON string literal holding the object, a number, an array, null) used to be
+   * handed to the SDK as the call's input, which sent it on as a non-object; an endpoint whose chat template iterates the
+   * arguments as a mapping refused the whole request (HTTP 400, "Can only get item pairs from a mapping.") and the run
+   * ended, so the gate's recoverable answer never reached the model. Each is wrapped as an unreadable text is.
+   */
+  const replayed = async (args: string) => {
+    const seen: string[] = [];
+    const fake: FetchLike = async (_input, init) => { seen.push(String(init?.body ?? '')); return sse([chatChunk('ok', null), chatChunk(null, 'stop', { prompt_tokens: 3, completion_tokens: 1 }), '[DONE]']); };
+    const client = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: fake });
+    const req = request('chat', {
+      messages: [
+        { role: 'user', content: [{ kind: 'text', text: 'hi' }] },
+        { role: 'assistant', content: [{ kind: 'tool-call', callId: 'c1', name: 'delegate', args }] },
+        { role: 'tool', content: [{ kind: 'tool-result', callId: 'c1', name: 'delegate', result: 'could not be read', isError: true }] },
+      ],
+    });
+    const { error } = await collect(client.stream(req));
+    expect(error).toBeNull();
+    const body = JSON.parse(seen[0]!) as { messages: { role: string; tool_calls?: { function: { arguments: string } }[] }[] };
+    return JSON.parse(body.messages.find((m) => m.role === 'assistant')!.tool_calls![0]!.function.arguments) as unknown;
+  };
+  const isPlainObject = (v: unknown) => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+  it('an object\'s text is replayed as that object', async () => {
+    expect(await replayed('{"persona":"x"}')).toEqual({ persona: 'x' });
+  });
+  for (const args of ['"{\\"persona\\":\\"x\\"}"', '42', '[1]', 'null', 'true']) {
+    it(`arguments that parse to a non-object (${args}) are replayed as a mapping holding the text`, async () => {
+      const sent = await replayed(args);
+      expect(isPlainObject(sent)).toBe(true);
+      expect(sent).toEqual({ _raw: args });
+    });
+  }
+  it('an unreadable text is replayed as a mapping holding the text, as before', async () => {
+    expect(await replayed('{"persona":')).toEqual({ _raw: '{"persona":' });
+  });
+});

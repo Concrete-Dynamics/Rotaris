@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
 // @ts-expect-error — the shapes are plain ESM beside the script that replays them.
-import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, endedShellReading, hereStringLinesReturned, interruptedPollReading, longOutputReading, outputOf, pausedBehindReading, replacedShellReading, terminalRunEndReading, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
 
 interface Shape { readonly id: string; readonly match: RegExp; readonly command: string; readonly prompt?: string }
 
@@ -343,5 +343,23 @@ describe('the long-output reading', () => {
     const reading = longOutputReading(run.stdout);
     expect(reading.distinct).toBe(LONG_OUTPUT_LINES);
     expect(reading.doubled).toHaveLength(0);
+  });
+});
+
+describe('how the terminal run ended (docs/defects/fixed/a-tool-call-whose-arguments-are-a-json-string-ends-the-run-with-http-400.md)', () => {
+  it('a run that ended failed before any terminal call is a failure, not a green run of NOTEs', () => {
+    // the 2026-10-01 pack: two calls, neither terminal, the endpoint's 400 ended the run, and live-run printed PASSED
+    expect(terminalRunEndReading({ execution_status: 'failed', stop_reason: 'agent_session_aborted' }, 0)).toEqual({ kind: 'died-early', detail: 'failed (agent_session_aborted) after 0 terminal call(s)' });
+  });
+  it('a run that failed after reaching the terminal is a NOTE; a completed or stopped run is an end; no session is a failure', () => {
+    expect(terminalRunEndReading({ execution_status: 'failed', stop_reason: 'x' }, 3).kind).toBe('failed-later');
+    expect(terminalRunEndReading({ execution_status: 'completed', stop_reason: null }, 0).kind).toBe('ended');
+    expect(terminalRunEndReading({ execution_status: 'completed', stop_reason: null }, 12).kind).toBe('ended');
+    expect(terminalRunEndReading(null, 0).kind).toBe('absent');
+  });
+  it('a run stopped or interrupted before any terminal call is a NOTE, never a silent end; after a terminal call it is an end', () => {
+    expect(terminalRunEndReading({ execution_status: 'stopped', stop_reason: 'user_cancelled' }, 0)).toEqual({ kind: 'ended-early', detail: 'stopped (user_cancelled) after 0 terminal call(s)' });
+    expect(terminalRunEndReading({ execution_status: 'interrupted', stop_reason: null }, 0).kind).toBe('ended-early');
+    expect(terminalRunEndReading({ execution_status: 'stopped', stop_reason: 'user_cancelled' }, 2).kind).toBe('ended');
   });
 });

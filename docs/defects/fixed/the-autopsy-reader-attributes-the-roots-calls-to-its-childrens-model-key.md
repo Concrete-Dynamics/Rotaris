@@ -52,8 +52,9 @@ root's current key resolves to in the snapshot's `models:` (its sign-in provider
 `providerIdentity`), chains are followed as the run follows them, and a later switch onto an overridden pair reads as the
 override. Where the snapshot does not record the pair the root's key resolves to and an override is recorded, the key
 from that point on is printed as `undetermined` (`ENTRY_KEY_UNDETERMINED`), never one key given as fact. The automatic
-moves of the root (`quota_fallback_model`, `llm_unresponsive`) are not read yet: open note
-[the-autopsy-reader-does-not-read-the-roots-automatic-model-fallbacks.md](../the-autopsy-reader-does-not-read-the-roots-automatic-model-fallbacks.md).
+moves of the root (`quota_fallback_model`, `llm_unresponsive`) were left unread by this repair and are read since
+[the-autopsy-reader-does-not-read-the-roots-automatic-model-fallbacks.md](the-autopsy-reader-does-not-read-the-roots-automatic-model-fallbacks.md)
+was repaired, which also keys the children by their canonical names.
 `apps/desktop/scripts/autopsy.mjs` reads the same through `scripts/lib/autopsy-entry-model.mjs`, which mirrors the engine's
 function (the script cannot import the engine's TypeScript); the run-autopsy skill's description of the reader says so.
 

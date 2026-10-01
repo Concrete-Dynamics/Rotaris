@@ -9,7 +9,8 @@
  * give the root its children's key whenever they shared one. The root's key is read instead from what the store records
  * of the root itself — the launch audit's configuration snapshot (REQ-SESSION-138), each continuation's own snapshot
  * (`run_continuation_intent`) and each switch (`entry_model_switched`, REQ-MONITOR-142), carried through each
- * `model_override` of the pair it runs on (REQ-MONITOR-303) — and is `session` only when none of them names one.
+ * `model_override` of the pair it runs on (REQ-MONITOR-303) and through the ladder's automatic fallbacks of the root
+ * (REQ-ORCH-090, REQ-ORCH-091 b) — and is `session` only when none of them names one.
  */
 
 /** The loader's own prefixes for the models it copies (`packages/config/src/keys.ts`; REQ-CONFIG-076..081). */
@@ -53,6 +54,15 @@ function snapshotEntry(snapshot) {
   return { models, label: modelLabel(models, model), pair: modelPair(models, model) };
 }
 
+/**
+ * Each child's model key, keyed by the name its own records carry: its canonical name (REQ-ORCH-044), which its turns
+ * run under, so its tool calls and the ladder's entries about it name it by that — never by `given_name`, which differs
+ * whenever the model's words hold a space, punctuation or a reused name (the live pack 2026-10-01T17-04-24-814Z).
+ */
+export function childModelKeys(children) {
+  return new Map(children.map((c) => [c.canonical_name, c.model_key]));
+}
+
 /** Printed where the record cannot say which key the entry agent ran on: an override may or may not have moved it. */
 export const ENTRY_KEY_UNDETERMINED = 'undetermined';
 
@@ -60,12 +70,23 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * Every key the entry agent ran on, in order, consecutive repeats folded; empty when nothing records one. The configured
  * key (launch audit, continuations, switches) carried through the session's `model_override` entries, each of which
  * moves the root exactly when it replaces the `provider|model` pair the root's key resolves to (REQ-MONITOR-303,
- * REQ-ORCH-091 d; the run resolves the root through every override of the session).
+ * REQ-ORCH-091 d; the run resolves the root through every override of the session), and moved by the ladder's two
+ * automatic moves of an agent no child is (`childNames`, the canonical names of `childModelKeys`): `quota_fallback_model` to its `to_key` (REQ-ORCH-091 b,
+ * REQ-NOTIFY-082) and `llm_unresponsive` to the one `models:` key resolving to its recorded pair, else the pair itself
+ * (REQ-ORCH-090). A child's move leaves the root where it is; the next continuation ends a move (its snapshot's key, or
+ * the configured key when it records none), and so does a switch — read so even onto the model already configured,
+ * which the run does not rebuild the root's cell for (the engine's copy says why). A continuation recording no snapshot
+ * returns the root to the last switched key, though a switch is held on its run alone and the new run starts on its
+ * configuration's model; and two children sharing one canonical name read as one (the engine's copy says both).
  */
-export function entryModelKeys(launchAuditPayload, timeline) {
+export function entryModelKeys(launchAuditPayload, timeline, childNames) {
+  const children = new Set(childNames);
   const keys = [];
   let models = {};
   let base = null;
+  // The key the configuration names (snapshot or switch); `base` departs from it only while a ladder move is in force.
+  let configured = null;
+  let fellBack = false;
   const overrides = new Map();
   const effective = () => {
     if (base === null) return null;
@@ -84,9 +105,14 @@ export function entryModelKeys(launchAuditPayload, timeline) {
   const add = (key) => { if (key !== null && key !== '' && keys[keys.length - 1] !== key) keys.push(key); };
   const fromSnapshot = (snapshot) => {
     const e = snapshotEntry(snapshot);
-    if (!e) return;
+    if (!e) {
+      // A continuation recording no entry model is still a new run, whose root cell is built from the configured model.
+      if (fellBack) { fellBack = false; base = configured; add(configured === null ? ENTRY_KEY_UNDETERMINED : effective()); }
+      return;
+    }
     models = e.models;
-    base = { label: e.label, pair: e.pair };
+    base = configured = { label: e.label, pair: e.pair };
+    fellBack = false;
     add(effective());
   };
   if (launchAuditPayload !== undefined && launchAuditPayload !== null) fromSnapshot(parseJson(launchAuditPayload)?.config_snapshot);
@@ -95,7 +121,8 @@ export function entryModelKeys(launchAuditPayload, timeline) {
     else if (t.name === 'entry_model_switched') {
       const key = str(parseJson(t.metadata)?.model);
       if (key === '') continue;
-      base = { label: modelLabel(models, key), pair: modelPair(models, key) };
+      base = configured = { label: modelLabel(models, key), pair: modelPair(models, key) };
+      fellBack = false;
       add(effective());
     } else if (t.name === 'model_override') {
       const meta = parseJson(t.metadata);
@@ -103,6 +130,18 @@ export function entryModelKeys(launchAuditPayload, timeline) {
       if (typeof meta?.provider !== 'string' || typeof meta?.model !== 'string' || key === '') continue;
       const to = typeof meta.to_provider === 'string' && typeof meta.to_model === 'string' ? `${meta.to_provider}|${meta.to_model}` : modelPair(models, key);
       overrides.set(`${meta.provider}|${meta.model}`, { key, to });
+      add(effective());
+    } else if (t.name === 'quota_fallback_model' || t.name === 'llm_unresponsive') {
+      const meta = parseJson(t.metadata);
+      if (typeof meta?.agent !== 'string' || children.has(meta.agent) || typeof meta.to_provider !== 'string' || typeof meta.to_model !== 'string') continue;
+      const pair = `${meta.to_provider}|${meta.to_model}`;
+      const toKey = str(meta.to_key);
+      if (t.name === 'quota_fallback_model' && toKey !== '') base = { label: modelLabel(models, toKey), pair };
+      else {
+        const labels = new Set(Object.keys(models).filter((k) => modelPair(models, k) === pair).map((k) => modelLabel(models, k)));
+        base = { label: labels.size === 1 ? [...labels][0] : `${meta.to_provider}/${meta.to_model}`, pair };
+      }
+      fellBack = true;
       add(effective());
     }
   }

@@ -419,7 +419,7 @@ describe('the rest of the load', () => {
       expect(readFileSync(join(s.workspaceRoot, '.gitignore'), 'utf8')).toBe('node_modules/\n.rotaris/\n');
     });
 
-    it('a linked worktree, and a workspace below the repository root, write the repository\'s shared exclude file', () => {
+    it("a linked worktree writes the repository's shared exclude file, and stays clean once the runtime's marker exists", () => {
       const s = scopes(null, null);
       git(s.workspaceRoot, 'init', '-q');
       writeFileSync(join(s.workspaceRoot, '.gitignore'), '.rotaris/\n');
@@ -433,13 +433,17 @@ describe('the rest of the load', () => {
       mkdirSync(join(linked, marker), { recursive: true });
       writeFileSync(join(linked, ...CODE_INTELLIGENCE_MARKER_SEGMENTS), 'project_name: linked\n');
       expect(git(linked, 'status', '--porcelain', '--untracked-files=all')).toBe('');
+    });
 
-      const nested = scopes(null, null);
-      git(nested.workspaceRoot, 'init', '-q');
-      const below = join(nested.workspaceRoot, 'packages', 'app');
+    it('a workspace below a repository\'s top level writes nothing into that repository', () => {
+      const outer = scopes(null, null);
+      git(outer.workspaceRoot, 'init', '-q');
+      const before = readFileSync(join(outer.workspaceRoot, '.git', 'info', 'exclude'), 'utf8');
+      const below = join(outer.workspaceRoot, 'packages', 'app');
       mkdirSync(join(below, '.rotaris'), { recursive: true });
-      loadConfiguration({ ...nested, workspaceRoot: below });
-      expect(readFileSync(join(nested.workspaceRoot, '.git', 'info', 'exclude'), 'utf8')).toContain(`\n${marker}/\n`);
+      loadConfiguration({ ...outer, workspaceRoot: below });
+      expect(readFileSync(join(outer.workspaceRoot, '.git', 'info', 'exclude'), 'utf8')).toBe(before);
+      expect(readFileSync(join(below, '.gitignore'), 'utf8')).toBe('.rotaris/\n');
     });
 
     it('a workspace in no repository gets no exclude file, and a marker line .gitignore already holds is not repeated', () => {

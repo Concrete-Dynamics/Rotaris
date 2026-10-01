@@ -165,34 +165,29 @@ function appendIgnoreLines(file: string, existing: string, dirs: readonly string
 }
 
 /**
- * The repository-local exclude file (`info/exclude` in the repository's common directory) of the repository that holds
- * `workspaceRoot`, found as Git finds a repository: the nearest `.git` at or above the workspace — a directory, or a file
- * naming the git directory (`gitdir: …`, a linked worktree or a submodule), whose `commondir` names the shared one.
- * Null when no repository holds the workspace or the pointer cannot be read. Never spawns Git: the load is synchronous.
+ * The repository-local exclude file (`info/exclude` in the repository's common directory) of the repository whose top
+ * level is `workspaceRoot`: the workspace's own `.git` — a directory, or a file naming the git directory (`gitdir: …`, a
+ * linked worktree or a submodule), whose `commondir` names the shared one. Null when the workspace is not a repository's
+ * top level or the pointer cannot be read. A repository that holds the workspace further down is never looked for: the
+ * first execution walked up as Git does, and `config-proof`'s scratch workspace inside this checkout wrote the line into
+ * the checkout's own exclude file — a write outside the workspace the user opened. Never spawns Git: the load is
+ * synchronous.
  */
 export function repositoryExcludeFile(workspaceRoot: string): string | null {
-  let dir = resolve(workspaceRoot);
-  for (;;) {
-    const dotGit = join(dir, '.git');
-    let gitDir: string | null = null;
-    try {
-      const stat = statSync(dotGit);
-      if (stat.isDirectory()) gitDir = dotGit;
-      else if (stat.isFile()) {
-        const pointer = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotGit, 'utf8'));
-        if (!pointer) return null;
-        gitDir = resolve(dir, pointer[1]!);
-      }
-    } catch (cause) { if ((cause as NodeJS.ErrnoException).code !== 'ENOENT' && (cause as NodeJS.ErrnoException).code !== 'ENOTDIR') return null; }
-    if (gitDir !== null) {
-      let common = gitDir;
-      try { common = resolve(gitDir, readFileSync(join(gitDir, 'commondir'), 'utf8').trim()); } catch { /* no commondir: the git directory is the common one */ }
-      return join(common, 'info', 'exclude');
-    }
-    const parent = dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
-  }
+  const dotGit = join(resolve(workspaceRoot), '.git');
+  let gitDir: string;
+  try {
+    const stat = statSync(dotGit);
+    if (stat.isDirectory()) gitDir = dotGit;
+    else if (stat.isFile()) {
+      const pointer = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotGit, 'utf8'));
+      if (!pointer) return null;
+      gitDir = resolve(dirname(dotGit), pointer[1]!);
+    } else return null;
+  } catch { return null; }
+  let common = gitDir;
+  try { common = resolve(gitDir, readFileSync(join(gitDir, 'commondir'), 'utf8').trim()); } catch { /* no commondir: the git directory is the common one */ }
+  return join(common, 'info', 'exclude');
 }
 
 /**
@@ -205,8 +200,8 @@ export function repositoryExcludeFile(workspaceRoot: string): string | null {
  * and every agent that checked its work then found a `.gitignore` change nobody had told it of (OQ-161; the live runs of
  * 2026-10-01). The reading taken under OQ-161 since 2026-10-01: the marker's directory goes to the repository-local
  * exclude file instead, which Git honours and nobody tracks, so `git status` stays clean and no file the user tracks
- * changes. Skipped when either file already names it; nothing is written where no repository holds the workspace. The
- * name comes from the generated manifest (REQ-MCP-116), never a literal.
+ * changes. Skipped when either file already names it; nothing is written unless the workspace is a repository's top
+ * level. The name comes from the generated manifest (REQ-MCP-116), never a literal.
  */
 export function keepScopeDirIgnored(workspaceRoot: string): void {
   try {

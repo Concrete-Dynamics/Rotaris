@@ -64,15 +64,15 @@ if it may, whether anyone is told. Recorded, not repaired.
 **Found true on the branch** (`fin2-config-readings`, from `origin/main` at `f41dc2a`): a repository whose committed
 `.gitignore` already named `.rotaris/` read ` M .gitignore` in `git status --porcelain` after one configuration load
 (`packages/config/src/load.test.ts`, "a repository whose committed .gitignore already names `.rotaris/` stays clean
-once the runtime's marker exists", red on the code before, with two more of the four new cases).
+once the runtime's marker exists", red on the code before, with the other four new cases and the amended REQ-CONFIG-013 case).
 
 **The part repaired, under a reading recorded in [OQ-161](../architecture/open-questions.md) and not a ruling.** The
 load appends `.rotaris/` alone to the workspace's `.gitignore`, the one line REQ-CONFIG-013 and REQ-MCP-089 name. The
 marker's directory goes to the repository-local exclude file (`info/exclude` in the common directory of the repository
-that holds the workspace, found as Git finds it, a linked worktree's and a workspace below the root included), which
-Git honours and nobody tracks: `git status` stays clean, and no file the user tracks changes, so there is nothing left
-for an agent to account for. Best-effort and idempotent; nothing is written where no repository holds the workspace.
-Pinned by four cases in `load.test.ts` (`OQ-161's reading: …`) and the amended REQ-CONFIG-013 case.
+whose top level is the workspace, a linked worktree's included), which Git honours and nobody tracks: `git status`
+stays clean, and no file the user tracks changes, so there is nothing left for an agent to account for. Best-effort and
+idempotent; nothing is written for a workspace below a repository's top level or in none (OQ-161 states why). Pinned by
+five cases in `load.test.ts` (`OQ-161's reading: …`) and the amended REQ-CONFIG-013 case.
 
 **Left to the owner.** OQ-161's ruling: whether the load may write the marker's directory anywhere at all, and if so
 whether the exclude file is the place, or whether the runtime should be started so that it creates no marker in the

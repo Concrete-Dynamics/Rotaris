@@ -7971,20 +7971,22 @@ changed the file: 319.4 s, 6.3 % of the run's wall time, and about 393 thousand 
 
 **What the build proceeds under, since 2026-10-01** (the `fin2` round's repair of the note above). A configuration load
 appends only `.rotaris/` to the workspace's `.gitignore` (REQ-CONFIG-013, REQ-MCP-089). The marker's directory goes to
-the repository-local exclude file instead: `info/exclude` in the common directory of the repository that holds the
-workspace, found as Git finds it (the nearest `.git` at or above the workspace, a directory or a `gitdir:` file, then
-its `commondir`), without spawning Git (`repositoryExcludeFile`, `keepScopeDirIgnored`,
-`packages/config/src/load.ts`). The line is written only when neither `.gitignore` nor the exclude file already names
-the directory, best-effort and idempotent, every failure swallowed; nothing is written when no repository holds the
-workspace, and nothing is removed from a `.gitignore` an earlier build amended. Git honours the exclude file and nobody
-tracks it, so `git status` stays clean and no file the user tracks changes. This is strictly narrower than the reading
-below and needs no ruling to be safe; it does not answer the question. Three consequences, stated for the ruling: the
-write lands in the repository's own directory, which may sit above the workspace (a workspace below the repository
-root, a linked worktree), and so stretches D-21's one exception ("a best-effort ignore-file line") to a second ignore
-file; the search tools' scan and the contains-code walk read only the root `.gitignore` (REQ-TOOLS-139,
-REQ-WORKSPACE-100), so `.serena/` is walked again as it was before 2026-09-06 (its `cache/` stays skipped as a
-hard-coded component, and it holds no indexable source); and a workspace in no repository keeps an untracked marker
-directory, which no `git status` reports.
+the repository-local exclude file instead: `info/exclude` in the common directory of the repository whose top level is
+the workspace (the workspace's own `.git`, a directory or a `gitdir:` file, then its `commondir`), without spawning Git
+(`repositoryExcludeFile`, `keepScopeDirIgnored`, `packages/config/src/load.ts`). The line is written only when neither
+`.gitignore` nor the exclude file already names the directory, best-effort and idempotent, every failure swallowed, and
+nothing is removed from a `.gitignore` an earlier build amended. Git honours the exclude file and nobody tracks it, so
+`git status` stays clean and no file the user tracks changes. This is strictly narrower than the reading below and
+needs no ruling to be safe; it does not answer the question. Four consequences, stated for the ruling. A linked
+worktree's exclude file is the main repository's (Git shares it), so the write lands outside the workspace there, and
+D-21's one exception ("a best-effort ignore-file line") now covers a second ignore file. **A workspace below a
+repository's top level gets no line**, so that repository lists the marker's directory as untracked
+(`?? <path>/.serena/`) as it did before 2026-09-06: the first execution walked up as Git does, and `config-proof`'s
+scratch workspace inside the developer's checkout wrote the line into the checkout's own exclude file — a write
+outside the workspace opened, so the walk was dropped. A workspace in no repository keeps an untracked marker
+directory, which no `git status` reports. And the search tools' scan and the contains-code walk read only the root
+`.gitignore` (REQ-TOOLS-139, REQ-WORKSPACE-100), so `.serena/` is walked again as it was before 2026-09-06 (its
+`cache/` stays skipped as a hard-coded component, and it holds no indexable source).
 
 *Until 2026-10-01:* every configuration load appended `.rotaris/` and `.serena/` to the workspace's `.gitignore`, each
 only when it was missing, unless the caller passed `keepIgnored: false`. The second name was taken from the generated

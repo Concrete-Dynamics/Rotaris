@@ -52,6 +52,7 @@ export interface RunSetupOptions {
   readonly containsCode: boolean;
   readonly env: Readonly<Record<string, string>>;
   readonly clocks: Clocks;
+  /** The command each step spawns, and nothing else: a step's outcome is the `onStep` caller's to log. */
   readonly log: McpLog;
   readonly signal: AbortSignal;
   readonly onStep: (step: SetupStepReport, all: readonly SetupStepReport[]) => void;
@@ -152,8 +153,9 @@ export async function runSetupSteps(o: RunSetupOptions): Promise<SetupReport> {
     if (exceeded) { stopped = 'failed'; set(i, { status: 'failed', detail: `exceeded its budget of ${Math.round(step.budgetMs / 1000)} s and was terminated${tail ? `; its last output: ${tail}` : ''}`, elapsedMs, stopped: 'budget' }); continue; }
     if (spawnError !== null) { stopped = 'failed'; set(i, { status: 'failed', detail: `the setup command could not be started: ${spawnError}`, elapsedMs }); continue; }
     if (child.exitCode !== 0) { stopped = 'failed'; set(i, { status: 'failed', detail: `exited with ${child.signalCode ? `signal ${child.signalCode}` : `code ${child.exitCode}`}${tail ? `; its last output: ${tail}` : ''}`, elapsedMs }); continue; }
+    // A step's outcome is logged by the caller's `onStep` (the run host's step reporter), never here as well:
+    // PD-MONITOR-002, live-run finding a71-9 — each success had reached the application log twice.
     set(i, { status: 'succeeded', detail: '', elapsedMs });
-    log.info(`mcp setup: ${step.id} succeeded in ${elapsedMs.toFixed(0)} ms`);
   }
   const outcome: SetupOutcome = stopped ?? (reports.every((r) => r.status === 'succeeded' || r.status === 'skipped-no-code') ? 'completed' : 'failed');
   return { steps: reports, outcome };

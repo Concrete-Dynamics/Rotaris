@@ -28,6 +28,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { restatedFacts } from './lib/restated-facts.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -157,6 +158,10 @@ const painted = await launch('painted', workspace, local, preferences, {
   if (divider?.data?.['aria-valuenow'] !== '528') throw new Error(`the divider did not move by the three Left presses: aria-valuenow=${divider?.data?.['aria-valuenow'] ?? 'absent'}`);
   const read = readLine(painted.log);
   if (!read) throw new Error('no "git view: N reads in M ms" line in the log');
+  // PD-MONITOR-002, live-run finding a71-9: the line is the workspace service's, which did the reads; main does not say it again.
+  if (!/workspace service: git view: \d+ reads in \d+ ms/.test(painted.log)) throw new Error('the git view line is not the workspace service\'s');
+  const restated = restatedFacts(painted.log);
+  if (restated.length > 0) throw new Error(`a fact reached the log twice: ${restated.map((r) => `line ${r.line}, ${r.fact} (owner: ${r.owner}): ${r.text}`).join(' | ')}`);
   const stored = JSON.parse(readFileSync(join(preferences, 'preferences.json'), 'utf8'));
   if (JSON.stringify(stored['panels/git']?.sizes?.[1]) !== '528') throw new Error(`panels/git was not written as [.., 528]: ${JSON.stringify(stored['panels/git'])}`);
   results.painted = { branch: 'main', sync: text(p, '[data-testid="git-sync"]')[0], rows: r.length, history: commits.length, local: local1.length, reads: read.reads, readMs: read.ms, divider: 528, png: painted.png };
@@ -261,7 +266,10 @@ const noGit = await launch('no-git', workspace, local, preferences, { ROTARIS_CA
   if (text(p, '[data-testid="git-branch"]')[0] !== 'not a git repository') throw new Error(`with no git the header reads "${text(p, '[data-testid="git-branch"]')[0]}"`);
   if (text(p, '[data-testid="git-sync"]')[0] !== 'ahead —  behind —') throw new Error(`with no git the sync label reads "${text(p, '[data-testid="git-sync"]')[0]}"`);
   if (!/notice: Working without Git/.test(noGit.log)) throw new Error('the Working without Git notice was not raised');
-  if (!/git view: \d+ reads in \d+ ms \(git=false/.test(noGit.log)) throw new Error('the read did not end in the git=false state');
+  // The workspace service's line names the root ahead of the state: `git view: N reads in M ms (<root>: git=false …)`.
+  if (!/git view: \d+ reads in \d+ ms \([^\n]*git=false/.test(noGit.log)) throw new Error('the read did not end in the git=false state');
+  const restatedNoGit = restatedFacts(noGit.log);
+  if (restatedNoGit.length > 0) throw new Error(`with no git a fact reached the log twice: ${restatedNoGit.map((r) => r.text).join(' | ')}`);
   if (/Error box|dialog/i.test(noGit.log.split('\n').filter((l) => /git view/.test(l)).join('\n'))) throw new Error('a dialog was raised for a missing git');
   const headlines = text(p, '.notice__headline');
   // ADR-0049 holds ONE current notice: the first-launch provider notice, raised 800 ms after the workspace opened, may have replaced it by capture time.

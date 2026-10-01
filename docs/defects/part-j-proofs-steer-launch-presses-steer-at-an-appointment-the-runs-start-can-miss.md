@@ -17,7 +17,7 @@ deadline. This launch was left as it was, because that note did not name it.
 
 A press that does land early meets a second hazard, the product's: a steer dialog opened before the composer's send has
 settled loses its focus to the composer, so the typed text misses the dialog
-([`a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer`](a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md)).
+([`a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer`](fixed/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md)).
 This launch's 1.9 s appointment can fall inside that window too.
 
 ## Specs

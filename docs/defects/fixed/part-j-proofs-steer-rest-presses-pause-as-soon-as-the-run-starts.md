@@ -42,7 +42,7 @@ schedule moved to `apps/desktop/scripts/lib/steer-rest.mjs`, which `part-j-proof
   (3800 ms) and the dialog's Steer (4200 ms) are appointments after that deadline. A run starting at 2.16 s missed the
   old 1900 ms appointment once on 2026-10-01; a dialog opened before the send settled lost its focus to the composer
   (recorded as its own product defect,
-  [`a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer`](../a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md)).
+  [`a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer`](a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md)).
 - **The proof asserts what the launch exercised.** It fails by name on any step the log does not show pressed on its
   own control (`unpressedClicks`), and on a timeline where the steer was not pending when the pause was asked for
   (`steerPendingAtPause`: `steering_submitted` before `run_pause_requested`, and no `steering_injected` before it).

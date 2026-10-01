@@ -214,6 +214,24 @@ export function modelChipLabel(loaded: boolean, models: readonly string[], selec
 export const DRAFT_PUBLISH_MS = 200;
 export const DRAFT_WRITE_MS = 400;
 
+/**
+ * Whether the composer takes keyboard focus back once a submission it awaited has settled (a start, a continue, a
+ * queue, an executed slash command). It does when focus is nowhere (`null` or the body), in the composer, or still on
+ * whatever held it when the submission began (the send pill, or the widget a Ctrl+Return came from, REQ-CHAT-001). It
+ * does NOT when something else took focus while the submission was in flight: a dialog that opened meanwhile keeps
+ * it. The run's events draw "Steer the run" before the start's reply arrives, so the steer dialog (REQ-MONITOR-137)
+ * can open and focus its field in that window; until 2026-10-01 the composer took the focus back from under the modal
+ * and the steer's text was typed into the composer behind it
+ * (`docs/defects/fixed/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`).
+ * Nothing in the specification moves focus out of an open modal (REQ-CHAT-002 gives a modal its own keys).
+ *
+ * The elements are compared by identity and nothing else is read of them, so the rule is checkable without a DOM.
+ */
+export function composerReclaimsFocus<T>(focus: { readonly now: T | null; readonly atSubmit: T | null; readonly body: T | null; readonly composer: T | null }): boolean {
+  const { now, atSubmit, body, composer } = focus;
+  return now === null || now === body || now === composer || now === atSubmit;
+}
+
 /** REQ-CHAT-010's geometry, as the requirement states it. */
 export const COMPOSER_DEFAULT_HEIGHT = 150;
 export const COMPOSER_MIN_HEIGHT = 110;

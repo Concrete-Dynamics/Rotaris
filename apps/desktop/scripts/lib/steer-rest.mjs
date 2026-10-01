@@ -14,11 +14,13 @@
  * The schedule now follows the steer instead of guessing at it:
  *  - Steer the run waits (`@~`) for its control AND for the composer's send to have settled (its send pill enabled
  *    again), because the run's start is the app's to choose, and gives up before the text is typed, so the typing
- *    never reaches a dialog that is not open. The second condition is not the proof's business but the product's: the
- *    composer takes focus back when its send settles, and a dialog opened before that loses its focus to the composer
- *    behind it, so the steer's text is typed into the composer and the dialog's Steer refuses an empty text. Seen twice
- *    in eight runs on 2026-10-01 and once in the ten after
- *    (`docs/defects/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`);
+ *    never reaches a dialog that is not open. The second condition was the product's defect, not the proof's: the
+ *    composer took focus back when its send settled, and a dialog opened before that lost its focus to the composer
+ *    behind it, so the steer's text was typed into the composer and the dialog's Steer refused an empty text. Seen
+ *    twice in eight runs on 2026-10-01 and once in the ten after
+ *    (`docs/defects/fixed/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md`,
+ *    repaired the same day; the steer-early launch, `steer-early.mjs`, now opens the dialog inside that window on
+ *    purpose). This launch keeps the wait, because what it measures is a steer pending at a rest, not that window;
  *  - the text, then the dialog's Steer, are appointments after that deadline;
  *  - Pause waits (`@from~ms`, the waiting form that starts looking at `from`) from just after the dialog's Steer for the
  *    steer dialog to be gone. The dialog closes only when the steer was accepted (`SteerDialog` in

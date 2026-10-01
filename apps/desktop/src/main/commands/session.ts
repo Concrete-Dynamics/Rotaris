@@ -10,9 +10,9 @@ import { refusal, type CommandContext, type CommandHandlers } from './context.js
  * a refusal into a notice where the surface has nowhere to show one.
  */
 export function sessionCommands(
-  ctx: Pick<CommandContext, 'capturing' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runHost' | 'services'>,
+  ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runHost' | 'services'>,
 ): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.start' | 'session.newId' | 'session.resume' | 'session.control' | 'session.prompt' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.reconcile' | 'session.pageOlder'> {
-  const { capturing, dialogs, log, mainWindows, notices, pauseWindows, quitting, raiseNotice, recoveryFor, relay, runHost, services } = ctx;
+  const { capturing, clocks, dialogs, log, mainWindows, notices, pauseWindows, quitting, raiseNotice, recoveryFor, relay, runHost, services } = ctx;
   return {
     'session.continue': async (req) => {
       const r = await runHost.request({ kind: 'session.continue', sessionId: req.sessionId, action: req.action, ...(req.withoutPaused === true ? { withoutPaused: true } : {}) }, millis(10_000));
@@ -185,6 +185,18 @@ export function sessionCommands(
       // for itself (the twenty-seventh defect above) and must not move any main window's followed session.
       mainWindows.setFollowedSession(senderId, req.sessionId);
       const r = await runHost.request({ kind: 'session.attach', sessionId: req.sessionId }, millis(5_000));
+      // A seam (verification only, ROTARIS_CAPTURE_PNG): ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS holds the reply that long
+      // after the attach was acknowledged. A start's send settles in the renderer only on this reply, while the
+      // attach's snapshot and the run's events have already drawn the run as active, so a dialog opened in between
+      // meets the composer's settling send. That window is the app's and a few milliseconds wide, which no script hits
+      // reliably; held, `part-j-proof`'s steer-early launch opens the steer dialog inside it every time
+      // (docs/defects/fixed/a-modal-opened-while-the-composers-send-is-settling-loses-its-focus-to-the-composer.md).
+      const hold = capturing ? Number(process.env['ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS'] ?? 0) : 0;
+      if (hold > 0 && r.kind === 'ack') {
+        log(`capture: session.subscribe reply held ${hold} ms`);
+        await new Promise<void>((done) => { clocks.timers.after(millis(hold), done); });
+        log('capture: session.subscribe reply released');
+      }
       return r.kind === 'ack' ? { ok: true } : refusal(r, 'The session could not be followed');
     },
     'session.unsubscribe': (req, { senderId }) => {

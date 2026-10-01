@@ -8652,3 +8652,32 @@ manual compression (Part AO) runs beside the step in flight and is not a wait of
 **What a ruling decides.** Whether a wait the run imposes, and a compression's model call, are outside the stall watch
 (as built), are stalls as REQ-MONITOR-119 reads literally, or are reported in words of their own — which REQ-ORCH-139's
 vocabulary does not have — and whether the dispatch layer's retry delays are such a wait too.
+
+**OQ-174 — Does a child's recorded MCP grant keep a tool a mid-run list update withdrew?** *(REQ-MCP-065, "Each child
+run's persisted state SHALL record both its granted native tools and its granted MCP tools"; REQ-MCP-060, a mid-run
+update "SHALL only ever narrow" the callable set, the withdrawn name "ceases to be callable at once", and narrowing "SHALL
+NOT … re-render the prompt"; REQ-MCP-114, the inspector's per-server list "sourced from the run's own recorded evidence,
+so it reads the same for a finished run as for a running one"; REQ-MCP-100, the persona window's line per server from the
+same evidence; REQ-MONITOR-060, the inspector's chips. Raised 2026-10-01 for
+[`a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md`](../defects/a-childs-recorded-mcp-grant-keeps-a-tool-a-mid-run-list-update-withdrew.md)
+by the second triage of open defect notes, which judged it the owner's. Open.)*
+
+A child's row records its MCP grant once, when its tool port is ready (`ChildLedger.recordGrant` →
+`SessionWriter.recordChildGrant`, once per execution). When a carried server then publishes a changed tool list,
+REQ-MCP-060's recomputation narrows the callable set: the port deletes the withdrawn tool's executor from its callable
+map and logs the withdrawal (`McpHost.executorsFor`'s `onToolsChanged`, `apps/desktop/src/run-host/mcp.ts`, through the
+port's `remove`, `apps/desktop/src/run-host/tools.ts`). The row's `granted_mcp` is not rewritten, so the inspector
+(REQ-MCP-114, REQ-MONITOR-060) and the persona window (REQ-MCP-100) go on listing the withdrawn tool under its server,
+for the rest of the run and for the finished run. The specification says "granted" for what configuration allows and
+"callable" for what a mid-run update leaves, and does not say which the record holds. Not reproduced in a built app:
+`mcp-proof`'s launch 4 narrows the run-level agent, whose grant is not recorded on a row.
+
+**What the build proceeds under.** The recorded grant is the grant at readiness. A tool withdrawn mid-run stays in the
+row's `granted_mcp`, unmarked, and every surface that reads the record lists it as granted; it is no longer callable,
+and a call to it is refused per REQ-MCP-062 (`mcp-proof` launch 4). The prompt is not re-rendered (REQ-MCP-060), and the
+record, a different reader, is not rewritten either.
+
+**What a ruling decides.** Whether the record keeps the grant at readiness (as built); follows the callable set, the
+withdrawn tool dropped from the row when the update narrows it; or keeps it marked as withdrawn mid-run, so a finished
+run's record shows both what was granted and what was taken away — and, for either of the last two, whether the surfaces
+draw a withdrawn tool at all.

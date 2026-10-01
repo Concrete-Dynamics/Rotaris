@@ -8370,7 +8370,12 @@ its run's park, and two cases follow that the specification does not settle:
 **What the build proceeds under.** A parked run keeps its ports open; a continue closes none of them; the crash record a
 continue makes settles no ring row while any run of this process on the session parked with its ports open
 (`Live.portsOpen` in `packages/engine/src/sessions.ts`, every such run and not only the last — the part of the note
-repaired with this question); a ring row carries no process identity. Both cases above stand.
+repaired with this question); a ring row carries no process identity. Both cases above stand. A parked run never reaches
+its teardown, so it never leaves `Live.portsOpen`: once any run of a session parks, this process skips the ring settle for
+that session for as long as the session stays live in it. That widens the second case: before the repair a later run's
+teardown re-armed the settle, so another process's dead rows were settled at the next continue after it; under this
+reading they are not settled by this process at all after a park, and stay `running` until a repair or another process's
+continue records the crash.
 
 **What a ruling decides.** Whether a park closes its run's ports, settling their open calls through the gate sink's
 `close` as an orderly end does (so the call that later returns writes nothing); whether a continue abandons the ports of

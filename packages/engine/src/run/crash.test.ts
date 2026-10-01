@@ -1697,5 +1697,42 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       await sessions.running(sid);
       expect(stray()).toMatchObject({ status: 'running' });
     });
+
+    /*
+     * The other half of residual 2's repair: a run leaves the set once it has closed its ports. A run of this process that
+     * completed and tore down holds no call that may still settle, so a continue after it settles `failed`, as a crash's,
+     * the ring row no live call holds (here one its port opened and never settled, as a dead process's call leaves it). Were
+     * the run kept in the set after its teardown, every later continue in this process would skip the settle and the row
+     * would stay `running` for good.
+     */
+    it('a continue after a run of this process that completed and tore down settles a ring row no live call holds', async () => {
+      const client = new ScriptedModelClient([toolCalls([{ callId: 'g1', name: 'grep', args: {} }], 'Reading.'), answer('Done.'), answer('Done again.')]);
+      const call = (callId: string, agent: string) => ({ call_id: callId, agent_name: agent, tool_name: 'grep', args: {} });
+      const port = (ctx: ToolPortContext): ToolPort => ({
+        specs: () => [{ name: 'grep', description: 'search', parameters: { type: 'object' } }],
+        dispatch: (c) => {
+          const own = ctx.writer.openToolCall(call(c.callId, 'orchestrator'));
+          if (own.ok) ctx.writer.settleToolCall(own.value, call(c.callId, 'orchestrator'), { status: 'ok', elapsed_ms: 1, is_error: false, result: 'a.ts:1' });
+          if (c.callId === 'g1') ctx.writer.openToolCall(call('dead', 'c9'));
+          return Promise.resolve({ text: 'a.ts:1', isError: false, status: 'ok' as const, durationMs: 1, label: 'grep', args: {} });
+        },
+        cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+      });
+      const sessions = new Sessions({
+        clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-torn', isProcessAlive: () => true,
+        model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, s) => join(dir, 'sessions', s), tools: (ctx) => port(ctx),
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', runStartMode: 'auto' },
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+      expect((await sessions.running(sid))!.execution_status).not.toBe('awaiting_plan_decision');
+      const dead = () => dal.toolCallsOf(sid).find((r) => r.call_id === 'dead');
+      expect(dead()).toMatchObject({ status: 'running' });
+      // The continue records a crash before its run is built; the run that completed closed its ports, so nothing of this
+      // process may still settle the row and it is settled as a crash's.
+      expect(sessions.prompt(sid, 'again').ok).toBe(true);
+      expect(dead()).toMatchObject({ status: 'failed', is_error: 1 });
+      await sessions.running(sid);
+      expect(dead()).toMatchObject({ status: 'failed', is_error: 1 });
+    });
   });
 });

@@ -51,6 +51,9 @@ declared tools where its port reported two.
   record at once and then awaits readiness as it always did, and the recording's reaction, registered on readiness before
   the turn's own await, still lands the grant before the first model request.
 
+ADR-0034, which decided the spawn-time evidence, has its two passages on it corrected in place (the collision reading's
+"recorded evidence" and the one resolution's consumers), the old reading struck through beside the new.
+
 Pinned by `packages/engine/src/children/children.test.ts` ("REQ-MCP-065 / REQ-TOOLS-006: a child's row records the grant
 its port reports once ready…", "…a child whose port reports no grant has none recorded…", and "REQ-MCP-065 / PD-ORCH-005:
 a child's payload is in its record while its port's readiness is pending, and its grant is recorded before its first model

@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join, relative, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { logTail, overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
@@ -8,7 +8,8 @@ import { choose, startApp, stopApp, stopOverrunMessage, until } from './lib/driv
 
 /**
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
- * (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..093/263). Seven scenarios, each asserting the store's events, issues,
+ * (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..093/263), and since OQ-173 that a wait the run imposes is not a stall
+ * (REQ-MONITOR-117..119). Eight scenarios, each asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
  *
@@ -224,6 +225,32 @@ await scenarioRun('retry-after', async () => {
   const after = probes(r.log, 'probe');
   expect(after.length > 0 && after[0].found.length === 0, `the header is still on screen after the run ended: ${JSON.stringify(after)}`);
   results.retryAfter = { status: row.execution_status, wait: meta, headerDuringWait: header.text, remainingS: header.data['data-remaining'], calls: modelCalls(r.log), png: r.png, elapsedMs: r.elapsedMs };
+});
+
+// 1b. OQ-173 (the repair of `a-provider-wait-or-a-compression-is-counted-as-a-stall.md`): a provider-limit wait longer than
+// the stall threshold is the run's own wait and not the agent's silence. With `child_stall_timeout: 3` the entry agent's
+// watch evaluates every second; a 10 s retry-after wait raises no `stall` issue, and its session log says the agent is
+// waiting on a provider limit (REQ-MONITOR-118's manner) beside the wait's own notice and issue (REQ-NOTIFY-083..087).
+const s1b = scenario('quota-wait', ['  child_stall_timeout: 3']);
+await scenarioRun('quota-wait', async () => {
+  const r = await launch('quota-wait', s1b, { ROTARIS_SCRIPT: 'fail:429:retry-after=10,answer', ROTARIS_CAPTURE_PROMPT: 'wait past the stall threshold', ROTARIS_CAPTURE_PROBE_AT: '.wait-header@~9000', ROTARIS_CAPTURE_PROBE: '.wait-header', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
+  const db = open(s1b);
+  const row = session(db);
+  const kinds = issues(db, row.session_id);
+  db.close();
+  expect(row.execution_status === 'completed', `the run did not complete after the wait: ${JSON.stringify(row)}`);
+  const wait = kinds.find((i) => i.kind === 'model_wait');
+  expect(wait !== undefined && JSON.parse(wait.metadata).wait_seconds === 10, `no 10 s model_wait issue: ${wait?.metadata}`);
+  const stalls = kinds.filter((i) => i.kind === 'stall');
+  expect(stalls.length === 0, `the provider-limit wait was reported as a stall ${stalls.length} time(s): ${stalls[0]?.message}`);
+  const header = probes(r.log, 'probe-at ~9000')[0]?.found[0];
+  expect(header !== undefined, 'the wait header was not on screen 9 s into the run');
+  const logFile = join(dirname(oneDatabase(s1b.local)), 'sessions', row.session_id, 'session.log');
+  const sessionLog = existsSync(logFile) ? readFileSync(logFile, 'utf8') : '';
+  const waitLines = sessionLog.split('\n').filter((l) => l.includes('agent waiting on a provider limit:'));
+  expect(waitLines.length >= 1, `the session log does not say the agent is waiting on a provider limit (${logFile})`);
+  expect(!/appears stalled/.test(sessionLog), 'the session log calls the wait a stall');
+  results.quotaWait = { status: row.execution_status, wait: JSON.parse(wait.metadata), stallIssues: stalls.length, headerDuringWait: header.text, waitLine: waitLines[0], png: r.png, elapsedMs: r.elapsedMs };
 });
 
 // 2. A 429 with no retry-after: a 60 s wait computed locally; cancel from the header ends the run user_cancelled with REQ-NOTIFY-063's notice.

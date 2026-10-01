@@ -38,7 +38,7 @@ import { callsRun, interruptedResult } from './interruption.js';
 import { firstTurn, resumedStart, resumeNoticeOf, type TurnStart } from './resume.js';
 import { offersForFirstMessage } from './offers.js';
 import { randomUUID } from 'node:crypto';
-import { StallWatch, stallRecoveredLine, stallWaitingLine, stallWarning } from '../children/stall.js';
+import { StallWatch, stallImposedWaitLine, stallRecoveredLine, stallWaitingLine, stallWarning } from '../children/stall.js';
 import { CHILD_STALL_TIMEOUT_MS } from '../children/cut-off.js';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, type AgentTodoDocument } from '../todo-view.js';
 
@@ -1388,6 +1388,8 @@ export class Run {
         writer.recordIssue({ kind: 'stall', severity: 'warning', actor: rootName, message, metadata: { task_id: rootTaskId, silent_seconds: r.silentS, active_tools: r.activeTools, recent_tool_calls: r.recentCalls, last_model_event: r.lastModelEvent } });
       },
       waiting: (w) => { if (!rootDetached) this.deps.warn(stallWaitingLine(rootName, rootTaskId, w.activeCalls, w.silentS, 'agent')); },
+      // OQ-173: a backoff, a provider-limit wait or a compression the run holds the root in is a wait, not a stall.
+      imposed: (w) => { if (!rootDetached) this.deps.warn(stallImposedWaitLine(rootName, rootTaskId, w.wait, w.silentS, 'agent')); },
       recovered: () => { if (!rootDetached) this.deps.warn(stallRecoveredLine(rootName, rootTaskId, 'agent')); },
       evaluated: (stalled) => { if (!rootDetached) this.rootStallEvaluated(rootName, stalled ? rootWatch.silentSeconds : null); },
     });
@@ -1433,6 +1435,8 @@ export class Run {
       onModelEvent: (kind) => rootWatch.modelEvent(kind),
       onToolStarted: (call) => rootWatch.toolStarted(call.callId, call.name),
       onToolCompleted: (call) => rootWatch.toolCompleted(call.callId),
+      // OQ-173: and told of each wait the run holds it in between its steps, which is not its silence.
+      onImposedWait: (wait) => rootWatch.imposedWait(wait),
       }, text, history, this.abort.signal, content).finally(() => rootWatch.betweenTurns());
     };
     let outcome: TurnOutcome | null = null;

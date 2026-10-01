@@ -873,11 +873,21 @@ as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds
   takes no step until a child of its own reports, so it is between its turns from the start. (Corrected 2026-09-30: the
   bullet above was first read as covering this path too, but no turn settles before such a wait, so it was counted as
   silence.)
+- each wait the run itself holds the agent in between two model steps (`StallWatch.imposedWait`, through
+  `TurnDeps.onImposedWait` and `LadderDeps.imposedWait`; OQ-173, the repair of
+  [`a-provider-wait-or-a-compression-is-counted-as-a-stall.md`](../../defects/fixed/a-provider-wait-or-a-compression-is-counted-as-a-stall.md),
+  2026-10-01): `resilientStep`'s transient or validation backoff and its suspended wait on a provider limit, and a
+  context compression's own model call, automatic or on a rejection (`runTurn`'s `compressing`). While one is held, an
+  evaluation past the threshold reports the wait and no stall — the callback *not stalled* — and its release restarts the
+  silence, as a call's result does.
 
 What it writes:
 - a silence of the threshold with no call in flight: a `stall` issue at every evaluation (REQ-MONITOR-119), and a
   warning at entry and then every `max(threshold, 30)` s (REQ-MONITOR-120);
 - the same silence with calls in flight: a `child waiting on tools: …` line (REQ-MONITOR-118);
+- the same silence while the run holds the agent in a wait of its own: a `child waiting on a provider limit: …` line
+  (or `a retry backoff`, `a context compression`), at entry and then every `max(threshold, 30)` s, in REQ-MONITOR-118's
+  manner (OQ-173); the suspended wait's own notice and `model_wait` issue (REQ-NOTIFY-083..087) are unchanged;
 - activity resuming after a stall: a `child stall recovered: …` line (REQ-MONITOR-120) — only when the agent was active
   after the evaluation that last found it stalled (a model event that is not an error, or something the run gave it). A
   stall that ends otherwise — a cancel, a stop, a pause, a hard timeout, a failed turn, at the watch's `stop` or at an

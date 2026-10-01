@@ -14,7 +14,12 @@ import type { ChatMessage, ModelError } from '@rotaris/model';
  * - between the child's turns — its turn has ended and the run asks nothing of it until it starts the next, which is a
  *   wait on its own children or the end of its execution — there is no model step to be silent, so it reports neither
  *   (OQ-155, the repair of `a-child-waiting-on-its-own-children-is-reported-stalled.md`). Each of those children has its
- *   own watch, which reports its own silence.
+ *   own watch, which reports its own silence;
+ * - while the run itself holds the agent between two model steps — a retry's backoff or the suspended wait on a provider
+ *   limit (REQ-ORCH-091/092), or a context compression's own model call (ADR-0060) — it reports that wait at
+ *   REQ-MONITOR-118's informational level, and no stall (OQ-173, the repair of
+ *   `a-provider-wait-or-a-compression-is-counted-as-a-stall.md`). The wait's end restarts the silence, as a tool call's
+ *   result does.
  * The callback fires on every evaluation with the stalled state, so a host can draw a badge.
  *
  * The recovery is separate from the watch. A child whose turn ends `failed`, having produced no output for the whole
@@ -34,6 +39,29 @@ export function stallRepeat(thresholdMs: number): Millis {
 
 /** The model events that are output: a token of the answer, of the reasoning, or of a tool call (REQ-NOTIFY-112, OQ-127). */
 const OUTPUT_EVENTS: ReadonlySet<string> = new Set(['text', 'reasoning', 'tool-call']);
+
+/**
+ * OQ-173: a wait the run imposes on an agent between its model steps — a transient or validation retry's backoff
+ * (REQ-ORCH-092), the suspended wait on a provider limit (REQ-ORCH-091 (c)), or a context compression's own model call,
+ * automatic or on a rejection (REQ-MONITOR-076, REQ-ORCH-093).
+ */
+export type ImposedWait = 'backoff' | 'provider_limit' | 'compression';
+
+/** OQ-173: how a wait the run imposes is announced to a stall watch (`StallWatch.imposedWait`); the result releases it. */
+export type ImposedWaitPort = (wait: ImposedWait) => () => void;
+
+/** OQ-173: runs `body` inside a wait the run imposes, released however it ends. With no port, it just runs `body`. */
+export async function duringImposedWait<T>(port: ImposedWaitPort | undefined, wait: ImposedWait, body: () => Promise<T>): Promise<T> {
+  const release = port?.(wait);
+  try {
+    return await body();
+  } finally {
+    release?.();
+  }
+}
+
+/** What `stallImposedWaitLine` calls each wait. */
+const IMPOSED_WAIT_WORDS: Readonly<Record<ImposedWait, string>> = { backoff: 'a retry backoff', provider_limit: 'a provider limit', compression: 'a context compression' };
 
 /** What one stall report carries (REQ-ORCH-089's diagnostics issue: active tools, the last 5 tool calls, the last model event type). */
 export interface StallReport {
@@ -55,6 +83,11 @@ export interface StallSinks {
   readonly stalled: (report: StallReport) => void;
   /** REQ-MONITOR-118: the same silence with tool calls in flight, at entry and at each repeat the throttle allows. */
   readonly waiting: (report: { readonly silentS: number; readonly activeCalls: number }) => void;
+  /**
+   * OQ-173: the same silence while the run holds the agent in a wait of its own (`imposedWait`), at entry and at each repeat
+   * the throttle allows — REQ-MONITOR-118's manner. Absent means it is not reported.
+   */
+  readonly imposed?: ((report: { readonly silentS: number; readonly wait: ImposedWait }) => void) | undefined;
   /** REQ-MONITOR-120: activity resumed after a stall — never a stall that ended with none. */
   readonly recovered: () => void;
   /** REQ-ORCH-089: every evaluation, with whether the child is stalled. */
@@ -83,6 +116,10 @@ export class StallWatch {
   private activeSinceStall = false;
   /** OQ-155: the child's turn has ended and the run has not started its next. */
   private between = false;
+  /** OQ-173: the waits the run is holding the agent in, by a key of their own; the newest names the wait reported. */
+  private readonly imposed = new Map<number, ImposedWait>();
+  private imposedKeys = 0;
+  private lastImposedAt: Millis | null = null;
 
   constructor(private readonly clocks: Clocks, readonly thresholdMs: Millis, private readonly sinks: StallSinks) {
     this.lastEventAt = clocks.monotonic.now();
@@ -93,6 +130,7 @@ export class StallWatch {
   start(): void {
     this.stop();
     this.active.clear();
+    this.imposed.clear();
     this.activity();
     this.timer = this.clocks.timers.every(stallCadence(this.thresholdMs), () => this.evaluate());
   }
@@ -147,6 +185,25 @@ export class StallWatch {
     this.between = true;
   }
 
+  /**
+   * OQ-173: the run holds the agent in a wait of its own between two model steps — a retry's backoff, the suspended wait
+   * on a provider limit, or a context compression's own model call. Until the returned release is called, an evaluation
+   * that finds the threshold passed reports the wait (`imposed`) and no stall, and the callback reads not stalled. The
+   * release restarts the silence, as a tool call's result does: the agent's next model step starts then, and the wait is
+   * not the agent's silence, for REQ-NOTIFY-112's window either. A second call of the release does nothing.
+   */
+  imposedWait(wait: ImposedWait): () => void {
+    const key = (this.imposedKeys += 1);
+    this.imposed.set(key, wait);
+    return () => {
+      if (!this.imposed.delete(key)) return;
+      if (this.imposed.size > 0) return;
+      const now = this.clocks.monotonic.now();
+      this.lastEventAt = now;
+      this.lastOutputAt = now;
+    };
+  }
+
   toolStarted(callId: string, name: string): void {
     this.active.set(callId, name);
     this.recent.push(name);
@@ -185,11 +242,25 @@ export class StallWatch {
     const silentS = Math.floor(silent / 1000);
     if (this.between || silent < this.thresholdMs) {
       this.lastWaitingAt = null;
+      this.lastImposedAt = null;
       this.endStall();
       this.sinks.evaluated(false);
       return;
     }
     const repeat = stallRepeat(this.thresholdMs);
+    const imposed = [...this.imposed.values()].at(-1);
+    if (imposed !== undefined) {
+      // OQ-173: the run's own wait, not the agent's silence — reported as a wait, never as a stall.
+      this.lastWaitingAt = null;
+      this.endStall();
+      if (this.lastImposedAt === null || now - this.lastImposedAt >= repeat) {
+        this.lastImposedAt = now;
+        this.sinks.imposed?.({ silentS, wait: imposed });
+      }
+      this.sinks.evaluated(false);
+      return;
+    }
+    this.lastImposedAt = null;
     if (this.active.size > 0) {
       this.endStall();
       if (this.lastWaitingAt === null || now - this.lastWaitingAt >= repeat) {
@@ -230,6 +301,15 @@ export function stallWarning(agentName: string, taskId: string, silentS: number,
 /** REQ-MONITOR-118's informational message: the silence with tool calls in flight, which is a wait and not a stall. */
 export function stallWaitingLine(agentName: string, taskId: string, activeCalls: number, silentS: number, subject: StallSubject = 'child'): string {
   return `${subject} waiting on tools: ${agentName} (${taskId}) has ${countNoun(activeCalls, 'active tool call')} and no model event or token for ${silentS} seconds; the run is still waiting on it (REQ-MONITOR-118)`;
+}
+
+/**
+ * OQ-173: the silence while the run holds the agent in a wait of its own, in REQ-MONITOR-118's manner — a wait and not a
+ * stall. The suspended wait's own notice (REQ-NOTIFY-083..087) remains what the surfaces state; this line is the session
+ * log's.
+ */
+export function stallImposedWaitLine(agentName: string, taskId: string, wait: ImposedWait, silentS: number, subject: StallSubject = 'child'): string {
+  return `${subject} waiting on ${IMPOSED_WAIT_WORDS[wait]}: ${agentName} (${taskId}) has no model event or token for ${silentS} seconds; the wait is the run's own and not a stall (OQ-173)`;
 }
 
 /** REQ-MONITOR-120's recovery: activity resumed after a stall. */

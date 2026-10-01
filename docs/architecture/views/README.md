@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-01**
 
+**A wait the run imposes is not a stall (REQ-MONITOR-117..119, REQ-ORCH-091, REQ-ORCH-092, REQ-ORCH-093, ADR-0060,
+OQ-173).** `StallWatch.imposedWait` (`children/stall.ts`) holds a stall watch's evaluation off the silence while the run
+holds the agent between two model steps: `resilientStep`'s backoff and suspended wait (`LadderDeps.imposedWait`) and a
+compression's own model call (`runTurn`'s `compressing`), both through `TurnDeps.onImposedWait`, which `Run.turn` wires to
+the root's watch and `execute` to each child's. Such a silence is logged as the wait it is (`stallImposedWaitLine`), and
+the release restarts the silence. This repairs `a-provider-wait-or-a-compression-is-counted-as-a-stall.md`. The
+**runtime view**'s stall-watch paragraph says so. No package, edge, process, message kind, channel, command or store
+column changed.
+
 **Every task and phase id the engine assigns is 8 lowercase hexadecimal characters (REQ-CHAT-089, REQ-CHAT-040).**
 `mintTodoId` (`run/todo.ts`) mints each, unique within the todo and, for a planner task, among the task ids the session's
 iterations recorded: the first run's task (was `<session>:main:1`), a continue's (`continuedTaskId`, was

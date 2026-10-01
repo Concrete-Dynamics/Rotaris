@@ -8524,3 +8524,44 @@ continue records the crash.
 `close` as an orderly end does (so the call that later returns writes nothing); whether a continue abandons the ports of
 the parked run it replaces, settling their rows as cut off; or whether the ring rows are stamped with the process that
 opened them, through an appended store migration, so a crash record settles exactly the rows of a dead process.
+
+**OQ-173 — Is a wait the run imposes on an agent, or a compression's own model call, silence for the stall watchdog?**
+*(REQ-MONITOR-117, "each agent is evaluated for a stall"; REQ-MONITOR-118, which excepts only "active tool calls",
+reported "at informational level as waiting on N active tool calls instead of as a stall"; REQ-MONITOR-119, "no model
+event or token"; REQ-ORCH-089; REQ-ORCH-091 (c) and REQ-ORCH-092, the suspended wait on a provider limit and the retry
+backoffs; REQ-NOTIFY-083 to REQ-NOTIFY-087, the suspended wait's own notice; REQ-MONITOR-076 and REQ-ORCH-093 with
+ADR-0060, the automatic compression and the condensation on a rejection; OQ-153; OQ-155. Raised 2026-10-01 by the
+repair of
+[`a-provider-wait-or-a-compression-is-counted-as-a-stall.md`](../defects/fixed/a-provider-wait-or-a-compression-is-counted-as-a-stall.md).
+Open.)*
+
+An agent's stall watch counts the silence since its last model event or token. Between two of its model steps the run
+can hold an agent where it has no step in flight and no tool call either: `resilientStep`'s backoff before a transient or
+validation retry (at most 2 s), its suspended wait on a provider limit — the provider's retry-after, the local backoff
+doubling from 60 s, or indefinitely for an exhausted provider — and a context compression, whose own model call runs
+before the agent's next step (automatic) or inside it (on a rejection), up to REQ-MONITOR-080's 120 s. Read literally,
+REQ-MONITOR-119 makes each of those, past the threshold (90 s by default), a stall: an `… appears stalled` warning, a
+`stall` issue at every evaluation, and the `stalled Ns` badge, beside the wait's own notice (REQ-NOTIFY-083 to
+REQ-NOTIFY-087), which already says the agent is waiting and why. REQ-MONITOR-118 tells a stall from a wait only by tool
+calls in flight, and no requirement says whether a wait the run itself imposes, or a compression's model call, is the
+agent's silence.
+
+**What the build proceeds under.** As OQ-155 reads for a child waiting on its own children: the watch measures the
+silence of the agent's own model steps, and a wait the run holds it in is not that silence. While the ladder backs off or
+waits on a provider limit, and while a compression runs, the watch is told so (`StallWatch.imposedWait`, released when
+the wait ends however it ends); an evaluation past the threshold then reports no stall, its callback reads *not stalled*,
+so no `stall` issue is written and no stalled seconds reach the record. The silence is logged at REQ-MONITOR-118's
+informational level, in its manner, as `… waiting on a provider limit: …` (or `a retry backoff`, `a context
+compression`), at entry and at each repeat the throttle allows, to the session log through the run's `warn`, as OQ-127
+reads for the wait on tools; no timeline word is minted. A stall under way when such a wait begins is over, and not
+recovered (OQ-153). The wait's end restarts the silence, as a tool call's result does, so the next step is counted from
+it, and so is REQ-NOTIFY-112's window. The root's watch and each child's are wired alike (`Run.turn`, `execute`; tests
+in `stall.test.ts`, `ladder.test.ts` and `compression.test.ts`; `resilience-proof`'s `quota-wait` scenario).
+
+**What the reading does not cover.** The dispatch layer's own retries inside one model step (REQ-CONFIG-086's
+`num_retries`, before the ladder; OQ-110) send no event while they wait either, and stay counted as the step's silence; a
+manual compression (Part AO) runs beside the step in flight and is not a wait of the agent's.
+
+**What a ruling decides.** Whether a wait the run imposes, and a compression's model call, are outside the stall watch
+(as built), are stalls as REQ-MONITOR-119 reads literally, or are reported in words of their own — which REQ-ORCH-139's
+vocabulary does not have — and whether the dispatch layer's retry delays are such a wait too.

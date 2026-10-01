@@ -336,6 +336,63 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(result.status).toBe('completed');
   });
 
+  describe('REQ-MONITOR-117..119 with REQ-ORCH-091 (c) (OQ-173): a wait the run imposes is not a stall', () => {
+    const stallLines = () => warnings.filter((m) => /appears stalled/.test(m));
+    /** Advances the clock in 5 s strides, letting what each stride wakes run and publish. */
+    const stride = async (ms: number) => { for (let t = 0; t < ms; t += 5_000) { clock.advance(Math.min(5_000, ms - t)); await tick(); } };
+
+    it('the entry agent\'s 120 s suspended wait on a provider limit raises no `stall` issue and no stalled seconds; the watch logs the wait instead', async () => {
+      const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(rateLimit(120)) : answer('after the wait')));
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      expect(lastWait(pub)).toMatchObject({ attempt: 1, agent: 'orchestrator' });
+      await stride(120_000);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests).toHaveLength(2);
+      expect(issues(sid)).toContain('model_wait');
+      expect(issues(sid)).not.toContain('stall');
+      expect(stallLines()).toEqual([]);
+      expect(pub.snapshots.every((s) => s.entryStalledSeconds === null)).toBe(true);
+      // REQ-MONITOR-118's manner: the silence is logged as the wait it is, once at entry and at each repeat the throttle allows.
+      expect(warnings.filter((m) => m.startsWith('agent waiting on a provider limit:'))).toEqual([expect.stringMatching(/^agent waiting on a provider limit: orchestrator \(bg_[0-9a-f]{8}\) has no model event or token for 90 seconds; the wait is the run's own and not a stall \(OQ-173\)$/)]);
+    });
+
+    it('a child\'s 120 s suspended wait on a provider limit raises no `stall` issue and no stalled seconds on its agent row', async () => {
+      const { sessions, pub } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'limited', task: 'TASK: wait' } }]) : answer('finished');
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        return turn === 1 ? failing(rateLimit(120)) : answer('I did it after the wait.');
+      }, { delegation: true });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+      expect(lastWait(pub)).toMatchObject({ attempt: 1 });
+      await stride(120_000);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(dal.childrenOf(sid)[0]!.state).toBe('succeeded');
+      expect(issues(sid)).not.toContain('stall');
+      expect(stallLines()).toEqual([]);
+      expect(pub.snapshots.every((s) => s.agents.every((a) => a.stalledSeconds === null))).toBe(true);
+      expect(warnings.filter((m) => m.startsWith('child waiting on a provider limit: limited'))).toHaveLength(1);
+    });
+
+    it('the wait\'s end restarts the silence: a step that then says nothing for the threshold is a stall again', async () => {
+      let speak!: () => void;
+      const spoken = new Promise<void>((r) => { speak = r; });
+      const { sessions } = sessionsWith((_p, turn) => (turn === 1 ? failing(rateLimit(120)) : { parts: [{ hold: spoken }, ...answer('late').parts] }));
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      await stride(120_000);
+      expect(issues(sid)).not.toContain('stall');
+      await stride(85_000);
+      expect(issues(sid)).not.toContain('stall');
+      await stride(5_000);
+      expect(issues(sid)).toContain('stall');
+      expect(stallLines()).toEqual([expect.stringMatching(/^agent appears stalled: no model event or token for 90 seconds/)]);
+      speak();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+    });
+  });
+
   it('quota with a same-tier candidate on another provider: the pair is marked exhausted, the fallback is transparent, the run completes on the other model (REQ-ORCH-091 a/b, REQ-NOTIFY-082/088/090)', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model']), entry('c1', 'c', C1, [])];
     const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer('from b')), { catalogue });

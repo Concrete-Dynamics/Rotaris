@@ -75,6 +75,11 @@
  *               is re-read and says nothing holds the card, draws no alert, and the history holds one resume. The queue
                is then started, and a run begins on the one tree the release provisioned (`…-u1`): no "no run began" on
                the card, no second provisioning in the log, one run row and one worktree row (REQ-TRACE-464).
+ *   ready-restart — REQ-TRACE-472/482/464 across a quit and a relaunch: the queue stopped and a release accepted through
+ *               the disclosure, so REQ-101 rests in `ready` on its tree; the application quits. Relaunched, the queue
+ *               asks for the disclosure, "Disclose and start" shows it, "Start the run" begins the run on the tree the
+ *               release provisioned: one run row of u1, one worktree row, the take-over in the log and no second
+ *               provisioning.
  *
  * Evidence under `.proof/requirements-proof/`: `vitest.json`, one PNG and one log per launch, `results.json`.
  * `--skip-build` skips the desktop build.
@@ -890,6 +895,66 @@ const resumeTrees = resumeRows.query("select * from delivery_worktrees where req
 expect(resumeRuns.length === 1 && resumeRuns[0].unit === 'u1', `REQ-TRACE-464: the resumed REQ-101 has run rows ${JSON.stringify(resumeRuns.map((x) => x.unit))}, not one run of u1`);
 expect(resumeTrees.length === 1 && String(resumeTrees[0].path).endsWith('-u1') && resumeTrees[0].ref === resumeRuns[0].worktree_ref, `REQ-TRACE-464/REQ-GIT-140: the run did not begin on the one tree the release provisioned (trees ${JSON.stringify(resumeTrees.map((t) => t.path))}, run on ${JSON.stringify(resumeRuns[0].worktree_ref)})`);
 stage2['blocker-resume'] = { disclosure: resumeDisclosure.buttons, waiting: resumeWaiting.waiting, afterAccept: { none: resumeAfter.none, alerts: resumeAfter.alerts }, column: resumed.evals['23200'].column, history: resumeHistory, dispatched, run: { unit: resumeRuns[0].unit, worktree: resumeTrees[0].path } };
+
+// ── ready-restart: a card resting in `ready` across a quit and a relaunch, disclosed and started from the queue (REQ-TRACE-472/482/464) ──
+//
+// Defect note `a-card-resting-in-ready-across-a-restart-can-never-be-started.md`. The first launch stops the queue and
+// releases REQ-101 through the disclosure, so it rests in `ready` on its provisioned tree with no run begun, and quits.
+// The launch the workspace service held lived in its memory only, so until 2026-10-02 the relaunched queue said the
+// disclosure was due, its "Disclose and start" recorded nothing (the release arm rewrote only a launch it held), and no
+// claim ever took the card. The relaunch must show the disclosure, take it from the queue, and begin the run on the
+// one tree the release provisioned.
+const QUEUE_AT = `(() => { const p = document.querySelector('[data-testid="req-pane-queue"]'); if (p === null) return null; return { rows: [...p.querySelectorAll('[data-testid="req-pane-queue-row"]')].map((r) => ({ id: (r.querySelector('.req-pane__mono') || {}).textContent, state: r.getAttribute('data-state'), reason: (r.querySelector('[data-testid="req-pane-queue-reason"]') || {}).textContent ?? null, buttons: [...r.querySelectorAll('button')].map((b) => b.getAttribute('aria-label') || b.textContent.trim()) })), stopped: p.querySelector('[aria-label="Start the queue"]') !== null }; })()`;
+const restartProfile = profile('ready-restart');
+const resting = await launch('ready-restart', restartProfile.workspace, restartProfile.local, restartProfile.preferences, {
+  ROTARIS_CAPTURE_RESIZE: '1264x800@300',
+  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_CLICKS: [
+    '[data-testid="req-queue-open"]@3000',
+    '[aria-label="Stop the queue"]@4000',
+    '[data-testid="req-pane-close"]@4800',
+    `${CARD_101}@5600`,
+    '[data-testid="req-move-control"]@6800',
+    '[data-testid="req-confirm"] .btn>>Release@7800',
+    '[data-testid="req-pane-disclosure"] .btn>>Start the run@9000',
+  ].join(';;'),
+  ROTARIS_CAPTURE_EVAL_AT: [`${REVEAL_101}@11800`, `${BOARD_AT}@12000`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '13000',
+}, 180_000);
+expect(resting.evals['12000']?.column === 'ready', `REQ-TRACE-382: with the queue stopped the release left REQ-101 in ${JSON.stringify(resting.evals['12000']?.column)}, not ready (feedback ${JSON.stringify(resting.evals['12000']?.feedback)})`);
+const restingRows = deliveryRows(restartProfile.local);
+expect(restingRows !== null, `no delivery store was written under ${restartProfile.local}`);
+const restingTrees = restingRows.query("select * from delivery_worktrees where req_id = 'REQ-101'");
+expect(restingTrees.length === 1 && String(restingTrees[0].path).endsWith('-u1') && existsSync(restingTrees[0].path), `REQ-TRACE-464: the release did not leave one tree of u1 on disk (${JSON.stringify(restingTrees.map((t) => t.path))})`);
+expect(restingRows.query("select * from delivery_runs where req_id = 'REQ-101'").length === 0, 'REQ-TRACE-479: a run began with the queue stopped');
+const relaunchedQueue = await launch('ready-restart-relaunch', restartProfile.workspace, restartProfile.local, restartProfile.preferences, {
+  ROTARIS_CAPTURE_RESIZE: '1264x800@300',
+  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_CLICKS: [
+    '[data-testid="req-queue-open"]@3000',
+    '[aria-label="Show the disclosure and start REQ-101"]@4600',
+    '[data-testid="req-pane-disclosure"] .btn>>Start the run@6400',
+  ].join(';;'),
+  ROTARIS_CAPTURE_EVAL_AT: [`${QUEUE_AT}@4000`, `${DISCLOSURE_AT}@5800`, `${REVEAL_101}@11900`, `${BOARD_AT}@12000`, `${REVEAL_101}@17900`, `${BOARD_AT}@18000`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '19000',
+}, 180_000);
+const restartQueue = relaunchedQueue.evals['4000'];
+const restartEntry = restartQueue?.rows?.find((r) => r.id === 'REQ-101');
+// REQ-TRACE-480: the stop is not persisted; REQ-TRACE-472/497: the lost launch's disclosure is asked for again, and nothing has begun.
+expect(restartQueue?.stopped === false, `REQ-TRACE-480: the relaunched queue reads stopped (${JSON.stringify(restartQueue)})`);
+expect(restartEntry?.state === 'deferred' && /have not been disclosed and accepted/.test(restartEntry.reason ?? '') && restartEntry.buttons.includes('Show the disclosure and start REQ-101'), `REQ-TRACE-472: after the relaunch the queue entry of REQ-101 reads ${JSON.stringify(restartEntry)}`);
+const restartDisclosure = relaunchedQueue.evals['5800'];
+expect(restartDisclosure !== null && restartDisclosure !== undefined && restartDisclosure.buttons.includes('Start the run'), `REQ-TRACE-472: "Disclose and start" raised no disclosure (${JSON.stringify(restartDisclosure)})`);
+const restartColumns = ['12000', '18000'].map((k) => relaunchedQueue.evals[k]?.column);
+expect(restartColumns.some((c) => c === 'running' || c === 'review' || c === 'done'), `REQ-TRACE-472/482: the disclosure accepted from the relaunched queue started nothing — REQ-101 read ${JSON.stringify(restartColumns)} (feedback ${JSON.stringify(relaunchedQueue.evals['18000']?.feedback)})`);
+expect(!/Worktree path already exists/.test(relaunchedQueue.log), 'REQ-TRACE-464: the relaunch provisioned the unit\'s worktree a second time');
+expect(/REQ-101 unit u1 takes over its worktree/.test(relaunchedQueue.log), 'REQ-TRACE-464: the relaunch\'s log does not say the recorded tree was taken over');
+const restartRows = deliveryRows(restartProfile.local);
+const restartRuns = restartRows.query("select * from delivery_runs where req_id = 'REQ-101'");
+const restartTrees = restartRows.query("select * from delivery_worktrees where req_id = 'REQ-101'");
+expect(restartRuns.length === 1 && restartRuns[0].unit === 'u1', `REQ-TRACE-464: the relaunched REQ-101 has run rows ${JSON.stringify(restartRuns.map((x) => x.unit))}, not one run of u1`);
+expect(restartTrees.length === 1 && restartTrees[0].path === restingTrees[0].path && restartTrees[0].ref === restartRuns[0].worktree_ref, `REQ-TRACE-464/REQ-GIT-140: the run did not begin on the tree the release provisioned before the quit (trees ${JSON.stringify(restartTrees.map((t) => t.path))}, run on ${JSON.stringify(restartRuns[0].worktree_ref)})`);
+stage2['ready-restart'] = { before: resting.evals['12000'].column, entryAfterRelaunch: { state: restartEntry.state, reason: restartEntry.reason }, disclosure: restartDisclosure.buttons, columns: restartColumns, run: { unit: restartRuns[0].unit, worktree: restartTrees[0].path } };
 
 // ── panes and the graph: the registry's contract, and the rest of REQ-TRACE-497 a proof can reach ────────────────
 // Defect `R2-6`, and the reason this read carries geometry at all: every assertion below once read attributes through

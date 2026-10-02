@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import type { Actor, BoardProjection, CommandOutcome, LaunchPreview, ProcessEvent, ProcessReply, ReqId, Refusal, RunHostRequest, RunReaped, TransitionOutcome } from '@rotaris/contracts';
 import { mintWorkspaceId } from '@rotaris/kernel';
@@ -62,6 +63,9 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
   const act = async (id: ReqId, action: 'release' | 'resume', payload?: Readonly<Record<string, string>>): Promise<{ readonly ok: boolean; readonly value?: TransitionOutcome; readonly error?: Refusal }> =>
     (await delivery.handle({ name: 'requirements.act', workspace: workspaceRoot, id, action, ...(payload === undefined ? {} : { payload }) }, USER)).value as { ok: boolean; value?: TransitionOutcome; error?: Refusal };
 
+  /** The workspace service and main's coordinator as a start builds them; the restart assertion builds a second pair over the same store. */
+  let start: () => void = () => undefined;
+
   beforeAll(async () => {
     const storeDir = join(out!, 'store');
     const configDir = join(out!, 'config');
@@ -70,26 +74,29 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
     const clocks = nodeClocks();
     resolved = openWorkspaceStore(storeDir, mintWorkspaceId('000000000000000000000000000000ap'.replace(/[^0-9a-f]/g, '0')), workspaceRoot);
     const engine = createTraceabilityEngine({ executor: createInThreadExecutor(clocks), io: fsArtifactIo(clocks.timers), clocks });
-    delivery = createDeliveryService({ db: resolved.db, workspaceRoot, engine, clocks, configDir, log: () => undefined });
-    runs = createRequirementsRuns({
-      currentWorkspace: () => workspaceRoot,
-      currentWorkspaceId: () => 'proof-workspace',
-      service: (root, request) => {
-        if (request.kind !== 'requirements.command') return Promise.resolve({ kind: 'refused', code: 'proof.unexpected', headline: `unexpected request ${request.kind}` } as ProcessReply);
-        expect(root).toBe(workspaceRoot);
-        expect(request.actor).toEqual({ kind: 'system' });
-        return delivery.handle(request.command, request.actor).then((answer): ProcessReply => {
-          serviceCalls.push({ name: request.command.name, value: answer.value });
-          return { kind: 'requirements.result', value: answer.value, ...(answer.changed === undefined ? {} : { changed: answer.changed }) };
-        });
-      },
-      runHost: { request: host, onEvent: (fn) => { emit = fn; return () => undefined; } },
-      onRunHostExit: (fn) => { exit = fn; },
-      preferences: { read: (key) => key === 'requirements/fullPermissionRuns', write: async () => undefined },
-      mintSessionId: () => `proof-session-${(minted += 1)}`,
-      broadcast: () => undefined,
-      log: () => undefined,
-    });
+    start = () => {
+      delivery = createDeliveryService({ db: resolved.db, workspaceRoot, engine, clocks, configDir, log: () => undefined });
+      runs = createRequirementsRuns({
+        currentWorkspace: () => workspaceRoot,
+        currentWorkspaceId: () => 'proof-workspace',
+        service: (root, request) => {
+          if (request.kind !== 'requirements.command') return Promise.resolve({ kind: 'refused', code: 'proof.unexpected', headline: `unexpected request ${request.kind}` } as ProcessReply);
+          expect(root).toBe(workspaceRoot);
+          expect(request.actor).toEqual({ kind: 'system' });
+          return delivery.handle(request.command, request.actor).then((answer): ProcessReply => {
+            serviceCalls.push({ name: request.command.name, value: answer.value });
+            return { kind: 'requirements.result', value: answer.value, ...(answer.changed === undefined ? {} : { changed: answer.changed }) };
+          });
+        },
+        runHost: { request: host, onEvent: (fn) => { emit = fn; return () => undefined; } },
+        onRunHostExit: (fn) => { exit = fn; },
+        preferences: { read: (key) => key === 'requirements/fullPermissionRuns', write: async () => undefined },
+        mintSessionId: () => `proof-session-${(minted += 1)}`,
+        broadcast: () => undefined,
+        log: () => undefined,
+      });
+    };
+    start();
     // The board is read once before anything is measured, so the engine's parse is not timed into the first launch.
     await board();
   });
@@ -219,5 +226,49 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
     expect(entry.reason).toBe(slotReason(2, 2));
     expect(after.queue.entries.filter((e) => e.state === 'executing')).toHaveLength(2);
     results.concurrency = { concurrency: after.queue.concurrency, started: [...dispatched], deferred: third, reason: entry.reason };
+  });
+
+  /**
+   * Defect note `a-card-resting-in-ready-across-a-restart-can-never-be-started.md` (REQ-TRACE-472/482/464): a release
+   * with the queue stopped provisions the unit's tree and rests in `ready`; the restart loses the launch, which the
+   * workspace service held in memory only. The queue's "Disclose and start" sends the release with the disclosure; the
+   * service takes over the tree the store recorded (real Git, `takeOverUnitWorktree`), and the run begins on it.
+   */
+  it('a card resting in ready across a restart is disclosed and started from the queue, on the worktree its release provisioned', async () => {
+    const worktreesOf = (id: string): string[] => execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd: workspaceRoot }).toString().split(/\n/).filter((l) => l.startsWith(`branch refs/heads/rotaris/req/${id.toLowerCase()}/`));
+    await delivery.handle({ name: 'requirements.queue.set', workspace: workspaceRoot, stop: true }, USER);
+    const released = await act('REQ-106', 'release', { disclosure: 'accepted' });
+    expect(released.ok, released.error?.reason).toBe(true);
+    expect(released.value!.to).toBe('ready');
+    const tree = requirementWorktreePath(workspaceRoot, 'rotaris/req/req-106/u1');
+    expect(existsSync(tree)).toBe(true);
+    expect(worktreesOf('REQ-106')).toHaveLength(1);
+    // The quit and the relaunch: a new workspace service and a new coordinator over the same store, nothing in memory.
+    // The runs the previous instance left running are reaped as the restart reaps them (REQ-TRACE-476), which frees the slots.
+    const requestsBefore = hostRequests.length;
+    start();
+    const before = await board();
+    expect(before.cards.find((c) => c.id === 'REQ-106')!.column).toBe('ready');
+    // REQ-TRACE-480: the stop is not persisted; REQ-TRACE-472: the entry asks for the disclosure and nothing begins without it.
+    expect(before.queue.stopped).toBe(false);
+    const waiting = before.queue.entries.find((e) => e.id === 'REQ-106')!;
+    expect(waiting.state).toBe('deferred');
+    expect(waiting.reason).toMatch(/have not been disclosed and accepted/);
+    expect((await runs.dispatch()).started).toEqual([]);
+    // "Disclose and start": the queue's release with the accepted disclosure, as the pane sends it.
+    const set = await delivery.handle({ name: 'requirements.queue.set', workspace: workspaceRoot, release: 'REQ-106', disclosure: 'accepted' }, USER);
+    expect((set.value as BoardProjection['queue']).entries.find((e) => e.id === 'REQ-106')!.state).toBe('next');
+    const report = await runs.dispatch();
+    expect(report.abandoned).toEqual([]);
+    expect(report.started.map((s) => s.id)).toEqual(['REQ-106']);
+    const startRequest = hostRequests.slice(requestsBefore).find((h) => h.request.kind === 'session.start')!;
+    expect((startRequest.request as { effectiveRoot?: string }).effectiveRoot).toBe(tree);
+    expect(startRequest.request).toHaveProperty('boardPermissions', 'permissive');
+    // REQ-TRACE-464: the tree was taken over, never provisioned a second time.
+    expect(worktreesOf('REQ-106')).toHaveLength(1);
+    const card = (await board()).cards.find((c) => c.id === 'REQ-106')!;
+    expect(card.column).toBe('running');
+    expect(card.run?.unit).toBe('u1');
+    results.restartRelease = { deferredBefore: waiting.reason, started: report.started.map((s) => s.id), worktree: tree, worktreesForUnit: worktreesOf('REQ-106').length };
   });
 });

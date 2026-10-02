@@ -78,4 +78,4 @@ worktree row ending `-u1`. The stage passed on the repair; the whole proof passe
 
 Noticed while repairing it, and recorded rather than repaired: after a restart, a card resting in `ready` before its
 run began can never be started, because the queue's disclosure release finds no launch to record it on. See
-[`../a-card-resting-in-ready-across-a-restart-can-never-be-started.md`](../a-card-resting-in-ready-across-a-restart-can-never-be-started.md).
+[`a-card-resting-in-ready-across-a-restart-can-never-be-started.md`](a-card-resting-in-ready-across-a-restart-can-never-be-started.md), since repaired (2026-10-02).

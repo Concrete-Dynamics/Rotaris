@@ -304,6 +304,12 @@ sequenceDiagram
   REQ-GIT-140). Such an action is a card held out of `ready` before its run began and then resumed, or returned and
   released again. The tree comes from the launch the service holds, or, after a restart, from the store's worktree row
   through `takeOverUnitWorktree`, which admits only a tree Git lists at that path on that branch (2026-10-02).
+- **A card resting in `ready` keeps a way to start after a restart.** The launch (unit, disclosure, tree) lives in the
+  workspace service's memory, and the queue's release has no transition. So `recoverLaunch` rebuilds a lost launch
+  from the store's worktree row by take-over, never by provisioning: once on the first pass after a start (undisclosed,
+  which an unattended workspace's scheduler claims as it is), and on the queue's release, which records the disclosure
+  "Disclose and start" carries and arms the card. A tree that cannot be taken over is stated on the entry as the last
+  start's stall, and the claim still refuses the card (REQ-TRACE-472/482/464, REQ-TRACE-463; 2026-10-02).
 - The elevated grant (`boardPermissions: 'permissive'`) travels **on the `session.start` of that launch** and
   applies to the configuration captured for it. It is not a mode anything stays in.
 - A board read is bounded at 120 s because it may run the engine's three passes; everything else is a store

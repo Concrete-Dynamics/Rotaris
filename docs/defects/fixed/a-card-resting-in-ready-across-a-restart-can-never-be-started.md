@@ -1,0 +1,78 @@
+## A card resting in `ready` across a restart can never be started
+
+A release accepted through the launch disclosure provisions the unit's worktree and records the launch (its unit, its
+disclosure, its tree) in the workspace service's memory only (`launches` in `apps/desktop/src/workspace-service/delivery.ts`).
+With the queue stopped, or under `manual` before the user releases it, the card rests in `ready` with no run begun. A
+restart loses the launch while the store keeps the card in `ready` and the tree's row. From then on the queue states
+"The permissions of the run for REQ-101 have not been disclosed and accepted; open it from the queue to see the
+disclosure and start it." The queue pane's "Disclose and start" sends `requirements.queue.set {release, disclosure}`, and
+that arm records the disclosure only on a launch it already holds (`if (command.disclosure !== undefined && l !==
+undefined)`). So nothing is recorded, the entry stays deferred with the same sentence, and `run.claim` answers `null`
+(it would also refuse a launch with no worktree). The card can leave `ready` only by a hold and a resume, or a return
+and a second release, both of which run `beforeCommit` again.
+
+Seen 2026-10-02 in a scratch case of `delivery.test.ts` (not kept): a release with the queue stopped, a second service
+over the same store standing for the restart, the queue's disclosure release, then the claim. The entry read
+`deferred` with the sentence above before and after the release, and the claim was `null`. Found while repairing
+[`a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md`](a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md).
+That repair takes over the recorded tree when a later run-starting action of the same unit runs `beforeCommit` (so the
+hold-and-resume and the return-and-release routes now work after a restart). It does not reach the queue's release,
+which has no transition and no `beforeCommit`. Not repaired.
+
+## Specs
+
+- `REQ-TRACE-472`: accepting the disclosure is what lets the run start. Here the acceptance, offered by the queue
+  itself, records nothing and starts nothing.
+- `REQ-TRACE-482`: under `manual` a candidate begins once the user releases it. This one never begins.
+- `REQ-TRACE-464`: the run takes over the worktree already provisioned for it. The tree is on disk and in the store,
+  and no route from the queue reaches it.
+
+## Relevant files
+
+- `apps/desktop/src/workspace-service/delivery.ts`: `launches`, the in-memory record a restart clears;
+  `requirements.queue.set`'s `release` arm, which records a disclosure only on a launch it holds; `claim`, which refuses
+  an absent or unprovisioned launch.
+- `packages/workspace/src/delivery/runs.ts`: `takeOverUnitWorktree`, the take-over of a recorded tree the release arm
+  could use.
+- `packages/ui/src/requirements/RequirementsView.tsx`: the queue's "Disclose and start", which sends the release with the
+  disclosure.
+
+## Outcome
+
+**Repaired 2026-10-02** (fourth repair round over the open notes, bundle `fin7-queue-and-roles`; origin/main `dc796f5`).
+
+**Confirmed first.** Three new cases in `apps/desktop/src/workspace-service/delivery.test.ts` were red on the code
+before. In the first, the queue's disclosure release after the restart left the entry `deferred`, not `next`. In the
+second, under an unattended workspace with automatic scheduling, the claim after the restart was `null`. In the third,
+a tree that cannot be taken over was reported only as an undisclosed launch, never as the reason. `requirements-runs-proof`'s
+new sixth assertion was red on the same code (`expected 'deferred' to be 'next'`). So was `requirements-proof`'s new
+`ready-restart` stage over a build of the unrepaired code, across a real quit and relaunch of the built app: the entry
+asked for the disclosure, "Disclose and start" showed it, "Start the run" was taken, and REQ-101 still read
+`["ready","ready"]` 12 s and 18 s into the relaunch.
+
+**What changed.** `apps/desktop/src/workspace-service/delivery.ts` gains `recoverLaunch`. For a card in `ready` whose
+launch the process lost, or whose launch holds no tree, it takes over the tree the store's worktree row records for the
+card's unit through `RunGitPort.takeOver` (`takeOverUnitWorktree`). It then records the launch with the disclosure it
+was given. `beforeCommit`'s own take-over now goes through the same `takeOverRecorded`. `recoverLaunch` is called from
+two places:
+
+- the `requirements.queue.set` release arm, for a card in `ready`, with the disclosure the command carries. So "Disclose
+  and start" records the acceptance and arms the card (REQ-TRACE-472/482).
+- once on the service's first pass after a start, undisclosed, for every card resting in `ready`. An unattended
+  workspace needs no disclosure (REQ-TRACE-474), so its scheduler claims the card with no release. Elsewhere the entry
+  still asks for the disclosure.
+
+It never provisions. The queue's release has no transition to write a new worktree row into, and REQ-TRACE-464 forbids
+a second tree for the unit. A tree it cannot take over is stated on the entry as the last start's stall (REQ-TRACE-463).
+The stall names the hold and resume from the board as the way to provision one, and the claim still refuses the card.
+A launch already holding the unit's tree only takes the disclosure, as before.
+
+**Pinned by** the three `delivery.test.ts` cases: the disclosure release after a restart, claimed on u1's recorded
+path with one provisioning; the unattended automatic claim after a restart with no release; and the stated stall for a
+removed tree, with nothing provisioned. Also by `requirements-runs-proof`'s sixth assertion (real Git, the real
+engine, a second workspace service and coordinator over the same store: the entry undisclosed, the release with the
+disclosure, the run started on the tree the release provisioned, `git worktree list` holding one tree for the unit).
+And by `requirements-proof`'s `ready-restart` stage (two launches of the built app over one profile: the run reached
+`review` on the one worktree row ending `-u1`, one run row of u1, "takes over its worktree" in the log, no "Worktree
+path already exists"). Both proofs passed on the repair: `requirements-runs-proof` 117/117 tests, and the whole
+`requirements-proof` 139 tests with every stage, at a load average of 3.7 falling to 0.9.

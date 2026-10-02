@@ -84,6 +84,15 @@ ended and still reads `running`, it asks the run host's status once. This repair
 The **process view**'s initialization paragraph says so. No package, edge, process, message kind, channel, command or
 store column changed.
 
+**A card resting in `ready` across a restart is disclosed and started from the queue (REQ-TRACE-472, REQ-TRACE-482,
+REQ-TRACE-464).** The delivery service's `recoverLaunch` (`workspace-service/delivery.ts`) rebuilds a launch the restart
+lost from the store's worktree row through `RunGitPort.takeOver`, never by provisioning. It runs once on the first pass
+after a start and again on the queue's release, which records the disclosure it carries. A tree that cannot be taken
+over is stated on the queue entry. `beforeCommit`'s own take-over now shares `takeOverRecorded` with it. This repairs
+`a-card-resting-in-ready-across-a-restart-can-never-be-started.md`; `requirements-runs-proof`'s sixth assertion shows
+it. The **sequences view**'s board section says so. No package, edge, process, message kind, channel, command or store
+column changed.
+
 **A unit's worktree is provisioned once, and a later start of the same unit takes it over (REQ-TRACE-464,
 REQ-GIT-140).** The delivery service's `beforeCommit` takes over the tree of the launch it holds when that launch is
 for the derived unit and its tree is on disk. It provisions only a unit with no tree. After a restart it takes over the

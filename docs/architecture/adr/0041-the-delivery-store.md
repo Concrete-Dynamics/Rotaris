@@ -1122,3 +1122,20 @@ worktree row records for it. It does that through `takeOverUnitWorktree` (`runs.
 lists at that path on that branch and which passes REQ-GIT-140's read-back. It provisions only a unit with no tree.
 `provisionUnitWorktree` is unchanged: an existing directory still fails provisioning rather than being reused.
 `requirements-proof`'s `blocker-resume` stage now asserts the dispatch.
+
+## Repair — 2026-10-02: a card resting in `ready` keeps a way to start after a restart
+
+*Reported back in place, under CLAUDE.md's standing policy, by the repair of
+[`a-card-resting-in-ready-across-a-restart-can-never-be-started.md`](../../defects/fixed/a-card-resting-in-ready-across-a-restart-can-never-be-started.md).*
+
+The repair above takes over a recorded tree from `beforeCommit`, so it reached only a transition. **It left the queue's
+release, which has no transition, holding the launch the restart lost, and is kept above as it was written.** A card
+released with the queue stopped (or resting under `manual`) rests in `ready`; the launch (unit, disclosure, tree) lived
+in the service's memory only, the queue's "Disclose and start" recorded its disclosure only on a launch it held, and no
+claim could take the card. Now `recoverLaunch` (`workspace-service/delivery.ts`) rebuilds such a launch from the store's
+worktree row through `RunGitPort.takeOver`, sharing `takeOverRecorded` with `beforeCommit`. It runs once on the first pass
+after a start, undisclosed, so an unattended workspace's scheduler claims the card with no release (REQ-TRACE-474), and
+on the queue's release, which records the disclosure it carries and arms the card (REQ-TRACE-472/482). It never
+provisions: the queue's release writes no worktree row, and REQ-TRACE-464 forbids a second tree. A tree it cannot take
+over is stated on the entry as the last start's stall (REQ-TRACE-463), and the claim still refuses the card.
+`requirements-proof`'s `ready-restart` stage shows it across a quit and a relaunch of the built app.

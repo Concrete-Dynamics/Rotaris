@@ -1,6 +1,6 @@
 /**
- * The conflict-marker gate, over texts and over a throwaway git repository: a real three-marker block it must fail,
- * and the two lookalikes it must pass — a Markdown setext heading underlined with seven `=`, and a marker block shown
+ * The conflict-marker gate, over texts and over a throwaway git repository: a real three-marker block it must fail
+ * (also when git is configured to colour its output), and the two lookalikes it must pass — a Markdown setext heading underlined with seven `=`, and a marker block shown
  * as an indented example. The markers are built with `repeat` so this file cannot trip the gate it tests.
  */
 import { execFileSync } from 'node:child_process';
@@ -103,6 +103,51 @@ describe('checkRepository — over the working copy and the index of a git check
     git('add', 'a.md');
     writeFileSync(join(root, 'a.md'), block);
     expect(checkRepository(root).map((p: { where: string }) => p.where)).toEqual(['working copy', 'working copy', 'working copy']);
+  });
+
+  it('fails a staged block when git is configured to colour its output always', () => {
+    // `color.ui=always` / `color.grep=always` once wrapped every path `git grep -l` named in ANSI escapes, the read
+    // of that name failed, and the failure was skipped: a staged block read as green.
+    git('config', 'color.ui', 'always');
+    git('config', 'color.grep', 'always');
+    writeFileSync(join(root, 'first-executions.md'), block);
+    git('add', 'first-executions.md');
+    const problems = checkRepository(root);
+    expect(problems.filter((p: { where: string }) => p.where === 'index')).toEqual([
+      { where: 'index', path: 'first-executions.md', line: 5, marker: OPEN },
+      { where: 'index', path: 'first-executions.md', line: 7, marker: SEP },
+      { where: 'index', path: 'first-executions.md', line: 9, marker: CLOSE },
+    ]);
+    expect(problems.filter((p: { where: string }) => p.where === 'working copy')).toHaveLength(3);
+  });
+
+  it('reads the working copy of an unmerged path and reports nothing it could not read', () => {
+    git('config', 'user.email', 'gate@example.invalid');
+    git('config', 'user.name', 'gate');
+    writeFileSync(join(root, 'a.md'), '# Record\n\nbase\n');
+    git('add', 'a.md');
+    git('commit', '-q', '-m', 'base');
+    git('checkout', '-q', '-b', 'theirs');
+    writeFileSync(join(root, 'a.md'), '# Record\n\ntheirs\n');
+    git('commit', '-q', '-am', 'theirs');
+    git('checkout', '-q', '-');
+    writeFileSync(join(root, 'a.md'), '# Record\n\nours\n');
+    git('commit', '-q', '-am', 'ours');
+    expect(() => git('merge', '-q', 'theirs')).toThrow();
+    const problems = checkRepository(root);
+    expect(problems.filter((p: object) => 'unreadable' in p)).toEqual([]);
+    expect(problems.map((p: { where: string; path: string; line: number }) => `${p.where} ${p.path}:${p.line}`)).toEqual([
+      'working copy a.md:3',
+      'working copy a.md:5',
+      'working copy a.md:7',
+    ]);
+  });
+
+  it('throws, rather than answering skipped or clean, when git cannot grep a checkout', () => {
+    writeFileSync(join(root, 'a.md'), block);
+    git('add', 'a.md');
+    writeFileSync(join(root, '.git', 'index'), 'not an index');
+    expect(() => checkRepository(root)).toThrow(/git grep/);
   });
 
   it('ignores an untracked file, and answers null outside a git checkout', () => {

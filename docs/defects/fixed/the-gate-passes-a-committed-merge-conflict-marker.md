@@ -29,19 +29,36 @@ inside a `<<<<<<< HEAD` / `=======` / `>>>>>>> origin/main` block left `pnpm lin
 `tools/check-conflict-markers.mjs` now runs in `pnpm lint`, second, after `check-line-endings.mjs`. One `git grep -l -I`
 over the working copy and one over the index name the candidate files (a line that begins with seven `<`, seven `|` or
 seven `>` followed by a space or the line's end); each candidate is read whole, from disk and from the index
-(`git show :<path>`), and every marker line is reported as `<path>:<line>: <marker> (working copy | index)`. A line of
+(`git cat-file blob :<path>`), and every marker line is reported as `<path>:<line>: <marker> (working copy | index)`. A line of
 exactly seven `=` counts only between an opening and a closing marker, because alone it is a legal Markdown setext
 heading underline; an indented or quoted marker is an example and passes. Reading the index as well catches a block
 that was staged and then cleaned on disk without being staged again. Outside a git checkout it prints that it skipped,
 as `check-line-endings.mjs` does. Untracked files are not read.
 
-Pinned by `tools/check-conflict-markers.test.ts` (nine cases, the markers built with `repeat` so the file cannot trip
+**Corrected after the first verification (2026-10-02).** The first form ran `git grep` without `--no-color` and
+skipped, with a bare `continue`, any candidate it could not read. Under `color.ui=always` or `color.grep=always` (a
+user's or a host's configuration, or `GIT_CONFIG_COUNT` in the environment) git wraps each path it names in ANSI
+escapes, no file of that name exists, both reads failed, and the check printed that no tracked file held a marker and
+exited 0 over a staged block: the false green the gate exists to prevent. The reason the first form gave for the
+skip, that a read can fail only for an unmerged path with no stage-0 entry, was false; it is kept here beside its
+replacement. Every git call now runs with `-c color.ui=false -c color.grep=false`, and `git grep` with `--no-color`
+as well. A candidate it cannot read is a reported problem (`<path>: could not be read (<side>): <reason>`), except on
+the index side for a path `git ls-files -u` names as unmerged, whose working copy is read instead. Inside a checkout
+(`git rev-parse --is-inside-work-tree`), a `git grep` that fails for any reason other than finding nothing turns the
+lint red with git's own message, so a broken checkout cannot read as skipped; only a directory outside git still
+skips.
+
+Pinned by `tools/check-conflict-markers.test.ts` (twelve cases, the markers built with `repeat` so the file cannot trip
 the gate): the three-marker block is named line by line, a diff3 block's base marker and a lone opening or closing
 marker are named, a setext heading underline (alone, and after a closed block) and an indented example inside a code
 fence pass, a plain text passes; over a throwaway git repository the staged block fails on both sides, the heading,
 the example and a JSON file pass, a block staged and then cleaned on disk fails on the index side, a block on disk not
 yet staged fails on the working-copy side, an untracked file is ignored, and a directory outside git answers `null`.
-The test file fails without the repair (the module does not exist). Shown again after the repair: the same marker block
+Three cases were added with the correction: the staged block still fails on the index side with lines 5, 7 and 9 when
+the throwaway repository sets `color.ui` and `color.grep` to `always`; a real merge conflict's unmerged path is read
+from its working copy (lines 3, 5 and 7) with nothing reported as unreadable; and a checkout whose index is corrupt
+throws a `git grep` failure instead of answering. The colour case and the corrupt-index case fail against the first
+form (it answered `[]` and `[]`). The test file fails without the repair (the module does not exist). Shown again after the repair: the same marker block
 committed on a scratch branch turns `pnpm lint` red at the new check, naming `docs/scratch-conflict.md` lines 5, 7 and 9,
 and removing it turns it green. On the branch itself the check is green from its first run: no tracked file on
 origin/main holds a marker.

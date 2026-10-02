@@ -90,7 +90,7 @@ The canonical-name keying is unique only per parent and per iteration (REQ-ORCH-
 share a name: a later run's child reusing an earlier run's child name, or a grandchild named like a child. The reader then
 prints both children's calls under the later one's key, and the tool-call record carries no task id to tell them apart.
 Recorded as its own note, not repaired here:
-[the-autopsy-reader-puts-two-children-sharing-a-canonical-name-under-one-model-key.md](../the-autopsy-reader-puts-two-children-sharing-a-canonical-name-under-one-model-key.md).
+[the-autopsy-reader-puts-two-children-sharing-a-canonical-name-under-one-model-key.md](the-autopsy-reader-puts-two-children-sharing-a-canonical-name-under-one-model-key.md).
 Both copies' doc comments now also state a second coarse reading: a switch is held on its run alone (`entryOverride` in
 `run.ts`; a continuation is a new `Run`), so a later continuation that records no snapshot starts on its configuration's
 model, while the reader keeps the switched key as the configured one. Only snapshot-less runs reach it.

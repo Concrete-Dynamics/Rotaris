@@ -55,12 +55,34 @@ function snapshotEntry(snapshot) {
 }
 
 /**
- * Each child's model key, keyed by the name its own records carry: its canonical name (REQ-ORCH-044), which its turns
- * run under, so its tool calls and the ladder's entries about it name it by that — never by `given_name`, which differs
- * whenever the model's words hold a space, punctuation or a reused name (the live pack 2026-10-01T17-04-24-814Z).
+ * Each child's model key over its lifetime, keyed by the name its own records carry: its canonical name (REQ-ORCH-044),
+ * which its turns run under, so its tool calls and the ladder's entries about it name it by that — never by `given_name`,
+ * which differs whenever the model's words hold a space, punctuation or a reused name (the live pack
+ * 2026-10-01T17-04-24-814Z). A canonical name is unique only per parent and iteration, so each name maps to every child
+ * that carried it, as `{ model_key, spawned_at, completed_at }` windows ordered by spawn, and a record is attributed by its
+ * name and instant (`childKeyAt`; the engine's copy says why).
  */
 export function childModelKeys(children) {
-  return new Map(children.map((c) => [c.canonical_name, c.model_key]));
+  const byName = new Map();
+  for (const c of [...children].sort((a, b) => (a.spawned_at < b.spawned_at ? -1 : a.spawned_at > b.spawned_at ? 1 : 0))) {
+    const windows = byName.get(c.canonical_name) ?? [];
+    windows.push({ model_key: c.model_key, spawned_at: c.spawned_at, completed_at: c.completed_at ?? null });
+    byName.set(c.canonical_name, windows);
+  }
+  return byName;
+}
+
+/** The label of a record two children of one name could have made, their windows overlapping: both keys, never one by guess. */
+export const ambiguousChildKey = (keys) => `ambiguous (${keys.join(' | ')})`;
+
+/**
+ * The child model key a record of `name` made at `at` is attributed to: the one child of that name alive then, every key
+ * (`ambiguousChildKey`) when windows of different keys hold the instant, and null when none was alive — the root's.
+ */
+export function childKeyAt(children, name, at) {
+  const keys = [...new Set((children.get(name) ?? []).filter((w) => w.spawned_at <= at && (w.completed_at === null || at <= w.completed_at)).map((w) => w.model_key))];
+  if (keys.length === 0) return null;
+  return keys.length === 1 ? keys[0] : ambiguousChildKey(keys);
 }
 
 /** Printed where the record cannot say which key the entry agent ran on: an override may or may not have moved it. */
@@ -71,17 +93,18 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * key (launch audit, continuations, switches) carried through the session's `model_override` entries, each of which
  * moves the root exactly when it replaces the `provider|model` pair the root's key resolves to (REQ-MONITOR-303,
  * REQ-ORCH-091 d; the run resolves the root through every override of the session), and moved by the ladder's two
- * automatic moves of an agent no child is (`childNames`, the canonical names of `childModelKeys`): `quota_fallback_model` to its `to_key` (REQ-ORCH-091 b,
+ * automatic moves of an agent no child of its name was alive for at the entry's instant (`children`, from
+ * `childModelKeys`, read through `childKeyAt`): `quota_fallback_model` to its `to_key` (REQ-ORCH-091 b,
  * REQ-NOTIFY-082) and `llm_unresponsive` to the one `models:` key resolving to its recorded pair, else the pair itself
  * (REQ-ORCH-090). A child's move leaves the root where it is; the next continuation ends a move (its snapshot's key, or
  * the configured key when it records none), and so does a switch the run rebuilt the root's cell for — not one it
  * records `rebuilds: false` on, onto the model the cell was last built from (a store recording no `rebuilds` reads as
  * rebuilt; the engine's copy says what stays coarse). A continuation recording no snapshot
  * returns the root to the last switched key, though a switch is held on its run alone and the new run starts on its
- * configuration's model; and two children sharing one canonical name read as one (the engine's copy says both).
+ * configuration's model (the engine's copy says so); and an entry naming a child alive at its instant is that child's,
+ * even where a root of the same name was alive too (OQ-158).
  */
-export function entryModelKeys(launchAuditPayload, timeline, childNames) {
-  const children = new Set(childNames);
+export function entryModelKeys(launchAuditPayload, timeline, children) {
   const keys = [];
   let models = {};
   let base = null;
@@ -138,7 +161,7 @@ export function entryModelKeys(launchAuditPayload, timeline, childNames) {
       add(effective());
     } else if (t.name === 'quota_fallback_model' || t.name === 'llm_unresponsive') {
       const meta = parseJson(t.metadata);
-      if (typeof meta?.agent !== 'string' || children.has(meta.agent) || typeof meta.to_provider !== 'string' || typeof meta.to_model !== 'string') continue;
+      if (typeof meta?.agent !== 'string' || childKeyAt(children, meta.agent, t.at) !== null || typeof meta.to_provider !== 'string' || typeof meta.to_model !== 'string') continue;
       const pair = `${meta.to_provider}|${meta.to_model}`;
       const toKey = str(meta.to_key);
       if (t.name === 'quota_fallback_model' && toKey !== '') base = { label: modelLabel(models, toKey), pair };

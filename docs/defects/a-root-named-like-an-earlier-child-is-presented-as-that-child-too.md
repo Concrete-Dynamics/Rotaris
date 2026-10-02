@@ -11,6 +11,14 @@ The autopsy reader is misled the same way (added 2026-10-01, fin3 repair round 2
 name (`childModelKeys`), so such a root's tool calls print under the earlier child's `model_key`, and the ladder's
 fallbacks of the root (`quota_fallback_model`, `llm_unresponsive`) are read as that child's and skipped by `entryModelKeys`.
 
+**Repaired in part (2026-10-02, fin5, harness-readers): the autopsy reader's share.** The reader now attributes a record by
+its name and its instant: a child keeps its `[spawned_at, completed_at]` window, and a tool call or a ladder entry of that
+name outside every such window is the root's (`childModelKeys`, `childKeyAt`). So the case above — the child in one run,
+the root of its name in the next — prints the root's calls under the root's own key and reads its fallbacks as the root's
+([the-autopsy-reader-puts-two-children-sharing-a-canonical-name-under-one-model-key.md](fixed/the-autopsy-reader-puts-two-children-sharing-a-canonical-name-under-one-model-key.md),
+pinned in `packages/engine/src/autopsy.test.ts`). A root alive while a child of its name is, and a child that never records
+a completion, are still not told apart. The surfaces' share is unchanged, and the note stays open for it under OQ-158.
+
 The ledger cannot prevent it. It names children and keeps every child off every root's names (OQ-158), but a root's name is
 its persona, which no ledger chooses, and the child was named before the root existed.
 

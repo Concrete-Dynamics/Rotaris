@@ -39,7 +39,7 @@ REQ-SESSION-139/199/153/136/134/135, REQ-EVENTS-056). It emits the session
 row, per-tool breakdown (failed vs blocked partitioned, elapsed sums),
 failure detail grouped by cause, usage curve with largest jumps, coherence
 warnings, and per-model-key tool-call attribution (children from the children
-record by canonical name, the entry agent from its own launch audit, continuations, switches, overrides and fallbacks), in one
+record by canonical name and lifetime — a call two same-named children could have made prints `ambiguous (<key> | <key>)` —, the entry agent from its own launch audit, continuations, switches, overrides and fallbacks), in one
 read-only pass:
 
 ```bash

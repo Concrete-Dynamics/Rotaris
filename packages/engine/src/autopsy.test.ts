@@ -262,6 +262,72 @@ describe('R-043 — the run-autopsy snapshot', () => {
       ]);
     });
 
+    describe('two agents sharing a canonical name are told apart by the lifetime the children record gives each child (REQ-ORCH-044, OQ-158)', () => {
+      // A canonical name is unique among one parent's children in one iteration (REQ-ORCH-044), so a continued session's
+      // second run can name a child as the first run did, and a root's persona can spell an earlier child's name. The tool
+      // call and the ladder's entries carry the name and the instant; the children record carries each child's window.
+      const models = {
+        'root-model': { provider: 'openai-compatible', auth_provider: 'katalyst', model_id: 'r', base_url: 'http://e' },
+        'big-model': { provider: 'openai', auth_provider: null, model_id: 'b' },
+        'small-model': { provider: 'anthropic', auth_provider: null, model_id: 's' },
+        'spare-model': { provider: 'mistral', auth_provider: null, model_id: 'x' },
+      };
+      const T = (m: number) => `2026-10-01T10:${String(m).padStart(2, '0')}:00.000Z`;
+      const timed = (sid: SessionId, task: string, name: string, modelKey: string, spawned: string, completed: string | null) => {
+        dal.insertChild({ session_id: sid, task_id: task, canonical_name: name, given_name: name, persona: 'coding-agent', state: 'running', parent_id: 'root', depth: 1, iteration: 1, model_key: modelKey, category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: spawned });
+        if (completed !== null) dal.setChildState(sid, task, 'succeeded', completed);
+      };
+      const callAt = (sid: SessionId, id: string, agent: string, at: string) => dal.ringInsert('tool_calls', sid, (o) => dal.insertToolCall({ session_id: sid, ordinal: o, call_id: id, agent_name: agent, tool_name: 'read_file', status: 'ok', started_at: at, elapsed_ms: 1, is_error: 0, entry: toolEntry(agent, 'read_file', 'ok') }));
+
+      it('a continued session\'s second-run child named like the first run\'s: each child\'s calls print under its own key', () => {
+        const sid = plant('S-same-name-runs', 'completed');
+        dal.transaction(() => {
+          audit(sid, 'root-model', models);
+          callAt(sid, 'r1', 'orchestrator', T(1));
+          timed(sid, 'bg_00000001', 'impl', 'big-model', T(2), T(5));
+          callAt(sid, 'a1', 'impl', T(3)); callAt(sid, 'a2', 'impl', T(4));
+          timed(sid, 'bg_00000002', 'impl', 'small-model', T(10), T(15));
+          callAt(sid, 'b1', 'impl', T(11));
+        });
+        expect(readAutopsy(dal, sid, clock.wall)!.requests).toEqual([
+          { endpoint: 'big-model', agents: ['impl'], tool_calls: 2 },
+          { endpoint: 'root-model', agents: ['orchestrator'], tool_calls: 1 },
+          { endpoint: 'small-model', agents: ['impl'], tool_calls: 1 },
+        ]);
+      });
+
+      it('a root whose persona spells an earlier child\'s name: its calls and its fallback outside that child\'s lifetime are the root\'s', () => {
+        const sid = plant('S-root-named-like-child', 'completed');
+        dal.transaction(() => {
+          audit(sid, 'root-model', models);
+          timed(sid, 'bg_00000001', 'planner', 'big-model', T(2), T(5));
+          callAt(sid, 'a1', 'planner', T(3));
+          // The next run's root is the persona `planner`.
+          callAt(sid, 'r1', 'planner', T(11)); callAt(sid, 'r2', 'planner', T(12));
+          dal.insertTimeline(sid, 1, T(13), 'quota_fallback_model', 'rotaris', 'planner moved to mistral/x.', JSON.stringify({ agent: 'planner', from_provider: 'katalyst', from_model: 'r', to_provider: 'mistral', to_model: 'x', to_key: 'spare-model', condition: 'rate_limit', provider_exhausted: false }), 'aaaaaaaaaai1', 'warning');
+        });
+        expect(readAutopsy(dal, sid, clock.wall)!.requests).toEqual([
+          { endpoint: 'root-model → spare-model', agents: ['planner'], tool_calls: 2 },
+          { endpoint: 'big-model', agents: ['planner'], tool_calls: 1 },
+        ]);
+      });
+
+      it('two windows of one name that overlap: the call is printed as ambiguous, naming both keys, never as the later child\'s', () => {
+        const sid = plant('S-same-name-overlap', 'completed');
+        dal.transaction(() => {
+          audit(sid, 'root-model', models);
+          timed(sid, 'bg_00000001', 'impl', 'big-model', T(2), T(8));
+          timed(sid, 'bg_00000002', 'impl', 'small-model', T(5), null);
+          callAt(sid, 'a1', 'impl', T(3)); callAt(sid, 'a2', 'impl', T(6)); callAt(sid, 'b1', 'impl', T(9));
+        });
+        expect(readAutopsy(dal, sid, clock.wall)!.requests).toEqual([
+          { endpoint: 'big-model', agents: ['impl'], tool_calls: 1 },
+          { endpoint: 'ambiguous (big-model | small-model)', agents: ['impl'], tool_calls: 1 },
+          { endpoint: 'small-model', agents: ['impl'], tool_calls: 1 },
+        ]);
+      });
+    });
+
     it('a loader-made copy (a role\'s `thinking`) reads as the one key it copies, and as its own name when two keys match', () => {
       const base = { provider: 'openai-compatible', model_id: 'm', base_url: 'http://e', thinking: null };
       const one = plant('S-synthetic', 'completed');

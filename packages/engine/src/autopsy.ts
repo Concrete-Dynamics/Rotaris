@@ -24,8 +24,9 @@
  *   stopped run, a cost of zero beside non-zero tokens, duplicate reads of
  *   the same path, identical commands retried.
  * - `requests`: per-model-key tool-call attribution — a child's calls under
- *   the model_key the children record carries (the usage.update payload
- *   carries tokens and cost alone), the entry agent's under the key the
+ *   the model_key the children record carries for the child of that name
+ *   alive when the call started (the usage.update payload carries tokens and
+ *   cost alone), the entry agent's under the key the
  *   launch audit, its continuations, its switches, the session's overrides
  *   of its pair and the ladder's fallbacks of it record for it
  *   (`entryModelKeys`), newest totals last.
@@ -179,16 +180,55 @@ function snapshotEntry(snapshot: unknown): { readonly models: Record<string, unk
   return { models, label: modelLabel(models, model), pair: modelPair(models, model) };
 }
 
+/** One child's model key over its lifetime in the children record: from its spawn to its completion, open while it has none. */
+export interface ChildWindow {
+  readonly model_key: string;
+  readonly spawned_at: string;
+  readonly completed_at: string | null;
+}
+
+/** Each child's windows, by the name its own records carry (`childModelKeys`). */
+export type ChildModelKeys = ReadonlyMap<string, readonly ChildWindow[]>;
+
 /**
- * Each child's model key (the children record's `model_key`), keyed by the name the child's own records carry: its
- * canonical name (REQ-ORCH-044), which the child's turns run under (`agentName: row.canonical_name`), so its tool calls
- * (`tool_calls.agent_name`) and the ladder's entries about it (`quota_fallback_model`, `llm_unresponsive`: `agent`)
- * name it by that. Never by `given_name`: the model's own words differ from the canonical name whenever they hold a
+ * Each child's model key (the children record's `model_key`) over its lifetime, keyed by the name the child's own records
+ * carry: its canonical name (REQ-ORCH-044), which the child's turns run under (`agentName: row.canonical_name`), so its
+ * tool calls (`tool_calls.agent_name`) and the ladder's entries about it (`quota_fallback_model`, `llm_unresponsive`:
+ * `agent`) name it by that. Never by `given_name`: the model's own words differ from the canonical name whenever they hold a
  * space, punctuation or a reused name, and keyed by those the child's calls and moves read as the root's (the live pack
  * 2026-10-01T17-04-24-814Z, 'Run 13 shell commands verbatim' / 'Run-13-shell-commands-verbatim').
+ *
+ * A canonical name is unique only among one parent's children in one iteration (REQ-ORCH-044), so one session can hold two
+ * children of one name — a continued session's later run reusing an earlier run's child name, a grandchild named like a
+ * child — and a root whose persona spells an earlier child's name. The records carry the name and no task id (OQ-158), so
+ * each child keeps its window, `[spawned_at, completed_at]`, ordered by spawn, and a record is attributed by its name and
+ * its instant (`childKeyAt`). Never keyed by name alone: the later child's key then took every call of both.
  */
-export function childModelKeys(children: readonly Pick<ChildRow, 'canonical_name' | 'model_key'>[]): Map<string, string> {
-  return new Map(children.map((c) => [c.canonical_name, c.model_key]));
+export function childModelKeys(children: readonly Pick<ChildRow, 'canonical_name' | 'model_key' | 'spawned_at' | 'completed_at'>[]): Map<string, ChildWindow[]> {
+  const byName = new Map<string, ChildWindow[]>();
+  for (const c of [...children].sort((a, b) => (a.spawned_at < b.spawned_at ? -1 : a.spawned_at > b.spawned_at ? 1 : 0))) {
+    const windows = byName.get(c.canonical_name) ?? [];
+    windows.push({ model_key: c.model_key, spawned_at: c.spawned_at, completed_at: c.completed_at });
+    byName.set(c.canonical_name, windows);
+  }
+  return byName;
+}
+
+/** The label of a record two children of one name could have made, their windows overlapping: both keys, never one by guess. */
+export const ambiguousChildKey = (keys: readonly string[]): string => `ambiguous (${keys.join(' | ')})`;
+
+/**
+ * The child model key a record of `name` made at `at` (a tool call's `started_at`, a timeline entry's `at`) is
+ * attributed to: the key of the one child of that name whose window holds the instant, `ambiguousChildKey` of every key
+ * when windows of different keys hold it, and `null` when no child of that name was alive then — the record is the
+ * root's. Instants are the store's ISO UTC strings, compared as written. Two agents of one name alive at once (a child
+ * and a root of its name, or two children whose windows overlap) are not told apart: that waits on an identity on the
+ * rows (OQ-158), and a child that never records a completion keeps its window open.
+ */
+export function childKeyAt(children: ChildModelKeys, name: string, at: string): string | null {
+  const keys = [...new Set((children.get(name) ?? []).filter((w) => w.spawned_at <= at && (w.completed_at === null || at <= w.completed_at)).map((w) => w.model_key))];
+  if (keys.length === 0) return null;
+  return keys.length === 1 ? keys[0]! : ambiguousChildKey(keys);
 }
 
 /** Printed where the record cannot say which key the entry agent ran on: an override may or may not have moved it. */
@@ -208,9 +248,9 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * key resolves to. Where the snapshot does not say which pair the root's key resolves to and an override is recorded,
  * the key from that point on is `ENTRY_KEY_UNDETERMINED`, never one key given as fact.
  *
- * The ladder's two automatic moves of the root are read as well, from the entries that name an agent no child is
- * (`childNames`: the children record names only the children, by the canonical names their records carry —
- * `childModelKeys` — so every other agent an entry names is the root). The
+ * The ladder's two automatic moves of the root are read as well, from the entries that name no child alive at the entry's
+ * instant (`children`: the children record names only the children, by the canonical names their records carry, each over
+ * its lifetime — `childModelKeys`, `childKeyAt` — so every other agent an entry names is the root). The
  * root's cell lives for the run (`rootResilience`), so after either move the root runs on the new model until the next
  * continuation (a new run: its snapshot's key, or the configured key when it records none) or its next switch:
  * - `quota_fallback_model` (REQ-ORCH-091 b, REQ-NOTIFY-082): the same-tier candidate, whose key the entry records
@@ -225,12 +265,10 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * away from the configured model while a move is in force and the second back onto it, read as ending the move, though
  * the cell was never rebuilt between them. A second is coarse the same way: a switch is held on its run alone (`entryOverride`; a continuation is a new
  * `Run`), so a later continuation recording no snapshot starts on its configuration's model, while this keeps the
- * switched key as the configured one. Only snapshot-less runs reach it. The children are keyed by canonical name, which
- * is unique only per parent and iteration (REQ-ORCH-044); two children sharing one read as one
- * (`docs/defects/the-autopsy-reader-puts-two-children-sharing-a-canonical-name-under-one-model-key.md`).
+ * switched key as the configured one. Only snapshot-less runs reach it. A third: an entry naming a child alive at its
+ * instant is that child's, even where a root of the same name was alive too (OQ-158; `childKeyAt`).
  */
-export function entryModelKeys(launchAuditPayload: string | undefined, timeline: readonly Pick<TimelineRow, 'name' | 'metadata'>[], childNames: Iterable<string>): string[] {
-  const children = new Set(childNames);
+export function entryModelKeys(launchAuditPayload: string | undefined, timeline: readonly Pick<TimelineRow, 'name' | 'metadata' | 'at'>[], children: ChildModelKeys): string[] {
   const keys: string[] = [];
   let models: Record<string, unknown> = {};
   let base: { readonly label: string; readonly pair: string | null } | null = null;
@@ -298,7 +336,7 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
       const agent = meta?.['agent'];
       const toProvider = meta?.['to_provider'];
       const toModel = meta?.['to_model'];
-      if (typeof agent !== 'string' || children.has(agent) || typeof toProvider !== 'string' || typeof toModel !== 'string') continue;
+      if (typeof agent !== 'string' || childKeyAt(children, agent, t.at) !== null || typeof toProvider !== 'string' || typeof toModel !== 'string') continue;
       const pair = `${toProvider}|${toModel}`;
       const toKey = str(meta?.['to_key']);
       if (t.name === 'quota_fallback_model' && toKey !== '') base = { label: modelLabel(models, toKey), pair };
@@ -426,34 +464,29 @@ export function readAutopsy(dal: StoreDal, sessionId: SessionId, _wall: WallCloc
     // Per-model-key attribution: the store records no provider or model on
     // the usage.update payload (REQ-EVENTS-053's payload is tokens and cost
     // alone), so a child's tool calls go to the model_key the children record
-    // carries, matched by the canonical name its calls carry (`childModelKeys`).
-    // The entry agent — the one no child names — is attributed to the
-    // key(s) its own records name (`entryModelKeys`: its snapshots, its switches,
-    // the overrides of the pair it runs on and the ladder's fallbacks of it), joined in order when it ran on
-    // more than one, and to `session` when none is recorded. Its calls
-    // are never split between keys by guess, and its key is never taken from
-    // its children (live-run finding a71-13: it had been, whenever they shared one).
-    const callsByAgent = new Map<string, number>();
-    for (const t of toolCalls) callsByAgent.set(t.agent_name, (callsByAgent.get(t.agent_name) ?? 0) + 1);
-    const keyByAgent = childModelKeys(children);
-    const childAgents = new Set(keyByAgent.keys());
-    const recordedEntryKeys = entryModelKeys(launchAudit?.payload, timeline, childAgents);
+    // carries, matched by the canonical name its calls carry and the instant
+    // each call started within that child's lifetime (`childModelKeys`,
+    // `childKeyAt`; two windows of one name holding the instant print both keys).
+    // A call no child of its name was alive for is the entry agent's,
+    // attributed to the key(s) its own records name (`entryModelKeys`: its
+    // snapshots, its switches, the overrides of the pair it runs on and the
+    // ladder's fallbacks of it), joined in order when it ran on more than one,
+    // and to `session` when none is recorded. Its calls are never split between
+    // keys by guess, and its key is never taken from its children (live-run
+    // finding a71-13: it had been, whenever they shared one).
+    const childKeys = childModelKeys(children);
+    const recordedEntryKeys = entryModelKeys(launchAudit?.payload, timeline, childKeys);
     const entryKey = recordedEntryKeys.length > 0 ? recordedEntryKeys.join(' → ') : 'session';
-    const requests: AutopsyEndpointRow[] = [...callsByAgent.entries()]
-      .map(([agent, calls]) => ({
-        endpoint: childAgents.has(agent) ? keyByAgent.get(agent)! : entryKey,
-        agents: [agent] as readonly string[],
-        tool_calls: calls,
-      }))
-      .reduce<AutopsyEndpointRow[]>((rows, r) => {
-        const prev = rows.find((x) => x.endpoint === r.endpoint);
-        if (!prev) return [...rows, r];
-        return rows.map((x) =>
-          x.endpoint === r.endpoint
-            ? { endpoint: x.endpoint, agents: [...x.agents, ...r.agents].sort(), tool_calls: x.tool_calls + r.tool_calls }
-            : x,
-        );
-      }, [])
+    const byEndpoint = new Map<string, { agents: Set<string>; calls: number }>();
+    for (const t of toolCalls) {
+      const endpoint = childKeyAt(childKeys, t.agent_name, t.started_at) ?? entryKey;
+      const row = byEndpoint.get(endpoint) ?? { agents: new Set<string>(), calls: 0 };
+      row.agents.add(t.agent_name);
+      row.calls += 1;
+      byEndpoint.set(endpoint, row);
+    }
+    const requests: AutopsyEndpointRow[] = [...byEndpoint.entries()]
+      .map(([endpoint, r]) => ({ endpoint, agents: [...r.agents].sort() as readonly string[], tool_calls: r.calls }))
       .sort((a, b) => b.tool_calls - a.tool_calls);
 
     let tokenSpan: string | null = null;

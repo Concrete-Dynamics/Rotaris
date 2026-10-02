@@ -391,7 +391,8 @@ and the notice are never under it, and `init-proof`'s `consent` scenario measure
 prompt it belongs to no view, so it is not laid out in flow: in flow it would take room from every view at
 REQ-SHELL-022's minimum. It therefore still lies over the view's top corner while open; whether the decision's "leaves the
 rest navigable" admits that, or this surface needs a region every view yields to, is raised as
-[OQ-186](../open-questions.md), with the measured controls under it. The level is otherwise as decided: no `aria-modal`, no
+[OQ-187](../open-questions.md) (raised as OQ-186 and renumbered at this bundle's merge of `origin/main` d0012a2, which had
+taken OQ-185), with the measured controls under it. The level is otherwise as decided: no `aria-modal`, no
 backdrop, no focus trap.
 
 ## The authentication recovery dialog — first executed 2026-10-02 (the 401 note's part C)

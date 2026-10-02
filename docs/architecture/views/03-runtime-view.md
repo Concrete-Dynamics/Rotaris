@@ -595,8 +595,9 @@ delay waited on the monotonic clock; `DefaultAgentBackend` forwards it to `TurnS
 the run's `warn` to the session log at WARNING (`dispatchRetryLine`, REQ-SESSION-142) — no issue and no timeline entry,
 because the ladder was not reached. An exhausted budget is handed on as the **last attempt's** error (the SDK's
 `RetryError` unwrapped in `fromError`), so its status and `retry-after` reach the ladder's classification. On resume the memory is
-rehydrated from the timeline (`ResilienceMemory.rehydrate`), so a continuation never returns to an exhausted pair and keeps the
-user's choice (REQ-SESSION-196).
+rehydrated from the timeline (`ResilienceMemory.rehydrate`), so a continuation never returns to an exhausted pair — unless an
+explicit choice cleared its exclusion (REQ-MONITOR-194, a `model_exhausted` entry carrying `cleared: true`, replayed in order)
+— and keeps the user's choice (REQ-SESSION-196).
 
 **Context compression (Part AH — ADR-0060; `run/conversation.ts`, `run/compression.ts`; REQ-ORCH-093,
 REQ-MONITOR-076..086, REQ-CONFIG-132..135).** The turn's history is a **`Conversation`** whose array is *swapped*,

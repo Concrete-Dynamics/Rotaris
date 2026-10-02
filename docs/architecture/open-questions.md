@@ -8823,7 +8823,10 @@ clears it is REQ-MONITOR-194's, recorded in
 
 **What a ruling decides.** Whether a switch onto the configured key ends a ladder move (as built) or leaves it in force —
 and, if it leaves it, what the row says; whether a later switch onto a pair an override moved supersedes that override for
-the entry agent, or the override stands (as built) and only the row says so.
+the entry agent, or the override stands (as built) and only the row says so. REQ-MONITOR-194's clearing is in force beside
+it since 2026-10-02, which sharpens the second half: a pair a quota wait moved is both excluded and overridden, and a later
+switch onto it clears the exclusion while the override, as built, still sends the entry agent elsewhere — so the pair the
+user explicitly chose is not what runs, and only the row says so.
 
 **OQ-178 — Which notice offers REQ-NOTIFY-045's retry, when a notice carries one action?** *(REQ-NOTIFY-044, whose
 vocabulary includes "retry the failed run under REQ-NOTIFY-045"; REQ-NOTIFY-045; REQ-NOTIFY-030; REQ-NOTIFY-066;

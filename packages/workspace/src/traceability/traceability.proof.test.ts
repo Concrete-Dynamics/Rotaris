@@ -12,7 +12,7 @@ import { loadLayout } from './layout.js';
 import { loadParser, parserLoadMs } from './parser.js';
 import { parseStore } from './store.js';
 import { SPIKE_7, generateScaleRepository } from './scale-fixture.js';
-import { growthPair, interleavedMinima, type PassReading } from './growth-readings.js';
+import { growthPair, interleavedMinima, type GrowthSide, type PassReading } from './growth-readings.js';
 import { sweepRepository, type SweepDetails } from './sweep.js';
 
 /**
@@ -91,6 +91,18 @@ const dualClock = () => {
   return { clock, sweepWallMs };
 };
 
+/**
+ * The sweep's growth pair has trees of its own, 2,000 files against 4,000 with ten sites a file, over the same store
+ * (`docs/defects/fixed/traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md`). It used to share the
+ * parse pair's half tree, 500 files against the 10^3-file budget tree, and the 500-file side read 14 to 23 ms of thread
+ * CPU on this host, below `growthVerdict`'s 25 ms floor, so REQ-TRACE-088's binding clause was recorded and never
+ * asserted. At 10^3 files the side read 36 to 44 ms idle, and about 28 ms at the low end extrapolated from the loaded
+ * 500-file figures: near the floor, so the pair is 2,000 against 4,000 (68 to 90 ms against 167 to 182 ms, idle).
+ * Doubling the source still costs about twice as much; the "about one second" budget is still read on the 10^3-file
+ * tree above, and the parse and the parser keep their own pairs.
+ */
+const SWEEP_PAIR_FILES: Record<GrowthSide, number> = { half: 2_000, full: 4_000 };
+
 describe.skipIf(!out)('spike 7 — the traceability engine at scale', () => {
   const scale = resolve(out ?? '.', 'scale');
   it('REQ-TRACE-501: a 1,500-document store parses in about one second, streaming', () => {
@@ -139,24 +151,37 @@ describe.skipIf(!out)('spike 7 — the traceability engine at scale', () => {
     expect(swept.sites.length).toBeGreaterThanOrEqual(10_000);
     results.sweep = { files: swept.details.files, sites: swept.sites.length, annotations: swept.details.annotations.length, coldMs: cold, warmMs: warm, parseMs: swept.details.parseMs, parsedFiles: swept.details.parsedFiles, wholeMs: swept.durationMs, parserLoadMs: parserLoadedIn, host: host() };
     expect(warm).toBeLessThan(1_500);
-    // linear growth: a half-size tree in about half the time. The sweep times itself, so each reader returns the
-    // sweep's own figure less the parse time it keeps apart, the same figure the budget above reads; the two sides are
-    // read evenly (`interleavedMinima`), where the full side used to be the one reading above against a minimum of three.
-    // Each pass runs on a `dualClock`: its own figure is then thread CPU time, and the wall figure is rebuilt beside it.
-    const halfDir = join(scale, '..', 'scale-half');
-    const halfParsed = parseStore({ root: halfDir, layout, retiredLog: null });
-    let half = sweepRepository({ root: halfDir, layout, aliases: halfParsed.details.legacyAliases, clock });
-    const sweepBoth = (root: string, aliases: typeof parsed.details.legacyAliases): { readonly reading: PassReading; readonly swept: typeof half } => {
+    // linear growth: twice the source in about twice the time, over the pair's own trees (`SWEEP_PAIR_FILES`). The sweep
+    // times itself, so each reader returns the sweep's own figure less the parse time it keeps apart, the same figure
+    // the budget above reads; the two sides are read evenly (`interleavedMinima`). Each pass runs on a `dualClock`: its
+    // own figure is then thread CPU time, and the wall figure is rebuilt beside it.
+    const pairTree = (side: GrowthSide) => {
+      const dir = join(scale, '..', `scale-sweep-${side}`);
+      rmSync(dir, { recursive: true, force: true });
+      mkdirSync(dir, { recursive: true });
+      const files = SWEEP_PAIR_FILES[side];
+      generateScaleRepository(dir, { ...SPIKE_7, implFiles: files * 0.8, testFiles: files * 0.2 });
+      return { dir, aliases: parseStore({ root: dir, layout, retiredLog: null }).details.legacyAliases };
+    };
+    const tic = performance.now();
+    const pair = { full: pairTree('full'), half: pairTree('half') };
+    let fullSwept = sweepRepository({ root: pair.full.dir, layout, aliases: pair.full.aliases, clock });
+    let half = sweepRepository({ root: pair.half.dir, layout, aliases: pair.half.aliases, clock });
+    const sweepBoth = (side: GrowthSide): { readonly reading: PassReading; readonly swept: typeof half } => {
       const dual = dualClock();
-      const s = sweepRepository({ root, layout, aliases, clock: dual.clock });
+      const s = sweepRepository({ root: pair[side].dir, layout, aliases: pair[side].aliases, clock: dual.clock });
       return { reading: { wallMs: dual.sweepWallMs(s.details.parsedFiles), cpuMs: round1(s.durationMs - s.details.parseMs) }, swept: s };
     };
     const growth = interleavedMinima({
-      full: () => sweepBoth(scale, parsed.details.legacyAliases).reading,
-      half: () => { const r = sweepBoth(halfDir, halfParsed.details.legacyAliases); half = r.swept; return r.reading; },
+      full: () => { const r = sweepBoth('full'); fullSwept = r.swept; return r.reading; },
+      half: () => { const r = sweepBoth('half'); half = r.swept; return r.reading; },
     });
     // The sweep's figures are whole milliseconds, so the quotient's denominator is floored at 1 ms as before.
-    results.sweepHalf = { files: half.details.files, sites: half.sites.length, ...growthPair(growth, { full: swept.details.files, half: half.details.files }, 1), host: host() };
+    expect([half.details.files, fullSwept.details.files]).toEqual([SWEEP_PAIR_FILES.half, SWEEP_PAIR_FILES.full]);
+    // the sites in proportion: the full tree carries exactly twice the half tree's, and the half tree at least ten a file
+    expect(fullSwept.sites.length).toBe(2 * half.sites.length);
+    expect(half.sites.length).toBeGreaterThanOrEqual(SWEEP_PAIR_FILES.half * SPIKE_7.sitesPerFile);
+    results.sweepHalf = { files: half.details.files, sites: half.sites.length, fullFiles: fullSwept.details.files, fullSites: fullSwept.sites.length, pairMs: round1(performance.now() - tic), ...growthPair(growth, { full: fullSwept.details.files, half: half.details.files }, 1), host: host() };
     if (out) writeFileSync(join(out, 'spike-results.json'), JSON.stringify(results, null, 2));
   });
   it('OQ-24 (Part AJ2): the parse-requiring checks of REQ-TRACE-104 rule 1 and REQ-TRACE-109/110 over the same 10^3-file tree, with the TypeScript compiler API', () => {

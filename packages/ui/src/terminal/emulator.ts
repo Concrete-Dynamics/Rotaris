@@ -84,8 +84,19 @@ export function createStreamDisplay(frame: DisplayFrame, factory: EmulatorFactor
  * line is never shown twice while retained and fresh output both arrive; a `screen` frame resets and rewrites; a
  * `delta` appends; a `meta` frame synchronises command, truncation and running state idempotently. The closing frame
  * (OQ-5's reading) is a literal replacement: reset, then the plain text with its newlines carried to column 0.
+ *
+ * `screen`'s hooks are called only for an applied `screen` frame, from the write queue: `resetReached` once everything
+ * queued before the frame has parsed and the reset is next (an empty write ahead of the reset, which is itself queued),
+ * so the screen read there is the last complete one; `parsed` once the frame's text has parsed. The subscription point
+ * holds that screen for the previews between the two, and only then (`streams.ts`;
+ * `docs/defects/fixed/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`).
  */
-export function applyFrame(display: StreamDisplay, frame: DisplayFrame): { readonly display: StreamDisplay; readonly outcome: ApplyOutcome } {
+export interface ScreenFrameHooks {
+  readonly resetReached?: () => void;
+  readonly parsed?: () => void;
+}
+
+export function applyFrame(display: StreamDisplay, frame: DisplayFrame, screen?: ScreenFrameHooks): { readonly display: StreamDisplay; readonly outcome: ApplyOutcome } {
   if (frame.streamId !== display.streamId) return { display, outcome: 'wrong-stream' };
   const seq = frameSeq(frame);
   if (seq <= display.lastSeq) return { display, outcome: 'stale' };
@@ -126,8 +137,9 @@ export function applyFrame(display: StreamDisplay, frame: DisplayFrame): { reado
    */
   let closingEndsMidRow = display.closingEndsMidRow;
   if (frame.kind === 'screen') {
+    if (screen?.resetReached !== undefined) display.emulator.write('', screen.resetReached);
     display.emulator.reset();
-    display.emulator.write(frame.closing ? frame.payload.replace(/\r?\n/g, '\r\n') : frame.payload);
+    display.emulator.write(frame.closing ? frame.payload.replace(/\r?\n/g, '\r\n') : frame.payload, screen?.parsed);
     closingEndsMidRow = frame.closing === true && frame.payload !== '' && !frame.payload.endsWith('\n');
   } else {
     if (reopened && closingEndsMidRow) display.emulator.write('\r\n');

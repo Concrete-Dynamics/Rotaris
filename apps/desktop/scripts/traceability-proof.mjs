@@ -5,7 +5,8 @@
  *
  *   1. spike    — `traceability.proof.test.ts` generates spike 7's 1,500-document store and 10^3-file / 10^4-site
  *                 tree under `scale/`, measures the parse (REQ-TRACE-501) and the sweep (REQ-TRACE-088) on one
- *                 thread, warm, plus a half-size tree for the linear-growth clause, and writes `spike-results.json`.
+ *                 thread, warm, plus a half-size tree for the parse's linear-growth clause and a 2,000/4,000-file
+ *                 pair for the sweep's, and writes `spike-results.json`.
  *   2. fixture  — the same test file drives the engine in-thread over a COPY of `fixtures/requirements-store/`
  *                 (never the fixture itself): the expected records and hashes (recomputed independently from the
  *                 document bytes), `check`'s planted findings in REQ-TRACE-091's order, regenerate twice (the
@@ -71,10 +72,18 @@ const expect = (condition, message) => { if (!condition) throw new Error(message
  * above its CPU count is re-run alone
  * (`docs/defects/fixed/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`).
  */
+/*
+ * 2026-10-02 (fin7): the sweep's pair is read over trees of its own, 2,000 files against 4,000, so both sides clear the
+ * floor, and the sweep's ratio is REQUIRED to be asserted (`mustAssert`): REQ-TRACE-088's linear clause is the binding one
+ * (resolution 36), and over the old 500-file side it was recorded and never asserted on this host
+ * (`docs/defects/fixed/traceability-proof-never-asserts-the-sweeps-linear-growth-on-this-host.md`). The floor and the
+ * ceiling are unchanged; a sweep pair that reads under the floor now goes red instead of printing a NOTE.
+ */
 const growthLines = [];
-const linear = (label, pair, lower) => {
+const linear = (label, pair, lower, { mustAssert = false } = {}) => {
   const verdict = growthVerdict(label, pair, lower);
   expect(verdict.ok, verdict.message);
+  expect(verdict.asserted || !mustAssert, `${verdict.message}; the ${label} pair is sized to clear the floor, so its ratio must be asserted`);
   if (!verdict.asserted) console.log(`  NOTE  ${verdict.message}`);
   growthLines.push(verdict.message);
 };
@@ -139,7 +148,7 @@ try {
   expect(spike.parse.documents >= 1500 && spike.parse.warmMs < 1500, `parse of ${spike.parse.documents} documents took ${spike.parse.warmMs} ms`);
   expect(spike.sweep.files >= 1000 && spike.sweep.sites >= 10_000 && spike.sweep.warmMs < 1500, `sweep of ${spike.sweep.files} files / ${spike.sweep.sites} sites took ${spike.sweep.warmMs} ms`);
   linear('parse', spike.parseHalf, 1.4);
-  linear('sweep', spike.sweepHalf, 1.3);
+  linear('sweep', spike.sweepHalf, 1.3, { mustAssert: true });
   // Part AJ2 / OQ-24: the parse-requiring checks are timed over the same tree and recorded; no requirement fixes a budget
   // for them, so the assertions are shape (every file parsed, every test function found) and linear growth, never a bound.
   expect(spike.parser && spike.parser.files >= 1000 && spike.parser.functions === 2000, `the parser did not cover the tree: ${JSON.stringify(spike.parser)}`);
@@ -223,14 +232,14 @@ try {
 } finally {
   // The generated trees and the two fixture copies hold TypeScript the linter would otherwise parse; the numbers,
   // the finding texts, the hashes and the logs stay in the JSON and log files beside this line.
-  for (const dir of ['scale', 'scale-half', 'local']) rmSync(join(output, dir), RM);
+  for (const dir of ['scale', 'scale-half', 'scale-sweep-half', 'scale-sweep-full', 'local']) rmSync(join(output, dir), RM);
   if (results.scratch) { try { rmSync(results.scratch, RM); } catch (e) { results.scratchLeftover = String(e); console.warn(`warning: the scratch copies could not be removed (${e.code ?? e}); they are under ${results.scratch}`); } }
   writeFileSync(join(output, 'results.json'), JSON.stringify(results, null, 2));
 }
 if (!results.passed) { console.error(JSON.stringify(results, null, 2)); process.exit(1); }
 console.log(`traceability-proof PASSED ${join(output, 'results.json')}`);
 console.log(`  parse ${results.spike.parse.documents} documents: ${results.spike.parse.warmMs} ms warm (${results.spike.parse.coldMs} ms cold); half-size ratio ${results.spike.parseHalf.ratio}`);
-console.log(`  sweep ${results.spike.sweep.files} files / ${results.spike.sweep.sites} sites: ${results.spike.sweep.warmMs} ms warm (${results.spike.sweep.coldMs} ms cold); half-size ratio ${results.spike.sweepHalf.ratio}`);
+console.log(`  sweep ${results.spike.sweep.files} files / ${results.spike.sweep.sites} sites: ${results.spike.sweep.warmMs} ms warm (${results.spike.sweep.coldMs} ms cold); growth pair ${results.spike.sweepHalf.fullFiles} against ${results.spike.sweepHalf.files} files, ratio ${results.spike.sweepHalf.ratio} (${results.spike.sweepHalf.pairMs} ms to build and read)`);
 console.log(`  parser (TypeScript ${results.spike.parser.version}) over ${results.spike.parser.files} files: ${results.spike.parser.warmMs} ms warm (${results.spike.parser.coldMs} ms cold), ${results.spike.parser.perFileMs} ms/file, load ${results.spike.parser.loadMs} ms; inside the sweep ${results.spike.parser.sweepParsedFiles} files in ${results.spike.parser.sweepParseMs} ms; half-size ratio ${results.spike.parser.ratio}`);
 console.log(`  process path: check ${results.process.check.elapsedMs} ms, regenerate ${results.process.regenerate1.elapsedMs} ms, cancelled check ${results.process.cancelledCheck.elapsedMs} ms`);
 for (const line of growthLines) console.log(`  growth: ${line}`);

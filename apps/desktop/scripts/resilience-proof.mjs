@@ -10,7 +10,8 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
 /**
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
  * (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..093/263), and since OQ-173 that a wait the run imposes is not a stall
- * (REQ-MONITOR-117..119). Eleven scenarios, each asserting the store's events, issues,
+ * (REQ-MONITOR-117..119), and since OQ-177 that an entry switch after a ladder move applies as its row says (REQ-MONITOR-142).
+ * Twelve scenarios, each asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
  *
@@ -197,7 +198,10 @@ const results = {};
 const expect = (cond, message) => { if (!cond) throw new Error(message); };
 /** One scenario, run to its end: a failure is recorded under its name and the next scenario still runs. */
 const failures = [];
+/** `--only=<name>[,<name>…]` runs the named scenarios alone (the others are skipped and say so); absent, all of them run. */
+const only = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length).split(',').filter((n) => n !== '') ?? null;
 async function scenarioRun(name, body) {
+  if (only !== null && !only.includes(name)) { console.log(`SKIP  ${name} (not named by --only)`); return; }
   const started = Date.now();
   try {
     await body();
@@ -308,6 +312,35 @@ await scenarioRun('same-tier', async () => {
   const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted/beta', `the calls did not move to beta: ${JSON.stringify(calls)}`);
   results.sameTier = { status: row.execution_status, fallback: meta, calls, png: r.png, elapsedMs: r.elapsedMs };
+});
+
+// 3b. OQ-177 (REQ-MONITOR-142 over REQ-ORCH-091 b): after the same-tier move the user switches the entry model back to the
+// configured key from the run header while iteration 1 holds on beta, and queues a follow-up beside it. Iteration 1 finishes
+// on beta (the iteration in flight keeps its setting); iteration 2, the follow-up, runs on alpha, as the switch's row says.
+// Before the repair the root's cell was rebuilt only when the requested model changed, so iteration 2 ran on beta under a
+// row that said the switch applied (`docs/defects/fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md`).
+const s3b = scenario('switch-back', [], { snapshot: true });
+await scenarioRun('switch-back', async () => {
+  const r = await launch('switch-back', s3b, {
+    ROTARIS_SCRIPT: 'fail:429,wait:12000,answer,answer', ROTARIS_CAPTURE_PROMPT: 'move, then switch back',
+    ROTARIS_CAPTURE_TYPE: 'a second task>>composer@5000',
+    ROTARIS_CAPTURE_CLICKS: 'button[aria-label="Active run model"]@7000;;[role="option"][data-value="alpha"]@7800',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800',
+  });
+  const db = open(s3b);
+  const row = session(db);
+  const list = names(db, row.session_id);
+  const rows = systemRows(db, row.session_id);
+  db.close();
+  expect(row.execution_status === 'completed' && row.iterations_completed === 2, `the run did not complete two iterations: ${JSON.stringify(row)}`);
+  expect(list.some((t) => t.name === 'quota_fallback_model'), `no same-tier move: ${list.map((t) => t.name).join(',')}`);
+  const switched = list.find((t) => t.name === 'entry_model_switched');
+  expect(switched !== undefined && JSON.parse(switched.metadata).model === 'alpha', `the switch was not recorded: ${list.map((t) => t.name).join(',')}`);
+  expect(rows.includes('Entry model switched to alpha; it applies from the next iteration.'), `no row for the switch: ${rows.join(' | ')}`);
+  const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
+  // Iteration 1: alpha refused, beta held then answered; iteration 2: alpha.
+  expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted/beta,scripted/alpha', `the next iteration did not run on the switched-to model: ${JSON.stringify(calls)}`);
+  results.switchBack = { status: row.execution_status, iterations: row.iterations_completed, row: rows.find((b) => b.startsWith('Entry model switched')), calls, png: r.png, elapsedMs: r.elapsedMs };
 });
 
 // 4. Quota with no candidate: an indefinite wait; setModel from the header → rebuilt, completes; the override persists; a relaunch and resume uses it.
@@ -446,8 +479,8 @@ await scenarioRun('fatal', async () => {
   results.fatal = { status: row.execution_status, error, notice: notice.text, png: r.png, elapsedMs: r.elapsedMs };
 });
 
-writeFileSync(join(output, 'results.json'), `${JSON.stringify({ ...results, failures }, null, 2)}\n`);
-console.log(JSON.stringify({ ...results, failures }, null, 2));
+writeFileSync(join(output, 'results.json'), `${JSON.stringify({ ...results, ...(only === null ? {} : { only }), failures }, null, 2)}\n`);
+console.log(JSON.stringify({ ...results, ...(only === null ? {} : { only }), failures }, null, 2));
 if (failures.length > 0) {
   console.error(`resilience-proof: ${failures.length} scenario(s) failed: ${failures.map((f) => f.scenario).join(', ')}`);
   process.exitCode = 1;

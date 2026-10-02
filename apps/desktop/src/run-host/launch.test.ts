@@ -165,6 +165,22 @@ describe('launch configuration ownership (REQ-TRACE-470/471, REQ-SESSION-138)', 
     }
   });
 
+  /**
+   * REQ-NOTIFY-060/061 with REQ-SANDBOX-095/097/120: a confinement mode the host cannot deliver (no confinement service
+   * is wired here, which the gate reads as unavailable) is refused before any lease or session, as its own class —
+   * `session.confinement` — carrying the backend's wording as the detail. It read `session.configuration` before the
+   * repair, so main could not tell it from any other configuration refusal.
+   */
+  it('a refused confinement mode is refused as its own class, before a lease or a session', async () => {
+    writeFileSync(file(dir), readFileSync(file(dir), 'utf8').replace('  allow_unsandboxed_autonomous: false\n', '  allow_unsandboxed_autonomous: false\n  sandbox_mode: workspace-write\n'));
+    const lease = vi.fn(async () => ({ 'provider-one': 'bearer' }));
+    const refused = await launch('confined', lease);
+    expect(refused).toMatchObject({ kind: 'refused', code: 'session.confinement', headline: 'The run was refused before it started' });
+    expect(refused.kind === 'refused' ? refused.detail : '').not.toBe('');
+    expect(lease).not.toHaveBeenCalled();
+    expect(setups.size).toBe(0);
+  });
+
   it('fatal configuration refuses before requesting credentials or creating a session', async () => {
     writeFileSync(file(dir), 'runtime: [invalid]\n');
     const lease = vi.fn(async () => ({ 'provider-one': 'bearer' }));

@@ -49,7 +49,13 @@ export const cancelOverlays: CancelOverlayStore = createCancelOverlayStore();
 // Every record the replica takes is numbered in the order it took it, so an accepted cancel keeps covering what a reader
 // lagging the replica still draws — a persona window's coalesced copy (REQ-SHELL-076) — and nothing taken after it.
 replica.subscribe((s) => { cancelOverlays.getState().witness(s.session); });
-export const { answerQuestions, cancelAgent, cancelQuestions, cancelRun, continueSession, control, planDecision, planEdit, setMode, setRunStartMode, stopRun, submitPrompt } = createSessionActions({ bridge, replica, cancels: cancelOverlays });
+export const { answerQuestions, cancelAgent, cancelQuestions, cancelRun, continueSession, control, planDecision, planEdit, retryRun, setMode, setRunStartMode, stopRun, submitPrompt } = createSessionActions({ bridge, replica, cancels: cancelOverlays });
+/**
+ * REQ-CHAT-014 / REQ-NOTIFY-045: the composer draft as the window last published it (200 ms behind the keystrokes), for
+ * the notice's retry, which acts outside the composer. `null` until the composer has published or the stored draft has
+ * been read; the retry then reads the stored one (REQ-NOTIFY-066).
+ */
+export const composerDraft: { current: string | null } = { current: null };
 
 export const notices: NoticeStore = createNoticeStore();
 /** REQ-NOTIFY-013 / REQ-SHELL-112: this window's ONE transient stack; main pushes to it over channel 8. */

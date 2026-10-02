@@ -45,6 +45,18 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**An entry switch applies from the next iteration, over a ladder move (REQ-MONITOR-142, REQ-ORCH-090, REQ-ORCH-091,
+OQ-177).** `Run.pendingEntrySwitch` holds a user's switch until `rootResilience`, now read once per root turn (an
+iteration, its resumes after its children included), applies it: a model switch rebuilds the root's cell on the chosen
+model even onto the one it was last built from (`rootRebuildsFor` counts it, so every switch records `rebuilds: true`), the
+once-per-agent budgets carried over; a reasoning switch sets the level on the model the cell has; a switch onto a pair a
+change-model resolution moved says where the entry agent runs instead (`ResilienceMemory.overrideReaching`). The
+**runtime view**'s `setModel` row says so. **The retry notice action has a target, and a refused confinement mode raises
+REQ-NOTIFY-061's notice (REQ-NOTIFY-045, REQ-NOTIFY-061, OQ-178).** `retry-run` dispatches to the renderer's `retryRun`,
+and the confinement gate's refusals carry the code `session.confinement` from the run host to main's
+`confinementRefusalNotice`, for a start, a prompt and a continue; the **seams view** §6 says the first, the **runtime
+view**'s refused start the second. No package, edge, process, message kind, channel, command or store column changed.
+
 **A switch of the entry model records whether the root's cell is rebuilt for it (REQ-MONITOR-142, REQ-ORCH-090,
 REQ-ORCH-091).** `setEntryModel` writes `entry_model_switched` with `{ model, rebuilds, supersedes }`, `rebuilds` being
 the test `rootResilience` applies at the next turn (`Run.rootRebuildsFor`) and `supersedes` saying the switch replaces one

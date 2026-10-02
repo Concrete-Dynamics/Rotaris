@@ -52,7 +52,13 @@ export function providersCommands(
     'providers.save': async (req) => {
       let message = '';
       if (req.baseUrl !== null) { const r = await providers.setBaseUrl(req.id, req.baseUrl); if (!r.ok) return { ok: true, value: { ok: false, message: r.error } }; message = r.value; }
-      if (req.apiKey.trim() !== '') { const r = await providers.replaceKey(req.id, req.apiKey, req.validate); if (!r.ok) return { ok: true, value: { ok: false, message: r.error } }; message = r.value; credentialsChanged(req.id); }
+      if (req.apiKey.trim() !== '') {
+        const r = await providers.replaceKey(req.id, req.apiKey, req.validate);
+        // `catalog`: the key was stored and only its discovered models were not recorded — the credentials changed all the same.
+        if (r.ok || r.stage === 'catalog') credentialsChanged(req.id);
+        if (!r.ok) return { ok: true, value: { ok: false, message: r.message } };
+        message = r.message;
+      }
       else if (req.baseUrl === null && !providers.status(req.id).startsWith('auth')) return { ok: true, value: { ok: false, message: `A key is required for ${providers.displayName(req.id)}.` } };
       if (message === '') message = 'Nothing changed.';
       else { healthCache.delete(req.id); await afterProviderChange(); }
@@ -67,7 +73,8 @@ export function providersCommands(
     'providers.signOut': async (req) => {
       const r = await providers.signOut(req.id);
       healthCache.delete(req.id);
-      credentialsChanged(req.id);
+      // Only a sign-out that removed the stored credential changed it; a failed one, or one with nothing stored, did not.
+      if (r.outcome === 'signed-out') credentialsChanged(req.id);
       log(`providers: ${r.message}`);
       await afterProviderChange();
       return { ok: true, value: { ok: r.outcome === 'signed-out' || r.outcome === 'nothing', message: r.message } };

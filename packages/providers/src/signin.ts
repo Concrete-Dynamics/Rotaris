@@ -225,10 +225,13 @@ export class ProviderService {
     return { outcome: 'signed-in', id, displayName, discovered: found.value.length, message, keyValidated: !publicCatalog };
   }
 
-  /** REQ-PROVIDER-108/141: replace the key; validated by discovery unless the user opted out. */
-  async replaceKey(id: string, apiKey: string, validate = true): Promise<Result<string, string>> {
-    const r = await this.storeKey(id, apiKey, validate);
-    return r.ok ? ok(r.message) : err(r.message);
+  /**
+   * REQ-PROVIDER-108/141: replace the key; validated by discovery unless the user opted out. The refusing stage is named,
+   * as for the recovery dialog's key path: `catalog` is a key that WAS stored, so the caller knows the credentials changed
+   * (REQ-NOTIFY-068) although the answer is a refusal.
+   */
+  async replaceKey(id: string, apiKey: string, validate = true): Promise<ReauthenticationOutcome> {
+    return this.storeKey(id, apiKey, validate);
   }
 
   /** REQ-NOTIFY-076: the method the recovery dialog offers for `id`, read from the catalogue and the stored family alone. */

@@ -85,7 +85,8 @@ path (REQ-NOTIFY-076/077).
     re-authentication, or a sign-in, a saved key, a sign-out or a removal under Settings (`commands/providers.ts`). Main holds
     it because the credential store is main's; the engine's restart still accepts any configured model, and its
     `REQ-NOTIFY-075` case is now the one where alpha's credentials changed first. `fatal`'s third dialog asserts alpha and
-    beta are both absent and gpt-4o is what is left. In memory: an application restart forgets the set.
+    beta are both absent and gpt-4o is what is left. In memory: an application restart forgets the set (and the focus gate's
+    held publication with it — repair round 2, below).
   - *REQ-NOTIFY-030/032.* The dialog had opened over the active main window for a session no window followed, and the class
     notice was raised at once. A failed run's class publication now goes through a focus gate (`RunFailurePublisher`,
     `apps/desktop/src/main/run-failure-notice.ts`): a session a main window follows publishes its class at once; any other
@@ -104,6 +105,23 @@ path (REQ-NOTIFY-076/077).
     was stored but whose discovered models could not be recorded is now its own stage (`catalog`), so it is no longer told
     as "The key could not be stored" — the run restarts with the stored key and the shortfall is logged (`signin.test.ts`,
     `auth-recovery.test.ts`).
+
+- **Repair round 2 (2026-10-02), after the verifier's blocking finding on the release under Settings.** The four call sites
+  in `apps/desktop/src/main/commands/providers.ts` that release a provider's refused pairs had no test: turning
+  `credentialsChanged` into a no-op there left the gate green, though a key re-entered under Settings after a 401 would then
+  leave the provider's models refused for the rest of the application session. `commands/providers.test.ts` now drives
+  `providersCommands` with a stand-in provider service and a spy recovery, and each case fails without its call. Writing it
+  showed the release keyed to the command's answer rather than to the credential store, wrong both ways: a sign-out that
+  failed, named no known provider or found nothing stored released the pairs although no credential changed; and a save
+  whose key **was** stored but whose discovered models could not be recorded (`catalog`) released nothing although the
+  credential changed. `replaceKey` now answers with its refusing stage (`ReauthenticationOutcome`, as the dialog's key path
+  does); `providers.save` releases on success or `catalog`, `providers.signOut` only on `signed-out`. A sign-in that signed
+  in, and a removal that succeeded, release; a refused sign-in, a blank key, a base URL alone, an earlier refusal of the
+  key and a refused removal do not.
+  - *In memory, both halves.* Besides the refused pairs, the focus gate's held class publication
+    (`RunFailurePublisher.held`) lives only in memory: after an application restart a background 401 that was waiting for
+    its session's focus never opens its dialog, and only REQ-NOTIFY-032's warning remains (persistent, with the failure text
+    and the action focusing the session).
 
 **Why the note is still open.** Parts C and D are built; A and B are not on this base (above). The note closes when the
 first-failure fallback restart and the non-modal prompt land — `fin6-auth-recovery-1` or a rebuild of it — and then the

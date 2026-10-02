@@ -165,9 +165,9 @@ describe('the rest of the provider service', () => {
   it('replaceKey validates by discovery and refuses a non-api-key provider; refresh counts (REQ-PROVIDER-108/147)', async () => {
     const { svc } = service();
     await svc.addInstance({ label: 'OpenRouter', baseUrl: OR, apiKey: KEY });
-    expect(await svc.replaceKey('openai-compatible--openrouter', 'sk-or-other')).toEqual({ ok: false, error: 'Validation failed for OpenRouter: Authentication failed for OpenRouter: 401' });
-    expect(await svc.replaceKey('openai-compatible--openrouter', KEY)).toEqual({ ok: true, value: 'Validated OpenRouter; discovered 3 models.' });
-    expect(await svc.replaceKey('codex', KEY)).toEqual({ ok: false, error: 'OpenAI Codex does not sign in with an API key.' });
+    expect(await svc.replaceKey('openai-compatible--openrouter', 'sk-or-other')).toEqual({ ok: false, stage: 'validation', message: 'Validation failed for OpenRouter: Authentication failed for OpenRouter: 401' });
+    expect(await svc.replaceKey('openai-compatible--openrouter', KEY)).toEqual({ ok: true, message: 'Validated OpenRouter; discovered 3 models.' });
+    expect(await svc.replaceKey('codex', KEY)).toEqual({ ok: false, stage: 'method', message: 'OpenAI Codex does not sign in with an API key.' });
     const lines: string[] = [];
     expect(await svc.refresh('all', (l) => lines.push(l))).toEqual({ succeeded: 1, failed: 0, skipped: 5, complete: false });
     expect(lines.at(-1)).toContain('finished with failures or skips: 1 succeeded, 5 skipped (not authenticated)');

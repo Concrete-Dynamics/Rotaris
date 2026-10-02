@@ -52,9 +52,10 @@ export class AuthRecovery {
    * REQ-NOTIFY-068 — by session, every provider/model pair that has failed authentication since its provider's credentials
    * last changed in this process. Such a pair is never offered by the dialog nor accepted by a retry: calling it again would
    * be the same provider with the same credentials. A pair leaves the set when its provider's credentials change
-   * (`credentialsChanged`: a re-authentication in the dialog, or a sign-in, a key saved, a sign-out or a removal under
-   * Settings) — the credential store is main's, so main is where "the same credentials" is known. Held in memory: an
-   * application restart forgets it, and the next failure's dialog leaves out only the pair that failed then.
+   * (`credentialsChanged`: a re-authentication in the dialog, or under Settings a sign-in that signed in, a key that was
+   * stored, a sign-out that removed the stored key or a removal that succeeded — `commands/providers.ts`). The credential
+   * store is main's, so main is where "the same credentials" is known. Held in memory: an application restart forgets it,
+   * and the next failure's dialog leaves out only the pair that failed then.
    */
   private readonly refused = new Map<string, Set<string>>();
 

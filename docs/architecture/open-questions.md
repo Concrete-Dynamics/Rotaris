@@ -8808,10 +8808,13 @@ Three things the requirements leave to the build:
 - the "fallback attempted" bookkeeping lives **in main for the life of the process**. The pin itself is durable, so after
   a relaunch the session runs on the fallback, and a failure there is a failure of the fallback, which is not tried again
   (REQ-NOTIFY-075's reading) — the dialog's case.
+- Because the restart is a further run of the session, its todo still holds the failed run's task as abandoned
+  (REQ-ORCH-074), so a restart that succeeds ends "The run completed with failures: 1 completed, 1 abandoned" — seen in
+  `resilience-proof`'s `auth-fallback` run on 2026-10-02. The build leaves it so: the failed run's task did fail.
 - The pin is keyed by the **pair** that failed (`provider|model`), as a wait's choice is, so every agent of the session on
   that pair — a child on the primary model included — moves to the fallback; REQ-NOTIFY-070 says "that session's model
   override", which is the one session-wide override REQ-SESSION-026 names.
 
-**What a ruling decides.** Whether the restart appends a user turn or continues the failed request; whether attachments
-are re-sent; whether a restart that could not begin leaves the pin standing; whether the first-failure bookkeeping outlives
+**What a ruling decides.** Whether the restart appends a user turn or continues the failed request (and so whether the
+failed run's task stays abandoned beside the restart's); whether attachments are re-sent; whether a restart that could not begin leaves the pin standing; whether the first-failure bookkeeping outlives
 the application; and whether the pin covers every agent on the failed pair or the entry agent alone.

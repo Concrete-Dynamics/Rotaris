@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, REASONING_LEVEL_NAMES, ROLE_REASONING_NAMES, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
-import { clampForDisplay, type PendingChange, type PendingSettings } from './config-state.js';
+import { clampForDisplay, scopeCellOf, type PendingChange, type PendingSettings } from './config-state.js';
 import { SecurityPolicy } from './SecurityPolicy.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
 
@@ -147,7 +147,7 @@ export function ModelsSettings(props: ConfigSettingsProps) {
   );
 }
 
-/** REQ-CONFIG-336..341: the edit-scope selector, the six-column role table, the Scope column with Unset at the edited origin only. */
+/** REQ-CONFIG-336..341: the edit-scope selector, the six-column role table, the Scope column with Unset at the edited origin only (`scopeCellOf`: a pending unset reads `default`). */
 export function PersonasSettings(props: ConfigSettingsProps & { readonly children?: React.ReactNode }) {
   const { snapshot, pending, onChange } = props;
   const [scope, setScope] = useState<'workspace' | 'global'>('workspace');
@@ -175,6 +175,7 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
             const model = edit?.unsetModel ? '' : edit?.model !== undefined ? edit.model ?? '' : r.rawModel ?? '';
             const thinking = edit?.unsetThinking ? 'default' : edit?.thinking !== undefined ? edit.thinking ?? 'default' : r.rawThinking ?? 'default';
             const levels = ROLE_REASONING_NAMES.includes(thinking as 'default') ? ROLE_REASONING_NAMES : [...ROLE_REASONING_NAMES, thinking];
+            const cell = scopeCellOf(r, pending, scope);
             return (
               <tr key={r.role}>
                 <td>{r.role}</td>
@@ -194,8 +195,8 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
                   </DesignSelect>
                 </td>
                 <td className="settings__scope">
-                  <div>model: <span className="text-secondary">{r.modelOrigin}</span>{r.modelOrigin === scope && <DesignButton type="button" className="btn btn-link btn-compact" title="Falls back to the lower-precedence value." onClick={() => onChange({ kind: 'role', role: r.role, scope, unsetModel: true })}>Unset</DesignButton>}</div>
-                  <div>reasoning: <span className="text-secondary">{r.thinkingOrigin}</span>{r.thinkingOrigin === scope && <DesignButton type="button" className="btn btn-link btn-compact" title="Falls back to the lower-precedence value." onClick={() => onChange({ kind: 'role', role: r.role, scope, unsetThinking: true })}>Unset</DesignButton>}</div>
+                  <div>model: <span className="text-secondary">{cell.model.origin}</span>{cell.model.offerUnset && <DesignButton type="button" className="btn btn-link btn-compact" aria-label={cell.model.unsetLabel} title="Falls back to the lower-precedence value." onClick={() => onChange({ kind: 'role', role: r.role, scope, unsetModel: true })}>Unset</DesignButton>}</div>
+                  <div>reasoning: <span className="text-secondary">{cell.reasoning.origin}</span>{cell.reasoning.offerUnset && <DesignButton type="button" className="btn btn-link btn-compact" aria-label={cell.reasoning.unsetLabel} title="Falls back to the lower-precedence value." onClick={() => onChange({ kind: 'role', role: r.role, scope, unsetThinking: true })}>Unset</DesignButton>}</div>
                 </td>
                 <td className="text-secondary settings__tools">{r.tools.join(', ') || '—'}</td>
               </tr>

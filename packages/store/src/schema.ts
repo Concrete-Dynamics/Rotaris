@@ -1062,6 +1062,26 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    to: 31,
+    /*
+     * REQ-SANDBOX-121 with REQ-MONITOR-257 and REQ-NOTIFY-030 (the repair of
+     * `no-workspace-indicator-names-the-confinement-backend.md`): the indicator names the confinement backend of the
+     * focused session, and the session's record carried only `sandboxed` (v3). `sandbox_backend` is the backend the
+     * session's latest run was confined by, written beside `sandboxed` when a run starts ('' when it was not confined).
+     * A session written before this version takes the backend its `session.start` event recorded
+     * (`sandbox.backend`, REQ-SESSION-193) where it is marked confined and that event is still held, else ''.
+     */
+    sql: `
+      ALTER TABLE sessions ADD COLUMN sandbox_backend TEXT NOT NULL DEFAULT '';
+      UPDATE sessions SET sandbox_backend = coalesce((
+        SELECT json_extract(e.payload, '$.sandbox.backend') FROM events e
+        WHERE e.session_id = sessions.session_id AND e.kind = 'session.start' AND json_valid(e.payload)
+          AND json_type(e.payload, '$.sandbox.backend') = 'text'
+        ORDER BY e.ordinal LIMIT 1), '')
+      WHERE sandboxed = 1;
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

@@ -797,6 +797,7 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     summary: r.summary_status && r.summary_severity && r.summary_text ? { status: r.summary_status, severity: r.summary_severity, message: r.summary_text } : null,
     permissionMode: r.permission_mode,
     sandboxed: r.sandboxed === 1,
+    sandboxBackend: r.sandboxed === 1 ? r.sandbox_backend : '',
     backgroundSessions: 0,
     intent: null,
     queuedPrompts: [...queued],

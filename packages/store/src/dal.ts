@@ -46,6 +46,8 @@ export interface SessionRow {
   // v4 — REQ-TOOLS-071 / REQ-TOOLS-060.
   readonly permission_mode: string | null;
   readonly sandboxed: number;
+  /** v31 — REQ-SANDBOX-121: the backend the latest run was confined by; '' when it was not. */
+  readonly sandbox_backend: string;
   readonly pending_approvals: string;
   // v6 — REQ-ORCH-084/087: the message limit in force and the count reached while paused at it.
   readonly message_limit: number | null;
@@ -104,6 +106,7 @@ export interface CheckpointRow {
 export interface SessionRunPatch {
   readonly permission_mode?: string | null;
   readonly sandboxed?: number;
+  readonly sandbox_backend?: string;
   readonly pending_approvals?: string;
   readonly stop_reason?: string | null;
   readonly iterations_completed?: number;
@@ -457,6 +460,7 @@ export class StoreDal {
         UPDATE sessions SET
           permission_mode = coalesce(@permission_mode, permission_mode),
           sandboxed = coalesce(@sandboxed, sandboxed),
+          sandbox_backend = coalesce(@sandbox_backend, sandbox_backend),
           pending_approvals = coalesce(@pending_approvals, pending_approvals),
           stop_reason = coalesce(@stop_reason, stop_reason),
           iterations_completed = coalesce(@iterations_completed, iterations_completed),
@@ -965,7 +969,7 @@ export class StoreDal {
   updateSessionRun(id: SessionId, patch: SessionRunPatch): void {
     this.stmts['updateSessionRun']!.run({
       session_id: id,
-      permission_mode: patch.permission_mode ?? null, sandboxed: patch.sandboxed ?? null, pending_approvals: patch.pending_approvals ?? null,
+      permission_mode: patch.permission_mode ?? null, sandboxed: patch.sandboxed ?? null, sandbox_backend: patch.sandbox_backend ?? null, pending_approvals: patch.pending_approvals ?? null,
       stop_reason: patch.stop_reason ?? null, iterations_completed: patch.iterations_completed ?? null, run_started_at: patch.run_started_at ?? null,
       tokens_input: patch.tokens_input ?? null, tokens_output: patch.tokens_output ?? null, cost: patch.cost ?? null, cost_qualifier: patch.cost_qualifier ?? null,
       tool_calls: patch.tool_calls ?? null, compressions: patch.compressions ?? null,

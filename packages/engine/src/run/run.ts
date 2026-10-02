@@ -903,7 +903,7 @@ export class Run {
       }
       // PD-TOOLS-002: the requested mode always applies — no downgrade row, timeline event or log warning. The announcement records the requested (= effective) mode.
       const perm = this.deps.permission;
-      this.saveRunning({ run_started_at: this.deps.readSession()?.updated_at ?? null, permission_mode: perm.effective, sandboxed: perm.sandboxed ? 1 : 0 });
+      this.saveRunning({ run_started_at: this.deps.readSession()?.updated_at ?? null, permission_mode: perm.effective, sandboxed: perm.sandboxed ? 1 : 0, sandbox_backend: perm.sandboxed ? perm.sandboxBackend : '' });
       // REQ-MONITOR-166: sampled by the run, not by a view — the cadence from the clock port, never a bare timer.
       this.sampler = clocks.timers.every(TOKEN_SAMPLE_PERIOD, () => this.sampleTokens(true));
       await this.drain();
@@ -2325,7 +2325,7 @@ export class Run {
     if (save) this.saveRunning({});
   }
 
-  private saveRunning(extra: { run_started_at?: string | null; permission_mode?: string; sandboxed?: number }, status: 'running' | 'waiting' = this.waits.size > 0 ? 'waiting' : 'running'): void {
+  private saveRunning(extra: { run_started_at?: string | null; permission_mode?: string; sandboxed?: number; sandbox_backend?: string }, status: 'running' | 'waiting' = this.waits.size > 0 ? 'waiting' : 'running'): void {
     // REQ-MONITOR-124: an accepted pause reads `pausing` until the run has come to rest — a wait the pause releases, or any
     // other save on the way to rest, does not read `running` again (found by phase 3's second review).
     const r = this.deps.writer.save(this.pauseRequested ? 'pausing' : status, {
@@ -2334,6 +2334,7 @@ export class Run {
       ...(extra.run_started_at === undefined ? {} : { run_started_at: extra.run_started_at }),
       ...(extra.permission_mode === undefined ? {} : { permission_mode: extra.permission_mode }),
       ...(extra.sandboxed === undefined ? {} : { sandboxed: extra.sandboxed }),
+      ...(extra.sandbox_backend === undefined ? {} : { sandbox_backend: extra.sandbox_backend }),
     });
     if (r.ok) this.deps.onSaved?.(r.value);
   }

@@ -298,3 +298,16 @@ The design language's pair — consult before, match after (`docs/design/README.
 
 Tokens alone are not compliance, and a plausible invention is not a third option where the design material
 decides.
+
+**A status-strip item** (worked example: REQ-SANDBOX-121's sandbox indicator, 2026-10-02). The strip draws one row of
+`StatusItem`s (`packages/ui/src/AppShell.tsx`), and an item is text in the strip's own craft — the mockup's strip is
+plain tertiary text, so a new item takes no new control and no new token. The path, in order: the fact on the record
+the renderer already receives (`SessionRecord` in `packages/contracts/src/channels.ts`, filled by `toSessionRecord` in
+`packages/engine/src/sessions.ts`; a store column first if no stored fact carries it, §3 — here v31's
+`sandbox_backend`); a pure helper beside `statusStripModeItem` in `packages/ui/src/composer.ts` that returns the item or
+`null` (`statusStripSandboxItem`), pinned in `composer.test.ts` for every state that shows or hides it; then the
+renderer's `status` memo in `apps/desktop/src/renderer/main.tsx`, which reads the **focused** session's record, so the
+item re-binds with focus (REQ-MONITOR-257) and memoises on the primitives it shows (REQ-TOOLS-184's "never redraws when
+nothing it displays has changed"). Give it a name and a tooltip (`{short form} — {explanation}`, REQ-SHELL-041's form)
+and a `testId`, and read it in the built app with `pnpm app:drive` at 1400 and at 1000 px wide: REQ-SHELL-047 owns the
+widths at which an item stops being shown, and an item added without a threshold there is shown at every width.

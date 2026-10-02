@@ -261,6 +261,11 @@ export const SessionRecordSchema = z.object({
   /** REQ-TOOLS-071 / REQ-TOOLS-184: the effective mode and the sandbox verdict, as the strip shows them. */
   permissionMode: z.string().nullable(),
   sandboxed: z.boolean(),
+  /**
+   * REQ-SANDBOX-121: the confinement backend the session's latest run was confined by (`bubblewrap`, `seatbelt`), for the
+   * workspace indicator that names it; '' where `sandboxed` is false.
+   */
+  sandboxBackend: z.string(),
   /** REQ-TOOLS-060 / REQ-CHAT-051: the pending approvals, request id to payload, for the trailer rows. */
   pendingApprovals: z.array(ApprovalPayloadSchema),
   /** REQ-TOOLS-184: background terminal sessions in the running state. */

@@ -515,13 +515,21 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
     });
   }
 
+  // `selector>>text@from~ms`, the waiting form the main window's probes take: the first persona window is read once an element
+  // matching the selector (with that exact text, when one is given) is in it, or at the deadline — a reading with a
+  // precondition, where a fixed instant reports whatever the clock found (compression-proof's `root-and-child`, which reads
+  // the run-wide compression count once the run has counted both compressions, REQ-MONITOR-086/281). The label keeps the
+  // requested form, `~` included, as `probe-at`'s does.
+  const personaRead = (probe: string): Promise<unknown> => { const e = firstPersona(); return e ? e.win.webContents.executeJavaScript(probe) : Promise.resolve(false); };
   for (const step of steps(process.env['ROTARIS_CAPTURE_PERSONA_PROBE_AT'])) {
-    clocks.timers.after(millis(step.at), async () => {
+    void (async () => {
+      await settleAt(host, step, personaRead);
+      const label = `${step.until ? '~' : ''}${step.at}`;
       const e = firstPersona();
-      if (!e) { log(`capture: persona-probe-at ${step.at} ${step.selector} → null`); return; }
+      if (!e) { log(`capture: persona-probe-at ${label} ${step.selector} → null`); return; }
       const found = await e.win.webContents.executeJavaScript(`(() => [...document.querySelectorAll(${JSON.stringify(step.selector)})].map((el) => ({ text: (el.tagName === 'TEXTAREA' ? el.value : (el.textContent || '')).trim().slice(0, 400), data: Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-') || a.name.startsWith('aria-') || a.name === 'title').map((a) => [a.name, a.value])) })))()`).catch((cause: unknown) => `error: ${String(cause)}`) as unknown;
-      log(`capture: persona-probe-at ${step.at} ${step.selector} → ${JSON.stringify(found)}`);
-    });
+      log(`capture: persona-probe-at ${label} ${step.selector} → ${JSON.stringify(found)}`);
+    })();
   }
 
   for (const step of steps(process.env['ROTARIS_CAPTURE_PERSONA_CLOSE_AT'])) {

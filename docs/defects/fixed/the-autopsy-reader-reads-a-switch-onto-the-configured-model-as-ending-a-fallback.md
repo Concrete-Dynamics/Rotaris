@@ -87,6 +87,48 @@ earlier reading. Pinned by:
 
   The first, second and fourth failed on both copies before the change.
 
+**Corrected in place, repair round 2 (2026-10-02).** The paragraph above said: "Both readers keep the state from before
+the first unapplied switch, including the keys printed up to it. A superseding record returns to that state before it is
+read." That restore also threw away every record read after that point, and the verifier showed one that really happened:
+a ladder move of the root made **between** the two switches, inside the turn that was already running when the first was
+made. On the run's own store (switch to `c1`, `quota_fallback_model` a1 → b1, switch back to `a1` superseding) the reader
+read `['a1']` while the run stayed on `b1`; the root's superseding wait choice erased a move in the same way. The same
+cause reached a switch that is never superseded: a root move made while the switch was pending was read after it
+(`['c1', 'b1']`, ending on `b1`) though the switch applied at the next turn and ended it (the run ran `a1, b1, c1`).
+
+Repaired at the cause: the reader placed records by the order they were written, while the run applies a switch at the
+root's next turn.
+- The run records where a root ladder move falls against a pending switch: `quota_fallback_model` and `llm_unresponsive`
+  carry `switch_pending` for the root (`TurnResilience.switchPending`, given by `rootResilience` alone; a child's move
+  carries none).
+- Both readers keep the state before the pending switch and the records since it, split into those known to precede the
+  root's next turn and those whose place is unknown. A superseding switch reads the timeline as if the superseded switch
+  were not recorded: the state before it, every record since it read again, then the superseding switch. The key the
+  superseded switch printed is taken back with it, rightly, since the root never ran on it. The root's superseding wait
+  choice does the same, then reads the choice. A move recording `switch_pending: true` is read before the pending switch,
+  which then ends it unless it records `rebuilds: false`; `switch_pending: false` says the switch had applied.
+- A child's wait choice between two switches of one chain is read again from the state before the first, so the coarse
+  reading the round-1 report named (a key that override printed replaced after restoring) is gone with it.
+
+Pinned by:
+- `packages/engine/src/run/ladder.test.ts`, "a root fallback made while a switch is pending is recorded so, and the reader
+  places it before the switch …": the root's call on `a1` is held, the user switches to `c1`, the call fails on quota and
+  the root moves to `b1` (`switch_pending: true`), then (second run) the user switches back to `a1`
+  (`rebuilds: false, supersedes: true`). The root's turns after the first all go to `b1` and the reader over the run's own
+  store reads `['b1']`. In the control (no switch back) the root ends on `c1` and the reader reads `['b1', 'c1']`; it read
+  `['c1', 'b1']` with the earlier reader, and the records assertion failed without the run change.
+- `apps/desktop/scripts/lib/autopsy-entry-model.test.ts`, six moves-table rows: the move between two switches, with and
+  without `switch_pending`; the root's superseding wait choice with a move since the switch; a pending-switch move read
+  before a switch that is never superseded; a move after the switch applied (`switch_pending: false`, read as recorded);
+  and a child's wait choice between two switches of one chain. All but the `switch_pending: false` row failed on both
+  copies before the change.
+
+What stays coarse, stated in both copies' doc comments: a child's wait choice made after a pending switch is read after
+that switch as recorded, since nothing says whether the root's next turn came before it, so a switched key it overrode
+before that turn is printed though the root never ran on it. That residual is an open note,
+[the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md](../the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md).
+A store recording no `switch_pending` reads a move where it stands until a superseding switch places it.
+
 The other coarse reading these doc comments state is a different defect: a switched key is carried across a continuation
 that records no snapshot. It is now recorded as an open note,
 [the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md](../the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md).

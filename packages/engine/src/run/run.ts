@@ -512,7 +512,8 @@ export class Run {
   private appliedEntryModel: ModelRef | null = null;
   /**
    * A switch recorded since the root's cell was last settled (`rootResilience`, at the root's next turn): until then a
-   * later switch, or the root's own wait choice, replaces it and it never applies. Each record says so (`supersedes`),
+   * later switch, or the root's own wait choice, replaces it and it never applies. Each record says so (`supersedes`), and
+   * each ladder move of the root says whether one is pending at it (`switch_pending`, `TurnResilience.switchPending`),
    * since the autopsy reader cannot see when the root's turns start (the repair of the verifier's away-and-back case of
    * the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback).
    */
@@ -1278,9 +1279,9 @@ export class Run {
   }
 
   /** The per-agent ladder deps shared by the root and every child (the cell is the agent's own). */
-  private resilienceFor(cell: AgentResilienceCell, unresponsiveBoundMs: number): TurnResilience {
+  private resilienceFor(cell: AgentResilienceCell, unresponsiveBoundMs: number, switchPending?: () => boolean): TurnResilience {
     const { config } = this.deps;
-    return { cell, memory: this.memory, catalogue: this.catalogue, waits: this.waits, transientRetries: config.transientRetries, validationRetries: config.validationRetries, llmResponseTimeoutMs: config.llmResponseTimeoutMs, unresponsiveBoundMs, resting: () => this.restCause !== null };
+    return { cell, memory: this.memory, catalogue: this.catalogue, waits: this.waits, transientRetries: config.transientRetries, validationRetries: config.validationRetries, llmResponseTimeoutMs: config.llmResponseTimeoutMs, unresponsiveBoundMs, resting: () => this.restCause !== null, switchPending };
   }
 
   /**
@@ -1307,7 +1308,8 @@ export class Run {
       if (previous) { this.rootCell.fallbackAttempted = previous.fallbackAttempted; this.rootCell.sameTierAttempted = previous.sameTierAttempted; for (const p of previous.attempted) this.rootCell.attempted.add(p); }
       this.appliedEntryModel = entryModel;
     }
-    return this.resilienceFor(this.rootCell, config.modelTimeoutMs);
+    // A ladder move of the root records whether a switch is pending at it: made on this cell, before the switch applies.
+    return this.resilienceFor(this.rootCell, config.modelTimeoutMs, () => this.entrySwitchPending);
   }
 
   /**

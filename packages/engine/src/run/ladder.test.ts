@@ -479,6 +479,67 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(awayAndBack.keys).toEqual(['b1']);
   });
 
+  /*
+   * The verifier's second case of the same note: the root's ladder move recorded BETWEEN a switch and the switch that
+   * supersedes it. The move happens in the turn already running when the first switch was made, on the cell from before
+   * it, so undoing the superseded switch keeps it: the root stays on b1 and the reader, over the run's own store, ends on
+   * b1. The run records on the move that a switch was pending (`switch_pending`), so the reader also places a move before
+   * a switch that is never superseded — the control: the switch to c1 alone ends the move at the root's next turn.
+   */
+  it('REQ-MONITOR-142 over REQ-ORCH-091 b: a root fallback made while a switch is pending is recorded so, and the reader places it before the switch — kept when the switch is superseded, ended when it applies', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model']), entry('c1', 'c', C1, [])];
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    const runWith = async (back: boolean) => {
+      let releaseA!: () => void;
+      const heldA = new Promise<void>((r) => { releaseA = r; });
+      let releaseB!: () => void;
+      const heldB = new Promise<void>((r) => { releaseB = r; });
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        if (persona !== 'orchestrator') return answer('child done');
+        // On a1: held, then a quota failure — the same-tier fallback to b1 is made inside this turn.
+        if (turn === 1) return { parts: [{ hold: heldA }, { error: quota() }] };
+        // On b1: held, then a delegation; the root resumes with the child's report in a new turn.
+        if (turn === 2) return { parts: [{ hold: heldB }, ...toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]).parts] };
+        return answer(`root ${turn}`);
+      };
+      const { sessions, client } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 10_000 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 40 && client.requests.length < 1; i++) await tick();
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+      releaseA();
+      for (let i = 0; i < 40 && client.requests.length < 2; i++) await tick();
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+      if (back) expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+      releaseB();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const rows = dal.timelineOf(sid);
+      return {
+        records: rows.filter((t) => t.name === 'entry_model_switched' || t.name === 'quota_fallback_model').map((t) => ({ name: t.name, ...(JSON.parse(t.metadata) as Record<string, unknown>) })),
+        root: client.requests.filter((r) => /^You are the orchestrator/.test(systemOf(r))).map((r) => r.model.modelId),
+        keys: entryModelKeys(undefined, rows, childModelKeys(dal.childrenOf(sid))),
+      };
+    };
+    const control = await runWith(false);
+    expect(control.records).toEqual([
+      { name: 'entry_model_switched', model: 'c1', rebuilds: true, supersedes: false },
+      expect.objectContaining({ name: 'quota_fallback_model', agent: 'orchestrator', to_key: 'b1', switch_pending: true }),
+    ]);
+    expect(control.root.slice(0, 2)).toEqual(['a1', 'b1']);
+    expect(control.root.length).toBeGreaterThan(3);
+    expect(control.root.at(-1)).toBe('c1');
+    expect(control.keys).toEqual(['b1', 'c1']);
+    const between = await runWith(true);
+    expect(between.records).toEqual([
+      { name: 'entry_model_switched', model: 'c1', rebuilds: true, supersedes: false },
+      expect.objectContaining({ name: 'quota_fallback_model', agent: 'orchestrator', to_key: 'b1', switch_pending: true }),
+      { name: 'entry_model_switched', model: 'a1', rebuilds: false, supersedes: true },
+    ]);
+    expect(between.root.length).toBeGreaterThan(3);
+    expect(between.root.slice(1).every((m) => m === 'b1')).toBe(true);
+    expect(between.keys).toEqual(['b1']);
+  });
+
   it('REQ-MONITOR-142 over REQ-MONITOR-303: the root\'s own wait choice supersedes a switch recorded since its last turn, and its override says so', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, []), entry('f1', 'f', F1, [])];
     let release!: () => void;

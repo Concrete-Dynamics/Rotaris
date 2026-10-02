@@ -262,10 +262,21 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * it: the run records `rebuilds: false` on a switch onto the model the cell was last built from (`rootResilience`,
  * `sameRef`), and the move then stands while the switched key becomes the configured one; a store written before the
  * run recorded `rebuilds` is read as rebuilt. A switch applies at the root's next turn, which the record does not show,
- * so the run records on each switch and on the root's own wait choice whether it `supersedes` a switch recorded since the
- * root's cell was last settled: that switch never applied, so the reader returns to the state before it (the keys it
- * printed for it included) and reads the superseding record from there — away from the configured model and back onto it
- * with no turn between leaves a move in force standing. A store recording no `supersedes` reads each switch as applied.
+ * so the run records what places the records around that turn:
+ * - on each switch and on the root's own wait choice, whether it `supersedes` a switch recorded since the root's cell was
+ *   last settled. That switch never applied, so it is read as if it were not recorded: the reader returns to the state
+ *   before it — the key it printed taken back with it, rightly, since the root never ran on it — and reads again every
+ *   record since it, a ladder move of the root or a child's wait choice made in between included, then the superseding
+ *   record. Away from the configured model and back onto it with no turn between leaves a move in force standing, whether
+ *   the move came before the first switch or between the two. (Restoring that state without reading the records since it
+ *   again, as the repair before this one did, erased a move made between the two: the verifier's second case.)
+ * - on each ladder move of the root, whether a switch was pending at it (`switch_pending`): the move was made on the cell
+ *   from before that switch, in the turn already running when it was made, so it is read before the switch, which then
+ *   ends it at the next turn unless it records `rebuilds: false`. `switch_pending: false` says the switch had applied.
+ * A store recording no `supersedes` reads each switch as applied; one recording no `switch_pending` reads each move where
+ * it is recorded, until a switch that supersedes places it. A child's wait choice after a pending switch is read after
+ * that switch as recorded, so a switched key it overrode before the root's next turn prints though the root never ran on it
+ * (the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it).
  * One reading stays coarse: a switch is held on its run alone (`entryOverride`; a continuation is a new
  * `Run`), so a later continuation recording no snapshot starts on its configuration's model, while this keeps the
  * switched key as the configured one. Only snapshot-less runs reach it
@@ -273,103 +284,150 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * instant is that child's, even where a root of the same name was alive too (OQ-158; `childKeyAt`).
  */
 export function entryModelKeys(launchAuditPayload: string | undefined, timeline: readonly Pick<TimelineRow, 'name' | 'metadata' | 'at'>[], children: ChildModelKeys): string[] {
-  const keys: string[] = [];
   type Key = { readonly label: string; readonly pair: string | null };
-  let models: Record<string, unknown> = {};
-  let base: Key | null = null;
-  // The key the configuration names (snapshot or switch); `base` departs from it only while a ladder move is in force.
-  let configured: Key | null = null;
-  let fellBack = false;
-  // The state before the first switch the run had not applied yet: a record that `supersedes` it returns here first.
-  let held: { readonly base: Key | null; readonly configured: Key | null; readonly fellBack: boolean; readonly keys: readonly string[] } | null = null;
-  const restore = (): void => {
-    if (held === null) return;
-    base = held.base;
-    configured = held.configured;
-    fellBack = held.fellBack;
-    keys.splice(0, keys.length, ...held.keys);
-  };
-  const overrides = new Map<string, { readonly key: string; readonly to: string | null }>();
-  const effective = (): string | null => {
-    if (base === null) return null;
-    if (base.pair === null) return overrides.size > 0 ? ENTRY_KEY_UNDETERMINED : base.label;
-    let label = base.label;
-    let pair: string = base.pair;
+  type Row = Pick<TimelineRow, 'name' | 'metadata' | 'at'>;
+  interface State {
+    models: Record<string, unknown>;
+    base: Key | null;
+    // The key the configuration names (snapshot or switch); `base` departs from it only while a ladder move is in force.
+    configured: Key | null;
+    fellBack: boolean;
+    readonly keys: string[];
+    readonly overrides: Map<string, { readonly key: string; readonly to: string | null }>;
+  }
+  const clone = (s: State): State => ({ ...s, keys: [...s.keys], overrides: new Map(s.overrides) });
+  const effective = (s: State): string | null => {
+    if (s.base === null) return null;
+    if (s.base.pair === null) return s.overrides.size > 0 ? ENTRY_KEY_UNDETERMINED : s.base.label;
+    let label = s.base.label;
+    let pair: string = s.base.pair;
     for (let hops = 0; hops < 8; hops++) {
-      const o = overrides.get(pair);
+      const o = s.overrides.get(pair);
       if (!o || o.to === pair) break;
       label = o.key;
-      if (o.to === null) return overrides.size > 1 ? ENTRY_KEY_UNDETERMINED : label;
+      if (o.to === null) return s.overrides.size > 1 ? ENTRY_KEY_UNDETERMINED : label;
       pair = o.to;
     }
     return label;
   };
-  const add = (key: string | null): void => { if (key !== null && key !== '' && keys[keys.length - 1] !== key) keys.push(key); };
-  const fromSnapshot = (snapshot: unknown): void => {
+  const add = (s: State, key: string | null): void => { if (key !== null && key !== '' && s.keys[s.keys.length - 1] !== key) s.keys.push(key); };
+  const fromSnapshot = (s: State, snapshot: unknown): void => {
     const e = snapshotEntry(snapshot);
     if (!e) {
       // A continuation recording no entry model (`config_snapshot: {}`) is still a new run with a new root cell, built
       // from the configured model: a ladder move of the run before it ends there, back to the configured key, or to an
       // undetermined one when nothing ever named it.
-      if (fellBack) { fellBack = false; base = configured; add(configured === null ? ENTRY_KEY_UNDETERMINED : effective()); }
+      if (s.fellBack) { s.fellBack = false; s.base = s.configured; add(s, s.configured === null ? ENTRY_KEY_UNDETERMINED : effective(s)); }
       return;
     }
-    models = e.models;
-    base = configured = { label: e.label, pair: e.pair };
-    fellBack = false;
-    held = null;
-    add(effective());
+    s.models = e.models;
+    s.base = s.configured = { label: e.label, pair: e.pair };
+    s.fellBack = false;
+    add(s, effective(s));
   };
-  if (launchAuditPayload !== undefined) fromSnapshot(parseJson(launchAuditPayload)?.['config_snapshot']);
-  for (const t of timeline) {
-    if (t.name === 'run_continuation_intent') fromSnapshot(parseJson(t.metadata)?.['config_snapshot']);
+  /** A root ladder move the record names, or null: an entry naming a child alive at its instant is that child's. */
+  const rootMove = (t: Row): { readonly meta: Record<string, unknown>; readonly toProvider: string; readonly toModel: string } | null => {
+    if (t.name !== 'quota_fallback_model' && t.name !== 'llm_unresponsive') return null;
+    const meta = parseJson(t.metadata);
+    const agent = meta?.['agent'];
+    const toProvider = meta?.['to_provider'];
+    const toModel = meta?.['to_model'];
+    if (meta === undefined || typeof agent !== 'string' || childKeyAt(children, agent, t.at) !== null || typeof toProvider !== 'string' || typeof toModel !== 'string') return null;
+    return { meta, toProvider, toModel };
+  };
+  /** One record read as it applies to the root, with no regard to when the run applied a switch (the loop below sees to that). */
+  const read = (s: State, t: Row): void => {
+    if (t.name === 'run_continuation_intent') fromSnapshot(s, parseJson(t.metadata)?.['config_snapshot']);
     else if (t.name === 'entry_model_switched') {
       const meta = parseJson(t.metadata);
       const key = str(meta?.['model']);
-      if (key === '') continue;
-      // `supersedes`: the switch before it never applied (no root turn between them), so this one is read from the state
-      // before that one; otherwise this is the first switch not yet applied, and that state is kept.
-      if (meta?.['supersedes'] === true) restore();
-      else held = { base, configured, fellBack, keys: [...keys] };
-      configured = { label: modelLabel(models, key), pair: modelPair(models, key) };
+      if (key === '') return;
+      s.configured = { label: modelLabel(s.models, key), pair: modelPair(s.models, key) };
       // `rebuilds: false`: the switch named the model the root's cell was last built from, so the run did not rebuild
       // it and a ladder move in force stands. A store recording no `rebuilds` (written before the run recorded it) is
       // read as rebuilt.
-      if (meta?.['rebuilds'] === false && fellBack) continue;
-      base = configured;
-      fellBack = false;
-      add(effective());
+      if (meta?.['rebuilds'] === false && s.fellBack) return;
+      s.base = s.configured;
+      s.fellBack = false;
+      add(s, effective(s));
     } else if (t.name === 'model_override') {
       const meta = parseJson(t.metadata);
       const provider = meta?.['provider'];
       const model = meta?.['model'];
       const key = str(meta?.['model_key']);
-      if (typeof provider !== 'string' || typeof model !== 'string' || key === '') continue;
-      // `supersedes`: the root's own wait choice replaced a switch the run had not applied, which never ran.
-      if (meta?.['supersedes'] === true) { restore(); held = null; }
+      if (typeof provider !== 'string' || typeof model !== 'string' || key === '') return;
       const toProvider = meta?.['to_provider'];
       const toModel = meta?.['to_model'];
-      const to = typeof toProvider === 'string' && typeof toModel === 'string' ? `${toProvider}|${toModel}` : modelPair(models, key);
-      overrides.set(`${provider}|${model}`, { key, to });
-      add(effective());
-    } else if (t.name === 'quota_fallback_model' || t.name === 'llm_unresponsive') {
-      const meta = parseJson(t.metadata);
-      const agent = meta?.['agent'];
-      const toProvider = meta?.['to_provider'];
-      const toModel = meta?.['to_model'];
-      if (typeof agent !== 'string' || childKeyAt(children, agent, t.at) !== null || typeof toProvider !== 'string' || typeof toModel !== 'string') continue;
-      const pair = `${toProvider}|${toModel}`;
-      const toKey = str(meta?.['to_key']);
-      if (t.name === 'quota_fallback_model' && toKey !== '') base = { label: modelLabel(models, toKey), pair };
+      const to = typeof toProvider === 'string' && typeof toModel === 'string' ? `${toProvider}|${toModel}` : modelPair(s.models, key);
+      s.overrides.set(`${provider}|${model}`, { key, to });
+      add(s, effective(s));
+    } else {
+      const move = rootMove(t);
+      if (move === null) return;
+      const pair = `${move.toProvider}|${move.toModel}`;
+      const toKey = str(move.meta['to_key']);
+      if (t.name === 'quota_fallback_model' && toKey !== '') s.base = { label: modelLabel(s.models, toKey), pair };
       else {
-        const labels = new Set(Object.keys(models).filter((k) => modelPair(models, k) === pair).map((k) => modelLabel(models, k)));
-        base = { label: labels.size === 1 ? [...labels][0]! : `${toProvider}/${toModel}`, pair };
+        const labels = new Set(Object.keys(s.models).filter((k) => modelPair(s.models, k) === pair).map((k) => modelLabel(s.models, k)));
+        s.base = { label: labels.size === 1 ? [...labels][0]! : `${move.toProvider}/${move.toModel}`, pair };
       }
-      fellBack = true;
-      add(effective());
+      s.fellBack = true;
+      add(s, effective(s));
+    }
+  };
+
+  let s: State = { models: {}, base: null, configured: null, fellBack: false, keys: [], overrides: new Map() };
+  if (launchAuditPayload !== undefined) fromSnapshot(s, parseJson(launchAuditPayload)?.['config_snapshot']);
+  // A switch the run has not applied yet: it applies at the root's next turn, which the record does not show. `before` is
+  // the state before it; `ahead` the records known to precede that turn, read before the switch; `after` the records
+  // since whose place against that turn is unknown, read after it as recorded.
+  let pending: { readonly before: State; switched: Row; ahead: Row[]; after: Row[] } | null = null;
+  const replay = (p: NonNullable<typeof pending>): void => {
+    s = clone(p.before);
+    for (const t of p.ahead) read(s, t);
+    read(s, p.switched);
+    for (const t of p.after) read(s, t);
+  };
+  for (const t of timeline) {
+    const meta = t.name === 'entry_model_switched' || t.name === 'model_override' ? parseJson(t.metadata) : undefined;
+    const move = rootMove(t);
+    if (t.name === 'run_continuation_intent') {
+      // A new run, whose root cell is its own: no switch of the run before it is pending in it.
+      pending = null;
+      read(s, t);
+    } else if (t.name === 'entry_model_switched' && str(meta?.['model']) !== '') {
+      if (meta?.['supersedes'] === true && pending !== null) {
+        // The pending switch never applied (no root turn between the two), so it is read as if it were not recorded —
+        // the key it printed taken back with it — and every record since it precedes this one, read from the state
+        // before it.
+        pending = { before: pending.before, switched: t, ahead: [...pending.ahead, ...pending.after], after: [] };
+        replay(pending);
+      } else {
+        // The first switch not yet applied (a store recording no `supersedes` reads each switch as this one).
+        pending = { before: clone(s), switched: t, ahead: [], after: [] };
+        read(s, t);
+      }
+    } else if (t.name === 'model_override' && meta?.['supersedes'] === true && pending !== null) {
+      // The root's own wait choice replaced the pending switch, which never ran: every record since it is read from the
+      // state before it, then the choice.
+      const p = pending;
+      pending = null;
+      s = clone(p.before);
+      for (const r of [...p.ahead, ...p.after, t]) read(s, r);
+    } else if (move !== null && pending !== null && move.meta['switch_pending'] === true) {
+      // `switch_pending`: the root moved in the turn that was running when the switch was made, on the cell from before
+      // it; the switch then applies at the next turn, after the move, and ends it unless it `rebuilds: false`.
+      pending.ahead = [...pending.ahead, ...pending.after, t];
+      pending.after = [];
+      replay(pending);
+    } else {
+      // `switch_pending: false`: the root's turn had applied the switch before this move, which is read as recorded.
+      if (move !== null && move.meta['switch_pending'] === false) pending = null;
+      else pending?.after.push(t);
+      read(s, t);
     }
   }
-  return keys;
+  return s.keys;
 }
 
 /**

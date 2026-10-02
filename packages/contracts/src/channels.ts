@@ -326,6 +326,12 @@ export const SessionRecordSchema = z.object({
     reason: z.string(),
     agent: z.string(),
     rejection: z.string().nullable(),
+    /**
+     * REQ-MONITOR-194 / REQ-MONITOR-303: the configured model keys whose pair the session recorded out of quota, in
+     * declaration order. The change-model picker lists each annotated with that reason, never hidden; an explicit choice of
+     * one is the run's to clear (REQ-MONITOR-194).
+     */
+    excluded: z.array(z.string()),
   }).nullable(),
   /**
    * REQ-MONITOR-085 (Part AH, ADR-0060): the compression in flight — the agent whose context is being

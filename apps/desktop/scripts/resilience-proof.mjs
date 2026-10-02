@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { logTail, overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
-import { choose, startApp, stopApp, stopOverrunMessage, until } from './lib/driver.mjs';
+import { startApp, stopApp, stopOverrunMessage, until } from './lib/driver.mjs';
 import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-marker.mjs';
 
 /**
@@ -115,7 +115,8 @@ async function launch(name, s, extra, opts = {}) {
 /**
  * Scenario 4's first launch, DRIVEN (`lib/driver.mjs`): the prompt typed once the composer holds the caret, the wait
  * header read once it is on screen, "Change model" pressed, and the model chosen in the chooser the header draws —
- * the design system's `SearchableSelect`, by two real clicks — then the run waited for in the store. Its first form
+ * the design system's `SearchableSelect`, by two real clicks, its rows read between them (`override-picker.png`; the pair
+ * held out of quota listed with its reason, REQ-MONITOR-194/303) — then the run waited for in the store. Its first form
  * addressed `.wait-header select`, a native control the header no longer draws, so no model was ever chosen and the
  * launch waited on a result that could not come. Each step lands in `override.steps.json`.
  *
@@ -162,11 +163,18 @@ async function drivenOverride(s, { boundMs = 180_000 } = {}) {
         const during = await step('the header during the wait', d.probe('.wait-header'));
         await step('the waiting picture', d.screenshot(join(output, 'override-waiting.png')));
         await step('Change model', d.click('.wait-header .btn-secondary', { text: 'Change model' }));
-        const chosen = await step('the chooser → beta', choose(d, '.wait-header button[aria-label="Change model"]', 'beta'));
+        // REQ-MONITOR-194 / REQ-MONITOR-303: the chooser opened and read before a model is chosen — every row's value and its
+        // words, the pair held out of quota (alpha, the waiting one) annotated with the reason and still listed.
+        await step('the chooser opened', d.click('.wait-header button[aria-label="Change model"]'));
+        await step('the chooser\'s rows', d.waitFor('[role="option"][data-value="alpha"]'));
+        const picker = await step('the chooser read', d.eval(`[...document.querySelectorAll('[role="listbox"][aria-label="Change model"] [role="option"]')].map((o) => ({ value: o.dataset.value, text: o.textContent, disabled: o.getAttribute('aria-disabled') }))`));
+        await step('the chooser picture', d.screenshot(join(output, 'override-picker.png')));
+        await step('the chooser → beta', d.click('[role="option"][data-value="beta"]'));
+        const chosen = { kind: 'design-system', value: 'beta' };
         const settled = await step('the run settled', until(() => { const db = open(s); try { return session(db); } finally { db.close(); } }, (row) => row !== undefined && SETTLED.has(row.execution_status), { timeoutMs: 90_000, what: 'the session settling', signal: giveUp.signal }));
         // EVIDENCE, not an assertion: the header's absence once the run has settled.
         const after = await step('the header after the change', d.probe('.wait-header'));
-        return { during, chosen, settled, after };
+        return { during, picker, chosen, settled, after };
       })(),
       new Promise((_, reject) => { bound = setTimeout(() => reject(new Error(`the steps did not finish within ${boundMs} ms`)), boundMs); }),
     ]);
@@ -366,10 +374,14 @@ await scenarioRun('override', async () => {
   const override = list.find((t) => t.name === 'model_override');
   expect(override !== undefined && JSON.parse(override.metadata).model_key === 'beta', `no model_override entry: ${list.map((t) => t.name).join(',')}`);
   expect(rows.some((b) => b.includes('Model changed to beta during the wait')), `no system row for the change: ${rows.join(' | ')}`);
+  // REQ-MONITOR-194 / REQ-MONITOR-303: alpha, the pair the 'quota' answer put out of quota, is listed with the reason and choosable; beta is not annotated.
+  const pickerRow = (v) => r.value.picker.find((o) => o.value === v);
+  expect(pickerRow('alpha') !== undefined && pickerRow('alpha').text.includes('provider reported insufficient quota in this session') && pickerRow('alpha').disabled !== 'true', `the excluded pair is not listed with its reason: ${JSON.stringify(r.value.picker)}`);
+  expect(pickerRow('beta') !== undefined && !pickerRow('beta').text.includes('insufficient quota'), `beta is annotated as out of quota: ${JSON.stringify(r.value.picker)}`);
   expect(!list.some((t) => t.name === 'quota_fallback_model'), 'a same-tier fallback happened with no candidate');
   const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted-b/beta', `the run did not resume on beta: ${JSON.stringify(calls)}`);
-  results.override = { status: row.execution_status, headerDuringWait: header.text, chooser: r.value.chosen.kind, override: JSON.parse(override.metadata), calls, headerAfterChange: r.value.after.length, png: r.png, elapsedMs: r.elapsedMs };
+  results.override = { status: row.execution_status, headerDuringWait: header.text, chooser: r.value.chosen.kind, picker: r.value.picker, override: JSON.parse(override.metadata), calls, headerAfterChange: r.value.after.length, png: r.png, elapsedMs: r.elapsedMs };
   // The relaunch: the stored session opened from the browser and continued; the first call of the continuation goes to beta.
   const again = await launch('override-resume', s4, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_PROMPT: 'continue on the override', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
   const calls2 = modelCalls(again.log).filter((c) => c.who === 'orchestrator');

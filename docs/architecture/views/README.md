@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**The quota-wait chooser annotates the pairs held out of quota (REQ-MONITOR-194, REQ-MONITOR-303; fin8, OQ-185).** The
+record's `wait` gains `excluded`, the configured keys whose pair the run's `ResilienceMemory` holds out of quota
+(`excludedModelKeys`, read by `Run.currentWait` at every snapshot); the wait header's change-model chooser lists each with
+the reason as its hint and leaves it choosable. The **runtime view**'s `setModel` row says so. No package, edge, process,
+channel, command or store column changed.
+
 **The status strip names the focused session's confinement backend (REQ-SANDBOX-121, REQ-MONITOR-257, REQ-NOTIFY-030;
 fin8).** Store v31 appends `sessions.sandbox_backend`, written beside `sandboxed` when a run starts; the record carries
 `sandboxBackend`; the strip draws `sandbox: <backend>` for a focused session whose record says confined, and nothing

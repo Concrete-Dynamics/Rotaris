@@ -28,7 +28,7 @@ import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { LoopSupervisor } from './supervisor.js';
 import type { Persona, PersonaResolver } from '../children/personas.js';
 import { agentCell, type AgentResilienceCell, type TurnResilience } from './ladder.js';
-import { entryOf, pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
+import { entryOf, excludedModelKeys, pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
 import { WaitRegistry, type WaitState } from './waits.js';
 import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
@@ -711,9 +711,14 @@ export class Run {
   writeClaimFor(callerId: string, rel: string): ClaimHit | null {
     return this.children?.writeClaimFor(callerId, rel) ?? null;
   }
-  /** REQ-NOTIFY-263: the wait the record carries; null while no agent is parked on a provider limit. */
-  get currentWait(): WaitState | null {
-    return this.waits.current();
+  /**
+   * REQ-NOTIFY-263: the wait the record carries; null while no agent is parked on a provider limit. REQ-MONITOR-194 /
+   * REQ-MONITOR-303: with it, the model keys the session holds out of quota (`excludedModelKeys`), read from the memory at
+   * every snapshot, so the change-model picker lists them annotated with the reason rather than as any other model.
+   */
+  get currentWait(): (WaitState & { readonly excluded: string[] }) | null {
+    const wait = this.waits.current();
+    return wait === null ? null : { ...wait, excluded: excludedModelKeys(this.catalogue, this.memory.exhausted) };
   }
   /**
    * REQ-MONITOR-085 (Part AH): the compression in flight, published with the snapshot exactly as `wait` is —

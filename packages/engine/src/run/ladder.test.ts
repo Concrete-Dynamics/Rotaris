@@ -418,6 +418,19 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(pub.snapshots.every((s) => s.wait === null)).toBe(true);
   });
 
+  it('REQ-MONITOR-194 / REQ-MONITOR-303: a quota wait\'s record names the model keys the session recorded out of quota, for the picker to annotate', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, [])];
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer('from b')), { catalogue });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+    // No same-tier candidate: an indefinite wait on a1, which the session now holds out of quota; b1 is not excluded.
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', resumeAt: null, excluded: ['a1'] });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'b1' } })).toEqual({ ok: true });
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+    expect(lastWait(pub)).toBeNull();
+  });
+
   // Until OQ-177 (2026-10-02) the switch onto a1 recorded `rebuilds: false` and the fallback stood
   // (a-switch-onto-the-configured-entry-model-leaves-a-ladder-fallback-in-force); now every switch rebuilds the cell.
   it('REQ-MONITOR-142 over REQ-ORCH-091 b (OQ-177): a switch records that the root\'s cell is rebuilt for it — even for the model it was last built from, so a fallback in force ends', async () => {

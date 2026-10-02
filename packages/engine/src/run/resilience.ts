@@ -157,6 +157,21 @@ export function sameTierCandidates(failing: { readonly provider: string; readonl
   return out;
 }
 
+/**
+ * REQ-MONITOR-194 / REQ-MONITOR-303: the configured model keys whose provider-and-model pair the session recorded out of
+ * quota, in declaration order, each once — what a model selector lists "annotated with the reason that the provider reported
+ * insufficient quota for it in this session" rather than hiding. A discovered model is no key a selector lists; a pair no
+ * configured key reaches names nothing.
+ */
+export function excludedModelKeys(catalogue: readonly CatalogueEntry[], exhausted: ReadonlySet<string>): string[] {
+  const out: string[] = [];
+  for (const e of catalogue) {
+    if (e.origin !== 'configured' || out.includes(e.key)) continue;
+    if (exhausted.has(pairKey(e.provider, e.model.modelId))) out.push(e.key);
+  }
+  return out;
+}
+
 /** REQ-NOTIFY-092's conditions: one condition, one wording; only the substituted values differ between two occurrences. */
 export type Condition =
   | { readonly kind: 'quota_exhausted'; readonly provider: string; readonly model: string }

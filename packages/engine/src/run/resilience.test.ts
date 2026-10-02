@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { modelError, type ModelError } from '@rotaris/model';
-import { classifyFailure, describeCondition, localBackoffMs, pairKey, ResilienceMemory, retryAfterMs, sameTierCandidates, type CatalogueEntry } from './resilience.js';
+import { classifyFailure, describeCondition, excludedModelKeys, localBackoffMs, pairKey, ResilienceMemory, retryAfterMs, sameTierCandidates, type CatalogueEntry } from './resilience.js';
 
 const http = (status: number, providerMessage = '', headline = `HTTP ${status}`): ModelError => modelError({ code: 'http', status, headline, providerMessage });
 
@@ -96,6 +96,22 @@ describe('engine/run/resilience — same-tier candidates (REQ-ORCH-091 b, REQ-NO
     const c = sameTierCandidates({ provider: 'a', modelId: 'a-small', roles: ['small_model'] }, catalogue, new Set([pairKey('b', 'b-small')]), new Set([pairKey('c', 'c-small')]));
     expect(c.map((e) => e.key)).toEqual(['b-mixed']);
     expect(sameTierCandidates({ provider: 'a', modelId: 'a-small', roles: [] }, catalogue, new Set(), new Set())).toEqual([]);
+  });
+});
+
+describe('engine/run/resilience — the excluded pairs a model selector annotates (REQ-MONITOR-194, REQ-MONITOR-303)', () => {
+  const catalogue = [
+    entry('a-small', 'a', ['small_model']),
+    entry('b-small', 'b', ['small_model']),
+    entry('c-small', 'c', ['small_model'], 'discovered'),
+    entry('b-again', 'b', [], 'configured'),
+  ];
+  it('names every configured key whose pair the session recorded out of quota, in declaration order, each once', () => {
+    expect(excludedModelKeys(catalogue, new Set())).toEqual([]);
+    expect(excludedModelKeys(catalogue, new Set([pairKey('b', 'b-small'), pairKey('a', 'a-small')]))).toEqual(['a-small', 'b-small']);
+  });
+  it('a discovered model is no key a selector lists, and a pair no key reaches names nothing', () => {
+    expect(excludedModelKeys(catalogue, new Set([pairKey('c', 'c-small'), pairKey('z', 'z1')]))).toEqual([]);
   });
 });
 

@@ -9080,3 +9080,40 @@ record; the verifier's finding above withdrew it.
 
 **What a ruling decides.** Whether the indicator belongs in the status strip (and then its place among REQ-SHELL-038's items
 and its REQ-SHELL-047 threshold) or on another workspace surface; its wording beyond the backend's name.
+
+**OQ-185 — Which models does the quota-wait surface's "change model" list: REQ-MONITOR-193's candidates or REQ-NOTIFY-074's
+list?** *(REQ-MONITOR-303, "a model picker offering the fallback candidates of REQ-MONITOR-193, listing excluded pairs with
+their reason rather than hiding them (REQ-MONITOR-194)"; REQ-MONITOR-193, "exactly the configured models … whose size tier
+equals the current model's tier, less any model excluded … in the order their models are declared"; REQ-NOTIFY-263,
+"Changing model opens the model list of REQ-NOTIFY-074 and pins the chosen model for the session under REQ-NOTIFY-089";
+REQ-NOTIFY-074, "lists models from providers other than the one that failed, ahead of any others … Where no other provider
+offers a model, every model except the one that failed is listed"; REQ-MONITOR-194, "from any model selector or from the
+quota-wait decision surface … listed there rather than hidden, annotated". Raised 2026-10-02 by the repair of
+[`the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md`](../defects/fixed/the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md)
+(fin8, bundle `fin8-noticed-gaps-4`). Open.)*
+
+Two requirements describe the one control. REQ-MONITOR-303 lists REQ-MONITOR-193's candidates — the same-tier configured
+models from any provider, in declaration order, less the pairs held out of quota — and beside them the excluded pairs,
+annotated; a model of another tier is not offered, and a model that resolves through no tier alias "may still be chosen
+explicitly" without saying from where. REQ-NOTIFY-263 opens REQ-NOTIFY-074's list — every model, other providers first,
+the one that failed left out, each labelled with its model name and its provider — which has no tier and lists no excluded
+pair as such, and REQ-NOTIFY-074 written for the authentication recovery dialog leaves the failed model out where
+REQ-MONITOR-194 would have the waiting pair, when it is the one held out of quota, listed and annotated. They agree on
+one thing: REQ-MONITOR-194 asks every model selector to list an excluded pair annotated with its reason, and an explicit
+choice of it to clear its exclusion.
+
+**What the build proceeds under** (`WaitHeader` and `waitModelOptions`, `packages/ui/src/WorkspaceView.tsx`; the record's
+`wait.excluded`, `excludedModelKeys` in `packages/engine/src/run/resilience.ts`): what both agree on, over the list as it
+was built. The picker lists every configured model key as the configuration snapshot gives them (alphabetical; the
+waiting model included), which holds REQ-MONITOR-193's candidates and REQ-NOTIFY-074's models alike, with neither one's
+filter nor its order applied; a key whose provider-and-model pair the session recorded out of quota is listed in place,
+annotated "provider reported insufficient quota in this session", and stays choosable. Choosing it is the run's explicit
+choice (`setEntryModel`). On `origin/main` 4ae715a, the base this was built on, that choice neither clears an exclusion nor
+accepts the waiting pair itself (it is refused as "the model that is waiting"); plan fin8's ladder-overrides bundle, not yet
+merged when this was written, makes it clear the chosen pair's exclusion (`ResilienceMemory.clearExhausted`) and resolve a
+wait on its own excluded pair as a retry on it. No model is labelled with its provider.
+
+**What a ruling decides.** Which list the picker offers — REQ-MONITOR-193's same-tier candidates beside the excluded pairs,
+REQ-NOTIFY-074's (other providers first, each labelled with its provider), or one ahead of the other — and in which order;
+whether the waiting pair is listed when it is not held out of quota (a rate-limit wait); and whether a model of no tier is
+offered here.

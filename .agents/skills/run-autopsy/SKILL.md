@@ -50,7 +50,8 @@ node apps/desktop/scripts/autopsy.mjs DB [SESSION_ID]
 Two facts the reader bakes in: the `usage.update` payload carries tokens and
 cost alone — no provider or model — so attribution reads `children.model_key`
 for a child (matched by its `canonical_name`, the name its tool calls and the
-ladder's entries carry, never its `given_name`) and, for the entry agent, the key its launch audit's configuration
+ladder's entries carry, never its `given_name`, and by its lifetime: a record goes to the child of that name alive at its
+instant, else to the root) and, for the entry agent, the key its launch audit's configuration
 snapshot, its continuations and its `entry_model_switched` entries record (a switch ends a ladder move only where its
 `rebuilds` is not false, and one that `supersedes` an unapplied switch is read from before that switch),
 carried through every `model_override` of the pair it runs on (`undetermined`

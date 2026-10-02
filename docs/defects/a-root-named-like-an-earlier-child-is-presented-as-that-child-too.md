@@ -16,8 +16,13 @@ its name and its instant: a child keeps its `[spawned_at, completed_at]` window,
 name outside every such window is the root's (`childModelKeys`, `childKeyAt`). So the case above — the child in one run,
 the root of its name in the next — prints the root's calls under the root's own key and reads its fallbacks as the root's
 ([the-autopsy-reader-puts-two-children-sharing-a-canonical-name-under-one-model-key.md](fixed/the-autopsy-reader-puts-two-children-sharing-a-canonical-name-under-one-model-key.md),
-pinned in `packages/engine/src/autopsy.test.ts`). A root alive while a child of its name is, and a child that never records
-a completion, are still not told apart. The surfaces' share is unchanged, and the note stays open for it under OQ-158.
+pinned in `packages/engine/src/autopsy.test.ts`). Two cases are still not told apart:
+- A root that is alive while a child of its name is alive.
+- A child that never records a completion, because the run crashed or the child was paused and never resumed. Its window
+  stays open, so a later root of its name has its calls and fallbacks attributed to that child **silently**. They are not
+  printed as ambiguous, because only one window holds the instant.
+
+The surfaces' share is unchanged, and the note stays open for both under OQ-158.
 
 The ledger cannot prevent it. It names children and keeps every child off every root's names (OQ-158), but a root's name is
 its persona, which no ledger chooses, and the child was named before the root existed.

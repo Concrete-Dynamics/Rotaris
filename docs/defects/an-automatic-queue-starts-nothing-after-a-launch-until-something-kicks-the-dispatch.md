@@ -16,12 +16,22 @@ repair round 1). Recorded, not repaired: a dispatch at workspace open asks the s
 requirement store at every open of every workspace. Where that belongs (main's workspace open, the service's first pass,
 or the board's first read) is a design choice, and the startup budget bears on it.
 
+**Amended 2026-10-02 (fifth triage of the open notes, by code reading on origin/main `c1381f5`).** A sibling gap of the
+same shape: under `automatic`, an accepted act that lands a card in `ready` without starting a run — a `reject` from
+review, chiefly — is followed by no dispatch either. `perform` in `RequirementsView.tsx` dispatches only after a
+run-starting move (`moveStartsRun`), so the rejected card waits in `ready`, named `next`, until a person acts again or
+another run ends. REQ-TRACE-476 ("The queue SHALL resume where it stopped") and REQ-TRACE-482 leave no reading in which a
+relaunch waits for a person, so where the kick lives is the build's choice; the board's first read is not a placement
+(REQ-TRACE-408: a read creates no execution unit; REQ-TRACE-512: nothing starts on its own initiative from opening the
+view).
+
 ## Specs
 
 - `REQ-TRACE-482`: with automatic scheduling enabled, "the system itself picks up the next candidate as capacity becomes
   available". After a relaunch, capacity is available and a candidate is in `ready`, but nothing picks it up until a
   person acts.
 - `REQ-TRACE-478`: the queue is the scheduler's own order. It names a candidate `next` that nothing dispatches.
+- `REQ-TRACE-476`: "The queue SHALL resume where it stopped". After a relaunch it does not, until a person acts.
 
 ## Relevant files
 

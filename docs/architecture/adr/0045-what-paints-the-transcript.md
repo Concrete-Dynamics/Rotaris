@@ -732,7 +732,7 @@ reading. The observer's delivery comes after layout and before the paint, and it
 (`flushSync`); the reading is 0 px on every frame in four runs of four. Its cost is the same render moved before the paint,
 and, where that render rebinds or re-observes a slot, a slot's size deferred to the next frame with Chromium's "loop completed
 with undelivered notifications" line in the renderer console — once in the proof's eleven launches
-(`docs/defects/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`). The identity's last height still places the row for the render that binds it, so a streaming row
+(`docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`). The identity's last height still places the row for the render that binds it, so a streaming row
 is never placed by an estimate; what changed is that the render is not the one painted. The read forces layout of the slots
 the update bound or changed, before a paint that would have laid them out anyway, and walks the pool's slots rather than the
 rows held (REQ-CHAT-055); what it costs is that a new row's first painted frame carries the second render the delivery used
@@ -742,3 +742,28 @@ rows already drawn, which it had recorded and not held, to 1 px: 0 in three runs
 (`docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md`). Nothing else this
 record decided moved.
 
+
+**One observer, and a held gutter, 2026-10-02 (R-062).** The cost recorded above, a slot's size deferred to the next frame
+with "ResizeObserver loop completed with undelivered notifications", came in nearly every geometry launch of
+`transcript-proof` once the launches were repeated: 34 of 39 on the code before. Its cause was not the one the paragraph
+above names. The measurement observer's effect depended on the displayed rows, so React's pending passive effect ran
+inside the delivery's own `flushSync`, disconnected the observer that was delivering, and observed every slot again at
+the depth just delivered (measured 2026-10-01). **The observer now lives as long as the pane**; a slot that a displayed
+change rebinds is observed by the every-commit `observeAgain`, as one a scroll rebinds already was, and a slot whose node
+unmounts is unobserved and forgotten (`slotRef`), so a node a later capacity growth mounts in it is observed again. Under heavy load a second cause showed: the
+scrollbar appearing inside a delivery's render narrowed every slot by 6 px. That re-keyed every bound row, since the
+measurement key carries the width, and it once painted a re-wrapped row 30.7 px through the row beneath it. **The scroller
+holds its scrollbar gutter**, so the width the rows are measured at never changes with the bar. `transcript-proof` now fails
+on the line in any launch. Nothing else this record decided moved
+(`docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`).
+
+**A delivery held to the committed span, 2026-10-02 (R-062, after verification).** The two repairs above did not remove the
+line: on the branch carrying them, the proof's check failed 3 of 5 runs, in the append launches, 20 to 120 ms after the
+scripted run ended. The third cause was the one the 2026-10-01 paragraph named ("where that render rebinds or re-observes a slot"): slots are bound by position, so when the
+observer's delivery corrected a height above the viewport, its synchronous render moved the bound span (six rows in the
+launch traced) and rebound every slot, each changing size inside the delivery at the depth just delivered. **A delivery's
+render now binds the span the pool last committed** (`bindRange`); it moves rows and rebinds none, and an ordinary update
+after the frame releases the hold and rebinds what it held back. The row that grew is still painted with the row beneath
+it moved, which is what the synchronous render is for. Such a delivery came in 3 of 24 append launches, and the line in
+none of them (`docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`).
+Nothing else this record decided moved.

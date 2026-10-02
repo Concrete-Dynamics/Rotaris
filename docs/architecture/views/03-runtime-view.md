@@ -1404,7 +1404,7 @@ episode however many arrive — an arrival-timing dependency would break the ben
 **What paints it (ADR-0045).** A scroll container of **226 absolutely positioned slots** — `ceil(H_max ÷ 20 px) + 10`
 with `H_max` a declared product constant of 4,320 px and 20 px the shortest a row's slot holds (`SHORTEST_ROW_HEIGHT`:
 the 4 px row gap, the border and the 14 px continuation bar; 30 px until 2026-10-01, taller than a row PD-CHAT-003 draws)
-— allocated at window construction, never added to or removed from, **emptied rather than unmounted**, and rendered whether or not the transcript holds any rows. The slot index is
+— allocated at window construction, **emptied rather than unmounted** when a row leaves it, and rendered whether or not the transcript holds any rows. The pool's size follows the viewport (`capacityFor`): a viewport taller than `H_max` grows it and a shorter one shrinks it again, and only then are slots mounted or unmounted. **Corrected 2026-10-02, kept beside its replacement: "never added to or removed from".** Since the capacity growth of 2026-10-01 that was no longer so. The slot index is
 the framework key, never the row identity. Heights are **measured** by a `ResizeObserver` into a bounded cache and fed
 to a prefix-sum offset table — rebuilt from the first height that changed, not from the top (REQ-CHAT-055) — which is
 what makes the anchor of REQ-CHAT-071 exact. A row not yet measured is positioned by `estimateHeight`, built from
@@ -1418,7 +1418,16 @@ the paint (`measureAtCommit`), the pane rendering again inside the commit when i
 2026-10-01 a row that grew was painted through the row beneath it for the frame before the observer's delivery rendered.
 A size that changes under an unchanged key — an image attachment's `<details>` opened, the image loading, a block start's
 margin — runs no commit, so the observer's delivery renders it synchronously (`flushSync`), after layout and before the
-paint, where it used to render a frame later. A span wider
+paint, where it used to render a frame later. One observer serves the pane's life: it is made at mount, never again on a
+displayed change, so no render inside a delivery can disconnect it and observe every slot afresh; a slot whose node
+unmounts (a capacity that shrank) is unobserved and forgotten (`slotRef`), so a node mounted later in it is observed
+again. The scroller also holds
+its scrollbar gutter (`scrollbar-gutter: stable`), so a bar that appears inside a delivery narrows no row. Until
+2026-10-01 either could leave the slots' sizes to the next frame, with Chromium's "ResizeObserver loop" error in the
+renderer console. And a delivery's synchronous render binds the span of rows the pool last committed (`bindRange`), so it
+moves rows and rebinds no slot: slots are bound by position, and a corrected height above the viewport used to move the
+span, rebinding every slot inside the delivery — the same error, at the end of a run that appends while the pane follows.
+The span is released by an ordinary render after the frame. A span wider
 than the pool sheds its overscan, below and then above, before it cuts a visible row (`visibleRange`). The anchor is
 the identity and viewport offset
 of the top visible row, restored by finding that row again, never by re-applying a stored pixel offset. A retained

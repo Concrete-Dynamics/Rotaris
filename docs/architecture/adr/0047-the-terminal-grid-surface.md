@@ -340,3 +340,27 @@ to 18.
 measurement. The mono face is bundled but declared `font-display: swap` (`packages/ui/src/fonts.css`), so this could
 happen at first paint. The gate does not watch font loading, and this round did not measure that case.
 
+
+## The proof's reads under load — 2026-10-01 (R-062)
+
+*`pnpm terminal-proof`'s wheel, selection and empty-copy checks, and its flood and echo readings, went red at random on a
+loaded host ([note](../../defects/fixed/terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md)).*
+
+**Which side.** The proof's, for every input check. Eighty runs beside pinned busy loops (load average 5.7 to 18 on four
+CPUs) kept every run's results. The two `wheel.subNotch` reds moved exactly three rows over the ten tenths of a notch, so the
+accumulator was right and the readings came early. Chromium's browser process holds a wheel event until the renderer has
+handled the one before it, and merges what it holds; key and pointer events are not held behind wheel events. A fixed
+pause after `sendInputEvent` is therefore no guarantee that the page has the event, for a notch least of all.
+
+**The repair, in the proof only.** Each key, click and wheel event now waits until the page has counted it, in the capture
+phase of the dispatch the grid handles it in (`terminal-proof/fence.cjs`; the proof page's `inputs()`). One wheel event is
+in flight at a time, and a fence that times out is recorded rather than passed. The flood is read once its closing frame
+has been parsed. No product code changed, and no assertion was weakened. `live.echoUnder100ms` keeps REQ-SHELL-166's 100 ms
+and the page's own timestamps, and records the host's load beside it (`results.live.echoLoad`). In the eighty runs on the
+repair no input check went red and no fence timed out. The echo was red six times, at load averages of 9.3 to 13.5, each
+time one keystroke of three missing the bound by 0 to 44 ms. Whether the bound holds on an oversubscribed host is OQ-176.
+
+**Found along the way.** A closing `screen` frame resets each emulator and rewrites the final screen, which the library
+parses over several tasks; one read in that window saw the row preview empty while the grid showed the flood's last line
+([note](../../defects/a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md), recorded, not
+repaired).

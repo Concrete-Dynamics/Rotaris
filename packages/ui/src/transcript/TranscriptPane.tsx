@@ -8,8 +8,8 @@ import { createMeasurementCache, createRenderCache, identityOf, measureKey, reus
 import { CAP_DEFAULTS, isLive, rowKey, type DisplayCaps } from './project.js';
 import { createProjector } from './projector.js';
 import {
-  beginMeasuring, buildOffsets, captureAnchor, commitTable, createMeasureLedger, markMeasured, measureAtCommit, newUpdatesLabel, remeasuredSince,
-  observeAgain, readHeight, restoreAnchor, reuseOffsets, updateShape, visibleRange, type Anchor,
+  beginMeasuring, bindRange, buildOffsets, captureAnchor, commitTable, createMeasureLedger, markMeasured, measureAtCommit, newUpdatesLabel, remeasuredSince,
+  observeAgain, readHeight, restoreAnchor, reuseOffsets, slotRef, updateShape, visibleRange, type Anchor,
 } from './pool.js';
 import { isOwnScroll } from './scroll.js';
 import { countLabel, indexAll, step as stepMatch, type Match } from './search.js';
@@ -156,6 +156,14 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   /** The measurement key each slot was last observed under (`observeAgain`), and the measurement pass's observer. */
   const [observedKeys] = useState(() => new Map<number, string>());
   const observerRef = useRef<ResizeObserver | null>(null);
+  /** Each slot's ref callback, one per slot for the pane's life (`slotRef`). */
+  const [slotRefs] = useState(() => new Map<number, (node: HTMLDivElement | null) => void>());
+  /**
+   * ADR-0045: the span of rows the pool bound at the last commit, and the span the measurement observer's synchronous render
+   * is held to (`bindRange`) — set inside the delivery, released by an ordinary update after it.
+   */
+  const committedRange = useRef<{ first: number; last: number }>({ first: 0, last: -1 });
+  const [heldRange, setHeldRange] = useState<{ first: number; last: number } | null>(null);
 
   /**
    * REQ-CHAT-059 / REQ-CHAT-167: what the READER set by hand, keyed by stable identity. It is deliberately not
@@ -314,7 +322,11 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   const matches: Match[] = searchOpen && query !== '' ? indexAll(display, query) : [];
   const activeMatch = matches[current] ?? null;
 
-  const range = visibleRange(table, scrollTop, viewport.height, display.length, capacity);
+  // ADR-0045: a measurement delivery's synchronous render binds the span the pool last committed (`bindRange`), so it moves
+  // rows and rebinds no slot inside the delivery; the span is released by an ordinary render after the frame.
+  const needed = visibleRange(table, scrollTop, viewport.height, display.length, capacity);
+  const range = bindRange(heldRange, needed, display.length, capacity);
+  useLayoutEffect(() => { committedRange.current = range; });
   const bind = (slot: number): DisplayRow | null => {
     const at = range.first + slot;
     return at <= range.last ? display[at] ?? null : null;
@@ -390,7 +402,19 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
       // That is a default-lane update, rendered after the frame was painted, so the row that grew was drawn through the row
       // beneath it for that frame
       // (docs/defects/fixed/a-row-that-grows-is-drawn-through-the-row-beneath-it-until-it-is-measured-again.md).
-      if (changed) flushSync(() => setMeasuredVersion((v) => v + 1));
+      //
+      // The render is held to the span of rows the pool last committed (`bindRange`): slots are bound by position, and a
+      // corrected height above the viewport moved the span, so the delivery's render rebound every slot and changed its
+      // size at the depth just delivered, which the browser defers and reports as "ResizeObserver loop completed with
+      // undelivered notifications" — at the end of `transcript-proof`'s append runs, after the first repair
+      // (docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md). The
+      // span is released by an ordinary update, rendered after this frame, outside any delivery, which rebinds what the
+      // delivery held back.
+      if (changed) {
+        const held = committedRange.current;
+        flushSync(() => { setHeldRange(held); setMeasuredVersion((v) => v + 1); });
+        setHeldRange(null);
+      }
     });
     observedKeys.clear();
     for (const [slot, node] of slotNodes) { observer.observe(node); observedKeys.set(slot, node.dataset['measure'] ?? ''); }
@@ -402,7 +426,16 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     // observer delivers a size only when it CHANGES: a slot rebound to a row that draws the height the row it held drew
     // delivered nothing, and the new row stayed at its estimate on screen until the next displayed change. The layout
     // effect below observes such a slot again, which delivers its size whatever it was.
-  }, [measurements, lastByIdentity, ledger, slotNodes, observedKeys, display, capacity]);
+    //
+    // ONE observer for the pane's life: every dependency is an identity held in state, so this runs at mount and never
+    // again. **Until 2026-10-01 `display` and `capacity` were dependencies too, and the observer was disconnected and made
+    // again, observing every slot afresh, on each displayed change.** React flushes a pending passive effect before its
+    // next render, and that render could be the delivery's own `flushSync` above: a displayed change was committed, the
+    // delivery came in the same frame, and this effect disconnected the very observer delivering and observed every slot
+    // again at the depth just delivered. The browser defers such observations to the next frame and reports "ResizeObserver
+    // loop completed with undelivered notifications" (docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md).
+    // A slot that a displayed change rebinds, or that a capacity growth adds, is observed by the layout effect below.
+  }, [measurements, lastByIdentity, ledger, slotNodes, observedKeys]);
 
   // ADR-0045 (heights are measured): every commit, a slot bound under a measurement key it was not observed under is
   // observed again, so the row it now holds is measured rather than left at its estimate
@@ -633,7 +666,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
               return (
                 <div
                   key={slot}
-                  ref={(node) => { if (node) slotNodes.set(slot, node); else slotNodes.delete(slot); }}
+                  ref={slotRef(slotRefs, slot, slotNodes, observedKeys, (node) => observerRef.current?.unobserve(node))}
                   className={`transcript__slot slot${d === null ? ' slot--empty' : ''}`}
                   data-slot={slot}
                   data-measure={measured}

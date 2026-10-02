@@ -320,6 +320,19 @@ describe('createDeliveryService', () => {
     const kept = await after.handle({ name: 'requirements.board', workspace: 'x' }, USER);
     expect(kept.value).toBe(moved.value);
   });
+  it('REQ-TRACE-472: after a restart, a claim carrying a disclosure accepted earlier in this launch starts a recovered card permissive, and its queue entry asks for nothing', async () => {
+    const { port } = provisioningGit();
+    const deps = { db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port };
+    const before = createDeliveryService(deps);
+    await before.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
+    await before.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    writeFileSync(join(root, 'agents.yaml'), 'requirements:\n  scheduling:\n    mode: automatic\n');
+    const after = createDeliveryService(deps);
+    const board = (await after.handle({ name: 'requirements.board', workspace: 'x' }, USER, 'accepted')).value as BoardProjection;
+    expect(board.queue.entries.find((e) => e.id === 'REQ-101')).toMatchObject({ state: 'next' });
+    const c = (await after.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM, 'accepted')).value as { id: string; permissions: string } | null;
+    expect(c).toMatchObject({ id: 'REQ-101', permissions: 'permissive' });
+  });
   it('REQ-TRACE-472: with the elevation switched off when the claim is made, a launch accepted earlier starts on the workspace\'s own mode', async () => {
     const { port } = provisioningGit();
     const s = createDeliveryService({ db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port });

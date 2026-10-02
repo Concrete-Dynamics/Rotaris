@@ -319,8 +319,10 @@ sequenceDiagram
   2026-10-02). A claim before the first pass under `manual` with nothing armed answers without parsing the store.
 - **Every requirements command carries main's standing disclosure.** Only main holds the two preferences of
   REQ-TRACE-472, so main stamps what they make of an undisclosed launch on every `requirements.command` envelope, beside
-  the actor — the relay for a person's commands and the coordinator for its own: `due`, `suppressed` (accepted
-  permanently) or `off` (the elevation switched off). The service holds the last value and schedules the published
+  the actor — the relay for a person's commands and the coordinator for its own: `due`, `accepted` (accepted, not
+  permanently, earlier in this launch of the application: main holds it in memory, told by the board's
+  `requirements.runs {op: 'accept'}`, and the preview reads it too, so no dialog is shown again until the next launch;
+  2026-10-02), `suppressed` (accepted permanently) or `off` (the elevation switched off). The service holds the last value and schedules the published
   queue, the launch preview and the claim under the same one, so the queue names what the claim takes (REQ-TRACE-478); a
   value that moved republishes the queue before the answer, which carries `changed`. A launch recorded undisclosed, as a
   recovered one is, is claimed when that is not `due`, and `off` gives the run the workspace's own mode. A permanent

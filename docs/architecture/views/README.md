@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**One acceptance suppresses the disclosure for the rest of the launch (REQ-TRACE-472).** `requirements.runs` gains the
+`accept` op: the board's plain acceptance tells main's coordinator, which holds it in memory for the launch and reads
+`accepted` — a new value of `StandingDisclosure` and of `LaunchPreview.disclosure` (`packages/contracts/src/requirements.ts`)
+— in the standing disclosure it stamps on every service command and in the preview, which the board answers without the
+dialog (`disclosureFor`). This repairs `accepting-the-disclosure-once-does-not-suppress-it-for-the-rest-of-the-launch.md`;
+`requirements-proof`'s `disclosure-launch` stage shows it. The **process view**'s requirements contracts and the
+**sequences view**'s board section say so. No package, edge, process, message kind, channel or store column changed;
+the command gained one op value and the envelope's disclosure one value.
+
 **An automatic queue dispatches at a workspace open and after a reject (REQ-TRACE-476, REQ-TRACE-482).** Main's run
 coordinator gains `opened(root, workspaceId)`, a dispatch for the workspace just opened, kicked once from
 `openWorkspaceInner`'s post-open slot; its dispatches are serialised per workspace root rather than one at a time. The

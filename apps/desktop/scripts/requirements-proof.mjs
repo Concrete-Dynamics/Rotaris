@@ -65,12 +65,14 @@
  *               on a non-delivery axis refused in words, a column count agreeing with the widgets in it, and the card
  *               and its detail agreeing on health. The rotated-rail clause is asserted in `fold`, which has a rail.
  *   review-rerun — REQ-TRACE-426 with REQ-TRACE-472: a release accepted through the disclosure, the run arrived at
- *               review, and the review pane's Rerun taken. The disclosure is due again; while it stands the pane says
+ *               review, and the application quits; relaunched, the review pane's Rerun taken. The disclosure is due again in
+ *               that launch (one acceptance holds for the launch it was given in); while it stands the pane says
  *               nothing has been recorded, as the decision's state and not as a refusal; once it is accepted the pane
  *               says the re-run was recorded, offers the reload alone and draws no alert; the history holds one rerun.
  *   blocker-resume — REQ-TRACE-453/454 with REQ-TRACE-472: the queue stopped, a release accepted through the
  *               disclosure, the card held out of `ready` by a drag onto the blocked column with a stated reason, and the
- *               blockers pane's "Clear the blocker" taken. The disclosure is due again; while it stands the pane says
+ *               application quits; relaunched with the queue stopped again, the blockers pane's "Clear the blocker" taken.
+ *               The disclosure is due again in that launch; while it stands the pane says
  *               nothing has been recorded as a status, not a refusal, with the resume held; once it is accepted the pane
  *               is re-read and says nothing holds the card, draws no alert, and the history holds one resume. The queue
                is then started, and a run begins on the one tree the release provisioned (`…-u1`): no "no run began" on
@@ -82,6 +84,8 @@
  *               provisioning.
  *   ready-restart-automatic — REQ-TRACE-476/482: the same rest under automatic scheduling with the disclosure accepted
  *               permanently; relaunched, nothing is clicked, and the card reaches `running` on its recorded tree.
+ *   disclosure-launch — REQ-TRACE-472: one plain acceptance on REQ-101, then REQ-102 released with no disclosure shown and
+ *               its run permissive; relaunched, REQ-103's release shows the disclosure again.
  *
  * Evidence under `.proof/requirements-proof/`: `vitest.json`, one PNG and one log per launch, `results.json`.
  * `--skip-build` skips the desktop build.
@@ -761,11 +765,17 @@ stage2['end-to-end'] = {
 // never told what the disclosure came to — accepting it took the decision while the pane went on saying nothing was
 // recorded and offering the six decisions again, with no reload (defect note
 // `a-review-decision-taken-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`). The release here
-// is accepted with "Start the run" and not "always", so the disclosure is still due for the re-run (REQ-TRACE-472).
+// is accepted with "Start the run" and not "always", so the disclosure is due again for the re-run in the NEXT launch
+// (REQ-TRACE-472).
 /** The pane while a decision is waiting on the disclosure, and once it has been answered. */
 const DECISION_AT = `(() => { const p = document.querySelector('[data-testid="req-pane-review"]'); if (p === null) return null; const text = (sel) => { const el = p.querySelector(sel); return el === null ? null : el.textContent.trim(); }; const d = p.querySelector('[data-testid="req-pane-review-decided"]'); const footer = p.querySelector('[data-testid="req-pane-review-decisions"]'); return { decided: text('[data-testid="req-pane-review-decided"] span'), actions: d === null ? [] : [...d.querySelectorAll('button')].map((b) => b.textContent.trim()), waiting: text('[data-testid="req-pane-review-waiting"]'), refused: text('[data-testid="req-pane-review-refused"]'), alerts: [...p.querySelectorAll('[role="alert"]')].map((a) => a.textContent.trim()), decisions: footer === null ? null : [...footer.querySelectorAll('button')].map((b) => ({ label: b.textContent.trim(), disabled: b.disabled })) }; })()`;
 const rr = profile('review-rerun');
-const rerun = await launch('review-rerun', rr.workspace, rr.local, rr.preferences, {
+// The release and the re-run are taken in two launches of the application. REQ-TRACE-472: "Accepting SHALL suppress the
+// disclosure for the remainder of that launch" — so in the launch whose release was accepted, the re-run asks for no
+// disclosure at all, and the pane's state while one stands can only be read in a launch whose first run-starting action
+// is the re-run (defect note `accepting-the-disclosure-once-does-not-suppress-it-for-the-rest-of-the-launch.md`: until
+// 2026-10-02 this stage took both in one launch and relied on the disclosure being due again).
+const rerunReviewed = await launch('review-rerun', rr.workspace, rr.local, rr.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   ROTARIS_CAPTURE_CLICKS: [
@@ -773,26 +783,35 @@ const rerun = await launch('review-rerun', rr.workspace, rr.local, rr.preference
     '[data-testid="req-move-control"]@4400',
     '[data-testid="req-confirm"] .btn>>Release@5400',
     '[data-testid="req-pane-disclosure"] .btn>>Start the run@6800',
-    `${CARD_101}@30000`,
-    '[data-testid="req-detail-review"]@32000',
-    '[data-testid="req-pane-review-decisions"] .btn>>Rerun@34000',
-    '[data-testid="req-pane-review-confirm"] .btn-primary@35600',
-    '[data-testid="req-pane-disclosure"] .btn>>Start the run@37600',
   ].join(';;'),
-  ROTARIS_CAPTURE_KEYS: 'Return@31000',
-  ROTARIS_CAPTURE_EVAL_AT: [`${BOARD_AT}@29000`, `${DISCLOSURE_AT}@36600`, `${DECISION_AT}@36800`, `${DECISION_AT}@39400`].join(';;'),
-  ROTARIS_CAPTURE_AFTER_MS: '40000',
+  ROTARIS_CAPTURE_EVAL_AT: [`${BOARD_AT}@29000`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '30000',
 }, 300_000);
-expect(rerun.evals['29000']?.column === 'review', `REQ-TRACE-499: the release never arrived at review before the re-run (${JSON.stringify(rerun.evals['29000']?.column)})`);
-const rerunDisclosure = rerun.evals['36600'];
+expect(rerunReviewed.evals['29000']?.column === 'review', `REQ-TRACE-499: the release never arrived at review before the re-run (${JSON.stringify(rerunReviewed.evals['29000']?.column)})`);
+const rerun = await launch('review-rerun-relaunch', rr.workspace, rr.local, rr.preferences, {
+  ROTARIS_CAPTURE_RESIZE: '1264x800@300',
+  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_CLICKS: [
+    `${CARD_101}@3000`,
+    '[data-testid="req-detail-review"]@5000',
+    '[data-testid="req-pane-review-decisions"] .btn>>Rerun@7000',
+    '[data-testid="req-pane-review-confirm"] .btn-primary@8600',
+    '[data-testid="req-pane-disclosure"] .btn>>Start the run@10600',
+  ].join(';;'),
+  ROTARIS_CAPTURE_KEYS: 'Return@4000',
+  ROTARIS_CAPTURE_EVAL_AT: [`${BOARD_AT}@2800`, `${DISCLOSURE_AT}@9600`, `${DECISION_AT}@9800`, `${DECISION_AT}@12400`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '13000',
+}, 300_000);
+expect(rerun.evals['2800']?.column === 'review', `REQ-TRACE-476: after the relaunch REQ-101 reads ${JSON.stringify(rerun.evals['2800']?.column)}, not review`);
+const rerunDisclosure = rerun.evals['9600'];
 expect(rerunDisclosure !== null && rerunDisclosure !== undefined && rerunDisclosure.buttons.includes('Start the run'), `REQ-TRACE-472: the review's re-run raised no disclosure (${JSON.stringify(rerunDisclosure)})`);
-const waitingPane = rerun.evals['36800'];
+const waitingPane = rerun.evals['9800'];
 expect(waitingPane !== null && waitingPane !== undefined, 'REQ-TRACE-426: the review pane was not open while the re-run waited on the disclosure');
 // While the disclosure is on screen nothing has been recorded, and the pane says so — as the decision's state, not as
 // a refusal: nothing refused the re-run.
 expect(typeof waitingPane.waiting === 'string' && waitingPane.waiting.startsWith('Nothing has been recorded for REQ-101 yet'), `REQ-TRACE-472: while the disclosure stands the pane reads ${JSON.stringify(waitingPane.waiting)}`);
 expect(waitingPane.alerts.length === 0, `REQ-TRACE-472: a re-run waiting on its disclosure is drawn as a refusal: ${JSON.stringify(waitingPane.alerts)}`);
-const rerunPane = rerun.evals['39400'];
+const rerunPane = rerun.evals['12400'];
 expect(rerunPane !== null && rerunPane !== undefined, 'REQ-TRACE-426: the review pane was not open after the disclosure was accepted');
 expect(rerunPane.decided === 'Rerun recorded for REQ-101. The review you were reading is out of date.', `REQ-TRACE-426/472: once the disclosure was accepted the pane's notice reads ${JSON.stringify(rerunPane.decided)} (alerts ${JSON.stringify(rerunPane.alerts)})`);
 expect(JSON.stringify(rerunPane.actions) === JSON.stringify(['Reload the review']), `REQ-TRACE-426: the notice after the re-run offers ${JSON.stringify(rerunPane.actions)}, not exactly the reload`);
@@ -813,7 +832,7 @@ stage2['review-rerun'] = { disclosure: rerunDisclosure.buttons, waiting: waiting
 // `a-blocker-resumed-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`). The queue is STOPPED
 // first, so the release lands in `ready` without a run and the card can be held there: a hold out of `ready` is the
 // blocker whose resume starts a run. Each disclosure is accepted with "Start the run", never "always", so the
-// resume's own disclosure is still due (REQ-TRACE-472).
+// resume's own disclosure is due again in the next launch, where the resume is taken (REQ-TRACE-472).
 /** The blockers pane while the answer waits on the disclosure, and once it has been answered. */
 const BLOCKERS_AT = `(() => { const p = document.querySelector('[data-testid="req-pane-blockers"]'); if (p === null) return null; const text = (sel) => { const el = p.querySelector(sel); return el === null ? null : el.textContent.trim(); }; return { title: text('.req-pane__title'), none: text('[data-testid="req-pane-blockers-none"]'), waiting: text('[data-testid="req-pane-blockers-waiting"]'), refused: text('[data-testid="req-pane-blockers-refused"]'), alerts: [...p.querySelectorAll('[role="alert"]')].map((a) => a.textContent.trim()), answers: [...p.querySelectorAll('[data-testid="req-pane-blockers-paths"] button, .req-pane__options button')].map((b) => ({ label: b.textContent.trim(), disabled: b.disabled })) }; })()`;
 /**
@@ -825,7 +844,7 @@ const BLOCKERS_AT = `(() => { const p = document.querySelector('[data-testid="re
  */
 const DRAG_TO_BLOCKED = `(async () => { const board = window.__rotarisBoard; if (!board || typeof board.reveal !== 'function') return 'no observable'; const revealed = board.reveal('REQ-101'); const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); await frame(); const card = document.querySelector('[data-req-card="REQ-101"]'); if (card === null) return { revealed, card: false }; const dt = new DataTransfer(); const ev = (type, el) => el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt })); ev('dragstart', card); await frame(); const slot = document.querySelector('[data-testid="req-columns"] > [data-column="blocked"]'); if (slot === null) return { revealed, slot: false }; slot.scrollIntoView({ block: 'nearest', inline: 'nearest' }); await frame(); await new Promise((r) => setTimeout(r, 400)); await frame(); const rail = document.querySelector('[data-testid="req-rail"][data-column="blocked"]'); if (rail !== null) { ev('dragenter', rail); await frame(); } const target = document.querySelector('[data-testid="req-column"][data-column="blocked"]'); if (target === null) return { revealed, rail: rail !== null, target: false }; ev('dragenter', target); ev('dragover', target); await frame(); const dragging = document.querySelector('[data-testid="req-columns"]')?.getAttribute('data-dragging'); ev('drop', target); ev('dragend', card); await frame(); return { revealed, rail: rail !== null, dragging, types: [...dt.types], dialog: document.querySelector('[data-testid="req-reason-dialog"]') !== null }; })()`;
 const br = profile('blocker-resume');
-const resumed = await launch('blocker-resume', br.workspace, br.local, br.preferences, {
+const held = await launch('blocker-resume', br.workspace, br.local, br.preferences, {
   ROTARIS_CAPTURE_RESIZE: '1264x800@300',
   ROTARIS_CAPTURE_VIEWS: '4@1200',
   ROTARIS_CAPTURE_CLICKS: [
@@ -838,45 +857,61 @@ const resumed = await launch('blocker-resume', br.workspace, br.local, br.prefer
     '[data-testid="req-pane-disclosure"] .btn>>Start the run@9000',
     // The hold's reason is typed into the dialog's own field (it takes the focus) and the hold is confirmed.
     '[data-testid="req-reason-dialog"] .btn-primary@13200',
-    // The blocked column lies outside the columns area's viewport at 1264 px: the strip's "Go to card" reveals it.
-    '[data-testid="req-blocked-row"][data-req="REQ-101"] .btn>>Go to card@14600',
-    `${CARD_101}@15400`,
-    '[data-testid="req-detail-blockers"]@17000',
-    '[aria-label="Clear the blocker"]@18400',
-    '[data-testid="req-pane-disclosure"] .btn>>Start the run@20400',
-    // The dispatch (defect note `a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md`):
-    // the queue is started again after the resume's reads, and the run must begin on the tree the release provisioned.
-    '[data-testid="req-queue-open"]@24000',
-    '[aria-label="Start the queue"]@25000',
   ].join(';;'),
   ROTARIS_CAPTURE_TYPE_AT: 'Waiting on a vendor answer@12200',
+  ROTARIS_CAPTURE_EVAL_AT: [`${BOARD_AT}@10400`, `${DRAG_TO_BLOCKED}@11000`, `${REVEAL_101}@14000`, `${BOARD_AT}@14200`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '15000',
+}, 300_000);
+// The resume is taken in the NEXT launch: REQ-TRACE-472's plain acceptance suppresses the disclosure for the remainder of
+// the launch it was given in, so only a launch whose first run-starting action is the resume shows the pane waiting on
+// one (defect note `accepting-the-disclosure-once-does-not-suppress-it-for-the-rest-of-the-launch.md`; until 2026-10-02
+// this stage took the release and the resume in one launch and relied on the disclosure being due again). The stop is
+// not persisted (REQ-TRACE-480), so the relaunch stops the queue again before the resume, to read the card in `ready`.
+const resumed = await launch('blocker-resume-relaunch', br.workspace, br.local, br.preferences, {
+  ROTARIS_CAPTURE_RESIZE: '1264x800@300',
+  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_CLICKS: [
+    '[data-testid="req-queue-open"]@2600',
+    '[aria-label="Stop the queue"]@3400',
+    '[data-testid="req-pane-close"]@4000',
+    // The blocked column lies outside the columns area's viewport at 1264 px: the strip's "Go to card" reveals it.
+    '[data-testid="req-blocked-row"][data-req="REQ-101"] .btn>>Go to card@4800',
+    `${CARD_101}@5600`,
+    '[data-testid="req-detail-blockers"]@7200',
+    '[aria-label="Clear the blocker"]@8600',
+    '[data-testid="req-pane-disclosure"] .btn>>Start the run@10600',
+    // The dispatch (defect note `a-card-held-out-of-ready-and-resumed-provisions-its-unit-worktree-a-second-time.md`):
+    // the queue is started again after the resume's reads, and the run must begin on the tree the release provisioned.
+    '[data-testid="req-queue-open"]@14200',
+    '[aria-label="Start the queue"]@15200',
+  ].join(';;'),
   // The focused card opens its own detail with Enter (REQ-TRACE-484); the harness sends single clicks only. A card is
   // read through the board's own reveal first (REQ-TRACE-364): the column it sits in may lie outside the viewport.
-  ROTARIS_CAPTURE_KEYS: 'Return@16000',
-  ROTARIS_CAPTURE_EVAL_AT: [`${BOARD_AT}@10400`, `${DRAG_TO_BLOCKED}@11000`, `${REVEAL_101}@14000`, `${BOARD_AT}@14200`, `${BLOCKERS_AT}@17800`, `${DISCLOSURE_AT}@19400`, `${BLOCKERS_AT}@19600`, `${BLOCKERS_AT}@23000`, `${REVEAL_101}@23100`, `${BOARD_AT}@23200`, `${REVEAL_101}@29900`, `${BOARD_AT}@30000`, `${REVEAL_101}@35900`, `${BOARD_AT}@36000`].join(';;'),
-  ROTARIS_CAPTURE_AFTER_MS: '37000',
+  ROTARIS_CAPTURE_KEYS: 'Return@6200',
+  ROTARIS_CAPTURE_EVAL_AT: [`${BLOCKERS_AT}@8000`, `${DISCLOSURE_AT}@9600`, `${BLOCKERS_AT}@9800`, `${BLOCKERS_AT}@13200`, `${REVEAL_101}@13300`, `${BOARD_AT}@13400`, `${REVEAL_101}@20100`, `${BOARD_AT}@20200`, `${REVEAL_101}@26100`, `${BOARD_AT}@26200`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '27200',
 }, 300_000);
-expect(resumed.evals['10400']?.column === 'ready', `REQ-TRACE-382: with the queue stopped the release left REQ-101 in ${JSON.stringify(resumed.evals['10400']?.column)}, not ready (feedback ${JSON.stringify(resumed.evals['10400']?.feedback)})`);
-const heldDrag = resumed.evals['11000'];
+expect(held.evals['10400']?.column === 'ready', `REQ-TRACE-382: with the queue stopped the release left REQ-101 in ${JSON.stringify(held.evals['10400']?.column)}, not ready (feedback ${JSON.stringify(held.evals['10400']?.feedback)})`);
+const heldDrag = held.evals['11000'];
 expect(heldDrag !== null && typeof heldDrag === 'object' && heldDrag.dragging === 'true' && heldDrag.dialog === true, `REQ-TRACE-389: dropping REQ-101 on the blocked column did not ask for the hold's reason (${JSON.stringify(heldDrag)})`);
-expect(resumed.evals['14200']?.column === 'blocked', `REQ-TRACE-446: the hold out of ready left REQ-101 in ${JSON.stringify(resumed.evals['14200']?.column)}, not blocked (feedback ${JSON.stringify(resumed.evals['14200']?.feedback)})`);
-const heldPane = resumed.evals['17800'];
+expect(held.evals['14200']?.column === 'blocked', `REQ-TRACE-446: the hold out of ready left REQ-101 in ${JSON.stringify(held.evals['14200']?.column)}, not blocked (feedback ${JSON.stringify(held.evals['14200']?.feedback)})`);
+const heldPane = resumed.evals['8000'];
 expect(heldPane !== null && heldPane !== undefined && heldPane.none === null && heldPane.answers.some((a) => a.label.startsWith('Clear the blocker')), `REQ-TRACE-448: the blockers pane offers no resume for the held REQ-101 (${JSON.stringify(heldPane)})`);
-const resumeDisclosure = resumed.evals['19400'];
+const resumeDisclosure = resumed.evals['9600'];
 expect(resumeDisclosure !== null && resumeDisclosure !== undefined && resumeDisclosure.buttons.includes('Start the run'), `REQ-TRACE-472: the resume into ready raised no disclosure (${JSON.stringify(resumeDisclosure)})`);
-const resumeWaiting = resumed.evals['19600'];
+const resumeWaiting = resumed.evals['9800'];
 expect(resumeWaiting !== null && resumeWaiting !== undefined, 'REQ-TRACE-454: the blockers pane was not open while the resume waited on the disclosure');
 // While the disclosure is on screen nothing has been recorded, and the pane says so as the answer's state — nothing
 // refused the resume — with the answers held until the disclosure is answered.
 expect(resumeWaiting.alerts.length === 0, `REQ-TRACE-454/472: a resume waiting on its disclosure is drawn as a refusal: ${JSON.stringify(resumeWaiting.alerts)}`);
 expect(typeof resumeWaiting.waiting === 'string' && resumeWaiting.waiting.startsWith('Nothing has been recorded for REQ-101 yet'), `REQ-TRACE-472: while the disclosure stands the blockers pane reads ${JSON.stringify({ waiting: resumeWaiting.waiting, refused: resumeWaiting.refused })}`);
 expect(resumeWaiting.answers.filter((a) => a.label.startsWith('Clear the blocker')).every((a) => a.disabled), `REQ-TRACE-472: the resume is offered again while its disclosure stands: ${JSON.stringify(resumeWaiting.answers)}`);
-const resumeAfter = resumed.evals['23000'];
+const resumeAfter = resumed.evals['13200'];
 expect(resumeAfter !== null && resumeAfter !== undefined, 'REQ-TRACE-454: the blockers pane was not open after the disclosure was accepted');
 expect(resumeAfter.alerts.length === 0 && resumeAfter.refused === null && resumeAfter.waiting === null, `REQ-TRACE-453/472: after the disclosure was accepted the blockers pane still says ${JSON.stringify({ alerts: resumeAfter.alerts, waiting: resumeAfter.waiting })}`);
 // The host re-reads the blocker once the resume is taken, and a cleared blocker is REQ-TRACE-447's positive statement.
 expect(resumeAfter.none === 'Nothing is holding REQ-101.', `REQ-TRACE-447/453: once the resume was taken the pane was not re-read: ${JSON.stringify(resumeAfter)}`);
-expect(resumed.evals['23200']?.column === 'ready', `REQ-TRACE-453: the resume returned REQ-101 to ${JSON.stringify(resumed.evals['23200']?.column)}, not ready, the state it was held out of`);
+expect(resumed.evals['13400']?.column === 'ready', `REQ-TRACE-453: the resume returned REQ-101 to ${JSON.stringify(resumed.evals['13400']?.column)}, not ready, the state it was held out of`);
 const resumeRows = deliveryRows(br.local);
 expect(resumeRows !== null, `no delivery store was written under ${br.local}`);
 const resumeHistory = resumeRows.query(`select * from "${resumeRows.tables.find((t) => /history/.test(t))}" order by rowid`).map((e) => String(e.action));
@@ -886,17 +921,17 @@ expect(resumeHistory.filter((a) => a === 'resume').length === 1, `REQ-TRACE-453/
 // moved, and no run began: Worktree path already exists: …" while no claim could ever take it: this stage asserted the
 // pane and the history and passed with that defect present. The resume now takes over the release's tree, and once the
 // queue is started a run begins on it.
-const dispatchReads = ['23200', '30000', '36000'].map((k) => resumed.evals[k]).filter((v) => v && typeof v === 'object');
+const dispatchReads = ['13400', '20200', '26200'].map((k) => resumed.evals[k]).filter((v) => v && typeof v === 'object');
 const noRun = dispatchReads.flatMap((t) => t.feedback ?? []).filter((f) => /no run began/i.test(f));
 expect(noRun.length === 0, `REQ-TRACE-464/463: the resumed card says no run began: ${JSON.stringify(noRun)}`);
-expect(!/Worktree path already exists/.test(resumed.log), 'REQ-TRACE-464: the resume provisioned the unit\'s worktree a second time (the log carries "Worktree path already exists")');
-const dispatched = ['30000', '36000'].map((k) => resumed.evals[k]?.column);
+expect(!/Worktree path already exists/.test(held.log + resumed.log), 'REQ-TRACE-464: the resume provisioned the unit\'s worktree a second time (the log carries "Worktree path already exists")');
+const dispatched = ['20200', '26200'].map((k) => resumed.evals[k]?.column);
 expect(dispatched.some((c) => c === 'running' || c === 'review' || c === 'done'), `REQ-TRACE-464/453: once the queue was started the resumed REQ-101 never became a run — it read ${JSON.stringify(dispatched)}`);
 const resumeRuns = resumeRows.query("select * from delivery_runs where req_id = 'REQ-101'");
 const resumeTrees = resumeRows.query("select * from delivery_worktrees where req_id = 'REQ-101'");
 expect(resumeRuns.length === 1 && resumeRuns[0].unit === 'u1', `REQ-TRACE-464: the resumed REQ-101 has run rows ${JSON.stringify(resumeRuns.map((x) => x.unit))}, not one run of u1`);
 expect(resumeTrees.length === 1 && String(resumeTrees[0].path).endsWith('-u1') && resumeTrees[0].ref === resumeRuns[0].worktree_ref, `REQ-TRACE-464/REQ-GIT-140: the run did not begin on the one tree the release provisioned (trees ${JSON.stringify(resumeTrees.map((t) => t.path))}, run on ${JSON.stringify(resumeRuns[0].worktree_ref)})`);
-stage2['blocker-resume'] = { disclosure: resumeDisclosure.buttons, waiting: resumeWaiting.waiting, afterAccept: { none: resumeAfter.none, alerts: resumeAfter.alerts }, column: resumed.evals['23200'].column, history: resumeHistory, dispatched, run: { unit: resumeRuns[0].unit, worktree: resumeTrees[0].path } };
+stage2['blocker-resume'] = { disclosure: resumeDisclosure.buttons, waiting: resumeWaiting.waiting, afterAccept: { none: resumeAfter.none, alerts: resumeAfter.alerts }, column: resumed.evals['13400'].column, history: resumeHistory, dispatched, run: { unit: resumeRuns[0].unit, worktree: resumeTrees[0].path } };
 
 // ── ready-restart: a card resting in `ready` across a quit and a relaunch, disclosed and started from the queue (REQ-TRACE-472/482/464) ──
 //
@@ -1005,6 +1040,54 @@ const autoTrees = autoRows.query("select * from delivery_worktrees where req_id 
 expect(autoRuns.length === 1 && autoRuns[0].unit === 'u1' && autoRuns[0].permissions === 'permissive', `REQ-TRACE-464/472: the relaunched REQ-101 has run rows ${JSON.stringify(autoRuns.map((x) => ({ unit: x.unit, permissions: x.permissions })))}, not one permissive run of u1`);
 expect(autoTrees.length === 1 && autoTrees[0].path === autoRestingTrees[0].path && autoTrees[0].ref === autoRuns[0].worktree_ref, `REQ-TRACE-464: the run did not begin on the tree the release provisioned before the quit (trees ${JSON.stringify(autoTrees.map((t) => t.path))})`);
 stage2['ready-restart-automatic'] = { before: autoResting.evals['12000'].column, columns: autoColumns, run: { unit: autoRuns[0].unit, permissions: autoRuns[0].permissions, worktree: autoTrees[0].path } };
+
+// ── disclosure-launch: one acceptance suppresses the disclosure for the rest of the launch, and the next launch asks again (REQ-TRACE-472) ──
+//
+// Defect note `accepting-the-disclosure-once-does-not-suppress-it-for-the-rest-of-the-launch.md`. REQ-101 is released
+// and its disclosure accepted once ("Start the run", not permanently). REQ-102 is released next in the same launch: no
+// disclosure may be shown, and its run starts with the permissions the first acceptance disclosed. Relaunched, REQ-103's
+// release must show the disclosure again: a plain acceptance holds for its own launch only.
+const CARD_102 = '[data-req-card="REQ-102"]';
+const CARD_103 = '[data-req-card="REQ-103"]';
+const twoProfile = profile('disclosure-launch');
+const twoCards = await launch('disclosure-launch', twoProfile.workspace, twoProfile.local, twoProfile.preferences, {
+  ROTARIS_CAPTURE_RESIZE: '1264x800@300',
+  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_CLICKS: [
+    `${CARD_101}@3000`,
+    '[data-testid="req-move-control"]@4200',
+    '[data-testid="req-confirm"] .btn>>Release@5200',
+    '[data-testid="req-pane-disclosure"] .btn>>Start the run@6400',
+    `${CARD_102}@10000`,
+    '[data-testid="req-move-control"]@11200',
+    '[data-testid="req-confirm"] .btn>>Release@12200',
+  ].join(';;'),
+  ROTARIS_CAPTURE_EVAL_AT: [`${DISCLOSURE_AT}@5800`, `${CARD_AT('REQ-102')}@9800`, `${DISCLOSURE_AT}@13400`, `${CARD_AT('REQ-102')}@18000`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '19000',
+}, 180_000);
+const firstDisclosure = twoCards.evals['5800'];
+expect(firstDisclosure !== null && firstDisclosure !== undefined && firstDisclosure.buttons.includes('Start the run'), `REQ-TRACE-472: the first run-starting action of the launch raised no disclosure (${JSON.stringify(firstDisclosure)})`);
+expect(twoCards.evals['9800']?.column === 'backlog', `the second card was not in the backlog before its release (${JSON.stringify(twoCards.evals['9800'])})`);
+expect(twoCards.evals['13400'] === null, `REQ-TRACE-472: after one acceptance the second card's release showed the disclosure again within the same launch (${JSON.stringify(twoCards.evals['13400'])})`);
+const secondColumn = twoCards.evals['18000']?.column;
+expect(secondColumn === 'running' || secondColumn === 'review' || secondColumn === 'done', `REQ-TRACE-472/482: the second card's release started nothing — REQ-102 read ${JSON.stringify(twoCards.evals['18000'])}`);
+const twoRows = deliveryRows(twoProfile.local);
+const secondRuns = twoRows.query("select * from delivery_runs where req_id = 'REQ-102'");
+expect(secondRuns.length === 1 && secondRuns[0].permissions === 'permissive', `REQ-TRACE-472: the second card's run carries ${JSON.stringify(secondRuns.map((r) => r.permissions))}, not the permissive grant the first acceptance disclosed`);
+const nextLaunch = await launch('disclosure-launch-relaunch', twoProfile.workspace, twoProfile.local, twoProfile.preferences, {
+  ROTARIS_CAPTURE_RESIZE: '1264x800@300',
+  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_CLICKS: [
+    `${CARD_103}@3000`,
+    '[data-testid="req-move-control"]@4200',
+    '[data-testid="req-confirm"] .btn>>Release@5200',
+  ].join(';;'),
+  ROTARIS_CAPTURE_EVAL_AT: [`${DISCLOSURE_AT}@6400`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '7400',
+}, 180_000);
+const relaunchDisclosure = nextLaunch.evals['6400'];
+expect(relaunchDisclosure !== null && relaunchDisclosure !== undefined && relaunchDisclosure.buttons.includes('Start the run'), `REQ-TRACE-472: in the next launch the disclosure was not due again (${JSON.stringify(relaunchDisclosure)})`);
+stage2['disclosure-launch'] = { first: firstDisclosure.buttons, secondShown: twoCards.evals['13400'], second: { column: secondColumn, permissions: secondRuns[0].permissions }, nextLaunch: relaunchDisclosure.buttons };
 
 // ── panes and the graph: the registry's contract, and the rest of REQ-TRACE-497 a proof can reach ────────────────
 // Defect `R2-6`, and the reason this read carries geometry at all: every assertion below once read attributes through

@@ -79,6 +79,10 @@ describe('REQ-TRACE-466/478/481: the queue rows, the statement and the ceiling',
 
 describe('REQ-TRACE-472/474/468: the disclosure', () => {
   const preview = (over: Partial<LaunchPreview> = {}): LaunchPreview => ({ id: 'REQ-101', action: 'release', unit: 'u1', branch: 'rotaris/req/req-101/u1', worktreePath: 'C:\\w\\.rotaris\\requirements\\worktrees\\x', workspaceUnattended: false, startsNow: true, repository: { ok: true }, approvalTimeoutSeconds: 0, disclosure: 'due', permissions: 'permissive', approvalWait: { seconds: 0, unlimited: true }, ...over });
+  it('REQ-TRACE-472: a second card\'s run-starting move after a plain acceptance in this launch shows no dialog, and carries the acceptance as its payload', () => {
+    // Main answers `accepted` once a person accepted the disclosure, not permanently, earlier in this launch.
+    expect(disclosureFor(preview({ id: 'REQ-102', disclosure: 'accepted' }))).toEqual({ show: false, payload: 'accepted' });
+  });
   it('is shown only when due, and the silent states carry their payload; the lines state the permissions, the worktree, the wait and when it begins', () => {
     expect(disclosureFor(preview())).toEqual({ show: true, payload: 'accepted' });
     expect(disclosureFor(preview({ disclosure: 'suppressed' }))).toEqual({ show: false, payload: 'suppressed' });

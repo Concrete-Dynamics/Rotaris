@@ -86,6 +86,32 @@ describe('the dispatch (REQ-TRACE-464/470/471/463)', () => {
     await off.runs.handle({ kind: 'requirements.runs', op: 'preview', id: 'REQ-101', action: 'release' });
     expect(off.sent.every((r) => r.kind === 'requirements.command' && r.disclosure === 'off')).toBe(true);
   });
+  /**
+   * Defect note `accepting-the-disclosure-once-does-not-suppress-it-for-the-rest-of-the-launch.md` (REQ-TRACE-472):
+   * "Accepting SHALL suppress the disclosure for the remainder of that launch". Main read only the two preferences, and a
+   * plain acceptance wrote none, so the next card's preview read `due` and the dialog came back.
+   */
+  it('REQ-TRACE-472: one plain acceptance suppresses the disclosure for the rest of the launch — the next card\'s preview reads accepted and every command carries it; the next launch reads due', async () => {
+    const h = harness({ claims: [CLAIM] });
+    expect(await h.runs.handle({ kind: 'requirements.runs', op: 'preview', id: 'REQ-101', action: 'release' })).toMatchObject({ ok: true, value: { disclosure: 'due' } });
+    expect(await h.runs.handle({ kind: 'requirements.runs', op: 'accept' })).toEqual({ ok: true, value: { accepted: true } });
+    // The service is told at once, as after a permanent acceptance (REQ-TRACE-478); no preference is written.
+    expect(h.sent.at(-1)).toMatchObject({ command: { name: 'requirements.board' }, disclosure: 'accepted' });
+    expect(h.written).toEqual([]);
+    expect(h.runs.standingDisclosure()).toBe('accepted');
+    expect(await h.runs.handle({ kind: 'requirements.runs', op: 'preview', id: 'REQ-102', action: 'release' })).toMatchObject({ ok: true, value: { disclosure: 'accepted', permissions: 'permissive' } });
+    await h.runs.dispatch();
+    expect(h.sent.every((r) => r.kind === 'requirements.command' && (r.disclosure === 'accepted' || (r.command.name === 'requirements.run.preview' && r.command.id === 'REQ-101')))).toBe(true);
+    // The elevation switched off and a permanent acceptance still read as they did.
+    expect(harness({ prefs: { runs: false } }).runs.standingDisclosure()).toBe('off');
+    const permanent = harness({ prefs: { suppressed: true } });
+    await permanent.runs.handle({ kind: 'requirements.runs', op: 'accept' });
+    expect(permanent.runs.standingDisclosure()).toBe('suppressed');
+    // A fresh coordinator is the next launch of the application: the plain acceptance is not carried into it.
+    const next = harness();
+    expect(next.runs.standingDisclosure()).toBe('due');
+    expect(await next.runs.handle({ kind: 'requirements.runs', op: 'preview', id: 'REQ-103', action: 'release' })).toMatchObject({ ok: true, value: { disclosure: 'due' } });
+  });
   it('REQ-TRACE-472/478: a permanent acceptance tells the service at once, so the queue it publishes stops asking for the disclosure', async () => {
     const h = harness();
     await h.runs.handle({ kind: 'requirements.runs', op: 'suppress', suppressed: true });

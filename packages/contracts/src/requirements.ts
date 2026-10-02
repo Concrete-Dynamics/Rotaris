@@ -127,7 +127,9 @@ export interface RequirementDetail { readonly card: BoardCard; readonly prose: s
  * `a-card-resting-in-ready-across-a-restart-can-never-be-started.md`: the verifier's second finding put it on the
  * claim alone, and the published queue then still called a card the claim takes "deferred" — the third).
  */
-export const STANDING_DISCLOSURES = ['due', 'suppressed', 'off'] as const;
+// `accepted`: accepted (not permanently) earlier in this launch of the application, which suppresses the disclosure for
+// the remainder of the launch (REQ-TRACE-472); main holds it in memory, so the next launch reads `due` again.
+export const STANDING_DISCLOSURES = ['due', 'accepted', 'suppressed', 'off'] as const;
 export type StandingDisclosure = (typeof STANDING_DISCLOSURES)[number];
 // ---- commands (channel 5), main → workspace service; Actor is stamped by main, never sent by a renderer ----
 export type RequirementsCommand =
@@ -300,8 +302,8 @@ export interface RunLaunchPreview {
 }
 /** Main's answer to `requirements.runs {op: 'preview'}`: the service's facts plus the two desktop preferences and the effective wait (REQ-TRACE-467/468). */
 export interface LaunchPreview extends RunLaunchPreview {
-  /** `due`: the dialog must be shown; `suppressed`: accepted permanently before; `off`: the elevation is switched off; `unattended`: REQ-TRACE-474's silence. */
-  readonly disclosure: 'due' | 'suppressed' | 'off' | 'unattended';
+  /** `due`: the dialog must be shown; `accepted`: accepted earlier in this launch (REQ-TRACE-472, the remainder of the launch); `suppressed`: accepted permanently before; `off`: the elevation is switched off; `unattended`: REQ-TRACE-474's silence. */
+  readonly disclosure: 'due' | 'accepted' | 'suppressed' | 'off' | 'unattended';
   readonly permissions: RunPermissions;
   /** `runtime.approval_timeout_seconds` as the layered configuration resolves it; zero is an unlimited wait and is never shown as "0 seconds" (REQ-TRACE-468). */
   readonly approvalWait: { readonly seconds: number; readonly unlimited: boolean };
@@ -373,12 +375,13 @@ export interface BlockerPayload {
 /**
  * The one renderer → main command of this Part (one spread in `commands.ts`, under the Part AP banner): the coordinator
  * in main owns the disclosure preferences, the session start and the run's lifetime, so a renderer asks it — never the
- * service — for a launch preview, a dispatch after an act or a queue change, the permanent suppression (REQ-TRACE-472),
- * and the live board runs (REQ-TRACE-466/475).
+ * service — for a launch preview, a dispatch after an act or a queue change, the plain acceptance that suppresses the
+ * disclosure for the rest of the launch (`accept`) and the permanent suppression (`suppress`, REQ-TRACE-472), and the
+ * live board runs (REQ-TRACE-466/475).
  */
 export const RequirementsRunsCommandSchema = z.object({
   kind: z.literal('requirements.runs'),
-  op: z.enum(['preview', 'dispatch', 'suppress', 'live']),
+  op: z.enum(['preview', 'dispatch', 'accept', 'suppress', 'live']),
   id: ReqIdSchema.optional(),
   action: BoardActionSchema.optional(),
   suppressed: z.boolean().optional(),

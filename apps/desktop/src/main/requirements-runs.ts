@@ -72,6 +72,14 @@ export function approvalWaitOf(seconds: number): LaunchPreview['approvalWait'] {
 export function createRequirementsRuns(deps: RequirementsRunsDeps): RequirementsRuns {
   interface Live { readonly id: ReqId; readonly unit: string; readonly permissions: RunPermissions; waiting: boolean }
   const runs = new Map<string, Live>();
+  /**
+   * REQ-TRACE-472: "Accepting SHALL suppress the disclosure for the remainder of that launch". The launch is the
+   * application's — "subsequent launches" are what the permanent acceptance reaches — and main's lifetime is that launch,
+   * so the plain acceptance is held here, in memory, and the next launch reads `due` again. The board tells main of it
+   * through `requirements.runs {op: 'accept'}` (defect note
+   * `accepting-the-disclosure-once-does-not-suppress-it-for-the-rest-of-the-launch.md`).
+   */
+  let acceptedThisLaunch = false;
   /** One dispatch in flight per workspace root: two kicks for one workspace share it, and a kick for another is not swallowed by it. */
   const dispatching = new Map<string, Promise<DispatchReport>>();
 
@@ -92,9 +100,10 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
    * REQ-TRACE-472: what the two preferences make of a launch nobody disclosed — `off` with the elevation switched off,
    * `suppressed` once accepted permanently, else `due`. Stamped on every command main sends the service, because the
    * service cannot read them, a launch it recovered after a restart is recorded undisclosed, and the queue it publishes
-   * must read the same value its claim does (REQ-TRACE-478).
+   * must read the same value its claim does (REQ-TRACE-478). `accepted` once a person accepted it, not permanently,
+   * earlier in this launch (below).
    */
-  const standingDisclosure = (): StandingDisclosure => (!deps.preferences.read('requirements/fullPermissionRuns') ? 'off' : deps.preferences.read('requirements/fullPermissionNoticeSuppressed') ? 'suppressed' : 'due');
+  const standingDisclosure = (): StandingDisclosure => (!deps.preferences.read('requirements/fullPermissionRuns') ? 'off' : deps.preferences.read('requirements/fullPermissionNoticeSuppressed') ? 'suppressed' : acceptedThisLaunch ? 'accepted' : 'due');
 
   const preview = async (root: string, id: ReqId, action: RunLaunchPreview['action']): Promise<CommandOutcome> => {
     const a = await ask(root, { name: 'requirements.run.preview', workspace: root, id, action });
@@ -105,7 +114,7 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
     // REQ-TRACE-472/473/474: on by default; suppressed permanently by acceptance; off in settings; silent where the workspace already opted in.
     const elevationOn = deps.preferences.read('requirements/fullPermissionRuns');
     const suppressed = deps.preferences.read('requirements/fullPermissionNoticeSuppressed');
-    const disclosure: LaunchPreview['disclosure'] = !elevationOn ? 'off' : f.workspaceUnattended ? 'unattended' : suppressed ? 'suppressed' : 'due';
+    const disclosure: LaunchPreview['disclosure'] = !elevationOn ? 'off' : f.workspaceUnattended ? 'unattended' : suppressed ? 'suppressed' : acceptedThisLaunch ? 'accepted' : 'due';
     const permissions: RunPermissions = elevationOn && !f.workspaceUnattended ? 'permissive' : 'workspace';
     const value: LaunchPreview = { ...f, disclosure, permissions, approvalWait: approvalWaitOf(f.approvalTimeoutSeconds) };
     return { ok: true, value };
@@ -208,6 +217,18 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
         }
         case 'dispatch':
           return { ok: true, value: await dispatch() };
+        case 'accept': {
+          // REQ-TRACE-472: a plain acceptance suppresses the disclosure for the rest of this launch. The service is told at
+          // once (a board read carries the new standing value, REQ-TRACE-478), so a launch it recovered undisclosed is
+          // claimable and the queue stops asking for the disclosure, as after a permanent acceptance.
+          const was = standingDisclosure();
+          acceptedThisLaunch = true;
+          if (standingDisclosure() !== was) {
+            const told = await ask(root, { name: 'requirements.board', workspace: root });
+            if ('refused' in told) deps.log(`requirements: the service was not told the disclosure is now ${standingDisclosure()} (${told.refused})`);
+          }
+          return { ok: true, value: { accepted: true } };
+        }
         case 'suppress': {
           // REQ-TRACE-472: accepting permanently suppresses the disclosure in subsequent launches; settings can switch the behaviour off (`fullPermissionRuns`).
           await deps.preferences.write('requirements/fullPermissionNoticeSuppressed', command.suppressed ?? true);

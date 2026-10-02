@@ -145,4 +145,4 @@ starts a recovered card only at its first kick (a person's act or queue change, 
 Noticed while repairing it, and recorded rather than repaired: a rejected card back in `ready` can never start its next
 unit. Before the repair the claim handed out the rejected unit's held launch and `run.started` failed on the run
 table's key; the queue's release now states a stall instead, and automatic scheduling still meets the store error. See
-[`../a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`](../a-rejected-card-back-in-ready-can-never-start-its-next-unit.md).
+[`a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`](a-rejected-card-back-in-ready-can-never-start-its-next-unit.md).

@@ -55,6 +55,8 @@ export interface DeliveryWriter {
   /** Part AP — the pass's move out of the terminal state, and a run row's stage (REQ-TRACE-437, 466). */
   recordSpecificationMoved: DeliveryTransitions['recordSpecificationMoved'];
   recordRunStage: DeliveryTransitions['recordRunStage'];
+  /** REQ-TRACE-464: a tree the claim provisioned for a unit no transition provisioned, recorded at once (a restart then takes it over). */
+  recordWorktreeProvisioned: DeliveryTransitions['recordWorktreeProvisioned'];
   answerBlocker: DeliveryTransitions['answerBlocker'];
   setQueue: DeliveryTransitions['setQueue'];
   readonly inFlight: ReadonlySet<ReqId>;
@@ -154,6 +156,7 @@ export function createDeliveryWriter(reader: DeliveryReader, transitions: Delive
     recordRunEnded: (...args) => transitions.recordRunEnded(...args),
     recordSpecificationMoved: (...args) => transitions.recordSpecificationMoved(...args), // Part AP
     recordRunStage: (...args) => transitions.recordRunStage(...args), // Part AP
+    recordWorktreeProvisioned: (...args) => transitions.recordWorktreeProvisioned(...args), // REQ-TRACE-464: the claim's provisioning of a unit no transition provisioned
     answerBlocker: (...args) => transitions.answerBlocker(...args),
     setQueue: (...args) => transitions.setQueue(...args),
     inFlight: transitions.inFlight,

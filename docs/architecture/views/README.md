@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**A rejected card's next unit begins on a fresh tree (REQ-TRACE-423, REQ-TRACE-464, REQ-TRACE-482).** The delivery
+service treats a launch held for an earlier unit as spent: the scheduler names the card's current unit, and the claim
+provisions it when the store records no tree for it, writing the row at once through the writer's new
+`recordWorktreeProvisioned` (`workspace/src/delivery/transition.ts`, `handles.ts`). A claim before the first pass under
+`manual` with nothing armed answers without parsing the store. This repairs
+`a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`; `requirements-runs-proof`'s eighth assertion shows it.
+The **sequences view**'s board section says so. The writer gained one method (a row write, no delivery state); no
+package, edge, process, message kind, channel, command or store column changed.
+
 **A closing terminal frame no longer blanks a preview (REQ-SHELL-102, REQ-CHAT-063, REQ-CHAT-076).** The renderer's
 `TerminalStreamSet` holds, for `previewOf`, the screen a `screen` frame's reset replaces, from the parser reaching that
 reset (`applyFrame`'s `resetReached` hook, an empty write queued ahead of it) until the text has parsed (its `parsed`

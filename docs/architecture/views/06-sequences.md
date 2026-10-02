@@ -310,6 +310,13 @@ sequenceDiagram
   launch (undisclosed), and on the queue's release, which records the disclosure "Disclose and start" carries and arms
   the card. A tree that cannot be taken over is stated on the entry as the last start's stall, and the claim still
   refuses the card (REQ-TRACE-472/482/464, REQ-TRACE-463; 2026-10-02).
+- **A card's next unit is provisioned at the claim.** A reject, or a run ending `cancelled` (stopped at its iteration
+  limit), rests a card in `ready` on a unit no run-starting action provisioned. The launch held for the finished unit
+  is spent: the queue names the card's current unit, and its disclosure carries over. The claim — the system's
+  dispatch, under both modes — provisions that unit when the store records no tree for it, and writes the row at once
+  (`recordWorktreeProvisioned`), so a restart before the start takes it over. The read pass, the queue's release and the
+  reject never provision; a recorded tree that is gone stays the stall (REQ-TRACE-423/464/482, REQ-TRACE-408;
+  2026-10-02). A claim before the first pass under `manual` with nothing armed answers without parsing the store.
 - **Every requirements command carries main's standing disclosure.** Only main holds the two preferences of
   REQ-TRACE-472, so main stamps what they make of an undisclosed launch on every `requirements.command` envelope, beside
   the actor — the relay for a person's commands and the coordinator for its own: `due`, `suppressed` (accepted

@@ -9,7 +9,7 @@ the rejected unit's (`u1`, its tree kept intact by REQ-TRACE-423).
   launch again, and `requirements.run.started` threw `SqliteError: UNIQUE constraint failed: delivery_runs.req_id,
   delivery_runs.unit`, because a run of `u1` was already recorded. Had it not thrown, the next run would have worked in
   the rejected unit's tree, which REQ-TRACE-423 says rejecting leaves intact.
-- **Since the repair of [`fixed/a-card-resting-in-ready-across-a-restart-can-never-be-started.md`](fixed/a-card-resting-in-ready-across-a-restart-can-never-be-started.md)**
+- **Since the repair of [`a-card-resting-in-ready-across-a-restart-can-never-be-started.md`](a-card-resting-in-ready-across-a-restart-can-never-be-started.md)**
   (bundle `fin7-queue-and-roles`): the queue's release looks for the next unit's tree, finds none, and states the stall
   on the entry: "The last start of REQ-101 did not begin: REQ-101 unit u2 has no recorded worktree on disk to take over,
   and a start from the queue provisions none: restore the tree, or hold the card and resume it from the board, which
@@ -23,8 +23,8 @@ Seen 2026-10-02 in scratch cases of `delivery.test.ts` (not kept), on both codes
 (card in `review`), `reject`, then the queue's release with `disclosure: 'accepted'` and the claim (re-run on the
 bundle's head in its third repair round, where the entry read the sentence quoted above word for word); and, under
 `requirements.scheduling.mode: automatic`, the claim and `run.started` straight after the reject. Found while repairing
-the note above. Not repaired: what should provision the next unit after a rejection (the reject itself, the queue's
-release, or the claim) is a choice the repair did not make.
+the note above. What should provision the next unit after a rejection (the reject itself, the queue's release, or the
+claim) was a choice that repair did not make; the outcome below makes it.
 
 **Amended 2026-10-02 (fifth triage of the open notes, by code reading on origin/main `c1381f5`; confirmed the same day by
 five failing cases of `delivery.test.ts` on bundle `fin9-queue-dispatch-and-disclosure` before its repair).**
@@ -41,6 +41,24 @@ five failing cases of `delivery.test.ts` on bundle `fin9-queue-dispatch-and-disc
   run would have worked in the rejected unit's tree" understates it: the session has already started when the row is
   refused. The throw also skips `claimed.delete`, so the card reads `next` and holds a concurrency slot until a restart,
   and when the unrecorded session ends, `run.ended` finds no running unit for it.
+
+**Outcome — repaired 2026-10-02 (bundle `fin9-queue-dispatch-and-disclosure`).** The placement the note left open is
+the claim. In `apps/desktop/src/workspace-service/delivery.ts` a launch held for an earlier unit is **spent**: the
+scheduler names the card's current unit (`unitOfCard`), never the held launch's, and the claim never hands the finished
+unit out; the spent launch's disclosure carries over (given in this launch of the application, REQ-TRACE-472), its tree
+and a send-back's instructions do not. The claim (`treeForClaim`) provisions the card's current unit when the store
+records no tree row for it at all, under both modes, and records the row at once through the writer's new
+`recordWorktreeProvisioned` (`packages/workspace/src/delivery/transition.ts`, `handles.ts`), so a restart before the
+start takes the tree over (REQ-TRACE-464). The queue's release, and the pass's recovery after a restart, no longer state
+a stall for a unit with no row: they keep the launch without a tree, and the claim provisions it. A recorded row whose
+tree is gone stays the stated stall. Nothing provisions on a board read (REQ-TRACE-408) or on the reject
+(REQ-TRACE-389/422). `requirements.run.started` now settles the claim (`claimed`, `armed`, `stalled`) whatever its write
+does. A claim before the first pass under `manual` with nothing armed answers `null` without parsing the store. Pinned by
+five cases in `delivery.test.ts` (manual release after a reject; automatic claim after a reject; an ending classified
+`cancelled`; a restart between the provisioning claim and the start; the cheap claim), all red before the repair, and one
+in `transition.test.ts`; shown by `requirements-runs-proof`'s eighth assertion (a reviewed card rejected, the dispatch,
+u2 running on its own worktree beside the kept u1), red on the unrepaired service and green on the repair. ADR-0041 records
+it in "Repair — 2026-10-02: a card's next unit is provisioned at the claim", keeping the replaced clause.
 
 ## Specs
 

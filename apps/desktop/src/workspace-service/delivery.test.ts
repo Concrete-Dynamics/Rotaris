@@ -344,6 +344,100 @@ describe('createDeliveryService', () => {
     expect((await after.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value).toBeNull();
     expect(calls).toEqual(['u1']);
   });
+  /**
+   * Defect note `a-rejected-card-back-in-ready-can-never-start-its-next-unit.md` (REQ-TRACE-423/482/464/497): a run of
+   * u1 ends and the review rejects it (or the run ends classified `cancelled`, as one stopped at its iteration limit
+   * is), so the card rests in `ready` with its `Units` fact at 1 and the next unit is u2. The launch the service held
+   * was u1's, and nothing provisioned u2: the claim handed u1 out again and `run.started` threw on `delivery_runs`'
+   * primary key under `automatic`, and the queue's release stated a stall under `manual`. The held launch of an earlier
+   * unit is spent; the claim provisions the card's current unit when the store records no tree for it, and records the
+   * row at once, so u1's tree stays intact (REQ-TRACE-423) and u2 gets one tree (REQ-TRACE-464).
+   */
+  const u = (unit: string) => join(ws, '.rotaris', 'requirements', 'worktrees', unit);
+  const runToEnd = async (s: DeliveryService, outcome: 'completed' | 'cancelled') => {
+    const first = (await s.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value as { unit: string } | null;
+    expect(first).toMatchObject({ unit: 'u1' });
+    await s.handle({ name: 'requirements.run.started', workspace: 'x', id: 'REQ-101', unit: 'u1', sessionId: 'sess-1', permissions: 'permissive' }, SYSTEM);
+    const ended = (await s.handle({ name: 'requirements.run.ended', workspace: 'x', sessionId: 'sess-1', outcome, detail: `the run ended ${outcome}` }, SYSTEM)).value as { settled: boolean; to?: string };
+    expect(ended).toMatchObject({ settled: true, to: outcome === 'completed' ? 'review' : 'ready' });
+    if (outcome === 'completed') {
+      const rejected = await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'reject', payload: { reason: 'not what was asked' } }, USER);
+      expect((rejected.value as { value: TransitionOutcome }).value).toMatchObject({ from: 'review', to: 'ready' });
+    }
+  };
+  const startsU2 = async (s: DeliveryService, calls: readonly string[], disclosure?: 'suppressed') => {
+    const claim = (await s.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM, disclosure)).value as { id: string; unit: string; worktree: { path: string; branch: string } } | null;
+    expect(claim).toMatchObject({ id: 'REQ-101', unit: 'u2', worktree: { path: u('u2'), branch: 'rotaris/req/req-101/u2' } });
+    expect(calls).toEqual(['u1', 'u2']);
+    // REQ-TRACE-423: the rejected unit's tree is kept for inspection.
+    expect(existsSync(u('u1'))).toBe(true);
+    const started = (await s.handle({ name: 'requirements.run.started', workspace: 'x', id: 'REQ-101', unit: 'u2', sessionId: 'sess-2', permissions: 'permissive' }, SYSTEM)).value as { ok: boolean };
+    expect(started.ok).toBe(true);
+    const d = (await s.handle({ name: 'requirements.detail', workspace: 'x', id: 'REQ-101' }, USER)).value as { card: { column: string; run?: { unit: string } }; runs: { unit: string; worktree?: string }[] };
+    expect(d.card.column).toBe('running');
+    expect(d.card.run?.unit).toBe('u2');
+    expect(d.runs.map((x) => [x.unit, x.worktree])).toEqual([['u1', u('u1')], ['u2', u('u2')]]);
+  };
+  it('REQ-TRACE-423/482/464: under manual, a rejected card released from the queue begins u2 on a fresh tree, u1\'s tree kept', async () => {
+    const { port, calls } = provisioningGit();
+    const s = createDeliveryService({ db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port });
+    await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    await runToEnd(s, 'completed');
+    // REQ-TRACE-482: under manual nothing begins until the person releases it from the queue.
+    expect((await s.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value).toBeNull();
+    expect(calls).toEqual(['u1']);
+    const released = await s.handle({ name: 'requirements.queue.set', workspace: 'x', release: 'REQ-101', disclosure: 'accepted' }, USER);
+    const entry = (released.value as BoardProjection['queue']).entries.find((e) => e.id === 'REQ-101');
+    expect(entry).toMatchObject({ state: 'next', unit: 'u2' });
+    expect(entry?.reason).toBeUndefined();
+    await startsU2(s, calls);
+  });
+  it('REQ-TRACE-423/482/464/497: under automatic, the claim after a reject begins u2 on a fresh tree, never the rejected unit again', async () => {
+    const { port, calls } = provisioningGit();
+    const s = createDeliveryService({ db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port });
+    await s.handle({ name: 'requirements.queue.set', workspace: 'x', automatic: true }, USER);
+    await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    await runToEnd(s, 'completed');
+    const board = (await s.handle({ name: 'requirements.board', workspace: 'x' }, USER)).value as BoardProjection;
+    expect(board.queue.entries.find((e) => e.id === 'REQ-101')).toMatchObject({ state: 'next', unit: 'u2' });
+    // The read provisions nothing (REQ-TRACE-408), and neither did the reject (REQ-TRACE-389/422).
+    expect(calls).toEqual(['u1']);
+    await startsU2(s, calls);
+  });
+  it('REQ-TRACE-482/464: a run ending classified cancelled (stopped at its iteration limit) rests in ready, and the next claim begins u2 on a fresh tree', async () => {
+    const { port, calls } = provisioningGit();
+    const s = createDeliveryService({ db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port });
+    await s.handle({ name: 'requirements.queue.set', workspace: 'x', automatic: true }, USER);
+    await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    await runToEnd(s, 'cancelled');
+    await startsU2(s, calls);
+  });
+  it('REQ-TRACE-464: a restart between the claim that provisioned u2 and its start takes u2\'s recorded tree over rather than provisioning it twice', async () => {
+    const { port, calls, takenOver } = provisioningGit();
+    const deps = { db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port };
+    const before = createDeliveryService(deps);
+    await before.handle({ name: 'requirements.queue.set', workspace: 'x', automatic: true }, USER);
+    await before.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    await runToEnd(before, 'completed');
+    expect((await before.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value).toMatchObject({ unit: 'u2' });
+    expect(calls).toEqual(['u1', 'u2']);
+    // The relaunch: nothing in memory; the store holds u2's row, written at the claim.
+    const after = createDeliveryService(deps);
+    const claim = (await after.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM, 'suppressed')).value as { unit: string; worktree: { path: string } } | null;
+    expect(claim).toMatchObject({ unit: 'u2', worktree: { path: u('u2') } });
+    expect(calls).toEqual(['u1', 'u2']);
+    expect(takenOver.map((t) => t.path)).toContain(u('u2'));
+  });
+  it('a claim before the first pass, under manual with nothing armed, answers null without parsing the store; under automatic it parses', async () => {
+    const s = service();
+    expect((await s.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value).toBeNull();
+    expect(parses).toBe(0);
+    await s.handle({ name: 'requirements.queue.set', workspace: 'x', automatic: true }, USER);
+    const fresh = service();
+    parses = 0;
+    expect((await fresh.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value).toBeNull();
+    expect(parses).toBe(1);
+  });
   it('deliveryServiceFor keeps one service per open store', () => {
     const deps = { workspaceRoot: ws, engine, clocks: clock, log: () => undefined };
     expect(deliveryServiceFor(r, deps)).toBe(deliveryServiceFor(r, deps));

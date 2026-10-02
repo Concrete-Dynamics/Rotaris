@@ -61,7 +61,7 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
   };
   // A person's reads and acts arrive through main's relay, which stamps the coordinator's standing disclosure beside the actor (REQ-TRACE-472/478).
   const board = async (): Promise<BoardProjection> => (await delivery.handle({ name: 'requirements.board', workspace: workspaceRoot }, USER, runs.standingDisclosure())).value as BoardProjection;
-  const act = async (id: ReqId, action: 'release' | 'resume', payload?: Readonly<Record<string, string>>): Promise<{ readonly ok: boolean; readonly value?: TransitionOutcome; readonly error?: Refusal }> =>
+  const act = async (id: ReqId, action: 'release' | 'resume' | 'reject', payload?: Readonly<Record<string, string>>): Promise<{ readonly ok: boolean; readonly value?: TransitionOutcome; readonly error?: Refusal }> =>
     (await delivery.handle({ name: 'requirements.act', workspace: workspaceRoot, id, action, ...(payload === undefined ? {} : { payload }) }, USER, runs.standingDisclosure())).value as { ok: boolean; value?: TransitionOutcome; error?: Refusal };
 
   /** The workspace service and main's coordinator as a start builds them; the restart assertion builds a second pair over the same store. */
@@ -310,5 +310,50 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
     expect(card.column).toBe('running');
     expect(card.run?.unit).toBe('u1');
     results.restartAutomatic = { id, entryBefore: entry, started: report.started.map((s) => s.id), worktree: tree, worktreesForUnit: worktreesOf(id).length, permissions: 'permissive' };
+  });
+  /**
+   * Defect note `a-rejected-card-back-in-ready-can-never-start-its-next-unit.md` (REQ-TRACE-423/482/464/497). The card the
+   * seventh assertion started finishes and is reviewed; the review rejects it, which returns it to `ready` keeping u1's
+   * branch and tree for inspection. Its next unit is u2, which no run-starting action provisioned. The launch held was
+   * u1's: the claim handed it out again, the session began in the rejected unit's tree, and the run row was refused by
+   * `delivery_runs`' primary key. Now the held launch is spent, and the claim provisions u2 (real Git) and records its row.
+   */
+  it('a rejected card back in ready begins its next unit on a fresh worktree, the rejected unit\'s worktree kept', async () => {
+    const id = (results['restartAutomatic'] as { id: ReqId }).id;
+    const worktreesOf = (req: string): string[] => execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd: workspaceRoot }).toString().split(/\n/).filter((l) => l.startsWith(`branch refs/heads/rotaris/req/${req.toLowerCase()}/`));
+    const u1 = requirementWorktreePath(workspaceRoot, `rotaris/req/${id.toLowerCase()}/u1`);
+    const live = runs.live().find((l) => l.id === id);
+    expect(live, `${id} has no live board run`).toBeDefined();
+    // The run host's own terminal event (REQ-TRACE-477): the coordinator settles the row, and the card awaits review.
+    emit({ kind: 'run.result', sessionId: live!.sessionId, result: { execution_status: 'completed', summary: 'the unit is done' } } as unknown as ProcessEvent);
+    for (let i = 0; i < 200 && (await board()).cards.find((c) => c.id === id)!.column !== 'review'; i += 1) await settle();
+    expect((await board()).cards.find((c) => c.id === id)!.column).toBe('review');
+    const rejected = await act(id, 'reject', { reason: 'not what the specification asks' });
+    expect(rejected.ok, rejected.error?.reason).toBe(true);
+    expect(rejected.value!.to).toBe('ready');
+    // REQ-TRACE-389/422: rejecting provisions nothing; REQ-TRACE-408: nor does reading the board.
+    expect(worktreesOf(id)).toHaveLength(1);
+    expect((await board()).queue.entries.find((e) => e.id === id)).toMatchObject({ state: 'next', unit: 'u2' });
+    expect(worktreesOf(id)).toHaveLength(1);
+    const requestsBefore = hostRequests.length;
+    const report = await runs.dispatch();
+    expect(report.abandoned).toEqual([]);
+    expect(report.started.filter((s) => s.id === id).map((s) => s.unit)).toEqual(['u2']);
+    const startRequest = hostRequests.slice(requestsBefore).find((h) => h.request.kind === 'session.start');
+    const begun = startRequest?.request as { effectiveRoot?: string; worktree?: { worktree_path: string; branch: string } } | undefined;
+    // The unit's branch is the configured template's (the second cycle of the card carries its suffix, as a re-run's does).
+    const u2Branch = begun?.worktree?.branch ?? '';
+    expect(u2Branch.startsWith(`rotaris/req/${id.toLowerCase()}/u2`), u2Branch).toBe(true);
+    const u2 = requirementWorktreePath(workspaceRoot, u2Branch);
+    expect(begun?.effectiveRoot).toBe(u2);
+    expect(u2).not.toBe(u1);
+    // REQ-TRACE-423: u1's tree and branch kept; REQ-TRACE-464: u2 has exactly one.
+    expect(existsSync(join(u1, 'rotaris-traceability.json'))).toBe(true);
+    expect(existsSync(join(u2, 'rotaris-traceability.json'))).toBe(true);
+    expect(worktreesOf(id).sort()).toEqual([`branch refs/heads/rotaris/req/${id.toLowerCase()}/u1`, `branch refs/heads/${u2Branch}`]);
+    const card = (await board()).cards.find((c) => c.id === id)!;
+    expect(card.column).toBe('running');
+    expect(card.run?.unit).toBe('u2');
+    results.rejectNextUnit = { id, started: report.started, worktreeU1: u1, worktreeU2: u2, branchU2: u2Branch, worktrees: worktreesOf(id).length };
   });
 });

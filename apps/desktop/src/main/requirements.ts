@@ -1,4 +1,4 @@
-import type { Actor, CommandOutcome, ProcessReply, RequirementsChanged, RequirementsCommandPayload, WorkspaceServiceRequest } from '@rotaris/contracts';
+import type { Actor, CommandOutcome, ProcessReply, RequirementsChanged, RequirementsCommandPayload, StandingDisclosure, WorkspaceServiceRequest } from '@rotaris/contracts';
 import { CONTRACT_SCHEMA_VERSION } from '@rotaris/contracts';
 import { millis, type Millis } from '@rotaris/kernel';
 
@@ -26,6 +26,8 @@ export interface RequirementsRelayDeps {
   readonly awaitWorkspace: () => Promise<unknown>;
   /** Sends to the workspace service of `workspaceRoot`; undefined when none is running. */
   readonly request: (workspaceRoot: string, req: WorkspaceServiceRequest, bound: Millis) => Promise<ProcessReply> | undefined;
+  /** REQ-TRACE-472: main's standing disclosure (the coordinator's `standingDisclosure`), stamped beside the actor so the queue the service publishes reads what its claim reads (REQ-TRACE-478). */
+  readonly disclosure: () => StandingDisclosure;
   /** REQ-CONFIG-198: the operating-system account the interactive session runs under. */
   readonly person: () => string;
   /** Channel 10 to every live window. */
@@ -49,7 +51,7 @@ export function createRequirementsRelay(deps: RequirementsRelayDeps): { handle(c
       if (root === undefined) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its requirements' };
       const actor = actorFor(origin, deps.person);
       const bound = command.name === 'requirements.board' || command.name === 'requirements.refresh' ? BOUND_BOARD : BOUND_OTHER;
-      const pending = deps.request(root, { kind: 'requirements.command', workspaceRoot: root, command: { ...command, workspace: root }, actor }, bound);
+      const pending = deps.request(root, { kind: 'requirements.command', workspaceRoot: root, command: { ...command, workspace: root }, actor, disclosure: deps.disclosure() }, bound);
       if (pending === undefined) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
       let r: ProcessReply;
       try { r = await pending; } catch (e) { return { ok: false, code: 'requirements.ask', headline: 'The requirements board could not be read', detail: e instanceof Error ? e.message : String(e) }; }

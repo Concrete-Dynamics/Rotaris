@@ -90,6 +90,9 @@ path already exists"). Both proofs passed on the repair: `requirements-runs-proo
   a restart in a workspace that schedules automatically without being unattended. The entry kept asking for a disclosure
   that would never be shown. **Now** main's coordinator sends its standing disclosure (`due`, `suppressed` or `off`, from
   the two preferences) on every `requirements.run.claim` (`StandingDisclosure` in `packages/contracts/src/requirements.ts`).
+  *(Falsified by the verifier in repair round 2, kept as written: this repaired the claim only. The entry the board
+  published was still computed as if the disclosure were `due`, so it went on asking for a disclosure that would never
+  be shown while the next claim took the card — see the round-2 paragraph below.)*
   The service treats a launch recorded undisclosed as disclosed when that disclosure is not `due`. It starts the run on
   the workspace's own mode when the elevation is `off`, whatever the launch recorded (REQ-TRACE-472: "with it switched
   off, a board-started run SHALL adopt the workspace's own permission mode").
@@ -108,6 +111,32 @@ assertion's third release rests in `ready` through two restarts; with automatic 
 suppressed permanently, a third service and coordinator pick it up with no release and start it, elevated, on its
 recorded tree. It was red with the round's first `delivery.ts` and `requirements-runs.ts` and green with these; the
 whole proof passed, 122/122 tests, at a load average of 1.0.
+
+**A third gap the verifier found, 2026-10-02 (repair round 2), kept beside its repair.** Round 1 split the scheduler in
+two. The queue the board published (`rebuild()` → `schedule(base)`) was computed with the standing disclosure defaulting
+to `due`, while only the claim saw main's value. After a restart, under automatic scheduling with the disclosure
+suppressed permanently, the entry read "deferred: The permissions of the run for REQ-101 have not been disclosed and
+accepted; open it from the queue to see the disclosure and start it" while the next claim took REQ-101 with no
+disclosure shown. That contradicts REQ-TRACE-478 (the queue shows the candidate the scheduler takes next, for the
+scheduler's own reason) and REQ-TRACE-472 (a permanent acceptance suppresses the disclosure in later launches).
+**Now** the standing disclosure is one value the service holds, not an argument of the claim. Main stamps it on every
+`requirements.command` it sends the service, beside the actor (the envelope's `disclosure` in
+`packages/contracts/src/process-protocol.ts`; `requirements.run.claim` no longer carries a field of its own). The relay
+of a person's commands (`apps/desktop/src/main/requirements.ts`) and the coordinator's own requests
+(`requirements-runs.ts`) both stamp `standingDisclosure()`. The service's scheduler reads the last value it received for
+the published queue, the launch preview and the claim alike. A command whose value differs from the one held
+republishes the queue under it before answering, and its reply carries the move for channel 10. A permanent acceptance
+(`requirements.runs {op: 'suppress'}`) asks the service for the board at once, so an open board stops asking for the
+disclosure without waiting for another act.
+
+**Pinned by** two more `delivery.test.ts` cases (after a restart under automatic scheduling with the disclosure
+suppressed, the published entry reads `next` with no reason and the claim takes the card the queue named; a standing
+disclosure that moves republishes the queue and the reply carries `changed`, one that holds changes nothing, and a
+command naming none keeps the last one), one `requirements-runs.test.ts` case (a permanent acceptance sends the board
+read stamped `suppressed`; every command, not only the claim, carries the value), and the relay's case in
+`requirements.test.ts`. `requirements-runs-proof`'s seventh assertion now also reads the published entry before the
+dispatch and requires `next` with no reason. With the published queue forced back to `due` (round 1's split), the two
+`delivery.test.ts` cases and the seventh assertion are red; with the repair the whole proof passed, 125/125 tests.
 
 Still owed, and recorded rather than repaired: nothing dispatches when the application launches, so an automatic queue
 starts a recovered card only at its first kick (a person's act or queue change, or a run ending). See

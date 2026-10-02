@@ -27,11 +27,12 @@ import { join } from 'node:path';
  */
 export interface DeliveryAnswer {
   readonly value: unknown;
-  /** Present exactly when a write moved the generation; main publishes it on channel 10 AFTER the reply (persist before publish). */
+  /** Present exactly when a write moved the generation, or main's standing disclosure moved the queue; main publishes it on channel 10 AFTER the reply (persist before publish). */
   readonly changed?: { readonly generation: number; readonly affected: ReqId[] | null };
 }
 export interface DeliveryService {
-  handle(command: RequirementsCommandPayload, actor: Actor): Promise<DeliveryAnswer>;
+  /** `disclosure`: main's standing disclosure, stamped on the envelope beside the actor (REQ-TRACE-472); absent, the last one held stands. */
+  handle(command: RequirementsCommandPayload, actor: Actor, disclosure?: StandingDisclosure): Promise<DeliveryAnswer>;
   /** What the restart reap settled on the first pass (REQ-TRACE-476), for the log. */
   readonly reaped: readonly ReapResult[];
   readonly generation: number;
@@ -125,18 +126,25 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
   const recordOf = (id: ReqId): RequirementRecord | undefined => parse?.records.find((x) => x.id === id);
   const workspaceUnattended = (): boolean => permissionMode === 'autonomous';
   /**
-   * REQ-TRACE-497: a run started while its disclosure was due and not accepted is never observable — a launch without one
-   * is not claimable. `standing` is what main's two preferences make of a launch nobody disclosed (REQ-TRACE-472): only
-   * main holds them, and it sends them on a claim; everywhere else the service assumes the disclosure is `due`. A launch
-   * recorded undisclosed (one the restart recovery rebuilt) is disclosed once the disclosure is permanently suppressed or
-   * the elevation is switched off, as a launch disclosed in this process would be (the verifier's second finding on
-   * `a-card-resting-in-ready-across-a-restart-can-never-be-started.md`).
+   * What main's two preferences make of a launch nobody disclosed (REQ-TRACE-472): only main holds them, and it stamps
+   * the value on every command it sends; this is the last one received, `due` until the first. ONE value feeds the
+   * queue the service publishes, the launch preview and the claim, so the queue shows the candidate the scheduler takes
+   * next, for the reason it takes or defers it (REQ-TRACE-478). The verifier's second finding on
+   * `a-card-resting-in-ready-across-a-restart-can-never-be-started.md` put it on the claim alone, and the published queue
+   * then still called "deferred, open it to see the disclosure" a card the next claim took with the disclosure
+   * suppressed (the third finding).
    */
-  const disclosed = (l: Launch | undefined, standing: StandingDisclosure = 'due'): boolean => l !== undefined && (l.disclosure !== 'undisclosed' || standing !== 'due' || workspaceUnattended());
+  let standing: StandingDisclosure = 'due';
+  /**
+   * REQ-TRACE-497: a run started while its disclosure was due and not accepted is never observable — a launch without one
+   * is not claimable. A launch recorded undisclosed (one the restart recovery rebuilt) is disclosed once the disclosure
+   * is permanently suppressed or the elevation is switched off, as a launch disclosed in this process would be.
+   */
+  const disclosed = (l: Launch | undefined): boolean => l !== undefined && (l.disclosure !== 'undisclosed' || standing !== 'due' || workspaceUnattended());
   /** REQ-TRACE-472: with the elevation switched off a board-started run adopts the workspace's own permission mode, whatever its launch recorded. */
-  const permissionsOf = (l: Launch | undefined, standing: StandingDisclosure = 'due'): RunPermissions => (l === undefined || l.disclosure === 'off' || standing === 'off' || workspaceUnattended() ? 'workspace' : 'permissive');
+  const permissionsOf = (l: Launch | undefined): RunPermissions => (l === undefined || l.disclosure === 'off' || standing === 'off' || workspaceUnattended() ? 'workspace' : 'permissive');
   /** The scheduler over the store's current state (REQ-TRACE-478): the base projection supplies the candidates, then the queue is the scheduler's own order and reasons. */
-  const schedule = (base: BoardProjection, standing: StandingDisclosure = 'due') => {
+  const schedule = (base: BoardProjection) => {
     const stamp = now();
     const candidates = base.cards.filter((c) => c.column === 'ready').map((c) => {
       if (!since.has(c.id)) since.set(c.id, stamp);
@@ -148,7 +156,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     // arming — a resume that returns to `ready` provisions and arms — and the queue then called `next` a candidate
     // `claim()` refuses, so nothing started and the slot it held was denied to candidates that could have used it.
     const undisclosed = new Map<ReqId, string>();
-    for (const c of candidates) if (!disclosed(launches.get(c.id), standing)) undisclosed.set(c.id, UNDISCLOSED_REASON(c.id));
+    for (const c of candidates) if (!disclosed(launches.get(c.id))) undisclosed.set(c.id, UNDISCLOSED_REASON(c.id));
     return scheduleQueue({
       candidates, executing: reader.runningRuns().map((r) => ({ id: r.id, unit: r.unit })),
       settings: { ...reader.queue(), stopped }, held, armed, claimed, stalled, undisclosed,
@@ -175,13 +183,17 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
    * takes the disclosure. Answers the reason when nothing could be taken over, for the caller to state as the stall
    * (REQ-TRACE-463); the launch is then kept without a tree, so the claim still refuses it.
    */
-  const recoverLaunch = async (card: BoardCard, disclosure: Launch['disclosure']): Promise<string | undefined> => {
+  const recoverLaunch = async (card: BoardCard, disclosure: Launch['disclosure'], opts: { readonly onlyIfAbsent?: boolean } = {}): Promise<string | undefined> => {
     const id = card.id;
     const prior = launches.get(id);
     const unit = unitOfCard(card);
     if (prior?.worktree !== undefined && prior.unit === unit && existsSync(prior.worktree.path)) { launches.set(id, { ...prior, disclosure }); return undefined; }
     const kept = { action: prior?.action ?? ('release' as const), ...(prior?.instructions === undefined ? {} : { instructions: prior.instructions }) };
     const taken = await takeOverRecorded(id, unit);
+    // The pass's recovery (`onlyIfAbsent`) found no launch before it waited on Git; a queue release that recovered the
+    // card meanwhile recorded the person's disclosure, and an undisclosed launch must not overwrite it (the verifier's
+    // optional finding, repair round 2).
+    if (opts.onlyIfAbsent === true && launches.has(id)) return undefined;
     if (taken?.ok === true) {
       launches.set(id, { unit, disclosure, worktree: taken.value, ...kept });
       log(`requirements: ${id} unit ${unit} takes over its worktree at ${taken.value.path} on ${taken.value.branch} (the tree the store recorded for it, its launch lost since the release; disclosure ${disclosure})`);
@@ -235,18 +247,18 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     log(`requirements: ${id} unit ${unit} provisioned at ${made.value.path} on ${made.value.branch} (disclosure ${disclosure})`);
     return { worktree: { ref: made.value.ref, unit, path: made.value.path, branch: made.value.branch } };
   };
-  const claim = (standing: StandingDisclosure = 'due'): RunClaim | null => {
+  const claim = (): RunClaim | null => {
     if (current === undefined) return null;
-    const out = schedule(current, standing);
+    const out = schedule(current);
     for (const id of out.dispatch) {
       const l = launches.get(id);
       // The invariant defect AP-4 broke: what the scheduler offers, the claim takes. A mismatch is a defect of the
       // scheduler's inputs, so it is logged rather than passed over in silence.
-      if (l?.worktree === undefined || !disclosed(l, standing)) { log(`requirements: the scheduler offered ${id} but its launch is ${l === undefined ? 'absent' : l.worktree === undefined ? 'unprovisioned' : 'undisclosed'}; nothing was claimed for it`, 'warn'); continue; }
+      if (l?.worktree === undefined || !disclosed(l)) { log(`requirements: the scheduler offered ${id} but its launch is ${l === undefined ? 'absent' : l.worktree === undefined ? 'unprovisioned' : 'undisclosed'}; nothing was claimed for it`, 'warn'); continue; }
       const record = recordOf(id);
       if (record === undefined) continue;
       claimed.add(id);
-      return { id, unit: l.unit, worktree: { ref: l.worktree.ref, path: l.worktree.path, branch: l.worktree.branch, baseBranch: l.worktree.baseBranch, baseRevision: l.worktree.baseRevision }, prompt: runPromptFor(record, l.unit, l.instructions), permissions: permissionsOf(l, standing) };
+      return { id, unit: l.unit, worktree: { ref: l.worktree.ref, path: l.worktree.path, branch: l.worktree.branch, baseBranch: l.worktree.baseBranch, baseRevision: l.worktree.baseRevision }, prompt: runPromptFor(record, l.unit, l.instructions), permissions: permissionsOf(l) };
     }
     return null;
   };
@@ -390,7 +402,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
       // first projection is published.
       if (parse !== undefined) {
         const resting = reader.board(input()).cards.filter((card) => card.column === 'ready' && !launches.has(card.id) && !inFlight.has(card.id));
-        await Promise.all(resting.map(async (card) => { const failed = await recoverLaunch(card, 'undisclosed'); if (failed !== undefined) stalled.set(card.id, failed); }));
+        await Promise.all(resting.map(async (card) => { const failed = await recoverLaunch(card, 'undisclosed', { onlyIfAbsent: true }); if (failed !== undefined) stalled.set(card.id, failed); }));
       }
       return rebuild();
     })().finally(() => { refreshing = undefined; });
@@ -419,7 +431,20 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
   const service: DeliveryService = {
     get reaped() { return reaped ?? []; },
     get generation() { return generation; },
-    async handle(command, actor) {
+    async handle(command, actor, disclosure) {
+      // REQ-TRACE-472/478: main's standing disclosure moved since the queue was last published (a permanent acceptance, the
+      // elevation switched, or the first command after a start told the service what the preferences are). The queue is
+      // recomputed under the new value BEFORE the command is answered, and the reply carries the move for channel 10, so
+      // no surface keeps reading a reason the scheduler no longer gives. Nothing is written: the value is main's.
+      const moved = disclosure !== undefined && disclosure !== standing && current !== undefined;
+      if (disclosure !== undefined) standing = disclosure;
+      if (moved) rebuild();
+      const answer = await answerCommand(command, actor);
+      return moved ? { ...answer, changed: { generation, affected: null } } : answer;
+    },
+  };
+  /** The command proper, under the standing disclosure `handle` settled. */
+  async function answerCommand(command: RequirementsCommandPayload, actor: Actor): Promise<DeliveryAnswer> {
       // Part AP — REQ-TRACE-392: the system is the sole actor that places a requirement into a run; a person's copy of a run command is refused.
       if (SYSTEM_ONLY_REQUIREMENTS_COMMANDS.has(command.name) && actor.kind !== 'system') return { value: { ok: false, error: { reason: `${command.name} is the run coordinator's to speak, not a person's; nothing changed.` } } };
       switch (command.name) {
@@ -616,7 +641,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
         }
         case 'requirements.run.claim': {
           await ensure();
-          return { value: claim(command.disclosure ?? 'due') };
+          return { value: claim() };
         }
         case 'requirements.run.started': {
           await ensure();
@@ -673,8 +698,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
           return { value: blockerPayload(command.id) };
         }
       }
-    },
-  };
+  }
   return service;
 }
 

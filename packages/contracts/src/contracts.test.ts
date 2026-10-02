@@ -236,3 +236,17 @@ describe('REQ-CONFIG-259/341: a role edit is held under the scope each field was
     expect(DesktopSaveSchema.safeParse({ roles: { tester: { workspace: { model: 'gpt-4o', scope: 'global' } } } }).success).toBe(false);
   });
 });
+
+describe('the requirements command envelope (REQ-TRACE-472/478)', () => {
+  it('carries main\'s standing disclosure beside the actor, and refuses a value outside due, suppressed and off', async () => {
+    const { WorkspaceServiceRequestSchema } = await import('./process-protocol.js');
+    const base = { kind: 'requirements.command', workspaceRoot: '/ws', command: { name: 'requirements.board', workspace: '/ws' }, actor: { kind: 'system' } };
+    for (const disclosure of ['due', 'suppressed', 'off']) {
+      const parsed = WorkspaceServiceRequestSchema.safeParse({ ...base, disclosure });
+      expect(parsed.success).toBe(true);
+      expect(parsed.data).toMatchObject({ disclosure });
+    }
+    expect(WorkspaceServiceRequestSchema.safeParse(base).success).toBe(true);
+    expect(WorkspaceServiceRequestSchema.safeParse({ ...base, disclosure: 'accepted' }).success).toBe(false);
+  });
+});

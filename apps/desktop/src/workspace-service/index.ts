@@ -256,7 +256,7 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
     case 'requirements.command': {
       if (!open) return { kind: 'refused', code: 'workspace.none', headline: 'Open a workspace before reading its requirements' };
       const { engineFor } = await import('./traceability.js');
-      const r = await deliveryServiceFor(open, { workspaceRoot: req.workspaceRoot, engine: engineFor(clocks, log), clocks, log }).handle(req.command, req.actor);
+      const r = await deliveryServiceFor(open, { workspaceRoot: req.workspaceRoot, engine: engineFor(clocks, log), clocks, log }).handle(req.command, req.actor, req.disclosure);
       return { kind: 'requirements.result', value: r.value, ...(r.changed === undefined ? {} : { changed: r.changed }) };
     }
     // Part AJ

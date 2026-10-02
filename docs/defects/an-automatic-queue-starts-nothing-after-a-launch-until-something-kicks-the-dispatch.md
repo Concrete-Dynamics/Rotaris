@@ -7,8 +7,8 @@ relaunch, a workspace with automatic scheduling on and candidates in `ready` sta
 until a person acts on the board or the queue, or a run ends.
 
 That includes the cards the restart recovery now makes claimable. Since 2026-10-02 the delivery service rebuilds the
-launch of a card resting in `ready` (`recoverLaunch`), and main's claim carries its standing disclosure. A claim would
-therefore take such a card, but no claim is made. `requirements-runs-proof`'s seventh assertion calls `runs.dispatch()`
+launch of a card resting in `ready` (`recoverLaunch`), and main stamps its standing disclosure on every command it sends
+the service. The queue therefore names such a card `next`, and a claim would take it, but no claim is made. `requirements-runs-proof`'s seventh assertion calls `runs.dispatch()`
 itself, standing in for the kick. The built app has no such kick at launch.
 
 Noticed while repairing `a-card-resting-in-ready-across-a-restart-can-never-be-started.md` (bundle `fin7-queue-and-roles`,

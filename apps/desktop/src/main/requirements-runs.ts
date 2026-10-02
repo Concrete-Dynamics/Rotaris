@@ -36,6 +36,8 @@ export interface RequirementsRuns {
   /** Claims and starts every dispatch the scheduler offers now; serialised, so two kicks never start one claim twice. */
   dispatch(): Promise<DispatchReport>;
   live(): readonly LiveBoardRun[];
+  /** REQ-TRACE-472: what the two preferences make of a launch nobody disclosed; stamped on every requirements command main sends the service (this coordinator's and the relay's). */
+  standingDisclosure(): StandingDisclosure;
   /**
    * REQ-TRACE-464: closing the application ends the board's runs rather than orphaning them — as the application's quit,
    * which brings each to rest by `quit` (PD-ORCH-005 clauses 3 and 15). Best effort, bounded.
@@ -66,7 +68,7 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
   let dispatching: Promise<DispatchReport> | undefined;
 
   const ask = async (root: string, command: RequirementsCommandPayload, bound: Millis = BOUND_SERVICE): Promise<{ readonly value: unknown; readonly changed?: { readonly generation: number; readonly affected: readonly ReqId[] | null } } | { readonly refused: string }> => {
-    const pending = deps.service(root, { kind: 'requirements.command', workspaceRoot: root, command: { ...command, workspace: root }, actor: { kind: 'system' } }, bound);
+    const pending = deps.service(root, { kind: 'requirements.command', workspaceRoot: root, command: { ...command, workspace: root }, actor: { kind: 'system' }, disclosure: standingDisclosure() }, bound);
     if (pending === undefined) return { refused: 'The workspace service is not running' };
     let r: ProcessReply;
     try { r = await pending; } catch (e) { return { refused: e instanceof Error ? e.message : String(e) }; }
@@ -80,8 +82,9 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
 
   /**
    * REQ-TRACE-472: what the two preferences make of a launch nobody disclosed — `off` with the elevation switched off,
-   * `suppressed` once accepted permanently, else `due`. Sent on every claim, because the service cannot read them and a
-   * launch it recovered after a restart is recorded undisclosed.
+   * `suppressed` once accepted permanently, else `due`. Stamped on every command main sends the service, because the
+   * service cannot read them, a launch it recovered after a restart is recorded undisclosed, and the queue it publishes
+   * must read the same value its claim does (REQ-TRACE-478).
    */
   const standingDisclosure = (): StandingDisclosure => (!deps.preferences.read('requirements/fullPermissionRuns') ? 'off' : deps.preferences.read('requirements/fullPermissionNoticeSuppressed') ? 'suppressed' : 'due');
 
@@ -125,7 +128,7 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
       if (root === undefined || workspaceId === undefined) return { started, abandoned };
       // Bounded by the scheduler: a claim comes back only while a slot is free and a disclosed launch is next (REQ-TRACE-478/481/483).
       for (let guard = 0; guard < 64; guard += 1) {
-        const c = await ask(root, { name: 'requirements.run.claim', workspace: root, disclosure: standingDisclosure() });
+        const c = await ask(root, { name: 'requirements.run.claim', workspace: root });
         if ('refused' in c) { deps.log(`requirements: no claim (${c.refused})`); break; }
         const claim = c.value as RunClaim | null;
         if (claim === null) break;
@@ -195,6 +198,10 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
         case 'suppress': {
           // REQ-TRACE-472: accepting permanently suppresses the disclosure in subsequent launches; settings can switch the behaviour off (`fullPermissionRuns`).
           await deps.preferences.write('requirements/fullPermissionNoticeSuppressed', command.suppressed ?? true);
+          // REQ-TRACE-478: the queue the service published was computed under the standing disclosure before this
+          // acceptance; a board read carries the new one, and the service answers it with the move for channel 10.
+          const told = await ask(root, { name: 'requirements.board', workspace: root });
+          if ('refused' in told) deps.log(`requirements: the service was not told the disclosure is now ${standingDisclosure()} (${told.refused})`);
           return { ok: true, value: { suppressed: command.suppressed ?? true } };
         }
         case 'live':
@@ -202,6 +209,7 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
       }
     },
     dispatch,
+    standingDisclosure,
     live: () => [...runs.entries()].map(([sessionId, l]) => ({ sessionId, id: l.id, unit: l.unit, waitingOnPerson: l.waiting, permissions: l.permissions })),
     /**
      * REQ-TRACE-464 ("Closing the application SHALL cancel the run rather than leave it orphaned") and REQ-TRACE-469

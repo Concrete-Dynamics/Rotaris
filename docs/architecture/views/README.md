@@ -104,6 +104,12 @@ first parse that failed used it up; it now runs on every pass that parses. Secon
 no way to learn main's preferences. Main's coordinator now sends its standing disclosure (`due`, `suppressed`, `off`) on
 `requirements.run.claim`, a new optional field of that command. `requirements-runs-proof`'s seventh assertion shows it.
 The **sequences view**'s board section says so. No package, edge, process, message kind, channel or store column changed.
+**Corrected in a second round the same day:** sent on the claim alone, the value split the scheduler, and the queue the
+board published still asked for a disclosure the claim no longer needed. The field moved off `requirements.run.claim`
+onto the `requirements.command` envelope, beside the actor, stamped by main's relay and its coordinator on every command;
+the service holds the last value and schedules the published queue, the preview and the claim under it. The **process
+view**'s requirements contracts and the **sequences view**'s board section say so. No package, edge, process, message
+kind, channel or store column changed.
 
 **A unit's worktree is provisioned once, and a later start of the same unit takes it over (REQ-TRACE-464,
 REQ-GIT-140).** The delivery service's `beforeCommit` takes over the tree of the launch it holds when that launch is

@@ -1150,3 +1150,13 @@ coordinator sends its standing disclosure (`StandingDisclosure`: `due`, `suppres
 `requirements.run.claim`. The service treats an undisclosed launch as disclosed when that is not `due`, and gives the run
 the workspace's own mode when it is `off`. `requirements-runs-proof`'s seventh assertion shows it. Nothing dispatches
 when the application launches, so the pick-up waits for the first kick; that gap is recorded as its own defect note.
+
+**The verifier falsified "on every `requirements.run.claim`" in a second round, kept above as written.** Sent on the
+claim alone, the standing disclosure split the scheduler in two: the queue the board published was still computed as
+if the disclosure were `due`, and called "deferred, open it to see the disclosure" a card the next claim took with the
+disclosure suppressed (REQ-TRACE-478, REQ-TRACE-472). Now main stamps the value on every `requirements.command`
+envelope it sends, beside the actor, from the relay and the coordinator alike; the claim command carries no field of
+its own. The service holds the last value it received and schedules the published queue, the launch preview and the
+claim under it; a command whose value moved republishes the queue before answering and its reply carries `changed`. A
+permanent acceptance reads the board at once, so the service learns of it without waiting for another act. The seventh
+assertion now also requires the published entry to read `next` before the dispatch.

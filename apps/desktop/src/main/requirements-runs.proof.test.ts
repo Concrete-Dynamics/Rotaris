@@ -59,9 +59,10 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
     }
     return { kind: 'ack' };
   };
-  const board = async (): Promise<BoardProjection> => (await delivery.handle({ name: 'requirements.board', workspace: workspaceRoot }, USER)).value as BoardProjection;
+  // A person's reads and acts arrive through main's relay, which stamps the coordinator's standing disclosure beside the actor (REQ-TRACE-472/478).
+  const board = async (): Promise<BoardProjection> => (await delivery.handle({ name: 'requirements.board', workspace: workspaceRoot }, USER, runs.standingDisclosure())).value as BoardProjection;
   const act = async (id: ReqId, action: 'release' | 'resume', payload?: Readonly<Record<string, string>>): Promise<{ readonly ok: boolean; readonly value?: TransitionOutcome; readonly error?: Refusal }> =>
-    (await delivery.handle({ name: 'requirements.act', workspace: workspaceRoot, id, action, ...(payload === undefined ? {} : { payload }) }, USER)).value as { ok: boolean; value?: TransitionOutcome; error?: Refusal };
+    (await delivery.handle({ name: 'requirements.act', workspace: workspaceRoot, id, action, ...(payload === undefined ? {} : { payload }) }, USER, runs.standingDisclosure())).value as { ok: boolean; value?: TransitionOutcome; error?: Refusal };
 
   /** The workspace service and main's coordinator as a start builds them; the restart assertion builds a second pair over the same store. */
   let start: (prefs?: { readonly suppressed?: boolean }) => void = () => undefined;
@@ -83,7 +84,7 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
           if (request.kind !== 'requirements.command') return Promise.resolve({ kind: 'refused', code: 'proof.unexpected', headline: `unexpected request ${request.kind}` } as ProcessReply);
           expect(root).toBe(workspaceRoot);
           expect(request.actor).toEqual({ kind: 'system' });
-          return delivery.handle(request.command, request.actor).then((answer): ProcessReply => {
+          return delivery.handle(request.command, request.actor, request.disclosure).then((answer): ProcessReply => {
             serviceCalls.push({ name: request.command.name, value: answer.value });
             return { kind: 'requirements.result', value: answer.value, ...(answer.changed === undefined ? {} : { changed: answer.changed }) };
           });
@@ -236,7 +237,7 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
    */
   it('a card resting in ready across a restart is disclosed and started from the queue, on the worktree its release provisioned', async () => {
     const worktreesOf = (id: string): string[] => execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd: workspaceRoot }).toString().split(/\n/).filter((l) => l.startsWith(`branch refs/heads/rotaris/req/${id.toLowerCase()}/`));
-    await delivery.handle({ name: 'requirements.queue.set', workspace: workspaceRoot, stop: true }, USER);
+    await delivery.handle({ name: 'requirements.queue.set', workspace: workspaceRoot, stop: true }, USER, runs.standingDisclosure());
     const released = await act('REQ-106', 'release', { disclosure: 'accepted' });
     expect(released.ok, released.error?.reason).toBe(true);
     expect(released.value!.to).toBe('ready');
@@ -256,7 +257,7 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
     expect(waiting.reason).toMatch(/have not been disclosed and accepted/);
     expect((await runs.dispatch()).started).toEqual([]);
     // "Disclose and start": the queue's release with the accepted disclosure, as the pane sends it.
-    const set = await delivery.handle({ name: 'requirements.queue.set', workspace: workspaceRoot, release: 'REQ-106', disclosure: 'accepted' }, USER);
+    const set = await delivery.handle({ name: 'requirements.queue.set', workspace: workspaceRoot, release: 'REQ-106', disclosure: 'accepted' }, USER, runs.standingDisclosure());
     expect((set.value as BoardProjection['queue']).entries.find((e) => e.id === 'REQ-106')!.state).toBe('next');
     const report = await runs.dispatch();
     expect(report.abandoned).toEqual([]);
@@ -275,8 +276,10 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
    * The verifier's second finding on the same note (REQ-TRACE-472/482). The concurrency assertion's third release rests in
    * `ready` with its tree, through the restart above and one more. Its launch is rebuilt undisclosed, because the service
    * cannot read the preferences. Meanwhile the person has accepted the disclosure permanently, and the workspace schedules
-   * automatically. Main's coordinator sends the standing disclosure on its claim, so the scheduler picks the card up with
-   * no release. The run begins, elevated, on the tree its release provisioned.
+   * automatically. Main stamps its standing disclosure on every command it sends the service, so the queue the board
+   * publishes names the card next (repair round 2: it read "deferred … open it to see the disclosure" while the claim
+   * took it, REQ-TRACE-478) and the scheduler picks it up with no release. The run begins, elevated, on the tree its
+   * release provisioned.
    */
   it('a card resting in ready is picked up by automatic scheduling after a restart once the disclosure is suppressed permanently, on its recorded tree', async () => {
     const id = (results['concurrency'] as { deferred: ReqId }).deferred;
@@ -285,12 +288,16 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
     expect(existsSync(tree)).toBe(true);
     expect((await board()).cards.find((c) => c.id === id)!.column).toBe('ready');
     // REQ-TRACE-480: automatic scheduling is written into the workspace configuration, so the relaunch reads it.
-    await delivery.handle({ name: 'requirements.queue.set', workspace: workspaceRoot, automatic: true }, USER);
+    await delivery.handle({ name: 'requirements.queue.set', workspace: workspaceRoot, automatic: true }, USER, runs.standingDisclosure());
     const requestsBefore = hostRequests.length;
     start({ suppressed: true });
     const before = await board();
     expect(before.queue.automatic).toBe(true);
     expect(before.cards.find((c) => c.id === id)!.column).toBe('ready');
+    // REQ-TRACE-478: the queue a person reads is the scheduler's own — the card it takes next, with no disclosure asked for.
+    const entry = before.queue.entries.find((e) => e.id === id);
+    expect(entry).toMatchObject({ state: 'next' });
+    expect(entry?.reason).toBeUndefined();
     const report = await runs.dispatch();
     expect(report.abandoned).toEqual([]);
     expect(report.started.map((s) => s.id)).toContain(id);
@@ -302,6 +309,6 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
     const card = (await board()).cards.find((c) => c.id === id)!;
     expect(card.column).toBe('running');
     expect(card.run?.unit).toBe('u1');
-    results.restartAutomatic = { id, started: report.started.map((s) => s.id), worktree: tree, worktreesForUnit: worktreesOf(id).length, permissions: 'permissive' };
+    results.restartAutomatic = { id, entryBefore: entry, started: report.started.map((s) => s.id), worktree: tree, worktreesForUnit: worktreesOf(id).length, permissions: 'permissive' };
   });
 });

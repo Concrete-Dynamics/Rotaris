@@ -1194,10 +1194,12 @@ answers reachable and the plan the largest part of the gate (REQ-ORCH-153, PD-OR
 view's own `reauth` row for the followed session alone (REQ-NOTIFY-030, OQ-181). `auth-fallback-dialog` (driven,
 `fail:401:only=scripted+scripted-b`) follows the fallback refused too: the second failure opens the dialog naming beta,
 the prompt is closed as it opens (REQ-NOTIFY-079), neither alpha — the automatic fallback's primary — nor beta is offered
-(REQ-NOTIFY-068), and the run completes on gpt-4o.
+(REQ-NOTIFY-068), and the run completes on gpt-4o. `auth-fallback-revise` (driven, plan mode) fails a **revise** cycle's
+turn on a first 401 and reads the restart relaunch the same revise on beta — cycle 2 with the changes stated, no prompt
+re-submitted, the gate reading "You asked for: …" (REQ-ORCH-154, the fourth repair round's `relaunchAfterAuthFailure`).
 **What the 401 recovery does not do:** a device-code or browser provider is told its method is not provided by this build,
 the sign-in flows being owed (REQ-NOTIFY-076's second branch,
-[note](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).
+[note](../defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).
 
 **A probe is a deadline, not an appointment (2026-09-12).** Three of this proof's assertions were mid-run DOM probes
 fired at a fixed instant — `.wait-header@1700` — and they failed intermittently on a busy machine with nothing wrong

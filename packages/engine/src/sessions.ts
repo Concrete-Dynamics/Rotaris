@@ -365,6 +365,28 @@ interface Live {
    * closed its ports. Which of a parked run's ports a park or a continue should close is OQ-170's.
    */
   readonly portsOpen: Set<Run>;
+  /**
+   * REQ-ORCH-154 with REQ-NOTIFY-070/074/076: the plan decision that launched a run of this session, kept with the run it
+   * launched, so an authentication restart of that run relaunches the same decision (`relaunchAfterAuthFailure`). Read
+   * only while that run is the session's last: any other launch replaces `run`, and the record no longer matches.
+   */
+  planLaunch?: PlanDecisionLaunch | undefined;
+}
+
+/**
+ * REQ-ORCH-154: what a plan decision launched a run to do — approve carrying the plan as the user left it (their edit
+ * where they edited it), revise starting a further cycle with the plan as it stood and the changes they stated — and the
+ * run it launched. In memory with that run: a restart is only ever asked of the process that ran it, since main's focus
+ * gate and the run host's `failedEntryModel` both live there too.
+ */
+interface PlanDecisionLaunch {
+  readonly run: Run;
+  readonly decision: 'approve' | 'revise';
+  /** The cycle the decision settled. */
+  readonly cycle: number;
+  /** The plan as it stood when the decision was taken: the user's edit where they edited it, else the verbatim plan. */
+  readonly plan: string;
+  readonly changes: string;
 }
 
 /**
@@ -2195,6 +2217,61 @@ export class Sessions {
   }
 
   /**
+   * REQ-NOTIFY-070 / REQ-NOTIFY-074 / REQ-NOTIFY-076 with REQ-ORCH-154 — an authentication restart relaunches what the failed
+   * run was launched to do, on the model the caller has just pinned (or, after a re-authentication, on the same one). A run
+   * a plan decision launched is relaunched as that decision (`relaunchPlanDecision`): approve carries the plan as the user
+   * left it again, and revise starts the same further cycle — its number, the changes stated, the plan as it stood — and
+   * nothing is re-submitted, since a decision is no prompt. Any other run re-submits the session's last prompt
+   * (`promptHeld`, OQ-180's reading). `beginning` runs once every refusal has passed, just before the launch.
+   *
+   * Until 2026-10-02's fourth repair round every restart took the second path, so a revise cycle that failed on a first 401
+   * came back as a fresh cycle from the original prompt, the changes stated and the plan they revised dropped (and an
+   * approved plan's edit with them).
+   */
+  private relaunchAfterAuthFailure(s: Live, sessionId: SessionId, lastPrompt: string, hold: HoldSlot, beginning: () => void): Result<void, { code: string; reason: string }> {
+    const decided = s.planLaunch;
+    if (decided !== undefined && s.run !== null && decided.run === s.run) return this.relaunchPlanDecision(s, sessionId, decided, hold, beginning);
+    const restarted = this.promptHeld(sessionId, lastPrompt, [], hold, beginning);
+    return restarted.ok ? ok(undefined) : err(restarted.error);
+  }
+
+  /**
+   * REQ-ORCH-154: the decision `decided` launched again — `planDecisionHeld`'s launch with the same payload section and the
+   * same cycle override, and the gate it settled left settled (approve's release stands). Refused, writing nothing, on the
+   * refusals that launch shares with a prompt's.
+   */
+  private relaunchPlanDecision(s: Live, sessionId: SessionId, decided: PlanDecisionLaunch, hold: HoldSlot, beginning: () => void): Result<void, { code: string; reason: string }> {
+    const storeFailure = storeFailureOf(s.dal, s.writer);
+    if (storeFailure !== null) return err({ code: 'store-failed', reason: `The workspace store requires recovery before continuing work: ${storeFailure}` });
+    if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
+    const stored = s.dal.getSession(sessionId);
+    if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
+    const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, false));
+    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
+    const gone = missingWorktree(stored);
+    if (gone) return err(gone);
+    const todo = parseTodoDocument(stored);
+    if (!todo.ok) return err(todo.error);
+    // ADR-0005: the lock is taken back before the first write, and the run launched below holds it.
+    const held = this.holdForContinue(s);
+    if (!held.ok) return err(held.error);
+    hold.release = held.value.release;
+    const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((r) => r.kind === 'user')?.body ?? stored.session_id;
+    const payload = `${buildContinuationPayload(s.dal, stored, lastPrompt, todo.value)}\n\n${planSection(decided.decision, decided.plan, decided.changes)}`;
+    beginning();
+    /*
+     * The decision's own launch appends no task: the held run's todo carries the gated work (REQ-ORCH-004 / OQ-104). Its
+     * relaunch lets the todo decide (`restatesUnfinished`): after a failed revise cycle — which takes up no task — the work
+     * is still pending and nothing is appended; after a failed approved run, whose iteration abandoned the task
+     * (REQ-ORCH-074), the request is appended again so the plan is carried out, as a re-submitted prompt's is (OQ-180).
+     */
+    this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, [], decided.decision === 'revise' ? { cycle: decided.cycle + 1, changes: decided.changes } : undefined, { message: null }, true);
+    // The relaunched run is the decision's now: a further authentication restart of it relaunches the same decision again.
+    if (s.run !== null) s.planLaunch = { ...decided, run: s.run };
+    return ok(undefined);
+  }
+
+  /**
    * REQ-NOTIFY-070 / REQ-MONITOR-147 / REQ-SESSION-026: the authentication recovery's automatic half. The session's last
    * run ended on its root's model call failing authentication; main classified the failure (REQ-NOTIFY-060/067) and asks
    * for this. The configured `fallback_model` (REQ-CONFIG-067) is pinned as the session's model override, keyed by the
@@ -2243,7 +2320,7 @@ export class Sessions {
     // leaves no row claiming one; where the restart fails after it (the user row's own write), a row says so.
     let announced = false;
     const hold: HoldSlot = {};
-    const restarted = this.promptHeld(sessionId, lastPrompt, [], hold, () => {
+    const restarted = this.relaunchAfterAuthFailure(s, sessionId, lastPrompt, hold, () => {
       announced = s.writer.appendRow('system', `Authentication failed on ${from.provider}/${from.model}. The run restarts on the fallback model ${fallbackKey} (${to.provider}/${to.model}), which stays in use for this session.`, true).ok;
     });
     if (!restarted.ok) {
@@ -2374,7 +2451,7 @@ export class Sessions {
     if (lastPrompt.trim() === '') return err({ code: 'no-prompt', reason: 'No prompt is recorded for this session.' });
     const hold: HoldSlot = {};
     if (modelKey === null) {
-      const restarted = this.promptHeld(sessionId, lastPrompt, [], hold, () => {
+      const restarted = this.relaunchAfterAuthFailure(s, sessionId, lastPrompt, hold, () => {
         s.writer.appendRow('system', 'Re-authenticated after the authentication failure; the run restarts with the same prompt.', true);
       });
       if (!restarted.ok) { hold.release?.(); return err({ code: 'restart-failed', reason: restarted.error.reason }); }
@@ -2398,7 +2475,7 @@ export class Sessions {
     if (memory.clearOverride(to.provider, to.model)) s.writer.appendTimeline('model_override', 'user', `${modelKey} (${to.provider}/${to.model}) was chosen in the recovery dialog; the pin that replaced it is taken back.`, { provider: to.provider, model: to.model, cleared: true, cause: 'authentication' });
     memory.setOverride(from.provider, from.model, { key: modelKey, choice: withSettings(catalogue, resolved.choice) });
     s.writer.appendTimeline('model_override', 'user', `Authentication failed on ${from.provider}/${from.model}; ${modelKey} (${to.provider}/${to.model}), chosen in the recovery dialog, is pinned for the rest of the session and the run restarts with the same prompt.`, { provider: from.provider, model: from.model, model_key: modelKey, to_provider: to.provider, to_model: to.model, cause: 'authentication' });
-    const restarted = this.promptHeld(sessionId, lastPrompt, [], hold, () => {
+    const restarted = this.relaunchAfterAuthFailure(s, sessionId, lastPrompt, hold, () => {
       s.writer.appendRow('system', `Authentication failed on ${from.provider}/${from.model}. The run restarts on ${modelKey} (${to.provider}/${to.model}), which stays in use for this session.`, true);
     });
     if (!restarted.ok) {
@@ -2510,6 +2587,8 @@ export class Sessions {
     // a hold that followed a resumed iteration (PD-ORCH-003 revision 2) that todo also carries the continue's message,
     // complete, or pending and taken up first.
     this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, [], decision === 'revise' ? { cycle: cycle + 1, changes } : undefined, { message: null }, false);
+    // REQ-ORCH-154 with REQ-NOTIFY-070/074/076: what this run was launched to do, for an authentication restart of it.
+    if (s.run !== null) s.planLaunch = { run: s.run, decision, cycle, plan: text, changes };
     return ok({ relaunched: true, cycle });
   }
 

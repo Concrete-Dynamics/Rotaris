@@ -12,9 +12,10 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
  * (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..093/263), and since OQ-173 that a wait the run imposes is not a stall
  * (REQ-MONITOR-117..119), and since OQ-177 that an entry switch after a ladder move applies as its row says (REQ-MONITOR-142).
- * Sixteen scenarios (since 2026-10-02 the authentication class's: `fatal` and `reauth` the recovery dialog's, `generic`
+ * Seventeen scenarios (since 2026-10-02 the authentication class's: `fatal` and `reauth` the recovery dialog's, `generic`
  * REQ-NOTIFY-064's notice, `auth-fallback` the first failure's automatic fallback and its re-authentication prompt,
- * `auth-fallback-dialog` the two together), each asserting the store's events, issues,
+ * `auth-fallback-dialog` the two together, `auth-fallback-revise` a failed revise cycle restarted as the same revise), each
+ * asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
  *
@@ -898,6 +899,62 @@ await scenarioRun('auth-fallback-dialog', async () => {
   expect(overrides.some((o) => o.provider === 'scripted' && o.model === 'alpha' && o.model_key === 'beta' && o.cause === 'authentication')
     && overrides.some((o) => o.provider === 'scripted-b' && o.model === 'beta' && o.model_key === 'gpt-4o' && o.cause === 'authentication'), `the two pins are not recorded: ${JSON.stringify(overrides)}`);
   results.authFallbackDialog = { status: row.execution_status, calls, dialog: { title: v.dialog.title, models: keys }, promptWhileOpen: v.promptWhileOpen, overrides, png: r.png, elapsedMs: r.elapsedMs };
+});
+
+// 13. `auth-fallback-revise` — REQ-ORCH-154 with REQ-NOTIFY-070 (the fourth repair round's blocking finding): a revise cycle
+// whose turn fails on a first 401 is restarted on the fallback AS THE SAME REVISE — the changes the user stated and the plan
+// they revised reach the fallback, the cycle is the revise's, and no prompt is re-submitted. Plan mode, `fallback_model:
+// beta`. Cycle 1 runs on alpha (`scripted`) and parks; the gate's changes field is filled and Revise pressed with alpha's
+// provider swapped to `deepseek` in the workspace's agents.yaml first (a run reads the configuration at its start, ADR-0037),
+// so the revise cycle's call is refused (`fail:401:only=deepseek`) — a key revoked between the cycle and the revise, made
+// reproducible — and the restart's call on beta answers. Driven, because the gate's changes and its Revise are clicked.
+const s12 = scenario('auth-fallback-revise', ['  run_start_mode: plan'], { fallback: 'beta' });
+await scenarioRun('auth-fallback-revise', async () => {
+  const CHANGES = 'USE-THE-ZEBRA-LIBRARY';
+  const r = await drivenLaunch('auth-fallback-revise', s12, { ROTARIS_SCRIPT: 'fail:401:only=deepseek' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    await step('the first-launch notice', until(() => d.probe('.notice-slot'), (found) => Array.isArray(found) && /No model provider is authenticated yet/.test(found[0]?.text ?? ''), { timeoutMs: 30_000, what: 'the first-launch notice', signal }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('plan the thing', { enter: true }));
+    await step('cycle 1 at the gate', d.waitFor('[data-testid="plan-gate-plan"]', { timeoutMs: 60_000 }));
+    // alpha's provider refuses from now on: the revise cycle's call is alpha's, on `deepseek`.
+    const yaml = join(s12.workspace, '.rotaris', 'agents.yaml');
+    writeFileSync(yaml, readFileSync(yaml, 'utf8').replace('alpha: { provider: scripted, model_id: alpha }', 'alpha: { provider: deepseek, model_id: alpha }'));
+    await step('the changes field opened', d.click('.plan-gate__changes-summary'));
+    await step('the changes field', d.waitFor('#plan-gate-changes', { timeoutMs: 10_000 }));
+    await step('the changes field focused', d.click('#plan-gate-changes'));
+    await step('the changes typed', d.type(CHANGES));
+    await step('Revise', d.click('[data-testid="plan-revise"]'));
+    // The restarted revise parks at cycle 2, the gate drawn again with the changes it was asked for.
+    const prior = await step('cycle 2 at the gate', until(() => d.eval(`document.querySelector('[data-testid="plan-gate-prior"]')?.textContent ?? null`), (t) => typeof t === 'string' && t.includes(CHANGES), { timeoutMs: 90_000, what: 'the restarted revise at the gate', signal }));
+    const prompt = await step('the prompt beside it', until(() => d.eval(`document.querySelector('[data-testid="reauth-prompt"]')?.getAttribute('data-session') ?? null`), (v) => typeof v === 'string', { timeoutMs: 15_000, what: 'the re-authentication prompt', signal }));
+    const windows = await step('no recovery window', recoveryWindows(d));
+    return { prior, prompt, windows };
+  });
+  const db = open(s12);
+  const row = session(db);
+  const cycles = db.prepare('SELECT cycle, changes, plan FROM plan_cycles WHERE session_id = ? ORDER BY cycle').all(row.session_id);
+  const users = db.prepare("SELECT body FROM transcript_rows WHERE session_id = ? AND kind = 'user' ORDER BY row_index").all(row.session_id).map((u) => u.body);
+  const overrides = names(db, row.session_id).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata));
+  const rows = systemRows(db, row.session_id);
+  db.close();
+  const v = r.value;
+  const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator').map((c) => c.model);
+  expect(row.execution_status === 'awaiting_plan_decision', `the restarted revise did not park at the gate: ${JSON.stringify(row)}`);
+  expect(JSON.stringify(calls) === JSON.stringify(['scripted/alpha', 'deepseek/alpha', 'scripted-b/beta']), `the calls are not cycle 1 on alpha, the revise refused on alpha, the restart on beta: ${JSON.stringify(calls)}`);
+  // REQ-ORCH-154: the restarted cycle is the revise's — cycle 2, the changes stated — and its plan is the fallback's.
+  expect(cycles.length === 2 && cycles[0].cycle === 1 && cycles[0].changes === '' && cycles[1].cycle === 2 && cycles[1].changes === CHANGES, `the restart was not the same revise: ${JSON.stringify(cycles)}`);
+  expect(v.prior.includes(CHANGES), `the gate does not show the changes the restarted cycle was asked for: ${v.prior}`);
+  // A decision is no prompt: nothing re-submitted.
+  expect(users.length === 1 && users[0] === 'plan the thing', `the restart re-submitted a prompt: ${JSON.stringify(users)}`);
+  expect(overrides.some((o) => o.provider === 'deepseek' && o.model === 'alpha' && o.model_key === 'beta' && o.cause === 'authentication'), `the fallback was not pinned for the pair that failed: ${JSON.stringify(overrides)}`);
+  expect(rows.some((b) => b.startsWith('Authentication failed on deepseek/alpha') && b.includes('beta')), `no row names the restart on the fallback: ${rows.join(' | ')}`);
+  // REQ-NOTIFY-070/071: the restart's prompt beside the gate, and no recovery dialog for a first failure with a usable fallback.
+  expect(v.prompt === row.session_id && v.windows.length === 0 && !/authentication recovery: the dialog is open for session/.test(r.log), `the first failure did not take the automatic fallback alone: ${JSON.stringify({ prompt: v.prompt, windows: v.windows })}`);
+  results.authFallbackRevise = { status: row.execution_status, calls, cycles: cycles.map((c) => ({ cycle: c.cycle, changes: c.changes })), users, prior: v.prior, png: r.png, elapsedMs: r.elapsedMs };
 });
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify({ ...results, ...(only === null ? {} : { only }), failures }, null, 2)}\n`);

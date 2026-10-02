@@ -320,7 +320,7 @@ what this execution proves.
 
 ## Sixth execution — 2026-10-02, the session-wide override taken by a second writer (REQ-NOTIFY-070, REQ-SESSION-026)
 
-*The 401 note's part A ([`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).
+*The 401 note's part A ([`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../../defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).
 Found nothing wrong with the mechanism; it gained a writer and a way to take a pin back.*
 
 The third execution's session-wide memory (`ResilienceMemory`, persisted as `model_override` timeline entries and replayed
@@ -344,4 +344,13 @@ on the fallback — `restartOnFallback` refused it as "no model call failing" an
 verifier's reproduction in the built app). The run's last failure and the failed model are now recorded together in one
 place for every root turn (`Run.recordRootModelFailure`, called by `iterate` and by `parkAtPlanGate`); the restarted plan
 cycle runs on the fallback and parks at the gate. Pinned by the REQ-ORCH-153 case in `ladder.test.ts` (red before) and
-shown by `auth-fallback`'s plan-mode launch.
+shown by `auth-fallback`'s plan-mode launch. *Corrected again 2026-10-02 (the fourth repair round):* "the restarted plan
+cycle runs on the fallback" held for a first cycle alone. The repair above also made a **revise** cycle's failed turn
+restartable, and the restart re-submitted the last user row, so the revise came back as a fresh cycle from the original
+prompt with its changes and the plan it revised dropped (the verifier's reproduction). The pin was right; what the
+restart launched was not. A restart now relaunches what the failed run was launched to do
+(`Sessions.relaunchAfterAuthFailure`): a run a plan decision launched as the same decision, any other by re-submitting
+the prompt. The recovery dialog's restart (`Sessions.restartAfterAuthFailure`, merged beside this the same day) is a third
+writer of the session-wide override (`cause: authentication`, by the user's choice) and shares the relaunch. Pinned by the
+REQ-ORCH-154 cases in `ladder.test.ts` (red before) and shown by `resilience-proof`'s `auth-fallback-revise` (red on a
+build of the code before, green after).

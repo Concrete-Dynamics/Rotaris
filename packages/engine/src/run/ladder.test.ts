@@ -1075,6 +1075,101 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'model_override')!.metadata)).toMatchObject({ provider: 'a', model: 'a1', model_key: 'f1', cause: 'authentication' });
     });
 
+    /*
+     * REQ-ORCH-154 with REQ-NOTIFY-070/074: a plan decision launches a run carrying more than the last prompt — revise "starts
+     * a further plan cycle with the plan as it currently stands and the changes stated", approve carries the plan as the
+     * user left it (edited where they edited it). A restart after that run's first 401 relaunches the same decision on the
+     * model just pinned: the plan, the changes and the cycle reach the fallback, and no prompt is re-submitted, since a
+     * decision is no prompt. Re-submitting the last user row instead opened a fresh cycle from the original prompt and
+     * dropped both (the fourth repair round's blocking finding).
+     */
+    const planned = (script: (turn: number) => ScriptedCall) => {
+      const h = sessionsWith((_p, turn) => script(turn), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' }, runStartMode: 'plan' });
+      const sid = (h.sessions.start(dal, 'C:/ws', 'plan the thing') as { value: SessionId }).value;
+      return { ...h, sid };
+    };
+    const users = (sid: SessionId) => dal.residentRows(sid).filter((r) => r.kind === 'user').map((r) => r.body);
+    const taskStates = (sid: SessionId) => (JSON.parse(dal.getSession(sid)!.todo ?? '{"phases":[]}') as { phases: { tasks: { state: string }[] }[] }).phases.flatMap((p) => p.tasks.map((t) => t.state));
+
+    it('REQ-ORCH-154: a revise cycle that fails on a first 401 is restarted as the same revise — the stated changes and the plan they revise reach the fallback', async () => {
+      const { sessions, client, sid } = planned((turn) => (turn === 1 ? answer('1. Original plan.') : turn === 2 ? failing(unauthorized()) : answer('1. Revised plan on the fallback.')));
+      await sessions.running(sid)!;
+      expect(dal.getSession(sid)!.execution_status).toBe('awaiting_plan_decision');
+      expect(sessions.planDecision(sid, 'revise', 'USE-THE-ZEBRA-LIBRARY')).toEqual({ ok: true, value: { relaunched: true, cycle: 1 } });
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1']);
+      const restarted = sessions.restartOnFallback(sid);
+      if (!restarted.ok) throw new Error(`${restarted.error.code}: ${restarted.error.reason}`);
+      await sessions.running(sid)!;
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1', 'f1']);
+      const sent = JSON.stringify(client.requests[2]!.messages);
+      expect(sent).toContain('USE-THE-ZEBRA-LIBRARY');
+      expect(sent).toContain('1. Original plan.');
+      // The revise's own cycle, parked at the gate with the fallback's plan and the changes it was asked for.
+      expect(dal.getSession(sid)!.execution_status).toBe('awaiting_plan_decision');
+      expect(dal.planCyclesOf(sid).map((c) => ({ cycle: c.cycle, changes: c.changes, plan: c.plan }))).toEqual([
+        { cycle: 1, changes: '', plan: '1. Original plan.' },
+        { cycle: 2, changes: 'USE-THE-ZEBRA-LIBRARY', plan: '1. Revised plan on the fallback.' },
+      ]);
+      // A decision is no prompt: nothing is re-submitted, and a row says the run restarted on the fallback.
+      expect(users(sid)).toEqual(['plan the thing']);
+      expect(dal.residentRows(sid).some((r) => r.kind === 'system' && /^Authentication failed on a\/a1\. The run restarts on the fallback model f1/.test(r.body))).toBe(true);
+      // Approving the revised plan carries the work out once, on the fallback: the request was never abandoned or doubled.
+      expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1', 'f1', 'f1']);
+      expect(JSON.stringify(client.requests[3]!.messages)).toContain('1. Revised plan on the fallback.');
+      expect(taskStates(sid)).toEqual(['complete']);
+    });
+
+    it('REQ-ORCH-154: an approved plan whose run fails on a first 401 is restarted as the same approval — the plan as the user edited it reaches the fallback', async () => {
+      const { sessions, client, sid } = planned((turn) => (turn === 1 ? answer('1. Original plan.') : turn === 2 ? failing(unauthorized()) : answer('carried out on the fallback')));
+      await sessions.running(sid)!;
+      expect(sessions.planEdit(sid, '1. THE-EDITED-STEP.').ok).toBe(true);
+      expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      const restarted = sessions.restartOnFallback(sid);
+      if (!restarted.ok) throw new Error(`${restarted.error.code}: ${restarted.error.reason}`);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1', 'f1']);
+      expect(JSON.stringify(client.requests[2]!.messages)).toContain('THE-EDITED-STEP');
+      expect(dal.getSession(sid)!.plan_released).toBe(1);
+      expect(dal.planCyclesOf(sid)).toHaveLength(1);
+      expect(users(sid)).toEqual(['plan the thing']);
+      // The failed run's task stays abandoned (REQ-ORCH-074) and the relaunch carried the request out again (OQ-180).
+      expect(taskStates(sid)).toEqual(['abandoned', 'complete']);
+    });
+
+    it('REQ-NOTIFY-074 with REQ-ORCH-154: the recovery dialog\'s restart relaunches a failed revise as the same revise too', async () => {
+      const { sessions, client, sid } = planned((turn) => (turn === 1 ? answer('1. Original plan.') : turn === 2 ? failing(unauthorized()) : answer('1. Revised plan on the chosen model.')));
+      await sessions.running(sid)!;
+      expect(sessions.planDecision(sid, 'revise', 'USE-THE-ZEBRA-LIBRARY').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      const restarted = sessions.restartAfterAuthFailure(sid, 'f1');
+      if (!restarted.ok) throw new Error(`${restarted.error.code}: ${restarted.error.reason}`);
+      await sessions.running(sid)!;
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1', 'f1']);
+      expect(JSON.stringify(client.requests[2]!.messages)).toContain('USE-THE-ZEBRA-LIBRARY');
+      expect(dal.planCyclesOf(sid).map((c) => c.changes)).toEqual(['', 'USE-THE-ZEBRA-LIBRARY']);
+      expect(users(sid)).toEqual(['plan the thing']);
+    });
+
+    it('a restart after a later PROMPT re-submits that prompt, not an earlier decision (REQ-NOTIFY-070)', async () => {
+      // Cycle 1 parks, is approved and completes; the next prompt (plan mode again, released) fails on a first 401.
+      const { sessions, client, sid } = planned((turn) => (turn === 1 ? answer('1. Original plan.') : turn === 2 ? answer('done') : turn === 3 ? failing(unauthorized()) : answer('the follow-up on the fallback')));
+      await sessions.running(sid)!;
+      expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const next = sessions.prompt(sid, 'and a follow-up');
+      if (!next.ok) throw new Error(next.error.reason);
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      const restarted = sessions.restartOnFallback(sid);
+      if (!restarted.ok) throw new Error(`${restarted.error.code}: ${restarted.error.reason}`);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1', 'a1', 'f1']);
+      expect(users(sid)).toEqual(['plan the thing', 'and a follow-up', 'and a follow-up']);
+    });
+
     it('a plan cycle whose turn ended on no model call\'s failure records no failed model: refused (REQ-NOTIFY-069)', async () => {
       // The plan cycle produced no plan text (a succeeded, empty turn): the run ends, but no model call failed.
       const { sessions } = sessionsWith(() => answer(''), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' }, runStartMode: 'plan' });

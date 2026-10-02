@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**An authentication restart relaunches the failed run's own launch (REQ-NOTIFY-070, REQ-NOTIFY-074, REQ-ORCH-154; the
+401 note's part A, fourth repair round).** `Sessions.relaunchAfterAuthFailure` is the one restart path of the automatic
+fallback and of the recovery dialog: a run a plan decision launched (`Live.planLaunch`, kept with that run) is relaunched as
+that decision, any other by re-submitting the last prompt. The **runtime view**'s two restart paragraphs and the **process
+view**'s dialog entry say so. No package, edge, process, channel, command or store column changed.
+
 **The automatic fallback goes ahead of the recovery dialog (REQ-NOTIFY-068, REQ-NOTIFY-070, REQ-NOTIFY-072, REQ-NOTIFY-079;
 the 401 note's parts A and B merged beside C and D, 2026-10-02).** The two builds of REQ-NOTIFY-060's classes are one:
 `main/failure-class.ts` and `main/run-failure-notice.ts` (parts C and D) classify and word every ending, and the focus gate

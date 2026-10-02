@@ -2112,7 +2112,7 @@ export class Run {
       plan = report.status === 'failed' ? '' : report.text.trim();
       // REQ-NOTIFY-070: a plan cycle's turn is the root's model call too, so its failure records the model it was calling,
       // as an iteration's does — a first 401 here restarts on the fallback like any other (the repair of the plan-mode
-      // finding on a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md).
+      // finding on docs/defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md).
       if (report.status === 'failed') this.recordRootModelFailure(report.error);
     } catch (cause) {
       this.lastFailure = String(cause);

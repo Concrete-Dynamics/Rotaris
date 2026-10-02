@@ -324,7 +324,7 @@ seams, replacing the inline records in `index.ts`. All behavior, attribution, an
 
 ## The re-authentication prompt — the non-modal level's second surface, first executed 2026-10-02
 
-*The 401 note's part B ([`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md));
+*The 401 note's part B ([`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../../defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md));
 REQ-NOTIFY-071, REQ-NOTIFY-078. Found nothing wrong with the decision; found two placements wrong against it, both
 corrected below with the falsified reading kept.*
 

@@ -56,7 +56,7 @@ first click, so the 60 s wait ran out and the run completed), and `fatal` **pass
   provider-auth wording and the Models settings action": the product has neither — REQ-NOTIFY-060's authentication class
   and its recovery (REQ-NOTIFY-067..079) are not built, and the generic notice lacks REQ-NOTIFY-064's wording and action.
   That is recorded as its own note,
-  [`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md),
+  [`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md),
   and the scenario asserts what a 401's notice is today, not that recovery.
 - Pinned in `apps/desktop/scripts/lib/initialization-marker.test.ts`: `resilience-proof` joins `SLOT_READERS` (the section
   in `scenario()`, the guard in `launch()`), and a case of its own holds the driven launch's guard. Without the repair

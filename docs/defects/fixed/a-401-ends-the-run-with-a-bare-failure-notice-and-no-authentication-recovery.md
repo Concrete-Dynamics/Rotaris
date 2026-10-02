@@ -15,13 +15,13 @@ action returning to the workspace view, and the notice raised offers no action a
 Seen 2026-10-01 in `pnpm resilience-proof`'s `fatal` scenario (scripted `fail:401`; `results.json` `fatal.notice`:
 "×The run failed: scripted authentication failure (HTTP 401) — HTTP 401 — Incorrect API key provided Details … Copy
 Dismiss"), while repairing that scenario to assert its own notice
-([`fixed/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md`](fixed/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md)).
+([`fixed/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md`](resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md)).
 The scenario now asserts what the product does — the 401's failure text as the notice's detail, no retry, no wait — and
 not the recovery above; it should assert REQ-NOTIFY-072's dialog (with no fallback configured) once the class is built.
 Recorded, not repaired: building the class is product work of its own (a dialog surface, a fallback restart, a
 re-authentication path).
 
-## Parts built — the note stays open until every part has landed
+## Parts built — the note stayed open until every part had landed
 
 The third triage (2026-10-02) split the repair in four parts over two bundles: **A** the classifier, REQ-NOTIFY-064's generic
 notice and the first-failure fallback pin and restart (REQ-NOTIFY-060/064/067..070); **B** the non-modal re-authentication
@@ -205,8 +205,33 @@ failed pair, and the pin is taken back — pinned by the "user row cannot be wri
   `parkAtPlanGate`). The restart re-submits the prompt under the same mode, so it is a plan cycle on the fallback that parks
   at the gate. Pinned by the REQ-ORCH-153 case in `ladder.test.ts` (red on the code before: `no-model-failure`) and a
   plan cycle that ends on no model failure still refused; shown by `auth-fallback`'s third launch, `auth-fallback-plan`.
-- **Readings** the build proceeds under (the restart re-submits the prompt as a new row, a restart that cannot begin takes
-  the pin back, the first-failure bookkeeping lives in main for the process's life): OQ-180 (raised as OQ-177, renumbered
+- **A revise cycle** (fourth repair round, 2026-10-02, the verifier's blocking finding). The plan-mode repair above made
+  every plan cycle's turn record the failed model — the cycle a **revise** launches included — and the restart re-submitted
+  the session's last user row through `promptHeld`, which carries no plan override: so a revise whose turn failed on a first
+  401 came back as an ordinary new cycle from the original prompt (`changes: ''`), the changes the user stated and the plan
+  they revised reaching the fallback nowhere (REQ-ORCH-154: revise "starts a further plan cycle with the plan as it
+  currently stands and the changes stated"), and the prompt shown sent twice. An approved plan's run failing the same way
+  lost the user's edit of the plan. **Root cause:** a restart rebuilt the failed run's launch from the last user row alone,
+  so anything that launch carried beyond it — a plan decision's section, its cycle and its changes — was dropped. The
+  dialog's restarts (`restartAfterAuthFailure`, parts C and D) shared it. **Repair:** every authentication restart relaunches
+  what the failed run was launched to do (`Sessions.relaunchAfterAuthFailure`): `planDecision` records the decision with the
+  run it launched (`Live.planLaunch`: approve or revise, the cycle, the plan as it stood — the edit where there is one — and
+  the changes), and a restart of THAT run relaunches the same decision (`relaunchPlanDecision`: the same plan section, the
+  same cycle override, the gate left as the decision settled it, nothing re-submitted, since a decision is no prompt); any
+  other run re-submits the last prompt as before. The relaunch lets the todo decide whether to append the request: a failed
+  revise cycle took up no task, so the work is still pending and nothing is appended; a failed approved run abandoned its
+  task (REQ-ORCH-074), so the request is appended again and the plan carried out, as a re-submitted prompt's would be.
+  Pinned by four `ladder.test.ts` cases — a revise relaunched on the fallback (its changes and the plan it revised in the
+  fallback's request, cycle 2 with the changes, one user row, and approving it carries the work out once), an approval
+  relaunched with the user's edit, the dialog's restart of a failed revise, and a later prompt's restart re-submitting that
+  prompt — the first three red on the code before (the fallback's request held no `USE-THE-ZEBRA-LIBRARY`, no
+  `THE-EDITED-STEP`); shown by `resilience-proof`'s new driven `auth-fallback-revise` launch, red on a build of the code
+  before ("the restarted revise at the gate did not hold": cycle 2 recorded with `changes: ''` and the prompt in two user rows)
+  and green after (calls `scripted/alpha`, `deepseek/alpha`, `scripted-b/beta`; cycle 2 with the changes; one user row; the
+  gate reading "You asked for: USE-THE-ZEBRA-LIBRARY" beside the prompt's bar).
+- **Readings** the build proceeds under (the restart re-submits the prompt as a new row — a plan decision's run relaunched
+  as that decision instead, since the fourth repair round — a restart that cannot begin takes the pin back, the
+  first-failure bookkeeping lives in main for the process's life): OQ-180 (raised as OQ-177, renumbered
   OQ-179 and then OQ-180 at the branch's merges).
 
 ## Progress — part B built 2026-10-02
@@ -234,7 +259,7 @@ the window's top corner (copied from `.project-setup`) and covered the title bar
 close and the notice's dismissal while open; it ~~is now~~ was then drawn in AppShell's `windowPanel` slot inside the rail-and-view
 region, below the title bar and the notice slot (superseded by the second round below), and `auth-fallback` asserts every title-bar and notice-slot button is
 the element under its own centre (the same fault in the setup dialog is recorded in
-[`the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`](the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md)).
+[`the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`](../the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md)).
 It was also one prompt per window, sent to the window following the session, so it stood over whichever session that
 window focused next and acted on its own; channel 13 now carries `{sessionId, prompt}` to every main window, each holds
 the prompts by session and draws the followed session's alone (REQ-NOTIFY-030; `reauthPromptFor` in
@@ -321,6 +346,27 @@ two `ladder.test.ts` blocks (A's and C's restarts side by side, one harness opti
 restart, no dialog), and the new `auth-fallback-dialog` (driven; the fallback refused too: the dialog naming beta, the
 prompt closed as it opened, neither alpha nor beta offered, the run completed on gpt-4o).
 
-**Why the note is still open.** The fourth repair round's blocking finding is part A's: a revise cycle that failed on a
+~~**Why the note is still open.** The fourth repair round's blocking finding is part A's: a revise cycle that failed on a
 first 401 was restarted from the original prompt as a fresh plan cycle, dropping the stated changes and the plan they
-revised.
+revised.~~ Repaired the same day (part A's fourth-round bullet above).
+
+## Outcome — repaired 2026-10-02
+
+A 401 no longer ends the run with a bare notice. A failed run is classified in REQ-NOTIFY-060's order and published
+behind the focus gate; an authentication failure takes the automatic fallback on the session's first failure (the pin, the
+acknowledgement, the restart with the same prompt — or the same plan decision — and the non-modal re-authentication prompt
+beside the continuing run), and the 560 px recovery dialog on a second failure or where no usable fallback exists (other
+providers' models first, the provider's error, Retry, the re-authenticate path, Cancel); anything else takes REQ-NOTIFY-064's
+notice with the action back to the workspace. Pinned by `failure-class.test.ts`, `run-failure-notice.test.ts`,
+`auth-fallback.test.ts`, `auth-recovery.test.ts` (main and ui), `reauth-prompt.test.ts`, `signin.test.ts`,
+`commands/providers.test.ts`, `ladder.test.ts`, `resilience.test.ts`, `autopsy.test.ts` and `scripted-client.test.ts`;
+shown by `pnpm resilience-proof`'s `fatal`, `reauth`, `generic`, `auth-fallback` (three launches),
+`auth-fallback-dialog` and `auth-fallback-revise`.
+
+**Not met, and not this note's:** REQ-NOTIFY-076's second branch — "for browser and device-code providers it starts that
+provider's own flow in place … and offers a control confirming that re-authentication has been completed" — waits for the
+device-code and browser-PKCE authenticators the build does not have (`packages/providers/src/catalogue.ts`'s header;
+[`../../architecture/first-release-plan.md`](../../architecture/first-release-plan.md)'s deferred product gaps); until they
+exist the dialog and the prompt say the method is not provided by this build. **Open questions** the build proceeds under:
+OQ-179 (a provider whose key the model configuration carries), OQ-180 (the restart's readings), OQ-181 (where the prompt
+stands).

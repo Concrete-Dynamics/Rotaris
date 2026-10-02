@@ -1172,7 +1172,8 @@ recovery facts and opens the 560 px modal recovery dialog beside the class's own
 REQ-NOTIFY-072..075/079/080), or — REQ-NOTIFY-069's preconditions unmet — takes the generic path. Retry pins the chosen
 model against the pair the failed root call was addressed to (`Run.failedEntryModel`, recorded with the run's last
 failure) in the session's `ResilienceMemory` and as a `model_override` timeline entry carrying `cause: authentication`, then
-re-submits the session's last prompt through `promptHeld` (`Sessions.restartAfterAuthFailure`); a pin away from the chosen
+re-submits the session's last prompt through `promptHeld` (`Sessions.restartAfterAuthFailure`) — *since the fourth repair
+round of parts A and B, the failed run's own launch relaunched (`relaunchAfterAuthFailure`, below)*; a pin away from the chosen
 model is taken back first, and a restart that cannot begin takes its own pin back (`cleared: true`, which `rehydrate`
 replays in order). The dialog's second path (REQ-NOTIFY-076/077, part D) stores a new key for a key-based provider through
 main's provider key store — validated by discovery first — and restarts on the same model with no pin, the continuation
@@ -1217,9 +1218,13 @@ every root turn — an iteration's or, in plan mode, the plan cycle's: `Run.reco
 missed until the third repair round, so a plan-mode 401 was never restarted), resolves `fallback_model`, and —
 where the fallback is configured and is another pair — pins it in the session's `ResilienceMemory` keyed by the pair that
 failed and records the `model_override` timeline entry (`cause: authentication`) that `ResilienceMemory.rehydrate`
-replays on every later run and after a reload (REQ-SESSION-026); then `prompt` re-submits the last user prompt, a new
-run on the fallback, and a system row says so — written by `promptHeld`'s `beginning` hook once every refusal has passed,
-just before the restarted prompt's user row, so a restart that cannot begin leaves no row claiming one. A restart that
+replays on every later run and after a reload (REQ-SESSION-026); then ~~`prompt` re-submits the last user prompt~~ the
+failed run's launch is relaunched (`Sessions.relaunchAfterAuthFailure`, the fourth repair round): the last user prompt
+re-submitted, a new run on the fallback — or, where a plan decision launched the failed run (`Live.planLaunch`, kept with
+that run), the same decision again (`relaunchPlanDecision`, REQ-ORCH-154: approve's plan as the user left it, revise's
+cycle, plan and changes; nothing re-submitted; the todo's own rule decides whether the request is appended) — and a system
+row says so, written by the `beginning` hook once every refusal has passed, just before the launch, so a restart that
+cannot begin leaves no row claiming one. A restart that
 cannot begin takes the pin back with a `model_override` entry carrying `cleared: true`, which the replay and the autopsy
 reader honour (and, where it failed after the row — the user row's own write — a second row says the session stays on the
 model it had). Main then raises an error acknowledgement naming

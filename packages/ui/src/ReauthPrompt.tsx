@@ -19,7 +19,10 @@ import { Button as DesignButton, Input as DesignInput } from './design-system/in
  * **At the minimum window size** the transcript keeps REQ-CHAT-010's floor and the prompt takes what is left, which with
  * a notice standing is less than it needs: the card then scrolls, and its answers — the key field and the two buttons, on
  * one wrapping row — are pinned to its floor as the plan gate pins its three, so they never scroll away. The key's hint
- * sits with the provider's words above them and describes the field (`aria-describedby`).
+ * sits with the provider's words above them and describes the field (`aria-describedby`). **Beside an expanded plan gate**
+ * the transcript is not drawn and the prompt does not take what is left: it yields to the gate, which the run is stopped
+ * on, drawn as a bar — its title and its answers — by `shell.css` alone (whole, sized first, it once left the gate's three
+ * answers unreachable); its words stay in the document and are drawn again when the gate is collapsed or answered.
  *
  * **Craft** (`pnpm mockup`, "Provider auth modal", read for craft only): `dialog-title`, `dialog-body`, the provider's
  * words in an inset block on the ground with the hairline border, a caption in the tertiary ink, `dialog-actions` with the

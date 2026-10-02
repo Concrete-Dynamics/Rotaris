@@ -1152,7 +1152,9 @@ naming both models and the restart with the same prompt completing on `scripted-
 REQ-MONITOR-147, REQ-SESSION-026) — in plan mode too, where the 401 falls on the plan cycle's turn and the restarted cycle
 parks at the gate on the fallback (`auth-fallback-plan`, the third repair round) — and since part B the non-modal re-authentication prompt beside the continuing run
 with the composer, every title-bar control and every notice button usable beside it and no control under it, at the
-opening size and at 1000x680 with an API-key provider's key field (REQ-NOTIFY-071, ADR-0048), drawn in flow as the
+opening size and at 1000x680 with an API-key provider's key field (REQ-NOTIFY-071, ADR-0048), and beside an expanded
+plan gate at 1000x680 drawn as its bar with the gate's three answers reachable and the plan the largest part of the gate
+(`auth-fallback-plan`, REQ-ORCH-153, PD-ORCH-002), drawn in flow as the
 Workspace view's own `reauth` row for the followed session alone (REQ-NOTIFY-030, OQ-180). The recovery
 dialog and its re-authentication path are owed
 ([note](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).

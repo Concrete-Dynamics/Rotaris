@@ -151,4 +151,28 @@ describe('the re-authentication prompt overlays nothing (ADR-0048 "leaves the re
       expect(tracks[narrow ? 2 : 1], t.selector).toBe('minmax(0, auto)');
     }
   });
+
+  it('beside an expanded plan gate the prompt yields as a bar — its title and its answers on one row, nothing pinned, no height written — and is whole again beside a collapsed gate (REQ-ORCH-153, PD-ORCH-002, OQ-180)', () => {
+    // A `minmax(0, auto)` track is maximised before a flexible one is expanded (CSS Grid §12.5-12.7). With the gate expanded
+    // the transcript is not drawn and the gate's row is `minmax(0, 1fr)`, so the whole prompt took its height first and left
+    // the gate 42 px at 1000x680, its three answers unreachable (the verifier's probe, 2026-10-02).
+    const expanded = ".workspace[data-plan-gate='1']:not([data-plan-gate-collapsed='1']) > .reauth-prompt";
+    const card = rulesOf(expanded).join(' ');
+    expect(card).toMatch(/flex-direction\s*:\s*row/);
+    expect(card).toMatch(/flex-wrap\s*:\s*wrap/);
+    // The bar's height is its one row of controls: no height of any kind is written, so nothing rests on arithmetic.
+    expect(card).not.toMatch(/(^|[\s;])(max-|min-)?height\s*:/);
+    // The sentence, the provider's words and the hint are not drawn in the bar; the answers are unpinned (nothing scrolls).
+    expect(css).toMatch(new RegExp(`${expanded.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\.reauth-prompt__head \\.dialog-body,\\s*${expanded.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\.reauth-prompt__detail\\s*\\{\\s*display:\\s*none;\\s*\\}`));
+    const answer = rulesOf(`${expanded} .reauth-prompt__answer`).join(' ');
+    expect(answer).toMatch(/position\s*:\s*static/);
+    expect(rulesOf(`${expanded} .reauth-prompt__answer .field`).join(' ')).toMatch(/flex-direction\s*:\s*row/);
+    // The inline label stays one line (the first bar drawn broke "API key" over two, beside its field).
+    expect(rulesOf(`${expanded} .reauth-prompt__answer .field-label`).join(' ')).toMatch(/white-space\s*:\s*nowrap/);
+    // Every bar rule is keyed on the expanded gate alone: no other rule hides the prompt's words, so with no gate or a
+    // collapsed one the prompt is whole.
+    const hiding = [...css.matchAll(/([^{}]*\.reauth-prompt[^{}]*)\{[^}]*display\s*:\s*none/g)].map((m) => m[1]!.trim());
+    expect(hiding.length).toBeGreaterThan(0);
+    for (const selector of hiding) for (const part of selector.split(',')) expect(part.trim().startsWith(expanded), part).toBe(true);
+  });
 });

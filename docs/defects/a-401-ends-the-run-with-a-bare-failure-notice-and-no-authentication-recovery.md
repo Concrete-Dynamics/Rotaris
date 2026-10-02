@@ -114,7 +114,7 @@ the composer's submit, and in the other views their top-right controls; the proo
 with the shortest prompt. The prompt is now **laid out in flow**: the Workspace view draws it (`WorkspaceView`'s
 `reauthPrompt`) as its own grid row, `reauth`, between the run header and the transcript, in every template of the view's
 grid, and AppShell's `windowPanel` slot is gone. The transcript keeps REQ-CHAT-010's floor and the prompt takes what is
-left; shorter than it needs, the card scrolls with its answers (the key field and the two buttons, one wrapping row)
+left ~~at every size~~ (falsified beside an expanded plan gate: third round below); shorter than it needs, the card scrolls with its answers (the key field and the two buttons, one wrapping row)
 pinned sticky to its floor, as the plan gate's are, and the key's hint describes the field. Where "beside the continuing
 run" stands, and that the prompt is not drawn while another view is shown, is raised as **OQ-180** with that reading.
 Pinned by `reauth-prompt.test.ts` (the prompt's row in the Workspace view, no `fixed`/`absolute`/`z-index` in its rule, the
@@ -123,6 +123,25 @@ launches — the opening size with alpha on `scripted` (no key field) and 1000x6
 provider, with the key field) — each asserting that no on-screen control outside the prompt has the prompt at its centre
 (`underPrompt` empty: 45 and 33 controls tested) and that the prompt's own key field and answers are each the element
 under their own centre. The proof run against the second placement failed at its first launch with `Persona|orchestrator|Agent model` under the prompt.
+
+*Third repair round, 2026-10-02.* "The prompt takes what is left" held only while the transcript is drawn. Beside an
+EXPANDED plan gate the transcript is not drawn and the gate's row is `minmax(0, 1fr)`, floor 0; an `auto` maximum is grown
+before a flexible track is expanded (CSS Grid §12.5-12.7), so the prompt took its whole height first and, at 1000x680 with
+the key field, left the gate 42 px with Approve, Revise and Cancel — the three answers the run is stopped on
+(REQ-ORCH-153) — unreachable (the verifier's measurement). The state is reachable as soon as a plan-mode 401 restarts (part
+A's plan-mode repair above), and by keeping the fallback and sending the next prompt in plan mode. Beside an expanded gate
+the prompt now **yields as the transcript does** (PD-ORCH-002 revision 2: one action away): it is drawn as a **bar**, its
+title and its answers (the key field with its label inline, and the two buttons) on one wrapping row, nothing pinned since
+nothing scrolls, and no height written; its sentence, the provider's words and the key's hint stay in the document (the
+dialog's description) and are drawn again the moment the gate is collapsed or answered. The gate's row takes the rest at
+every size from REQ-SHELL-022's minimum up. A bounded band (a fixed `max-height` in tokens) was the first form of this
+repair and was dropped before it was committed: weighed against the gate's parts as the proof measured them (heading,
+intent, todo, revision field and answers, about 210 px of the roughly 380 px the two rows share at 1000x680), any band that
+still holds the prompt's title and answers leaves the plan no height, where PD-ORCH-002 makes it the largest part of the
+gate. Pinned by `reauth-prompt.test.ts` (the bar's rules keyed on the expanded gate alone, no height written, nothing else
+hiding the prompt's words — red before); shown by `auth-fallback-plan` at 1000x680 with the key field, which asserts the
+gate expanded, the prompt drawn as its bar, each of the gate's three answers and each of the prompt's controls the element
+under its own centre, and the plan the largest part of the gate (red on the code before: the gate 82 px, the plan 18).
 
 **Still owed:** part C, REQ-NOTIFY-072's 560 px
 recovery dialog on a second failure or with no usable fallback (until it lands both take the generic notice, and `fatal`

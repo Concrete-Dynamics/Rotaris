@@ -8915,7 +8915,13 @@ window shows a view other than the one the run is shown in.
 - the prompt is drawn **in flow in the Workspace view**, the view that shows the run, as its own row of the view's grid
   between the run header and the transcript (the plan gate's kind of place, REQ-SHELL-168). It overlays nothing at any
   window size: the transcript keeps REQ-CHAT-010's floor and the prompt takes what is left, scrolling when that is less
-  than it needs with its answers pinned to its floor;
+  than it needs with its answers pinned to its floor ~~— at every size~~ (*corrected 2026-10-02, the third repair round*:
+  beside an EXPANDED plan gate the transcript is not drawn and the gate's row has no floor, and the prompt, sized first,
+  left the gate 42 px with its three answers unreachable at 1000x680. There the prompt **yields to the gate** as the
+  transcript does, one action away: it is drawn as a bar — its title and its answers on one row — and its sentence, the
+  provider's words and the key's hint are drawn again when the gate is collapsed or answered; the gate, the run's stop
+  and the reading area (REQ-ORCH-153, PD-ORCH-002 revision 2), takes the rest. A ruling may also decide whether REQ-NOTIFY-071's
+  quote may be withheld from view that way while a plan awaits a decision);
 - it is **not drawn while another view is shown**. The window keeps holding it (by session, REQ-NOTIFY-030) and draws it
   again when the Workspace view returns; the run's acknowledgement (REQ-NOTIFY-070) is the window-wide signal, shown in
   any view. A key half-typed into the field is not kept across a view change.

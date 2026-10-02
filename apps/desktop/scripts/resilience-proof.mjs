@@ -499,7 +499,10 @@ await scenarioRun('fatal', async () => {
 //
 // A third launch in plan mode (`runtime.run_start_mode: plan`, REQ-ORCH-152/153): the 401 is the plan cycle's turn, which
 // recorded no failed model, so the session was never restarted on the fallback and the generic notice was published
-// (the verifier's reproduction, 2026-10-02). Restarted, the cycle runs again on beta and parks at the gate.
+// (the verifier's reproduction, 2026-10-02). Restarted, the cycle runs again on beta and parks at the gate, EXPANDED beside
+// the open prompt at the minimum size — where the prompt, sized before the gate's flexible row, had left the gate 42 px and
+// its three answers unreachable. Each gate answer and each prompt control must be the element under its own centre, the
+// prompt drawn as its bar (its words not drawn), and the plan the largest part of the gate (PD-ORCH-002 revision 2).
 const authVariants = [
   { name: 'auth-fallback', provider: 'scripted', method: 'none', resize: null, plan: false },
   { name: 'auth-fallback-minimum', provider: 'deepseek', method: 'api-key', resize: '1000x680', plan: false },
@@ -515,6 +518,8 @@ await scenarioRun('auth-fallback', async () => {
   // whose centre is the prompt's — it must be empty. The prompt's own controls are tested the same way (`promptControls`):
   // its answers never scroll away, whatever the size. `size` and `promptRect` say what was measured.
   const chromeUsable = "(() => { const p = document.querySelector('[data-testid=\"reauth-prompt\"]'); if (p === null) return false; const label = (b) => (b.getAttribute('aria-label') || b.textContent || b.title || b.getAttribute('data-testid') || b.tagName).trim().slice(0, 60); const centre = (b) => { const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height }; }; const centreHit = (b) => { const c = centre(b); const hit = document.elementFromPoint(c.x, c.y); return hit === b || b.contains(hit) ? 'ok' : (p.contains(hit) ? 'UNDER-PROMPT' : 'covered'); }; const onScreen = (b) => { const c = centre(b); return c.w > 0 && c.h > 0 && c.x >= 0 && c.y >= 0 && c.x < innerWidth && c.y < innerHeight; }; const chrome = [...document.querySelectorAll('.title-bar button, .notice-slot button')]; const controls = [...document.querySelectorAll('button, input, select, textarea, a[href], [role=\"separator\"][tabindex], [tabindex]:not([tabindex=\"-1\"])')].filter(onScreen); document.body.dataset.chromeUsable = chrome.map((b) => label(b) + '=' + centreHit(b)).join('|'); document.body.dataset.underPrompt = controls.filter((b) => !p.contains(b) && centreHit(b) === 'UNDER-PROMPT').map(label).join('|'); document.body.dataset.outsideControls = String(controls.filter((b) => !p.contains(b)).length); document.body.dataset.promptControls = [...p.querySelectorAll('button, input')].map((b) => label(b) + '=' + (onScreen(b) ? centreHit(b) : 'off-screen')).join('|'); const r = p.getBoundingClientRect(); document.body.dataset.promptRect = [r.left, r.top, r.width, r.height].map(Math.round).join(','); document.body.dataset.size = innerWidth + 'x' + innerHeight; return chrome.length > 0; })()";
+  // REQ-ORCH-153 beside the prompt: the gate's three answers are each the element under their own centre (`gateAnswers`).
+  const gateUsable = "(() => { const g = document.querySelector('[data-testid=\"plan-gate\"]'); if (g === null) return false; const ids = ['plan-approve', 'plan-revise', 'plan-cancel']; document.body.dataset.gateAnswers = ids.map((id) => { const b = document.querySelector('[data-testid=\"' + id + '\"]'); if (b === null) return id + '=absent'; const r = b.getBoundingClientRect(); const x = r.left + r.width / 2; const y = r.top + r.height / 2; if (!(r.width > 0 && r.height > 0 && y >= 0 && y < innerHeight)) return id + '=off-screen'; const hit = document.elementFromPoint(x, y); return id + '=' + (hit === b || b.contains(hit) ? 'ok' : 'not-hit'); }).join('|'); const r = g.getBoundingClientRect(); document.body.dataset.gateRect = [r.left, r.top, r.width, r.height].map(Math.round).join(','); document.body.dataset.gateCollapsed = String(g.classList.contains('plan-gate--collapsed')); const d = document.querySelector('.reauth-prompt__detail'); document.body.dataset.promptDetailDrawn = String(d !== null && getComputedStyle(d).display !== 'none'); document.body.dataset.gateChildren = [...g.children].map((c) => c.className.split(' ')[0] + '=' + Math.round(c.getBoundingClientRect().height)).join('|'); return true; })()";
   const ackSeen = "(document.body.dataset.ackSeen ||= [...document.querySelectorAll('[data-testid=\"acknowledgement\"]')].map((a) => a.textContent).find((t) => t.includes('Authentication failed')) ?? '')";
   results.authFallback = {};
   for (const v of authVariants) {
@@ -525,7 +530,7 @@ await scenarioRun('auth-fallback', async () => {
       // first step again, so the fault is scoped to the provider rather than to the step.
       ROTARIS_SCRIPT: `fail:401:only=${v.provider}`, ROTARIS_CAPTURE_PROMPT: 'bad key, then the fallback',
       ...(v.resize === null ? {} : { ROTARIS_CAPTURE_RESIZE: `${v.resize}@200` }),
-      ROTARIS_CAPTURE_WAIT: `js:${ackSeen} !== '' && ${v.plan ? `document.querySelector('[data-testid="plan-gate-plan"]') !== null` : `document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed'`} && document.querySelector('[data-testid="reauth-prompt"]') !== null${v.resize === null ? '' : ` && innerWidth + 'x' + innerHeight === '${v.resize}'`} && ${composerUsable} && ${chromeUsable}`, ROTARIS_CAPTURE_WAIT_MS: '90000',
+      ROTARIS_CAPTURE_WAIT: `js:${ackSeen} !== '' && ${v.plan ? `document.querySelector('[data-testid="plan-gate-plan"]') !== null` : `document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed'`} && document.querySelector('[data-testid="reauth-prompt"]') !== null${v.resize === null ? '' : ` && innerWidth + 'x' + innerHeight === '${v.resize}'`} && ${composerUsable} && ${chromeUsable}${v.plan ? ` && ${gateUsable}` : ''}`, ROTARIS_CAPTURE_WAIT_MS: '90000',
       ROTARIS_CAPTURE_PROBE: 'body;;.notice-slot;;[data-testid="reauth-prompt"];;[data-action="reauth-keep"];;[data-testid="reauth-error"]', ROTARIS_CAPTURE_AFTER_MS: '800',
     }, { timeout: 180_000 });
     const db = open(s8);
@@ -565,6 +570,19 @@ await scenarioRun('auth-fallback', async () => {
     if (v.resize !== null) expect(size === v.resize, `${v.name}: the window was not measured at ${v.resize}: ${size}`);
     const composer = body?.data['data-composer-usable'] ?? '';
     expect(composer === 'true:true:true:true', `${v.name}: the composer is not usable behind a non-modal prompt (hit:focused:enabled:no-aria-modal = ${composer})`);
+    // Plan mode: the gate stands EXPANDED beside the open prompt, and each of its three answers is reachable where it stands.
+    const gateAnswers = body?.data['data-gate-answers'] ?? '';
+    if (v.plan) {
+      expect(body?.data['data-gate-collapsed'] === 'false', `${v.name}: the plan gate was not expanded beside the prompt: ${JSON.stringify(body?.data)}`);
+      expect(gateAnswers === 'plan-approve=ok|plan-revise=ok|plan-cancel=ok', `${v.name}: a plan-gate answer is not reachable beside the prompt at ${body?.data['data-size']} (gate ${body?.data['data-gate-rect']}, prompt ${body?.data['data-prompt-rect']}): ${gateAnswers}`);
+      // Beside the expanded gate the prompt is its bar: the provider's words are in the document (asserted above) but not drawn.
+      expect(body?.data['data-prompt-detail-drawn'] === 'false', `${v.name}: the prompt is drawn whole beside the expanded gate, not as its bar: ${JSON.stringify(body?.data)}`);
+      // PD-ORCH-002 revision 2, read as plan-gate-proof reads it: the plan's own text is taller than every other part of the
+      // gate. The prompt sized before the gate's flexible row left the gate a strip whose answers fit and whose plan did not.
+      const children = (body?.data['data-gate-children'] ?? '').split('|').filter((c) => c !== '').map((c) => { const [name, h] = c.split('='); return { name, h: Number(h) }; });
+      const tallest = children.reduce((a, b) => (b.h > a.h ? b : a), { name: '', h: -1 });
+      expect(/plan-gate__(preview-wrap|plan)/.test(tallest.name), `${v.name}: beside the prompt the plan is not the largest element of the gate at ${body?.data['data-size']} (gate ${body?.data['data-gate-rect']}, prompt ${body?.data['data-prompt-rect']}): ${body?.data['data-gate-children']}`);
+    }
     const chrome = body?.data['data-chrome-usable'] ?? '';
     const chromeControls = chrome.split('|').filter((c) => c !== '');
     expect(chromeControls.length >= 4 && chromeControls.every((c) => c.endsWith('=ok')) && chromeControls.some((c) => c.startsWith('Close')), `${v.name}: a title-bar or notice control is not usable beside the non-modal prompt: ${chrome}`);
@@ -576,7 +594,7 @@ await scenarioRun('auth-fallback', async () => {
     const own = (body?.data['data-prompt-controls'] ?? '').split('|').filter((c) => c !== '');
     const expectedOwn = v.method === 'api-key' ? 3 : 2;
     expect(own.length === expectedOwn && own.every((c) => c.endsWith('=ok')), `${v.name}: the prompt's own controls are not all usable at ${size}: ${own.join('|')}`);
-    results.authFallback[v.name] = { size, status: row.execution_status, calls, pin: meta, acknowledgement: ack, users, prompt: prompt.text, method: prompt.data['data-method'], promptRect: body?.data['data-prompt-rect'] ?? '', composerUsable: composer, chromeUsable: chrome, outsideControlsTested: outside, underPrompt, promptControls: own.join('|'), png: r.png, elapsedMs: r.elapsedMs };
+    results.authFallback[v.name] = { size, status: row.execution_status, calls, pin: meta, acknowledgement: ack, users, prompt: prompt.text, method: prompt.data['data-method'], promptRect: body?.data['data-prompt-rect'] ?? '', composerUsable: composer, chromeUsable: chrome, outsideControlsTested: outside, underPrompt, promptControls: own.join('|'), ...(v.plan ? { gateAnswers, gateRect: body?.data['data-gate-rect'] ?? '', gateChildren: body?.data['data-gate-children'] ?? '' } : {}), png: r.png, elapsedMs: r.elapsedMs };
   }
 });
 

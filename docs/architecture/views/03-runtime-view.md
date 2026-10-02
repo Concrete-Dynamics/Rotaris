@@ -1195,7 +1195,9 @@ recovery dialog of REQ-NOTIFY-072 is not built (the note's part C).
 prompt (channel 13, to every main window; a window draws the followed session's alone, REQ-NOTIFY-030, ~~in AppShell's
 `windowPanel` slot inside the rail-and-view region, below the title bar and the notice slot~~ — corrected in the second
 repair round, since that overlay covered the run header's switches and the composer's submit at 1000x680: in flow, as the
-Workspace view's own `reauth` row between the run header and the transcript, overlaying nothing, OQ-180): the primary that failed, the run continuing on the fallback,
+Workspace view's own `reauth` row between the run header and the transcript, overlaying nothing, OQ-180; beside an
+expanded plan gate it yields as a bar, its title and its answers, so the gate's three answers stay reachable — the third
+repair round): the primary that failed, the run continuing on the fallback,
 the switch back from the next iteration, the provider's error quoted, a key field for a key-based provider (a device-code
 or browser provider is told its method is unavailable in this build). Dismissing it keeps the fallback. Submitting saves
 a key supplied, clears main's bookkeeping and sends `session.repinPrimary`: `Sessions.repinPrimary` takes the pin back

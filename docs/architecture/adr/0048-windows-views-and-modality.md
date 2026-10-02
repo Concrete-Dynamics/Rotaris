@@ -348,7 +348,15 @@ down. The proof had passed because it measured at the opening size with the shor
 no overlay: the Workspace view draws it **in flow**, as its own row of the view's grid between the run header and the
 transcript (`WorkspaceView`'s `reauthPrompt`, the grid's `reauth` row; AppShell's `windowPanel` slot is gone), so it takes
 its height from the transcript (whose REQ-CHAT-010 floor is sized first) and overlays nothing at any size; shorter than it
-needs, the card scrolls with its answers pinned to its floor, as the plan gate's are. That it is drawn in the view that
+needs, the card scrolls with its answers pinned to its floor, as the plan gate's are. ~~It takes its height from the
+transcript~~ in every state — **falsified by the third verification the same day** for one: beside an EXPANDED plan gate
+the transcript is not drawn and the gate's row is `minmax(0, 1fr)`, floor 0, and the prompt's `auto` maximum is grown
+first (CSS Grid §12.5-12.7), so at 1000x680 with a key field it left the gate 42 px and the gate's Approve, Revise and
+Cancel were not the element under their own centres. In flow, the prompt overlaid nothing; it starved a sibling that is
+also open until answered. Beside an expanded gate it now yields as the transcript does, one action away: it is drawn as
+a bar, its title and its answers on one row, its words drawn again when the gate is collapsed or answered, and the gate
+takes the rest (the run is stopped on it, REQ-ORCH-153; it is the reading area, PD-ORCH-002 revision 2). The decision is untouched: the level never said which of two in-flow panels gives way, and the
+build's answer is the one the run is stopped on keeps the room. That it is drawn in the view that
 shows the run, and not while another view is shown, is the build's reading of "beside the continuing run", raised as
 [OQ-180](../open-questions.md). The decision holds for this placement: the level is still an in-window panel, non-modal,
 with no focus trap, and nothing else in the window is under it. It is fed by main on its own channel
@@ -359,6 +367,8 @@ opening size with the shortest prompt, and 1000x680 with an API-key provider's p
 composer is the element under its own centre, takes the focus and is enabled, the prompt carries no `aria-modal`, every
 title-bar and notice-slot button is the element under its own centre (`chromeUsable`), no control on screen outside the
 prompt has the prompt at its centre (`underPrompt` empty: 45 and 33 controls tested), and the prompt's own key field and
-answers are each the element under their own centre (`promptControls`). Not measured: Escape, which this surface does not answer (only its
+answers are each the element under their own centre (`promptControls`); and a third launch in plan mode at 1000x680 with
+the key field, the gate expanded beside the prompt, each of the gate's three answers the element under its own centre
+(`gateAnswers`). Not measured: Escape, which this surface does not answer (only its
 two buttons close it — the dismissal keeps the fallback, REQ-NOTIFY-071), and REQ-NOTIFY-079's rule that the modal
 recovery dialog closes it, since that dialog is not built (part C).

@@ -100,7 +100,12 @@ AppShell `windowPanel` slot inside the rail-and-view region, and at 1000x680 the
 field, the composer's submit were under it; the slot is gone. **A non-modal surface that stays open until answered is
 laid out in flow, in a row or column of the view it belongs to, never as an overlay**: add its grid area to every
 template of that view (`layout-proof` fails a child naming an area the template lacks) and measure it at REQ-SHELL-022's
-minimum.
+minimum. **In flow is not enough beside another panel open until answered** (the third repair round, 2026-10-02): an
+`auto`-maximum row is grown before a `1fr` one, so beside the expanded plan gate (whose row has no floor once the
+transcript is hidden) the prompt took the height first and left the gate's three answers unreachable at 1000x680. Decide
+which of the two yields — the one the run is not stopped on — and give it a form whose height is one row of its answers
+on the state where they meet (`.workspace[data-plan-gate='1']:not([data-plan-gate-collapsed='1']) > .reauth-prompt`, the
+prompt's bar), never a written height, then measure both panels' answers at the minimum in that state.
 
 | # | File | What lands here |
 |---|---|---|

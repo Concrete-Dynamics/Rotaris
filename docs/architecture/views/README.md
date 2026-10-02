@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**The re-authentication prompt yields to an expanded plan gate (REQ-NOTIFY-071, REQ-ORCH-153, ADR-0048, OQ-180; the 401
+note's part B, third repair round).** Beside an expanded gate the prompt is drawn as a bar (its title and its answers) so the
+gate keeps its three answers and the plan its height. The **seams view** §2 states the rule (in flow is not enough beside
+another panel open until answered: the one the run is not stopped on yields to one row of its answers) and the **runtime view** the placement. No package, edge, channel, command or
+store column changed.
+
 **A plan cycle's 401 is restarted on the fallback (REQ-NOTIFY-070, REQ-ORCH-153; the 401 note's part A, third repair
 round).** `Run.recordRootModelFailure` records the failed model with the run's last failure on every root turn, the plan
 cycle's included; the **runtime view** says so. No package, edge, channel, command or store column changed.

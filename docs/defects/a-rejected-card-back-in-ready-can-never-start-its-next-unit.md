@@ -26,6 +26,22 @@ bundle's head in its third repair round, where the entry read the sentence quote
 the note above. Not repaired: what should provision the next unit after a rejection (the reject itself, the queue's
 release, or the claim) is a choice the repair did not make.
 
+**Amended 2026-10-02 (fifth triage of the open notes, by code reading on origin/main `c1381f5`; confirmed the same day by
+five failing cases of `delivery.test.ts` on bundle `fin9-queue-dispatch-and-disclosure` before its repair).**
+
+- **A second trigger.** A board run that reaches its iteration limit persists `stopped` (`stop-conditions.ts`), main's
+  coordinator classifies `stopped` and `cancelling` as `cancelled` (`outcomeOf` in `requirements-runs.ts`), and a
+  `cancelled` ending rests the card in `ready` (`recordRunEnded` in `transition.ts`) still holding the finished unit's
+  launch. The `dispatch()` that follows every run's ending re-claims that finished unit at once under `automatic`. (A
+  user's stop persists `paused` since R-067's ruling, ends `failed` into `blocked`, and its resume provisions; it does
+  not take this path.)
+- **What the built app does on that claim.** Main's `session.start` precedes `requirements.run.started`
+  (`requirements-runs.ts`), so under automatic scheduling the re-claimed finished unit runs a real session in the
+  rejected unit's kept worktree before its row is refused by `delivery_runs`' primary key. "Had it not thrown, the next
+  run would have worked in the rejected unit's tree" understates it: the session has already started when the row is
+  refused. The throw also skips `claimed.delete`, so the card reads `next` and holds a concurrency slot until a restart,
+  and when the unrecorded session ends, `run.ended` finds no running unit for it.
+
 ## Specs
 
 - `REQ-TRACE-423`: rejecting leaves every unit branch and worktree intact. The old route reused the rejected unit's

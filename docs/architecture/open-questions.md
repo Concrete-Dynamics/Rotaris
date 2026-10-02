@@ -9197,3 +9197,60 @@ so they stay reachable from the keyboard (not measured), and Escape answers the 
 a region of its own that every view yields room to at REQ-SHELL-022's minimum (and then which, with what bound on its
 height), or in another form — collapsed to a bar until opened, as the re-authentication prompt yields beside an expanded
 plan gate.
+
+**OQ-188 — Whose tokens does the status strip's tokens item count: the workspace's runs, or the focused session's?**
+*(REQ-SHELL-044, "The tokens item reads the running total of tokens used"; REQ-SHELL-045, the cost item's figure is "the
+model provider's reported cost for this workspace's runs so far"; REQ-SHELL-038, the items' accessible names, "Tokens used"
+and "Cost so far". Raised 2026-10-02 by the repair of
+[`the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md`](../defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)
+(fin10, bundle `fin10-strip-notices-and-listing`). Open.)*
+
+REQ-SHELL-045 scopes the cost to this workspace's runs and its tooltip says so. REQ-SHELL-044 says "the running total of
+tokens used" and names no scope: not the workspace's runs, not the focused session's, not the current run's. The two items
+stand side by side, so a reader compares them, and a session-scoped token count beside a workspace-scoped cost would make
+that comparison wrong without saying so.
+
+**What the build proceeds under** (`workspaceUsage`, `packages/engine/src/workspace-usage.ts`; `stripItems`,
+`packages/ui/src/composer.ts`): the workspace's runs, as the cost is — the sum of every stored session's
+`tokens_input + tokens_output` for this workspace, read from the run host on the `workspace.usage` command when the strip
+mounts, when the focused session's own usage moves and every five seconds (a background session's run moves it too). Its
+tooltip says so: "Tokens used by this workspace's runs so far: {n} tok."
+
+**What a ruling decides.** The scope of REQ-SHELL-044's running total (the workspace's runs, the focused session, the
+current run), and whether the tooltip names it.
+
+**OQ-189 — The workspace domain states three things about the status strip that the shell domain, which owns it, states
+otherwise.** *(REQ-SHELL-040, "Neither failure is silent", with the resolution of `docs/spec/resolutions/12-desktop-shell-windows.md`
+item 7, "Silent failure is dropped"; REQ-WORKSPACE-019, "a failure to open SHALL be silent"; REQ-SHELL-041, the
+`unsaved settings` explanation conveys "that runs keep using the last saved values until they are saved", and the mode
+flag's explanation is given word for word; REQ-WORKSPACE-022, the same flag's explanation conveys "that runs use the values
+on screen rather than the values on disk", and the mode flag's conveys "exactly the following and no more: which permission
+mode is in force and that it decides whether a tool call is allowed outright, put to the user, or refused"; REQ-SHELL-047,
+"This document owns the status strip". Raised 2026-10-02 by the repair of
+[`the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md`](../defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md)
+(fin10, bundle `fin10-strip-notices-and-listing`). Open.)*
+
+Three statements disagree:
+
+- **The workspace-path link's failure.** REQ-SHELL-040 (amended by the shell domain's resolution 7) reports a failure to open
+  the folder on the transient error surface with the path attempted; REQ-WORKSPACE-019 still says the failure is silent.
+- **What `unsaved settings` explains.** REQ-SHELL-041: runs keep using the last saved values until the edits are saved.
+  REQ-WORKSPACE-022: runs use the values on screen rather than the values on disk. They are opposite claims about which
+  values a run uses; the product's runs read the saved configuration (ADR-0037's Tier B, applied at the next run start).
+- **The mode flag's explanation.** REQ-SHELL-041 gives the sentence ("Permission mode {mode}: how much agents may do
+  without asking. Change it under the composer or in Settings → Runtime."); REQ-WORKSPACE-022 bounds it to the mode in
+  force and that it decides allow, ask or refuse, "and no more", which the shell's second sentence exceeds.
+
+The file-access flag's two explanations are not among them: REQ-WORKSPACE-022 fixes that pair word for word and
+REQ-SHELL-041 asks only that they use the Settings control's words, which REQ-WORKSPACE-022's pair does (REQ-WORKSPACE-148's
+control "lets agents read and write outside this workspace folder").
+
+**What the build proceeds under** (`apps/desktop/src/main/commands/workspace.ts`'s `workspace.openFolder`,
+`apps/desktop/src/renderer/strip-facts.ts`, `statusStripSafetyFlags` in `packages/ui/src/composer.ts`): the shell domain's
+statements, since REQ-SHELL-047 says that document owns the strip and its resolution 7 is the later decision. A folder that
+cannot be opened raises the transient error naming the path (an opener that never answers counts after 5 s,
+`apps/desktop/src/main/open-folder.ts`); `unsaved settings` reads "The Settings view is holding edits that have not been
+saved; runs keep using the last saved values until they are saved."; the mode flag's sentence is REQ-SHELL-041's; the
+file-access pair is REQ-WORKSPACE-022's.
+
+**What a ruling decides.** Which domain's statement stands for each of the three, and an amendment to the other.

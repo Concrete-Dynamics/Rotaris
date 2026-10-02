@@ -49,7 +49,7 @@ describe('PD-ORCH-005 clauses 13, 16 and 18 (OQ-100, OQ-101, OQ-103): the render
    */
   it('main.tsx hands the Workspace the recovery fact (PD-ORCH-005 clauses 13 and 18)', () => {
     const text = source('main.tsx');
-    expect(text.match(/const needsRecovery = useNeedsRecovery\(session\?\.id \?\? null, session\?\.executionStatus \?\? null\);/g)).toHaveLength(3);
+    expect(text.match(/const needsRecovery = useNeedsRecovery\(session\?\.id \?\? null, session\?\.executionStatus \?\? null\);/g)).toHaveLength(2);
     const start = text.indexOf('<WorkspaceView ');
     const element = text.slice(start, text.indexOf('/></>;', start));
     expect(start).toBeGreaterThan(-1);
@@ -57,17 +57,16 @@ describe('PD-ORCH-005 clauses 13, 16 and 18 (OQ-100, OQ-101, OQ-103): the render
   });
 
   /*
-   * REQ-SHELL-038 with REQ-CHAT-008: the window's status strip names the recovery state as the run header and the Mission
-   * view do (`statusStripRunItem`, pinned in `packages/ui` by composer.test.ts), from the third of main.tsx's
-   * `useNeedsRecovery` calls, the one the window root makes. Handing it `false`, or naming the status without it, would
-   * read "run Running" beside a run-level agent drawn `paused` (PD-ORCH-005 clause 13, OQ-100) and fails here. Since
-   * acceptance A35 (REQ-MONITOR-127, OQ-165) the status it names is the one the window's surfaces show — the record under
-   * this window's optimistic cancels (`useShownSession`), so a confirmed run cancel reads `cancelling` there too.
+   * REQ-SHELL-038 (a closed list) draws no run state in the status strip. Until 2026-10-02 the strip named it
+   * (`statusStripRunItem`, from a third `useNeedsRecovery` call the window root made, so it read `Run needs recovery` as the
+   * run header does: PD-ORCH-005 clause 13, OQ-100, acceptance A35). The strip's repair
+   * (docs/defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md) dropped the
+   * item, so no strip text can disagree with the run header about the recovery state; the run header, the Workspace
+   * badge and the Mission view carry it.
    */
-  it('main.tsx names the strip\'s run item from the recovery fact, over the status the window shows', () => {
+  it('main.tsx draws no run state in the status strip', () => {
     const text = source('main.tsx');
-    expect(text).toContain('statusStripRunItem(shownStatus, needsRecovery)');
-    expect(text).toContain('const shownStatus = useShownSession()?.executionStatus ?? null;');
+    expect(text).not.toContain('statusStripRunItem');
     expect(text).not.toMatch(/`run \$\{STATUS_LABELS/);
   });
 });

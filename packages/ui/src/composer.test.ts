@@ -6,7 +6,8 @@ import {
   COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, COMPOSER_PLACEHOLDERS, COMPOSER_WIDGET_MIN_HEIGHT, DEFAULT_REASONING, DRAFT_PUBLISH_MS,
   DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel, MODELS_LOADING_LABEL, pausePendingAfter,
   PROJECT_SETUP_REFUSAL, reasoningChipLabel, runControlReason, runHeaderControlReason, RUN_STATE_LABELS, runStateOf, runTimingLabel,
-  runTimingSeconds, sendRefusal, statusStripModeItem, statusStripRunItem, statusStripSandboxItem, TRANSCRIPT_MIN_HEIGHT, type HistoryWalk,
+  runTimingSeconds, sendRefusal, statusStripModeItem, statusStripSandboxItem, STRIP_BACKGROUND_MIN_WIDTH, STRIP_NAMES, STRIP_PATH_MIN_WIDTH, stripCostText, stripItems, stripModelItem,
+  stripTokensText, TRANSCRIPT_MIN_HEIGHT, type HistoryWalk, type StripFacts, type StripItem,
 } from './composer.js';
 import { STRIP_NARROW_BELOW, STRIP_TIGHT_BELOW, stripDensity, stripIconTitle } from './WorkspaceView.js';
 
@@ -93,17 +94,108 @@ describe('REQ-SANDBOX-121: the strip names the confinement backend of the focuse
   });
 });
 
-describe('REQ-SHELL-038 with REQ-CHAT-008: the status strip names the recovery state as the run header does', () => {
-  it('reads "Run needs recovery" for a busy session with no run here, and the presentation vocabulary otherwise', () => {
-    // PD-ORCH-005 clause 13 (OQ-100): the strip never says a run is active beside a run-level agent drawn `paused`.
-    expect(statusStripRunItem('running', true)).toBe('Run needs recovery');
-    expect(statusStripRunItem('waiting', true)).toBe('Run needs recovery');
-    expect(statusStripRunItem('pausing', true)).toBe('Run needs recovery');
-    expect(statusStripRunItem('running', false)).toBe('run Running');
-    // A session at rest is named by its own status whatever a stale listing says (REQ-NOTIFY-049).
-    expect(statusStripRunItem('paused', true)).toBe('run Paused');
-    expect(statusStripRunItem('interrupted', true)).toBe('run Idle');
-    expect(statusStripRunItem(null, false)).toBe('no session');
+/*
+ * REQ-SHELL-038/039/041/043/044/045/047 with REQ-TOOLS-131/184 and OQ-184's build reading: the strip's items, their order,
+ * names, tooltips and the two thresholds. Before the repair of
+ * docs/defects/fixed/the-status-strip-applies-no-responsive-hiding-and-overflows-at-the-minimum-window.md the strip drew the
+ * run's state, the theme's name, the child services and the replica counters, none of the workspace path, model, tokens or
+ * cost, the literal `workspace-scoped` whatever the opt-out said, and `bg sessions: N`, at every width.
+ */
+describe('REQ-SHELL-038/047: the status strip, item by item', () => {
+  const opened: string[] = [];
+  const facts = (over: Partial<StripFacts> = {}): StripFacts => ({
+    workspace: { label: '~/work/rotaris', path: '/home/u/work/rotaris', open: () => { opened.push('folder'); } },
+    branch: { text: 'main ↑1', title: 'Branch this workspace is on: main, 1 commit ahead.' },
+    safety: { circuitBreakerArmed: true, unsavedSettings: false, outsideWorkspace: false, mode: 'mode: ask' },
+    sandbox: statusStripSandboxItem({ sandboxed: true, sandboxBackend: 'bubblewrap' }),
+    model: { name: 'scripted', label: 'model: scripted' },
+    tokens: 12480,
+    cost: '0.0042',
+    backgroundSessions: 3,
+    ...over,
+  });
+  const texts = (items: readonly StripItem[]) => items.map((i) => (i.kind === 'spacer' ? '|' : i.text));
+  const named = (items: readonly StripItem[], name: string) => items.filter((i): i is Exclude<StripItem, { kind: 'spacer' }> => i.kind !== 'spacer' && i.name === name);
+
+  it('draws REQ-SHELL-038\'s items left to right, with the sandbox indicator after the file-access flag (OQ-184), at full width', () => {
+    expect(texts(stripItems(1400, facts()))).toEqual([
+      '~/work/rotaris', 'main ↑1', '|', '● CB armed', 'redaction: always on', 'workspace-scoped', 'sandbox: bubblewrap', 'mode: ask',
+      'model: scripted', '12,480 tok', '0.0042 cost', '3 bg sessions',
+    ]);
+    // Nothing REQ-SHELL-038 does not list: no run state, theme, child service or replica counter.
+    expect(texts(stripItems(1400, facts())).some((t) => /^run |rotaris-dim|svc:|applied \d/.test(t))).toBe(false);
+  });
+
+  it('gives every item REQ-SHELL-038\'s accessible name, and exactly the workspace path is a link (REQ-SHELL-039/040)', () => {
+    const items = stripItems(1400, facts());
+    const names = items.flatMap((i) => (i.kind === 'spacer' ? [] : [i.name]));
+    expect(new Set(names)).toEqual(new Set([STRIP_NAMES.workspace, STRIP_NAMES.branch, STRIP_NAMES.safety, 'Confinement backend', STRIP_NAMES.model, STRIP_NAMES.tokens, STRIP_NAMES.cost, STRIP_NAMES.background]));
+    const links = items.filter((i) => i.kind === 'link');
+    expect(links.map((l) => l.kind === 'link' && l.testId)).toEqual(['strip-workspace']);
+    const link = links[0];
+    if (link?.kind !== 'link') throw new Error('no link');
+    expect(link.title).toBe('Workspace folder: /home/u/work/rotaris. Opens it in your file manager.');
+    link.onActivate();
+    expect(opened).toEqual(['folder']);
+  });
+
+  it('REQ-SHELL-047: hides the path below 1180 px and the background count below 1080 px, and nothing else', () => {
+    const at = (w: number) => texts(stripItems(w, facts()));
+    expect(STRIP_PATH_MIN_WIDTH).toBe(1180);
+    expect(STRIP_BACKGROUND_MIN_WIDTH).toBe(1080);
+    expect(at(1180)).toContain('~/work/rotaris');
+    expect(at(1179)).not.toContain('~/work/rotaris');
+    expect(at(1179)).toContain('3 bg sessions');
+    expect(at(1080)).toContain('3 bg sessions');
+    expect(at(1079)).not.toContain('3 bg sessions');
+    // At REQ-MONITOR-051's 1000 px floor, every other item stays.
+    expect(at(1000)).toEqual(['main ↑1', '|', '● CB armed', 'redaction: always on', 'workspace-scoped', 'sandbox: bubblewrap', 'mode: ask', 'model: scripted', '12,480 tok', '0.0042 cost']);
+  });
+
+  it('REQ-SHELL-041 / REQ-TOOLS-131: the safety flags in their fixed order, each tooltip "{short form} — {explanation}"', () => {
+    const flags = named(stripItems(1400, facts({ safety: { circuitBreakerArmed: true, unsavedSettings: true, outsideWorkspace: true, mode: 'mode: autonomous' } })), STRIP_NAMES.safety);
+    expect(flags.map((f) => f.text)).toEqual(['● CB armed', 'redaction: always on', 'unsaved settings', 'outside-workspace!', 'mode: autonomous']);
+    for (const f of flags) expect(f.title.startsWith(`${f.text} — `)).toBe(true);
+    expect(flags[0]?.title).toBe('● CB armed — Circuit breaker: Rotaris stops a run that keeps repeating a failing step.');
+    expect(flags[1]?.title).toBe('redaction: always on — Secret redaction: anything that looks like a credential is masked before it reaches a model or the transcript.');
+    // REQ-WORKSPACE-022's fixed pair, the opt-out (`runtime.allow_outside_workspace`, REQ-TOOLS-131) deciding which.
+    expect(flags[2]?.title).toBe('unsaved settings — The Settings view is holding edits that have not been saved; runs keep using the last saved values until they are saved.');
+    expect(flags[3]?.title).toBe('outside-workspace! — File access: agents may read and write outside this workspace folder.');
+    expect(flags[4]?.title).toBe('mode: autonomous — Permission mode autonomous: how much agents may do without asking. Change it under the composer or in Settings → Runtime.');
+    // The opt-out off: `workspace-scoped`, and exactly one of the two is always present; no breaker, no unsaved edits, no flag for them.
+    const confined = named(stripItems(1400, facts({ safety: { circuitBreakerArmed: false, unsavedSettings: false, outsideWorkspace: false, mode: 'mode: ask' } })), STRIP_NAMES.safety).map((f) => f.text);
+    expect(confined).toEqual(['redaction: always on', 'workspace-scoped', 'mode: ask']);
+    const scoped = named(stripItems(1400, facts()), STRIP_NAMES.safety).find((f) => f.text === 'workspace-scoped');
+    expect(scoped?.title).toBe('workspace-scoped — File access: agents may read and write inside this workspace folder only.');
+  });
+
+  it('REQ-SHELL-043/044/045: the model at full strength, the tokens grouped, the cost by the money rule and absent until there is one', () => {
+    const items = stripItems(1400, facts());
+    const model = named(items, STRIP_NAMES.model)[0];
+    expect(model?.kind === 'text' && model.strong).toBe(true);
+    expect(model?.title).toBe('Runs started from this window use scripted. Change it in the composer or in Settings → Models.');
+    expect(stripModelItem('model: gpt-x')).toEqual({ name: 'gpt-x', label: 'model: gpt-x' });
+    expect(stripTokensText(0)).toBe('0 tok');
+    expect(stripTokensText(12480)).toBe('12,480 tok');
+    expect(stripTokensText(1234567)).toBe('1,234,567 tok');
+    expect(stripCostText(null)).toBeNull();
+    expect(stripCostText('n/a')).toBe('n/a cost');
+    expect(stripCostText('0')).toBe('0.00 cost');
+    expect(stripCostText('0.00001')).toBe('< 0.0001 cost');
+    expect(stripCostText('1.005')).toBe('1.01 cost');
+    expect(named(items, STRIP_NAMES.cost)[0]?.title).toBe('Cost of this workspace\'s runs so far: 0.0042. Reported by the model provider; an unpriced model reads n/a.');
+    expect(named(stripItems(1400, facts({ cost: null })), STRIP_NAMES.cost)).toEqual([]);
+    // REQ-SHELL-044: zero is a known value — `0 tok` and `0 bg sessions` are drawn; the noun agrees with the count.
+    const zero = texts(stripItems(1400, facts({ tokens: 0, backgroundSessions: 0 })));
+    expect(zero).toContain('0 tok');
+    expect(zero).toContain('0 bg sessions');
+    expect(texts(stripItems(1400, facts({ backgroundSessions: 1 })))).toContain('1 bg session');
+  });
+
+  it('draws no workspace link with no workspace open, and no sandbox item for an unconfined session', () => {
+    const items = texts(stripItems(1400, facts({ workspace: null, sandbox: null })));
+    expect(items[0]).toBe('main ↑1');
+    expect(items).not.toContain('sandbox: bubblewrap');
   });
 });
 

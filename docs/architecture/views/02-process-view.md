@@ -141,7 +141,12 @@ it was not given; the request is attributed to the window that sent it, REQ-SHEL
 `PD-SHELL-001`'s add route, decided by the gesture before the chooser opens — a palette entry or the chip with the
 platform's secondary-activation modifier — on which REQ-SHELL-021's three gates are not evaluated and no window is
 closed; a folder another window already holds surfaces that window and builds none, on REQ-STARTUP-163's rule),
-`shell.switchView`, **`window.state` / `window.minimize` / `window.toggleMaximize` / `window.close`**
+**`workspace.openFolder`** (fin10, REQ-SHELL-040: the status strip's workspace-path link; no path on the wire — main
+opens the folder of the window that asked with `shell.openPath`, bounded at 5 s because an opener that cannot be launched
+may never answer (`main/open-folder.ts`), and answers a failure as a refusal naming the path, which the renderer raises on
+the transient error surface; OQ-189), **`workspace.usage`** (fin10, REQ-SHELL-044/045: the strip's tokens and cost, relayed
+as the run host's `workspace.usage {workspaceId}`, answered `{tokens, cost}` by `workspaceUsage` over the workspace's stored
+sessions; OQ-188), `shell.switchView`, **`window.state` / `window.minimize` / `window.toggleMaximize` / `window.close`**
 (PD-SHELL-003: the frameless main window's renderer asks main to operate the BrowserWindow that sent the command;
 close calls `BrowserWindow.close()` so the existing guarded close event remains the only decision point),
 `window.modality {active}` (Part W: the main window's application-modal surface — the command
@@ -513,7 +518,8 @@ restart that could not begin; and
 `config.liveState`, `presenter.register/revoke/pollReply` (a revoke the application's quit causes carries `quitting`,
 PD-ORCH-005 clause 9 — `06-sequences.md` §2), `approval.shown/queued`, `hooks.*`, `playbooks.catalogue`,
 `checkpoint.list/recordSafety/recordRestore` (Part P), `prompts.read/push/take` (Part X, session-less like
-`session.list` — REQ-LIBRARY-137/138), `timeline.append` (Part V, REQ-NOTIFY-268; its optional
+`session.list` — REQ-LIBRARY-137/138), `workspace.usage {workspaceId}` (fin10, session-less too: the status strip's tokens and
+cost over the workspace's stored sessions, answered `workspace.usage {tokens, cost}`), `timeline.append` (Part V, REQ-NOTIFY-268; its optional
 `severity` is REQ-SESSION-134's vocabulary and `info` where absent, while the entry's `id` is minted by the writer
 that records it and never travels on the wire), `shutdown`. Events back: `publish.increment`, `publish.snapshot`,
 `run.result` (since 2026-09-13 it may carry `persistence: {confirmed: false, last_event_ordinal}` — present only when

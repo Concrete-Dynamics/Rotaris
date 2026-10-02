@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
 import { TerminalHostProvider } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripRunItem, statusStripSandboxItem, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripSandboxItem, stripItems, stripModelItem, collapseHome, modelChipLabel, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -21,7 +21,8 @@ import '@phosphor-icons/web/fill';
 
 // The window itself: the bridge, the replica and the two stacks, the terminal registry, the display preferences and
 // the theme — everything this window has before a surface mounts (`shell.ts`).
-import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, composerDraft, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, retryRun, setMode, setRunStartMode, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
+import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, composerDraft, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, retryRun, setMode, setRunStartMode, settingsUnsaved, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
+import { openWorkspaceFolder, useWindowWidth, useWorkspaceUsage } from './strip-facts.js';
 // What a transcript surface reads about the session it is following, shared with the persona window (`session-view.ts`).
 import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery, useShownSession } from './session-view.js';
 // The other windows this same bundle is the root of, each one a role on the route (`windows.tsx`, ADR-0056).
@@ -644,6 +645,9 @@ function useConfiguration(workspace: string | null) {
   const [error, setError] = useState<string | null>(null);
   const [guarding, setGuarding] = useState<{ resolve: (proceed: boolean) => void } | null>(null);
   const dirty = saved !== null && pending !== null && isDirty(saved, pending);
+  // REQ-SHELL-041: the strip's `unsaved settings` flag, shown only while this screen holds unsaved edits.
+  useEffect(() => { settingsUnsaved.setState({ dirty }); }, [dirty]);
+  useEffect(() => () => { settingsUnsaved.setState({ dirty: false }); }, []);
   const pendingRef = useRef<PendingSettings | null>(null);
   useEffect(() => { pendingRef.current = pending; }, [pending]);
   // REQ-CONFIG-472: publish the pending caps for the transcript, and take them back down when the screen goes.
@@ -1035,8 +1039,7 @@ function dispatchNoticeAction(action: NoticeAction): void {
   }
 }
 
-function App({ version, workspace, home, processes, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout, initialLibraryLayout, initialWorkspaceLayout, initialPopOut }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; initialWorkspaceLayout: PaneLayout | undefined; version: string; workspace: string; home: string | undefined; processes: string[]; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean; initialPopOut: boolean }) {
-  const counters = useStore(replica, (s) => s.counters);
+function App({ version, workspace, home, initialTheme, initialReducedMotion, settingsCategory, circuitBreakerArmed, initialLayout, initialGitLayout, initialLibraryLayout, initialWorkspaceLayout, initialPopOut }: { initialLayout: PaneLayout | undefined; initialGitLayout: PaneLayout | undefined; initialLibraryLayout: PaneLayout | undefined; initialWorkspaceLayout: PaneLayout | undefined; version: string; workspace: string; home: string | undefined; initialTheme: Theme; initialReducedMotion: boolean | undefined; settingsCategory: string; circuitBreakerArmed: boolean; initialPopOut: boolean }) {
   // REQ-SHELL-073: the "agent pop-out" preference, persisted through the preference command; default off.
   const [popOut, setPopOut] = useState(initialPopOut);
   // REQ-CHAT-067 (Part Z): the tool-grouping display preference, default ON, in the desktop preference store;
@@ -1044,9 +1047,6 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   const groupTools = useStore(displayPrefs, (s) => s.groupTools);
   const changePopOut = useCallback((value: boolean) => { setPopOut(value); void bridge.command({ kind: 'prefs.set', key: 'interface/agentPopOut', value }); }, []);
   const session = useStore(replica, (s) => s.session);
-  // REQ-MONITOR-127/130 (acceptance A35, OQ-165): the strip names the run's state as this window's surfaces show it — a
-  // confirmed run cancel reads `cancelling` from the confirmation, as the run header and the Mission view do.
-  const shownStatus = useShownSession()?.executionStatus ?? null;
   const notice = useStore(notices, (s) => s.current);
   const [theme, setTheme] = useState(initialTheme);
   const [reducedMotion, setReducedMotion] = useState(() => initialReducedMotion ?? motionReduced());
@@ -1236,31 +1236,43 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
     void bridge.command({ kind: 'approval.raise', requestId: trailer.requestId });
   }, []);
   const branchItem = useMemo(() => branchStripItem(git.state, session?.worktreeBranch ?? null), [git.state, session]);
-  // REQ-CHAT-008's recovery fact for the strip's run item, from the one liveness predicate the Workspace and Mission read.
-  const needsRecovery = useNeedsRecovery(session?.id ?? null, session?.executionStatus ?? null);
-  // REQ-TOOLS-184: the configured preset, re-read on every configuration change, for the strip's mode with no session focused.
-  const configuredMode = useConfigSnapshot(workspace)?.runtime.permission_mode ?? null;
+  // REQ-TOOLS-184 / REQ-TOOLS-131: the configured preset (the strip's mode with no session focused) and the file-access
+  // opt-out, re-read on every configuration change. The saved values, which are what runs use.
+  const stripConfig = useConfigSnapshot(workspace);
+  const configuredMode = stripConfig?.runtime.permission_mode ?? null;
+  const outsideWorkspace = stripConfig?.runtime.allow_outside_workspace === true;
   // REQ-SANDBOX-121 / REQ-MONITOR-257: the focused session's confinement backend, re-bound with focus; absent unless confined.
   const sandboxFlag = session ? session.sandboxed : null;
   const sandboxBackend = session?.sandboxBackend ?? '';
   const sandboxItem = useMemo(() => statusStripSandboxItem(sandboxFlag === null ? null : { sandboxed: sandboxFlag, sandboxBackend }), [sandboxFlag, sandboxBackend]);
+  // REQ-SHELL-041: the Settings view's unsaved edits.
+  const unsavedSettings = useStore(settingsUnsaved, (s) => s.dirty);
+  // REQ-SHELL-043: the model a run started from this window uses — the entry role's, as the composer's model chip names it.
+  // Selected as the one string, so the window root re-renders when the model changes and not on every transcript row.
+  const stripModel = useStore(replica, (s) => entryOf(stripConfig, s.rows, s.session).model);
+  // REQ-SHELL-044/045: this workspace's tokens and cost, re-read as the focused session's own usage moves.
+  const usagePulse = session ? `${session.id}:${session.tokenUsage.input + session.tokenUsage.output}:${session.cost}` : 'none';
+  const usage = useWorkspaceUsage(workspace, usagePulse);
+  // REQ-SHELL-047: the window's width decides which items are shown.
+  const windowWidth = useWindowWidth();
   const status = useMemo<readonly StatusItem[]>(
-    () => [
-      // REQ-NOTIFY-048/049: the presentation vocabulary, never a raw persisted string; in REQ-CHAT-008's recovery state the
-      // synthetic label, as the run header and the Mission view read it (PD-ORCH-005 clause 13, OQ-100).
-      statusStripRunItem(shownStatus, needsRecovery),
+    () => stripItems(windowWidth, {
+      // REQ-SHELL-038/039/040: the workspace path, as the title-bar chip shortens it, a link to the folder.
+      workspace: workspace === '(no workspace)' ? null : { label: collapseHome(workspace, home), path: workspace, open: () => { openWorkspaceFolder(workspace); } },
       // REQ-SHELL-038 / REQ-GIT-122/161: the checked-out branch, the focused session's worktree branch first.
-      { text: branchItem.text, name: 'Checked-out branch', title: branchItem.title, state: branchItem.state, testId: 'strip-branch' },
-      // REQ-TOOLS-184: text, never colour alone — the mode, the workspace-scope flag (REQ-TOOLS-131), redaction (REQ-TOOLS-174), background sessions.
-      // With no session focused the mode is the configured preset the next run starts from, never a literal (live-run finding L7).
-      statusStripModeItem(session?.permissionMode ?? null, configuredMode), 'workspace-scoped',
-      // REQ-SANDBOX-121: beside the workspace-scope flag, the OS confinement the focused session's run had (OQ-184).
-      ...(sandboxItem ? [sandboxItem] : []),
-      'redaction: always on', `bg sessions: ${session?.backgroundSessions ?? 0}`,
-      ...(circuitBreakerArmed ? ['● CB armed'] : []),
-      theme.label, ...processes, `applied ${counters.applied} · reset ${counters.reset} · refused ${counters.refused}`,
-    ],
-    [processes, counters, session, shownStatus, needsRecovery, theme, circuitBreakerArmed, branchItem, configuredMode, sandboxItem],
+      branch: { text: branchItem.text, title: branchItem.title, state: branchItem.state },
+      // REQ-SHELL-041 / REQ-TOOLS-184: text, never colour alone. With no session focused the mode is the configured preset
+      // the next run starts from, never a literal (live-run finding L7).
+      safety: { circuitBreakerArmed, unsavedSettings, outsideWorkspace, mode: statusStripModeItem(session?.permissionMode ?? null, configuredMode) },
+      // REQ-SANDBOX-121: beside the file-access flag, the OS confinement the focused session's run had (OQ-184).
+      sandbox: sandboxItem,
+      // REQ-SHELL-043: the composer's model chip's own words, and the model it names in the tooltip, so the two never differ.
+      model: stripModelItem(modelChipLabel(modelsLoaded, models, stripModel || null)),
+      tokens: usage.tokens,
+      cost: usage.cost,
+      backgroundSessions: session?.backgroundSessions ?? 0,
+    }),
+    [windowWidth, workspace, home, branchItem, circuitBreakerArmed, unsavedSettings, outsideWorkspace, session, configuredMode, sandboxItem, stripModel, modelsLoaded, models, usage],
   );
   // Part W: Ctrl+L (REQ-CHAT-002) and every other chord of REQ-SHELL-049 are the command registry's, bound once by the
   // shell's `useCommandShortcuts`; the Ctrl+L effect that lived here is gone. ADR-0048's application modality: the palette
@@ -1532,7 +1544,7 @@ async function boot(): Promise<void> {
   openWorkspace = info.workspace;
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App version={info.version} workspace={info.workspace} home={info.home} processes={info.processes} initialTheme={bootTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} />
+      <App version={info.version} workspace={info.workspace} home={info.home} initialTheme={bootTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} />
     </StrictMode>,
   );
 }

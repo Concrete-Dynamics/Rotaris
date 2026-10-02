@@ -1,5 +1,7 @@
+import { shell } from 'electron';
 import { canonicalPath } from '@rotaris/platform';
 import { millis } from '@rotaris/kernel';
+import { openFolder } from '../open-folder.js';
 import { refusal, type CommandContext, type CommandHandlers } from './context.js';
 
 /**
@@ -8,10 +10,35 @@ import { refusal, type CommandContext, type CommandHandlers } from './context.js
  * command surface over it.
  */
 export function workspaceCommands(
-  ctx: Pick<CommandContext, 'chooseSave' | 'clocks' | 'mainWindows' | 'raiseNotice' | 'restoreFlow' | 'services'>,
-): Pick<CommandHandlers, 'workspace.backup' | 'workspace.restore' | 'workspace.choose'> {
-  const { chooseSave, clocks, mainWindows, raiseNotice, restoreFlow, services } = ctx;
+  ctx: Pick<CommandContext, 'capturing' | 'chooseSave' | 'clocks' | 'log' | 'mainWindows' | 'raiseNotice' | 'restoreFlow' | 'runHost' | 'services'>,
+): Pick<CommandHandlers, 'workspace.backup' | 'workspace.restore' | 'workspace.choose' | 'workspace.openFolder' | 'workspace.usage'> {
+  const { capturing, chooseSave, clocks, log, mainWindows, raiseNotice, restoreFlow, runHost, services } = ctx;
   return {
+    /**
+     * REQ-SHELL-040 / REQ-WORKSPACE-019: the strip's workspace-path link — the folder of the window that asked, in the OS
+     * file manager. A failure is answered, never swallowed: the refusal names the path attempted, so the renderer's
+     * transient error says what could not be opened and where it is (REQ-SHELL-040's resolution; OQ-189 records that
+     * REQ-WORKSPACE-019 still says silent). Verification seam (only with ROTARIS_CAPTURE_PNG): `record` opens nothing and
+     * reports success, `fail` reports the platform refusal, as `shell.openExternal`'s does.
+     */
+    'workspace.openFolder': async (_req, { w }) => {
+      if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'No workspace folder is open' };
+      const path = w.workspace;
+      const scripted = capturing ? process.env['ROTARIS_CAPTURE_OPEN_EXTERNAL'] : undefined;
+      if (scripted === 'fail') { log(`capture: open-folder REFUSED ${path}`); return { ok: false, code: 'folder.failed', headline: 'The workspace folder could not be opened', detail: `${path} — the file manager refused to open it (scripted).` }; }
+      if (scripted === 'record') { log(`capture: open-folder ${path}`); return { ok: true, value: { path } }; }
+      const opened = await openFolder(path, (p) => shell.openPath(p), clocks.timers);
+      if (!opened.ok) { log(`the workspace folder could not be opened: ${path} — ${opened.reason}`); return { ok: false, code: 'folder.failed', headline: 'The workspace folder could not be opened', detail: `${path} — ${opened.reason}` }; }
+      log(`opened the workspace folder: ${path}`);
+      return { ok: true, value: { path } };
+    },
+    /** REQ-SHELL-044/045: the strip's tokens and cost, relayed to the run host that owns the store. */
+    'workspace.usage': async (_req, { w, awaitWorkspace }) => {
+      await awaitWorkspace();
+      if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'No workspace is open' };
+      const r = await runHost.request({ kind: 'workspace.usage', workspaceId: w.workspaceId }, millis(5_000));
+      return r.kind === 'workspace.usage' ? { ok: true, value: { tokens: r.tokens, cost: r.cost } } : refusal(r, 'The workspace usage could not be read');
+    },
     'workspace.backup': async (_req, { w }) => {
       // REQ-SESSION-201: the destination is a file the user chooses; nothing is written until then.
       if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before backing up its session store' };

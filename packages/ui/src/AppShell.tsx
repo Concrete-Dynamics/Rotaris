@@ -13,6 +13,7 @@ import { KeyboardHelp } from './commands/KeyboardHelp.js';
 import { commandById, detectPlatform, type CommandContext } from './commands/registry.js';
 import { useCommandShortcuts } from './commands/useCommandShortcuts.js';
 import { Button as DesignButton, layoutContractAttributes, type UiLayoutContract } from './design-system/index.js';
+import type { StripItem } from './composer.js';
 
 const SHELL_LAYOUT = {
   root: { id: 'shell-root', relations: [{ kind: 'containment' }, { kind: 'viewport-scroll', axis: 'both', expected: false }] },
@@ -37,8 +38,11 @@ const SHELL_LAYOUT = {
  * control. The structure is the specification's, the language the design
  * system's. A view body is supplied by the caller through `views`.
  */
-/** REQ-SHELL-038: a strip item is text; one carrying an accessible name, a tooltip and a state (the branch, REQ-GIT-122/161) is a record. */
-export type StatusItem = string | { readonly text: string; readonly name: string; readonly title?: string | undefined; readonly state?: string | undefined; readonly testId?: string | undefined };
+/**
+ * REQ-SHELL-038/039: a strip item, built by `stripItems` (`composer.ts`) — inert text with its accessible name and its
+ * tooltip as its accessible description, the one link (the workspace path), or the spacer between the branch and the flags.
+ */
+export type StatusItem = StripItem;
 
 export interface AppShellProps {
   readonly version: string;
@@ -178,10 +182,14 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
         {windowDialog}
       </div>
       <footer className="status-strip" aria-label="Status" aria-description="An item too long for the strip is shortened with an ellipsis and keeps its full text in its tooltip." tabIndex={0} {...layoutContractAttributes(SHELL_LAYOUT.status)}>
-        {/* REQ-SHELL-038: an item that elides keeps its full text in the tooltip — so every item carries one (UIR-001). */}
-        {statusItems.map((s, i) => (typeof s === 'string'
-          ? <span key={i} className="status-strip__item" data-elide={s.length > 28 ? '1' : undefined} title={s}>{s}</span>
-          : <span key={i} className="status-strip__item" data-elide={s.text.length > 28 ? '1' : undefined} aria-label={s.name} title={s.title ?? s.text} data-branch-state={s.state} data-testid={s.testId}>{s.text}</span>
+        {/* REQ-SHELL-038: an item that elides keeps its full text in the tooltip — so every item carries one (UIR-001).
+            REQ-SHELL-039: the workspace path is the one link (its own focus stop, click or Return); every other item is inert
+            text exposed with its accessible name and its tooltip sentence as its description (REQ-SHELL-058). */}
+        {statusItems.map((s, i) => (s.kind === 'spacer'
+          ? <span key={`spacer-${i}`} className="status-strip__spacer" aria-hidden="true" />
+          : s.kind === 'link'
+            ? <DesignButton key={s.testId} type="button" className="btn btn-link status-strip__item status-strip__link" data-elide={s.text.length > 28 ? '1' : undefined} aria-label={s.name} aria-description={s.title} title={s.title} data-testid={s.testId} onClick={s.onActivate}>{s.text}</DesignButton>
+            : <span key={s.testId} className="status-strip__item" data-elide={s.text.length > 28 ? '1' : undefined} aria-label={s.name} aria-description={s.title} title={s.title} data-branch-state={s.state} data-figure={s.figure ? '1' : undefined} data-strong={s.strong ? '1' : undefined} data-testid={s.testId}>{s.text}</span>
         ))}
       </footer>
       {acknowledgements && <Acknowledgements store={acknowledgements} />}

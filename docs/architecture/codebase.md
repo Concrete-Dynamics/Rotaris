@@ -219,7 +219,8 @@ wrapper that drops the originals' own properties (`fs.realpath.native`) breaks f
    `result` and the terminal status in one durable transaction **while still holding the lock** (A3, REQ-EVENTS-098),
    releases it in guaranteed cleanup after the sink is detached, then rebuilds `summary.md` off the path.
    The stop control cancels gracefully and a second press forces; the outcome is presented once as the
-   persistent notice; the status strip shows the presentation vocabulary. Every event is recorded then
+   persistent notice; the status strip shows the presentation vocabulary (its run item was dropped on 2026-10-02, fin10:
+   REQ-SHELL-038's closed list has no run state, and the run header and the Mission subtitle carry it). Every event is recorded then
    forwarded on the bus with the 5 s bound. **No tool, no child, no hook, no intent classification, no
    verification**: one task, one agent, one turn per iteration.
 

@@ -1,0 +1,88 @@
+## The status strip applies no responsive hiding and overflows at the minimum window
+
+REQ-SHELL-047 hides the workspace-path item below 1180 px and the background-session item below 1080 px. The built strip
+(`packages/ui/src/AppShell.tsx`, items from `apps/desktop/src/renderer/main.tsx`) hides nothing at any width: at
+REQ-MONITOR-051's 1000 × 680 floor it still draws `bg sessions: 0`, and it holds items REQ-SHELL-038's list does not have
+(the run's state, the theme's name, each child service and the applied/reset/refused counters). The strip's content is then
+wider than the window and falls back to its own horizontal scroll (`overflow-x: auto`, `packages/ui/src/shell.css`).
+Measured 2026-10-02 by fin8 with `pnpm app:drive` at 1000 × 680, load about 2.2: with an unconfined session focused the
+strip's `scrollWidth` was 1026 px against a `clientWidth` of 1000 px; with a confined one, whose `sandbox: bubblewrap` item
+REQ-SANDBOX-121's repair added (141 px with its gap), 1167 px; at 1400 px wide both fit. Noticed while drawing that item
+([no-workspace-indicator-names-the-confinement-backend.md](no-workspace-indicator-names-the-confinement-backend.md));
+not repaired there: the thresholds and the strip's item list are REQ-SHELL-038/047's, and where the new item stands is
+OQ-184's.
+
+**Amended 2026-10-02 (fin10, before the repair): the strip read against REQ-SHELL-038's whole list, not only its
+thresholds.** On origin/main `97e1de4` the strip also lacks items and states something false:
+
+- it draws none of REQ-SHELL-038's "Workspace folder", "Model runs use", "Tokens used" or "Cost so far" items (no source
+  file holds those names), so the workspace path is no link (REQ-SHELL-039/040) and no model, tokens or cost is shown
+  (REQ-SHELL-043/044/045);
+- it has no `unsaved settings` flag (REQ-SHELL-041, REQ-TOOLS-184);
+- its file-access flag is the string literal `workspace-scoped` (`apps/desktop/src/renderer/main.tsx:1255`) whatever
+  `runtime.allow_outside_workspace` says (`packages/config/src/sections/runtime.ts:45`, a live Tier-B key), so with the
+  opt-out on the strip still tells the user agents are confined to the workspace where REQ-TOOLS-131 requires
+  `outside-workspace!`: a safety indicator that misreports;
+- a string flag's tooltip is its own text (`packages/ui/src/AppShell.tsx:183`), not REQ-SHELL-041's
+  "{short form} — {explanation}", and the flags stand in another order than REQ-SHELL-041's fixed one;
+- the background count reads `bg sessions: N` where REQ-SHELL-044 reads `N bg sessions`, its noun agreeing with N.
+
+## Specs
+
+- REQ-SHELL-047: the two responsive-elision thresholds, unbuilt; "An item added to the strip is given its threshold here".
+- REQ-SHELL-038: the strip's items left to right; the build draws others besides them and lacks four of its own.
+- REQ-SHELL-039/040: the workspace path is a link opening the folder; unbuilt.
+- REQ-SHELL-041, REQ-TOOLS-131, REQ-TOOLS-184: the safety flags, their order, their joined tooltips, the file-access flag
+  from the opt-out and the `unsaved settings` flag; the file-access flag is a literal.
+- REQ-SHELL-043/044/045: the model, tokens and cost items, unbuilt; the background count's wording.
+
+## Relevant files
+
+- `apps/desktop/src/renderer/main.tsx`: the `status` memo, the strip's items, with no width condition.
+- `packages/ui/src/AppShell.tsx`: the strip, drawing every item it is handed.
+- `packages/ui/src/shell.css`: `.status-strip`'s `overflow-x: auto`, the last resort a full strip falls back to.
+- `packages/ui/src/composer.ts`: the strip's item helpers (`statusStripRunItem`, `statusStripModeItem`, `statusStripSandboxItem`).
+- `packages/config/src/sections/runtime.ts`: `allow_outside_workspace`, which the file-access flag never reads.
+- `apps/desktop/scripts/mission-proof.mjs`: the one proof reading strip items (the run state).
+
+## Outcome (fin10, 2026-10-02)
+
+**Repaired.** The strip is built from pure helpers in `packages/ui/src/composer.ts`: `stripItems(width, facts)` answers
+REQ-SHELL-038's items in its order with its accessible names (`STRIP_NAMES`) — the workspace path as the one link
+(REQ-SHELL-039; a design-system `Button`, its tooltip and description "Workspace folder: {path}. Opens it in your file
+manager."), the branch, a spacer, REQ-SHELL-041's safety flags in their fixed order (`statusStripSafetyFlags`: `● CB armed`
+while armed, `redaction: always on`, `unsaved settings` while the Settings view is dirty, exactly one of
+`outside-workspace!` / `workspace-scoped` from `runtime.allow_outside_workspace`, OQ-184's `sandbox: <backend>` right after
+it, `mode: {mode}`), each tooltip and accessible description the joined "{short form} — {explanation}"; the model at full
+text strength with REQ-SHELL-043's tooltip; `{n} tok` grouped by thousands (REQ-SHELL-044); `{figure} cost` by the money
+rule, absent until a figure exists, `n/a` for unpriced usage (REQ-SHELL-045; bare, as PD-MONITOR-001 revision 3 renders a
+figure with no currency); `N bg session(s)` with the noun agreeing. REQ-SHELL-047's thresholds read the window's own width:
+the path goes below 1180 px, the background count below 1080 px. The run state, the theme's name, the child services and the
+replica counters are gone from the strip (the run header, the Mission subtitle and Settings carry the first two). The
+cloud-credit item (REQ-SHELL-046) is never present: this build reads no credit balance. Two commands carry what the renderer
+did not have: `workspace.openFolder` (REQ-SHELL-040: a failure is the transient error naming the path; an opener that never
+answers counts after 5 s, `apps/desktop/src/main/open-folder.ts`) and `workspace.usage` (the tokens and cost over the
+workspace's stored sessions, `packages/engine/src/workspace-usage.ts`).
+
+**Readings the build proceeds under, raised:** the tokens item counts **this workspace's runs**, as the cost does — REQ-SHELL-044
+names no scope (OQ-188); where the workspace domain states the strip otherwise (REQ-WORKSPACE-019's silent failure,
+REQ-WORKSPACE-022's `unsaved settings` and mode explanations) the shell domain's statements are built, the file-access pair
+being REQ-WORKSPACE-022's fixed one (OQ-189).
+
+**Pinned by** `packages/ui/src/composer.test.ts` ("REQ-SHELL-038/047: the status strip, item by item": order, names, the one
+link, both thresholds at 1179/1180 and 1079/1080, every flag's tooltip, `outside-workspace!` under the opt-out, tokens, cost
+and the noun), `packages/ui/src/layout-regression.test.ts` (the item list at each threshold and the spacer's give),
+`packages/engine/src/workspace-usage.test.ts`, `apps/desktop/src/main/open-folder.test.ts` and
+`apps/desktop/src/renderer/recovery-wiring.test.ts` (no run item). Each strip test fails on the code before the repair, which
+had no `stripItems`. `apps/desktop/scripts/mission-proof.mjs` read the strip's run item; it reads the Mission subtitle now.
+
+**Shown in the built app** with `pnpm app:drive` on 2026-10-02 (load about 0.79), a confined session focused
+(`sandbox_mode: workspace-write`, bubblewrap) after a scripted run: `.status-strip`'s `scrollWidth` equals its
+`clientWidth` at 1000 (1000/1000, the spacer still 204 px wide), 1079 (1079/1079), 1080, 1179 (1179/1179), 1180 and 1400
+(1400/1400), with the path shown from 1180 and the count from 1080 exactly; before, fin8 measured 1167/1000 here. Relaunched
+with `allow_outside_workspace: true` the flag read `outside-workspace!`; an unsaved Settings edit raised `unsaved settings`;
+the path link on this host (no `xdg-open`) raised "The workspace folder could not be opened" naming the path after 5 s.
+
+Noticed while building and recorded, not repaired:
+[the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md](../the-status-strips-workspace-path-elides-at-its-end-not-its-middle.md),
+[the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md](../the-status-strips-branch-item-has-no-branch-icon-and-its-tooltip-no-full-stop.md).

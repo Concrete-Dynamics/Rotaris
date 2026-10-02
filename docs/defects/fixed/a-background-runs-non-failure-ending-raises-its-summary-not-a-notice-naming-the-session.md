@@ -44,7 +44,10 @@ so no question was raised.
 - Main's run-result handler sends every non-failure ending through `RunFailurePublisher.endedOtherwise`, the focus test the
   REQ-NOTIFY-032 gate already used (`MainWindows.followerOfSession`): a session a main window follows raises the notice
   `runEndingPublication` decided, as before; any other raises REQ-NOTIFY-031's in its place. Nothing changes the focus.
-  REQ-NOTIFY-032's warning replaces it in the one slot where a later failure follows (REQ-NOTIFY-024).
+  REQ-NOTIFY-032's warning replaces it in the one slot where a later failure follows (REQ-NOTIFY-024). A run a cancelled
+  quota wait ended is one of these endings: not on screen, it raises REQ-NOTIFY-031's `info` notice, not REQ-NOTIFY-063's,
+  and nothing brings REQ-NOTIFY-063's (with its model-settings action) at the focus — recorded, not repaired, in
+  [`a-background-run-ended-on-a-provider-limit-loses-its-quota-notice.md`](../a-background-run-ended-on-a-provider-limit-loses-its-quota-notice.md).
 - Found while showing it: after "New session" the window shows no session (REQ-MONITOR-249/252) but main went on counting the
   released one as followed until the next prompt subscribed another, so the most common way a run goes to the background
   still raised its summary — and a failure there published its class notice at once rather than REQ-NOTIFY-032's. A new

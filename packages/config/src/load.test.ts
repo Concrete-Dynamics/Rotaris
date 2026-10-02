@@ -649,7 +649,7 @@ providers:
     const slots = Object.fromEntries(slotPreferences(r.value).map((p) => [p.slot, p]));
     expect(slots['small_model']).toMatchObject({ value: 'p/tiny', origin: 'discovered' });
     expect(slots['large_model']).toMatchObject({ value: 'p/big', origin: 'discovered' });
-    expect(slots['medium_model']).toMatchObject({ origin: 'built-in' });
+    expect(slots['medium_model']).toMatchObject({ origin: 'default' });
     expect(r.value.discoveredSlots).toEqual({ large_model: 'p/big', small_model: 'p/tiny' });
   });
 });

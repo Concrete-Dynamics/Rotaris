@@ -121,7 +121,7 @@ export function ModelsSettings(props: ConfigSettingsProps) {
             const levels: string[] = [...REASONING_LEVEL_NAMES.filter((l) => l !== 'auto'), ...(thinking === 'auto' ? ['auto'] : [])];
             return (
               <tr key={slot}>
-                <td className="mono">{slot}<span className="text-tertiary settings__origin"> {view?.origin ?? 'built-in'}</span></td>
+                <td className="mono">{slot}<span className="text-tertiary settings__origin"> {view?.origin ?? 'default'}</span></td>
                 <td>
                   <DesignSearchableSelect
                     className="input select"

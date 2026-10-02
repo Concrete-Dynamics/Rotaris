@@ -48,9 +48,48 @@ Pinned by:
   cell for it": a synthetic store fixture, since no live pack holds the case. It failed before the repair
   (`root-model → spare-model → root-model`).
 
-One reading stays coarse, stated in both copies' doc comments: two switches within one iteration, the first away from the
-configured model while a move is in force and the second back onto it before the root takes another turn, read as ending
-the move, though the cell was never rebuilt between them; the record does not say whether a turn fell between the two.
+**Corrected in place, repair round 1 (2026-10-02).** The first form of this outcome said: "One reading stays coarse, stated
+in both copies' doc comments: two switches within one iteration, the first away from the configured model while a move is
+in force and the second back onto it before the root takes another turn, read as ending the move, though the cell was
+never rebuilt between them; the record does not say whether a turn fell between the two." The verifier showed that this
+was the note's own symptom left reachable, not a coarse edge. `rebuilds` is a prediction made at the switch, and a later
+switch made before the root's next turn overtakes it. The first record (`rebuilds: true`) was then untrue, and both readers
+printed the root back on the configured key while the run stayed on its fallback.
+
+Repaired at its root: the run now also records whether a record **supersedes** a switch that never applied. `Run` keeps
+`entrySwitchPending`. A switch sets it, and `rootResilience` clears it where the root's cell is settled at each root turn.
+Two records carry it:
+- `entry_model_switched` carries `{ model, rebuilds, supersedes }`.
+- The root's own wait choice (`model_override`, REQ-MONITOR-303) carries `supersedes`, true when it replaced such a
+  switch. A child's wait choice records `false` and leaves the pending switch standing.
+
+Both readers keep the state from before the first unapplied switch, including the keys printed up to it. A superseding
+record returns to that state before it is read. Switching away and back with no turn between therefore leaves the move
+standing, and a chain of three is read from the state before the first. A store that records no `supersedes` keeps the
+earlier reading. Pinned by:
+- `packages/engine/src/run/ladder.test.ts`, "a switch away and back before the root's next turn supersedes the first …":
+  - The root falls back to `b1` and delegates. While its call is in flight, the user switches to `c1` and back to `a1`.
+  - The run records `{c1, rebuilds: true, supersedes: false}` then `{a1, rebuilds: false, supersedes: true}`.
+  - The root's resumed turn after the child still goes to `b1`. In the control run, the switch to `c1` alone moves that
+    turn to `c1`.
+  - `entryModelKeys` over the run's own store reads `['b1']`, and `['b1', 'c1']` in the control.
+  - The case fails without the run change and without the reader change.
+- The same file's "the root's own wait choice supersedes a switch recorded since its last turn …": a switch to `f1`, made
+  while the root's call is in flight, is overtaken by the root's wait choice of `c1`. The override records
+  `supersedes: true`. The case fails without the run change.
+- The earlier case in that file, which switches to `a1` then `c1` with no turn between, now expects
+  `supersedes: false` then `supersedes: true`.
+- `apps/desktop/scripts/lib/autopsy-entry-model.test.ts`, four moves-table rows:
+  - away and back with no turn between;
+  - a third switch in the chain;
+  - a switch after an applied one, read as recorded;
+  - the root's superseding wait choice.
+
+  The first, second and fourth failed on both copies before the change.
+
+The other coarse reading these doc comments state is a different defect: a switched key is carried across a continuation
+that records no snapshot. It is now recorded as an open note,
+[the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md](../the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md).
 
 The product's own row is a separate matter and is recorded, not repaired, here:
 [a-switch-onto-the-configured-entry-model-leaves-a-ladder-fallback-in-force.md](../a-switch-onto-the-configured-entry-model-leaves-a-ladder-fallback-in-force.md)

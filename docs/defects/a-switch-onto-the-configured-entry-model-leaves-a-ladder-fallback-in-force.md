@@ -12,7 +12,9 @@ Noticed 2026-10-02 while repairing
 [the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback.md](fixed/the-autopsy-reader-reads-a-switch-onto-the-configured-model-as-ending-a-fallback.md)
 (fin5, harness-readers), and first named in the third triage of open notes as a candidate to record. Read from the code;
 the run now records the fact on the switch (`entry_model_switched` carries `rebuilds: false`), pinned by
-`packages/engine/src/run/ladder.test.ts` ("a switch records whether the root's cell is rebuilt for it …"). Not reached in a
+`packages/engine/src/run/ladder.test.ts` ("a switch records whether the root's cell is rebuilt for it …"). The same holds
+when the user switches away and back before the root's next turn: the second switch records `supersedes: true`, and the
+root keeps its fallback (the same file, "a switch away and back before the root's next turn …"). Not reached in a
 live pack. Not repaired: whether the run should rebuild the root's cell on such a switch (and with it reset or keep the
 cell's one-fallback budgets) is a product change outside that task.
 

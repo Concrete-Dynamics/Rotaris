@@ -8,6 +8,7 @@ import type { SessionSnapshot } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRef, type ScriptedCall } from '@rotaris/model';
 import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, toSessionRecord, type CatalogueEntry, type DelegationOps, type ModelChoice, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
 import { conversationOf } from './record.js';
+import { childModelKeys, entryModelKeys } from '../autopsy.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000d') as MachineId;
 const ref = (providerId: string, modelId: string): ModelRef => ({ providerId, modelId, dialect: 'chat' });
@@ -425,9 +426,78 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
     // Another model: rebuilt from the next iteration.
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
-    expect(switched()).toEqual([{ model: 'a1', rebuilds: false }, { model: 'c1', rebuilds: true }]);
+    // No root turn between the two: the second supersedes the first, which never applies.
+    expect(switched()).toEqual([{ model: 'a1', rebuilds: false, supersedes: false }, { model: 'c1', rebuilds: true, supersedes: true }]);
     release();
     expect((await sessions.running(sid)!).status).toBe('completed');
+  });
+
+  /*
+   * The verifier's away-and-back case of the same note: with the root on its fallback, a switch away from the configured
+   * model and one back onto it before the root's next turn. `rebuilds: true` on the first was a prediction the second
+   * overtook; the run says so (`supersedes`), keeps b1 at the root's next turn, and the reader, over the run's own store,
+   * reads b1 and nothing else. The control: the switch away alone moves the root's next turn to c1.
+   */
+  it('REQ-MONITOR-142 over REQ-ORCH-091 b: a switch away and back before the root\'s next turn supersedes the first — the root keeps its fallback, and the record and the autopsy reader say so', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model']), entry('c1', 'c', C1, [])];
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    const runWith = async (switches: readonly string[]) => {
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        if (persona !== 'orchestrator') return answer('child done');
+        if (turn === 1) return failing(quota());
+        // On b1: held, then a delegation; its turn ends and the root resumes with the child's report in a new turn.
+        if (turn === 2) return { parts: [{ hold: held }, ...toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]).parts] };
+        return answer(`root ${turn}`);
+      };
+      const { sessions, client } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 10_000 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 40 && client.requests.length < 2; i++) await tick();
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+      for (const model of switches) expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model } })).toEqual({ ok: true });
+      release();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const rows = dal.timelineOf(sid);
+      return {
+        records: rows.filter((t) => t.name === 'entry_model_switched').map((t) => JSON.parse(t.metadata) as unknown),
+        root: client.requests.filter((r) => /^You are the orchestrator/.test(systemOf(r))).map((r) => r.model.modelId),
+        keys: entryModelKeys(undefined, rows, childModelKeys(dal.childrenOf(sid))),
+      };
+    };
+    const control = await runWith(['c1']);
+    expect(control.records).toEqual([{ model: 'c1', rebuilds: true, supersedes: false }]);
+    expect(control.root.slice(0, 2)).toEqual(['a1', 'b1']);
+    expect(control.root.length).toBeGreaterThan(3);
+    expect(control.root.at(-1)).toBe('c1');
+    expect(control.keys).toEqual(['b1', 'c1']);
+    const awayAndBack = await runWith(['c1', 'a1']);
+    expect(awayAndBack.records).toEqual([{ model: 'c1', rebuilds: true, supersedes: false }, { model: 'a1', rebuilds: false, supersedes: true }]);
+    expect(awayAndBack.root.length).toBeGreaterThan(3);
+    expect(awayAndBack.root.slice(1).every((m) => m === 'b1')).toBe(true);
+    expect(awayAndBack.keys).toEqual(['b1']);
+  });
+
+  it('REQ-MONITOR-142 over REQ-MONITOR-303: the root\'s own wait choice supersedes a switch recorded since its last turn, and its override says so', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, []), entry('f1', 'f', F1, [])];
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? { parts: [{ hold: held }, { error: quota() }] } : answer('on c1')), { catalogue });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && client.requests.length < 1; i++) await tick();
+    // The root's call on a1 is in flight: a switch to f1 is recorded and waits for the root's next turn.
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'f1' } })).toEqual({ ok: true });
+    release();
+    for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+    // The call failed on quota with no same-tier candidate: the root waits, and the user's choice there replaces f1.
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', agent: 'orchestrator' });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'c1']);
+    const meta = (name: string) => dal.timelineOf(sid).filter((t) => t.name === name).map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+    expect(meta('entry_model_switched')).toEqual([{ model: 'f1', rebuilds: true, supersedes: false }]);
+    expect(meta('model_override')).toEqual([expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1', supersedes: true })]);
   });
 
   describe('PD-MONITOR-001 revision 2: a request is priced at the ladder cell, by the model it was sent to', () => {

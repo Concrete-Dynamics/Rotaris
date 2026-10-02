@@ -99,9 +99,11 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * (REQ-ORCH-090). A child's move leaves the root where it is; the next continuation ends a move (its snapshot's key, or
  * the configured key when it records none), and so does a switch the run rebuilt the root's cell for — not one it
  * records `rebuilds: false` on, onto the model the cell was last built from (a store recording no `rebuilds` reads as
- * rebuilt; the engine's copy says what stays coarse). A continuation recording no snapshot
+ * rebuilt). A switch or a wait choice that `supersedes` a switch the run had not applied yet is read from the state
+ * before that switch, which never ran (the engine's copy says why; a store recording none reads each as applied). A
+ * continuation recording no snapshot
  * returns the root to the last switched key, though a switch is held on its run alone and the new run starts on its
- * configuration's model (the engine's copy says so); and an entry naming a child alive at its instant is that child's,
+ * configuration's model (the engine's copy says so; the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot); and an entry naming a child alive at its instant is that child's,
  * even where a root of the same name was alive too (OQ-158).
  */
 export function entryModelKeys(launchAuditPayload, timeline, children) {
@@ -111,6 +113,15 @@ export function entryModelKeys(launchAuditPayload, timeline, children) {
   // The key the configuration names (snapshot or switch); `base` departs from it only while a ladder move is in force.
   let configured = null;
   let fellBack = false;
+  // The state before the first switch the run had not applied yet: a record that `supersedes` it returns here first.
+  let held = null;
+  const restore = () => {
+    if (held === null) return;
+    base = held.base;
+    configured = held.configured;
+    fellBack = held.fellBack;
+    keys.splice(0, keys.length, ...held.keys);
+  };
   const overrides = new Map();
   const effective = () => {
     if (base === null) return null;
@@ -137,6 +148,7 @@ export function entryModelKeys(launchAuditPayload, timeline, children) {
     models = e.models;
     base = configured = { label: e.label, pair: e.pair };
     fellBack = false;
+    held = null;
     add(effective());
   };
   if (launchAuditPayload !== undefined && launchAuditPayload !== null) fromSnapshot(parseJson(launchAuditPayload)?.config_snapshot);
@@ -146,6 +158,9 @@ export function entryModelKeys(launchAuditPayload, timeline, children) {
       const meta = parseJson(t.metadata);
       const key = str(meta?.model);
       if (key === '') continue;
+      // `supersedes`: the switch before it never applied, so this one is read from the state before that one.
+      if (meta?.supersedes === true) restore();
+      else held = { base, configured, fellBack, keys: [...keys] };
       configured = { label: modelLabel(models, key), pair: modelPair(models, key) };
       // `rebuilds: false`: the run did not rebuild the root's cell, so a ladder move in force stands; none recorded: rebuilt.
       if (meta?.rebuilds === false && fellBack) continue;
@@ -156,6 +171,8 @@ export function entryModelKeys(launchAuditPayload, timeline, children) {
       const meta = parseJson(t.metadata);
       const key = str(meta?.model_key);
       if (typeof meta?.provider !== 'string' || typeof meta?.model !== 'string' || key === '') continue;
+      // `supersedes`: the root's own wait choice replaced a switch the run had not applied, which never ran.
+      if (meta.supersedes === true) { restore(); held = null; }
       const to = typeof meta.to_provider === 'string' && typeof meta.to_model === 'string' ? `${meta.to_provider}|${meta.to_model}` : modelPair(models, key);
       overrides.set(`${meta.provider}|${meta.model}`, { key, to });
       add(effective());

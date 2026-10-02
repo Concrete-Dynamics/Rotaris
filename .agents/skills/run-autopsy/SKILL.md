@@ -51,7 +51,8 @@ Two facts the reader bakes in: the `usage.update` payload carries tokens and
 cost alone — no provider or model — so attribution reads `children.model_key`
 for a child (matched by its `canonical_name`, the name its tool calls and the
 ladder's entries carry, never its `given_name`) and, for the entry agent, the key its launch audit's configuration
-snapshot, its continuations and its `entry_model_switched` entries record,
+snapshot, its continuations and its `entry_model_switched` entries record (a switch ends a ladder move only where its
+`rebuilds` is not false, and one that `supersedes` an unapplied switch is read from before that switch),
 carried through every `model_override` of the pair it runs on (`undetermined`
 where the snapshot cannot place the root's pair against a recorded override),
 joined in order when it ran on more than one (`session` means none is recorded;

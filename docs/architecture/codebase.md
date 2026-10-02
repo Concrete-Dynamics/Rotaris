@@ -718,6 +718,10 @@ key (`.proof/slice-proof/results.json`), after two runs that each found a defect
 credential file where the product writes it on the running platform (`tokensDirFor`): the Windows spelling it used
 everywhere left the first launch's wait, the strays check and the sign-out check with nothing to read off Windows
 ([note](../defects/fixed/slice-proof-and-code-intel-proof-spell-the-windows-data-directory-on-every-platform.md)).
+Since 2026-10-01 step 3 reads the priming from the run host's opening credential report (`lib/priming-report.mjs`,
+pinned against `LeaseReportLog`): the provider among the authenticated, nothing unresolved (REQ-PROVIDER-067/068), in
+place of "credentials: 1 provider(s) authenticated", a line nothing writes
+([note](../defects/fixed/slice-proof-asserts-a-priming-line-the-product-does-not-write.md); not yet run since).
 
 **What `pnpm live-run` does.** It is the only check here that answers to a real model rather than a scripted one,
 and the only one that spends money, so it never runs on its own: `pnpm check` does not reach it and without
@@ -1116,6 +1120,11 @@ scenario runs to its end with its failure listed in `results.json`
 `spawnSync`'s own timeout could not bound a launch: it closes the pipes as it signals, and the application's quit then
 loops on its own EPIPE ([note](../defects/fixed/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md); repaired
 2026-09-29 under R-067 — the application log's writer, `standardStreamWriter`, absorbs a failed write and stops).
+Since 2026-10-01 every scenario's workspace carries the answered project-setup section (`lib/initialization-marker.mjs`)
+and every launch fails if the setup started in the background anyway, so a bundle-less checkout's "Project setup did not
+finish" no longer stands in the one notice slot `cancel` and `fatal` read; `fatal` asserts the 401's own notice (its
+failure text as detail) rather than only "not a provider limit"
+([note](../defects/fixed/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md)).
 
 **A probe is a deadline, not an appointment (2026-09-12).** Three of this proof's assertions were mid-run DOM probes
 fired at a fixed instant — `.wait-header@1700` — and they failed intermittently on a busy machine with nothing wrong

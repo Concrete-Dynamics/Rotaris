@@ -75,7 +75,7 @@ const created = { kind: 'worktree.created', path: `${WORKSPACE}/.rotaris/worktre
 describe('REQ-NOTIFY-061: a sandboxed launch that was refused', () => {
   const WORDING = 'Confinement is unavailable: the bubblewrap launcher is not on PATH. Install bubblewrap (bwrap) and start the run again.';
   const refused = { kind: 'refused', code: 'session.confinement', headline: 'The run was refused before it started', detail: WORDING } as const;
-  const host = (req: RunHostRequest): ProcessReply => (req.kind === 'runs.active' ? { kind: 'runs.count', count: 0 } : refused);
+  const host = (req: RunHostRequest): ProcessReply => (req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: 'ws-1', count: 0 } : refused);
   const expected = { severity: 'error', title: 'The run was refused before it started', message: WORDING, detail: WORDING, persistent: true, action: { label: 'Open Workspace', action: { kind: 'open-view', view: 'workspace' } } };
 
   it('a start: the wording as received in the message and the copyable detail, an action returning to the workspace view, no retry', async () => {
@@ -96,7 +96,7 @@ describe('REQ-NOTIFY-061: a sandboxed launch that was refused', () => {
   });
 
   it('any other refusal keeps its own notice', async () => {
-    const h = harness(() => ({ kind: 'ack' }), (req) => (req.kind === 'runs.active' ? { kind: 'runs.count', count: 0 } : { kind: 'refused', code: 'session.configuration', headline: 'The run was refused before it started', detail: 'The configuration could not be loaded.' }));
+    const h = harness(() => ({ kind: 'ack' }), (req) => (req.kind === 'runs.active' ? { kind: 'runs.count', workspaceId: 'ws-1', count: 0 } : { kind: 'refused', code: 'session.configuration', headline: 'The run was refused before it started', detail: 'The configuration could not be loaded.' }));
     await sessionCommands(h.ctx)['session.start']({ kind: 'session.start', prompt: 'Hello.' }, windowOn('ws-1'));
     expect(h.reported).toEqual([]);
     expect(h.raised).toEqual([{ severity: 'error', headline: 'The run was refused before it started', detail: 'The configuration could not be loaded.' }]);

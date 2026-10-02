@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import type { BlockerPayload } from '@rotaris/contracts';
-import { PATH_LABELS, blockerPresentation, nothingHolds, type AnswerPath } from './presentation.js';
+import { PATH_LABELS, blockerPresentation, followAnswer, nothingHolds, type AnswerPath, type DecisionResult } from './presentation.js';
 import { Button as DesignButton } from '../../design-system/index.js';
 
 /**
@@ -8,11 +8,14 @@ import { Button as DesignButton } from '../../design-system/index.js';
  * value alone (`blockerPresentation`), so the same blocker reads identically here, on the card and in the detail; the
  * four answer paths carry named controls and the precedence the engine's fields decide (REQ-TRACE-448/449); a conflict
  * presents both requirements side by side (REQ-TRACE-450); an answer carries only the chosen option and the engine's
- * refusal is quoted (REQ-TRACE-453/454); no blocker is a positive statement, never an empty pane (REQ-TRACE-447).
+ * refusal is quoted (REQ-TRACE-453/454); no blocker is a positive statement, never an empty pane (REQ-TRACE-447). A
+ * resume into `ready` starts a run, so it waits on the launch's disclosure (REQ-TRACE-472): the pane follows it there,
+ * says it is waiting as a status with the answers held, and once it is accepted says nothing was refused.
  */
 export interface BlockersPaneProps {
   readonly payload: BlockerPayload | null;
-  readonly onAnswer: (option: string) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  /** The board's one write path; an answer that starts a run comes back held behind the disclosure (REQ-TRACE-472). */
+  readonly onAnswer: (option: string) => Promise<DecisionResult>;
   readonly onNavigate: (id: string) => void;
   readonly onOpenRun: (sessionId: string) => void;
   readonly onClose: () => void;
@@ -21,9 +24,17 @@ export interface BlockersPaneProps {
 export function BlockersPane(p: BlockersPaneProps) {
   const headingId = useId();
   const [refusal, setRefusal] = useState<string | null>(null);
+  /** REQ-TRACE-472: the answer is waiting on the launch's disclosure: nothing has been recorded yet, and nothing was refused. */
+  const [waiting, setWaiting] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const pres = p.payload === null ? null : blockerPresentation(p.payload);
-  const answer = async (option: string) => { setBusy(true); const r = await p.onAnswer(option); setBusy(false); setRefusal(r.ok ? null : r.reason); };
+  const answer = async (option: string) => {
+    setBusy(true);
+    const first = await p.onAnswer(option);
+    // The answers stay held until the disclosure has been answered; the host re-reads the blocker once it is taken.
+    await followAnswer(first, (s) => { setWaiting(s.waiting); setRefusal(s.refusal); });
+    setBusy(false);
+  };
   if (p.payload === null) return <div className="req-pane req-pane--blockers" role="region" aria-labelledby={headingId}><h2 id={headingId} className="req-pane__title">Blockers</h2><p className="req-pane__lead">Select a requirement to see what is holding it.</p></div>;
   if (pres === null) {
     return (
@@ -60,6 +71,7 @@ export function BlockersPane(p: BlockersPaneProps) {
         </div>
       )}
       <div className="req-pane__paths" data-testid="req-pane-blockers-paths">{pres.paths.map((path) => control(path))}</div>
+      {waiting !== null && <p className="req-pane__notice" role="status" data-testid="req-pane-blockers-waiting">{waiting}</p>}
       {refusal !== null && <p className="req-pane__notice req-pane__notice--error" role="alert" data-testid="req-pane-blockers-refused">{refusal}</p>}
       <div className="dialog-actions"><DesignButton type="button" className="btn btn-secondary" onClick={p.onClose}>Close</DesignButton></div>
     </div>

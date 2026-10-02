@@ -225,14 +225,14 @@ describe('REQ-CONFIG-248..255 the model-preference path and its read-back', () =
     const slots = Object.fromEntries(slotPreferences(c.value).map((p) => [p.slot, p]));
     expect(slots['large_model']).toMatchObject({ value: 'gpt-4o', origin: 'global' });
     expect(slots['small_model']).toMatchObject({ value: null, origin: 'global', thinking: 'auto' });
-    expect(slots['default_summary_model']).toMatchObject({ origin: 'built-in' });
+    expect(slots['default_summary_model']).toMatchObject({ origin: 'default' });
     const tester = rolePreferences(c.value).find((r) => r.role === 'tester')!;
     // `large_model: medium_model` registers no alias (REQ-CONFIG-074): the editor follows the raw chain to gpt-4o, while the
     // resolved role keeps the literal and referential validation names it.
     expect(tester).toMatchObject({ rawModel: 'large_model', modelOrigin: 'global', effectiveModel: 'large_model', inherited: false, builtInDefault: 'medium_model', rawThinking: 'high', tier: 'large_model' });
     expect(c.value.referential).toContain("large_model 'medium_model' names no configured model (a tier alias that registered no substitution)");
     const planner = rolePreferences(c.value).find((r) => r.role === 'planner')!;
-    expect(planner).toMatchObject({ rawModel: null, modelOrigin: 'built-in', inherited: true, effectiveModel: 'large_model', builtInDefault: 'large_model' });
+    expect(planner).toMatchObject({ rawModel: null, modelOrigin: 'default', inherited: true, effectiveModel: 'large_model', builtInDefault: 'large_model' });
   });
 });
 

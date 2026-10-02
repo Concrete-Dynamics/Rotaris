@@ -68,6 +68,11 @@
  *               review, and the review pane's Rerun taken. The disclosure is due again; while it stands the pane says
  *               nothing has been recorded, as the decision's state and not as a refusal; once it is accepted the pane
  *               says the re-run was recorded, offers the reload alone and draws no alert; the history holds one rerun.
+ *   blocker-resume — REQ-TRACE-453/454 with REQ-TRACE-472: the queue stopped, a release accepted through the
+ *               disclosure, the card held out of `ready` by a drag onto the blocked column with a stated reason, and the
+ *               blockers pane's "Clear the blocker" taken. The disclosure is due again; while it stands the pane says
+ *               nothing has been recorded as a status, not a refusal, with the resume held; once it is accepted the pane
+ *               is re-read and says nothing holds the card, draws no alert, and the history holds one resume.
  *
  * Evidence under `.proof/requirements-proof/`: `vitest.json`, one PNG and one log per launch, `results.json`.
  * `--skip-build` skips the desktop build.
@@ -789,6 +794,81 @@ expect(rerunRows !== null, `no delivery store was written under ${rr.local}`);
 const rerunHistory = rerunRows.query(`select * from "${rerunRows.tables.find((t) => /history/.test(t))}" order by rowid`).map((e) => String(e.action));
 expect(rerunHistory.filter((a) => a === 'rerun').length === 1, `REQ-TRACE-422: the re-run accepted through the disclosure left ${JSON.stringify(rerunHistory)} in the history, not one rerun`);
 stage2['review-rerun'] = { disclosure: rerunDisclosure.buttons, waiting: waitingPane.waiting, afterAccept: { decided: rerunPane.decided, actions: rerunPane.actions, alerts: rerunPane.alerts }, history: rerunHistory };
+
+// ── blocker-resume: a blocker cleared from the blockers pane, taken through the launch's disclosure (REQ-TRACE-453/454/472) ──
+//
+// A resume that returns the card to `ready` starts a run, so the disclosure stands between the answer and the record,
+// exactly as it does for the review pane's re-run above. Until 2026-10-01 the blockers pane drew the host's first
+// answer ("Nothing has been recorded … yet") as its refusal alert and was never told what the disclosure came to, and
+// the host re-read the blocker only on a first answer of `ok` (defect note
+// `a-blocker-resumed-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`). The queue is STOPPED
+// first, so the release lands in `ready` without a run and the card can be held there: a hold out of `ready` is the
+// blocker whose resume starts a run. Each disclosure is accepted with "Start the run", never "always", so the
+// resume's own disclosure is still due (REQ-TRACE-472).
+/** The blockers pane while the answer waits on the disclosure, and once it has been answered. */
+const BLOCKERS_AT = `(() => { const p = document.querySelector('[data-testid="req-pane-blockers"]'); if (p === null) return null; const text = (sel) => { const el = p.querySelector(sel); return el === null ? null : el.textContent.trim(); }; return { title: text('.req-pane__title'), none: text('[data-testid="req-pane-blockers-none"]'), waiting: text('[data-testid="req-pane-blockers-waiting"]'), refused: text('[data-testid="req-pane-blockers-refused"]'), alerts: [...p.querySelectorAll('[role="alert"]')].map((a) => a.textContent.trim()), answers: [...p.querySelectorAll('[data-testid="req-pane-blockers-paths"] button, .req-pane__options button')].map((b) => ({ label: b.textContent.trim(), disabled: b.disabled })) }; })()`;
+/**
+ * The hold, by the one route the board offers into the blocked column: a drag (the keyboard picker lists the delivery
+ * states, and `blocked` is not one). As in `drop`, it is DOM drag events carrying a `DataTransfer` through the board's
+ * own handlers. The blocked column is the last of seven and outside the columns area's viewport at 1264 px, so it is
+ * scrolled into view between the drag's start and its drop, exactly as a person's drag would scroll the area; an empty
+ * column is folded to a rail once anything has left the backlog, and a rail a drag enters opens for the drop.
+ */
+const DRAG_TO_BLOCKED = `(async () => { const board = window.__rotarisBoard; if (!board || typeof board.reveal !== 'function') return 'no observable'; const revealed = board.reveal('REQ-101'); const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); await frame(); const card = document.querySelector('[data-req-card="REQ-101"]'); if (card === null) return { revealed, card: false }; const dt = new DataTransfer(); const ev = (type, el) => el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt })); ev('dragstart', card); await frame(); const slot = document.querySelector('[data-testid="req-columns"] > [data-column="blocked"]'); if (slot === null) return { revealed, slot: false }; slot.scrollIntoView({ block: 'nearest', inline: 'nearest' }); await frame(); await new Promise((r) => setTimeout(r, 400)); await frame(); const rail = document.querySelector('[data-testid="req-rail"][data-column="blocked"]'); if (rail !== null) { ev('dragenter', rail); await frame(); } const target = document.querySelector('[data-testid="req-column"][data-column="blocked"]'); if (target === null) return { revealed, rail: rail !== null, target: false }; ev('dragenter', target); ev('dragover', target); await frame(); const dragging = document.querySelector('[data-testid="req-columns"]')?.getAttribute('data-dragging'); ev('drop', target); ev('dragend', card); await frame(); return { revealed, rail: rail !== null, dragging, types: [...dt.types], dialog: document.querySelector('[data-testid="req-reason-dialog"]') !== null }; })()`;
+const br = profile('blocker-resume');
+const resumed = await launch('blocker-resume', br.workspace, br.local, br.preferences, {
+  ROTARIS_CAPTURE_RESIZE: '1264x800@300',
+  ROTARIS_CAPTURE_VIEWS: '4@1200',
+  ROTARIS_CAPTURE_CLICKS: [
+    '[data-testid="req-queue-open"]@3000',
+    '[aria-label="Stop the queue"]@4000',
+    '[data-testid="req-pane-close"]@4800',
+    `${CARD_101}@5600`,
+    '[data-testid="req-move-control"]@6800',
+    '[data-testid="req-confirm"] .btn>>Release@7800',
+    '[data-testid="req-pane-disclosure"] .btn>>Start the run@9000',
+    // The hold's reason is typed into the dialog's own field (it takes the focus) and the hold is confirmed.
+    '[data-testid="req-reason-dialog"] .btn-primary@13200',
+    // The blocked column lies outside the columns area's viewport at 1264 px: the strip's "Go to card" reveals it.
+    '[data-testid="req-blocked-row"][data-req="REQ-101"] .btn>>Go to card@14600',
+    `${CARD_101}@15400`,
+    '[data-testid="req-detail-blockers"]@17000',
+    '[aria-label="Clear the blocker"]@18400',
+    '[data-testid="req-pane-disclosure"] .btn>>Start the run@20400',
+  ].join(';;'),
+  ROTARIS_CAPTURE_TYPE_AT: 'Waiting on a vendor answer@12200',
+  // The focused card opens its own detail with Enter (REQ-TRACE-484); the harness sends single clicks only. A card is
+  // read through the board's own reveal first (REQ-TRACE-364): the column it sits in may lie outside the viewport.
+  ROTARIS_CAPTURE_KEYS: 'Return@16000',
+  ROTARIS_CAPTURE_EVAL_AT: [`${BOARD_AT}@10400`, `${DRAG_TO_BLOCKED}@11000`, `${REVEAL_101}@14000`, `${BOARD_AT}@14200`, `${BLOCKERS_AT}@17800`, `${DISCLOSURE_AT}@19400`, `${BLOCKERS_AT}@19600`, `${BLOCKERS_AT}@23000`, `${REVEAL_101}@23100`, `${BOARD_AT}@23200`].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '24000',
+}, 240_000);
+expect(resumed.evals['10400']?.column === 'ready', `REQ-TRACE-382: with the queue stopped the release left REQ-101 in ${JSON.stringify(resumed.evals['10400']?.column)}, not ready (feedback ${JSON.stringify(resumed.evals['10400']?.feedback)})`);
+const heldDrag = resumed.evals['11000'];
+expect(heldDrag !== null && typeof heldDrag === 'object' && heldDrag.dragging === 'true' && heldDrag.dialog === true, `REQ-TRACE-389: dropping REQ-101 on the blocked column did not ask for the hold's reason (${JSON.stringify(heldDrag)})`);
+expect(resumed.evals['14200']?.column === 'blocked', `REQ-TRACE-446: the hold out of ready left REQ-101 in ${JSON.stringify(resumed.evals['14200']?.column)}, not blocked (feedback ${JSON.stringify(resumed.evals['14200']?.feedback)})`);
+const heldPane = resumed.evals['17800'];
+expect(heldPane !== null && heldPane !== undefined && heldPane.none === null && heldPane.answers.some((a) => a.label.startsWith('Clear the blocker')), `REQ-TRACE-448: the blockers pane offers no resume for the held REQ-101 (${JSON.stringify(heldPane)})`);
+const resumeDisclosure = resumed.evals['19400'];
+expect(resumeDisclosure !== null && resumeDisclosure !== undefined && resumeDisclosure.buttons.includes('Start the run'), `REQ-TRACE-472: the resume into ready raised no disclosure (${JSON.stringify(resumeDisclosure)})`);
+const resumeWaiting = resumed.evals['19600'];
+expect(resumeWaiting !== null && resumeWaiting !== undefined, 'REQ-TRACE-454: the blockers pane was not open while the resume waited on the disclosure');
+// While the disclosure is on screen nothing has been recorded, and the pane says so as the answer's state — nothing
+// refused the resume — with the answers held until the disclosure is answered.
+expect(resumeWaiting.alerts.length === 0, `REQ-TRACE-454/472: a resume waiting on its disclosure is drawn as a refusal: ${JSON.stringify(resumeWaiting.alerts)}`);
+expect(typeof resumeWaiting.waiting === 'string' && resumeWaiting.waiting.startsWith('Nothing has been recorded for REQ-101 yet'), `REQ-TRACE-472: while the disclosure stands the blockers pane reads ${JSON.stringify({ waiting: resumeWaiting.waiting, refused: resumeWaiting.refused })}`);
+expect(resumeWaiting.answers.filter((a) => a.label.startsWith('Clear the blocker')).every((a) => a.disabled), `REQ-TRACE-472: the resume is offered again while its disclosure stands: ${JSON.stringify(resumeWaiting.answers)}`);
+const resumeAfter = resumed.evals['23000'];
+expect(resumeAfter !== null && resumeAfter !== undefined, 'REQ-TRACE-454: the blockers pane was not open after the disclosure was accepted');
+expect(resumeAfter.alerts.length === 0 && resumeAfter.refused === null && resumeAfter.waiting === null, `REQ-TRACE-453/472: after the disclosure was accepted the blockers pane still says ${JSON.stringify({ alerts: resumeAfter.alerts, waiting: resumeAfter.waiting })}`);
+// The host re-reads the blocker once the resume is taken, and a cleared blocker is REQ-TRACE-447's positive statement.
+expect(resumeAfter.none === 'Nothing is holding REQ-101.', `REQ-TRACE-447/453: once the resume was taken the pane was not re-read: ${JSON.stringify(resumeAfter)}`);
+expect(resumed.evals['23200']?.column === 'ready', `REQ-TRACE-453: the resume returned REQ-101 to ${JSON.stringify(resumed.evals['23200']?.column)}, not ready, the state it was held out of`);
+const resumeRows = deliveryRows(br.local);
+expect(resumeRows !== null, `no delivery store was written under ${br.local}`);
+const resumeHistory = resumeRows.query(`select * from "${resumeRows.tables.find((t) => /history/.test(t))}" order by rowid`).map((e) => String(e.action));
+expect(resumeHistory.filter((a) => a === 'resume').length === 1, `REQ-TRACE-453/472: the resume accepted through the disclosure left ${JSON.stringify(resumeHistory)} in the history, not one resume`);
+stage2['blocker-resume'] = { disclosure: resumeDisclosure.buttons, waiting: resumeWaiting.waiting, afterAccept: { none: resumeAfter.none, alerts: resumeAfter.alerts }, column: resumed.evals['23200'].column, history: resumeHistory };
 
 // ── panes and the graph: the registry's contract, and the rest of REQ-TRACE-497 a proof can reach ────────────────
 // Defect `R2-6`, and the reason this read carries geometry at all: every assertion below once read attributes through

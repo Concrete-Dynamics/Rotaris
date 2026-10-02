@@ -275,15 +275,25 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * - on each ladder move of the root, whether a switch was pending at it (`switch_pending`): the move was made on the cell
  *   from before that switch, in the turn already running when it was made, so it is read before the switch, which then
  *   ends it at the next turn unless it records `rebuilds: false`. `switch_pending: false` says the switch had applied.
- * A store recording no `supersedes` reads each switch as applied; one recording no `switch_pending` reads each move where
- * it is recorded, until a switch that supersedes places it. A child's wait choice after a pending switch is read after
- * that switch as recorded, so a switched key it overrode before the root's next turn prints though the root never ran on it
- * (the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it).
- * One reading stays coarse: a switch is held on its run alone (`entryOverride`; a continuation is a new
- * `Run`), so a later continuation recording no snapshot starts on its configuration's model, while this keeps the
- * switched key as the configured one. Only snapshot-less runs reach it
- * (the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot). A second: an entry naming a child alive at its
- * instant is that child's, even where a root of the same name was alive too (OQ-158; `childKeyAt`).
+ * - on a child's wait choice, whether such a switch was pending at it (`switch_pending`, since 2026-10-02): every agent
+ *   on the replaced pair follows the override from its next call (`followOverride`), the root on the cell from before
+ *   the switch, and the switch's rebuild then resolves through it, so the choice is read before the switch and a switched
+ *   key it replaced is never printed (the repair of
+ *   the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it).
+ * - on an override a wait choice took back (`cleared: true`, `cause: 'superseded'`, since 2026-10-02), where the root's
+ *   cell was (`root_cell`): `followed` (on any pair of the chain from the override's own target on) keeps the root on the
+ *   chain's end, where the run's root goes from its next call, as a ladder move does; `on_pair` takes back
+ *   the target's key printed for it, which the root never ran on.
+ * A store recording no `supersedes` reads each switch as applied; one recording no `switch_pending` reads each move and
+ * each child's choice where it is recorded, until a switch that supersedes places it.
+ * A switch is held on its run alone (`entryOverride`; a continuation is a new `Run`), and whether it should reach the next
+ * run is OQ-185's open question (an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation). A continuation
+ * whose snapshot names the entry model says which it ran on; one recording none, after a switch onto another key than the
+ * last snapshot's, prints `ENTRY_KEY_UNDETERMINED` until a record names a key, so neither answer is printed as fact (since
+ * 2026-10-02; until then the switched key was kept, and a move such a run's fresh cell ended was read as ending on it:
+ * the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot). With no such switch the last
+ * snapshot's key is kept, as before. One reading stays coarse: an entry naming a child alive at its instant is that
+ * child's, even where a root of the same name was alive too (OQ-158; `childKeyAt`).
  */
 export function entryModelKeys(launchAuditPayload: string | undefined, timeline: readonly Pick<TimelineRow, 'name' | 'metadata' | 'at'>[], children: ChildModelKeys): string[] {
   type Key = { readonly label: string; readonly pair: string | null };
@@ -293,29 +303,54 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
     base: Key | null;
     // The key the configuration names (snapshot or switch); `base` departs from it only while a ladder move is in force.
     configured: Key | null;
+    // The entry key the last snapshot naming one recorded; `configured` differs from it after a switch since.
+    snapshotLabel: string | null;
     fellBack: boolean;
     readonly keys: string[];
     readonly overrides: Map<string, { readonly key: string; readonly to: string | null }>;
   }
   const clone = (s: State): State => ({ ...s, keys: [...s.keys], overrides: new Map(s.overrides) });
-  const effective = (s: State): string | null => {
+  /** The root's chain of overrides followed from `base`: the key it ends on, that key's pair, and the pairs it left. */
+  const walk = (s: State): { readonly label: string; readonly pair: string | null; readonly path: readonly string[] } | null => {
     if (s.base === null) return null;
-    if (s.base.pair === null) return s.overrides.size > 0 ? ENTRY_KEY_UNDETERMINED : s.base.label;
+    if (s.base.pair === null) return { label: s.overrides.size > 0 ? ENTRY_KEY_UNDETERMINED : s.base.label, pair: null, path: [] };
     let label = s.base.label;
     let pair: string = s.base.pair;
-    for (let hops = 0; hops < 8; hops++) {
+    const path: string[] = [];
+    for (;;) {
+      if (path.includes(pair)) {
+        // A cycle — a store written before the run took a superseded override back (`Run.takeBackOverrideOf`): it ends on
+        // the newest override's target, as the run's memory does (`overrides` is kept in the order last set).
+        const order = [...s.overrides.keys()];
+        const newest = path.slice(path.indexOf(pair)).reduce((a, b) => (order.indexOf(b) > order.indexOf(a) ? b : a));
+        const o = s.overrides.get(newest)!;
+        return { label: o.key, pair: o.to, path };
+      }
       const o = s.overrides.get(pair);
       if (!o || o.to === pair) break;
+      path.push(pair);
       label = o.key;
-      if (o.to === null) return s.overrides.size > 1 ? ENTRY_KEY_UNDETERMINED : label;
+      if (o.to === null) return { label: s.overrides.size > 1 ? ENTRY_KEY_UNDETERMINED : label, pair: null, path };
       pair = o.to;
     }
-    return label;
+    return { label, pair, path };
   };
+  const effective = (s: State): string | null => walk(s)?.label ?? null;
   const add = (s: State, key: string | null): void => { if (key !== null && key !== '' && s.keys[s.keys.length - 1] !== key) s.keys.push(key); };
   const fromSnapshot = (s: State, snapshot: unknown): void => {
     const e = snapshotEntry(snapshot);
     if (!e) {
+      // A switch recorded since the last snapshot naming an entry model, onto another key: whether it reaches this new run
+      // or ended with its own (`entryOverride` is held per `Run`) is OQ-185's open question
+      // (an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation), and this snapshot does not say which
+      // model the run was configured with, so the key is undetermined until a record names one (the repair of
+      // the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot; revisit when it is ruled).
+      if (s.configured !== null && s.configured.label !== s.snapshotLabel) {
+        s.base = s.configured = { label: ENTRY_KEY_UNDETERMINED, pair: null };
+        s.fellBack = false;
+        add(s, ENTRY_KEY_UNDETERMINED);
+        return;
+      }
       // A continuation recording no entry model (`config_snapshot: {}`) is still a new run with a new root cell, built
       // from the configured model: a ladder move of the run before it ends there, back to the configured key, or to an
       // undetermined one when nothing ever named it.
@@ -323,6 +358,7 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
       return;
     }
     s.models = e.models;
+    s.snapshotLabel = e.label;
     s.base = s.configured = { label: e.label, pair: e.pair };
     s.fellBack = false;
     add(s, effective(s));
@@ -358,8 +394,22 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
       const model = meta?.['model'];
       // REQ-NOTIFY-070/078: an entry carrying `cleared: true` takes the pin on its pair back (`ResilienceMemory.rehydrate`).
       if (typeof provider === 'string' && typeof model === 'string' && meta?.['cleared'] === true) {
-        s.overrides.delete(`${provider}|${model}`);
-        add(s, effective(s));
+        // REQ-ORCH-091 (d) / REQ-MONITOR-303: a wait choice of the pair took back an override from it (`cause: 'superseded'`,
+        // `Run.takeBackOverrideOf`). An agent that had followed it stays on the chain it followed, so a root the run records
+        // there (`root_cell: 'followed'`: on any pair of the chain from the override's own target on, `Run.onChainFrom`) is
+        // kept on the chain's end, where it moves from its next call, as after a ladder move; a root still on the pair (`on_pair`: its call was in
+        // flight, or it waited there, when the override was set) never ran on the target, so the key printed for it is
+        // taken back. A store recording no `root_cell` (fin6's taken-back pins, which rebuild the root) reads as before.
+        const cleared = `${provider}|${model}`;
+        const before = walk(s);
+        if (meta['root_cell'] === 'followed' && before !== null && before.path.includes(cleared)) {
+          s.base = { label: before.label, pair: before.pair };
+          s.fellBack = true;
+        }
+        s.overrides.delete(cleared);
+        const after = effective(s);
+        if (meta['root_cell'] === 'on_pair' && before !== null && before.path.includes(cleared) && s.keys.at(-1) === before.label && s.keys.at(-2) === after) s.keys.pop();
+        else add(s, after);
         return;
       }
       const key = str(meta?.['model_key']);
@@ -367,6 +417,7 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
       const toProvider = meta?.['to_provider'];
       const toModel = meta?.['to_model'];
       const to = typeof toProvider === 'string' && typeof toModel === 'string' ? `${toProvider}|${toModel}` : modelPair(s.models, key);
+      s.overrides.delete(`${provider}|${model}`);
       s.overrides.set(`${provider}|${model}`, { key, to });
       add(s, effective(s));
     } else {
@@ -384,7 +435,7 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
     }
   };
 
-  let s: State = { models: {}, base: null, configured: null, fellBack: false, keys: [], overrides: new Map() };
+  let s: State = { models: {}, base: null, configured: null, snapshotLabel: null, fellBack: false, keys: [], overrides: new Map() };
   if (launchAuditPayload !== undefined) fromSnapshot(s, parseJson(launchAuditPayload)?.['config_snapshot']);
   // A switch the run has not applied yet: it applies at the root's next turn, which the record does not show. `before` is
   // the state before it; `ahead` the records known to precede that turn, read before the switch; `after` the records
@@ -399,6 +450,8 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
   for (const t of timeline) {
     const meta = t.name === 'entry_model_switched' || t.name === 'model_override' ? parseJson(t.metadata) : undefined;
     const move = rootMove(t);
+    // Where the record places it against a pending switch: a root move's `switch_pending`, or a child's wait choice's.
+    const placed = move !== null ? move.meta['switch_pending'] : t.name === 'model_override' ? meta?.['switch_pending'] : undefined;
     if (t.name === 'run_continuation_intent') {
       // A new run, whose root cell is its own: no switch of the run before it is pending in it.
       pending = null;
@@ -422,15 +475,17 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
       pending = null;
       s = clone(p.before);
       for (const r of [...p.ahead, ...p.after, t]) read(s, r);
-    } else if (move !== null && pending !== null && move.meta['switch_pending'] === true) {
+    } else if (placed === true && pending !== null) {
       // `switch_pending`: the root moved in the turn that was running when the switch was made, on the cell from before
-      // it; the switch then applies at the next turn, after the move, and ends it unless it `rebuilds: false`.
+      // it; the switch then applies at the next turn, after the move, and ends it unless it `rebuilds: false`. A child's
+      // wait choice recording it moved the root the same way (the root follows an override from its next call), and the
+      // switch's rebuild then resolves through it, so a switched key it replaced is never printed.
       pending.ahead = [...pending.ahead, ...pending.after, t];
       pending.after = [];
       replay(pending);
     } else {
-      // `switch_pending: false`: the root's turn had applied the switch before this move, which is read as recorded.
-      if (move !== null && move.meta['switch_pending'] === false) pending = null;
+      // `switch_pending: false`: the root's turn had applied the switch before this move or choice, read as recorded.
+      if (placed === false) pending = null;
       else pending?.after.push(t);
       read(s, t);
     }

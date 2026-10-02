@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { modelError, type ModelError } from '@rotaris/model';
-import { classifyFailure, describeCondition, localBackoffMs, pairKey, ResilienceMemory, retryAfterMs, sameTierCandidates, type CatalogueEntry } from './resilience.js';
+import { classifyFailure, describeCondition, localBackoffMs, pairKey, ResilienceMemory, retryAfterMs, sameTierCandidates, type CatalogueEntry, type ModelChoice } from './resilience.js';
 
 const http = (status: number, providerMessage = '', headline = `HTTP ${status}`): ModelError => modelError({ code: 'http', status, headline, providerMessage });
 
@@ -153,6 +153,31 @@ describe('engine/run/resilience — the session-wide memory (REQ-ORCH-091 a/d, R
     expect(warnings).toHaveLength(1);
   });
 
+  // REQ-ORCH-091 (d) with REQ-MONITOR-194 (a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced, its second
+  // round): a cycle a store already holds ends on the newest override's target. Before: an eight-hop walk ending on x or y
+  // by the cycle's parity. (The run no longer writes one: a wait choice takes back any override from the pair it chooses,
+  // `Run.takeBackOverrideOf`, pinned in ladder.test.ts; until the third round only one leading back, `supersededBy`.)
+  it('REQ-ORCH-091 (d): a cycle of overrides ends on the newest override\'s target', () => {
+    const catalogue = [entry('x', 'a', ['small_model']), entry('y', 'b', ['small_model']), entry('z', 'c', ['small_model'])];
+    const [x, y] = catalogue.map((e) => ({ model: e.model, thinking: 'unset' as const })) as [ModelChoice, ModelChoice, ModelChoice];
+    // A cycle written without the superseding (a store from before it): x → y (older), y → x (newer). Every agent on it ends
+    // on x, the newest override's target, whatever pair it starts from and however long the walk.
+    const cycle = new ResilienceMemory();
+    cycle.setOverride('a', 'x', { key: 'y', choice: y });
+    cycle.setOverride('b', 'y', { key: 'x', choice: x });
+    expect(cycle.effective(x, catalogue).model.modelId).toBe('x');
+    expect(cycle.effective(y, catalogue).model.modelId).toBe('x');
+    // Setting an override again makes it the newest: x → y set anew turns the cycle the other way.
+    cycle.setOverride('a', 'x', { key: 'y', choice: y });
+    expect(cycle.effective(x, catalogue).model.modelId).toBe('y');
+    expect(cycle.effective(y, catalogue).model.modelId).toBe('y');
+    // Rehydrated in timeline order, the same.
+    const resolve = (key: string) => (key === 'x' ? x : key === 'y' ? y : null);
+    const rows = [{ name: 'model_override', metadata: JSON.stringify({ provider: 'a', model: 'x', model_key: 'y' }) }, { name: 'model_override', metadata: JSON.stringify({ provider: 'b', model: 'y', model_key: 'x' }) }];
+    expect(ResilienceMemory.rehydrate(rows, resolve).effective(y, catalogue).model.modelId).toBe('x');
+    expect(ResilienceMemory.rehydrate(rows, resolve).overrideReaching(y, catalogue)?.key).toBe('x');
+  });
+
   it('REQ-NOTIFY-074/076: a `cleared` entry takes the pin on its pair back, in order, and a later pin stands again', () => {
     const catalogue = [entry('x', 'a', ['small_model']), entry('y', 'b', ['small_model']), entry('z', 'c', ['small_model'])];
     const resolve = (key: string) => { const e = catalogue.find((c) => c.key === key); return e ? { model: e.model, thinking: 'unset' as const } : null; };
@@ -165,5 +190,25 @@ describe('engine/run/resilience — the session-wide memory (REQ-ORCH-091 a/d, R
     expect(m.clearOverride('a', 'x')).toBe(true);
     expect(m.clearOverride('a', 'x')).toBe(false);
     expect(m.effective({ model: catalogue[0]!.model, thinking: 'unset' }, catalogue).model.modelId).toBe('x');
+  });
+
+  // REQ-MONITOR-194: an explicit choice clears the exclusion, so the pair is eligible again until a further
+  // insufficient-quota response re-records it; the clearing survives a resume (the repair of
+  // an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion).
+  it('REQ-MONITOR-194: a `model_exhausted` entry carrying cleared: true takes the exclusion back, in order, and a later one records it again', () => {
+    const exhausted = { name: 'model_exhausted', metadata: JSON.stringify({ provider: 'a', model: 'x', agent: 'orchestrator' }) };
+    const cleared = { name: 'model_exhausted', metadata: JSON.stringify({ provider: 'a', model: 'x', cleared: true }) };
+    const resolve = () => null;
+    expect(ResilienceMemory.rehydrate([exhausted], resolve).isExhausted('a', 'x')).toBe(true);
+    expect(ResilienceMemory.rehydrate([exhausted, cleared], resolve).isExhausted('a', 'x')).toBe(false);
+    expect(ResilienceMemory.rehydrate([exhausted, cleared], resolve).exhausted.size).toBe(0);
+    expect(ResilienceMemory.rehydrate([exhausted, cleared, exhausted], resolve).isExhausted('a', 'x')).toBe(true);
+    const m = new ResilienceMemory();
+    expect(m.clearExhausted('a', 'x')).toBe(false);
+    expect(m.markExhausted('a', 'x')).toBe(true);
+    expect(m.clearExhausted('a', 'x')).toBe(true);
+    expect(m.isExhausted('a', 'x')).toBe(false);
+    // Eligible again: a further insufficient-quota response records it anew.
+    expect(m.markExhausted('a', 'x')).toBe(true);
   });
 });

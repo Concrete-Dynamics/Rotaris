@@ -88,9 +88,11 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     configureRefusesFrom?: number;
     /** REQ-ORCH-152/153: `runtime.run_start_mode`. */
     runStartMode?: 'auto' | 'plan';
+    /** REQ-MONITOR-049: each model's advertised input limit, by model id, through the compression section's `triggerFor`. */
+    inputLimits?: Record<string, number>;
   }
 
-  function sessionsWith(script: (persona: string, turn: number) => ScriptedCall, opts: Opts = {}) {
+  function sessionsWith(script: (persona: string, turn: number, req: Parameters<ScriptedModelClient['stream']>[0]) => ScriptedCall, opts: Opts = {}) {
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
     const original = client.stream.bind(client);
@@ -99,7 +101,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       const persona = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise/i.test(system) ? 'summariser' : 'child';
       const n = (counts.get(persona) ?? 0) + 1;
       counts.set(persona, n);
-      client.push(script(persona, n));
+      client.push(script(persona, n, req));
       return original(req);
     };
     const pub = recorder();
@@ -114,7 +116,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       clocks: clock, publisher: pub, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++minted}`,
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: (_sid, r) => results.push(r.status),
       configure: () => (++configured >= (opts.configureRefusesFrom ?? Infinity) ? { ok: false as const, error: { reason: 'the configuration no longer loads' } } : { ok: true, value: {
-        model: { backend, config }, models, personas,
+        model: { backend, config, ...(opts.inputLimits === undefined ? {} : { compression: { model: null, timeoutMs: 120_000, charsPerToken: 4, preserveRecentTurns: 1, triggerFor: (m: ModelRef) => ({ tokens: 10_000_000, thresholdPercentage: 60, capacity: opts.inputLimits![m.modelId] ?? 1000, advertisedInputLimit: opts.inputLimits![m.modelId] ?? null, defaultThreshold: 265_000 }) } }) }, models, personas,
         runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, ...(opts.runStartMode === undefined ? {} : { runStartMode: opts.runStartMode }), ...(opts.childTimeoutMs === undefined ? {} : { childTimeoutMs: opts.childTimeoutMs }), ...(opts.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: opts.childStallTimeoutMs }) },
         resilience: { catalogue, fallbackModel: opts.fallbackModel ?? null },
       } }),
@@ -613,6 +615,314 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(meta('model_override')).toEqual([expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1', supersedes: true })]);
   });
 
+  /*
+   * The repair of a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced (the note's probe, made permanent): a
+   * child's "change model now" persists the override for the session (REQ-ORCH-091 d), and the pair it replaced is recorded
+   * out of quota, "neither retried automatically" for the rest of the session (REQ-MONITOR-194). The root, already on that
+   * pair, and the summariser, configured on it, call the override's model from their next call — the root resumes after its
+   * child in the same turn, so the root's next turn would be too late. Until this repair: child c1, child c1, summariser a1,
+   * root a1.
+   */
+  it('REQ-ORCH-091 (a)/(d) with REQ-MONITOR-194: a child\'s wait choice moves the root and the summariser off the replaced pair from their next call', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    const who = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => (/^You are the orchestrator/.test(systemOf(r)) ? 'root' : /summarise/i.test(systemOf(r)) ? 'summariser' : 'child');
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]) : answer(`root ${turn}`);
+      return turn === 1 ? failing(quota()) : answer('I did it.');
+    };
+    const { sessions, client, pub } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 10_000 });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+    // The child's call on a1 met insufficient quota with no same-tier candidate: it waits on a/a1, and the user chooses c1.
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true });
+    expect(lastWait(pub)!.agent).not.toBe('orchestrator');
+    const before = client.requests.length;
+    // The root's first call delegated and its second, on a1, ended its turn; the child's call on a1 failed.
+    expect(client.requests.map((r) => `${who(r)} ${r.model.modelId}`).sort()).toEqual(['child a1', 'root a1', 'root a1']);
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const after = client.requests.slice(before);
+    // Every call after the choice — the child's, the summariser's and the root's — goes to c1; none returns to a1.
+    expect(after.map((r) => `${who(r)} ${r.model.modelId}`)).toEqual(after.map((r) => `${who(r)} c1`));
+    expect(new Set(after.map(who))).toEqual(new Set(['child', 'summariser', 'root']));
+  });
+
+  /*
+   * Two wait choices that go back: a1 runs out of quota and the user chooses c1 (a1 → c1); later c1 runs out of quota and
+   * the user chooses a1 (c1 → a1, which clears a1's exclusion, REQ-MONITOR-194). The newest choice supersedes the older
+   * override that would lead back to the pair it replaces: a1 → c1 is taken back (a `model_override` entry carrying
+   * `cleared: true`), so no agent on c1 — the root, which ran on it since the first choice — "follows" the cycle back onto
+   * c1. Until this repair the memory held a1 → c1 → a1 and the bounded walk ended on c1 for the root: child a1, child a1,
+   * summariser a1, root c1.
+   */
+  it('REQ-ORCH-091 (a)/(d) with REQ-MONITOR-194: a wait choice back onto a pair an earlier choice replaced takes that override back, so no agent returns to the pair just replaced', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    const who = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => (/^You are the orchestrator/.test(systemOf(r)) ? 'root' : /summarise/i.test(systemOf(r)) ? 'summariser' : 'child');
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      if (persona === 'orchestrator') return turn === 1 ? failing(quota()) : turn === 2 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]) : answer(`root ${turn}`);
+      return turn === 1 ? failing(quota()) : answer('I did it.');
+    };
+    const { sessions, client, pub } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 10_000 });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true, agent: 'orchestrator' });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+    for (let i = 0; i < 40 && lastWait(pub)?.model !== 'c1'; i++) await tick();
+    // The root delegated on c1; the child, built on c1 through the override, met insufficient quota there: it waits on c/c1.
+    expect(lastWait(pub)).toMatchObject({ provider: 'c', model: 'c1', exhausted: true });
+    expect(lastWait(pub)!.agent).not.toBe('orchestrator');
+    // Since the first choice the root runs on c1 (its turn goes on beside the waiting child): nothing has called a1 again.
+    expect(client.requests.slice(0, 2).map((r) => `${who(r)} ${r.model.modelId}`)).toEqual(['root a1', 'root c1']);
+    expect(client.requests.slice(2).map((r) => `${who(r)} ${r.model.modelId}`)).toContain('child c1');
+    expect(client.requests.slice(2).every((r) => r.model.modelId === 'c1')).toBe(true);
+    const before = client.requests.length;
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const after = client.requests.slice(before);
+    // Every call after the second choice goes to a1, the root's included; none returns to c1.
+    expect(after.map((r) => `${who(r)} ${r.model.modelId}`)).toEqual(after.map((r) => `${who(r)} a1`));
+    expect(new Set(after.map(who))).toEqual(new Set(['child', 'summariser', 'root']));
+    const overrides = dal.timelineOf(sid).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+    expect(overrides).toEqual([
+      expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1' }),
+      // The root ran on c1, a1 → c1's target, when a1 was chosen: the reader keeps it there until it follows c1 → a1.
+      expect.objectContaining({ provider: 'a', model: 'a1', cleared: true, cause: 'superseded', root_cell: 'followed' }),
+      expect.objectContaining({ provider: 'c', model: 'c1', model_key: 'a1' }),
+    ]);
+    // REQ-MONITOR-194: a1, excluded and not the waiting pair, was chosen in c1's wait, which cleared its exclusion; c1 stays excluded.
+    const exhausted = dal.timelineOf(sid).filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+    expect(exhausted.map((m) => `${m['provider']}/${m['model']}${m['cleared'] === true ? ' cleared' : ''}`)).toEqual(['a/a1', 'c/c1', 'a/a1 cleared']);
+    // A reload holds the same memory: c1 → a1 alone, a1 eligible, c1 excluded.
+    const resolve = (key: string) => { const e = catalogue.find((c) => c.key === key); return e ? { model: e.model, thinking: e.thinking } : null; };
+    const memory = ResilienceMemory.rehydrate(dal.timelineOf(sid), resolve);
+    expect(memory.overrideFor('a', 'a1')).toBeUndefined();
+    expect(memory.overrideFor('c', 'c1')?.key).toBe('a1');
+    expect([memory.isExhausted('a', 'a1'), memory.isExhausted('c', 'c1')]).toEqual([false, true]);
+  });
+
+  /*
+   * Repair round 2 of the same note: the user's newest explicit choice of a pair supersedes ANY override from it, not only
+   * one whose chain leads back to the waiting pair. Here a1 → c1 is chosen in the root's wait on a1; the next iteration
+   * runs on f1 (an entry switch), f1 runs out, and a1 is chosen in f1's wait. Before this repair a1 → c1 stood, the root
+   * followed it before its first call (`followOverride`) and called c1 while the row said it resumed on a1 — the
+   * requests were a1, c1, f1, c1.
+   */
+  it('REQ-MONITOR-303 / REQ-ORCH-091 (d): a wait choice of a pair an earlier choice replaced takes that override back, and the agent resumes on the pair chosen', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, []), entry('f1', 'f', F1, [])];
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      if (persona !== 'orchestrator') return answer('child done');
+      if (turn === 1 || turn === 3) return failing(quota());
+      if (turn === 2) return { parts: [{ hold: held, part: { kind: 'text', delta: 'root 2' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+      return answer(`root ${turn}`);
+    };
+    const { sessions, client, pub } = sessionsWith(script, { catalogue });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    const root = () => client.requests.filter((r) => /^You are the orchestrator/.test(systemOf(r))).map((r) => r.model.modelId);
+    for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true, agent: 'orchestrator' });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+    for (let i = 0; i < 40 && root().length < 2; i++) await tick();
+    // No wait is open while the root's turn on c1 is held: the switch to f1 applies at the next iteration's root turn.
+    expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', id: 'second', text: 'a second task' } })).toEqual({ ok: true });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'f1' } })).toEqual({ ok: true });
+    release();
+    for (let i = 0; i < 40 && lastWait(pub)?.model !== 'f1'; i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'f', model: 'f1', exhausted: true, agent: 'orchestrator' });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(root()).toEqual(['a1', 'c1', 'f1', 'a1']);
+    const rows = dal.timelineOf(sid);
+    expect(rows.filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>)).toEqual([
+      expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1' }),
+      expect.objectContaining({ provider: 'a', model: 'a1', cleared: true, cause: 'superseded', root_cell: 'elsewhere' }),
+      expect.objectContaining({ provider: 'f', model: 'f1', model_key: 'a1' }),
+    ]);
+    // The row says what the run does: it resumes on a1.
+    expect(dal.residentRows(sid).map((r) => r.body).filter((t) => /during the wait/.test(t)).at(-1)).toMatch(/Model changed to a1 during the wait; the run resumes on it now/);
+    const resolve = (key: string) => { const e = catalogue.find((c) => c.key === key); return e ? { model: e.model, thinking: e.thinking } : null; };
+    const memory = ResilienceMemory.rehydrate(rows, resolve);
+    expect(memory.overrideFor('a', 'a1')).toBeUndefined();
+    expect(memory.overrideFor('f', 'f1')?.key).toBe('a1');
+    expect([memory.isExhausted('a', 'a1'), memory.isExhausted('f', 'f1')]).toEqual([false, true]);
+  });
+
+  /*
+   * Repair round 3 of the same note: a root that followed a1 → c1 and is still on c1 when c1 → f1 is added sits on the
+   * taken-back override's own target, an intermediate pair of the chain from a1, and moves on to f1 at its next call
+   * (`followOverride`). Its take-back records `root_cell: 'followed'`, so the autopsy reader keeps the root on the chain
+   * instead of returning it to a1. Before: the cell was compared with the chain's end (f1) only, recorded `elsewhere`, and
+   * both readers ended on a1 while the root called f1 (the verifier's repair-round-3 finding).
+   */
+  it('REQ-ORCH-091 (d) / REQ-MONITOR-142: a take-back while the root is on an intermediate pair of the override\'s chain records it followed, and the reader ends where the root runs', async () => {
+    const catalogue = [entry('a1', 'a', A1, []), entry('c1', 'c', C1, []), entry('f1', 'f', F1, [])];
+    const textOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages.flatMap((m) => m.content.map((p) => (p.kind === 'text' ? p.text ?? '' : ''))).join('\n');
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    const holds = new Map<string, () => void>();
+    const hold = (name: string) => new Promise<void>((r) => { holds.set(name, r); });
+    const calls = new Map<string, number>();
+    const script = (persona: string, turn: number, req: Parameters<ScriptedModelClient['stream']>[0]): ScriptedCall => {
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      if (persona === 'orchestrator') {
+        if (turn === 1) return toolCalls(['x', 'y', 'z'].map((t) => ({ callId: `d${t}`, name: 'delegate', args: { persona: 'coding-agent', task_name: t, task: `TASK: child ${t}` } })));
+        if (turn === 3) return { parts: [{ hold: hold('root'), part: { kind: 'text', delta: 'root 3' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+        return answer(`root ${turn}`);
+      }
+      const child = ['x', 'y', 'z'].find((t) => textOf(req).includes(`TASK: child ${t}`)) ?? '?';
+      const n = (calls.get(child) ?? 0) + 1;
+      calls.set(child, n);
+      // X: out of quota on a1 (→ c1 chosen), then held on c1 and out of quota there (→ f1 chosen), then done.
+      if (child === 'x') return n === 1 ? failing(quota()) : n === 2 ? { parts: [{ hold: hold('x') }, { error: quota() }] } : answer('x done');
+      // Y: held on a1 until c1 is chosen, then done, which resumes the root on c1.
+      if (child === 'y') return n === 1 ? { parts: [{ hold: hold('y'), part: { kind: 'text', delta: 'y done' } }, { part: { kind: 'finish', reason: 'stop' } }] } : answer('y done');
+      // Z: held on a1, then out of quota there once a1 → c1 → f1 stands; a1 itself is chosen for the retry.
+      return n === 1 ? { parts: [{ hold: hold('z') }, { error: quota() }] } : answer('z done');
+    };
+    const { sessions, client, pub } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 10_000 });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    const root = () => client.requests.filter((r) => /^You are the orchestrator/.test(systemOf(r))).map((r) => r.model.modelId);
+    for (let i = 0; i < 40 && (lastWait(pub) === null || root().length < 2 || !holds.has('y') || !holds.has('z')); i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+    for (let i = 0; i < 40 && !holds.has('x'); i++) await tick();
+    holds.get('y')!();
+    for (let i = 0; i < 40 && !holds.has('root'); i++) await tick();
+    // The root resumed after Y on c1 — it followed a1 → c1 — and its turn is held there.
+    expect(root()).toEqual(['a1', 'a1', 'c1']);
+    holds.get('x')!();
+    for (let i = 0; i < 40 && lastWait(pub)?.model !== 'c1'; i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'c', model: 'c1', exhausted: true });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'f1' } })).toEqual({ ok: true });
+    for (let i = 0; i < 40 && lastWait(pub)?.model === 'c1'; i++) await tick();
+    holds.get('z')!();
+    for (let i = 0; i < 40 && !(lastWait(pub)?.model === 'a1' && lastWait(pub)?.exhausted === true); i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+    holds.get('root')!();
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    // The root stays on the chain it followed: from c1 it moves on to f1, never back to a1.
+    expect(root().slice(0, 3)).toEqual(['a1', 'a1', 'c1']);
+    expect(root().slice(3)).toEqual(root().slice(3).map(() => 'f1'));
+    expect(root().length).toBeGreaterThan(3);
+    const rows = dal.timelineOf(sid);
+    expect(rows.filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>)).toEqual([
+      expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1' }),
+      expect.objectContaining({ provider: 'c', model: 'c1', model_key: 'f1' }),
+      expect.objectContaining({ provider: 'a', model: 'a1', cleared: true, cause: 'superseded', root_cell: 'followed' }),
+    ]);
+    const models = { a1: { provider: 'a', model_id: 'a1' }, c1: { provider: 'c', model_id: 'c1' }, f1: { provider: 'f', model_id: 'f1' } };
+    const audit = JSON.stringify({ session_id: sid, config_snapshot: { default_persona: 'orchestrator', personas: { orchestrator: { model: 'a1' } }, models } });
+    expect(entryModelKeys(audit, rows, childModelKeys(dal.childrenOf(sid)))).toEqual(['a1', 'c1', 'f1']);
+  });
+
+  /*
+   * The same on the quota-retry path: a child's wait on a1 is resolved with c1 (a1 → c1) while the root's call on a1 is in
+   * flight; that call then runs out too and the root waits on a1, where the user chooses a1 itself. The exclusion is cleared
+   * and a1 → c1 taken back, so the call is retried on a1, as the row says. Before: the retry followed a1 → c1 and called c1.
+   */
+  it('REQ-MONITOR-194 / REQ-MONITOR-303: choosing the waiting pair itself takes back the override an earlier choice set for it, and the call is retried on it', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]) : turn === 2 ? { parts: [{ hold: held }, { error: quota() }] } : answer(`root ${turn}`);
+      return turn === 1 ? failing(quota()) : answer('I did it.');
+    };
+    const { sessions, client, pub } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 10_000 });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    const root = () => client.requests.filter((r) => /^You are the orchestrator/.test(systemOf(r))).map((r) => r.model.modelId);
+    for (let i = 0; i < 40 && (lastWait(pub) === null || root().length < 2); i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true });
+    expect(lastWait(pub)!.agent).not.toBe('orchestrator');
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+    release();
+    for (let i = 0; i < 40 && lastWait(pub)?.agent !== 'orchestrator'; i++) await tick();
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true, agent: 'orchestrator' });
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(root()).toEqual(root().map(() => 'a1'));
+    expect(root().length).toBeGreaterThan(2);
+    expect(dal.residentRows(sid).map((r) => r.body).filter((t) => /during the wait/.test(t)).at(-1)).toMatch(/a1 chosen during the wait on a\/a1: .* the call is retried on it now\./);
+    const rows = dal.timelineOf(sid);
+    expect(rows.filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>)).toEqual([
+      expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1' }),
+      expect.objectContaining({ provider: 'a', model: 'a1', cleared: true, cause: 'superseded', root_cell: 'on_pair' }),
+    ]);
+    const resolve = (key: string) => { const e = catalogue.find((c) => c.key === key); return e ? { model: e.model, thinking: e.thinking } : null; };
+    const memory = ResilienceMemory.rehydrate(rows, resolve);
+    expect(memory.overrideFor('a', 'a1')).toBeUndefined();
+    expect(memory.isExhausted('a', 'a1')).toBe(false);
+  });
+
+  /*
+   * The repair of the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it: a
+   * child's wait choice records whether an entry switch is pending at it (`switch_pending`), as a ladder move of the root
+   * does, because the root follows the override from its next call on the cell from before that switch. Here the root's
+   * resume after the child runs on the choice (c1), and the switch (f1) applies at the next iteration's turn.
+   */
+  it('REQ-MONITOR-142 over REQ-MONITOR-303: a child\'s wait choice records whether an entry switch is pending at it, and the root runs on the choice before the switch applies', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, []), entry('f1', 'f', F1, [])];
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    const runWith = async (switchFirst: boolean) => {
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]) : answer(`root ${turn}`);
+        // The child's call on a1 is held, then fails on quota with no same-tier candidate: it waits on a/a1.
+        return turn === 1 ? { parts: [{ hold: held }, { error: quota() }] } : answer('I did it.');
+      };
+      const { sessions, client, pub } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 10_000 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 40 && client.requests.length < 3; i++) await tick();
+      expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', id: 'second', text: 'a second task' } })).toEqual({ ok: true });
+      // No wait is open yet, so this is the entry switch: it applies at the root's next turn, the next iteration's.
+      if (switchFirst) expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'f1' } })).toEqual({ ok: true });
+      release();
+      for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+      expect(lastWait(pub)!.agent).not.toBe('orchestrator');
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      return {
+        override: dal.timelineOf(sid).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>),
+        root: client.requests.filter((r) => /^You are the orchestrator/.test(systemOf(r))).map((r) => r.model.modelId),
+      };
+    };
+    const control = await runWith(false);
+    expect(control.override).toEqual([expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1', supersedes: false, switch_pending: false })]);
+    expect(control.root.slice(0, 2)).toEqual(['a1', 'a1']);
+    expect(control.root.slice(2)).toEqual(control.root.slice(2).map(() => 'c1'));
+    const pending = await runWith(true);
+    expect(pending.override).toEqual([expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1', supersedes: false, switch_pending: true })]);
+    // The iteration in flight: a1 until the choice, then c1 (its resume after the child); the next iteration: f1.
+    expect(pending.root.slice(0, 3)).toEqual(['a1', 'a1', 'c1']);
+    expect(pending.root.at(-1)).toBe('f1');
+  });
+
+  // The repair of the-entry-agents-context-limit-is-read-from-the-requested-model-not-the-one-it-runs-on (REQ-MONITOR-049,
+  // REQ-MONITOR-089): the run-level agent's limit is the maximum input of the model its ladder cell calls, so a same-tier
+  // move of the root moves it. Before: read from the requested model (`entryOverride.model ?? config.model`), 1000 throughout.
+  it('REQ-MONITOR-049 / REQ-MONITOR-089: the entry agent\'s context limit follows the root\'s same-tier move to the model it runs on', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer('from b')), { catalogue, inputLimits: { a1: 1000, b1: 5000 } });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+    const limits = (pub.snapshots as unknown as { entryContext: { limit: number } }[]).map((p) => p.entryContext.limit);
+    expect(limits).toContain(1000);
+    expect(limits.at(-1)).toBe(5000);
+    expect(limits.slice(limits.indexOf(5000))).toEqual(limits.slice(limits.indexOf(5000)).map(() => 5000));
+  });
+
   describe('PD-MONITOR-001 revision 2: a request is priced at the ladder cell, by the model it was sent to', () => {
     const A_RATES = { input: '0.000003', output: '0.000015' };
     const B_RATES = { input: '0.0000001', output: '0.0000002' };
@@ -696,9 +1006,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'nope' } })).toEqual({ ok: false });
     expect(issues(sid)).toContain('model_override_rejected');
     expect(lastWait(pub)!.rejection).toMatch(/nope could not be applied .*not a configured model.*still outstanding/);
-    // The waiting pair itself: refused too.
-    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: false });
-    expect(client.requests).toHaveLength(1);
+    // (The waiting pair itself was refused here too until 2026-10-02; REQ-MONITOR-194 lets the excluded pair be chosen on
+    // this surface, which clears its exclusion and retries it — the case below.)
     // A different model: applied at once and persisted.
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
     const result = await sessions.running(sid)!;
@@ -722,6 +1031,104 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(fresh.client.requests.map((r) => r.model.modelId)).toEqual(['c1']);
     // Found on Part Q's first execution: a continuation on a LOADED session forwarded no events, so its terminal result never left the run host.
     expect(fresh.results).toEqual(['completed']);
+  });
+
+  /*
+   * The repair of an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion (REQ-MONITOR-194): "Choosing it
+   * explicitly clears the recorded exclusion for that pair, so it is eligible again until a further insufficient-quota
+   * response re-records it", and the quota-wait surface is a place it may be chosen (REQ-MONITOR-303).
+   */
+  describe('REQ-MONITOR-194: an explicit choice of a pair recorded out of quota clears its exclusion', () => {
+    const exhaustedRows = (sid: SessionId) => dal.timelineOf(sid).filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+    const resolveIn = (catalogue: CatalogueEntry[]) => (key: string) => { const e = catalogue.find((c) => c.key === key); return e ? { model: e.model, thinking: e.thinking } : null; };
+
+    it('in a quota wait the waiting pair itself is chosen: the exclusion is cleared, the wait resolves as a retry on it with no override, and a further quota response re-records it', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+      const { sessions, client, pub } = sessionsWith((_p, turn) => (turn <= 2 ? failing(quota()) : answer(`answer ${turn}`)), { catalogue });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true, attempt: 1 });
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+      for (let i = 0; i < 40 && lastWait(pub)?.attempt !== 2; i++) await tick();
+      // Retried on a1 at once; it met insufficient quota again, which recorded the pair anew and parked the run again.
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1']);
+      expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true, attempt: 2 });
+      expect(exhaustedRows(sid)).toEqual([
+        expect.objectContaining({ provider: 'a', model: 'a1' }),
+        { provider: 'a', model: 'a1', model_key: 'a1', cleared: true },
+        expect.objectContaining({ provider: 'a', model: 'a1' }),
+      ]);
+      expect(exhaustedRows(sid)[2]).not.toHaveProperty('cleared');
+      expect(timeline(sid)).not.toContain('model_override');
+      expect(issues(sid)).not.toContain('model_override_rejected');
+      expect(dal.residentRows(sid).some((r) => r.kind === 'system' && r.body.includes('a1 chosen during the wait on a/a1: it is no longer treated as out of quota'))).toBe(true);
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1', 'c1']);
+      // A reload replays the entries in order: excluded, cleared, excluded again.
+      expect(ResilienceMemory.rehydrate(dal.timelineOf(sid), resolveIn(catalogue)).isExhausted('a', 'a1')).toBe(true);
+    });
+
+    it('a rate-limit wait\'s own pair is not excluded, so choosing it is still refused and the wait keeps its timer', async () => {
+      const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(rateLimit()) : answer('after')));
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: false });
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: false });
+      expect(lastWait(pub)!.rejection).toMatch(/a1 is the model that is waiting/);
+      expect(client.requests).toHaveLength(1);
+      expect(exhaustedRows(sid)).toEqual([]);
+      clock.advance(60_000);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+    });
+
+    it('chosen in a wait it clears the exclusion, so a later same-tier failure lists it again as a candidate, and a further quota response re-records it', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model']), entry('c1', 'c', C1, [])];
+      // Run 1: b1 rate limits, the same-tier candidate a1 meets insufficient quota and the run waits on a1; a1 is chosen.
+      // Run 2: b1 rate limits again, and a1 is a candidate again; it meets insufficient quota again.
+      const models: Record<number, ScriptedCall> = { 1: failing(rateLimit(1)), 2: failing(quota()), 3: answer('a1 after the choice'), 4: failing(rateLimit(1)), 5: failing(quota()) };
+      const { sessions, client, pub } = sessionsWith((_p, turn) => models[turn] ?? answer(`answer ${turn}`), { catalogue, entryModel: B1 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['b1', 'a1']);
+      expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true });
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['b1', 'a1', 'a1']);
+      const again = sessions.prompt(sid, 'again');
+      if (!again.ok) throw new Error(again.error.reason);
+      for (let i = 0; i < 40 && client.requests.length < 5; i++) await tick();
+      // Without the clearing a1 stayed excluded, b1 had no candidate and the run waited on b1's rate limit.
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['b1', 'a1', 'a1', 'b1', 'a1']);
+      const fallbacks = dal.timelineOf(sid).filter((t) => t.name === 'quota_fallback_model').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+      expect(fallbacks.map((f) => [f['from_model'], f['to_model']])).toEqual([['b1', 'a1'], ['b1', 'a1']]);
+      for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+      expect(exhaustedRows(sid).map((m) => m['cleared'] === true)).toEqual([false, true, false]);
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      await sessions.running(sid);
+    });
+
+    it('a switch of the entry model onto an excluded pair, outside a wait, clears its exclusion too — durably', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const { sessions, client } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : turn === 2 ? { parts: [{ hold: held }, ...answer('from b').parts] } : answer(`answer ${turn}`)), { catalogue });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 40 && client.requests.length < 2; i++) await tick();
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+      expect(ResilienceMemory.rehydrate(dal.timelineOf(sid), resolveIn(catalogue)).isExhausted('a', 'a1')).toBe(true);
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+      release();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(exhaustedRows(sid)).toEqual([expect.objectContaining({ provider: 'a', model: 'a1' }), { provider: 'a', model: 'a1', model_key: 'a1', cleared: true }]);
+      expect(ResilienceMemory.rehydrate(dal.timelineOf(sid), resolveIn(catalogue)).isExhausted('a', 'a1')).toBe(false);
+      // The next run's root calls a1, which answers: nothing records it again, and nothing else is cleared.
+      const again = sessions.prompt(sid, 'again');
+      if (!again.ok) throw new Error(again.error.reason);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.at(-1)!.model.modelId).toBe('a1');
+      expect(exhaustedRows(sid)).toHaveLength(2);
+    });
   });
 
   it('an unresponsive model: no event within llm_response_timeout closes the call and re-runs it once on the fallback; without a fallback the call keeps waiting (REQ-ORCH-090, REQ-CONFIG-114)', async () => {

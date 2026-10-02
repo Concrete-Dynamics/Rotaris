@@ -45,6 +45,31 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**A take-back records a root on any pair of the override's chain as having followed it (REQ-ORCH-091 d, REQ-MONITOR-142;
+the fourth round of `a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced`).** `Run.onChainFrom` classifies
+`root_cell: 'followed'` for a root on the taken-back override's own target or any pair past it, not only the chain's end.
+The **runtime view**'s ladder paragraph says so. No package, edge, process, channel, timeline name or store column changed.
+
+**An entry switch ends with its run, and OQ-185 asks whether it should (REQ-MONITOR-142/143, REQ-SESSION-026,
+REQ-MONITOR-146).** The **runtime view**'s `setModel` row says where a switch is held. No code moved.
+
+**The entry agent's context limit is its ladder cell's model's (REQ-MONITOR-049, REQ-MONITOR-089; the repair of
+`the-entry-agents-context-limit-is-read-from-the-requested-model-not-the-one-it-runs-on`).** `Run.entryContext` reads the
+limit from the root cell's model. The **runtime view**'s `SessionRecord.entryContext` sentence says so. Nothing else moved.
+
+**An explicit choice clears an exclusion (REQ-MONITOR-194; the repair of
+`an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion`).** `ResilienceMemory.clearExhausted`, persisted as a
+`model_exhausted` entry carrying `cleared: true`; `setEntryModel` clears the chosen pair, and in a quota wait the waiting
+pair itself is a retry. The **runtime view**'s ladder paragraph and its `setModel` row say so. No package, edge, process,
+channel, command, timeline name or store column changed.
+
+**A session-wide override is followed from every agent's next call (REQ-ORCH-091 a/d, REQ-MONITOR-194; the repair of
+`a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced`).** The ladder reads the session's overrides before
+every call (`followOverride`), not only where a cell is built, and the summariser's model is carried through them at each
+attempt. The **runtime view**'s ladder paragraph says so. A child's wait choice records `switch_pending` on its
+`model_override`, which the autopsy reader places before a pending switch; the **runtime view**'s `setModel` row says so.
+No package, edge, process, channel, command or store column changed.
+
 **The status strip names the focused session's confinement backend (REQ-SANDBOX-121, REQ-MONITOR-257, REQ-NOTIFY-030;
 fin8).** Store v31 appends `sessions.sandbox_backend`, written beside `sandboxed` when a run starts; the record carries
 `sandboxBackend`; the strip draws `sandbox: <backend>` for a focused session whose record says confined, and nothing

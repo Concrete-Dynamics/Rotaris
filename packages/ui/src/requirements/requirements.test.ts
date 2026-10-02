@@ -4,7 +4,7 @@ import { DELIVERY_COLUMNS, PANE_KEYS, REVIEW_DECISIONS } from '@rotaris/contract
 // Part R2 — the pane host's pure half and the registry the board drives it through.
 import { createPaneRegistry } from './panes/registry.js';
 import { PANE_TITLE, consequenceForDecision, disclosurePending, dispatchNothingStarted, heldLaunch, installedPanesSentence, launchAbandoned } from './panes-host.js';
-import { decidedNotice, followDecision } from './panes/presentation.js';
+import { decidedNotice, followAnswer, followDecision, rereadWhenTaken, type AnswerState } from './panes/presentation.js';
 import { arcPath, segmentArcs } from './EvidenceIndicator.js';
 import { cardDescription } from './Card.js';
 import { DETAIL_SECTIONS, SECTION_EMPTY } from './DetailPanel.js';
@@ -390,6 +390,52 @@ describe('a review decision held behind the launch disclosure (REQ-TRACE-426/472
     expect(await followDecision({ ok: true }, (s) => waiting.push(s))).toEqual({ ok: true });
     expect(await followDecision({ ok: false, reason: 'refused' }, (s) => waiting.push(s))).toEqual({ ok: false, reason: 'refused' });
     expect(waiting).toEqual([]);
+  });
+});
+
+/**
+ * Defect note `a-blocker-resumed-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`: the blockers
+ * pane's resume into `ready` starts a run, so it waits on the launch disclosure exactly as the review pane's re-run does.
+ * The pane drew the host's first answer ("nothing has been recorded yet") as its refusal and kept it after the resume
+ * was taken, and the host re-read the blocker only on a first answer of `ok`. `requirements-proof`'s `blocker-resume`
+ * stage drives the same path through the built app; these are its pure halves.
+ */
+describe('a blocker answer held behind the launch disclosure (REQ-TRACE-453/454/472)', () => {
+  it('REQ-TRACE-453/472: a resume accepted through the disclosure ends with nothing refused, and the blocker is re-read once', async () => {
+    const held = heldLaunch('REQ-101');
+    const states: AnswerState[] = [];
+    let rereads = 0;
+    const outcome = followAnswer(held.result, (s) => states.push(s));
+    const reread = rereadWhenTaken(held.result, () => { rereads += 1; });
+    expect(states).toEqual([{ waiting: disclosurePending('REQ-101'), refusal: null }]);
+    expect(rereads).toBe(0);
+    held.settle({ ok: true });
+    expect(await outcome).toEqual({ ok: true });
+    await reread;
+    expect(states).toEqual([{ waiting: disclosurePending('REQ-101'), refusal: null }, { waiting: null, refusal: null }]);
+    expect(rereads).toBe(1);
+  });
+  it('REQ-TRACE-454/472: a resume whose disclosure is abandoned quotes the abandonment, and nothing is re-read', async () => {
+    const held = heldLaunch('REQ-101');
+    const states: AnswerState[] = [];
+    let rereads = 0;
+    const outcome = followAnswer(held.result, (s) => states.push(s));
+    const reread = rereadWhenTaken(held.result, () => { rereads += 1; });
+    held.abandon();
+    expect(await outcome).toEqual({ ok: false, reason: launchAbandoned('REQ-101') });
+    await reread;
+    expect(states.at(-1)).toEqual({ waiting: null, refusal: launchAbandoned('REQ-101') });
+    expect(rereads).toBe(0);
+  });
+  it('REQ-TRACE-454: an answer the engine refuses at once is quoted and never drawn as waiting; one taken at once is re-read', async () => {
+    const states: AnswerState[] = [];
+    let rereads = 0;
+    expect(await followAnswer({ ok: false, reason: 'REQ-101 is not blocked.' }, (s) => states.push(s))).toEqual({ ok: false, reason: 'REQ-101 is not blocked.' });
+    expect(states).toEqual([{ waiting: null, refusal: 'REQ-101 is not blocked.' }]);
+    await rereadWhenTaken({ ok: false, reason: 'REQ-101 is not blocked.' }, () => { rereads += 1; });
+    expect(rereads).toBe(0);
+    await rereadWhenTaken({ ok: true }, () => { rereads += 1; });
+    expect(rereads).toBe(1);
   });
 });
 

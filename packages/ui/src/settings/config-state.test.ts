@@ -132,3 +132,51 @@ describe('REQ-CONFIG-472 — the Display category in the pending state', () => {
     expect(savePayload(saved, reselected).instructions).toEqual({ overrides: { 'workspace:AGENTS.md': null } });
   });
 });
+
+describe('REQ-CONFIG-341 — the Scope column reads the pending unset', () => {
+  // The note's workspace: `agents.yaml` sets only `personas.tester.model: large_model`.
+  const tester = { ...snapshot.roles[0]!, rawModel: 'large_model', modelOrigin: 'workspace' as const, inherited: false };
+
+  it('draws the read-back origin, with Unset only at the edited scope, while nothing is pending', async () => {
+    const { pendingFrom, scopeCellOf } = await import('./config-state.js');
+    const saved = pendingFrom(snapshot);
+    expect(scopeCellOf(tester, saved, 'workspace')).toMatchObject({ model: { origin: 'workspace', offerUnset: true }, reasoning: { origin: 'default', offerUnset: false } });
+    expect(scopeCellOf(tester, saved, 'global')).toMatchObject({ model: { origin: 'workspace', offerUnset: false }, reasoning: { origin: 'default', offerUnset: false } });
+  });
+
+  it('Unset clicked: the field reads `default` and offers no Unset; Discard (the saved state) reads `workspace` with Unset again', async () => {
+    const { applyChange, pendingFrom, scopeCellOf } = await import('./config-state.js');
+    const saved = pendingFrom(snapshot);
+    const unset = applyChange(saved, { kind: 'role', role: 'tester', scope: 'workspace', unsetModel: true });
+    expect(scopeCellOf(tester, unset, 'workspace')).toMatchObject({ model: { origin: 'default', offerUnset: false }, reasoning: { origin: 'default', offerUnset: false } });
+    // Switching the edit scope is a view selection: the pending unset still reads `default` there.
+    expect(scopeCellOf(tester, unset, 'global').model).toMatchObject({ origin: 'default', offerUnset: false });
+    expect(scopeCellOf(tester, saved, 'workspace').model).toMatchObject({ origin: 'workspace', offerUnset: true });
+  });
+
+  it('reads each field on its own: a pending reasoning unset leaves the model at its origin', async () => {
+    const { applyChange, pendingFrom, scopeCellOf } = await import('./config-state.js');
+    const both = { ...tester, rawThinking: 'high', thinkingOrigin: 'workspace' as const };
+    const unset = applyChange(pendingFrom(snapshot), { kind: 'role', role: 'tester', scope: 'workspace', unsetThinking: true });
+    expect(scopeCellOf(both, unset, 'workspace')).toMatchObject({ model: { origin: 'workspace', offerUnset: true }, reasoning: { origin: 'default', offerUnset: false } });
+  });
+
+  it('a value picked after the unset withdraws it: the field reads its read-back origin again', async () => {
+    const { applyChange, pendingFrom, scopeCellOf } = await import('./config-state.js');
+    let pending = applyChange(pendingFrom(snapshot), { kind: 'role', role: 'tester', scope: 'workspace', unsetModel: true });
+    pending = applyChange(pending, { kind: 'role', role: 'tester', scope: 'workspace', model: 'small_model' });
+    expect(scopeCellOf(tester, pending, 'workspace').model).toMatchObject({ origin: 'workspace', offerUnset: true });
+  });
+});
+
+describe('REQ-CONFIG-341 — the Scope column\'s Unset is named by its field and its role', () => {
+  it('names the model\'s and the reasoning\'s Unset apart, and each role apart', async () => {
+    const { pendingFrom, scopeCellOf } = await import('./config-state.js');
+    const saved = pendingFrom(snapshot);
+    const tester = { ...snapshot.roles[0]!, rawModel: 'large_model', modelOrigin: 'workspace' as const, rawThinking: 'high', thinkingOrigin: 'workspace' as const };
+    const cell = scopeCellOf(tester, saved, 'workspace');
+    expect(cell.model).toMatchObject({ offerUnset: true, unsetLabel: 'Unset model for tester' });
+    expect(cell.reasoning).toMatchObject({ offerUnset: true, unsetLabel: 'Unset reasoning for tester' });
+    expect(scopeCellOf({ ...tester, role: 'planner' }, saved, 'workspace').model.unsetLabel).toBe('Unset model for planner');
+  });
+});

@@ -388,6 +388,14 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: r.error.code === 'run-active' ? r.error.reason : r.error.code === 'confinement' ? 'The run was refused before it started' : 'The prompt could not be recorded', detail: r.error.reason };
       return { kind: 'ack' };
     }
+    case 'session.retry': {
+      // REQ-NOTIFY-045 (OQ-178): a retry launches a run as a prompt does, so the continuation lease is refreshed first.
+      const leaseRefusal = await continuationLeaseForSession(req.sessionId);
+      if (leaseRefusal) return leaseRefusal;
+      const r = sessions.retry(asSessionId(req.sessionId));
+      if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: r.error.code === 'run-active' ? r.error.reason : r.error.code === 'confinement' ? 'The run was refused before it started' : 'The prompt could not be retried', detail: r.error.reason };
+      return { kind: 'ack' };
+    }
     case 'session.readAttachment': {
       const r = sessions.readAttachment(asSessionId(req.sessionId), req.path, req.digest);
       return r.ok ? { kind: 'session.attachment', base64: r.base64 } : { kind: 'refused', code: 'session.attachment-unavailable', headline: r.reason };

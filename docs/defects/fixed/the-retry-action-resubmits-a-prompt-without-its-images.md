@@ -24,3 +24,25 @@ what the retry is for.
 - `packages/engine/src/sessions.ts`: the user row's `attachments`, and `persistAttachments`.
 - `packages/contracts/src/channels.ts`: `ImageAttachmentInputSchema` (bytes) and `ImageAttachmentSchema` (the row's
   metadata).
+
+## Outcome
+
+Repaired 2026-10-02 (fin8, bundle `fin8-focus-bound-recovery`), on the engine-side retry of
+[the-retry-action-reads-the-last-prompt-from-the-resident-window.md](the-retry-action-reads-the-last-prompt-from-the-resident-window.md).
+`Sessions.retry` resubmits the last submitted prompt with its images: `readBackAttachments`
+(`packages/engine/src/attachments.ts`) reads each stored image back by its relative path below the session's directory
+and verifies it against its recorded digest (`readAttachmentBody`, REQ-CHAT-173), so the bytes never cross the command
+boundary a second time, and `prompt` stores and sends them as it does a composer's — the new user row carries the same
+digest. A missing or altered image refuses the retry with the image named ("…because its image shot.png could not be read
+back: Image is no longer available.") rather than resubmitting less than was sent. REQ-CHAT-171's gate is `prompt`'s,
+checked against the model the retry runs on. The authentication restarts (`restartOnFallback`, the recovery dialog's) keep
+re-sending the text alone under OQ-182's reading, though the shared reading returns the images.
+
+Not covered here, and raised: a NON-blank draft is still resubmitted as its text, the images held in the composer staying
+there (OQ-183, whether the "current composer draft" includes them).
+
+Pinned by `packages/engine/src/last-prompt.test.ts` (a prompt with one PNG, failed and retried: the new row carries the
+same digest and the model is sent the bytes; the same for a prompt released from the resident window; a missing and an
+altered image refuse naming `shot.png`; a model without image input refuses) and shown in the built application by
+`pnpm notice-proof`'s `retry-image` launch (a failed session whose prompt, one PNG attached, is released, reopened and
+retried: the retried row's digest and the digest of the image the model port received equal the stored one).

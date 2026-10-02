@@ -115,7 +115,7 @@ is wired end to end and, from Part Z, is CALLED: the transcript asks for the nex
 toward the top, and the replica's `prependOlder` places it above — REQ-CHAT-165, REQ-SESSION-192; `continue`
 carries `{action, withoutPaused?}` since PD-ORCH-005's phase 5, the option clause 6's "continue without them",
 relayed as it is to the run host's `session.continue`, which since clause 18 also continues a session a crash left),
-**`authRecovery.payload` / `authRecovery.retry {modelKey}` / `authRecovery.reauthenticate {apiKey}` / `authRecovery.cancel`** (REQ-NOTIFY-072..077/080, 2026-10-02: the recovery window's payload and answers, keyed by the SENDER as a pause window's are, so the window acts on the session it was opened for and names none; `retry` is relayed to the run host as `session.authRestart {sessionId, modelKey}` — refused for a key the dialog did not list; `reauthenticate` carries a pasted key INWARD to main's provider key store (`ProviderService.reauthenticateWithKey`, validated by discovery before it is saved, never logged) and then relays `session.authRestart {sessionId, modelKey: null}`; each answered `{ok}` or the sentence the dialog shows), **`session.planEdit {text}` / `session.planDecision {decision, changes?}` / `session.planRearm {sessionId}`**
+**`session.retry {sessionId}`** (REQ-NOTIFY-045 / REQ-CHAT-173, OQ-178; 2026-10-02: a notice's retry with a blank composer draft, relayed to the run host as itself after the continuation lease a `session.prompt` takes; `Sessions.retry` resubmits the session's last submitted prompt — read over every row, released ones included (`lastSubmittedPrompt`) — with its images read back from the session's directory and verified by digest (`readBackAttachments`), so no prompt text or image bytes cross from the renderer again; answered `ack`, or refused `session.no-prompt`, `session.attachment-unavailable` naming the image, or any refusal a `session.prompt` meets), **`authRecovery.payload` / `authRecovery.retry {modelKey}` / `authRecovery.reauthenticate {apiKey}` / `authRecovery.cancel`** (REQ-NOTIFY-072..077/080, 2026-10-02: the recovery window's payload and answers, keyed by the SENDER as a pause window's are, so the window acts on the session it was opened for and names none; `retry` is relayed to the run host as `session.authRestart {sessionId, modelKey}` — refused for a key the dialog did not list; `reauthenticate` carries a pasted key INWARD to main's provider key store (`ProviderService.reauthenticateWithKey`, validated by discovery before it is saved, never logged) and then relays `session.authRestart {sessionId, modelKey: null}`; each answered `{ok}` or the sentence the dialog shows), **`session.planEdit {text}` / `session.planDecision {decision, changes?}` / `session.planRearm {sessionId}`**
 (ADR-0062 and PD-ORCH-003, REQ-ORCH-152/153/154: the plan gate's three entries, relayed to the run host that owns
 the session and answered `ack` / `{cycle, relaunched}` / `ack`. They are session commands and **not** control
 operations, because `CONTROL_OPS` is REQ-MONITOR-004's closed enumeration over a LIVE run and a run held at the
@@ -173,7 +173,10 @@ baseRevision}` | `refused` (the Git failure text as the headline); `worktree.rem
 {path, branch, baseBranch, baseRevision}` | `refused`. Main → run host: `session.start` gains `sessionId`,
 `effectiveRoot`, `worktree` (REQ-GIT-015's binding) and `sandboxMode`; the binding is made BEFORE the run host is
 asked, so a binding failure leaves no session behind (REQ-GIT-023 by construction). `SessionListItem` gains `worktree`
-and `checkpointCount` (REQ-GIT-018); `SessionRecord` gains `worktreeBranch` for the status strip (REQ-GIT-122).
+and `checkpointCount` (REQ-GIT-018); `SessionRecord` gains `worktreeBranch` for the status strip (REQ-GIT-122), and
+since 2026-10-02 `sandboxBackend` beside `sandboxed` (REQ-SANDBOX-121: the backend the latest run was confined by, '' when
+it was not; the strip's sandbox indicator reads both). A run of the session refused at the confinement gate republishes the
+record with both cleared until a run of it starts (REQ-NOTIFY-061, `Sessions.refusedAtStart`); the row is not written.
 
 **Checkpoints (Part P; ADR-0039's first execution).** Renderer → main: `checkpoints.list {sessionId}` (rows only, REQ-GIT-050),
 `checkpoints.preview {sessionId, sequence}` and `checkpoints.restore {sessionId, sequence, force}`; main holds ONE desktop
@@ -491,7 +494,7 @@ repaint or repopulate every live window.
 
 **Main ↔ run host (`RunHostRequestSchema` / `ProcessReplySchema` / `ProcessEventSchema`).** Since 2026-09-09 (Part AL): the seven `terminal.*` requests, the `terminal.streams` reply and the `publish.terminal` event, listed above. Requests:
 `workspace.opened/closing/refuseRuns/renewLease/closeStore/release`, `session.*` (start, list, resume,
-continue, prompt, attach, detach, reconcile, pageOlder, control, and since 2026-10-02 `restartOnFallback {sessionId}` —
+continue, prompt, retry (since 2026-10-02, REQ-NOTIFY-045; answered `ack`), attach, detach, reconcile, pageOlder, control, and since 2026-10-02 `restartOnFallback {sessionId}` —
 REQ-NOTIFY-070's pin of `fallback_model` and the restart with the same prompt, answered
 `session.fallbackRestarted {failed, fallback}` with each pair's provider, model and key, or `refused` — whose code main reads
 since the merge beside the recovery dialog: `session.no-fallback`, `session.fallback-failed` and `session.no-model-failure`

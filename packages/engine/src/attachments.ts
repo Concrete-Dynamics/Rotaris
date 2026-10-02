@@ -9,7 +9,8 @@ export const MAX_ATTACHMENT_COUNT = 10;
 export const MAX_ATTACHMENTS_BYTES = 25 * 1024 * 1024;
 
 type MediaType = ImageAttachmentInput['mediaType'];
-type StoredAttachment = Omit<ImageAttachment, 'available' | 'unavailableReason'>;
+/** REQ-CHAT-046/173: what a user row and the snapshot keep of an image — its reference and digest, never its bytes. */
+export type StoredAttachment = Omit<ImageAttachment, 'available' | 'unavailableReason'>;
 
 export function imageMediaType(bytes: Uint8Array): MediaType | null {
   const ascii = (from: number, length: number) => String.fromCharCode(...bytes.slice(from, from + length));
@@ -94,4 +95,20 @@ export function readAttachmentBody(sessionDir: string, path: string, expectedDig
     const digest = createHash('sha256').update(bytes).digest('hex');
     return digest === expectedDigest ? { ok: true, base64: bytes.toString('base64') } : { ok: false, reason: 'Image content does not match its recorded digest.' };
   } catch { return { ok: false, reason: 'Image is no longer available.' }; }
+}
+
+/**
+ * REQ-NOTIFY-045 with REQ-CHAT-173: a prompt's stored images read back as the inputs it was submitted with, each by its
+ * relative path below the session's directory and verified against its recorded digest, so a resubmission sends what was
+ * sent and the bytes never cross the command boundary a second time. The first image that is missing or altered refuses
+ * the whole read, named, rather than leaving less than was sent.
+ */
+export function readBackAttachments(sessionDir: string, stored: readonly StoredAttachment[]): { ok: true; inputs: ImageAttachmentInput[] } | { ok: false; name: string; reason: string } {
+  const inputs: ImageAttachmentInput[] = [];
+  for (const attachment of stored) {
+    const body = readAttachmentBody(sessionDir, attachment.path, attachment.digest);
+    if (!body.ok) return { ok: false, name: attachment.name, reason: body.reason };
+    inputs.push({ name: attachment.name, mediaType: attachment.mediaType, size: attachment.size, base64: body.base64 });
+  }
+  return { ok: true, inputs };
 }

@@ -94,7 +94,7 @@ function opened() {
 describe("improvement store handles (ADR-0061)", () => {
   it("migrates v19, records the session association and survives reopen", () => {
     const resolved = opened();
-    expect(CURRENT_SCHEMA_VERSION).toBe(30); // REQ-MONITOR-102 (R-067) appended v26; the explicit cancel's mark (OQ-103, R-067) v27; a child's attachments and inherited block (REQ-LIBRARY-098, R-067) v28; the plan cycle's root under way (REQ-MONITOR-102 with REQ-ORCH-153, R-067) v29; every plan cycle's root (REQ-MONITOR-044 with REQ-ORCH-153, R-067) v30
+    expect(CURRENT_SCHEMA_VERSION).toBe(31); // REQ-MONITOR-102 (R-067) appended v26; the explicit cancel's mark (OQ-103, R-067) v27; a child's attachments and inherited block (REQ-LIBRARY-098, R-067) v28; the plan cycle's root under way (REQ-MONITOR-102 with REQ-ORCH-153, R-067) v29; every plan cycle's root (REQ-MONITOR-044 with REQ-ORCH-153, R-067) v30; the backend a confined run used (REQ-SANDBOX-121) v31
     const sessionDal = new StoreDal(resolved.db);
     sessionDal.upsertSession({
       session_id: "typed-run",

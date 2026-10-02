@@ -8849,7 +8849,16 @@ another model, or retry once the provider resets."). Activated, the action resub
 last published it (REQ-CHAT-014), else as stored (REQ-NOTIFY-066), else — the draft blank — the focused session's newest
 `user` row, the prompt the engine's own continue reads as the last one; it goes through the composer's submit path to
 the session the window follows (REQ-NOTIFY-030), and is refused, with the reason in a warning notice, when no session
-is followed or there is nothing to resubmit. The composer keeps the draft: nothing outside the composer clears it.
+is followed or there is nothing to resubmit. The composer keeps the draft: nothing outside the composer clears it. *Since
+2026-10-02 (fin8, the repair of
+[`the-retry-action-reads-the-last-prompt-from-the-resident-window.md`](../defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md)
+and
+[`the-retry-action-resubmits-a-prompt-without-its-images.md`](../defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md)):*
+the blank-draft branch is the engine's (`session.retry`, `Sessions.retry`). It reads the last submitted prompt over every
+row, released ones included, where the window had searched its replica's resident window and refused once the prompt was
+released; and it resubmits the prompt's images with it, read back from the session's directory and verified by digest,
+where the window had re-sent the text alone. A missing or altered image refuses the retry, naming the image. A non-blank
+draft is still resubmitted as its text (OQ-183).
 
 **What a ruling decides.** Which notice carries the retry — REQ-NOTIFY-063's in place of, or beside, its model-settings
 action (which REQ-SHELL-114's single action would then have to allow), REQ-NOTIFY-064's, or none — and whether a draft a
@@ -9012,3 +9021,62 @@ the application; whether the pin covers every agent on the failed pair or the en
 with no usable fallback spends the session's automatic fallback; whether a session not on screen is restarted at once,
 in the background, or when it is focused; and whether "the same prompt" of a run a plan decision launched is that decision
 (as built) or the session's last prompt.
+
+**OQ-183 — Does REQ-NOTIFY-045's "current composer draft" include the images the composer holds?** *(REQ-NOTIFY-045,
+"resubmits the current composer draft"; REQ-NOTIFY-066, the draft stored under `composerDraft`; REQ-CHAT-014, the draft
+published to application state; REQ-CHAT-011/170/171/172, a submission's attachments and their gates. Raised 2026-10-02 by
+the repair of
+[`the-retry-action-resubmits-a-prompt-without-its-images.md`](../defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md)
+(fin8). Open.)*
+
+The retry resubmits "the current composer draft" where there is one. The composer holds images beside its text
+(REQ-CHAT-170..172), but the draft the specification stores and publishes (REQ-NOTIFY-066, REQ-CHAT-014) is text, and
+nothing says whether images held in the composer at the moment a notice's retry is activated belong to "the draft" the
+retry resubmits, or stay in the composer for the user's own submission.
+
+**What the build proceeds under** (`retryRun`, `apps/desktop/src/renderer/session-actions.ts`): a non-blank draft is
+resubmitted as its text alone, as the stored and published draft is text; images held in the composer are not sent by
+the retry and stay where they are. A blank draft resubmits the session's last submitted prompt with its images
+(`Sessions.retry`, OQ-178's reading since 2026-10-02).
+
+**What a ruling decides.** Whether a retry of a non-blank draft carries the images the composer holds (and so whether the
+composer publishes them to application state as it does its text), and whether they are then cleared from the composer.
+
+**OQ-184 — Where does REQ-SANDBOX-121's workspace indicator stand, and in what words?** *(Asked until 2026-10-02 as "…and
+what does it say after a refused continuation of a confined session?"; that third part was not open and is withdrawn, below.)
+(REQ-SANDBOX-121, "A workspace indicator naming the backend appears only for a session whose recorded result is confined"; REQ-MONITOR-257 and REQ-NOTIFY-030, "the sandbox indicator"; REQ-NOTIFY-061, "The sandbox indicator
+stops describing the run as sandboxed"; REQ-SHELL-038, the strip's items left to right, a closed list; REQ-SHELL-047, "An
+item added to the strip is given its threshold here"; REQ-TOOLS-184. Raised 2026-10-02 by the repair of
+[`no-workspace-indicator-names-the-confinement-backend.md`](../defects/fixed/no-workspace-indicator-names-the-confinement-backend.md)
+(fin8). Open.)*
+
+Two things the requirements leave to the build:
+
+- **Where it stands.** REQ-SANDBOX-121 calls it a *workspace* indicator and places it nowhere; REQ-SHELL-038 lists the
+  strip's items and has none for it, and REQ-SHELL-047 says an item added to the strip gets its responsive threshold there,
+  which it has not.
+- **Its words.** "Naming the backend" fixes the backend's name and nothing else; REQ-TOOLS-184's flags take their
+  tooltips' wording from the settings pages, which this indicator is not among.
+- ~~**A refused continuation.**~~ *Withdrawn 2026-10-02 (fin8, repair round 1): not open.* It read: "A confined session
+  whose next run is refused at the confinement gate (REQ-NOTIFY-061) started no run, and its record still says its last
+  run was confined. REQ-NOTIFY-061 has the indicator 'stop describing the run as sandboxed'; whether 'the run' is the
+  refused one (which the indicator never described) or the session's latest result is not said." fin8's verifier found the
+  reading empty the clause: a refused START leaves no session (REQ-SANDBOX-120), so no indicator is drawn for it either
+  way, and the only indicator that can stop is the one a refused continuation would otherwise keep showing. The clause is
+  plain, and the build now meets it (below).
+
+**What the build proceeds under** (`statusStripSandboxItem`, `packages/ui/src/composer.ts`; `apps/desktop/src/renderer/main.tsx`):
+an inert text item in the status strip, right after the workspace-scope flag, reading `sandbox: <backend>` (or
+`sandbox: confined` for a record written before the backend was recorded, whose start event no longer holds it), with the
+accessible name "Confinement backend" and a tooltip worded as the settings page's Sandbox mode control words confinement,
+joined to the short form as REQ-SHELL-041's flags are. It is shown at every width (no REQ-SHELL-047 threshold). It reads
+the focused session's record, so it is absent with no session focused — where a refused start leaves the window, no
+session remaining (REQ-SANDBOX-120). After a run of an existing session is refused at the confinement gate (a prompt, a
+retry, a continue, a plan decision, an authentication restart) the engine publishes the record no longer sandboxed and with
+no backend (`Sessions.refusedAtStart`, `packages/engine/src/sessions.ts`), so the item is gone beside the refusal notice
+until a run of the session starts again; the stored row keeps the fact of the run that started (REQ-SANDBOX-094). Until
+that repair the reading here was that the item kept describing the last run that started and the refusal changed no
+record; the verifier's finding above withdrew it.
+
+**What a ruling decides.** Whether the indicator belongs in the status strip (and then its place among REQ-SHELL-038's items
+and its REQ-SHELL-047 threshold) or on another workspace surface; its wording beyond the backend's name.

@@ -166,4 +166,24 @@ describe('engine/run/resilience — the session-wide memory (REQ-ORCH-091 a/d, R
     expect(m.clearOverride('a', 'x')).toBe(false);
     expect(m.effective({ model: catalogue[0]!.model, thinking: 'unset' }, catalogue).model.modelId).toBe('x');
   });
+
+  // REQ-MONITOR-194: an explicit choice clears the exclusion, so the pair is eligible again until a further
+  // insufficient-quota response re-records it; the clearing survives a resume (the repair of
+  // an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion).
+  it('REQ-MONITOR-194: a `model_exhausted` entry carrying cleared: true takes the exclusion back, in order, and a later one records it again', () => {
+    const exhausted = { name: 'model_exhausted', metadata: JSON.stringify({ provider: 'a', model: 'x', agent: 'orchestrator' }) };
+    const cleared = { name: 'model_exhausted', metadata: JSON.stringify({ provider: 'a', model: 'x', cleared: true }) };
+    const resolve = () => null;
+    expect(ResilienceMemory.rehydrate([exhausted], resolve).isExhausted('a', 'x')).toBe(true);
+    expect(ResilienceMemory.rehydrate([exhausted, cleared], resolve).isExhausted('a', 'x')).toBe(false);
+    expect(ResilienceMemory.rehydrate([exhausted, cleared], resolve).exhausted.size).toBe(0);
+    expect(ResilienceMemory.rehydrate([exhausted, cleared, exhausted], resolve).isExhausted('a', 'x')).toBe(true);
+    const m = new ResilienceMemory();
+    expect(m.clearExhausted('a', 'x')).toBe(false);
+    expect(m.markExhausted('a', 'x')).toBe(true);
+    expect(m.clearExhausted('a', 'x')).toBe(true);
+    expect(m.isExhausted('a', 'x')).toBe(false);
+    // Eligible again: a further insufficient-quota response records it anew.
+    expect(m.markExhausted('a', 'x')).toBe(true);
+  });
 });

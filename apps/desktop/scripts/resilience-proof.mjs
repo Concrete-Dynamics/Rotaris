@@ -12,9 +12,10 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
  * (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..093/263), and since OQ-173 that a wait the run imposes is not a stall
  * (REQ-MONITOR-117..119), and since OQ-177 that an entry switch after a ladder move applies as its row says (REQ-MONITOR-142).
- * Seventeen scenarios (since 2026-10-02 the authentication class's: `fatal` and `reauth` the recovery dialog's, `generic`
+ * Eighteen scenarios (since 2026-10-02 the authentication class's: `fatal` and `reauth` the recovery dialog's, `generic`
  * REQ-NOTIFY-064's notice, `auth-fallback` the first failure's automatic fallback and its re-authentication prompt,
- * `auth-fallback-dialog` the two together, `auth-fallback-revise` a failed revise cycle restarted as the same revise), each
+ * `auth-fallback-dialog` the two together, `auth-fallback-revise` a failed revise cycle restarted as the same revise; and
+ * `quota-retry`, REQ-MONITOR-194's explicit choice of the waiting pair clearing its exclusion), each
  * asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
@@ -379,6 +380,51 @@ await scenarioRun('override', async () => {
   db2.close();
   expect(row2.execution_status === 'completed' && row2.iterations_completed >= 2, `the continuation did not complete: ${JSON.stringify(row2)}`);
   results.overrideResume = { calls: calls2, session: row2, png: again.png, elapsedMs: again.elapsedMs };
+});
+
+// 4b. REQ-MONITOR-194 / REQ-MONITOR-303 (the repair of an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion):
+// the quota-wait surface offers the waiting pair itself, and choosing it clears the pair's exclusion and retries it — no
+// override. Alpha refuses again on quota, which records it anew and parks the run again; beta is then chosen and the run
+// completes on it. Before the repair the first choice was refused (`model_override_rejected`) and the run never left the wait.
+const s4b = scenario('quota-retry', []);
+await scenarioRun('quota-retry', async () => {
+  const waits = () => { const db = open(s4b); try { const row = session(db); return row === undefined ? 0 : issues(db, row.session_id).filter((i) => i.kind === 'model_wait').length; } finally { db.close(); } };
+  const r = await drivenLaunch('quota-retry', s4b, { ROTARIS_SCRIPT: 'fail:quota,fail:quota,answer' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('quota, then the waiting pair chosen', { enter: true }));
+    await step('the first wait header', d.waitFor('.wait-header', { timeoutMs: 60_000 }));
+    await step('Change model', d.click('.wait-header .btn-secondary', { text: 'Change model' }));
+    const first = await step('the chooser → alpha, the waiting pair', choose(d, '.wait-header button[aria-label="Change model"]', 'alpha'));
+    await step('the second wait', until(waits, (n) => n >= 2, { timeoutMs: 60_000, what: 'a second model_wait issue', signal }));
+    await step('the second wait header', d.waitFor('.wait-header', { timeoutMs: 60_000 }));
+    const during = await step('the header during the second wait', d.probe('.wait-header'));
+    await step('Change model again', d.click('.wait-header .btn-secondary', { text: 'Change model' }));
+    const second = await step('the chooser → beta', choose(d, '.wait-header button[aria-label="Change model"]', 'beta'));
+    // (`settled` is declared below the scenarios that run before it; this one polls the same way.)
+    const row = await step('the run settled', until(() => { const db = open(s4b); try { return session(db); } finally { db.close(); } }, (x) => x !== undefined && SETTLED.has(x.execution_status), { timeoutMs: 90_000, what: 'the session settling', signal }));
+    return { first, second, during, row };
+  });
+  const db = open(s4b);
+  const row = session(db);
+  const list = names(db, row.session_id);
+  const kinds = issues(db, row.session_id);
+  const rows = systemRows(db, row.session_id);
+  db.close();
+  expect(row.execution_status === 'completed', `the run did not complete: ${JSON.stringify(row)}`);
+  expect(!kinds.some((i) => i.kind === 'model_override_rejected'), `the waiting pair was refused: ${kinds.filter((i) => i.kind === 'model_override_rejected').map((i) => i.message).join(' | ')}`);
+  const exhausted = list.filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata));
+  expect(exhausted.length === 3 && exhausted[0].cleared === undefined && exhausted[1].cleared === true && exhausted[1].model === 'alpha' && exhausted[2].cleared === undefined, `the exclusion was not recorded, cleared and recorded again: ${JSON.stringify(exhausted)}`);
+  const overrides = list.filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata));
+  expect(overrides.length === 1 && overrides[0].model_key === 'beta', `the retry on alpha persisted an override, or beta's choice did not: ${JSON.stringify(overrides)}`);
+  expect(rows.some((b) => b.includes('alpha chosen during the wait on scripted/alpha: it is no longer treated as out of quota')), `no system row for the retry: ${rows.join(' | ')}`);
+  const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
+  expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted/alpha,scripted-b/beta', `the calls were not alpha, alpha (the retry), beta: ${JSON.stringify(calls)}`);
+  expect(kinds.filter((i) => i.kind === 'model_wait').length === 2, 'the retry did not park the run a second time');
+  results.quotaRetry = { status: row.execution_status, exhausted, overrides, calls, headerDuringSecondWait: r.value.during[0]?.text ?? null, png: r.png, elapsedMs: r.elapsedMs };
 });
 
 // 5. An unresponsive model: no event for 30 s with a fallback slot → the fallback; the same script with no fallback keeps waiting.

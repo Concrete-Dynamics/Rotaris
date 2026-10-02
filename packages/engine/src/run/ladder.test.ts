@@ -774,9 +774,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'nope' } })).toEqual({ ok: false });
     expect(issues(sid)).toContain('model_override_rejected');
     expect(lastWait(pub)!.rejection).toMatch(/nope could not be applied .*not a configured model.*still outstanding/);
-    // The waiting pair itself: refused too.
-    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: false });
-    expect(client.requests).toHaveLength(1);
+    // (The waiting pair itself was refused here too until 2026-10-02; REQ-MONITOR-194 lets the excluded pair be chosen on
+    // this surface, which clears its exclusion and retries it — the case below.)
     // A different model: applied at once and persisted.
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
     const result = await sessions.running(sid)!;
@@ -800,6 +799,104 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(fresh.client.requests.map((r) => r.model.modelId)).toEqual(['c1']);
     // Found on Part Q's first execution: a continuation on a LOADED session forwarded no events, so its terminal result never left the run host.
     expect(fresh.results).toEqual(['completed']);
+  });
+
+  /*
+   * The repair of an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion (REQ-MONITOR-194): "Choosing it
+   * explicitly clears the recorded exclusion for that pair, so it is eligible again until a further insufficient-quota
+   * response re-records it", and the quota-wait surface is a place it may be chosen (REQ-MONITOR-303).
+   */
+  describe('REQ-MONITOR-194: an explicit choice of a pair recorded out of quota clears its exclusion', () => {
+    const exhaustedRows = (sid: SessionId) => dal.timelineOf(sid).filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+    const resolveIn = (catalogue: CatalogueEntry[]) => (key: string) => { const e = catalogue.find((c) => c.key === key); return e ? { model: e.model, thinking: e.thinking } : null; };
+
+    it('in a quota wait the waiting pair itself is chosen: the exclusion is cleared, the wait resolves as a retry on it with no override, and a further quota response re-records it', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+      const { sessions, client, pub } = sessionsWith((_p, turn) => (turn <= 2 ? failing(quota()) : answer(`answer ${turn}`)), { catalogue });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true, attempt: 1 });
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+      for (let i = 0; i < 40 && lastWait(pub)?.attempt !== 2; i++) await tick();
+      // Retried on a1 at once; it met insufficient quota again, which recorded the pair anew and parked the run again.
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1']);
+      expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true, attempt: 2 });
+      expect(exhaustedRows(sid)).toEqual([
+        expect.objectContaining({ provider: 'a', model: 'a1' }),
+        { provider: 'a', model: 'a1', model_key: 'a1', cleared: true },
+        expect.objectContaining({ provider: 'a', model: 'a1' }),
+      ]);
+      expect(exhaustedRows(sid)[2]).not.toHaveProperty('cleared');
+      expect(timeline(sid)).not.toContain('model_override');
+      expect(issues(sid)).not.toContain('model_override_rejected');
+      expect(dal.residentRows(sid).some((r) => r.kind === 'system' && r.body.includes('a1 chosen during the wait on a/a1: it is no longer treated as out of quota'))).toBe(true);
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1', 'c1']);
+      // A reload replays the entries in order: excluded, cleared, excluded again.
+      expect(ResilienceMemory.rehydrate(dal.timelineOf(sid), resolveIn(catalogue)).isExhausted('a', 'a1')).toBe(true);
+    });
+
+    it('a rate-limit wait\'s own pair is not excluded, so choosing it is still refused and the wait keeps its timer', async () => {
+      const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(rateLimit()) : answer('after')));
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: false });
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: false });
+      expect(lastWait(pub)!.rejection).toMatch(/a1 is the model that is waiting/);
+      expect(client.requests).toHaveLength(1);
+      expect(exhaustedRows(sid)).toEqual([]);
+      clock.advance(60_000);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+    });
+
+    it('chosen in a wait it clears the exclusion, so a later same-tier failure lists it again as a candidate, and a further quota response re-records it', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model']), entry('c1', 'c', C1, [])];
+      // Run 1: b1 rate limits, the same-tier candidate a1 meets insufficient quota and the run waits on a1; a1 is chosen.
+      // Run 2: b1 rate limits again, and a1 is a candidate again; it meets insufficient quota again.
+      const models: Record<number, ScriptedCall> = { 1: failing(rateLimit(1)), 2: failing(quota()), 3: answer('a1 after the choice'), 4: failing(rateLimit(1)), 5: failing(quota()) };
+      const { sessions, client, pub } = sessionsWith((_p, turn) => models[turn] ?? answer(`answer ${turn}`), { catalogue, entryModel: B1 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['b1', 'a1']);
+      expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true });
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['b1', 'a1', 'a1']);
+      const again = sessions.prompt(sid, 'again');
+      if (!again.ok) throw new Error(again.error.reason);
+      for (let i = 0; i < 40 && client.requests.length < 5; i++) await tick();
+      // Without the clearing a1 stayed excluded, b1 had no candidate and the run waited on b1's rate limit.
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['b1', 'a1', 'a1', 'b1', 'a1']);
+      const fallbacks = dal.timelineOf(sid).filter((t) => t.name === 'quota_fallback_model').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+      expect(fallbacks.map((f) => [f['from_model'], f['to_model']])).toEqual([['b1', 'a1'], ['b1', 'a1']]);
+      for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+      expect(exhaustedRows(sid).map((m) => m['cleared'] === true)).toEqual([false, true, false]);
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      await sessions.running(sid);
+    });
+
+    it('a switch of the entry model onto an excluded pair, outside a wait, clears its exclusion too — durably', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const { sessions, client } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : turn === 2 ? { parts: [{ hold: held }, ...answer('from b').parts] } : answer(`answer ${turn}`)), { catalogue });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 40 && client.requests.length < 2; i++) await tick();
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+      expect(ResilienceMemory.rehydrate(dal.timelineOf(sid), resolveIn(catalogue)).isExhausted('a', 'a1')).toBe(true);
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+      release();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(exhaustedRows(sid)).toEqual([expect.objectContaining({ provider: 'a', model: 'a1' }), { provider: 'a', model: 'a1', model_key: 'a1', cleared: true }]);
+      expect(ResilienceMemory.rehydrate(dal.timelineOf(sid), resolveIn(catalogue)).isExhausted('a', 'a1')).toBe(false);
+      // The next run's root calls a1, which answers: nothing records it again, and nothing else is cleared.
+      const again = sessions.prompt(sid, 'again');
+      if (!again.ok) throw new Error(again.error.reason);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.at(-1)!.model.modelId).toBe('a1');
+      expect(exhaustedRows(sid)).toHaveLength(2);
+    });
   });
 
   it('an unresponsive model: no event within llm_response_timeout closes the call and re-runs it once on the fallback; without a fallback the call keeps waiting (REQ-ORCH-090, REQ-CONFIG-114)', async () => {

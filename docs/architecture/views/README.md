@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**An explicit choice clears an exclusion (REQ-MONITOR-194; the repair of
+`an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion`).** `ResilienceMemory.clearExhausted`, persisted as a
+`model_exhausted` entry carrying `cleared: true`; `setEntryModel` clears the chosen pair, and in a quota wait the waiting
+pair itself is a retry. The **runtime view**'s ladder paragraph and its `setModel` row say so. No package, edge, process,
+channel, command, timeline name or store column changed.
+
 **A session-wide override is followed from every agent's next call (REQ-ORCH-091 a/d, REQ-MONITOR-194; the repair of
 `a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced`).** The ladder reads the session's overrides before
 every call (`followOverride`), not only where a cell is built, and the summariser's model is carried through them at each

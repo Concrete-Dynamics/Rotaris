@@ -216,6 +216,14 @@ export class ResilienceMemory {
   isExhausted(provider: string, modelId: string): boolean {
     return this.exhausted.has(pairKey(provider, modelId));
   }
+  /**
+   * REQ-MONITOR-194: "Choosing it explicitly clears the recorded exclusion for that pair, so it is eligible again until a
+   * further insufficient-quota response re-records it." Persisted as a `model_exhausted` entry carrying `cleared: true`
+   * (the shape of `clearOverride`'s entry), which `rehydrate` replays in order. True when the pair was excluded.
+   */
+  clearExhausted(provider: string, modelId: string): boolean {
+    return this.exhausted.delete(pairKey(provider, modelId));
+  }
   setOverride(fromProvider: string, fromModelId: string, override: Override): void {
     this.overrides.set(pairKey(fromProvider, fromModelId), override);
   }
@@ -261,7 +269,9 @@ export class ResilienceMemory {
   }
 
   /**
-   * Rehydrate from the session's timeline; an override whose key no longer resolves is dropped with a warning. An entry
+   * Rehydrate from the session's timeline; an override whose key no longer resolves is dropped with a warning. A
+   * `model_exhausted` entry carrying `cleared: true` takes the exclusion of its pair back (an explicit choice of it,
+   * REQ-MONITOR-194), and a later one without it records it again. A `model_override` entry
    * carrying `cleared: true` takes back the pin on its pair (an authentication restart that could not begin, REQ-NOTIFY-070/074;
    * REQ-NOTIFY-078's re-pinned primary), so the entries replay in order to the memory the session last held.
    */
@@ -274,7 +284,11 @@ export class ResilienceMemory {
       const provider = typeof meta['provider'] === 'string' ? meta['provider'] : null;
       const model = typeof meta['model'] === 'string' ? meta['model'] : null;
       if (provider === null || model === null) continue;
-      if (t.name === 'model_exhausted') { memory.exhausted.add(pairKey(provider, model)); continue; }
+      if (t.name === 'model_exhausted') {
+        if (meta['cleared'] === true) memory.clearExhausted(provider, model);
+        else memory.exhausted.add(pairKey(provider, model));
+        continue;
+      }
       if (meta['cleared'] === true) { memory.clearOverride(provider, model); continue; }
       const key = typeof meta['model_key'] === 'string' ? meta['model_key'] : null;
       if (key === null) continue;

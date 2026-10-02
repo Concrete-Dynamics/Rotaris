@@ -1965,6 +1965,12 @@ export class Run {
    * override is persisted (`model_override` timeline entry) so later calls of the session never return to the
    * exhausted pair. A choice that cannot be applied is never discarded silently: `model_override_rejected` is
    * recorded, the wait continues on the model it had, and the header names the reason.
+   *
+   * REQ-MONITOR-194: a choice of a pair recorded out of quota clears its exclusion, on either path (`clearChosenExclusion`),
+   * so it is eligible again until a further insufficient-quota response re-records it. In a quota wait the waiting pair
+   * itself may be chosen: the exclusion is cleared and the wait resolves as a retry on that pair, with no override
+   * persisted. (Until 2026-10-02 the waiting pair was refused and no choice cleared an exclusion:
+   * an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.)
    */
   setEntryModel(key: string): boolean {
     if (this.ended) return false;
@@ -1977,11 +1983,24 @@ export class Run {
     }
     if (waiting) {
       const provider = providerIdentity(this.catalogue, resolved.choice.model);
-      if (pairKey(provider, resolved.choice.model.modelId) === pairKey(waiting.provider, waiting.model)) {
-        this.rejectOverride(waiting, key, `${key} is the model that is waiting (${waiting.provider}/${waiting.model}); choose a different one`);
-        return false;
-      }
+      const chosen = pairKey(provider, resolved.choice.model.modelId);
       const choice = withSettings(this.catalogue, resolved.choice);
+      if (chosen === pairKey(waiting.provider, waiting.model)) {
+        // A rate-limit wait's own pair is not excluded: choosing it is no change of model, and the wait keeps its timer.
+        if (!this.memory.isExhausted(waiting.provider, waiting.model)) {
+          this.rejectOverride(waiting, key, `${key} is the model that is waiting (${waiting.provider}/${waiting.model}); choose a different one`);
+          return false;
+        }
+        // REQ-MONITOR-194 / REQ-MONITOR-303: the excluded pair chosen on the quota-wait surface — the exclusion is cleared
+        // and the wait resolves as a retry on it. No override: the pair replaces nothing. Another agent waiting on another
+        // pair moves to it, as a change-model choice moves every parked agent.
+        this.clearChosenExclusion(key, provider, resolved.choice.model.modelId);
+        for (const w of this.waits.all()) if (pairKey(w.provider, w.model) !== chosen) this.memory.setOverride(w.provider, w.model, { key, choice });
+        writer.appendRow('system', `${key} chosen during the wait on ${waiting.provider}/${waiting.model}: it is no longer treated as out of quota, and the call is retried on it now.`, true);
+        this.waits.resolveWithModel(key, choice);
+        return true;
+      }
+      this.clearChosenExclusion(key, provider, resolved.choice.model.modelId);
       for (const w of this.waits.all()) this.memory.setOverride(w.provider, w.model, { key, choice });
       // `supersedes`: the root's own wait choice replaces a switch recorded since its cell was last settled, which then
       // never applies (`entrySwitchPending`); a child's wait leaves the root's switch as it stands. A child's choice records
@@ -1996,6 +2015,7 @@ export class Run {
       this.waits.resolveWithModel(key, choice);
       return true;
     }
+    this.clearChosenExclusion(key, providerIdentity(this.catalogue, resolved.choice.model), resolved.choice.model.modelId);
     this.entryOverride = { ...this.entryOverride, model: resolved.choice.model };
     this.pendingEntrySwitch = 'model';
     // OQ-177: the switch applies over a ladder move; a change-model resolution persisted for the pair (REQ-ORCH-091 d)
@@ -2015,6 +2035,16 @@ export class Run {
     this.entrySwitchPending = true;
     writer.appendTimeline('entry_model_switched', 'user', `The entry model switched to ${key}.`, { model: key, rebuilds: this.rootRebuildsFor(resolved.choice.model), supersedes });
     return true;
+  }
+  /**
+   * REQ-MONITOR-194: "Choosing it explicitly clears the recorded exclusion for that pair, so it is eligible again until a
+   * further insufficient-quota response re-records it" — in the session's memory and as a `model_exhausted` entry carrying
+   * `cleared: true`, which `ResilienceMemory.rehydrate` replays, so the clearing survives a resume as the exclusion does.
+   * Nothing is written for a pair that was not excluded.
+   */
+  private clearChosenExclusion(key: string, provider: string, modelId: string): void {
+    if (!this.memory.clearExhausted(provider, modelId)) return;
+    this.deps.writer.appendTimeline('model_exhausted', 'user', `The user chose ${key} (${provider}/${modelId}) explicitly; the pair is no longer excluded as out of quota and is eligible again until a further insufficient-quota response.`, { provider, model: modelId, model_key: key, cleared: true });
   }
   private rejectOverride(waiting: WaitState, key: string, reason: string): void {
     const message = `The model was not changed: ${key} could not be applied (${reason}). The wait on ${waiting.provider}/${waiting.model} is still outstanding; choose again or cancel the run.`;

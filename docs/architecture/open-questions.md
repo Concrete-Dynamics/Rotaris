@@ -8819,7 +8819,7 @@ rest of the session: the entry agent runs on Y from the next iteration." The ite
 it had: the root's ladder is read once per root turn, so a root resumed after its children in the same iteration is not
 moved by a switch made meanwhile. The exclusion of an exhausted pair is not touched by a switch (whether an explicit choice
 clears it is REQ-MONITOR-194's, recorded in
-[`an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md`](../defects/an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md)).
+[`an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md`](../defects/fixed/an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md); *since 2026-10-02 an explicit choice clears it, on a switch and in a quota wait, where the waiting pair itself may be chosen*).
 
 **What a ruling decides.** Whether a switch onto the configured key ends a ladder move (as built) or leaves it in force —
 and, if it leaves it, what the row says; whether a later switch onto a pair an override moved supersedes that override for

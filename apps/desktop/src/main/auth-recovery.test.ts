@@ -37,7 +37,51 @@ describe('main/auth-recovery — the recovery dialog\'s coordinator (REQ-NOTIFY-
     expect(await h.recovery.onAuthenticationFailure('S1', 'HTTP 401 — Incorrect API key provided')).toEqual({ opened: true });
     expect(h.presented).toHaveLength(1);
     expect(h.presented[0]).toMatchObject({ sessionId: 'S1', error: 'HTTP 401 — Incorrect API key provided', failed: { model: 'alpha', providerName: 'scripted' } });
-    expect(h.presented[0]!.models.map((m) => [m.key, m.providerName])).toEqual([['alpha', 'scripted'], ['beta', 'Scripted B']]);
+    // REQ-NOTIFY-068: the pair that failed is not offered at all.
+    expect(h.presented[0]!.models.map((m) => [m.key, m.providerName])).toEqual([['beta', 'Scripted B']]);
+  });
+
+  it('REQ-NOTIFY-068 with REQ-NOTIFY-075: a pair that failed authentication earlier in the session is neither offered nor retried until its provider\'s credentials change', async () => {
+    const gamma = { key: 'gamma', provider: 'openai', model: 'gpt-4o' };
+    const all = [{ key: 'alpha', provider: 'scripted', model: 'alpha' }, { key: 'beta', provider: 'scripted-b', model: 'beta' }, gamma];
+    let failedNow = { key: 'alpha', provider: 'scripted', model: 'alpha' };
+    const h = harness((req) => req.kind === 'session.authRecovery' ? facts({ failed: failedNow, active: failedNow, models: all })
+      : { kind: 'session.authRestarted', sessionId: 'S1', pinned: null });
+    await h.recovery.onAuthenticationFailure('S1', 'HTTP 401');
+    expect(h.presented[0]!.models.map((m) => m.key)).toEqual(['beta', 'gamma']);
+    // beta, chosen by hand, fails too: the reopened dialog offers neither beta nor alpha — alpha's credentials did not change.
+    failedNow = { key: 'beta', provider: 'scripted-b', model: 'beta' };
+    await h.recovery.onAuthenticationFailure('S1', 'HTTP 401');
+    expect(h.presented[1]!.models.map((m) => m.key)).toEqual(['gamma']);
+    // A payload older than a failure cannot bring the pair back: the retry refuses it, and nothing is restarted.
+    const restarts = () => h.requests.filter((r) => r.kind === 'session.authRestart').length;
+    const r = await h.recovery.retry(h.presented[0]!, 'beta');
+    expect(r).toMatchObject({ ok: false, message: expect.stringMatching(/beta \(Scripted B\) already failed authentication/) });
+    expect(await h.recovery.retry(h.presented[1]!, 'alpha')).toEqual({ ok: false, message: 'alpha is not among the models this dialog offers.' });
+    expect(restarts()).toBe(0);
+    // Another session's refusals are its own.
+    await h.recovery.onAuthenticationFailure('S2', 'HTTP 401');
+    expect(h.recovery.refusedPair('S2', { provider: 'scripted', model: 'alpha' })).toBe(false);
+    // alpha's provider is signed in again under Settings: alpha may be offered again; beta stays refused.
+    h.recovery.credentialsChanged('scripted');
+    expect(h.recovery.refusedPair('S1', { provider: 'scripted', model: 'alpha' })).toBe(false);
+    expect(h.recovery.refusedPair('S1', { provider: 'scripted-b', model: 'beta' })).toBe(true);
+    failedNow = { key: 'gamma', provider: 'openai', model: 'gpt-4o' };
+    await h.recovery.onAuthenticationFailure('S1', 'HTTP 401');
+    expect(h.presented.at(-1)!.models.map((m) => m.key)).toEqual(['alpha']);
+  });
+
+  it('REQ-NOTIFY-068: re-authenticating the failed provider in the dialog lets its pairs be offered again', async () => {
+    const h = harness((req) => req.kind === 'session.authRecovery' ? facts() : { kind: 'session.authRestarted', sessionId: 'S1', pinned: null });
+    await h.recovery.onAuthenticationFailure('S1', 'HTTP 401');
+    expect(h.recovery.refusedPair('S1', { provider: 'scripted', model: 'alpha' })).toBe(true);
+    expect(await h.recovery.reauthenticate(h.presented[0]!, 'k')).toEqual({ ok: true });
+    expect(h.recovery.refusedPair('S1', { provider: 'scripted', model: 'alpha' })).toBe(false);
+  });
+
+  it('a refusal because a run of the session is active again marks the failure superseded', async () => {
+    const h = harness(() => ({ kind: 'refused', code: 'session.run-active', headline: 'The session cannot be recovered here', detail: 'A run is already active.' }));
+    expect(await h.recovery.onAuthenticationFailure('S1', 'x')).toMatchObject({ opened: false, stale: true });
   });
 
   it('REQ-NOTIFY-069: no recorded prompt, a refusal or no answer opens nothing, and says why', async () => {

@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { AuthRecoveryDialog } from './AuthRecoveryDialog.js';
-import { AUTH_ERROR_LIMIT, canSaveKey, modelLabel, providerErrorText, recoveryModelList, recoveryTitle } from './auth-recovery.js';
+import { AUTH_ERROR_LIMIT, canSaveKey, modelLabel, providerErrorText, radioStep, recoveryModelList, recoveryTitle } from './auth-recovery.js';
 
 const m = (key: string, provider: string, model: string, providerName = provider) => ({ key, provider, providerName, model });
 
@@ -89,5 +89,20 @@ describe('ui/AuthRecoveryDialog — the drawn dialog (REQ-NOTIFY-072..074, REQ-N
     expect(html).not.toContain('data-testid="auth-recovery-key"');
     expect(html).not.toContain('data-action="save-and-retry"');
     expect(html).not.toMatch(/terminal|shell|command line/i);
+  });
+});
+
+describe('the model list\'s keyboard (the radio group pattern)', () => {
+  it('the arrow keys move the choice, wrapping; Home and End go to the ends; any other key is not the group\'s', () => {
+    const keys = ['beta', 'gpt-4o', 'gamma'];
+    expect(radioStep(keys, 'beta', 'ArrowDown')).toBe('gpt-4o');
+    expect(radioStep(keys, 'gamma', 'ArrowRight')).toBe('beta');
+    expect(radioStep(keys, 'beta', 'ArrowUp')).toBe('gamma');
+    expect(radioStep(keys, 'gpt-4o', 'ArrowLeft')).toBe('beta');
+    expect(radioStep(keys, 'gpt-4o', 'Home')).toBe('beta');
+    expect(radioStep(keys, 'beta', 'End')).toBe('gamma');
+    expect(radioStep(keys, null, 'ArrowDown')).toBe('beta');
+    expect(radioStep(keys, 'beta', 'Enter')).toBeNull();
+    expect(radioStep([], null, 'ArrowDown')).toBeNull();
   });
 });

@@ -39,11 +39,39 @@ export interface AuthRecoveryDeps {
 export const KEY_NOT_STORED = 'The key could not be stored';
 export const RESTART_AFTER_REAUTH_FAILED = 'The run could not be restarted after re-authentication';
 
-/** Why the dialog was not opened, for the caller's log line; the caller then raises the generic notice. */
-export type AuthRecoveryOpened = { readonly opened: true } | { readonly opened: false; readonly reason: string };
+/**
+ * Why the dialog was not opened, for the caller's log line; the caller then raises the generic notice — unless `stale`: a
+ * run of the session is active again, so the failure the dialog was for has been superseded and nothing is raised.
+ */
+export type AuthRecoveryOpened = { readonly opened: true } | { readonly opened: false; readonly reason: string; readonly stale?: boolean };
+
+const pairOf = (m: { readonly provider: string; readonly model: string }): string => `${m.provider}|${m.model}`;
 
 export class AuthRecovery {
+  /**
+   * REQ-NOTIFY-068 — by session, every provider/model pair that has failed authentication since its provider's credentials
+   * last changed in this process. Such a pair is never offered by the dialog nor accepted by a retry: calling it again would
+   * be the same provider with the same credentials. A pair leaves the set when its provider's credentials change
+   * (`credentialsChanged`: a re-authentication in the dialog, or a sign-in, a key saved, a sign-out or a removal under
+   * Settings) — the credential store is main's, so main is where "the same credentials" is known. Held in memory: an
+   * application restart forgets it, and the next failure's dialog leaves out only the pair that failed then.
+   */
+  private readonly refused = new Map<string, Set<string>>();
+
   constructor(private readonly deps: AuthRecoveryDeps) {}
+
+  /** REQ-NOTIFY-068: `providerId`'s credentials changed, so its pairs may be offered and retried again in every session. */
+  credentialsChanged(providerId: string): void {
+    for (const [sessionId, pairs] of this.refused) {
+      for (const pair of [...pairs]) if (pair.startsWith(`${providerId}|`)) pairs.delete(pair);
+      if (pairs.size === 0) this.refused.delete(sessionId);
+    }
+  }
+
+  /** REQ-NOTIFY-068: whether the pair failed authentication in the session with the credentials its provider still has. */
+  refusedPair(sessionId: string, model: { readonly provider: string; readonly model: string }): boolean {
+    return this.refused.get(sessionId)?.has(pairOf(model)) ?? false;
+  }
 
   /**
    * REQ-NOTIFY-072: an authentication failure of `sessionId`'s run, its failure text `error`. Opens the recovery dialog, or
@@ -56,18 +84,27 @@ export class AuthRecovery {
     } catch (cause) {
       return { opened: false, reason: `the run host did not answer: ${cause instanceof Error ? cause.message : String(cause)}` };
     }
-    if (reply.kind === 'refused') return { opened: false, reason: [reply.headline, reply.detail].filter(Boolean).join(': ') };
+    if (reply.kind === 'refused') return { opened: false, reason: [reply.headline, reply.detail].filter(Boolean).join(': '), ...(reply.code === 'session.run-active' ? { stale: true } : {}) };
     if (reply.kind !== 'session.authRecovery') return { opened: false, reason: `the run host answered ${reply.kind}` };
     if (!reply.lastPrompt) return { opened: false, reason: 'no prompt is recorded for the session (REQ-NOTIFY-069)' };
     const named = <T extends { readonly key: string | null; readonly provider: string; readonly model: string }>(m: T): T & AuthRecoveryModel => ({ ...m, providerName: this.deps.providerName(m.provider) });
     const subject = reply.failed ?? reply.active;
+    // REQ-NOTIFY-068: the pair that failed joins the session's refused pairs — the run host takes an unrecorded failed model
+    // to be the active one, as the dialog's title does (REQ-NOTIFY-072).
+    if (subject !== null) {
+      const pairs = this.refused.get(sessionId) ?? new Set<string>();
+      pairs.add(pairOf(subject));
+      this.refused.set(sessionId, pairs);
+    }
     const provider = subject?.provider ?? '';
     const how = provider === '' ? { method: 'configuration' as const, message: 'The provider that failed is not known, so it cannot be re-authenticated here.' } : this.deps.reauthentication(provider);
     const payload: AuthRecoveryPayload = {
       sessionId,
       failed: reply.failed === null ? null : named(reply.failed),
       active: reply.active === null ? null : named(reply.active),
-      models: reply.models.map(named),
+      // REQ-NOTIFY-074 with REQ-NOTIFY-068: every configured model but the pairs that failed authentication with the
+      // credentials their providers still hold — the one that failed now, and any that failed earlier in the session.
+      models: reply.models.filter((m) => !this.refusedPair(sessionId, m)).map(named),
       error,
       reauth: { provider, providerName: provider === '' ? 'the provider' : this.deps.providerName(provider), method: how.method, message: how.message },
     };
@@ -81,6 +118,11 @@ export class AuthRecovery {
    * answered as the sentence the dialog shows, and the dialog stays.
    */
   async retry(payload: AuthRecoveryPayload, modelKey: string): Promise<AuthRecoveryResult> {
+    // REQ-NOTIFY-074: only a model the dialog listed is pinned; REQ-NOTIFY-068: never a pair that failed authentication with
+    // the credentials its provider still has (the list leaves those out; this holds where a payload is older than a failure).
+    const chosen = payload.models.find((m) => m.key === modelKey);
+    if (chosen === undefined) return { ok: false, message: `${modelKey} is not among the models this dialog offers.` };
+    if (this.refusedPair(payload.sessionId, chosen)) return { ok: false, message: `${modelKey} (${chosen.providerName}) already failed authentication with the credentials it still has; choose another model or re-authenticate ${chosen.providerName}.` };
     let reply: ProcessReply;
     try {
       reply = await this.deps.request({ kind: 'session.authRestart', sessionId: payload.sessionId, modelKey });
@@ -112,6 +154,8 @@ export class AuthRecovery {
       return { ok: false, message: `${KEY_NOT_STORED}: ${stored.message}` };
     }
     this.deps.log(`authentication recovery: ${provider} re-authenticated (${stored.message})`);
+    // REQ-NOTIFY-068: the credentials changed, so the provider's pairs are no longer refused.
+    this.credentialsChanged(provider);
     let reply: ProcessReply;
     try {
       reply = await this.deps.request({ kind: 'session.authRestart', sessionId: payload.sessionId, modelKey: null });

@@ -1078,7 +1078,14 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(dal.residentRows(sid).some((row) => row.kind === 'system' && row.body.startsWith('Re-authenticated after the authentication failure'))).toBe(true);
     });
 
-    it('REQ-NOTIFY-075: a hand-chosen model that also fails is replaced by the next choice, and choosing back the first model leaves no pin away from it', async () => {
+    /*
+     * REQ-NOTIFY-068: main never offers back a pair that failed authentication while its provider holds the same credentials
+     * (`apps/desktop/src/main/auth-recovery.ts`, `refusedPair`) — the credential store is main's, so the engine cannot know
+     * whether they changed. What this pins is the engine's half once they have: a1's provider re-authenticated under
+     * Settings after a1 failed, then b1 failing too, makes a1 a legitimate choice again, and the pin that moved the session
+     * off a1 must not lead back off it.
+     */
+    it('REQ-NOTIFY-075: a hand-chosen model that also fails is replaced by the next choice; choosing back the first model once its provider\'s credentials changed leaves no pin away from it', async () => {
       const { sessions, client, sid } = await failedSession((_p, turn) => (turn <= 2 ? unauthorized() : answer('at last')));
       const first = sessions.restartAfterAuthFailure(sid, 'b1');
       if (!first.ok) throw new Error(first.error.reason);

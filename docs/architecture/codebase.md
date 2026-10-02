@@ -1149,12 +1149,17 @@ the 401 note's part C (`main/failure-class.ts`, `main/auth-recovery.ts`, `packag
 `Sessions.authRecoveryFacts` / `restartAfterAuthFailure`) — read in its own window (560 px, its title, the error in the
 failure colour, the other providers' models), Cancelled with the run left failed and the class's notice on screen,
 reopened by a second failure, answered with beta (refused too, `fail:401:only=scripted+scripted-b`, which reopens it
-naming beta) and then gpt-4o, on which the run completes; the pins are read from the timeline
+naming beta, with neither beta nor alpha offered — REQ-NOTIFY-068, both failed with the credentials their providers still
+hold) and then gpt-4o, on which the run completes; the pins are read from the timeline
 ([note](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md), open: parts A and B are
 not built on this base). A `reauth` scenario (part D, REQ-NOTIFY-076/077) signs an OpenAI-compatible instance in with a
 stale key against a loopback catalog stand-in, fails the run on it (`fail:401:unless-key=fresh-key`), types the new key into
 the dialog's masked field, and reads the key validated against the catalog, saved, and carried by the restarted run on the
-same model to completion, no pin written and the key in no log line. **What the 401 recovery does not yet do:** the
+same model to completion, no pin written and the key in no log line. A `generic` scenario (scripted `fail`, an HTTP 400)
+reads REQ-NOTIFY-064's notice — the run failed, the session and the draft were kept, the failure text as detail, persistent,
+scoped to the session — and follows its **Back to the workspace** action from Overview; every run-ending notice's words are
+`main/run-failure-notice.ts`'s, which also holds a failed run's class publication until its session is followed by a main
+window (REQ-NOTIFY-030/032). **What the 401 recovery does not yet do:** the
 automatic first-failure fallback restart and the non-modal re-authentication prompt (REQ-NOTIFY-070/071/078, parts A and B,
 built on `fin6-auth-recovery-1` and not merged), so every authentication failure opens the dialog; and a device-code or
 browser provider is told its method is not provided by this build, the sign-in flows being owed.

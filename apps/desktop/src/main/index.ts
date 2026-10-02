@@ -5,7 +5,7 @@ import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2
 import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu, type CloseGuard } from './main-windows.js';
 import { createNoticeStore } from './notices.js';
 import { AuthRecovery } from './auth-recovery.js'; // REQ-NOTIFY-072..080 (the 401 note's parts C and D)
-import { classifyRunFailure, isQuotaFailure } from './failure-class.js'; // REQ-NOTIFY-060/067
+import { RunFailurePublisher, runEndingPublication } from './run-failure-notice.js'; // REQ-NOTIFY-060/064 with REQ-NOTIFY-030/032
 import { createLibraryRevision } from './library.js';
 // The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
 import { startDriver, type AuxiliaryWindow } from './driver.js';
@@ -503,16 +503,6 @@ async function main(): Promise<void> {
             : action === 'session.reopen' ? (sessionId === undefined || sessionId === '' ? [] : [{ label: 'Reopen the session', action: { kind: 'focus-session', sessionId } }])
               : [];
   /**
-   * REQ-NOTIFY-064 / REQ-NOTIFY-065: a failed run's error notice — persistent, the failure text as copyable detail, the
-   * statement that the session and the draft were kept, and the action returning to the workspace view (REQ-SHELL-023's
-   * `workspace`). The authentication class raises it under its own title beside the recovery dialog (REQ-NOTIFY-080: the
-   * notice stays on screen when the dialog is cancelled).
-   */
-  const AUTHENTICATION_FAILED = 'Authentication failed';
-  const raiseRunFailure = (failure: string, title = 'The run failed', message = 'The session and the draft were kept.'): void => {
-    void notices.report({ severity: 'error', title, message, detail: failure, persistent: true, action: { label: 'Back to the workspace', action: { kind: 'open-view', view: 'workspace' } } });
-  };
-  /**
    * REQ-SHELL-155 / REQ-SESSION-062, OQ-46 (accepted 2026-09-06): the repair is ANNOUNCED, and the failure it
    * reports is plural. ADR-0002 accepts the run-host crash as a consequence, and it stales one session per
    * in-flight run — so three or five sessions needing repair at once is the realistic shape, and five notices
@@ -634,6 +624,17 @@ async function main(): Promise<void> {
       return r;
     },
     acknowledge: (kind, title, body) => notices.acknowledge(kind, title, body),
+  });
+  /**
+   * REQ-NOTIFY-060/064 with REQ-NOTIFY-030/032 (`run-failure-notice.ts`): a failed run's class publication, gated on its
+   * session being on screen — followed by a main window. A session no main window follows gets REQ-NOTIFY-032's warning, and
+   * its class notice (and, for the authentication class, the recovery dialog) waits for `session.subscribe` to follow it.
+   */
+  const runFailures = new RunFailurePublisher({
+    isFocused: (sessionId) => mainWindows.followerOfSession(sessionId, relay.subscribersOf(sessionId).map((sink) => sink.id)) !== undefined,
+    report: (notice) => { void notices.report(notice); },
+    recoverAuthentication: async (sessionId, failure) => await authRecovery.onAuthenticationFailure(sessionId, failure),
+    log: (message) => log(message),
   });
 
   // ADR-0030 / REQ-PROVIDER-116/117/142: the authentication window — one at a time, its payload read by its own command.
@@ -992,20 +993,20 @@ async function main(): Promise<void> {
         }).catch((cause: Error) => raiseNotice('warning', `Improvement ${improvement.artifactId} completed without a post-run checkpoint`, cause.message, undefined, e.sessionId));
       }
       // REQ-SESSION-186 / REQ-NOTIFY-003: the terminal outcome, presented once, at the severity summarisation assigned.
-      const sev = e.result.severity === 'error' ? 'error' : e.result.severity === 'warning' ? 'warning' : 'info';
-      // REQ-NOTIFY-060: a failed run's failure is matched against four classes in order (`failure-class.ts`), the first match
-      // handling it. (1) Authentication (REQ-NOTIFY-067's markers): the recovery dialog of REQ-NOTIFY-072..075 opens over the
-      // session (`auth-recovery.ts`) beside the class's error notice — or, where REQ-NOTIFY-069's preconditions do not hold, the
-      // generic path below. The automatic first-failure fallback restart ahead of the dialog (REQ-NOTIFY-070/071, the 401
-      // note's parts A and B) is not built on this branch's base, so every authentication failure the preconditions admit opens
-      // the dialog. (2) The sandbox class (REQ-NOTIFY-061) never reaches this handler: a refused confinement mode is refused
-      // before a session or a run exists, and its notice is raised where the start, the prompt or the continue is refused
-      // (`confinementRefusalNotice`, `commands/session.ts`). (3) Part Q (REQ-NOTIFY-063/093): a run ended by a rate-limit or
-      // quota condition — the wait cancelled, or the ladder out of recoveries — the provider limit was reached, the session is
-      // preserved, another model or a retry once the provider resets, the failure text as detail, the action opening model
-      // settings. (REQ-NOTIFY-062's hosted-credit branch is not built: no hosted provider exists.) (4) REQ-NOTIFY-064's generic
-      // notice: the run failed, the session and the draft were kept, the failure text as detail, the action returning to the
-      // workspace view. (Until 2026-10-02 a failure that was not a limit raised the run's summary with no action.)
+      // REQ-NOTIFY-060: a FAILED run's failure is matched against four classes in order (`failure-class.ts`), the first match
+      // handling it, and published through the focus gate (`RunFailurePublisher`, REQ-NOTIFY-030/032). (1) Authentication
+      // (REQ-NOTIFY-067's markers): the recovery dialog of REQ-NOTIFY-072..077 opens over the session (`auth-recovery.ts`)
+      // beside the class's error notice — or, where REQ-NOTIFY-069's preconditions do not hold, the generic notice. The
+      // automatic first-failure fallback restart ahead of the dialog (REQ-NOTIFY-070/071, the 401 note's parts A and B) is not
+      // built on this branch's base, so every authentication failure the preconditions admit opens the dialog. (2) The
+      // sandbox class (REQ-NOTIFY-061) never reaches this handler: a refused confinement mode is refused before a session or a
+      // run exists, and its notice is raised where the start, the prompt or the continue is refused
+      // (`confinementRefusalNotice`, `commands/session.ts`). (3) Part Q (REQ-NOTIFY-063/093): a rate-limit or quota condition —
+      // the provider limit was reached, the session is preserved, the action opening model settings; a run that ENDED
+      // otherwise on a limit (a cancelled quota wait) raises it too, unclassified. (REQ-NOTIFY-062's hosted-credit branch is
+      // not built: no hosted provider exists.) (4) REQ-NOTIFY-064's generic notice: the run failed, the session and the draft
+      // were kept, the failure text (else the run's summary) as detail, the action returning to the workspace view.
+      // Every word and action is `run-failure-notice.ts`'s, pinned by `run-failure-notice.test.ts`.
       /**
        * REQ-EVENTS-088 (OQ-42): a run whose terminal persistence could not be confirmed has ALREADY been
        * reported — the run host published one failure notice carrying the last durable ordinal and the reopen
@@ -1014,29 +1015,14 @@ async function main(): Promise<void> {
        * The condition is read from the structured field rather than from the summary sentence, so the
        * suppression cannot be lost by rewording.
        */
-      if (e.result.persistence !== undefined) {
-        log(`run ${e.sessionId}: completion unconfirmed, last durable event ordinal ${e.result.persistence.last_event_ordinal} — the recording-failure notice already carries it (REQ-EVENTS-088)`);
-      } else if (e.result.error !== null) {
-        const failure = e.result.error;
-        // REQ-NOTIFY-060 classifies a FAILED run. A run that ended otherwise with a failure text — a cancelled quota wait
-        // (REQ-NOTIFY-093), a run that completed with a task abandoned — keeps the limit's notice or its own summary.
-        const failed = e.result.execution_status === 'failed' || e.result.status === 'failed' || e.result.status === 'error';
-        const failureClass = classifyRunFailure(failure);
-        if (failed && failureClass === 'authentication') {
-          const sessionId = e.sessionId;
-          void authRecovery.onAuthenticationFailure(sessionId, failure).then((r) => {
-            if (r.opened) raiseRunFailure(failure, AUTHENTICATION_FAILED, 'The session and the draft were kept. Choose another model or re-authenticate in the recovery dialog.');
-            else { log(`authentication recovery: no dialog for session ${sessionId} (${r.reason}); the generic failure notice is raised`); raiseRunFailure(failure); }
-          });
-        } else if (failureClass === 'quota' || (!failed && isQuotaFailure(failure))) {
-          raiseNotice('error', 'The provider limit was reached; the session is preserved', `${failure}\n\nChoose another model, or retry once the provider resets.`, recoveryFor('config.models'));
-        } else if (failed) {
-          raiseRunFailure(failure);
-        } else {
-          raiseNotice(sev, e.result.summary, failure);
-        }
+      runFailures.ended(e.sessionId);
+      const publication = runEndingPublication(e.sessionId, e.result);
+      if (publication.kind === 'reported') {
+        log(`run ${e.sessionId}: completion unconfirmed, last durable event ordinal ${e.result.persistence?.last_event_ordinal} — the recording-failure notice already carries it (REQ-EVENTS-088)`);
+      } else if (publication.kind === 'failure') {
+        void runFailures.failed(e.sessionId, publication.failureClass, publication.failure);
       } else {
-        raiseNotice(sev, e.result.summary);
+        void notices.report(publication.notice);
       }
       resultSeen = true;
       log(`run ${e.sessionId} ended ${e.result.status} (${e.result.stop_reason}) → ${e.result.execution_status}`);
@@ -1527,7 +1513,7 @@ async function main(): Promise<void> {
     log, clocks, capturing, layout, processes,
     runHost, services, relay,
     mainWindows, windowFor, ownerOfAuxiliary, dialogs, dialogPayloads,
-    pauseWindows, pausePayloads, presentPause, reviewPayloads, authRecovery, authRecoveryPayloads,
+    pauseWindows, pausePayloads, presentPause, reviewPayloads, authRecovery, authRecoveryPayloads, runFailures,
     measurePersonaPaint, terminalWindowCommand, surface,
     notices, raiseNotice, raiseNoticeKeyed, recoveryFor, announceRepairs, updater,
     providers, healthCache, providerPayloads, providerChoices, providerRows, presentProvider, afterProviderChange,

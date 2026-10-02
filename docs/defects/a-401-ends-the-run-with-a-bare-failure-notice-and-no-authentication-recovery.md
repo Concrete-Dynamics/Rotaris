@@ -76,6 +76,32 @@ path (REQ-NOTIFY-076/077).
   the dialog offers the masked field, the new key is validated against the catalog, saved, and the run restarts on the same
   model with it and completes, no pin written and the key in no log line.
 
+- **Repair round 1 (2026-10-02), after the verifier's three blocking findings on C.**
+  - *REQ-NOTIFY-068 across failures.* The dialog had left out only the pair that failed last, so after alpha failed and beta
+    (chosen by hand) failed too, the reopened dialog offered alpha again and a retry called it with credentials that had not
+    changed; `ladder.test.ts` and the `fatal` proof pinned that. Now main records, by session, every provider/model pair that
+    failed authentication since its provider's credentials last changed (`AuthRecovery.refusedPair`): such a pair is left out
+    of the payload's models and refused by a retry, and leaves the set when its provider's credentials change — the dialog's
+    re-authentication, or a sign-in, a saved key, a sign-out or a removal under Settings (`commands/providers.ts`). Main holds
+    it because the credential store is main's; the engine's restart still accepts any configured model, and its
+    `REQ-NOTIFY-075` case is now the one where alpha's credentials changed first. `fatal`'s third dialog asserts alpha and
+    beta are both absent and gpt-4o is what is left. In memory: an application restart forgets the set.
+  - *REQ-NOTIFY-030/032.* The dialog had opened over the active main window for a session no window followed, and the class
+    notice was raised at once. A failed run's class publication now goes through a focus gate (`RunFailurePublisher`,
+    `apps/desktop/src/main/run-failure-notice.ts`): a session a main window follows publishes its class at once; any other
+    raises REQ-NOTIFY-032's warning (naming the session, the failure text as detail, the action focusing it) and nothing else,
+    and its class notice — and for this class the dialog — arrives when a main window follows the session
+    (`session.subscribe`). This applies to every failure class, not only this one. Pinned by `run-failure-notice.test.ts`,
+    `session.test.ts` and `main-windows.test.ts`; not shown in the built app (no proof drives two sessions).
+  - *REQ-NOTIFY-064 pinned.* The generic, authentication and quota notices are built by pure helpers beside the classifier
+    (`run-failure-notice.ts`) and pinned word for word by `run-failure-notice.test.ts`; a failed run with no failure text now
+    takes the generic notice too (its summary the detail). `resilience-proof`'s new `generic` scenario (scripted `fail`, an
+    HTTP 400) asserts the notice's words, its detail, its persistence, its session, no recovery dialog, and that **Back to the
+    workspace** returns to the workspace view from Overview.
+  - *Carried from the verifier's optional findings.* The model list is a keyboard radio group (the arrow keys, Home and End
+    move the choice — `radioStep`, pinned in `packages/ui/src/auth-recovery.test.ts`); the retry guard checks the chosen key
+    against the filtered list and the refused pairs (`AuthRecovery.retry`) rather than the payload alone.
+
 **Why the note is still open.** Parts C and D are built; A and B are not on this base (above). The note closes when the
 first-failure fallback restart and the non-modal prompt land — `fin6-auth-recovery-1` or a rebuild of it — and then the
 reading recorded above (every authentication failure opens the dialog) is retired.
@@ -88,8 +114,12 @@ reading recorded above (every authentication failure opens the dialog) is retire
   and its key path (REQ-NOTIFY-076/077) are built; REQ-NOTIFY-070/071/078 are not, and REQ-NOTIFY-076's device-code and
   browser branch says the method is unavailable.*
 - REQ-NOTIFY-064 — the generic failure notice states neither that the session and the draft were kept nor offers the
-  action returning to the workspace view. *Built 2026-10-02 (`raiseRunFailure` in `apps/desktop/src/main/index.ts`).*
-- REQ-NOTIFY-068 holds: a 401 is not retried (`resilience-proof`'s `fatal` asserts one call).
+  action returning to the workspace view. *Built 2026-10-02 (`genericFailureNotice` in
+  `apps/desktop/src/main/run-failure-notice.ts`; pinned by its test and `resilience-proof`'s `generic` scenario).*
+- REQ-NOTIFY-068 holds: a 401 is not retried (`resilience-proof`'s `fatal` asserts one call). *Since repair round 1, no
+  pair that failed authentication is offered or retried again until its provider's credentials change.*
+- REQ-NOTIFY-030/032 — *since repair round 1 a failure of a session no main window follows raises REQ-NOTIFY-032's warning
+  and holds its class publication (the dialog included) until the session is followed.*
 
 ## Relevant files
 
@@ -98,6 +128,7 @@ reading recorded above (every authentication failure opens the dialog) is retire
 - `apps/desktop/scripts/resilience-proof.mjs` — the `fatal` scenario, which shows the notice a 401 gets today.
 - `apps/desktop/src/run-host/scripted-client.ts` — the `fail:401` fault step, and since 2026-10-02 its `:only=` and
   `:unless-key=` forms.
+- `apps/desktop/src/main/run-failure-notice.ts` — every run-ending notice's words and the focus gate (repair round 1).
 - `apps/desktop/src/main/failure-class.ts`, `apps/desktop/src/main/auth-recovery.ts`, `packages/ui/src/AuthRecoveryDialog.tsx`,
   `packages/providers/src/signin.ts` (`reauthentication`, `reauthenticateWithKey`), `packages/engine/src/sessions.ts`
   (`authRecoveryFacts`, `restartAfterAuthFailure`) — parts C and D.

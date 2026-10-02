@@ -16,8 +16,8 @@ export function authRecoveryCommands(ctx: Pick<CommandContext, 'authRecovery' | 
     'authRecovery.retry': async (req, { senderId }) => {
       const p = authRecoveryPayloads.get(senderId);
       if (!p) return none;
-      // REQ-NOTIFY-074: only a model the dialog listed is pinned; anything else is the dialog's mistake, not a choice.
-      if (!p.models.some((m) => m.key === req.modelKey)) return { ok: true, value: { ok: false, message: `${req.modelKey} is not among the models this dialog offers.` } };
+      // REQ-NOTIFY-074/068: only a model the dialog listed, and no pair that failed authentication with the same
+      // credentials, is pinned (`AuthRecovery.retry` refuses anything else as the dialog's sentence).
       return { ok: true, value: await authRecovery.retry(p, req.modelKey) };
     },
     'authRecovery.reauthenticate': async (req, { senderId }) => {

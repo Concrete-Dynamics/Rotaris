@@ -7,9 +7,11 @@ import { type CommandContext, type CommandHandlers } from './context.js';
  * `afterProviderChange`, which is what re-reads the slots and republishes them.
  */
 export function providersCommands(
-  ctx: Pick<CommandContext, 'afterProviderChange' | 'healthCache' | 'log' | 'presentProvider' | 'providerChoices' | 'providerPayloads' | 'providerRows' | 'providers' | 'raiseNotice' | 'recoveryFor'>,
+  ctx: Pick<CommandContext, 'afterProviderChange' | 'authRecovery' | 'healthCache' | 'log' | 'presentProvider' | 'providerChoices' | 'providerPayloads' | 'providerRows' | 'providers' | 'raiseNotice' | 'recoveryFor'>,
 ): Pick<CommandHandlers, 'providers.list' | 'providers.health' | 'providers.open' | 'provider.payload' | 'provider.signIn' | 'providers.save' | 'providers.validate' | 'providers.signOut' | 'providers.delete' | 'providers.refresh'> {
-  const { afterProviderChange, healthCache, log, presentProvider, providerChoices, providerPayloads, providerRows, providers, raiseNotice, recoveryFor } = ctx;
+  const { afterProviderChange, authRecovery, healthCache, log, presentProvider, providerChoices, providerPayloads, providerRows, providers, raiseNotice, recoveryFor } = ctx;
+  // REQ-NOTIFY-068: a provider's credentials changed, so a pair of it that failed authentication may be offered again.
+  const credentialsChanged = (id: string): void => authRecovery.credentialsChanged(id);
   return {
     'providers.list': () => {
       return { ok: true, value: providerRows() };
@@ -37,6 +39,7 @@ export function providersCommands(
         ? await providers.addInstance({ label: req.label ?? '', baseUrl: req.baseUrl ?? '', apiKey: req.apiKey, ...(req.replace ? { replace: true } : {}), ...(req.allowEmpty ? { allowEmpty: true } : {}) })
         : await providers.signInWithKey(req.providerId, req.apiKey, req.allowEmpty ?? false);
       if (outcome.outcome === 'signed-in') {
+        credentialsChanged(outcome.id);
         // A catalog that answers without a key validated nothing (REQ-PROVIDER-133's gap on a public catalog): health stays unchecked and the notice warns.
         healthCache.set(outcome.id, outcome.keyValidated ? { state: 'healthy', detail: outcome.message, available: true } : { state: 'unknown', detail: outcome.message, available: true });
         raiseNotice(outcome.keyValidated ? 'info' : 'warning', outcome.message, 'Model slots were assigned from the discovered catalog; review them under Settings → Models.', recoveryFor('config.models'));
@@ -49,7 +52,7 @@ export function providersCommands(
     'providers.save': async (req) => {
       let message = '';
       if (req.baseUrl !== null) { const r = await providers.setBaseUrl(req.id, req.baseUrl); if (!r.ok) return { ok: true, value: { ok: false, message: r.error } }; message = r.value; }
-      if (req.apiKey.trim() !== '') { const r = await providers.replaceKey(req.id, req.apiKey, req.validate); if (!r.ok) return { ok: true, value: { ok: false, message: r.error } }; message = r.value; }
+      if (req.apiKey.trim() !== '') { const r = await providers.replaceKey(req.id, req.apiKey, req.validate); if (!r.ok) return { ok: true, value: { ok: false, message: r.error } }; message = r.value; credentialsChanged(req.id); }
       else if (req.baseUrl === null && !providers.status(req.id).startsWith('auth')) return { ok: true, value: { ok: false, message: `A key is required for ${providers.displayName(req.id)}.` } };
       if (message === '') message = 'Nothing changed.';
       else { healthCache.delete(req.id); await afterProviderChange(); }
@@ -64,6 +67,7 @@ export function providersCommands(
     'providers.signOut': async (req) => {
       const r = await providers.signOut(req.id);
       healthCache.delete(req.id);
+      credentialsChanged(req.id);
       log(`providers: ${r.message}`);
       await afterProviderChange();
       return { ok: true, value: { ok: r.outcome === 'signed-out' || r.outcome === 'nothing', message: r.message } };
@@ -71,6 +75,7 @@ export function providersCommands(
     'providers.delete': async (req) => {
       const r = await providers.deleteInstance(req.id);
       healthCache.delete(req.id);
+      if (r.ok) credentialsChanged(req.id);
       if (r.ok) { log(`providers: ${r.value.message}`); await afterProviderChange(); }
       return { ok: true, value: r.ok ? { ok: true, message: r.value.message } : { ok: false, message: r.error } };
     },

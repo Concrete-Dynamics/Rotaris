@@ -1181,7 +1181,17 @@ device-code or browser provider, and one whose key the model configuration carri
 available here. REQ-NOTIFY-070's automatic first-failure fallback restart and REQ-NOTIFY-071's prompt are not built on
 this base (the 401 note's parts A and B), so every authentication failure the preconditions admit opens the dialog.
 A run that ended otherwise with a failure text — a cancelled quota wait, a completion with a task abandoned — keeps the
-limit's notice or its own summary.
+limit's notice or its own summary. *Since repair round 1 (2026-10-02):* every notice a run's ending raises is built by
+`main/run-failure-notice.ts` (`runEndingPublication`, a failed run with no failure text taking the generic class too), and a
+failed run's class publication passes the **focus gate** (`RunFailurePublisher`, REQ-NOTIFY-030/032): a session a main
+window follows (`MainWindows.followerOfSession`, no fallback to the active window) publishes at once; any other raises
+REQ-NOTIFY-032's warning — naming the session, the failure text as detail, `focus-session` — and holds the class notice, and
+for an authentication failure the recovery dialog, until a main window's `session.subscribe` follows that session; a later
+ending of the session supersedes what was held. Main also keeps, by session, every provider/model pair that failed
+authentication since its provider's credentials last changed (`AuthRecovery.refusedPair`, REQ-NOTIFY-068): the dialog
+leaves them out and a retry refuses them; a re-authentication, or a sign-in, saved key, sign-out or removal under Settings,
+releases that provider's pairs. REQ-NOTIFY-031 (a background run's non-failure ending) is not built — recorded in
+`docs/defects/a-background-runs-non-failure-ending-raises-its-summary-not-a-notice-naming-the-session.md`.
 
 Main presents `run.result` once as the notice — **except where that result carries `persistence: {confirmed: false}`**,
 the run host having already published the one failure notice `REQ-EVENTS-088` allows, with the last durable ordinal

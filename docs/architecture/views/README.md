@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**A failed run's notice waits for its session to be on screen, and a pair that failed authentication is not offered again
+(REQ-NOTIFY-030/032, REQ-NOTIFY-064, REQ-NOTIFY-068; the 401 note's repair round 1).** Every run-ending notice is built by
+`main/run-failure-notice.ts`; a failed run of a session no main window follows raises REQ-NOTIFY-032's warning and holds its
+class publication — the recovery dialog included — until `session.subscribe` follows it (`MainWindows.followerOfSession`).
+Main keeps the pairs that failed authentication by session until their provider's credentials change. The **runtime view**'s
+classification paragraph and two **state-ownership** rows say so. No package, edge, process, channel, command or store
+column changed.
+
 **The recovery dialog re-authenticates the provider that failed (REQ-NOTIFY-076, REQ-NOTIFY-077, REQ-NOTIFY-202, OQ-179; the
 401 note's part D).** A fourth command, `authRecovery.reauthenticate {apiKey}`, carries a key inward to main's provider key
 store (`ProviderService.reauthenticateWithKey`, stage-typed so a storage failure is told apart) and relays

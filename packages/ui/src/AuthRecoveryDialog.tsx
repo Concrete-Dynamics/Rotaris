@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AuthRecoveryPayload, AuthRecoveryResult } from '@rotaris/contracts';
 import { Button as DesignButton, Input as DesignInput } from './design-system/index.js';
-import { canSaveKey, modelLabel, providerErrorText, recoveryModel, recoveryModelList, recoveryTitle } from './auth-recovery.js';
+import { canSaveKey, modelLabel, providerErrorText, radioStep, recoveryModel, recoveryModelList, recoveryTitle } from './auth-recovery.js';
 
 /**
  * REQ-NOTIFY-072..077, REQ-NOTIFY-079/080, REQ-MONITOR-147 (the 401 note's parts C and D) — the authentication recovery dialog,
@@ -36,6 +36,15 @@ export function AuthRecoveryDialog({ payload, onRetry, onReauthenticate, onCance
   const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState('');
   const first = useRef<HTMLButtonElement>(null);
+  const options = useRef(new Map<string, HTMLButtonElement>());
+  // The radio group's keyboard (`radioStep`): the arrow keys, Home and End move the choice and the focus with it.
+  const onOptionsKey = (e: { key: string; preventDefault: () => void }) => {
+    const next = radioStep(list.map((m) => m.key), chosen, e.key);
+    if (next === null || busy) return;
+    e.preventDefault();
+    setChosen(next);
+    options.current.get(next)?.focus();
+  };
   useEffect(() => { document.title = title; }, [title]);
   useEffect(() => { first.current?.focus(); }, []);
   useEffect(() => {
@@ -72,16 +81,20 @@ export function AuthRecoveryDialog({ payload, onRetry, onReauthenticate, onCance
         {list.length === 0
           ? <p className="text-secondary" data-testid="auth-recovery-empty">{NO_OTHER_MODEL}</p>
           : (
-            <div className="auth-recovery__options" role="radiogroup" aria-labelledby="auth-recovery-models" data-testid="auth-recovery-models">
+            <div className="auth-recovery__options" role="radiogroup" aria-labelledby="auth-recovery-models" data-testid="auth-recovery-models" onKeyDown={onOptionsKey}>
               {list.map((m, index) => {
                 const selected = chosen === m.key;
                 return (
                   <DesignButton
                     key={m.key}
-                    ref={index === 0 ? first : undefined}
+                    ref={(el: HTMLButtonElement | null) => {
+                      if (el === null) options.current.delete(m.key); else options.current.set(m.key, el);
+                      if (index === 0) first.current = el;
+                    }}
                     type="button"
                     role="radio"
                     aria-checked={selected}
+                    tabIndex={selected ? 0 : -1}
                     className={`auth-recovery__option${selected ? ' is-selected' : ''}`}
                     data-value={m.key}
                     data-provider={m.provider}

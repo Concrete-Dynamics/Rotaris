@@ -12,7 +12,8 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
  * (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..093/263), and since OQ-173 that a wait the run imposes is not a stall
  * (REQ-MONITOR-117..119), and since OQ-177 that an entry switch after a ladder move applies as its row says (REQ-MONITOR-142).
- * Twelve scenarios, each asserting the store's events, issues,
+ * Fourteen scenarios (since 2026-10-02, `fatal` and `reauth` the authentication recovery's, `generic` REQ-NOTIFY-064's notice),
+ * each asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
  *
@@ -541,8 +542,9 @@ const recoveryWindows = async (d) => ((await d.windows()).auxiliary ?? []).filte
 // recovery dialog over the session beside the authentication class's notice. Cancel closes it and nothing else (the run stays
 // failed, its notice stays). A second prompt fails again and reopens it; beta, from another provider, is chosen and the run
 // restarts on it; beta's provider refuses too (`fail:401:only=scripted+scripted-b`), which reopens the dialog naming beta
-// (REQ-NOTIFY-075); gpt-4o, a shipped model on a third provider, is chosen and the run completes on it. Driven, because the
-// dialog is its own window (`drivenLaunch`).
+// (REQ-NOTIFY-075) and offering neither beta nor alpha — both failed authentication with the credentials their providers
+// still hold (REQ-NOTIFY-068); gpt-4o, a shipped model on a third provider, is chosen and the run completes on it. Driven,
+// because the dialog is its own window (`drivenLaunch`).
 const s7b = scenario('fatal', []);
 await scenarioRun('fatal', async () => {
   const r = await drivenLaunch('fatal', s7b, { ROTARIS_SCRIPT: 'fail:401:only=scripted+scripted-b' }, async (d, step, signal) => {
@@ -611,9 +613,10 @@ await scenarioRun('fatal', async () => {
   // REQ-NOTIFY-080: Cancel closed the dialog and did nothing else.
   expect(v.afterCancel.row.execution_status === 'failed' && v.afterCancel.row.session_id === v.failedOnce.session_id, `the run did not stay failed after Cancel: ${JSON.stringify(v.afterCancel.row)}`);
   expect(v.afterCancel.notice.find(Boolean)?.text === notice.text, `the notice did not stay on screen after Cancel: ${JSON.stringify(v.afterCancel.notice)}`);
-  // REQ-NOTIFY-075: the hand-chosen beta failed too, and the dialog came back naming beta — beta itself not listed, alpha now is.
+  // REQ-NOTIFY-075: the hand-chosen beta failed too, and the dialog came back naming beta. REQ-NOTIFY-068: neither beta nor
+  // alpha is listed — each failed authentication with the credentials its provider still holds — so gpt-4o is what is left.
   const thirdKeys = v.third.models.map((m) => m.key);
-  expect(!thirdKeys.includes('beta') && thirdKeys.includes('alpha') && thirdKeys.includes('gpt-4o'), `the reopened dialog does not offer the others for beta: ${JSON.stringify(v.third)}`);
+  expect(!thirdKeys.includes('beta') && !thirdKeys.includes('alpha') && thirdKeys.includes('gpt-4o'), `the reopened dialog offers a pair that already failed authentication, or not gpt-4o: ${JSON.stringify(v.third)}`);
   expect(v.done.execution_status === 'completed' && v.closedAtEnd.length === 0, `the run did not complete on gpt-4o, or a dialog stayed: ${JSON.stringify(v.done)} / ${JSON.stringify(v.closedAtEnd)}`);
   // REQ-SESSION-026: the pins are recorded, each keyed by the pair that failed.
   expect(overrides.some((o) => o.provider === 'scripted' && o.model === 'alpha' && o.model_key === 'beta' && o.cause === 'authentication')
@@ -685,6 +688,48 @@ await scenarioRun('reauth', async () => {
   results.reauth = { status: row.execution_status, dialog: { ...v.blank, text: undefined }, catalogSeen, calls, png: join(output, 'reauth-dialog.png'), elapsedMs: r.elapsedMs };
 });
 catalog.close();
+
+// 10. REQ-NOTIFY-060/064/065: a failure matching no earlier class — the scripted `fail` step, an HTTP 400 carrying no
+// authentication or limit marker — raises the generic error notice: the run failed, the session and the draft were kept,
+// the failure text as copyable detail, persistent, scoped to the session, and the action returning to the workspace view,
+// which is followed from another view. No recovery dialog opens. Driven, as `fatal` is, so the session is the one on screen
+// (REQ-NOTIFY-032 holds a failure of a session no window follows; `run-failure-notice.test.ts` pins that half).
+const s10 = scenario('generic', []);
+await scenarioRun('generic', async () => {
+  const NOTICE = `(() => { const n = document.querySelector('.notice-slot [data-testid="notice"]'); return n === null ? null : { severity: n.getAttribute('data-severity'), session: n.getAttribute('data-session'), title: n.querySelector('[data-testid="notice-title"]')?.textContent ?? null, message: n.querySelector('[data-testid="notice-message"]')?.textContent ?? null, detail: n.querySelector('[data-testid="notice-detail"]')?.textContent ?? null, action: n.querySelector('.notice__action')?.textContent ?? null, actionKind: n.querySelector('.notice__action')?.getAttribute('data-action') ?? null, dismiss: n.querySelector('.notice__dismiss') !== null }; })()`;
+  const VIEW = `document.querySelector('.app-shell')?.getAttribute('data-view') ?? null`;
+  const r = await drivenLaunch('generic', s10, { ROTARIS_SCRIPT: 'fail' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    await step('the first-launch notice', until(() => d.probe('.notice-slot'), (found) => Array.isArray(found) && /No model provider is authenticated yet/.test(found[0]?.text ?? ''), { timeoutMs: 30_000, what: 'the first-launch notice', signal }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('a request the provider rejects', { enter: true }));
+    const failed = await step('the run failed', settled(s10, signal, 'the run failing'));
+    const notice = await step('the generic notice', until(() => d.eval(NOTICE), (n) => n !== null && n.title === 'The run failed', { timeoutMs: 30_000, what: 'the generic failure notice', signal }));
+    const windows = await step('no recovery window', recoveryWindows(d));
+    await step('Ctrl+1', d.chord('Ctrl+1'));
+    const away = await step('another view', until(() => d.eval(VIEW), (v) => v !== null && v !== 'workspace', { timeoutMs: 10_000, what: 'a view other than the workspace', signal }));
+    await step('Back to the workspace', d.click('.notice-slot .notice__action'));
+    const back = await step('the workspace view', until(() => d.eval(VIEW), (v) => v === 'workspace', { timeoutMs: 10_000, what: 'the workspace view after the action', signal }));
+    return { failed, notice, windows, away, back };
+  });
+  const db = open(s10);
+  const row = session(db);
+  const events = db.prepare("SELECT payload FROM events WHERE session_id = ? AND kind = 'result'").all(row.session_id).map((e) => JSON.parse(e.payload));
+  db.close();
+  const v = r.value;
+  const error = events[0]?.result?.error ?? null;
+  expect(v.failed.execution_status === 'failed' && typeof error === 'string' && /HTTP 400/.test(error), `the run did not fail on the 400: ${JSON.stringify(v.failed)} / ${JSON.stringify(events[0])}`);
+  // REQ-NOTIFY-064/065: severity error, the two statements, the failure text exactly as detail, persistent, the workspace action.
+  expect(v.notice.severity === 'error' && v.notice.title === 'The run failed' && v.notice.message === 'The session and the draft were kept.', `the generic notice does not say the run failed and the session and the draft were kept: ${JSON.stringify(v.notice)}`);
+  expect(v.notice.detail === error, `the generic notice does not carry the failure text as detail: ${JSON.stringify(v.notice.detail)} vs ${JSON.stringify(error)}`);
+  expect(v.notice.dismiss === true && v.notice.session === row.session_id, `the generic notice is not persistent or not scoped to the session: ${JSON.stringify(v.notice)}`);
+  expect(v.notice.action === 'Back to the workspace' && v.notice.actionKind === 'open-view' && v.back === 'workspace' && v.away !== 'workspace', `the action does not return to the workspace view: ${JSON.stringify({ notice: v.notice, away: v.away, back: v.back })}`);
+  expect(v.windows.length === 0, `a recovery dialog opened for a failure that is not an authentication failure: ${JSON.stringify(v.windows)}`);
+  results.generic = { status: row.execution_status, error, notice: v.notice, away: v.away, back: v.back, elapsedMs: r.elapsedMs };
+});
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify({ ...results, ...(only === null ? {} : { only }), failures }, null, 2)}\n`);
 console.log(JSON.stringify({ ...results, ...(only === null ? {} : { only }), failures }, null, 2));

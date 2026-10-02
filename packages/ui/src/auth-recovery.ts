@@ -54,3 +54,20 @@ export function recoveryModelList<M extends AuthRecoveryModel & { readonly key: 
 export function canSaveKey(apiKey: string): boolean {
   return apiKey.trim() !== '';
 }
+
+/**
+ * The model list is a radio group (WAI-ARIA's radio group pattern): the arrow keys move the choice to the next or previous
+ * model, wrapping, and Home and End to the first and last. Answers the key now chosen, or null where the key is not one of
+ * these or the list is empty.
+ */
+export function radioStep(keys: readonly string[], current: string | null, key: string): string | null {
+  if (keys.length === 0) return null;
+  const at = current === null ? -1 : keys.indexOf(current);
+  switch (key) {
+    case 'ArrowDown': case 'ArrowRight': return keys[(at + 1) % keys.length]!;
+    case 'ArrowUp': case 'ArrowLeft': return keys[at <= 0 ? keys.length - 1 : at - 1]!;
+    case 'Home': return keys[0]!;
+    case 'End': return keys[keys.length - 1]!;
+    default: return null;
+  }
+}

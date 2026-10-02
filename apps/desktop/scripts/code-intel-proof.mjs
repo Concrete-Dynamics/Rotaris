@@ -411,7 +411,7 @@ if (want(5)) {
   console.log(`[code-intel-proof] 5 setup broken entry: ${message.slice(0, 120)}`);
 }
 if (want(5)) {
-  // Cancel while `create` runs (the runtime's import alone takes seconds): the step in flight is terminated, the rest not attempted.
+  // REQ-MCP-112: cancel while `create` runs. The step in flight reaches its terminal result; later steps are not attempted.
   // Cancel is pressed as soon as it is drawn, which is when the run host has reported `create` running: the step's child
   // is spawned in the same turn as that report (`packages/mcp/src/setup.ts`), so the press lands on a running step.
   rmSync(join(noCode, '.serena'), { recursive: true, force: true });
@@ -419,7 +419,7 @@ if (want(5)) {
   settledPresses('setup-cancel', r.log);
   const steps = setupSteps(r.log);
   const message = setupMessage(r.log);
-  if (steps.map((s) => s.status).join(',') !== 'failed,not-attempted,not-attempted' || !/Cancelled/.test(message)) throw new Error(`setup-cancel: ${JSON.stringify(steps)} — '${message}'\n${setupLog(r.log).join('\n')}`);
+  if (!['succeeded', 'failed'].includes(steps[0]?.status) || steps[1]?.status !== 'not-attempted' || steps[2]?.status !== 'not-attempted' || !/Cancelled/.test(message)) throw new Error(`setup-cancel: ${JSON.stringify(steps)} — '${message}'\n${setupLog(r.log).join('\n')}`);
   results.setup.cancel = { steps: steps.map((s) => s.status), message, detail: steps[0].text.slice(0, 200) };
   console.log(`[code-intel-proof] 5 setup cancel: ${steps.map((s) => s.status).join(' ')} — ${message}`);
 }

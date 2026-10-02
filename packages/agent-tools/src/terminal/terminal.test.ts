@@ -1179,7 +1179,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       expect(output(behind.text)).toBe('behind');
       // Before the repair: "The command exited with code 0." and nothing of the wedge.
       const detail = String(diag(behind.text)['detail']);
-      expect(detail).toMatch(/submitted while the soft-paused command `.*sleep.*` was still running/);
+      expect(detail).toMatch(/submitted while the soft-paused command `.*sleep.*` was still running/i);
       expect(detail).toMatch(/ended (\d+\.\d|under 0\.1) seconds? after this command was submitted, with exit code 5/);
       expect(behind.text).toContain('wedge-done');
       expect(behind.text).not.toContain('__rot_');

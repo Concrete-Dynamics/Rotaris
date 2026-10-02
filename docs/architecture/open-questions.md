@@ -8634,6 +8634,17 @@ the full 5 s. The 2 s is the build's figure: it leaves the close room for the po
 host's exit inside 5000 ms (measured: a step and a descendant that both ignore SIGTERM, force-killed, the quit 2234 ms and
 2274 ms).
 
+**Windows measurement, 2026-10-02.** `workspace-proof` on this host passed the project-switch cancellation and the
+replacement's initialization, but failed two REQ-WORKSPACE-092 liveness checks: after a switch, the outgoing step's PID
+was still present 5 s after the switch answered; after Cancel in the first of two windows, that window's step PID was
+still present 5 s after Cancel answered. The product recorded the cancellations and the next workspace's completed
+setup. Its log put the switch's cancellation request at 07:30:49.974 and the stopped step at 07:30:55.463 — 5.489 s
+apart. The Cancel request was at 07:31:19.411 and its stopped step at 07:31:25.014 — 5.603 s apart. An orderly quit
+in the same proof passed its 5 s child and descendant checks under the shorter shutdown grace. This extends the
+question to a workspace switch and an explicit Cancel while the application stays open: REQ-WORKSPACE-092 gives each
+the same 5 s liveness bound while REQ-MCP-099 gives cancellation a full 5 s before force-kill. The build still follows
+the existing reading; no timing rule is changed by this observation.
+
 **What a ruling decides.** Whether a close's cancellation is REQ-MCP-099's cancellation, with its 5 s grace (and then
 whether REQ-WORKSPACE-109's 5000 ms and REQ-WORKSPACE-092's 5 s give way, or the grace is counted inside them); or the
 close's own, bounded by REQ-WORKSPACE-109 and REQ-WORKSPACE-092 alone; and, if the latter, what grace the step is given

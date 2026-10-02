@@ -76,3 +76,8 @@ And by `requirements-proof`'s `ready-restart` stage (two launches of the built a
 `review` on the one worktree row ending `-u1`, one run row of u1, "takes over its worktree" in the log, no "Worktree
 path already exists"). Both proofs passed on the repair: `requirements-runs-proof` 117/117 tests, and the whole
 `requirements-proof` 139 tests with every stage, at a load average of 3.7 falling to 0.9.
+
+Noticed while repairing it, and recorded rather than repaired: a rejected card back in `ready` can never start its next
+unit. Before the repair the claim handed out the rejected unit's held launch and `run.started` failed on the run
+table's key; the queue's release now states a stall instead, and automatic scheduling still meets the store error. See
+[`../a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`](../a-rejected-card-back-in-ready-can-never-start-its-next-unit.md).

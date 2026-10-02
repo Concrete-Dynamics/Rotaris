@@ -86,7 +86,7 @@ other plan's agents on the host: `resilience-proof`, `mission-proof`, `compressi
 times at scenario 9, before any model call: the session browser pushed the row's Open out of its dialog under this
 worktree's path, so the resume's click loaded nothing. A build of `origin/main` passed it from a shorter path and from
 one of the same length whose longest unbroken run is shorter, and it is recorded on its own
-([`../the-session-browsers-table-pushes-each-rows-open-out-of-its-dialog-under-a-long-workspace-path.md`](../the-session-browsers-table-pushes-each-rows-open-out-of-its-dialog-under-a-long-workspace-path.md));
+([`the-session-browsers-table-pushes-each-rows-open-out-of-its-dialog-under-a-long-workspace-path.md`](the-session-browsers-table-pushes-each-rows-open-out-of-its-dialog-under-a-long-workspace-path.md));
 its scenarios before 9, the relaunches of a session a crash left among them, passed. The row is in
 [`../../architecture/first-executions.md`](../../architecture/first-executions.md).
 

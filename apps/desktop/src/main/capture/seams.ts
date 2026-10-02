@@ -520,15 +520,42 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   // precondition, where a fixed instant reports whatever the clock found (compression-proof's `root-and-child`, which reads
   // the run-wide compression count once the run has counted both compressions, REQ-MONITOR-086/281). The label keeps the
   // requested form, `~` included, as `probe-at`'s does.
+  //
+  // A fixed-instant probe (`selector@ms`) reads a PAINTED window: from its instant it waits until the first persona window
+  // exists and has painted a frame carrying a whole-session update (`__rotarisPersonaPainted`, the mark main's paint
+  // measurement reads), bounded at 5 s like that measurement, and when it had to wait it says how long, so the instant a
+  // reading was really taken is in the log. Until 2026-10-02 it read whatever was there at the instant: mission-proof item 8
+  // read `[]` at 6.5 s from a window a loaded host created 1.6 s after the click and painted after the probe
+  // (docs/defects/fixed/mission-proofs-reconcile-launch-probes-the-persona-window-before-its-first-paint.md). The paint
+  // check and the reading are one evaluation, so a window already painted is read at its instant, as before.
   const personaRead = (probe: string): Promise<unknown> => { const e = firstPersona(); return e ? e.win.webContents.executeJavaScript(probe) : Promise.resolve(false); };
+  const PERSONA_PAINT_BOUND_MS = 5_000;
   for (const step of steps(process.env['ROTARIS_CAPTURE_PERSONA_PROBE_AT'])) {
     void (async () => {
       await settleAt(host, step, personaRead);
       const label = `${step.until ? '~' : ''}${step.at}`;
-      const e = firstPersona();
-      if (!e) { log(`capture: persona-probe-at ${label} ${step.selector} → null`); return; }
-      const found = await e.win.webContents.executeJavaScript(`(() => [...document.querySelectorAll(${JSON.stringify(step.selector)})].map((el) => ({ text: (el.tagName === 'TEXTAREA' ? el.value : (el.textContent || '')).trim().slice(0, 400), data: Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-') || a.name.startsWith('aria-') || a.name === 'title').map((a) => [a.name, a.value])) })))()`).catch((cause: unknown) => `error: ${String(cause)}`) as unknown;
-      log(`capture: persona-probe-at ${label} ${step.selector} → ${JSON.stringify(found)}`);
+      const script = `(() => ({ painted: window.__rotarisPersonaPainted != null, found: [...document.querySelectorAll(${JSON.stringify(step.selector)})].map((el) => ({ text: (el.tagName === 'TEXTAREA' ? el.value : (el.textContent || '')).trim().slice(0, 400), data: Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-') || a.name.startsWith('aria-') || a.name === 'title').map((a) => [a.name, a.value])) })) }))()`;
+      const from = clocks.monotonic.now();
+      // Whether the first evaluation found the window unpainted: only then did the probe wait, and only then is a wait reported.
+      let deferred = false;
+      for (;;) {
+        const e = firstPersona();
+        const read = e ? await e.win.webContents.executeJavaScript(script).catch((cause: unknown) => ({ painted: true, found: `error: ${String(cause)}` })) as { painted: boolean; found: unknown } : null;
+        const waited = Math.round(clocks.monotonic.now() - from);
+        // The waiting form has already read its precondition in the window; only a fixed instant waits for the paint.
+        if (read && (read.painted || step.until)) {
+          if (deferred) log(`capture: persona-probe-at ${label} ${step.selector} waited ${waited} ms for the window's first paint`);
+          log(`capture: persona-probe-at ${label} ${step.selector} → ${JSON.stringify(read.found)}`);
+          return;
+        }
+        if (step.until || waited >= PERSONA_PAINT_BOUND_MS) {
+          if (!step.until) log(`capture: persona-probe-at ${label} ${step.selector} waited ${waited} ms for the window's first paint: not observed`);
+          log(`capture: persona-probe-at ${label} ${step.selector} → ${read ? JSON.stringify(read.found) : 'null'}`);
+          return;
+        }
+        deferred = true;
+        await pause(host, 20);
+      }
     })();
   }
 

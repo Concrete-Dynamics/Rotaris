@@ -36,3 +36,34 @@ re-authentication path).
   `raiseNotice(sev, e.result.summary, e.result.error)`, with no authentication class ahead of them.
 - `apps/desktop/scripts/resilience-proof.mjs` — the `fatal` scenario, which shows the notice a 401 gets today.
 - `apps/desktop/src/run-host/scripted-client.ts` — the `fail:401` fault step.
+
+## Progress — part A built 2026-10-02 (the note stays open until part D)
+
+The triage split this gap in four parts (A to D). **Part A** (REQ-NOTIFY-060/064/067/068/069/070, REQ-MONITOR-147's first
+half, REQ-SESSION-026, REQ-CONFIG-067) is built:
+
+- **The classes.** `apps/desktop/src/main/failure-class.ts` classifies a run's failure text in REQ-NOTIFY-060's order —
+  authentication by REQ-NOTIFY-067's markers (`401` standing alone, so `4010` does not match), the sandbox class (never
+  matched: nothing reports a refused sandboxed launch to main), quota, anything else — pinned by a table in
+  `failure-class.test.ts`. `apps/desktop/src/main/failure-recovery.ts` is now the one writer of a run failure's notice.
+- **The generic notice** (REQ-NOTIFY-064): "The run failed", "The session and the draft were kept.", the failure text as
+  detail, `Return to the workspace` (`open-view: workspace`) — `failure-recovery.test.ts`, and `resilience-proof`'s `fatal`.
+- **The first authentication failure** (REQ-NOTIFY-070): with a run channel and the session's configuration service
+  (REQ-NOTIFY-069), main asks the run host `session.restartOnFallback`; `Sessions.restartOnFallback` reads the model the
+  root's failing call was addressed to (`Run.failedEntryModel`), pins `fallback_model` keyed by that pair as the
+  session's model override — the `model_override` timeline entry (`cause: authentication`) that `ResilienceMemory`
+  rehydrates, so the pin outlives the failed run and a reload — and re-submits the last prompt. Main raises an error
+  acknowledgement naming both models. A refusal (no fallback, the fallback being the model that failed, no prompt), a
+  restart that cannot begin (the pin taken back with `cleared: true`), or a second authentication failure publishes the
+  generic notice. Pinned in `packages/engine/src/run/ladder.test.ts` ("REQ-NOTIFY-070 / REQ-MONITOR-147 /
+  REQ-SESSION-026 …"), `resilience.test.ts`, `autopsy.test.ts`, and shown by `resilience-proof`'s new `auth-fallback`
+  scenario (`fail:401:only=scripted`, `fallback_model: beta`). REQ-NOTIFY-068 holds: the 401 is not retried on the pair.
+- **Readings** the build proceeds under (the restart re-submits the prompt as a new row, a restart that cannot begin takes
+  the pin back, the first-failure bookkeeping lives in main for the process's life): OQ-177.
+
+**Still owed:** part B, the non-modal re-authentication prompt (REQ-NOTIFY-071/078); part C, REQ-NOTIFY-072's 560 px
+recovery dialog on a second failure or with no usable fallback (until it lands both take the generic notice, and `fatal`
+asserts that notice rather than the dialog); part D, the dialog's re-authenticate path (REQ-NOTIFY-076/077). Device-code
+and browser re-authentication can only say the method is unavailable, since those sign-in flows are still owed
+(`packages/providers/src/catalogue.ts`).
+

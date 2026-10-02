@@ -366,6 +366,11 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       const ordinal = ordinalAt(scripts[who] ?? [], (calls[counterKey] ?? 1) - 1);
       const callId = `call-${call}-s${ordinal}`;
       const marked = (text: string) => `${text} (scripted step ${ordinal})`;
+      // `<fault>:only=<provider>`: the fault answers a call addressed to that provider alone, and a call to any other answers
+      // as `answer` does — a credential refused by one provider, which a model on another provider does not share (the 401
+      // note's fallback restart, REQ-NOTIFY-070, whose restarted root takes the script from its first step again).
+      const scoped = /^(fail:(?:429|quota|503|401)(?::retry-after=\d+)?):only=([\w-]+)$/.exec(step);
+      if (scoped) step = req.model.providerId === scoped[2] ? scoped[1]! : 'answer';
       if (step === 'fail') {
         yield { ok: false as const, error: { code: 'http' as const, headline: 'scripted failure (HTTP 400)', status: 400, transient: false } };
         return;
@@ -375,7 +380,8 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         yield { ok: false as const, error: { code: 'http' as const, headline: 'scripted rejection: prompt is too long', status: 400, providerMessage: 'The maximum context length of this model is 8192 tokens; reduce the length of the messages.', transient: false } };
         return;
       }
-      // Part Q's fault steps (REQ-ORCH-088/090/091/092): `fail:429[:retry-after=<s>]`, `fail:quota`, `fail:503`, `fail:401`;
+      // Part Q's fault steps (REQ-ORCH-088/090/091/092): `fail:429[:retry-after=<s>]`, `fail:quota`, `fail:503`, `fail:401`,
+      // each optionally `:only=<provider>` (above);
       // tokens:<n> — Part AH: a step that REPORTS n prompt tokens and then calls a tool so the turn goes round
       // again. REQ-MONITOR-081 prefers the provider's own figure, so this is how a scripted run crosses the
       // automatic threshold without composing a genuinely enormous conversation. Verification only.

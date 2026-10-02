@@ -8780,3 +8780,38 @@ load average and CPU count beside the reading (`results.live.echoLoad`) and how 
 **What a ruling decides.** Whether the 100 ms applies on any host the product runs on, whatever else that host runs;
 or on a host whose CPUs are not oversubscribed, so a red under a load above the CPU count is evidence about the host; or
 on a stated reference host and load.
+
+**OQ-177 — What is REQ-NOTIFY-070's restart "with the same prompt", what does "the fallback bookkeeping is cleared" take back,
+and how long does "the first authentication failure of a session" last?** *(REQ-NOTIFY-070, "the run restarts with the
+same prompt. Where the restart cannot begin, the fallback bookkeeping is cleared and the generic failure notice is
+published instead"; REQ-NOTIFY-069, "a recorded last prompt"; REQ-NOTIFY-045, whose retry "resubmits the current composer
+draft, or the last submitted prompt"; REQ-NOTIFY-072/075, "a second authentication failure"; REQ-SESSION-026. Raised
+2026-10-02 by the 401 note's part A,
+[`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md).
+Open.)*
+
+Three things the requirements leave to the build:
+
+- **The restart.** REQ-NOTIFY-070 does not say whether restarting "with the same prompt" records the prompt again or
+  continues the failed run's request without a new user turn, nor what becomes of the prompt's image attachments.
+- **The clearing.** Where the restart cannot begin, "the fallback bookkeeping is cleared". The fallback was pinned before
+  the restart was tried (a run resolves its model at start); the requirement does not say whether that pin stands.
+- **The session's first failure.** "The first authentication failure of a session" has no stated lifetime: across an
+  application restart, the session is the same session, but nothing says the bookkeeping is durable.
+
+**What the build proceeds under** (`Sessions.restartOnFallback`, `apps/desktop/src/main/failure-recovery.ts`):
+- the restart **re-submits the last user prompt as a new user row** (`Sessions.prompt`), so the transcript shows it sent
+  twice, preceded by a system row naming the model that failed and the fallback; the prompt's text is re-sent and its
+  attachments are not (the row keeps only their metadata, REQ-CHAT-170);
+- where the restart cannot begin, **the pin is taken back** as well — a `model_override` entry carrying `cleared: true` —
+  so the session stays on the model it had and the generic notice says what happened;
+- the "fallback attempted" bookkeeping lives **in main for the life of the process**. The pin itself is durable, so after
+  a relaunch the session runs on the fallback, and a failure there is a failure of the fallback, which is not tried again
+  (REQ-NOTIFY-075's reading) — the dialog's case.
+- The pin is keyed by the **pair** that failed (`provider|model`), as a wait's choice is, so every agent of the session on
+  that pair — a child on the primary model included — moves to the fallback; REQ-NOTIFY-070 says "that session's model
+  override", which is the one session-wide override REQ-SESSION-026 names.
+
+**What a ruling decides.** Whether the restart appends a user turn or continues the failed request; whether attachments
+are re-sent; whether a restart that could not begin leaves the pin standing; whether the first-failure bookkeeping outlives
+the application; and whether the pin covers every agent on the failed pair or the entry agent alone.

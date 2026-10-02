@@ -1163,6 +1163,23 @@ and the reopen action on it (OQ-42). **Part V:** a starting run first clears the
 is unscoped or scoped to that same session and no other (REQ-NOTIFY-029/058), and every `warning` or `error` notice is
 written to the session's timeline as a `notice` entry BEFORE it is broadcast (REQ-NOTIFY-268, `timeline.append` to the
 run host), so a notice replaced within the same turn is still readable afterwards.
+**A failed run's class (REQ-NOTIFY-060, 2026-10-02, the 401 note's part A).** A result carrying failure text — a `failed`
+run, or a quota condition whatever its status — is classified in REQ-NOTIFY-060's order by `main/failure-class.ts`
+(authentication by REQ-NOTIFY-067's markers, `401` standing alone; the sandbox class never matches, nothing reporting a
+refused sandboxed launch to main; a quota or rate-limit marker; anything else) and its recovery published by
+`main/failure-recovery.ts`, the one writer of a run failure's notice: REQ-NOTIFY-063's notice, or REQ-NOTIFY-064's — the
+run failed, the session and the draft were kept, the failure text as detail, `Return to the workspace`
+(`open-view: workspace`). A **first authentication failure** of the session, with the run host and the session's
+workspace service present (REQ-NOTIFY-069), asks the run host `session.restartOnFallback`: `Sessions.restartOnFallback`
+reads the model the root's failing call was addressed to (`Run.failedEntryModel`), resolves `fallback_model`, and —
+where the fallback is configured and is another pair — pins it in the session's `ResilienceMemory` keyed by the pair that
+failed and records the `model_override` timeline entry (`cause: authentication`) that `ResilienceMemory.rehydrate`
+replays on every later run and after a reload (REQ-SESSION-026); a system row says so; then `prompt` re-submits the last
+user prompt, a new run on the fallback. A restart that cannot begin takes the pin back with a `model_override` entry
+carrying `cleared: true`, which the replay and the autopsy reader honour. Main then raises an error acknowledgement naming
+both models (REQ-NOTIFY-070) and keeps "this session's fallback was attempted" for the life of the process; a refusal, a
+missing run channel, a missing service, or a second authentication failure publishes REQ-NOTIFY-064's notice — the
+recovery dialog of REQ-NOTIFY-072 is not built (the note's part C).
 
 **The application's end, and the locks the run host holds (ADR-0014 "Main is gone only after the run host",
 2026-09-28).** A run's teardown releases its lock at the end of cleanup; the application's end reaches the same point

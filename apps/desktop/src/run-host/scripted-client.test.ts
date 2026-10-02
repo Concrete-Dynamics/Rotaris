@@ -66,6 +66,23 @@ describe('scriptedClient — the step a call takes', () => {
     expect(await interrupted(clock, client, late)).toBe('failed:aborted');
   });
 
+  it('`fail:401:only=<provider>` refuses that provider\'s calls alone; a call to another provider answers (REQ-NOTIFY-070\'s fallback restart)', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'fail:401:only=scripted');
+    const ask = async (providerId: string): Promise<string> => {
+      const client = scriptedClient(clock, () => {});
+      const parts = client.stream({ ...request([text('system', ORCHESTRATOR_SYSTEM), text('user', 'go')]), model: { providerId, modelId: 'm', dialect: 'chat' } })[Symbol.asyncIterator]();
+      for (;;) {
+        const next = parts.next();
+        let r = await Promise.race([next, settled()]);
+        while (r === undefined) { clock.advance(200); r = await Promise.race([next, settled()]); }
+        if (r.done === true) return 'answer';
+        if (!r.value.ok) return `failed:${r.value.error.headline}`;
+      }
+    };
+    expect(await ask('scripted')).toBe('failed:scripted authentication failure (HTTP 401)');
+    expect(await ask('scripted-b')).toBe('answer');
+  });
+
   it('PD-ORCH-005: a fresh agent takes its script from the first step, one step per call', async () => {
     vi.stubEnv('ROTARIS_CHILD_SCRIPT', 'glob,write,git');
     const client = scriptedClient(clock, () => {});

@@ -45,6 +45,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**A failed run is classified in REQ-NOTIFY-060's order, and a first 401 restarts on the fallback (REQ-NOTIFY-060/064/
+067/069/070, REQ-MONITOR-147, REQ-SESSION-026; the 401 note's part A).** Main's run-result handler hands a result carrying
+failure text to `main/failure-recovery.ts` (classes in `main/failure-class.ts`), the one writer of a run failure's notice:
+REQ-NOTIFY-064's generic notice with `Return to the workspace`, REQ-NOTIFY-063's as before, and for a first authentication
+failure the new run-host request **`session.restartOnFallback {sessionId}`** → `session.fallbackRestarted {failed,
+fallback}` (`Sessions.restartOnFallback`: the `model_override` entry keyed by the failed pair, `cause: authentication`,
+and the last prompt re-submitted; a `cleared: true` entry takes a pin back). The **process view** lists the request, the
+**runtime view** the classes and the restart, **state ownership** main's first-failure bookkeeping. No package, edge,
+channel, command or store column changed.
+
 **A switch of the entry model records whether the root's cell is rebuilt for it (REQ-MONITOR-142, REQ-ORCH-090,
 REQ-ORCH-091).** `setEntryModel` writes `entry_model_switched` with `{ model, rebuilds, supersedes }`, `rebuilds` being
 the test `rootResilience` applies at the next turn (`Run.rootRebuildsFor`) and `supersedes` saying the switch replaces one

@@ -4,6 +4,8 @@ import './sentinel.js';
 import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
 import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu, type CloseGuard } from './main-windows.js';
 import { createNoticeStore } from './notices.js';
+import { classifyFailure } from './failure-class.js';
+import { createFailureRecovery } from './failure-recovery.js';
 import { createLibraryRevision } from './library.js';
 // The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
 import { startDriver, type AuxiliaryWindow } from './driver.js';
@@ -500,6 +502,23 @@ async function main(): Promise<void> {
             : action === 'session.reopen' ? (sessionId === undefined || sessionId === '' ? [] : [{ label: 'Reopen the session', action: { kind: 'focus-session', sessionId } }])
               : [];
   /**
+   * REQ-NOTIFY-060..070 — the run failure's classes and their recoveries. The run channel is the run host's link; the
+   * configuration service is the workspace service of the window that follows the session (REQ-NOTIFY-069).
+   */
+  const failureRecovery = createFailureRecovery({
+    notices,
+    restartOnFallback: async (sessionId) => {
+      const r = await runHost.request({ kind: 'session.restartOnFallback', sessionId }, millis(10_000));
+      if (r.kind === 'session.fallbackRestarted') return { ok: true, value: { failed: r.failed, fallback: r.fallback } };
+      return { ok: false, reason: r.kind === 'refused' ? `${r.headline}${r.detail ? `: ${r.detail}` : ''}` : `the run host answered ${r.kind}` };
+    },
+    configurationService: (sessionId) => {
+      const owner = ownerOf(sessionId) ?? activeWindow();
+      return owner !== undefined && owner.workspace !== '(no workspace)' && services.has(canonicalPath(owner.workspace));
+    },
+    log: (m) => log(m),
+  });
+  /**
    * REQ-SHELL-155 / REQ-SESSION-062, OQ-46 (accepted 2026-09-06): the repair is ANNOUNCED, and the failure it
    * reports is plural. ADR-0002 accepts the run-host crash as a consequence, and it stales one session per
    * in-flight run — so three or five sessions needing repair at once is the realistic shape, and five notices
@@ -926,10 +945,11 @@ async function main(): Promise<void> {
       }
       // REQ-SESSION-186 / REQ-NOTIFY-003: the terminal outcome, presented once, at the severity summarisation assigned.
       const sev = e.result.severity === 'error' ? 'error' : e.result.severity === 'warning' ? 'warning' : 'info';
-      // REQ-NOTIFY-060/063/093 (Part Q): a run ended by a rate-limit or quota condition — the wait cancelled, or the ladder out of
-      // recoveries — is the third class: the provider limit was reached, the session is preserved, another model or a retry once
-      // the provider resets, the failure text as detail, the action opening model settings. (REQ-NOTIFY-062's hosted-credit
-      // branch is not built: no hosted provider exists.) The authentication and sandbox classes ahead of it are not built either.
+      // REQ-NOTIFY-060: a run that ended with failure text is classified in the requirement's order — authentication, a refused
+      // sandboxed launch, a quota or rate limit, anything else — and its class's recovery published (`failure-recovery.ts`):
+      // a first authentication failure pins the fallback and restarts (REQ-NOTIFY-070), a quota failure takes REQ-NOTIFY-063's
+      // notice (a cancelled wait included, whatever its status), anything else REQ-NOTIFY-064's. A result with no failure
+      // text is presented at the severity summarisation assigned.
       /**
        * REQ-EVENTS-088 (OQ-42): a run whose terminal persistence could not be confirmed has ALREADY been
        * reported — the run host published one failure notice carrying the last durable ordinal and the reopen
@@ -940,8 +960,9 @@ async function main(): Promise<void> {
        */
       if (e.result.persistence !== undefined) {
         log(`run ${e.sessionId}: completion unconfirmed, last durable event ordinal ${e.result.persistence.last_event_ordinal} — the recording-failure notice already carries it (REQ-EVENTS-088)`);
-      } else if (e.result.error !== null && /rate.?limit|quota|429|too many requests/i.test(e.result.error)) {
-        raiseNotice('error', 'The provider limit was reached; the session is preserved', `${e.result.error}\n\nChoose another model, or retry once the provider resets.`, recoveryFor('config.models'));
+      } else if (e.result.error !== null && (e.result.execution_status === 'failed' || classifyFailure(e.result.error) === 'quota')) {
+        const sessionId = e.sessionId;
+        void failureRecovery.onRunFailed({ sessionId, error: e.result.error }).then((outcome) => log(`run ${sessionId}: failure classified ${outcome} (REQ-NOTIFY-060)`));
       } else {
         raiseNotice(sev, e.result.summary, e.result.error ?? undefined);
       }

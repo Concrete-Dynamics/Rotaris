@@ -1125,6 +1125,14 @@ and every launch fails if the setup started in the background anyway, so a bundl
 finish" no longer stands in the one notice slot `cancel` and `fatal` read; `fatal` asserts the 401's own notice (its
 failure text as detail) rather than only "not a provider limit"
 ([note](../defects/fixed/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md)).
+**Since 2026-10-02 (the 401 note's part A)** a failed run is classified in REQ-NOTIFY-060's order by main
+(`main/failure-class.ts`, `main/failure-recovery.ts`): `fatal` (no usable fallback) asserts REQ-NOTIFY-064's notice — the
+session and the draft were kept, `Return to the workspace` — and the new `auth-fallback` scenario (`fallback_model: beta`,
+the scripted step `fail:401:only=scripted`) asserts the pin of the fallback keyed by the failed pair, the acknowledgement
+naming both models and the restart with the same prompt completing on `scripted-b/beta` (REQ-NOTIFY-070,
+REQ-MONITOR-147, REQ-SESSION-026). `--only=<names>` runs the named scenarios alone. The recovery dialog and the
+re-authentication path are owed
+([note](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).
 
 **A probe is a deadline, not an appointment (2026-09-12).** Three of this proof's assertions were mid-run DOM probes
 fired at a fixed instant — `.wait-header@1700` — and they failed intermittently on a busy machine with nothing wrong

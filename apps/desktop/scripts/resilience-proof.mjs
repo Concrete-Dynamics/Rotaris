@@ -10,7 +10,7 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
 /**
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
  * (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..093/263), and since OQ-173 that a wait the run imposes is not a stall
- * (REQ-MONITOR-117..119). Eleven scenarios, each asserting the store's events, issues,
+ * (REQ-MONITOR-117..119), and since the 401 note's part A the authentication class (REQ-NOTIFY-060/067/070). Twelve scenarios, each asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
  *
@@ -197,7 +197,10 @@ const results = {};
 const expect = (cond, message) => { if (!cond) throw new Error(message); };
 /** One scenario, run to its end: a failure is recorded under its name and the next scenario still runs. */
 const failures = [];
+/** `--only=<name>[,<name>…]` runs the named scenarios alone, for iterating on one; the full proof runs every one. */
+const only = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length).split(',').filter(Boolean) ?? null;
 async function scenarioRun(name, body) {
+  if (only !== null && !only.includes(name)) { console.log(`SKIP  ${name} (--only)`); return; }
   const started = Date.now();
   try {
     await body();
@@ -443,7 +446,49 @@ await scenarioRun('fatal', async () => {
   const notice = probes(r.log, 'probe').find((p) => p.selector === '.notice-slot')?.found[0];
   expect(notice !== undefined && notice.text.includes(error) && /Dismiss/.test(notice.text), `the 401's own notice is not the one on screen: ${JSON.stringify(notice)}`);
   expect(!/provider limit was reached/.test(notice.text), `a 401 was reported as a provider limit: ${JSON.stringify(notice)}`);
+  // REQ-NOTIFY-060/067: the 401 is classified authentication first. No usable fallback: `fallback_model` is unset, so it
+  // resolves to small_model (REQ-CONFIG-067), alpha, the model that failed — nothing is pinned and nothing restarts.
+  // REQ-NOTIFY-072's recovery dialog is not built (the 401 note's part C); until it is, REQ-NOTIFY-064's notice: the run
+  // failed, the session and the draft were kept, the action returning to the workspace view.
+  expect(/authentication recovery: session \S+ was not restarted on a fallback/.test(r.log) && /failure classified generic/.test(r.log), `the 401 did not take the authentication class's no-fallback path: see fatal.log`);
+  expect(/The run failed/.test(notice.text) && /The session and the draft were kept\./.test(notice.text) && /Return to the workspace/.test(notice.text), `the failure notice is not REQ-NOTIFY-064's: ${JSON.stringify(notice)}`);
   results.fatal = { status: row.execution_status, error, notice: notice.text, png: r.png, elapsedMs: r.elapsedMs };
+});
+
+// 8. `auth-fallback` — REQ-NOTIFY-070 / REQ-MONITOR-147 / REQ-SESSION-026: a first 401 with `fallback_model: beta` configured pins beta as the
+// session's model override (keyed by the pair that failed), acknowledges both models, and restarts the run with the same
+// prompt on beta, which answers. The acknowledgement is transient (REQ-NOTIFY-020's lifetime), so the wait expression
+// writes its text onto the body the moment it is drawn and the probe reads it back from there.
+const s8 = scenario('auth-fallback', [], { fallback: 'beta' });
+await scenarioRun('auth-fallback', async () => {
+  const ackSeen = "(document.body.dataset.ackSeen ||= [...document.querySelectorAll('[data-testid=\"acknowledgement\"]')].map((a) => a.textContent).find((t) => t.includes('Authentication failed')) ?? '')";
+  const r = await launch('auth-fallback', s8, {
+    // `:only=scripted`: alpha's provider refuses the key, beta's does not; the restarted root takes its script from the
+    // first step again, so the fault is scoped to the provider rather than to the step.
+    ROTARIS_SCRIPT: 'fail:401:only=scripted', ROTARIS_CAPTURE_PROMPT: 'bad key, then the fallback',
+    ROTARIS_CAPTURE_WAIT: `js:${ackSeen} !== '' && document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed'`, ROTARIS_CAPTURE_WAIT_MS: '90000',
+    ROTARIS_CAPTURE_PROBE: 'body;;.notice-slot', ROTARIS_CAPTURE_AFTER_MS: '800',
+  }, { timeout: 180_000 });
+  const db = open(s8);
+  const row = session(db);
+  const list = names(db, row.session_id);
+  const users = db.prepare("SELECT body FROM transcript_rows WHERE session_id = ? AND kind = 'user' ORDER BY row_index").all(row.session_id).map((u) => u.body);
+  const rows = systemRows(db, row.session_id);
+  db.close();
+  expect(row.execution_status === 'completed', `the restarted run did not complete on the fallback: ${JSON.stringify(row)}`);
+  const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
+  expect(calls.length === 2 && calls[0].model === 'scripted/alpha' && calls[1].model === 'scripted-b/beta', `the 401 was not followed by one call on the fallback: ${JSON.stringify(calls)}`);
+  const pin = list.find((t) => t.name === 'model_override');
+  const meta = pin ? JSON.parse(pin.metadata) : null;
+  expect(meta !== null && meta.provider === 'scripted' && meta.model === 'alpha' && meta.model_key === 'beta' && meta.cause === 'authentication', `the fallback was not pinned keyed by the pair that failed: ${pin?.metadata}`);
+  expect(users.length === 2 && users[0] === users[1] && users[0] === 'bad key, then the fallback', `the run did not restart with the same prompt: ${JSON.stringify(users)}`);
+  expect(rows.some((b) => b.startsWith('Authentication failed on scripted/alpha') && b.includes('beta')), `no system row names the restart on the fallback: ${rows.join(' | ')}`);
+  const body = probes(r.log, 'probe').find((p) => p.selector === 'body')?.found[0];
+  const ack = body?.data['data-ack-seen'] ?? '';
+  expect(/Authentication failed on scripted\/alpha/.test(ack) && /scripted-b\/beta/.test(ack), `the acknowledgement did not name both models: ${JSON.stringify(ack)}`);
+  const notice = probes(r.log, 'probe').find((p) => p.selector === '.notice-slot')?.found[0];
+  expect(notice === undefined || !/The run failed/.test(notice.text), `the restarted run left a failure notice on screen: ${JSON.stringify(notice)}`);
+  results.authFallback = { status: row.execution_status, calls, pin: meta, acknowledgement: ack, users, png: r.png, elapsedMs: r.elapsedMs };
 });
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify({ ...results, failures }, null, 2)}\n`);

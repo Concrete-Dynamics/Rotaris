@@ -33,7 +33,7 @@ import { isActiveStatus } from './run/stop-conditions.js';
 import type { HookPort, HookPortContext, RunNotice, ToolHookBridge } from './hooks-port.js';
 import { ArtifactStore } from './artifacts/store.js';
 import { toArtifactRecord } from './artifacts/record.js';
-import { persistAttachments, projectAttachments, readAttachmentBody, validateAttachmentInputs } from './attachments.js';
+import { decodeStoredAttachments, persistAttachments, projectAttachments, readAttachmentBody, validateAttachmentInputs, type StoredAttachment } from './attachments.js';
 import { artifactOps, type ArtifactOps } from './artifacts/port.js';
 import type { Preflight, PreflightContext } from './preflight.js';
 import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentStatus } from '@rotaris/contracts';
@@ -622,6 +622,34 @@ export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt:
   ].join('\n');
 }
 
+
+/** REQ-NOTIFY-045 / REQ-NOTIFY-069: a session's last submitted prompt — its row, its text and the images sent with it. */
+export interface LastPrompt {
+  readonly index: number;
+  readonly text: string;
+  readonly attachments: readonly StoredAttachment[];
+}
+
+/**
+ * REQ-NOTIFY-045 / REQ-NOTIFY-069 / REQ-SESSION-192: the session's last submitted prompt, read over EVERY row — resident or
+ * released to a page — so a prompt more than `RESIDENT_ROW_CAP` rows back is still the session's. The one reading the
+ * continue, the plan decision and the authentication restarts share; null only where no
+ * prompt was ever submitted. Until 2026-10-02 each of them searched `residentRows` and, once the prompt had been released,
+ * fell back to the session id as the prompt's text (the continue, the plan decision) or to '' (the restarts) (`docs/defects/fixed/the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md`).
+ */
+export function lastSubmittedPrompt(dal: StoreDal, sessionId: SessionId): LastPrompt | null {
+  const row = dal.lastPromptRow(sessionId);
+  return row === undefined ? null : { index: row.row_index, text: row.body, attachments: decodeStoredAttachments(row.attachments) };
+}
+
+/**
+ * REQ-ORCH-004: the request a continuation, a plan decision or a relaunched decision carries as its "Latest user request"
+ * and labels its task with — the last submitted prompt's text. The session id stands in only for a session with no
+ * submitted prompt at all (a transcript cleared under REQ-CHAT-084), never for one whose prompt has been released.
+ */
+function latestRequestOf(dal: StoreDal, stored: SessionRow): string {
+  return lastSubmittedPrompt(dal, stored.session_id as SessionId)?.text ?? stored.session_id;
+}
 
 /** REQ-MONITOR-171: the run's duration as `m:ss` / `h:mm:ss`; empty before any run. */
 export function durationLabel(startedAt: string | null, until: string): string {
@@ -2207,7 +2235,7 @@ export class Sessions {
     // held unfinished): the undecided case of OQ-103's "Nothing open to resume".
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, opts.withoutPaused === true));
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
-    const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user')?.body ?? stored.session_id;
+    const lastPrompt = latestRequestOf(s.dal, stored);
     const todo = parseTodoDocument(stored);
     if (!todo.ok) return todo;
     const payload = buildContinuationPayload(s.dal, stored, lastPrompt, todo.value);
@@ -2256,7 +2284,7 @@ export class Sessions {
     const held = this.holdForContinue(s);
     if (!held.ok) return err(held.error);
     hold.release = held.value.release;
-    const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((r) => r.kind === 'user')?.body ?? stored.session_id;
+    const lastPrompt = latestRequestOf(s.dal, stored);
     const payload = `${buildContinuationPayload(s.dal, stored, lastPrompt, todo.value)}\n\n${planSection(decided.decision, decided.plan, decided.changes)}`;
     beginning();
     /*
@@ -2286,7 +2314,8 @@ export class Sessions {
    *
    * Main keeps the "first failure of the session" bookkeeping (`apps/desktop/src/main/auth-fallback.ts`); this answers for one restart.
    * The restart re-submits the prompt as `prompt` does, so the transcript shows it sent again; the last prompt's
-   * attachments are not re-sent (the row keeps only their metadata).
+   * attachments are not re-sent (OQ-182's reading), though `lastSubmittedPrompt` — the reading it shares with the continue,
+   * over released rows too — returns them.
    */
   restartOnFallback(sessionId: SessionId): Result<AuthFallbackRestart, { readonly code: string; readonly reason: string }> {
     const s = this.live.get(sessionId);
@@ -2294,7 +2323,7 @@ export class Sessions {
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
     const failed = s.run?.failedEntryModel ?? null;
     if (failed === null) return err({ code: 'no-model-failure', reason: 'The session\'s last run did not end on a model call failing.' });
-    const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user')?.body ?? '';
+    const lastPrompt = this.lastPromptOf(s, sessionId);
     if (lastPrompt.trim() === '') return err({ code: 'no-prompt', reason: 'No prompt is recorded for this session.' });
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
@@ -2394,9 +2423,13 @@ export class Sessions {
     return s.memory;
   }
 
-  /** The newest submitted prompt of the session — the one a restart re-submits (REQ-NOTIFY-070/074/076) — or '' when none is recorded. */
+  /**
+   * The text of the session's last submitted prompt — the one a restart re-submits (REQ-NOTIFY-070/074/076) — or '' when none
+   * is recorded (`lastSubmittedPrompt`, over released rows too). The restarts re-send the text alone (OQ-182's reading), so a
+   * prompt of images alone reads as none here and the restart is refused rather than sending an empty prompt.
+   */
   private lastPromptOf(s: Live, sessionId: SessionId): string {
-    return [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user' && row.body.trim() !== '')?.body ?? '';
+    return lastSubmittedPrompt(s.dal, sessionId)?.text ?? '';
   }
 
   /**
@@ -2580,7 +2613,7 @@ export class Sessions {
     if (!todo.ok) return todo;
     const resolved = s.writer.resolvePlanGate(cycle, decision, 'idle', decision === 'approve', null);
     if (!resolved.ok) return err({ code: resolved.error.code, reason: 'reason' in resolved.error ? resolved.error.reason : resolved.error.code });
-    const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((r) => r.kind === 'user')?.body ?? stored.session_id;
+    const lastPrompt = latestRequestOf(s.dal, stored);
     const payload = `${buildContinuationPayload(s.dal, s.dal.getSession(sessionId)!, lastPrompt, todo.value)}\n\n${planSection(decision, text, changes)}`;
     // REQ-ORCH-004 / REQ-ORCH-154 (OQ-104): a plan decision states no new top-level task — the held run's todo already
     // carries the gated work — so the relaunch appends none; appending the last request again would duplicate it. After

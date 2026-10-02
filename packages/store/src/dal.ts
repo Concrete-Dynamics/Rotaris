@@ -531,6 +531,9 @@ export class StoreDal {
         UPDATE transcript_rows SET page = ? WHERE rowid IN (
           SELECT rowid FROM transcript_rows WHERE session_id = ? AND page IS NULL ORDER BY row_index LIMIT ${RELEASE_PAGE_SIZE})`),
       residentRows: db.prepare('SELECT * FROM transcript_rows WHERE session_id = ? AND page IS NULL ORDER BY row_index'),
+      // REQ-NOTIFY-045/069, REQ-SESSION-192: the newest submitted prompt, resident or released — text, or images alone.
+      lastPromptRow: db.prepare(`SELECT * FROM transcript_rows WHERE session_id = ? AND kind = 'user'
+        AND (trim(body, char(32, 9, 10, 13)) <> '' OR attachments <> '[]') ORDER BY row_index DESC LIMIT 1`),
       rowsBefore: db.prepare('SELECT * FROM transcript_rows WHERE session_id = ? AND row_index < ? ORDER BY row_index DESC LIMIT ?'),
       minRowIndex: db.prepare('SELECT min(row_index) AS m FROM transcript_rows WHERE session_id = ?'),
       // Part AO — REQ-CHAT-084: every row of the session, whichever page holds it, in one statement.
@@ -1136,6 +1139,14 @@ export class StoreDal {
   }
   residentRows(id: SessionId): TranscriptRowRecord[] {
     return this.stmts['residentRows']!.all(id) as TranscriptRowRecord[];
+  }
+  /**
+   * REQ-NOTIFY-045 / REQ-NOTIFY-069 / REQ-SESSION-192: the session's last submitted prompt — its newest `user` row with
+   * text or images — served from whichever page holds it, so a prompt the resident window has released is still the
+   * session's. Undefined only where no prompt was ever submitted (or the transcript was cleared, REQ-CHAT-084).
+   */
+  lastPromptRow(id: SessionId): TranscriptRowRecord | undefined {
+    return this.stmts['lastPromptRow']!.get(id) as TranscriptRowRecord | undefined;
   }
   // Part AO
   /**

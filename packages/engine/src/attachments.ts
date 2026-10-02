@@ -9,7 +9,8 @@ export const MAX_ATTACHMENT_COUNT = 10;
 export const MAX_ATTACHMENTS_BYTES = 25 * 1024 * 1024;
 
 type MediaType = ImageAttachmentInput['mediaType'];
-type StoredAttachment = Omit<ImageAttachment, 'available' | 'unavailableReason'>;
+/** REQ-CHAT-046/173: what a user row and the snapshot keep of an image — its reference and digest, never its bytes. */
+export type StoredAttachment = Omit<ImageAttachment, 'available' | 'unavailableReason'>;
 
 export function imageMediaType(bytes: Uint8Array): MediaType | null {
   const ascii = (from: number, length: number) => String.fromCharCode(...bytes.slice(from, from + length));
@@ -95,3 +96,4 @@ export function readAttachmentBody(sessionDir: string, path: string, expectedDig
     return digest === expectedDigest ? { ok: true, base64: bytes.toString('base64') } : { ok: false, reason: 'Image content does not match its recorded digest.' };
   } catch { return { ok: false, reason: 'Image is no longer available.' }; }
 }
+

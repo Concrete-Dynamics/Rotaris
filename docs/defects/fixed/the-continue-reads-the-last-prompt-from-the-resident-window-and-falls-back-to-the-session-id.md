@@ -10,7 +10,7 @@ has been released, the search finds nothing, and the code falls back to `stored.
 (`lastPromptOf`, behind `restartAfterAuthFailure` and `authRecoveryFacts`'s `lastPrompt`) carry a third and fourth copy
 of the same search, falling back to `''`: the restart is then refused as "No prompt is recorded for this session." and
 the dialog says there is none, both untrue. The renderer's retry has its own copy over the replica's window
-([the-retry-action-reads-the-last-prompt-from-the-resident-window.md](the-retry-action-reads-the-last-prompt-from-the-resident-window.md)).
+([the-retry-action-reads-the-last-prompt-from-the-resident-window.md](../the-retry-action-reads-the-last-prompt-from-the-resident-window.md)).
 Noticed 2026-10-02 by the fourth triage of open defect notes, while reading that note's code; recorded before its repair.
 
 ## Specs
@@ -27,3 +27,20 @@ Noticed 2026-10-02 by the fourth triage of open defect notes, while reading that
   `stored.session_id`), `restartOnFallback` and `lastPromptOf` (fall back to `''`).
 - `packages/store/src/dal.ts`: `residentRows` (`page IS NULL`), the only reading those paths use.
 - `packages/store/src/schema.ts`: `RESIDENT_ROW_CAP`.
+
+## Outcome
+
+Repaired 2026-10-02 (fin8, bundle `fin8-focus-bound-recovery`). `StoreDal.lastPromptRow` reads the session's newest `user`
+row with text or images over every row, resident or released (`page` is not consulted), and
+`lastSubmittedPrompt` (`packages/engine/src/sessions.ts`) is the one engine reading built on it: the continue
+(`continueSessionHeld`), the plan decision (`planDecisionHeld`) and the relaunched decision (`relaunchPlanDecision`) take
+their "Latest user request" from it (`latestRequestOf`), and the authentication restart (`restartOnFallback`) and the
+recovery dialog's reading (`lastPromptOf`) take the text the restart re-sends from it. The session id stands in as the
+request only for a session with no submitted prompt at all, which a transcript cleared under REQ-CHAT-084 is; a released
+prompt never reaches that fallback. The restarts still re-send the text alone (OQ-182's reading), so a last prompt of
+images alone reads as none there and the restart is refused rather than sending an empty prompt.
+
+Pinned by `packages/engine/src/last-prompt.test.ts`: a session planted with its prompt and `RESIDENT_ROW_CAP + 10` rows
+after it, the prompt released to a page, is read back by `lastSubmittedPrompt` with its stored image, and continued with
+"Latest user request:" naming the prompt — on the code before the repair that test read `Latest user request:\nR7`, the
+session's id.

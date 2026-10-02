@@ -251,6 +251,15 @@ export class InitializationCoordinator {
    */
   private setupAbandon: ((detail: string) => void) | null = null;
   /**
+   * REQ-WORKSPACE-109/084: the latest status the run host pushed while this coordinator's start request was in flight,
+   * before any sink was installed for it. A setup whose every step ends without waiting (a documentation-only workspace
+   * whose runtime marker is present) runs to its end inside the run host's start, so its steps and its `finished` status
+   * can reach main before the start is answered; dropped, the follow waited for a `finished` push that had come and gone
+   * until `SETUP_FOLLOW_BOUND_MS` (`docs/defects/fixed/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`).
+   * `undefined` while no start is in flight, so a push no setup of this coordinator's is waiting for is still dropped.
+   */
+  private setupEarly: McpSetupStatus | null | undefined = undefined;
+  /**
    * REQ-WORKSPACE-109/084/013: the tail of the coordinator's setups, one at a time. A run's `code-intelligence-setup`
    * starts only once the setup before it has ended — after a workspace switch, the outgoing workspace's, still ending
    * under its cancellation. Before this, the replacement's start was refused as already running, or its follow took the
@@ -312,12 +321,17 @@ export class InitializationCoordinator {
           // host has exited — is this task's own retryable failure, not one that ended without an outcome
           // (`docs/defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`).
           let started: Awaited<ReturnType<SetupPort['start']>>;
+          let early: McpSetupStatus | null = null;
+          this.setupEarly = null;
           try {
             started = await this.deps.setup.start(workspaceId);
           } catch (cause) {
             const error = cause instanceof Error ? cause.message : String(cause);
             this.deps.log(`initialization: the run host did not answer ${CODE_INTELLIGENCE_TASK_ID}'s setup start for ${ctx.workspaceRoot} (${error})`, 'warn');
             return this.failure(`${SETUP_REASON}: ${SETUP_START_UNANSWERED_DETAIL} (${error})`, CODE_INTELLIGENCE_FAILED_SUMMARY, true, []);
+          } finally {
+            early = this.setupEarly ?? null;
+            this.setupEarly = undefined;
           }
           // REQ-WORKSPACE-093/094: a refused start is not REQ-WORKSPACE-094's "not a local launch" — that one arrives as an
           // `unavailable` status, which `resultOf` maps — but a condition that may not hold at the next open: retryable, in
@@ -327,7 +341,7 @@ export class InitializationCoordinator {
             this.deps.log(`initialization: the run host refused ${CODE_INTELLIGENCE_TASK_ID}'s setup start for ${ctx.workspaceRoot} (${started.code}: ${started.reason})`, 'warn');
             return this.failure(`${SETUP_REASON}: ${started.reason}`, CODE_INTELLIGENCE_FAILED_SUMMARY, true, []);
           }
-          return await this.followSetup(workspaceId, started.status, ctx.signal, ctx.onStep);
+          return await this.followSetup(workspaceId, started.status, early, ctx.signal, ctx.onStep);
         } finally {
           // The turn passes on only once the setup before this one has ended as well, however this one ended.
           void previous.then(() => { this.setupTurns -= 1; release(); });
@@ -354,7 +368,7 @@ export class InitializationCoordinator {
    * REQ-WORKSPACE-109: each step reported the moment it finishes. The status arrives on channel
    * `mcp.setupStatus`, which the run host pushes on every change — no cadence, SR-3.
    */
-  private followSetup(workspaceId: string, first: McpSetupStatus, signal: AbortSignal, onStep: (s: { name: string; status: string; detail: string }) => void): Promise<TaskResult> {
+  private followSetup(workspaceId: string, first: McpSetupStatus, early: McpSetupStatus | null, signal: AbortSignal, onStep: (s: { name: string; status: string; detail: string }) => void): Promise<TaskResult> {
     return new Promise<TaskResult>((resolve) => {
       const seen = new Map<string, string>();
       let ended = false;
@@ -402,6 +416,18 @@ export class InitializationCoordinator {
       this.setupAbandon = abandon;
       signal.addEventListener('abort', onAbort, { once: true });
       drain(first);
+      // REQ-WORKSPACE-109: what the run host pushed before its start was answered, after the answer — the setup's own
+      // only (the run host holds one setup at a time and stamps each with the moment it started), never a previous one's.
+      const ours = (s: McpSetupStatus | null): s is McpSetupStatus => s !== null && s.startedAt === first.startedAt;
+      if (ours(early)) drain(early);
+      // And where every step has ended while the state still reads `running`, the `finished` status is the run host's
+      // very next push, already sent or about to be: the status is asked for once, so a lost push does not hold the run
+      // to the bound below. A status read that fails or answers for another setup leaves the follow to the pushes.
+      if (!ended && last.state === 'running' && last.steps.length > 0 && last.steps.every((s) => s.status !== 'pending' && s.status !== 'running')) {
+        this.deps.setup.status(workspaceId).then((s) => { if (ours(s)) drain(s); }, (cause: unknown) => {
+          this.deps.log(`initialization: the setup's status could not be read once its steps had ended (${String(cause)}); its finished status is awaited`, 'warn');
+        });
+      }
       // REQ-WORKSPACE-091/092: a lost push must not hold every later setup behind this one for the life of the process.
       if (!ended) {
         overdue = this.deps.clocks.timers.after(millis(SETUP_FOLLOW_BOUND_MS), () => {
@@ -458,7 +484,8 @@ export class InitializationCoordinator {
 
   /** The run host pushes here; main routes it in. */
   onSetupStatus(status: McpSetupStatus): void {
-    this.setupListener?.(status);
+    if (this.setupListener !== null) this.setupListener(status);
+    else if (this.setupEarly !== undefined) this.setupEarly = status;
   }
 
   /**

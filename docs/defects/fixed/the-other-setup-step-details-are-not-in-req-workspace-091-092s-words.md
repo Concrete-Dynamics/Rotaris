@@ -69,5 +69,5 @@ ADR-0064's fifteenth round reports it.
 
 **Found while showing it, recorded separately:** a documentation-only project carrying the marker never finishes its run,
 since every step ends without waiting and the coordinator's follow misses the `finished` status
-([`a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`](../a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md),
+([`a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`](a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md),
 not repaired here); 8g's marker project holds a source file for that reason.

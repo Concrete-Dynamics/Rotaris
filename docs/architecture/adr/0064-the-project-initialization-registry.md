@@ -499,5 +499,21 @@ and the error, the run host's log lines keeping its own words (50 passed, 0 fail
 `--skip-build` after `pnpm build`, load average about 6 from other agents). Not run on a build of the code before.
 **Found besides:** in a documentation-only project carrying the marker every step ends without waiting, and the follow
 never saw that setup finish — its run still under way 30 s later, as it would be until the 2235 s bound
-(`../../defects/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`, recorded, not repaired;
+(`../../defects/fixed/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`, recorded, not repaired;
 8g's marker project holds a source file so that its steps wait).
+
+**Sixteenth round (2026-10-02): a setup that finishes before its start is answered.** The eleventh round's "pushed, not
+polled" assumed the sink is installed before the first push it must take. It is installed once main's start request
+answers, and a setup whose every step ends without waiting (a documentation-only project carrying the runtime's marker)
+runs to its end inside the run host's start: its three step pushes and its `finished` push reach main ahead of the
+answer, which still reads `running` with every step ended. All four were dropped, and the follow waited until the 2235 s
+bound (`../../defects/fixed/a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`). The
+coordinator now keeps the latest status pushed while its own start is in flight (`setupEarly`) and drains it after the
+answer, and either is taken only when it is this setup's by `startedAt`. Where the drained status has every step ended
+and still reads `running`, it asks the run host's status once, the one poll this record admits, for the one status that
+must already have been sent. **Measured** by three cases in `initialization.test.ts` (two red on the code before), and by
+`workspace-proof`'s scenario 8g, which gained the note's documentation-only marker project: on the unrepaired build its
+run had not ended 18.2 s after the launch, and on the repair it ended 2.9 s after the launch as `success`, with the three
+steps and the non-code summary (51 passed, 0 failed, 2 skipped; as root under Xvfb, Node 24, `--skip-build` after
+`pnpm build`, load average 10 to 13 from other agents). OQ-169's bound and its readings are unchanged.
+

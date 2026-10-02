@@ -100,8 +100,9 @@ export function installPromptSeam(host: CaptureHost, prompt: string, resuming: b
  * `ROTARIS_CAPTURE_AFTER_MS` lets a verification run wait for the run loop to finish before the capture.
  * `ROTARIS_CAPTURE_WAIT=file:<path>|result|js:<expression>`, bounded by `ROTARIS_CAPTURE_WAIT_MS`: the
  * AFTER timer starts only once the file exists, the first terminal result was presented, or the
- * expression answers truthy — how the slice proof waits for a pasted key and for a real run, and how the
- * board scenario waits for the accept it pressed to land rather than for a clock. Without it a scenario
+ * expression answers truthy — how the slice proof waits for the credential file (the stored key it filled, or
+ * one the owner pasted) and for a real run, and how the board scenario waits for the accept it pressed to
+ * land rather than for a clock. Without it a scenario
  * whose work is state-driven still costs its whole deadline.
  *
  * `ROTARIS_CAPTURE_END_VIEW=<n>`: open view n (Ctrl+n) once the wait is over and before the capture, so a

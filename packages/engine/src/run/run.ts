@@ -510,6 +510,14 @@ export class Run {
    */
   private takenUp: { readonly text: string; readonly message: boolean } | null = null;
   private appliedEntryModel: ModelRef | null = null;
+  /**
+   * REQ-MONITOR-142 (OQ-176): the user's entry switch not yet applied to the root's cell, which `rootResilience` applies
+   * at the next iteration's turn. A model switch rebuilds the cell on the chosen model even when it names the model
+   * already requested, because the ladder may have moved the cell off it (REQ-ORCH-090, REQ-ORCH-091 b); a reasoning
+   * switch sets the level on whatever model the cell has. Without it the cell was rebuilt only when the requested model
+   * changed, so a switch back onto the configured key, and every reasoning switch, appended a row that was untrue.
+   */
+  private pendingEntrySwitch: 'model' | 'reasoning' | null = null;
 
   constructor(private readonly deps: RunDeps) {
     this.sessionId = deps.sessionId;
@@ -1276,19 +1284,28 @@ export class Run {
     return { cell, memory: this.memory, catalogue: this.catalogue, waits: this.waits, transientRetries: config.transientRetries, validationRetries: config.validationRetries, llmResponseTimeoutMs: config.llmResponseTimeoutMs, unresponsiveBoundMs, resting: () => this.restCause !== null };
   }
 
-  /** The root's cell lives for the run; the entry model (and a mid-run switch of it) enters through the session memory. */
+  /**
+   * The root's cell lives for the run; the entry model (and a mid-run switch of it) enters through the session memory.
+   * Called once per root turn — an iteration, or the plan cycle — so a switch made while it runs reaches the next one
+   * (REQ-MONITOR-142: "the iteration already in flight finishes on the previous setting").
+   */
   private rootResilience(): TurnResilience {
     const { config } = this.deps;
     const entryModel = this.entryOverride.model ?? config.model;
-    if (this.rootCell === null || this.appliedEntryModel === null || !sameRef(this.appliedEntryModel, entryModel)) {
-      const base = withSettings(this.catalogue, { model: entryModel, thinking: this.entryOverride.thinking ?? config.thinking });
+    const thinking = this.entryOverride.thinking ?? config.thinking;
+    if (this.rootCell === null || this.appliedEntryModel === null || !sameRef(this.appliedEntryModel, entryModel) || this.pendingEntrySwitch === 'model') {
+      const base = withSettings(this.catalogue, { model: entryModel, thinking });
       const current = this.memory.effective(base, this.catalogue);
       const persona = this.deps.personas?.resolve(config.persona)?.persona;
       const previous = this.rootCell;
       this.rootCell = agentCell(current, this.fallbackFor(persona, current));
       if (previous) { this.rootCell.fallbackAttempted = previous.fallbackAttempted; this.rootCell.sameTierAttempted = previous.sameTierAttempted; for (const p of previous.attempted) this.rootCell.attempted.add(p); }
       this.appliedEntryModel = entryModel;
+    } else if (this.pendingEntrySwitch === 'reasoning') {
+      // OQ-176: a reasoning switch is not a model switch — a move the ladder made stands, at the level the user chose.
+      this.rootCell.model = { ...this.rootCell.model, thinking };
     }
+    this.pendingEntrySwitch = null;
     return this.resilienceFor(this.rootCell, config.modelTimeoutMs);
   }
 
@@ -1387,7 +1404,10 @@ export class Run {
     // The launch content goes to a fresh root's first call only; a resumed root carries on from its record.
     let launching = resume === undefined;
     let initial = true;
-    const compression = this.compressionFor(this.rootResilience().cell.model, () => this.plannerTodoLines());
+    // REQ-MONITOR-142: the root's ladder for this whole turn, the resumes after its children included — a switch made
+    // while it runs applies from the next iteration, not at this iteration's next resume.
+    const rootResilience = this.rootResilience();
+    const compression = this.compressionFor(rootResilience.cell.model, () => this.plannerTodoLines());
     // PD-ORCH-005 revision 4 clause 14: one check per execution of the root, at its first model step.
     const fingerprint = this.record.fingerprint(rootTaskId, rootCanonical, iteration);
     /** REQ-SESSION-092: the stop's grace ran out before the root's turn returned, and the run went on without it. */
@@ -1438,7 +1458,7 @@ export class Run {
       steering: refreshing(this.steeringFor('root'), () => rootWatch.activity()), shouldPause: () => this.pauseRequested,
       // PD-ORCH-005: the pause's tool deadline, and what the root's interrupted calls are recorded as interrupted by.
       cutCalls: this.toolCut.signal, interruption: () => this.restCause,
-      resilience: this.rootResilience(),
+      resilience: rootResilience,
       // Part AH: the entry agent compresses against its own model's capacity, carrying the run-level plan.
       ...(compression ? { compression } : {}),
       // REQ-ORCH-093: after the first call this turn resumes the parent with its children's reports. A resumed root's
@@ -1902,7 +1922,14 @@ export class Run {
       return true;
     }
     this.entryOverride = { ...this.entryOverride, model: resolved.choice.model };
-    writer.appendRow('system', `Entry model switched to ${key}; it applies from the next iteration.`, true);
+    this.pendingEntrySwitch = 'model';
+    // OQ-176: the switch applies over a ladder move; a change-model resolution persisted for the pair (REQ-ORCH-091 d)
+    // stands for the rest of the session, and then the row says where the entry agent runs instead.
+    const kept = this.memory.overrideReaching(withSettings(this.catalogue, resolved.choice), this.catalogue);
+    const pair = `${providerIdentity(this.catalogue, resolved.choice.model)}/${resolved.choice.model.modelId}`;
+    writer.appendRow('system', kept === null
+      ? `Entry model switched to ${key}; it applies from the next iteration.`
+      : `Entry model switched to ${key}, but ${kept.key}, chosen for ${pair} during an earlier wait, stands for the rest of the session: the entry agent runs on ${kept.key} from the next iteration.`, true);
     writer.appendTimeline('entry_model_switched', 'user', `The entry model switched to ${key}.`, { model: key });
     return true;
   }
@@ -1915,6 +1942,7 @@ export class Run {
   setEntryReasoning(level: ThinkingLevel): boolean {
     if (this.ended) return false;
     this.entryOverride = { ...this.entryOverride, thinking: level };
+    if (this.pendingEntrySwitch !== 'model') this.pendingEntrySwitch = 'reasoning';
     this.deps.writer.appendRow('system', `Entry reasoning level switched to ${level}; it applies from the next iteration.`, true);
     this.deps.writer.appendTimeline('entry_reasoning_switched', 'user', `The entry reasoning level switched to ${level}.`, { level });
     return true;

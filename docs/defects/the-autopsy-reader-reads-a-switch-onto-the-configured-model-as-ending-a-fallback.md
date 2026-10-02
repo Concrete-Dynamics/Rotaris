@@ -12,6 +12,15 @@ certainty. No 2026-10-01 store holds such a switch after a fallback. Noticed whi
 (fin3, repair round 1); the reading is pinned as it stands by the moves table in
 `apps/desktop/scripts/lib/autopsy-entry-model.test.ts` ("a switch ends the root's move …"), so a repair changes that row.
 
+**Overtaken by the run, 2026-10-02 (not repaired in the reader).** The run's side of this note changed under OQ-176
+([an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md](fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md)):
+a user's switch of the entry model now rebuilds the root's cell on the chosen model at the next iteration even when it
+names the model already configured, so a switch after a ladder move does end the move, as the reader reads it. The
+reader and its pinned row (`autopsy-entry-model.test.ts`, "a switch ends the root's move …", whose parenthetical now says
+the run rebuilds) are unchanged and now agree with the run; what remains is a switch onto a pair a change-model
+resolution moved, which the reader follows through its `model_override` chain as the run does. Whether this note is closed
+is left to the plan that owns it; the bundle that changed the run did not repair the reader.
+
 ## Specs
 
 - None; harness reader. The run's behaviour is REQ-MONITOR-142's switch "from the next iteration" over the ladder of

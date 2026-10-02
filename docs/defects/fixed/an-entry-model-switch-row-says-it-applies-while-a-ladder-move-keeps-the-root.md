@@ -22,7 +22,7 @@ The same comparison makes three more rows of the same family untrue, confirmed b
   applies.
 
 Whether a user's switch onto the configured model ends a REQ-ORCH-090/091 b move is a question the specification leaves
-open: [OQ-176](../architecture/open-questions.md).
+open: [OQ-176](../../architecture/open-questions.md).
 
 ## Specs
 
@@ -38,3 +38,25 @@ open: [OQ-176](../architecture/open-questions.md).
 - `packages/engine/src/run/resilience.ts` — `ResilienceMemory.effective`, the override chain a rebuilt cell follows.
 - `packages/engine/src/run/ladder.ts` — the moves (`cell.model = …`) the cell carries.
 - `packages/engine/src/run/ladder.test.ts` — the reproduction.
+
+## Outcome
+
+Repaired 2026-10-02 on `fin5-noticed-gaps`, under OQ-176's reading (the question stays open for the owner; the row is
+true under either answer, because it now says what the next iteration runs on).
+
+- `Run.rootResilience` rebuilds the root's cell when a user's model switch is pending (`pendingEntrySwitch`), not only
+  when the requested model changed, so a switch onto the configured key ends a REQ-ORCH-090 or REQ-ORCH-091 b move; the
+  cell's once-per-agent budgets carry over. A reasoning switch sets the level on the model the cell has, so a move
+  stands under it.
+- `Run.turn` reads the root's ladder once per root turn and hands that one to every call of the turn function, so the
+  iteration in flight, its resumes after its children included, finishes on the setting it had.
+- `Run.setEntryModel` asks the session memory whether a change-model resolution moved the chosen pair
+  (`ResilienceMemory.overrideReaching`); when one did, the row names the model the entry agent runs on instead of saying
+  the switch applies.
+
+Pinned by `packages/engine/src/run/ladder.test.ts`'s `OQ-176` block, five tests that each failed before the repair (the
+requests went to `b1`, `f1`, the old reasoning level, `c1` within the iteration, and the row said "it applies"). Shown in
+the built app by `resilience-proof`'s new `switch-back` scenario: a 429 moves the root from alpha to beta, the user
+switches back to alpha from the run header and queues a follow-up, and iteration 2 runs on alpha under the row
+"Entry model switched to alpha; it applies from the next iteration." Against the build before the repair the same
+scenario failed with the calls alpha, beta, beta; after it all twelve scenarios pass.

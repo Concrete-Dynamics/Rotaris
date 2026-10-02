@@ -8744,3 +8744,40 @@ run host's final sentence there, REQ-MCP-112's words in this domain's error, the
 removed from every other detail. It also decides whether "the last 400 bytes of its combined standard output and standard
 error" are counted on the output as written or, as built, on the output trimmed of its leading and trailing blank space:
 the two differ for output that ends in blank lines, and for a tail whose first characters are blank.
+
+**OQ-176 — Does a user's switch of the entry model onto the model the run was configured with end a move the ladder made?**
+*(REQ-MONITOR-142, "A switch of the run's entry model … applies from the next iteration onward"; REQ-ORCH-090, the role's
+fallback "tried once per child by rebuilding the agent and transparently re-running"; REQ-ORCH-091 (b), "at most one
+same-tier automatic model fallback per child", and (d), a manual model change "persists the override in session state for
+the rest of the session"; REQ-MONITOR-194, a pair chosen explicitly is "eligible again". Raised 2026-10-02 by the repair of
+[`an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md`](../defects/fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md).
+Open.)*
+
+After the ladder moves the entry agent off its configured model — to the role's fallback when the model is unresponsive
+(REQ-ORCH-090), or to a same-tier model on another provider after a rate-limit or quota response (REQ-ORCH-091 b) — the
+user can switch the entry model to the configured key from the run header or the inspector. The specification says a
+switch applies from the next iteration and says nothing of a switch that names the model the run already asked for, which
+only the ladder's move makes a change. Read as a switch, it ends the move: the user chose that model. Read as no change,
+the move stands, since nothing the user asked for differs from what the run was asked to use. The same question arises
+for a switch onto a pair a change-model resolution moved during an earlier wait (REQ-ORCH-091 d), whose override the
+requirement keeps "for the rest of the session", and REQ-MONITOR-194, which lets an explicit choice of an excluded pair
+make it eligible again, bears on it without settling it.
+
+**What the build proceeds under** (`packages/engine/src/run/run.ts`, `rootResilience`, `setEntryModel`,
+`setEntryReasoning`; `ResilienceMemory.overrideReaching`): a switch is the user's choice and applies. From the next
+iteration the root's cell is rebuilt on the chosen model, ending a REQ-ORCH-090 or REQ-ORCH-091 b move, whether or not the
+key names the model already requested; the cell's once-per-agent budgets (the one unresponsive fallback, the one same-tier
+fallback, the pairs already attempted) carry over, so the ladder does not move the agent automatically more often than the
+requirements allow. A reasoning switch is not a model switch: the move stands and the level changes on the model the cell
+has. A change-model resolution's override (REQ-ORCH-091 d) is left standing for the rest of the session, as the
+requirement says, so a switch onto the pair it moved runs on the override's model, and the row says so in place of "it
+applies from the next iteration": "Entry model switched to X, but Y, chosen for P/M during an earlier wait, stands for the
+rest of the session: the entry agent runs on Y from the next iteration." The iteration in flight finishes on the setting
+it had: the root's ladder is read once per root turn, so a root resumed after its children in the same iteration is not
+moved by a switch made meanwhile. The exclusion of an exhausted pair is not touched by a switch (whether an explicit choice
+clears it is REQ-MONITOR-194's, recorded in
+[`an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md`](../defects/an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md)).
+
+**What a ruling decides.** Whether a switch onto the configured key ends a ladder move (as built) or leaves it in force —
+and, if it leaves it, what the row says; whether a later switch onto a pair an override moved supersedes that override for
+the entry agent, or the override stands (as built) and only the row says so.

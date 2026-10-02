@@ -1125,6 +1125,11 @@ and every launch fails if the setup started in the background anyway, so a bundl
 finish" no longer stands in the one notice slot `cancel` and `fatal` read; `fatal` asserts the 401's own notice (its
 failure text as detail) rather than only "not a provider limit"
 ([note](../defects/fixed/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md)).
+Since 2026-10-02 a `switch-back` scenario follows the same-tier move with a switch of the entry model back to the
+configured key from the run header, and a follow-up queued beside it: iteration 2 runs on the configured model, as the
+switch's REQ-MONITOR-142 row says (OQ-176;
+[note](../defects/fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md)); and
+`--only=<name>[,<name>…]` runs the named scenarios alone.
 
 **A probe is a deadline, not an appointment (2026-09-12).** Three of this proof's assertions were mid-run DOM probes
 fired at a fixed instant — `.wait-header@1700` — and they failed intermittently on a busy machine with nothing wrong

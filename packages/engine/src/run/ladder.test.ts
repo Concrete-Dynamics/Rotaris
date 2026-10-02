@@ -835,4 +835,108 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     await t.sessions.running(sid2)!;
     expect(t.client.requests[0]).toMatchObject({ timeoutMs: RUN_CONFIG_DEFAULTS.modelTimeoutMs, retries: RUN_CONFIG_DEFAULTS.modelRetries });
   });
+
+  /*
+   * REQ-MONITOR-142 over REQ-ORCH-090/091 (OQ-176): the row a switch appends says what the entry agent runs on from the
+   * next iteration, whatever the ladder did before it — and the iteration in flight finishes on the setting it had.
+   */
+  describe('REQ-MONITOR-142 with REQ-ORCH-090/091 (OQ-176): an entry switch row is what the next iteration runs on', () => {
+    const systemRows = (sid: SessionId) => dal.residentRows(sid).filter((r) => r.kind === 'system').map((r) => r.body);
+    const isRoot = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => /^You are the orchestrator/.test(r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '');
+    const rootModels = (client: ScriptedModelClient) => client.requests.filter(isRoot).map((r) => r.model.modelId);
+    const held = () => { let open!: () => void; const p = new Promise<void>((r) => { open = r; }); return { p, open }; };
+    const addTask = (sessions: Sessions, sid: SessionId) => expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', id: 'second', text: 'a second task' } })).toEqual({ ok: true });
+
+    it('a switch back to the configured key after a same-tier move rebuilds the root on it at the next iteration, as its row says (REQ-ORCH-091 b)', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+      const gate = held();
+      const { sessions, client } = sessionsWith((p, turn) => (p !== 'orchestrator' ? answer('{"summary":"done"}') : turn === 1 ? failing(rateLimit(1)) : turn === 2 ? hanging(gate.p) : answer(`iteration ${turn}`)), { catalogue });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      expect(rootModels(client)).toEqual(['a1', 'b1']);
+      addTask(sessions, sid);
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+      gate.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(dal.iterationsOf(sid)).toHaveLength(2);
+      expect(rootModels(client)).toEqual(['a1', 'b1', 'a1']);
+      expect(systemRows(sid)).toContain('Entry model switched to a1; it applies from the next iteration.');
+    });
+
+    it('a switch back to the configured key after an unresponsive-model fallback rebuilds the root on it at the next iteration (REQ-ORCH-090)', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+      const gate = held();
+      const { sessions, client } = sessionsWith((p, turn) => (p !== 'orchestrator' ? answer('{"summary":"done"}') : turn === 1 ? hanging(NEVER) : turn === 2 ? hanging(gate.p) : answer(`iteration ${turn}`)), { catalogue, fallbackModel: { model: F1, thinking: 'unset' }, llmResponseTimeoutMs: 30_000 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      clock.advance(30_000);
+      await tick();
+      expect(rootModels(client)).toEqual(['a1', 'f1']);
+      addTask(sessions, sid);
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+      gate.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(rootModels(client)).toEqual(['a1', 'f1', 'a1']);
+      expect(systemRows(sid)).toContain('Entry model switched to a1; it applies from the next iteration.');
+    });
+
+    it('a reasoning switch reaches the next iteration\'s requests, on the model the root has, and the row says so', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+      const gate = held();
+      const { sessions, client } = sessionsWith((p, turn) => (p !== 'orchestrator' ? answer('{"summary":"done"}') : turn === 1 ? failing(rateLimit(1)) : turn === 2 ? hanging(gate.p) : answer(`iteration ${turn}`)), { catalogue });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      addTask(sessions, sid);
+      expect(sessions.control({ op: 'setReasoning', sessionId: sid, args: { level: 'high' } })).toEqual({ ok: true });
+      gate.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // A reasoning switch is not a model switch: the same-tier move stands, and only the level changes.
+      expect(client.requests.filter(isRoot).map((r) => [r.model.modelId, r.thinking])).toEqual([['a1', 'unset'], ['b1', 'unset'], ['b1', 'high']]);
+      expect(systemRows(sid)).toContain('Entry reasoning level switched to high; it applies from the next iteration.');
+    });
+
+    it('the iteration in flight finishes on the model it had: a root resumed after its child in the same iteration is not moved by a switch', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+      const gate = held();
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: be slow' } }]) : answer(`root ${turn}`);
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        return turn === 1 ? hanging(gate.p) : answer('I did it.');
+      };
+      const { sessions, client } = sessionsWith(script, { catalogue, delegation: true });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      expect(dal.childrenOf(sid)[0]!.state).toBe('running');
+      addTask(sessions, sid);
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+      gate.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(dal.iterationsOf(sid)).toHaveLength(2);
+      // Iteration 1's root (its first call, its call after the delegation, its resume with the child's report) on a1;
+      // iteration 2's root on c1.
+      const roots = client.requests.filter(isRoot);
+      expect(roots.map((r) => r.model.modelId)).toEqual(['a1', 'a1', 'a1', 'c1']);
+      expect(JSON.stringify(roots[2]!.messages.at(-1))).toContain('[Background task completed]');
+    });
+
+    it('a switch onto a pair an earlier wait moved for the rest of the session says the entry agent stays on that choice (REQ-ORCH-091 d)', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+      const gate = held();
+      const { sessions, client, pub } = sessionsWith((p, turn) => (p !== 'orchestrator' ? answer('{"summary":"done"}') : turn === 1 ? failing(quota()) : turn === 2 ? hanging(gate.p) : answer(`iteration ${turn}`)), { catalogue });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1' });
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+      await tick();
+      expect(rootModels(client)).toEqual(['a1', 'c1']);
+      addTask(sessions, sid);
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+      gate.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(rootModels(client)).toEqual(['a1', 'c1', 'c1']);
+      const row = systemRows(sid).find((b) => b.startsWith('Entry model switched to a1'))!;
+      expect(row).toBe('Entry model switched to a1, but c1, chosen for a/a1 during an earlier wait, stands for the rest of the session: the entry agent runs on c1 from the next iteration.');
+      expect(row).not.toContain('it applies from the next iteration');
+    });
+  });
 });

@@ -218,10 +218,10 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * - `llm_unresponsive` (REQ-ORCH-090): the role's fallback, recorded as a `provider|model` pair with no key, so the key
  *   is the one `models:` key of the snapshot in force that resolves to that pair, and the pair itself
  *   (`provider/model`) when none does or more than one does.
- * A child's move leaves the root where it is. One reading is knowingly coarse: a switch to a key resolving to the very
- * model already configured does not rebuild the root's cell in the run (`sameRef`), so a fallback in force then stands,
- * while this reads the switch as ending it; the snapshot records `provider|model` pairs, not the reference the run
- * compares. A second is coarse the same way: a switch is held on its run alone (`entryOverride`; a continuation is a new
+ * A child's move leaves the root where it is. A switch ends a move, even onto the very model already configured: the
+ * run rebuilds the root's cell on every switch since OQ-176. (Until 2026-10-02 this reading was knowingly coarse: the
+ * run rebuilt the cell only when the requested model changed (`sameRef`), so a fallback in force then stood while this
+ * read the switch as ending it.) One reading is coarse: a switch is held on its run alone (`entryOverride`; a continuation is a new
  * `Run`), so a later continuation recording no snapshot starts on its configuration's model, while this keeps the
  * switched key as the configured one. Only snapshot-less runs reach it. The children are keyed by canonical name, which
  * is unique only per parent and iteration (REQ-ORCH-044); two children sharing one read as one

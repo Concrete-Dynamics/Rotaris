@@ -257,7 +257,13 @@
 .transcript { overflow: hidden; padding: var(--rt-space-4, 16px) var(--rt-space-5, 24px); display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); }
 .transcript__pane { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); flex: 1 1 auto; min-height: 0; }
 /* REQ-CHAT-070: the border treatment present while following the tail and absent while not. */
-.transcript__scroll { position: relative; overflow: auto; flex: 1 1 auto; min-height: 0; border: var(--rt-hairline-width) solid transparent; border-radius: var(--rt-radius-md, 6px); }
+/* ADR-0045 (heights are measured): the scrollbar's gutter is held whether or not the transcript overflows, so a scrollbar
+   appearing never narrows the rows. It appeared inside the measurement observer's synchronous render when a measured
+   height first carried the pool past the viewport; every slot narrowed by the bar's 6 px in that delivery, the browser
+   deferred their sizes ("ResizeObserver loop completed with undelivered notifications"), and every bound row was re-keyed
+   under the new width (docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md).
+   The track is transparent (`base.css`), so the held gutter draws nothing. */
+.transcript__scroll { position: relative; overflow: auto; scrollbar-gutter: stable; flex: 1 1 auto; min-height: 0; border: var(--rt-hairline-width) solid transparent; border-radius: var(--rt-radius-md, 6px); }
 .transcript__scroll.is-following { border-color: var(--rt-accent-tint-14); }
 /* UIR-007: an empty state is sized to its MESSAGE, not to the region it sits in. Overview's measured
    1236 x 636 — 84 % of the view's height — around three lines and one button, with the 32 px dot grid

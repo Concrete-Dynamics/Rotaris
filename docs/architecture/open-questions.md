@@ -8756,6 +8756,31 @@ removed from every other detail. It also decides whether "the last 400 bytes of 
 error" are counted on the output as written or, as built, on the output trimmed of its leading and trailing blank space:
 the two differ for output that ends in blank lines, and for a tail whose first characters are blank.
 
+**OQ-176 — Does REQ-SHELL-166's 100 ms echo hold on a host whose CPUs other processes oversubscribe?** *(REQ-SHELL-166,
+echo latency "within the 100 ms gesture budget of REQ-SHELL-150, measured from the key press to the frame that shows it";
+REQ-SHELL-150, whose "sustained load" is a burst of changes in the shell, "a build that misses any of the three under
+sustained load fails this requirement". Raised 2026-10-01 while repairing (measured that day; first committed 2026-10-02)
+[`terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md`](../defects/fixed/terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md)
+under R-062. Open.)*
+
+`pnpm terminal-proof`'s `live.echoUnder100ms` was run 120 times on 2026-10-01, with busy loops pinned beside the proof on
+one or two of the host's four CPUs and another plan's agents on the host. It went red in 10 runs, at load averages 9.1 to
+13.6. Each time one keystroke of three missed the bound (100 to 144 ms), and the other two passed at 18 to 93 ms. The time
+went into the run host's frame (key to frame up to 130 ms) or into waiting for the frame to paint. Where it was recorded,
+the key had waited in the renderer's queue for at most 11 ms. With no busy loops beside it, the same probe read key to
+paint at 20 to 30 ms. The requirement's load is the shell's own (a burst of changes), and REQ-SHELL-166 states no host
+condition; neither says whether the bound applies when other processes keep the CPUs busier than the product can be.
+
+**What the build proceeds under.** The bound is kept as stated and is not relaxed for load. The proof records the host's
+load average and CPU count beside the reading (`results.live.echoLoad`) and how long the key waited in the renderer's queue
+(`queuedMs`). Since 2026-10-02 the reading starts at the key event's own time stamp, so that wait is inside the bound
+(`from: 'event'`); until then it started when the page's listener ran and the wait was recorded beside it. A red taken at a load average above the CPU count is run again alone, as the host's own rule says
+(`.agents/skills/orchestrated-build/references/environment.md`, "Load"). A red alone is the product's.
+
+**What a ruling decides.** Whether the 100 ms applies on any host the product runs on, whatever else that host runs;
+or on a host whose CPUs are not oversubscribed, so a red under a load above the CPU count is evidence about the host; or
+on a stated reference host and load.
+
 **OQ-177 — Does a user's switch of the entry model onto the model the run was configured with end a move the ladder made?**
 *(REQ-MONITOR-142, "A switch of the run's entry model … applies from the next iteration onward"; REQ-ORCH-090, the role's
 fallback "tried once per child by rebuilding the agent and transparently re-running"; REQ-ORCH-091 (b), "at most one

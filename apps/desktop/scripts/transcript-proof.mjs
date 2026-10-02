@@ -96,6 +96,12 @@ async function launch(name, extra, timeoutMs = 240_000, electronArgs = []) {
   });
   const log = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   writeFileSync(join(output, `${name}.log`), log);
+  // ADR-0045's measurement observer: a delivery whose render leaves an observation at the depth just delivered makes the
+  // browser defer it and report a ResizeObserver loop in the renderer console, which every launch's log carries
+  // (docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md). Collected
+  // here and enforced after the last launch, so a red run keeps every stage's evidence.
+  const loops = log.split('\n').filter((line) => line.includes('ResizeObserver loop'));
+  if (loops.length > 0) resizeObserverLoops.push({ launch: name, lines: loops.length, first: loops[0].trim().slice(0, 300) });
   if (result.overran) throw new Error(`${overrunMessage(name, result, log)}\n(see ${name}.log)`);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'} (see ${name}.log)`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
@@ -158,6 +164,9 @@ git('-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'first');
 const dbFile = () => { const databases = findDatabases(local); if (databases.length !== 1) throw new Error(`expected one workspace database below ${local}; found ${databases.length}`); return databases[0]; };
 const withDb = (fn) => { const db = new Database(dbFile()); try { return fn(db); } finally { db.close(); } };
 const results = {};
+/** Every launch whose renderer console reported a ResizeObserver loop (enforced at the end). */
+const resizeObserverLoops = [];
+results.resizeObserverLoops = resizeObserverLoops;
 
 // ── 1. empty ────────────────────────────────────────────────────────────────────────────────────────────────
 // REQ-CHAT-073's empty state, word for word, and ADR-0045's structural counts with nothing in the transcript.
@@ -827,6 +836,9 @@ const loadedTraced = await appendRun('append-loaded-traced', 'S1200', loadedTrac
 }
 }
 
+// After every stage, so a run that reports a loop keeps all of its evidence on disk.
+writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
+expect(resizeObserverLoops.length === 0, `the renderer console reported a ResizeObserver loop in ${resizeObserverLoops.length} launch(es): ${JSON.stringify(resizeObserverLoops)}`);
 results.verdict = `${only === null ? 'PASSED' : `PASSED (only: empty, ${only.join(', ')})`}${results.capacity?.notAsked ? ` — stage 3c capacity NOT ASKED: ${results.capacity.notAsked}` : ''}`;
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
 console.log(`transcript proof ${results.verdict} — evidence under ${relative(repo, output)}`);

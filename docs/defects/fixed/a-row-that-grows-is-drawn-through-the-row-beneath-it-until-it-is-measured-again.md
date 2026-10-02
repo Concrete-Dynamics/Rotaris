@@ -110,7 +110,7 @@ moved earlier. For a row the commit already measured the delivery changes nothin
 appends are not charged it. A render inside a delivery that rebinds or re-observes a slot leaves that slot's size to the
 next frame and Chromium writes "ResizeObserver loop completed with undelivered notifications" to the renderer console:
 once in the whole proof's eleven launches, in the geometry launch as its session was first drawn. Recorded in
-[`../the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`](../the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md).
+[`the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`](the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md).
 
 **Not shown:** a streaming message growing by a chunk at the tail in the built app (the unit test covers the mechanism it
 shares; no proof drives a chunked stream with a row beneath it), Windows or macOS, and a live run.

@@ -8336,9 +8336,12 @@ end. Only the stop (`op: 'cancel'`) writes `cancelling`, and a stop is not a can
   `running` throughout.* The word it now draws is a reading: the run-level agent is the run (REQ-MONITOR-043), so while it
   is live and the shown session reads `cancelling` its state label and tab tooltip read the run's status, `cancelling`,
   REQ-NOTIFY-048's member, rather than a word minted for the agent vocabulary (`agentStateLabel`); its dot keeps the live
-  `running` motion (REQ-SHELL-075 (a): it pulses while the instance is live). A child keeps the agent vocabulary. The
-  inspector's meta line does not read it yet
-  ([`the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md`](../defects/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md)).
+  `running` motion (REQ-SHELL-075 (a): it pulses while the instance is live). A child keeps the agent vocabulary. ~~The
+  inspector's meta line does not read it yet~~ *Reached 2026-10-01: the inspector's meta line starts with the same word
+  (`metaLine` reads `agentStateLabel` over the shown session), so with the run-level agent shown it reads `cancelling · …`
+  beside the run header's `Cancelling…`; its dot keeps the live `running` motion
+  ([`the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md`](../defects/fixed/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md)).
+  The reading is the build's and the question stays open.*
 - **Until when.** From the confirmation, over every active record of the run it was confirmed against, answered or not,
   until the session's first record at rest taken after the confirmation; the overlay covers no record taken after that one,
   so a later run of the session is never shown cancelling by it. A refusal removes it, and the record's own status shows

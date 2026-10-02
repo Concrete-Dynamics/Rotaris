@@ -24,8 +24,9 @@
  *   stopped run, a cost of zero beside non-zero tokens, duplicate reads of
  *   the same path, identical commands retried.
  * - `requests`: per-model-key tool-call attribution — a child's calls under
- *   the model_key the children record carries (the usage.update payload
- *   carries tokens and cost alone), the entry agent's under the key the
+ *   the model_key the children record carries for the child of that name
+ *   alive when the call started (the usage.update payload carries tokens and
+ *   cost alone), the entry agent's under the key the
  *   launch audit, its continuations, its switches, the session's overrides
  *   of its pair and the ladder's fallbacks of it record for it
  *   (`entryModelKeys`), newest totals last.
@@ -179,16 +180,55 @@ function snapshotEntry(snapshot: unknown): { readonly models: Record<string, unk
   return { models, label: modelLabel(models, model), pair: modelPair(models, model) };
 }
 
+/** One child's model key over its lifetime in the children record: from its spawn to its completion, open while it has none. */
+export interface ChildWindow {
+  readonly model_key: string;
+  readonly spawned_at: string;
+  readonly completed_at: string | null;
+}
+
+/** Each child's windows, by the name its own records carry (`childModelKeys`). */
+export type ChildModelKeys = ReadonlyMap<string, readonly ChildWindow[]>;
+
 /**
- * Each child's model key (the children record's `model_key`), keyed by the name the child's own records carry: its
- * canonical name (REQ-ORCH-044), which the child's turns run under (`agentName: row.canonical_name`), so its tool calls
- * (`tool_calls.agent_name`) and the ladder's entries about it (`quota_fallback_model`, `llm_unresponsive`: `agent`)
- * name it by that. Never by `given_name`: the model's own words differ from the canonical name whenever they hold a
+ * Each child's model key (the children record's `model_key`) over its lifetime, keyed by the name the child's own records
+ * carry: its canonical name (REQ-ORCH-044), which the child's turns run under (`agentName: row.canonical_name`), so its
+ * tool calls (`tool_calls.agent_name`) and the ladder's entries about it (`quota_fallback_model`, `llm_unresponsive`:
+ * `agent`) name it by that. Never by `given_name`: the model's own words differ from the canonical name whenever they hold a
  * space, punctuation or a reused name, and keyed by those the child's calls and moves read as the root's (the live pack
  * 2026-10-01T17-04-24-814Z, 'Run 13 shell commands verbatim' / 'Run-13-shell-commands-verbatim').
+ *
+ * A canonical name is unique only among one parent's children in one iteration (REQ-ORCH-044), so one session can hold two
+ * children of one name — a continued session's later run reusing an earlier run's child name, a grandchild named like a
+ * child — and a root whose persona spells an earlier child's name. The records carry the name and no task id (OQ-158), so
+ * each child keeps its window, `[spawned_at, completed_at]`, ordered by spawn, and a record is attributed by its name and
+ * its instant (`childKeyAt`). Never keyed by name alone: the later child's key then took every call of both.
  */
-export function childModelKeys(children: readonly Pick<ChildRow, 'canonical_name' | 'model_key'>[]): Map<string, string> {
-  return new Map(children.map((c) => [c.canonical_name, c.model_key]));
+export function childModelKeys(children: readonly Pick<ChildRow, 'canonical_name' | 'model_key' | 'spawned_at' | 'completed_at'>[]): Map<string, ChildWindow[]> {
+  const byName = new Map<string, ChildWindow[]>();
+  for (const c of [...children].sort((a, b) => (a.spawned_at < b.spawned_at ? -1 : a.spawned_at > b.spawned_at ? 1 : 0))) {
+    const windows = byName.get(c.canonical_name) ?? [];
+    windows.push({ model_key: c.model_key, spawned_at: c.spawned_at, completed_at: c.completed_at });
+    byName.set(c.canonical_name, windows);
+  }
+  return byName;
+}
+
+/** The label of a record two children of one name could have made, their windows overlapping: both keys, never one by guess. */
+export const ambiguousChildKey = (keys: readonly string[]): string => `ambiguous (${keys.join(' | ')})`;
+
+/**
+ * The child model key a record of `name` made at `at` (a tool call's `started_at`, a timeline entry's `at`) is
+ * attributed to: the key of the one child of that name whose window holds the instant, `ambiguousChildKey` of every key
+ * when windows of different keys hold it, and `null` when no child of that name was alive then — the record is the
+ * root's. Instants are the store's ISO UTC strings, compared as written. Two agents of one name alive at once (a child
+ * and a root of its name, or two children whose windows overlap) are not told apart: that waits on an identity on the
+ * rows (OQ-158), and a child that never records a completion keeps its window open.
+ */
+export function childKeyAt(children: ChildModelKeys, name: string, at: string): string | null {
+  const keys = [...new Set((children.get(name) ?? []).filter((w) => w.spawned_at <= at && (w.completed_at === null || at <= w.completed_at)).map((w) => w.model_key))];
+  if (keys.length === 0) return null;
+  return keys.length === 1 ? keys[0]! : ambiguousChildKey(keys);
 }
 
 /** Printed where the record cannot say which key the entry agent ran on: an override may or may not have moved it. */
@@ -208,9 +248,9 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * key resolves to. Where the snapshot does not say which pair the root's key resolves to and an override is recorded,
  * the key from that point on is `ENTRY_KEY_UNDETERMINED`, never one key given as fact.
  *
- * The ladder's two automatic moves of the root are read as well, from the entries that name an agent no child is
- * (`childNames`: the children record names only the children, by the canonical names their records carry —
- * `childModelKeys` — so every other agent an entry names is the root). The
+ * The ladder's two automatic moves of the root are read as well, from the entries that name no child alive at the entry's
+ * instant (`children`: the children record names only the children, by the canonical names their records carry, each over
+ * its lifetime — `childModelKeys`, `childKeyAt` — so every other agent an entry names is the root). The
  * root's cell lives for the run (`rootResilience`), so after either move the root runs on the new model until the next
  * continuation (a new run: its snapshot's key, or the configured key when it records none) or its next switch:
  * - `quota_fallback_model` (REQ-ORCH-091 b, REQ-NOTIFY-082): the same-tier candidate, whose key the entry records
@@ -218,91 +258,176 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * - `llm_unresponsive` (REQ-ORCH-090): the role's fallback, recorded as a `provider|model` pair with no key, so the key
  *   is the one `models:` key of the snapshot in force that resolves to that pair, and the pair itself
  *   (`provider/model`) when none does or more than one does.
- * A child's move leaves the root where it is. One reading is knowingly coarse: a switch to a key resolving to the very
- * model already configured does not rebuild the root's cell in the run (`sameRef`), so a fallback in force then stands,
- * while this reads the switch as ending it; the snapshot records `provider|model` pairs, not the reference the run
- * compares. A second is coarse the same way: a switch is held on its run alone (`entryOverride`; a continuation is a new
+ * A child's move leaves the root where it is. A switch ends a move only when the run rebuilt the root's cell for
+ * it: the run records `rebuilds: false` on a switch onto the model the cell was last built from (`rootResilience`,
+ * `sameRef`), and the move then stands while the switched key becomes the configured one; a store written before the
+ * run recorded `rebuilds` is read as rebuilt. A switch applies at the root's next turn, which the record does not show,
+ * so the run records what places the records around that turn:
+ * - on each switch and on the root's own wait choice, whether it `supersedes` a switch recorded since the root's cell was
+ *   last settled. That switch never applied, so it is read as if it were not recorded: the reader returns to the state
+ *   before it — the key it printed taken back with it, rightly, since the root never ran on it — and reads again every
+ *   record since it, a ladder move of the root or a child's wait choice made in between included, then the superseding
+ *   record. Away from the configured model and back onto it with no turn between leaves a move in force standing, whether
+ *   the move came before the first switch or between the two. (Restoring that state without reading the records since it
+ *   again, as the repair before this one did, erased a move made between the two: the verifier's second case.)
+ * - on each ladder move of the root, whether a switch was pending at it (`switch_pending`): the move was made on the cell
+ *   from before that switch, in the turn already running when it was made, so it is read before the switch, which then
+ *   ends it at the next turn unless it records `rebuilds: false`. `switch_pending: false` says the switch had applied.
+ * A store recording no `supersedes` reads each switch as applied; one recording no `switch_pending` reads each move where
+ * it is recorded, until a switch that supersedes places it. A child's wait choice after a pending switch is read after
+ * that switch as recorded, so a switched key it overrode before the root's next turn prints though the root never ran on it
+ * (the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it).
+ * One reading stays coarse: a switch is held on its run alone (`entryOverride`; a continuation is a new
  * `Run`), so a later continuation recording no snapshot starts on its configuration's model, while this keeps the
- * switched key as the configured one. Only snapshot-less runs reach it. The children are keyed by canonical name, which
- * is unique only per parent and iteration (REQ-ORCH-044); two children sharing one read as one
- * (`docs/defects/the-autopsy-reader-puts-two-children-sharing-a-canonical-name-under-one-model-key.md`).
+ * switched key as the configured one. Only snapshot-less runs reach it
+ * (the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot). A second: an entry naming a child alive at its
+ * instant is that child's, even where a root of the same name was alive too (OQ-158; `childKeyAt`).
  */
-export function entryModelKeys(launchAuditPayload: string | undefined, timeline: readonly Pick<TimelineRow, 'name' | 'metadata'>[], childNames: Iterable<string>): string[] {
-  const children = new Set(childNames);
-  const keys: string[] = [];
-  let models: Record<string, unknown> = {};
-  let base: { readonly label: string; readonly pair: string | null } | null = null;
-  // The key the configuration names (snapshot or switch); `base` departs from it only while a ladder move is in force.
-  let configured: { readonly label: string; readonly pair: string | null } | null = null;
-  let fellBack = false;
-  const overrides = new Map<string, { readonly key: string; readonly to: string | null }>();
-  const effective = (): string | null => {
-    if (base === null) return null;
-    if (base.pair === null) return overrides.size > 0 ? ENTRY_KEY_UNDETERMINED : base.label;
-    let label = base.label;
-    let pair: string = base.pair;
+export function entryModelKeys(launchAuditPayload: string | undefined, timeline: readonly Pick<TimelineRow, 'name' | 'metadata' | 'at'>[], children: ChildModelKeys): string[] {
+  type Key = { readonly label: string; readonly pair: string | null };
+  type Row = Pick<TimelineRow, 'name' | 'metadata' | 'at'>;
+  interface State {
+    models: Record<string, unknown>;
+    base: Key | null;
+    // The key the configuration names (snapshot or switch); `base` departs from it only while a ladder move is in force.
+    configured: Key | null;
+    fellBack: boolean;
+    readonly keys: string[];
+    readonly overrides: Map<string, { readonly key: string; readonly to: string | null }>;
+  }
+  const clone = (s: State): State => ({ ...s, keys: [...s.keys], overrides: new Map(s.overrides) });
+  const effective = (s: State): string | null => {
+    if (s.base === null) return null;
+    if (s.base.pair === null) return s.overrides.size > 0 ? ENTRY_KEY_UNDETERMINED : s.base.label;
+    let label = s.base.label;
+    let pair: string = s.base.pair;
     for (let hops = 0; hops < 8; hops++) {
-      const o = overrides.get(pair);
+      const o = s.overrides.get(pair);
       if (!o || o.to === pair) break;
       label = o.key;
-      if (o.to === null) return overrides.size > 1 ? ENTRY_KEY_UNDETERMINED : label;
+      if (o.to === null) return s.overrides.size > 1 ? ENTRY_KEY_UNDETERMINED : label;
       pair = o.to;
     }
     return label;
   };
-  const add = (key: string | null): void => { if (key !== null && key !== '' && keys[keys.length - 1] !== key) keys.push(key); };
-  const fromSnapshot = (snapshot: unknown): void => {
+  const add = (s: State, key: string | null): void => { if (key !== null && key !== '' && s.keys[s.keys.length - 1] !== key) s.keys.push(key); };
+  const fromSnapshot = (s: State, snapshot: unknown): void => {
     const e = snapshotEntry(snapshot);
     if (!e) {
       // A continuation recording no entry model (`config_snapshot: {}`) is still a new run with a new root cell, built
       // from the configured model: a ladder move of the run before it ends there, back to the configured key, or to an
       // undetermined one when nothing ever named it.
-      if (fellBack) { fellBack = false; base = configured; add(configured === null ? ENTRY_KEY_UNDETERMINED : effective()); }
+      if (s.fellBack) { s.fellBack = false; s.base = s.configured; add(s, s.configured === null ? ENTRY_KEY_UNDETERMINED : effective(s)); }
       return;
     }
-    models = e.models;
-    base = configured = { label: e.label, pair: e.pair };
-    fellBack = false;
-    add(effective());
+    s.models = e.models;
+    s.base = s.configured = { label: e.label, pair: e.pair };
+    s.fellBack = false;
+    add(s, effective(s));
   };
-  if (launchAuditPayload !== undefined) fromSnapshot(parseJson(launchAuditPayload)?.['config_snapshot']);
-  for (const t of timeline) {
-    if (t.name === 'run_continuation_intent') fromSnapshot(parseJson(t.metadata)?.['config_snapshot']);
+  /** A root ladder move the record names, or null: an entry naming a child alive at its instant is that child's. */
+  const rootMove = (t: Row): { readonly meta: Record<string, unknown>; readonly toProvider: string; readonly toModel: string } | null => {
+    if (t.name !== 'quota_fallback_model' && t.name !== 'llm_unresponsive') return null;
+    const meta = parseJson(t.metadata);
+    const agent = meta?.['agent'];
+    const toProvider = meta?.['to_provider'];
+    const toModel = meta?.['to_model'];
+    if (meta === undefined || typeof agent !== 'string' || childKeyAt(children, agent, t.at) !== null || typeof toProvider !== 'string' || typeof toModel !== 'string') return null;
+    return { meta, toProvider, toModel };
+  };
+  /** One record read as it applies to the root, with no regard to when the run applied a switch (the loop below sees to that). */
+  const read = (s: State, t: Row): void => {
+    if (t.name === 'run_continuation_intent') fromSnapshot(s, parseJson(t.metadata)?.['config_snapshot']);
     else if (t.name === 'entry_model_switched') {
-      const key = str(parseJson(t.metadata)?.['model']);
-      if (key === '') continue;
-      base = configured = { label: modelLabel(models, key), pair: modelPair(models, key) };
-      fellBack = false;
-      add(effective());
+      const meta = parseJson(t.metadata);
+      const key = str(meta?.['model']);
+      if (key === '') return;
+      s.configured = { label: modelLabel(s.models, key), pair: modelPair(s.models, key) };
+      // `rebuilds: false`: the switch named the model the root's cell was last built from, so the run did not rebuild
+      // it and a ladder move in force stands. A store recording no `rebuilds` (written before the run recorded it) is
+      // read as rebuilt.
+      if (meta?.['rebuilds'] === false && s.fellBack) return;
+      s.base = s.configured;
+      s.fellBack = false;
+      add(s, effective(s));
     } else if (t.name === 'model_override') {
       const meta = parseJson(t.metadata);
       const provider = meta?.['provider'];
       const model = meta?.['model'];
       const key = str(meta?.['model_key']);
-      if (typeof provider !== 'string' || typeof model !== 'string' || key === '') continue;
+      if (typeof provider !== 'string' || typeof model !== 'string' || key === '') return;
       const toProvider = meta?.['to_provider'];
       const toModel = meta?.['to_model'];
-      const to = typeof toProvider === 'string' && typeof toModel === 'string' ? `${toProvider}|${toModel}` : modelPair(models, key);
-      overrides.set(`${provider}|${model}`, { key, to });
-      add(effective());
-    } else if (t.name === 'quota_fallback_model' || t.name === 'llm_unresponsive') {
-      const meta = parseJson(t.metadata);
-      const agent = meta?.['agent'];
-      const toProvider = meta?.['to_provider'];
-      const toModel = meta?.['to_model'];
-      if (typeof agent !== 'string' || children.has(agent) || typeof toProvider !== 'string' || typeof toModel !== 'string') continue;
-      const pair = `${toProvider}|${toModel}`;
-      const toKey = str(meta?.['to_key']);
-      if (t.name === 'quota_fallback_model' && toKey !== '') base = { label: modelLabel(models, toKey), pair };
+      const to = typeof toProvider === 'string' && typeof toModel === 'string' ? `${toProvider}|${toModel}` : modelPair(s.models, key);
+      s.overrides.set(`${provider}|${model}`, { key, to });
+      add(s, effective(s));
+    } else {
+      const move = rootMove(t);
+      if (move === null) return;
+      const pair = `${move.toProvider}|${move.toModel}`;
+      const toKey = str(move.meta['to_key']);
+      if (t.name === 'quota_fallback_model' && toKey !== '') s.base = { label: modelLabel(s.models, toKey), pair };
       else {
-        const labels = new Set(Object.keys(models).filter((k) => modelPair(models, k) === pair).map((k) => modelLabel(models, k)));
-        base = { label: labels.size === 1 ? [...labels][0]! : `${toProvider}/${toModel}`, pair };
+        const labels = new Set(Object.keys(s.models).filter((k) => modelPair(s.models, k) === pair).map((k) => modelLabel(s.models, k)));
+        s.base = { label: labels.size === 1 ? [...labels][0]! : `${move.toProvider}/${move.toModel}`, pair };
       }
-      fellBack = true;
-      add(effective());
+      s.fellBack = true;
+      add(s, effective(s));
+    }
+  };
+
+  let s: State = { models: {}, base: null, configured: null, fellBack: false, keys: [], overrides: new Map() };
+  if (launchAuditPayload !== undefined) fromSnapshot(s, parseJson(launchAuditPayload)?.['config_snapshot']);
+  // A switch the run has not applied yet: it applies at the root's next turn, which the record does not show. `before` is
+  // the state before it; `ahead` the records known to precede that turn, read before the switch; `after` the records
+  // since whose place against that turn is unknown, read after it as recorded.
+  let pending: { readonly before: State; switched: Row; ahead: Row[]; after: Row[] } | null = null;
+  const replay = (p: NonNullable<typeof pending>): void => {
+    s = clone(p.before);
+    for (const t of p.ahead) read(s, t);
+    read(s, p.switched);
+    for (const t of p.after) read(s, t);
+  };
+  for (const t of timeline) {
+    const meta = t.name === 'entry_model_switched' || t.name === 'model_override' ? parseJson(t.metadata) : undefined;
+    const move = rootMove(t);
+    if (t.name === 'run_continuation_intent') {
+      // A new run, whose root cell is its own: no switch of the run before it is pending in it.
+      pending = null;
+      read(s, t);
+    } else if (t.name === 'entry_model_switched' && str(meta?.['model']) !== '') {
+      if (meta?.['supersedes'] === true && pending !== null) {
+        // The pending switch never applied (no root turn between the two), so it is read as if it were not recorded —
+        // the key it printed taken back with it — and every record since it precedes this one, read from the state
+        // before it.
+        pending = { before: pending.before, switched: t, ahead: [...pending.ahead, ...pending.after], after: [] };
+        replay(pending);
+      } else {
+        // The first switch not yet applied (a store recording no `supersedes` reads each switch as this one).
+        pending = { before: clone(s), switched: t, ahead: [], after: [] };
+        read(s, t);
+      }
+    } else if (t.name === 'model_override' && meta?.['supersedes'] === true && pending !== null) {
+      // The root's own wait choice replaced the pending switch, which never ran: every record since it is read from the
+      // state before it, then the choice.
+      const p = pending;
+      pending = null;
+      s = clone(p.before);
+      for (const r of [...p.ahead, ...p.after, t]) read(s, r);
+    } else if (move !== null && pending !== null && move.meta['switch_pending'] === true) {
+      // `switch_pending`: the root moved in the turn that was running when the switch was made, on the cell from before
+      // it; the switch then applies at the next turn, after the move, and ends it unless it `rebuilds: false`.
+      pending.ahead = [...pending.ahead, ...pending.after, t];
+      pending.after = [];
+      replay(pending);
+    } else {
+      // `switch_pending: false`: the root's turn had applied the switch before this move, which is read as recorded.
+      if (move !== null && move.meta['switch_pending'] === false) pending = null;
+      else pending?.after.push(t);
+      read(s, t);
     }
   }
-  return keys;
+  return s.keys;
 }
 
 /**
@@ -418,34 +543,29 @@ export function readAutopsy(dal: StoreDal, sessionId: SessionId, _wall: WallCloc
     // Per-model-key attribution: the store records no provider or model on
     // the usage.update payload (REQ-EVENTS-053's payload is tokens and cost
     // alone), so a child's tool calls go to the model_key the children record
-    // carries, matched by the canonical name its calls carry (`childModelKeys`).
-    // The entry agent — the one no child names — is attributed to the
-    // key(s) its own records name (`entryModelKeys`: its snapshots, its switches,
-    // the overrides of the pair it runs on and the ladder's fallbacks of it), joined in order when it ran on
-    // more than one, and to `session` when none is recorded. Its calls
-    // are never split between keys by guess, and its key is never taken from
-    // its children (live-run finding a71-13: it had been, whenever they shared one).
-    const callsByAgent = new Map<string, number>();
-    for (const t of toolCalls) callsByAgent.set(t.agent_name, (callsByAgent.get(t.agent_name) ?? 0) + 1);
-    const keyByAgent = childModelKeys(children);
-    const childAgents = new Set(keyByAgent.keys());
-    const recordedEntryKeys = entryModelKeys(launchAudit?.payload, timeline, childAgents);
+    // carries, matched by the canonical name its calls carry and the instant
+    // each call started within that child's lifetime (`childModelKeys`,
+    // `childKeyAt`; two windows of one name holding the instant print both keys).
+    // A call no child of its name was alive for is the entry agent's,
+    // attributed to the key(s) its own records name (`entryModelKeys`: its
+    // snapshots, its switches, the overrides of the pair it runs on and the
+    // ladder's fallbacks of it), joined in order when it ran on more than one,
+    // and to `session` when none is recorded. Its calls are never split between
+    // keys by guess, and its key is never taken from its children (live-run
+    // finding a71-13: it had been, whenever they shared one).
+    const childKeys = childModelKeys(children);
+    const recordedEntryKeys = entryModelKeys(launchAudit?.payload, timeline, childKeys);
     const entryKey = recordedEntryKeys.length > 0 ? recordedEntryKeys.join(' → ') : 'session';
-    const requests: AutopsyEndpointRow[] = [...callsByAgent.entries()]
-      .map(([agent, calls]) => ({
-        endpoint: childAgents.has(agent) ? keyByAgent.get(agent)! : entryKey,
-        agents: [agent] as readonly string[],
-        tool_calls: calls,
-      }))
-      .reduce<AutopsyEndpointRow[]>((rows, r) => {
-        const prev = rows.find((x) => x.endpoint === r.endpoint);
-        if (!prev) return [...rows, r];
-        return rows.map((x) =>
-          x.endpoint === r.endpoint
-            ? { endpoint: x.endpoint, agents: [...x.agents, ...r.agents].sort(), tool_calls: x.tool_calls + r.tool_calls }
-            : x,
-        );
-      }, [])
+    const byEndpoint = new Map<string, { agents: Set<string>; calls: number }>();
+    for (const t of toolCalls) {
+      const endpoint = childKeyAt(childKeys, t.agent_name, t.started_at) ?? entryKey;
+      const row = byEndpoint.get(endpoint) ?? { agents: new Set<string>(), calls: 0 };
+      row.agents.add(t.agent_name);
+      row.calls += 1;
+      byEndpoint.set(endpoint, row);
+    }
+    const requests: AutopsyEndpointRow[] = [...byEndpoint.entries()]
+      .map(([endpoint, r]) => ({ endpoint, agents: [...r.agents].sort() as readonly string[], tool_calls: r.calls }))
       .sort((a, b) => b.tool_calls - a.tool_calls);
 
     let tokenSpan: string | null = null;

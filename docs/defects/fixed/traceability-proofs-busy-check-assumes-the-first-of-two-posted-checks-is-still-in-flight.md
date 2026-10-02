@@ -43,7 +43,7 @@ inferred from the guard's code is measured: the first check finishes before the 
 channel, and both answer `ok`, which is a correct answer. The proof itself, run ten times beside eight CPU-bound loops
 (load average 9.9 to 20.6), reached the busy check three times and passed it; the other seven stopped earlier, on the
 growth ratios and once on the parse budget (recorded in
-[`traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`](../traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md)).
+[`traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`](traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md)).
 
 **What changed** (`apps/desktop/scripts/traceability-proof.mjs` only; the engine and the service are untouched):
 

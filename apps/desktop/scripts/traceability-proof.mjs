@@ -62,6 +62,14 @@ const expect = (condition, message) => { if (!condition) throw new Error(message
  * parse went red at 3.04 to 3.37, twice in a row on an idle host. The verdict and its message are `growthVerdict`
  * (`lib/growth-verdict.mjs`), which prints each side's readings as that side's
  * (`docs/defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).
+ *
+ * 2026-10-02: the three ratios are read on the CPU time of the thread that ran each pass (`process.threadCpuUsage`),
+ * the wall-clock readings and their ratio kept beside them with the host's load average and CPU count. With more
+ * runnable work than CPUs the minimum of seven wall-clock readings stopped screening the load out, and the ratio left
+ * its band both ways (parse 3.1 to 5.52, sweep 0.34 to 3.32, at load averages of 9.9 to 20.6 on four CPUs). The bounds
+ * and the floor are unchanged. The two "about one second" budgets stay on the wall clock: a red there on a host loaded
+ * above its CPU count is re-run alone
+ * (`docs/defects/fixed/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`).
  */
 const growthLines = [];
 const linear = (label, pair, lower) => {

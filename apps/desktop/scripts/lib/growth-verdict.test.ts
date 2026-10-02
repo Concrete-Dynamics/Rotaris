@@ -38,6 +38,33 @@ describe('growthVerdict (REQ-TRACE-501, REQ-TRACE-088)', () => {
     expect(v.message).toContain('recorded, NOT asserted: 69 ms against 23 ms is below the 25 ms floor');
   });
 
+  describe('a pair read on the thread\'s CPU time (traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host)', () => {
+    // The parse pair of a red at a load average of 14: the wall minima read 4.94, the thread's CPU minima the work ratio.
+    const contended = {
+      work: { full: 1501, half: 701 }, clock: 'thread-cpu', ratio: 2.2, wallRatio: 4.94,
+      fullRunsMs: [912.4, 840.1], halfRunsMs: [190.2, 170.1], fullMinMs: 840.1, halfMinMs: 170.1,
+      fullCpuRunsMs: [201.3, 198.0], halfCpuRunsMs: [90.4, 90.0], fullCpuMinMs: 198.0, halfCpuMinMs: 90.0,
+      host: { loadAverage: [14.12, 11.8, 6.2], cpus: 4 },
+    };
+
+    it('REQ-TRACE-088: the ratio asserted is the CPU one, and the wall readings, their ratio and the load are printed beside it', () => {
+      const v = verdict('parse', contended, 1.4);
+      expect(v).toMatchObject({ ok: true, asserted: true });
+      expect(v.message).toBe('parse growth ratio 2.2 against work ratio 2.14 — readings thread CPU [201.3,198] full (minimum 198 ms) against [90.4,90] half (minimum 90 ms); wall clock [912.4,840.1] full against [190.2,170.1] half, ratio 4.94, load average 14.12 on 4 CPUs');
+    });
+
+    it('REQ-TRACE-088: a CPU ratio out of the band still fails, with the same bounds', () => {
+      expect(verdict('parse', { ...contended, ratio: 3.0 }, 1.4).ok).toBe(false);
+      expect(verdict('sweep', { ...contended, ratio: 1.3 }, 1.3).ok).toBe(false);
+    });
+
+    it('REQ-TRACE-088: the floor is read on the CPU minima', () => {
+      const v = verdict('sweep', { ...contended, fullCpuMinMs: 48, halfCpuMinMs: 21, ratio: 2.29 }, 1.3);
+      expect(v).toMatchObject({ ok: true, asserted: false });
+      expect(v.message).toContain('recorded, NOT asserted: 48 ms against 21 ms of thread CPU is below the 25 ms floor');
+    });
+  });
+
   it('REQ-TRACE-501: a half-size tree that is not about half the work fails whatever the clock reads', () => {
     const v = verdict('parse', { ...red, work: { full: 1501, half: 1400 }, ratio: 1.0 }, 1.4);
     expect(v).toMatchObject({ ok: false, asserted: false });

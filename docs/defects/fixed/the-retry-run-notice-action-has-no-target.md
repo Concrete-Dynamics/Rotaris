@@ -43,3 +43,8 @@ app by `notice-proof`'s new section 7 (`retry-action`): a run fails at its first
 published through the real store, its `Retry` is clicked, and the session's last submitted prompt is submitted again as a
 second run of the same session (two `user` rows with the prompt, `iterations_completed` 2, one session). The proof was
 not run against a build without the repair; the unit tests carry that comparison.
+
+The two records that named the retry among the vocabulary members with no target were corrected in place, the old
+wording struck beside the new (found at verification): ADR-0049's "Not built, said so" paragraph
+(`docs/architecture/adr/0049-notices-and-acknowledgements.md`) and the notice-pipeline row of
+`docs/architecture/codebase.md`.

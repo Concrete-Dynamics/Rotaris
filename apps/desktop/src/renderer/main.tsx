@@ -1356,6 +1356,14 @@ function useMcp(): McpSettingsProps {
     onSetupStart: async () => {
       const r = await bridge.command({ kind: 'mcp.setup', action: 'start' });
       if (r.ok) { setSetup(r.value as McpSetupStatus); return { ok: true, message: '' }; }
+      // Open-time initialization may have started the same workspace's setup before this card was opened.
+      // Follow that run instead of leaving stale "Not started" steps behind a refusal.
+      if (r.code === 'mcp.setup.running') {
+        const current = await bridge.command({ kind: 'mcp.setup', action: 'status' });
+        if (!current.ok) return { ok: false, message: current.detail ?? current.headline };
+        setSetup(current.value as McpSetupStatus);
+        return { ok: true, message: '' };
+      }
       return { ok: false, message: r.detail ?? r.headline };
     },
     onSetupCancel: async () => {

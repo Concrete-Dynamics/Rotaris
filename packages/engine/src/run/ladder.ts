@@ -1,5 +1,5 @@
 import { millis, type Clocks } from '@rotaris/kernel';
-import type { TurnReport } from '@rotaris/model';
+import type { ModelError, TurnReport } from '@rotaris/model';
 import type { SessionWriter } from '../session-writer.js';
 import { classifyFailure, describeCondition, describeError, entryOf, localBackoffMs, pairKey, providerIdentity, retryAfterMs, sameRef, sameTierCandidates, withSettings, type CatalogueEntry, type ModelChoice, type ResilienceMemory } from './resilience.js';
 import type { WaitRegistry } from './waits.js';
@@ -151,6 +151,20 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
     // PD-ORCH-005 clause 2: a rest accepted during a backoff, a condensation or a wait ends the step on what it has.
     if (last !== null && r.resting?.() === true) return last;
     followOverride(r);
+    // REQ-MONITOR-194 / REQ-ORCH-091 (a): the exclusion is read BEFORE every call. A cell on a pair the session recorded out
+    // of quota — by another agent's quota answer, or a run before this one (the memory is rehydrated) — is not called: it
+    // takes the path an insufficient-quota answer takes, its one same-tier fallback (b) else the wait that never
+    // auto-resumes (c), and records no second `model_exhausted`. An explicit choice of the pair clears the exclusion first
+    // (`Run.clearChosenExclusion`), so the choice is called. (Until 2026-10-02 the exclusion was read only after a failed
+    // call: an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it.)
+    const excludedProvider = providerIdentity(catalogue, cell.model.model);
+    if (memory.isExhausted(excludedProvider, cell.model.model.modelId)) {
+      const report = excludedReport(excludedProvider, cell.model.model.modelId);
+      last = report;
+      const outcome = await limitPath(report, report.error, 'quota_exhausted', true);
+      if (outcome !== null) return outcome;
+      continue;
+    }
     const { report, unresponsive } = await call(cell.model, unresponsiveThreshold(r));
     last = report;
     // OQ-8: one observation per completed provider request, before the ladder decides what to do with it — priced at
@@ -218,7 +232,21 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
     if (cls === 'quota_exhausted' && memory.markExhausted(provider, modelId)) {
       writer.appendTimeline('model_exhausted', 'rotaris', `Provider ${provider} reports its quota exhausted for model ${modelId}; the pair is excluded for the rest of the session.`, { provider, model: modelId, agent });
     }
+    const outcome = await limitPath(report, err, cls, false);
+    if (outcome !== null) return outcome;
+  }
+
+  /**
+   * REQ-ORCH-091 (b) then (c) for the pair the cell is on: after a rate-limit or quota answer, or — `preCall` — before any
+   * call, on a pair the session already holds out of quota. Null means the loop goes on (a move, a model chosen, a resume);
+   * a report ends the step.
+   */
+  async function limitPath(report: TurnReport & { readonly status: 'failed' }, err: ModelError, cls: 'rate_limit' | 'quota_exhausted', preCall: boolean): Promise<TurnReport | null> {
+    const provider = providerIdentity(catalogue, cell.model.model);
+    const modelId = cell.model.model.modelId;
     const exhausted = memory.isExhausted(provider, modelId);
+    const before = preCall ? ' before calling it, the session having recorded the pair out of quota' : '';
+    const preCallMeta = preCall ? { pre_call: true } : {};
     // REQ-ORCH-091 (b) / REQ-NOTIFY-082: one same-tier fallback per agent, transparent.
     if (!cell.sameTierAttempted) {
       const roles = entryOf(catalogue, cell.model.model)?.roles ?? [];
@@ -230,15 +258,17 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
         cell.attempted.add(pairKey(provider, modelId));
         cell.attempted.add(pairKey(candidate.provider, candidate.model.modelId));
         const condition = cls === 'quota_exhausted' ? 'quota exhaustion' : 'rate limit';
-        const message = `${agent} moved from ${provider}/${modelId} to ${candidate.provider}/${candidate.model.modelId} after a ${condition} response (same tier, different provider${exhausted ? '; the provider is marked exhausted' : ''}).`;
+        const message = preCall
+          ? `${agent} moved from ${provider}/${modelId} to ${candidate.provider}/${candidate.model.modelId}${before} (same tier, different provider; the provider is marked exhausted).`
+          : `${agent} moved from ${provider}/${modelId} to ${candidate.provider}/${candidate.model.modelId} after a ${condition} response (same tier, different provider${exhausted ? '; the provider is marked exhausted' : ''}).`;
         // REQ-ORCH-139 / REQ-NOTIFY-090: the vocabulary's words for the same-tier change — the `quota_fallback_model` entry and
         // the `quota_fallback` issue, under a rate limit as under exhaustion (REQ-NOTIFY-082's "usage limit"); A29, formerly
         // `model_fallback` for both, a name no list has. `condition` in the metadata still says which it was.
-        writer.appendTimeline('quota_fallback_model', 'rotaris', message, { agent, from_provider: provider, from_model: modelId, to_provider: candidate.provider, to_model: candidate.model.modelId, to_key: candidate.key, condition: cls, provider_exhausted: exhausted, ...switchPendingOf(r) });
-        writer.recordIssue({ kind: 'quota_fallback', severity: 'warning', actor: agent, message, metadata: { requested_model: `${provider}/${modelId}`, fallback_model: `${candidate.provider}/${candidate.model.modelId}`, provider_exhausted: exhausted, condition: cls } });
+        writer.appendTimeline('quota_fallback_model', 'rotaris', message, { agent, from_provider: provider, from_model: modelId, to_provider: candidate.provider, to_model: candidate.model.modelId, to_key: candidate.key, condition: cls, provider_exhausted: exhausted, ...preCallMeta, ...switchPendingOf(r) });
+        writer.recordIssue({ kind: 'quota_fallback', severity: 'warning', actor: agent, message, metadata: { requested_model: `${provider}/${modelId}`, fallback_model: `${candidate.provider}/${candidate.model.modelId}`, provider_exhausted: exhausted, condition: cls, ...preCallMeta } });
         deps.warn(message);
         cell.model = withSettings(catalogue, { model: candidate.model, thinking: candidate.thinking });
-        continue;
+        return null;
       }
     }
     // REQ-ORCH-091 (c) / REQ-NOTIFY-083..087: the suspended wait; an exhausted provider never auto-resumes.
@@ -249,8 +279,8 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
       ? describeCondition({ kind: 'quota_exhausted', provider, model: modelId })
       : describeCondition({ kind: 'rate_limit', provider, model: modelId, intervalS: providerInterval === null ? null : Math.round(providerInterval / 1000) });
     const seconds = waitMs === null ? null : waitMs / 1000;
-    const message = `${agent} is waiting on provider ${provider} (model ${modelId}), attempt ${cell.waitAttempt}: ${seconds === null ? 'no automatic resume; the wait continues until the user decides' : `${seconds} s, then an automatic retry`}${exhausted ? '; the provider is marked exhausted' : ''}.`;
-    writer.recordIssue({ kind: 'model_wait', severity: 'warning', actor: agent, message, metadata: { attempt: cell.waitAttempt, model: modelId, provider, wait_seconds: seconds, auto_resume: seconds !== null, provider_exhausted: exhausted } });
+    const message = `${agent} is waiting on provider ${provider} (model ${modelId}), attempt ${cell.waitAttempt}: ${seconds === null ? 'no automatic resume; the wait continues until the user decides' : `${seconds} s, then an automatic retry`}${exhausted ? '; the provider is marked exhausted' : ''}${preCall ? '; no call was made, the session having recorded the pair out of quota' : ''}.`;
+    writer.recordIssue({ kind: 'model_wait', severity: 'warning', actor: agent, message, metadata: { attempt: cell.waitAttempt, model: modelId, provider, wait_seconds: seconds, auto_resume: seconds !== null, provider_exhausted: exhausted, ...preCallMeta } });
     writer.appendRow('system', `Waiting on a provider limit — ${reason}`, true);
     deps.warn(message);
     const decision = await duringImposedWait(deps.imposedWait, 'provider_limit', () => waits.enter({ agent, provider, model: modelId, exhausted, attempt: cell.waitAttempt, reason }, waitMs, signal));
@@ -258,8 +288,18 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
     if (decision.kind === 'model') {
       cell.attempted.add(pairKey(provider, modelId));
       cell.model = withSettings(catalogue, decision.choice);
-      continue;
+      return null;
     }
     // Auto-resume: retry the same model — unless a pause released the wait, which the loop's top ends the step on.
+    return null;
   }
+}
+
+/**
+ * The report of a call the ladder did not make (REQ-MONITOR-194): the pair's recorded exclusion stands in for the provider's
+ * insufficient-quota answer, so a wait cancelled or released on it ends the step as one on that answer does. No usage.
+ */
+function excludedReport(provider: string, modelId: string): TurnReport & { readonly status: 'failed' } {
+  const headline = describeCondition({ kind: 'quota_exhausted', provider, model: modelId });
+  return { status: 'failed', text: '', usage: { input: 0, output: 0 }, error: { code: 'http', status: 429, headline, providerMessage: 'insufficient quota, recorded earlier in this session; no call was made', transient: false } };
 }

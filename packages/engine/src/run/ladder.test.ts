@@ -559,6 +559,9 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(control.records).toEqual([
       { name: 'entry_model_switched', model: 'c1', rebuilds: true, supersedes: false },
       expect.objectContaining({ name: 'quota_fallback_model', agent: 'orchestrator', to_key: 'b1', switch_pending: true }),
+      // REQ-MONITOR-194 (since fin10): the child, built on the configured a1 the session holds out of quota, moves to its
+      // same-tier candidate before its first call rather than calling a1.
+      expect.objectContaining({ name: 'quota_fallback_model', agent: 'side', from_model: 'a1', to_key: 'b1', pre_call: true }),
     ]);
     expect(control.root.slice(0, 2)).toEqual(['a1', 'b1']);
     expect(control.root.length).toBeGreaterThan(3);
@@ -1199,6 +1202,96 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect((await sessions.running(sid)!).status).toBe('completed');
       expect(client.requests.at(-1)!.model.modelId).toBe('a1');
       expect(exhaustedRows(sid)).toHaveLength(2);
+    });
+  });
+
+  /*
+   * The repair of an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it (REQ-MONITOR-194:
+   * "neither retried automatically nor offered as an automatic fallback candidate, and the exclusion survives a resume of the
+   * same session"; spec resolution 21: the exclusion governs automatic retry). Before every call the ladder reads the
+   * exclusion: an agent whose cell is on a pair the session recorded out of quota takes REQ-ORCH-091's own order without
+   * calling it — its one same-tier fallback (b), else the suspended wait that never auto-resumes (c). Until this repair the
+   * exclusion was read only after a failed call, so the agent called the pair and only the provider's next quota answer moved it.
+   */
+  describe('REQ-MONITOR-194 / REQ-ORCH-091 (a)-(c): no automatic call reaches a pair the session recorded out of quota', () => {
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    const who = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => (/^You are the orchestrator/.test(systemOf(r)) ? 'root' : /summarise/i.test(systemOf(r)) ? 'summariser' : 'child');
+
+    it('a root on a1 resumed after its child met insufficient quota on a1 moves to the same-tier candidate before calling: a1 is never called by it again', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]) : answer(`root ${turn}`);
+        return turn === 1 ? failing(quota()) : answer('I did it.');
+      };
+      const { sessions, client } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 10_000 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const calls = client.requests.map((r) => `${who(r)} ${r.model.modelId}`);
+      // The child's call on a1 met insufficient quota and moved to b1 (its own same-tier fallback, after the call).
+      const failed = calls.indexOf('child a1');
+      expect(failed).toBeGreaterThan(-1);
+      expect(calls.slice(failed + 1)).toContain('child b1');
+      // The root's resume after the child's report is its last call: on b1, a1 not called (before: root a1).
+      expect(calls.filter((c) => c.startsWith('root')).at(-1)).toBe('root b1');
+      const moves = dal.timelineOf(sid).filter((t) => t.name === 'quota_fallback_model').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+      expect(moves).toEqual([
+        expect.objectContaining({ from_model: 'a1', to_model: 'b1', condition: 'quota_exhausted', provider_exhausted: true }),
+        expect.objectContaining({ agent: 'orchestrator', from_model: 'a1', to_model: 'b1', condition: 'quota_exhausted', provider_exhausted: true, pre_call: true }),
+      ]);
+      expect(moves[0]).not.toHaveProperty('pre_call');
+      // One exclusion, recorded by the quota answer; the move made without a call records none of its own.
+      expect(timeline(sid).filter((n) => n === 'model_exhausted')).toHaveLength(1);
+    });
+
+    it('a continuation of a session whose configured a1 the session recorded out of quota makes no call to a1: with no candidate it waits, never auto-resuming, until a model is chosen', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+      const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer(`answer ${turn}`)), { catalogue });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+      expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true });
+      // The run is cancelled in the wait: the exclusion stands and no override replaces a1.
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      await sessions.running(sid);
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
+      const cont = sessions.prompt(sid, 'again');
+      if (!cont.ok) throw new Error(cont.error.reason);
+      for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+      // Parked on a1 without calling it (before: the continuation's root called a1): exhausted, no automatic resume.
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
+      expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true, resumeAt: null, excluded: ['a1'] });
+      clock.advance(3_600_000);
+      await tick();
+      expect(client.requests).toHaveLength(1);
+      const waitIssues = dal.issuesOf(sid).filter((i) => i.kind === 'model_wait').map((i) => JSON.parse(i.metadata) as Record<string, unknown>);
+      expect(waitIssues.at(-1)).toMatchObject({ auto_resume: false, provider_exhausted: true, pre_call: true });
+      expect(timeline(sid).filter((n) => n === 'model_exhausted')).toHaveLength(1);
+      // An explicit choice ends it: c1 is called, a1 is not.
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'c1']);
+    });
+
+    it('a continuation whose configured a1 is excluded moves to the same-tier candidate before its first call, and a fresh process does the same', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+      const { sessions, client } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer(`answer ${turn}`)), { catalogue });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+      const cont = sessions.prompt(sid, 'again');
+      if (!cont.ok) throw new Error(cont.error.reason);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // Before: a1, b1, a1 — the continuation's root was built on the configured a1 and called it.
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1', 'b1']);
+      // REQ-MONITOR-194's "survives a resume": a fresh process rehydrates the exclusion and makes no call to a1 either.
+      const fresh = sessionsWith(() => answer('fresh'), { catalogue });
+      const resumed = fresh.sessions.resume(dal, 'C:/ws', sid);
+      if (!resumed.ok) throw new Error(resumed.error.reason);
+      const again = fresh.sessions.prompt(sid, 'once more');
+      if (!again.ok) throw new Error(again.error.reason);
+      expect((await fresh.sessions.running(sid)!).status).toBe('completed');
+      expect(fresh.client.requests.map((r) => r.model.modelId)).toEqual(['b1']);
+      expect(timeline(sid).filter((n) => n === 'model_exhausted')).toHaveLength(1);
     });
   });
 

@@ -9197,3 +9197,34 @@ so they stay reachable from the keyboard (not measured), and Escape answers the 
 a region of its own that every view yields room to at REQ-SHELL-022's minimum (and then which, with what bound on its
 height), or in another form — collapsed to a bar until opened, as the re-authentication prompt yields beside an expanded
 plan gate.
+
+**OQ-188 — What does "Keep waiting" on the quota-wait surface do: resolve the wait as a retry now, or leave it as it is?**
+*(REQ-MONITOR-303, "keep waiting, which resolves the wait as a retry and returns the status to `running`"; spec resolution 29,
+which fixes the three choices and "what each does"; REQ-NOTIFY-263's three choices; REQ-MONITOR-192 and REQ-NOTIFY-087, the
+auto-resume variant ending by itself when its interval elapses; REQ-MONITOR-004's closed enumeration of twenty-two operations;
+REQ-MONITOR-194. Raised 2026-10-02 by task 1 of plan fin10's `fin10-quota-exclusions-and-choices` bundle, recording
+[`keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md`](../defects/keep-waiting-on-the-quota-wait-header-sends-nothing-where-it-should-resolve-the-wait-as-a-retry.md).
+Open; owner-only, as every question this round raises.)*
+
+ADR-0010's third execution (2026-09-05) read keep waiting as "the absence of a decision": the header acknowledges ("Still
+waiting.") and sends nothing, so the wait goes on as it was — the exhausted variant until a person decides, the auto-resume
+variant until its timer retries. That reading cites REQ-NOTIFY-263 and REQ-MONITOR-192 and predates REQ-MONITOR-303, which
+says keep waiting resolves the wait as a retry, in both variants alike. For the exhausted variant the two readings are not in
+tension with any other requirement: retrying is the only thing keep waiting can resolve to, and a retry of a pair the user
+chose to keep waiting on is an explicit choice of it (REQ-MONITOR-194), which clears its exclusion — the build already does
+this when the waiting pair is chosen in the picker (`setEntryModel`'s quota-retry branch). For the auto-resume variant an
+immediate retry ends the provider's own interval early, where REQ-MONITOR-192 says "the wait timing out resolves as a retry"
+and REQ-NOTIFY-087 "the wait ends by itself once the computed interval has elapsed"; whether keep waiting retries at once
+there, or only acknowledges and lets the timer retry, the specification does not settle. Either retry needs a means on the
+control channel: no operation of REQ-MONITOR-004's closed twenty-two names it, so it would be read onto an existing one (the
+quota-retry branch of `setModel` with the waiting key serves the exhausted variant only when the waiting pair is a configured
+key) or added.
+
+**What the build proceeds under** (as built, unchanged): keep waiting is the absence of a decision in both variants — the
+header acknowledges and sends nothing; the exhausted variant ends only by a change of model or a cancel, the auto-resume
+variant by its timer as well. No loop with the pre-call exclusion read (`resilientStep`, since the same bundle) is possible,
+because nothing is retried.
+
+**What a ruling decides.** Whether keep waiting resolves the exhausted variant as a retry of the waiting pair (and then that
+it clears the pair's exclusion as an explicit choice does); whether it retries the auto-resume variant at once or leaves its
+timer to retry; and whether either is a new operation or a reading of an existing one.

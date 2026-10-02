@@ -330,6 +330,22 @@ await scenarioRun('same-tier', async () => {
   const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted/beta', `the calls did not move to beta: ${JSON.stringify(calls)}`);
   results.sameTier = { status: row.execution_status, fallback: meta, calls, png: r.png, elapsedMs: r.elapsedMs };
+  // REQ-MONITOR-194 (the repair of an-agent-calls-a-pair-the-session-recorded-out-of-quota-when-no-override-replaces-it): a
+  // second prompt, in a relaunch that resumes the session. Its root is built on the configured alpha, which the session holds
+  // out of quota (no override replaces it); it moves to beta BEFORE calling (`pre_call`), and alpha is never called. Before
+  // the repair its first call went to alpha, which the scripted provider answered and a real one would have refused.
+  const again = await launch('same-tier-resume', s3, { ROTARIS_SCRIPT: 'answer', ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_PROMPT: 'a second prompt on the excluded alpha', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
+  const calls2 = modelCalls(again.log).filter((c) => c.who === 'orchestrator');
+  expect(calls2.length > 0 && calls2.every((c) => c.model === 'scripted/beta'), `the second prompt called the pair the session holds out of quota: ${JSON.stringify(calls2)}`);
+  const db2 = open(s3);
+  const row2 = session(db2);
+  const list2 = names(db2, row2.session_id);
+  db2.close();
+  expect(row2.execution_status === 'completed' && row2.iterations_completed >= 2, `the second prompt did not complete: ${JSON.stringify(row2)}`);
+  const moves = list2.filter((t) => t.name === 'quota_fallback_model').map((t) => JSON.parse(t.metadata));
+  expect(moves.length === 2 && moves[0].pre_call === undefined && moves[1].pre_call === true && moves[1].from_model === 'alpha' && moves[1].to_model === 'beta', `the second prompt's move was not made before its call: ${JSON.stringify(moves)}`);
+  expect(list2.filter((t) => t.name === 'model_exhausted').length === 1, `the move without a call recorded a second exclusion: ${list2.map((t) => t.name).join(',')}`);
+  results.sameTierResume = { calls: calls2, session: row2, moves, png: again.png, elapsedMs: again.elapsedMs };
 });
 
 // 3b. OQ-177 (REQ-MONITOR-142 over REQ-ORCH-091 b): after the same-tier move the user switches the entry model back to the

@@ -77,6 +77,7 @@ provisions it when the store records no tree for it, writing the row at once thr
 `a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`; `requirements-runs-proof`'s eighth assertion shows it.
 The **sequences view**'s board section says so. The writer gained one method (a row write, no delivery state); no
 package, edge, process, message kind, channel, command or store column changed.
+
 **A failed run's notice waits for its session to be on screen, and a pair that failed authentication is not offered again
 (REQ-NOTIFY-030/032, REQ-NOTIFY-064, REQ-NOTIFY-068; the 401 note's repair round 1).** Every run-ending notice is built by
 `main/run-failure-notice.ts`; a failed run of a session no main window follows raises REQ-NOTIFY-032's warning and holds its

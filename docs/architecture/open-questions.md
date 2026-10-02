@@ -8880,6 +8880,7 @@ are owed, `packages/providers/src/catalogue.ts`); that is a gap of the build, no
 **What a ruling decides.** Whether such a provider is offered a key field at all — writing the key into the configuration
 the model reads (a write into the user's project files, which REQ-NOTIFY-047 keeps out of notice actions but not out of a
 dialog), or into the credential store with the model then pointed at it — or only the sentence this build shows.
+
 **OQ-180 — Where does a board run that stops at its iteration limit rest, and does automatic scheduling start it again?**
 *(REQ-TRACE-477, a flow's ending delivered to the surface told it began; REQ-TRACE-482, "the system itself picks up the
 next candidate as capacity becomes available"; REQ-TRACE-463; REQ-TRACE-476, "without re-running completed units".

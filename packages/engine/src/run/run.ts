@@ -711,15 +711,15 @@ export class Run {
   writeClaimFor(callerId: string, rel: string): ClaimHit | null {
     return this.children?.writeClaimFor(callerId, rel) ?? null;
   }
+  /** REQ-CHAT-006 / REQ-SESSION-026: the session-wide overrides in force, by model key, for the record (`overridesInForce`). */
+  get modelOverridesInForce(): { from: string; to: string }[] {
+    return overridesInForce(this.catalogue, this.memory);
+  }
   /**
    * REQ-NOTIFY-263: the wait the record carries; null while no agent is parked on a provider limit. REQ-MONITOR-194 /
    * REQ-MONITOR-303: with it, the model keys the session holds out of quota (`excludedModelKeys`), read from the memory at
    * every snapshot, so the change-model picker lists them annotated with the reason rather than as any other model.
    */
-  /** REQ-CHAT-006 / REQ-SESSION-026: the session-wide overrides in force, by model key, for the record (`overridesInForce`). */
-  get modelOverridesInForce(): { from: string; to: string }[] {
-    return overridesInForce(this.catalogue, this.memory);
-  }
   get currentWait(): (WaitState & { readonly excluded: string[] }) | null {
     const wait = this.waits.current();
     return wait === null ? null : { ...wait, excluded: excludedModelKeys(this.catalogue, this.memory.exhausted) };

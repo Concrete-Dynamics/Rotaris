@@ -44,8 +44,8 @@ sequenceDiagram
   CFG->>CFG: the confinement gate — the effective mode is the layered key with the dialog's override folded in (REQ-SANDBOX-122); a non-off mode whose verdict is not `available` REFUSES here, before the lease, before the session row and before the lock, so nothing is left to clean up (REQ-SANDBOX-094/095)
   CFG-->>RH: RunSetup {model, runtime, personas, models, authProviders, tier} — or a fatal report / no entry model / the availability reason and remediation
   alt refused before it starts (REQ-EVENTS-021, REQ-EVENTS-024, REQ-CONFIG-478, REQ-SANDBOX-126, REQ-WORKSPACE-137 "No model configured")
-    RH-->>M: refused {headline, detail}
-    M-->>W: {ok:false} and a notice; nothing was recorded
+    RH-->>M: refused {code, headline, detail} — `session.confinement` when the confinement gate refused (REQ-NOTIFY-060's second class)
+    M-->>W: {ok:false} and a notice; nothing was recorded. A `session.confinement` refusal's notice is REQ-NOTIFY-061's (`confinementRefusalNotice`): the wording as received in its message and its copyable detail, one action opening the Workspace view, no retry — for a prompt or a continue the engine refuses at the same gate too
   else
     RH->>M: ask credentials.lease {providerIds} (ADR-0030; REQ-PROVIDER-066/067)
     M-->>RH: credentials.leased {bearers, report} — read per request by the resolver OF THE MODEL each call goes to (credentialFor; Part L); an unleased slot is skipped

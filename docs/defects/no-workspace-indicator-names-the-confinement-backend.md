@@ -5,7 +5,7 @@ hidden otherwise and tracking the focused session; REQ-MONITOR-257 and REQ-NOTIF
 a focus change, and REQ-NOTIFY-061 has it stop describing a refused run as sandboxed. No surface in this build draws one:
 the session record carries `sandboxed` (`packages/contracts/src/channels.ts`), and no component in `packages/ui` or the
 renderer reads it, and no code or record cites REQ-SANDBOX-121. Noticed 2026-10-02 while checking REQ-NOTIFY-061
-([a-refused-confinement-start-is-not-reported-as-req-notify-061-says.md](a-refused-confinement-start-is-not-reported-as-req-notify-061-says.md));
+([a-refused-confinement-start-is-not-reported-as-req-notify-061-says.md](fixed/a-refused-confinement-start-is-not-reported-as-req-notify-061-says.md));
 not repaired: it is a surface of its own, drawn under `docs/design/README.md` §7.
 
 ## Specs

@@ -18,7 +18,7 @@ The run host cannot tell this refusal from any other configuration refusal by it
 `apps/desktop/src/main/index.ts`'s run-result handler says "The authentication and sandbox classes ahead of it are not
 built either": the sandbox class never reaches a run result, because the run never starts. The indicator clause
 ("The sandbox indicator stops describing the run as sandboxed") is met only because no such indicator is drawn
-([no-workspace-indicator-names-the-confinement-backend.md](no-workspace-indicator-names-the-confinement-backend.md)).
+([no-workspace-indicator-names-the-confinement-backend.md](../no-workspace-indicator-names-the-confinement-backend.md)).
 Found read-only by the third triage; confirmed on `fin5-noticed-gaps` by `launch.test.ts` (the refusal's code) and
 `commands/session.test.ts` (the notice's shape).
 
@@ -36,3 +36,25 @@ Found read-only by the third triage; confirmed on `fin5-noticed-gaps` by `launch
   (`setupFor`) — the continuation's refusal.
 - `apps/desktop/src/main/commands/session.ts` — the notices for `session.start`, `session.prompt`, `session.continue`.
 - `apps/desktop/src/main/index.ts` — the run-result handler's comment.
+
+## Outcome
+
+Repaired 2026-10-02 on `fin5-noticed-gaps`, for the start, the prompt and the continue; the indicator clause stays with
+[no-workspace-indicator-names-the-confinement-backend.md](../no-workspace-indicator-names-the-confinement-backend.md),
+which is open.
+
+- The confinement gate's two refusals carry `code: 'confinement'` (`ConfigureRefusal`, `prepareRun`); `launchSession`
+  answers them as `session.confinement` under REQ-SANDBOX-120's title, and the run host hands the class to the engine
+  (`host.ts`'s `configure`), whose `setupFor` refuses a continuation as `confinement` rather than `configuration`
+  (`dispatch.ts` titles the prompt's and the continue's refusal as a start's).
+- Main raises REQ-NOTIFY-061's notice for every `session.confinement` refusal (`confinementRefusalNotice`,
+  `apps/desktop/src/main/commands/session.ts`): the wording as received in both the message and the copyable detail, one
+  action, `Open Workspace` (`open-view` / `workspace`), and no retry; a prompt's refusal, which raised nothing, raises it
+  too. `apps/desktop/src/main/index.ts`'s run-result comment no longer says the sandbox class is not built: it never
+  reaches that handler, and the comment says where it is raised, keeping the earlier claim beside it.
+
+Pinned by `apps/desktop/src/main/commands/session.test.ts` ("REQ-NOTIFY-061: a sandboxed launch that was refused", three
+tests), `apps/desktop/src/run-host/launch.test.ts` ("a refused confinement mode is refused as its own class …") and
+`packages/engine/src/session-resume.test.ts` ("REQ-NOTIFY-061: a continuation refused at the confinement gate …"); four
+of them failed before the repair. Not shown in the built app on this host: `sandbox-proof`'s refusal path runs only
+where confinement is unavailable, and this host has `bwrap`.

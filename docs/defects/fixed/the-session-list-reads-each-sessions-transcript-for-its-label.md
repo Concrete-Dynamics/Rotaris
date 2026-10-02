@@ -8,7 +8,7 @@ rows than the resident window holds, its first prompt has been released to a pag
 oldest prompt still resident (a later one), or the session id where none is: the same session is listed under a
 different name after a long run. Noticed 2026-10-02 by fin8 while replacing the engine's other resident-window readings
 of a session's prompt
-([the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md](fixed/the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md));
+([the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md](the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md));
 not repaired there: the listing's label is a different reading (the first prompt, not the last) and its repair is the
 listing record's, not the transcript's.
 
@@ -40,3 +40,30 @@ the listing record) holds either way.
   carry the persisted todo (`SessionRow.todo`) the title is derived from.
 - `packages/engine/src/todo-view.ts`: `decodeStoredTodo`, the persisted todo's one reader; `packages/engine/src/run/todo.ts`:
   `taskTitle`, a task's name where it has one, else its text.
+
+## Outcome — repaired 2026-10-02 (fin10, bundle `fin10-strip-notices-and-listing`)
+
+`Sessions.list` labels each row from its listing row alone: REQ-SESSION-032's task title, derived from the row's own
+persisted todo (`sessionTaskTitle`, `packages/engine/src/todo-view.ts`: the last non-blank task name across the planner's
+phases, a task's name where it has one, else its text; empty when there is none), else the session id (REQ-SESSION-030's
+reader default), cut at 80 characters as before. The `residentRows` read is gone, so building the list reads no transcript.
+No migration: every listing row carries `todo`, and every run writes its todo at `starting`. **The reading taken:** the
+session's task list is the planner's document (REQ-ORCH-004's todo, which a run seeds with its task); the agent's own plan
+(REQ-TOOLS-144, the version-2 envelope's `agent`) is not the session's task list and gives no title.
+
+**A visible change the specification mandates:** a session is now labelled with its newest top-level task — its latest
+prompt, or a queued prompt's task name (`Queued Prompt: <id>`, REQ-CHAT-040) — rather than its first prompt, and a session
+that never saved a todo reads its id. Keeping the first prompt would be a product directive over REQ-SESSION-030/032/154,
+which is the owner's to issue; the REQ-SESSION-042 half (read nothing but the listing record) holds either way.
+
+Pinned by `packages/engine/src/sessions.test.ts`: `sessionTaskTitle` over planner documents, phases, blank names, a queued
+prompt's name and the version-2 envelope, and empty for no, malformed or blank todo; and `list` over a DAL whose transcript
+reads throw — a session whose first prompt was released past `RESIDENT_ROW_CAP` labelled with its newest task, a one-prompt
+session with its prompt, a row with no todo with its id. All three failed before the repair (`sessionTaskTitle` absent; the
+listing read `residentRows`). Shown in the built app by `apps/desktop/scripts/sessions-proof.mjs` (2026-10-02, load about 1.5,
+nothing else running; 11 scenarios passed): after the seed's run, the live run cut mid-run and a relaunch, session A's
+browser row reads its newest task `Wait a while.` and not its first prompt `Write the notes.` (`repair-one`), and the
+planted `B-nolock`, `C-deadlock` and `D-live`, each with a prompt row and no todo, read their ids (`repair-all`).
+
+Noticed while repairing, recorded and not repaired:
+[the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md](../the-session-list-counts-each-sessions-checkpoints-from-the-checkpoint-table.md).

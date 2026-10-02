@@ -60,6 +60,26 @@ export function decodeStoredTodo(json: string | null): StoredTodoState {
   return { planner: null, agent: null };
 }
 
+/**
+ * REQ-SESSION-032: the listing record's `task_title`, derived from the persisted todo state — the last non-blank task name
+ * across phases (the newest top-level task), skipping blank names and empty phases, and empty when there is none. The
+ * session's task list is the planner's document (REQ-ORCH-004: a run seeds it with its task, `Todo.fresh`, before its
+ * `starting` save); a task's name is its title where it has one, else its text (`taskTitle`, REQ-CHAT-040). The agent's own
+ * plan (REQ-TOOLS-144) is not the session's task list and names no title. REQ-SESSION-042: read from the listing row's own
+ * column, never from the transcript.
+ */
+export function sessionTaskTitle(json: string | null): string {
+  const { planner } = decodeStoredTodo(json);
+  let title = '';
+  for (const phase of planner?.phases ?? []) {
+    for (const task of phase.tasks) {
+      const name = taskTitle(task).trim();
+      if (name !== '') title = name;
+    }
+  }
+  return title;
+}
+
 export function encodeStoredTodo(state: StoredTodoState): string | null {
   if (state.agent === null) return state.planner === null ? null : JSON.stringify(state.planner);
   return JSON.stringify({ schema_version: 2, planner: state.planner, agent: state.agent });

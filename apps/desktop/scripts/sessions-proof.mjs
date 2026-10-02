@@ -11,8 +11,12 @@
  *                       REQ-GIT-092's first sentence; the app exits mid-run leaving A `running` behind a dead lock.
  *   3. repair-one       the browser marks A stale; Actions → Repair → the report (id, `running` → `interrupted`, the reason
  *                       naming the pid); the lock released, the timeline entry filed; then About backups → the disclosure panel.
+ *                       After two runs and a relaunch A is labelled with its newest task, `Wait a while.`, not its first
+ *                       prompt (REQ-SESSION-030/032/154, read from the listing record alone, REQ-SESSION-042).
  *   4. repair-all       B (running, no lock), C (running, dead lock) and D (running, a LIVE lock — a child process this
  *                       script holds) planted; Repair all stale → B and C repaired, D untouched; again → "Nothing was stale".
+ *                       Planted with a prompt row and no todo, each is labelled with its id (REQ-SESSION-030's reader default),
+ *                       never its planted prompt.
  *   5. export-records   B given an audit three entries over the cap, two issues, a timeline; Export records… on B and on C
  *                       (empty) through the ROTARIS_CAPTURE_SAVE_PATH seam; a SEPARATE node process with no product code
  *                       parses both files: four keys; B's audit `complete: false`, `dropped: 3`, contiguous ordinals; C's four empty.
@@ -200,6 +204,11 @@ const repairOne = await launch('repair-one', {
 {
   const before = rowAt(repairOne, 2400, A);
   expect(before?.data['data-stale'] === 'true' && /stale/.test(before.text), `A was not marked stale: ${JSON.stringify(before)}`);
+  // REQ-SESSION-154 with REQ-SESSION-030/032: after the seed's run and the live run, relaunched, A's label is its newest
+  // top-level task — the live run's prompt — read from the listing record's todo, not its first prompt from the transcript
+  // (`docs/defects/fixed/the-session-list-reads-each-sessions-transcript-for-its-label.md`).
+  expect(before.text.startsWith('Wait a while.') && !before.text.includes('Write the notes.'), `A's label after two runs and a relaunch: ${JSON.stringify(before.text.slice(0, 120))}`);
+  results.labels = { [A]: 'Wait a while.' };
   const report = atText(repairOne, 4500, '[data-testid="session-report"]');
   expect(report.includes(`Session ${A} was stuck at 'running' and is now 'interrupted'`), `the repair report reads "${report}"`);
   expect(/its process \(pid \d+\) is gone/.test(report), `the reason does not name the pid: "${report}"`);
@@ -249,6 +258,13 @@ try {
   expect(sessionRow('D-live').execution_status === 'running' && countIn('session_locks', 'D-live') === 1, 'the live session was touched');
   const dRow = rowAt(repairAll, 6000, 'D-live');
   expect(dRow?.data['data-stale'] === 'false', `D-live is marked stale: ${JSON.stringify(dRow)}`);
+  // REQ-SESSION-030's reader default: a listing record with no todo is labelled with its id; the planted prompt row is
+  // never read (REQ-SESSION-042).
+  for (const sid of ['B-nolock', 'C-deadlock', 'D-live']) {
+    const row = rowAt(repairAll, 6000, sid);
+    expect(row !== null && row.text.startsWith(sid) && !row.text.includes(`planted prompt of ${sid}`), `${sid}'s label: ${JSON.stringify(row?.text.slice(0, 120))}`);
+    results.labels[sid] = sid;
+  }
   results.repairAll = { repaired: ['B-nolock', 'C-deadlock'], deadPid, liveUntouched: 'D-live', livePid: holder.pid, nothingStaleSecondTime: true, png: repairAll.png, reportPng: join(output, 'repair-all-report.png') };
 } finally { holder.kill(); }
 

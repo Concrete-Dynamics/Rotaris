@@ -238,6 +238,32 @@ export function observeAgain(observed: Map<number, string>, slot: number, key: s
 }
 
 /**
+ * Slot `slot`'s ref callback, made once and kept in `refs` for the pane's life, so React calls it only when the slot's
+ * node mounts and unmounts rather than on every commit. A node that mounts is filed in `nodes`. One that unmounts — a
+ * capacity that shrank — is removed from `nodes`, forgotten in `observed` and unobserved, so a node mounted later in that
+ * slot is observed by `observeAgain` even under the key the old node last held. The pane's one measurement observer
+ * outlives every slot (ADR-0045: heights are measured;
+ * docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md), so nothing else
+ * would observe it.
+ */
+export function slotRef<T>(
+  refs: Map<number, (node: T | null) => void>, slot: number, nodes: Map<number, T>, observed: Map<number, string>,
+  unobserve: (node: T) => void,
+): (node: T | null) => void {
+  const held = refs.get(slot);
+  if (held !== undefined) return held;
+  const ref = (node: T | null): void => {
+    if (node !== null) { nodes.set(slot, node); return; }
+    const gone = nodes.get(slot);
+    nodes.delete(slot);
+    observed.delete(slot);
+    if (gone !== undefined) unobserve(gone);
+  };
+  refs.set(slot, ref);
+  return ref;
+}
+
+/**
  * The commit's measurement (ADR-0045: heights are measured), run by the pane after every commit and before the browser
  * paints it: every bound slot whose measurement key has no measurement yet — a row first bound, or a row whose content
  * changed — is read now (`read`, the slot's drawn height), filed under its key and under its identity, and marked in the
@@ -439,6 +465,30 @@ export function visibleRange(table: OffsetTable, scrollTop: number, viewportHeig
   // (docs/defects/fixed/the-pool-capacity-assumes-no-row-is-shorter-than-thirty-pixels.md).
   if (last - first + 1 > capacity) last = first + capacity - 1;
   return { first, last };
+}
+
+/**
+ * The span of displayed rows the pool binds in a render: `held` while a measurement delivery holds the pool to the span
+ * it last committed, else `needed`, the span the viewport needs (`visibleRange`). A held span that no longer fits the
+ * displayed rows or the pool is not held.
+ *
+ * ADR-0045 (heights are measured): the measurement observer renders synchronously, inside its own delivery, so a row that
+ * grew is painted with the row beneath it already moved. A slot is bound by position (slot `i` holds row `first + i`), so a
+ * render that moved `first` rebound EVERY slot: a corrected height above the viewport moved `first` by one row or several,
+ * each slot changed size inside the delivery, at the depth just delivered, and the browser deferred those sizes to the
+ * next frame and reported "ResizeObserver loop completed with undelivered notifications"
+ * (docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md). So a delivery's
+ * render repositions the rows the pool holds and rebinds none; where it held back a span the viewport needs, the pane
+ * rebinds by an ordinary render after the frame, outside any delivery. The held span is the viewport's with `OVERSCAN`
+ * rows either side, and the delivery's render pins the tail or restores the anchor, so the rows on screen stay bound
+ * meanwhile.
+ */
+export function bindRange(
+  held: { readonly first: number; readonly last: number } | null,
+  needed: { readonly first: number; readonly last: number }, count: number, capacity: number,
+): { first: number; last: number } {
+  if (held !== null && held.last < count && held.last - held.first + 1 <= capacity) return { first: held.first, last: held.last };
+  return { first: needed.first, last: needed.last };
 }
 
 /**

@@ -42,6 +42,14 @@ interface ProofLog {
   goToWorkspace: number;
   openTerminal: string[];
   wheel: { deltaY: number; deltaMode: number }[];
+  /**
+   * Every keydown and every mouseup the window received, counted in the capture phase. The harness waits on these after
+   * each key and click instead of on a fixed pause, because the page handles an event in the same dispatch that counts
+   * it: on a loaded host a fixed pause read the state before the event had arrived
+   * (`docs/defects/fixed/terminal-proofs-input-checks-fail-at-random-on-a-heavily-loaded-host.md`).
+   */
+  keydowns: number;
+  pointerUps: number;
   /** Live mode: every outcome the bridge answered, with the request kind. */
   outcomes: { kind: string; ok: boolean; code?: string | undefined }[];
 }
@@ -49,9 +57,15 @@ interface ProofBridge {
   onFrame(fn: (frame: DisplayFrame) => void): void;
   command(request: Record<string, unknown>): Promise<CommandOutcome>;
 }
-interface EchoProbe { sentinel: string; pressedAt: number | null; frameAt: number | null; paintedAt: number | null }
+/**
+ * REQ-SHELL-166's echo, in the page's own clock: `pressedAt` when the page's keydown listener ran, `frameAt` when the frame
+ * carrying the sentinel arrived, `paintedAt` in the animation frame after the grid parsed it. `eventAt` is the event's
+ * own time stamp, so `pressedAt - eventAt` is how long the key waited in the renderer's queue before it was handled —
+ * a figure that is the host's, recorded beside the bound rather than inside it.
+ */
+interface EchoProbe { sentinel: string; eventAt: number | null; pressedAt: number | null; frameAt: number | null; paintedAt: number | null }
 
-const log: ProofLog = { sendKeys: [], interrupt: [], endInput: [], kill: [], resize: [], audit: [], acks: [], clipboard: [], goToWorkspace: 0, openTerminal: [], wheel: [], outcomes: [] };
+const log: ProofLog = { sendKeys: [], interrupt: [], endInput: [], kill: [], resize: [], audit: [], acks: [], clipboard: [], goToWorkspace: 0, openTerminal: [], wheel: [], keydowns: 0, pointerUps: 0, outcomes: [] };
 const refusals = new Map<string, TerminalRefusal>();
 const bridge = (window as unknown as { __terminalProofBridge?: ProofBridge }).__terminalProofBridge ?? null;
 let live = false;
@@ -157,7 +171,8 @@ function applyEverywhere(frame: DisplayFrame): void {
   }
 }
 if (bridge) bridge.onFrame((frame) => { applyEverywhere(frame); (window as unknown as { __terminalProofBump?: () => void }).__terminalProofBump?.(); });
-window.addEventListener('keydown', (event) => { if (echo && echo.pressedAt === null && event.key === echo.sentinel) echo.pressedAt = performance.now(); }, { capture: true });
+window.addEventListener('keydown', (event) => { log.keydowns += 1; if (echo && echo.pressedAt === null && event.key === echo.sentinel) { echo.pressedAt = performance.now(); echo.eventAt = event.timeStamp; } }, { capture: true });
+window.addEventListener('mouseup', () => { log.pointerUps += 1; }, { capture: true });
 
 const api = {
   feed(frames: Omit<DisplayFrame, 'v'>[]) {
@@ -177,7 +192,19 @@ const api = {
     live = streamId !== null;
     if (streamId !== null) (window as unknown as { __terminalProofRow?: (id: string) => void }).__terminalProofRow?.(streamId);
   },
-  echoProbe(sentinel: string | null) { echo = sentinel === null ? null : { sentinel, pressedAt: null, frameAt: null, paintedAt: null }; },
+  echoProbe(sentinel: string | null) { echo = sentinel === null ? null : { sentinel, eventAt: null, pressedAt: null, frameAt: null, paintedAt: null }; },
+  /**
+   * Resolves once the window's grid and both previews have parsed every write queued for `streamId`. A closing `screen`
+   * frame resets each emulator and writes the whole final screen again, which the library parses over several tasks, so a
+   * read taken between the reset and the end of that parse sees a partial screen.
+   */
+  settled(streamId: string) {
+    const parsed = (emulator: { write(data: string, parsed?: () => void): void }) => new Promise<boolean>((resolve) => { emulator.write('', () => resolve(true)); });
+    const displays = [windowStreams.get(streamId), previewStreams.get(streamId), personaStreams.get(streamId)].filter((d) => d !== null && d !== undefined);
+    return Promise.all(displays.map((d) => parsed(d.emulator))).then(() => true);
+  },
+  /** What the input fences read: cheaper than `state`, which copies the whole log. */
+  inputs() { return { keydowns: log.keydowns, pointerUps: log.pointerUps, wheels: log.wheel.length }; },
   state(streamId: string) {
     return {
       log: JSON.parse(JSON.stringify(log)) as ProofLog,

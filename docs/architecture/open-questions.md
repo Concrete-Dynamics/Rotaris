@@ -9117,3 +9117,38 @@ wait on its own excluded pair as a retry on it. No model is labelled with its pr
 REQ-NOTIFY-074's (other providers first, each labelled with its provider), or one ahead of the other — and in which order;
 whether the waiting pair is listed when it is not held out of quota (a rate-limit wait); and whether a model of no tier is
 offered here.
+
+**OQ-186 — Where does the project setup consent dialog stand: over a corner of the view, or in a region of the window that
+takes room from every view?** *(REQ-WORKSPACE-106, "a non-modal, window-level dialog (the rest of the app stays
+navigable)"; REQ-WORKSPACE-105, opened by itself once per workspace open and open until answered; ADR-0048's non-modal
+window-level level, "an in-window panel that does not trap focus and leaves the rest navigable"; REQ-SHELL-022's 1000x680
+minimum; REQ-SHELL-024's vertical order. Raised 2026-10-02 by the repair of
+[`the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`](../defects/fixed/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md)
+(fin8, bundle `fin8-noticed-gaps-4`). Open.)*
+
+The dialog is window-level: it belongs to no view and is shown whichever view is on screen, so the decision it waits on is
+not lost by navigating. Every placement of such a surface takes something. Fixed at the window's corner it lay over the
+title bar's Sessions, Minimize, Maximize and Close window and the notice's answers (the defect above). An overlay of the
+rail-and-view region leaves the window's chrome and the notice reachable and lies over the view's top corner instead. A
+region of the window laid out in flow — a band below the notice slot, or a column beside the view — overlays nothing but
+takes its height or width from every view, which at REQ-SHELL-022's minimum some views do not have to give (the
+Workspace view's transcript floor and composer alone are most of it). The re-authentication prompt, ADR-0048's other
+surface of this level, was moved in flow because it belongs to one view (OQ-181); this one does not. The specification
+does not say which the setup dialog takes, nor whether "the rest of the app stays navigable" is met by controls that are
+reachable from the keyboard, and from the pointer once the dialog is answered, but not by the pointer while it is open.
+
+**What the build proceeds under** (`AppShell`'s `windowDialog` slot, `packages/ui/src/AppShell.tsx`; `.project-setup` in
+`packages/ui/src/shell.css`): an overlay of the rail-and-view region, `absolute` at its top corner with the language's
+`--rt-space-4` inset, bounded by that region (scrolling, its answers pinned to its floor, when shorter than it needs). It
+begins below the title bar and the notice slot at any notice height, so no title-bar control and no notice answer is
+under it (`init-proof`'s `consent` scenario measures five, none covered). It lies over the view's top corner: measured in
+the built app on 2026-10-02, at 1440x900 the Overview's List sessions and New session and the Workspace inspector's
+Persona, Steer, Cancel and Pop out; at 1000x680 also the run header's model and reasoning switches and the composer's
+right part (its Send is disabled while this prompt is unanswered, REQ-WORKSPACE-112), and the top-right controls of the
+other views (Git's New worktree, Library's search, Settings' model rows). It traps no focus (no `aria-modal`, no backdrop),
+so they stay reachable from the keyboard (not measured), and Escape answers the dialog as a skip (REQ-WORKSPACE-107).
+
+**What a ruling decides.** Whether the dialog may lie over the view while it is open (and then which corner), or stands in
+a region of its own that every view yields room to at REQ-SHELL-022's minimum (and then which, with what bound on its
+height), or in another form — collapsed to a bar until opened, as the re-authentication prompt yields beside an expanded
+plan gate.

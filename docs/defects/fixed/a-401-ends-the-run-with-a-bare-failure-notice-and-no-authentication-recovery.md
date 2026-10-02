@@ -259,7 +259,7 @@ the window's top corner (copied from `.project-setup`) and covered the title bar
 close and the notice's dismissal while open; it ~~is now~~ was then drawn in AppShell's `windowPanel` slot inside the rail-and-view
 region, below the title bar and the notice slot (superseded by the second round below), and `auth-fallback` asserts every title-bar and notice-slot button is
 the element under its own centre (the same fault in the setup dialog is recorded in
-[`the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`](../the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md)).
+[`the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`](the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md)).
 It was also one prompt per window, sent to the window following the session, so it stood over whichever session that
 window focused next and acted on its own; channel 13 now carries `{sessionId, prompt}` to every main window, each holds
 the prompts by session and draws the followed session's alone (REQ-NOTIFY-030; `reauthPromptFor` in

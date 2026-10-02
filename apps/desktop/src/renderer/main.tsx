@@ -1342,17 +1342,17 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
       onAction={dispatchNoticeAction}
       acknowledgements={acknowledgements}
       onOpenSessions={() => { void loadSessions(); }}
+      /*
+       * Part AS — ADR-0064 / REQ-WORKSPACE-106: a WINDOW-level dialog, drawn by the shell rather than inside a view, so
+       * navigating elsewhere does not dismiss a decision the product is waiting on and the rest of the application stays
+       * navigable while it is open. It opens by itself at most once per workspace open (REQ-WORKSPACE-105), and otherwise
+       * only when the user asks — from the Workspace sidebar's Project section or from Settings › Project
+       * (REQ-WORKSPACE-113). The shell's `windowDialog` slot stands it below the title bar and the notice slot.
+       */
+      windowDialog={projectSetup !== null && initialization.state !== null
+        ? <ProjectSetupDialog state={initialization.state} auto={projectSetup === 'auto'} onInitialize={initialization.onInitialize} onSkip={initialization.onSkip} onClose={closeProjectSetup} />
+        : undefined}
     />
-    {/*
-      * Part AS — ADR-0064 / REQ-WORKSPACE-106: a WINDOW-level dialog, mounted beside the shell rather than
-      * inside a view, so navigating elsewhere does not dismiss a decision the product is waiting on and
-      * the rest of the application stays navigable while it is open. It opens by itself at most once per
-      * workspace open (REQ-WORKSPACE-105), and otherwise only when the user asks — from the Workspace
-      * sidebar's Project section or from Settings › Project (REQ-WORKSPACE-113).
-      */}
-    {projectSetup !== null && initialization.state !== null && (
-      <ProjectSetupDialog state={initialization.state} auto={projectSetup === 'auto'} onInitialize={initialization.onInitialize} onSkip={initialization.onSkip} onClose={closeProjectSetup} />
-    )}
     {browserOpen && (
       <SessionBrowser sessions={browserSessions} loading={browserLoading} error={browserError} onOpen={openSession} onDismiss={() => setBrowserOpen(false)}
         onRefresh={refreshSessions}

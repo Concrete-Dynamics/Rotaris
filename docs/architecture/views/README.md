@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**The project setup dialog stands below the window chrome (REQ-WORKSPACE-106, ADR-0048; fin8, OQ-186).** AppShell gains
+a `windowDialog` slot inside the rail-and-view region; `ProjectSetupDialog` is mounted there, `absolute` at the region's
+top corner, where it was `fixed` at the window's and lay over the title bar's controls and the notice's answers. The
+**seams view** §2's rule for a panel open until answered names it as the window-level exception. No package, edge, process, channel, command or
+store column changed.
+
 **A run that ends while its session is not on screen names it (REQ-NOTIFY-031, REQ-MONITOR-202; fin8).** Main's run-result
 handler routes a non-failure ending through `RunFailurePublisher.endedOtherwise`, the focus test REQ-NOTIFY-032's gate
 already used: a session no main window follows raises `unfocusedEndingNotice` (persistent, `success` or `info`, naming the

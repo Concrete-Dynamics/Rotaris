@@ -105,7 +105,8 @@
 .notice-slot { min-height: 0; }
 .notice-slot:not(:empty) { padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); background: var(--rt-surface); }
 
-.body { display: grid; grid-template-columns: auto 1fr; min-height: 0; }
+/* `position: relative`: the window dialog (AppShell's `windowDialog`, REQ-WORKSPACE-106) is placed against this region. */
+.body { position: relative; display: grid; grid-template-columns: auto 1fr; min-height: 0; }
 
 .nav-rail {
   display: flex; flex-direction: column; gap: 2px;
@@ -1023,17 +1024,27 @@
  * user can read the reason and the control it refers to at the same time. No colour and no size literal:
  * every value is a token or a bound REQ-WORKSPACE-153 already states.
  */
+/*
+ * REQ-WORKSPACE-106 / ADR-0048 — the project setup dialog: non-modal and window-level, placed against the rail-and-view
+ * region (`.body`, AppShell's `windowDialog` slot) at its top corner with the language's `--rt-space-4` inset, so it
+ * begins below the title bar and the notice slot at any notice height. Until 2026-10-02 it was `position: fixed` at the
+ * WINDOW's corner and lay over the title bar's Sessions, Minimize, Maximize and Close window and the notice's Dismiss
+ * (measured in the built app; the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md). It still lies
+ * over the view's top corner, as any overlay that stays open until answered lies over something (OQ-186).
+ * Bounded by the region, it scrolls when shorter than it needs and keeps its answers at its floor.
+ */
 .project-setup {
-  position: fixed;
+  position: absolute;
   top: var(--rt-space-4);
   right: var(--rt-space-4);
   z-index: 40;
   /* The width is `.dialog`'s own — the adopted language decides it, and this rule states no second figure. */
-  max-width: calc(100vw - 2 * var(--rt-space-4));
-  max-height: calc(100vh - 2 * var(--rt-space-4));
+  max-width: calc(100% - 2 * var(--rt-space-4));
+  max-height: calc(100% - 2 * var(--rt-space-4));
   overflow: auto;
   border: var(--rt-hairline-width) solid var(--rt-border);
 }
+.project-setup > .dialog-actions { position: sticky; bottom: calc(-1 * var(--rt-space-5)); padding-block: var(--rt-space-2); background: var(--rt-surface); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
 .project-setup__tasks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-space-2); }
 .project-setup__task { padding: var(--rt-space-3); }
 .project-setup__task-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rt-space-3); }

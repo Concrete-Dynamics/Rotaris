@@ -71,6 +71,14 @@ export interface AppShellProps {
   /** ADR-0048 (Part W): the application-modal registration with main's window registry (`window.modality`). */
   readonly onModality?: ((active: boolean) => void) | undefined;
   /** PD-SHELL-003: the main window's product-drawn frame. */
+  /**
+   * REQ-WORKSPACE-106 / ADR-0048: a non-modal, window-level dialog — the project setup consent dialog. Drawn in the
+   * rail-and-view region, at its top corner, so it is shown in every view and stands below the title bar's controls and
+   * the notice slot's answers at any notice height; until 2026-10-02 it was fixed at the window's corner, over them
+   * (`docs/defects/fixed/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`). Where it may stand
+   * over the view's own controls is OQ-186.
+   */
+  readonly windowDialog?: ReactNode;
   readonly windowControls?: {
     readonly maximized: boolean;
     readonly onMinimize: () => void;
@@ -114,7 +122,7 @@ export function useCommandContext(): CommandContext {
   }), [activeView]);
 }
 
-export function AppShell({ version, workspacePath, home, sessionName, onChooseWorkspace, statusItems, views = {}, notice = null, onAcknowledge, onAction, acknowledgements, onOpenSessions, onModality, windowControls }: AppShellProps) {
+export function AppShell({ version, workspacePath, home, sessionName, onChooseWorkspace, statusItems, views = {}, notice = null, onAcknowledge, onAction, acknowledgements, onOpenSessions, onModality, windowControls, windowDialog }: AppShellProps) {
   const activeView = useShellState((s) => s.activeView);
   const switchView = useShellState((s) => s.switchView);
   const paletteOpen = useShellState((s) => s.paletteOpen);
@@ -167,6 +175,7 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
             </div>
           )}
         </main>
+        {windowDialog}
       </div>
       <footer className="status-strip" aria-label="Status" aria-description="An item too long for the strip is shortened with an ellipsis and keeps its full text in its tooltip." tabIndex={0} {...layoutContractAttributes(SHELL_LAYOUT.status)}>
         {/* REQ-SHELL-038: an item that elides keeps its full text in the tooltip — so every item carries one (UIR-001). */}

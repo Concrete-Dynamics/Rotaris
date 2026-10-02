@@ -496,9 +496,14 @@ await scenarioRun('fatal', async () => {
 // 1000x680 minimum with alpha on `deepseek`, an API-key provider, so the prompt carries its key field and hint, and is
 // taller by them. The second form of the placement (absolute in the rail-and-view region) passed the first launch
 // and covered the run header's switches and the composer's submit at the second (the verifier's probe, 2026-10-02).
+//
+// A third launch in plan mode (`runtime.run_start_mode: plan`, REQ-ORCH-152/153): the 401 is the plan cycle's turn, which
+// recorded no failed model, so the session was never restarted on the fallback and the generic notice was published
+// (the verifier's reproduction, 2026-10-02). Restarted, the cycle runs again on beta and parks at the gate.
 const authVariants = [
-  { name: 'auth-fallback', provider: 'scripted', method: 'none', resize: null },
-  { name: 'auth-fallback-minimum', provider: 'deepseek', method: 'api-key', resize: '1000x680' },
+  { name: 'auth-fallback', provider: 'scripted', method: 'none', resize: null, plan: false },
+  { name: 'auth-fallback-minimum', provider: 'deepseek', method: 'api-key', resize: '1000x680', plan: false },
+  { name: 'auth-fallback-plan', provider: 'deepseek', method: 'api-key', resize: '1000x680', plan: true },
 ];
 await scenarioRun('auth-fallback', async () => {
   // REQ-NOTIFY-071 / ADR-0048: with the prompt open the composer is still the element under its own centre, takes the
@@ -513,14 +518,14 @@ await scenarioRun('auth-fallback', async () => {
   const ackSeen = "(document.body.dataset.ackSeen ||= [...document.querySelectorAll('[data-testid=\"acknowledgement\"]')].map((a) => a.textContent).find((t) => t.includes('Authentication failed')) ?? '')";
   results.authFallback = {};
   for (const v of authVariants) {
-    const s8 = scenario(v.name, [], { fallback: 'beta', alphaProvider: v.provider });
+    const s8 = scenario(v.name, v.plan ? ['  run_start_mode: plan'] : [], { fallback: 'beta', alphaProvider: v.provider });
     const primary = `${v.provider}/alpha`;
     const r = await launch(v.name, s8, {
       // `:only=<provider>`: alpha's provider refuses the key, beta's does not; the restarted root takes its script from the
       // first step again, so the fault is scoped to the provider rather than to the step.
       ROTARIS_SCRIPT: `fail:401:only=${v.provider}`, ROTARIS_CAPTURE_PROMPT: 'bad key, then the fallback',
       ...(v.resize === null ? {} : { ROTARIS_CAPTURE_RESIZE: `${v.resize}@200` }),
-      ROTARIS_CAPTURE_WAIT: `js:${ackSeen} !== '' && document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed' && document.querySelector('[data-testid="reauth-prompt"]') !== null${v.resize === null ? '' : ` && innerWidth + 'x' + innerHeight === '${v.resize}'`} && ${composerUsable} && ${chromeUsable}`, ROTARIS_CAPTURE_WAIT_MS: '90000',
+      ROTARIS_CAPTURE_WAIT: `js:${ackSeen} !== '' && ${v.plan ? `document.querySelector('[data-testid="plan-gate-plan"]') !== null` : `document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed'`} && document.querySelector('[data-testid="reauth-prompt"]') !== null${v.resize === null ? '' : ` && innerWidth + 'x' + innerHeight === '${v.resize}'`} && ${composerUsable} && ${chromeUsable}`, ROTARIS_CAPTURE_WAIT_MS: '90000',
       ROTARIS_CAPTURE_PROBE: 'body;;.notice-slot;;[data-testid="reauth-prompt"];;[data-action="reauth-keep"];;[data-testid="reauth-error"]', ROTARIS_CAPTURE_AFTER_MS: '800',
     }, { timeout: 180_000 });
     const db = open(s8);
@@ -531,7 +536,7 @@ await scenarioRun('auth-fallback', async () => {
     // The first run's result carries the provider's failure text, which the prompt quotes (REQ-NOTIFY-071).
     const error0 = db.prepare("SELECT payload FROM events WHERE session_id = ? AND kind = 'result'").all(row.session_id).map((e) => JSON.parse(e.payload)?.result?.error).find((e) => typeof e === 'string') ?? null;
     db.close();
-    expect(row.execution_status === 'completed', `${v.name}: the restarted run did not complete on the fallback: ${JSON.stringify(row)}`);
+    expect(row.execution_status === (v.plan ? 'awaiting_plan_decision' : 'completed'), `${v.name}: the restarted run did not ${v.plan ? 'park at the plan gate' : 'complete'} on the fallback: ${JSON.stringify(row)}`);
     expect(typeof error0 === 'string' && /HTTP 401/.test(error0), `${v.name}: the first run's result does not carry the 401: ${error0}`);
     const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
     expect(calls.length === 2 && calls[0].model === primary && calls[1].model === 'scripted-b/beta', `${v.name}: the 401 was not followed by one call on the fallback: ${JSON.stringify(calls)}`);

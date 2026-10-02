@@ -45,6 +45,10 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**A plan cycle's 401 is restarted on the fallback (REQ-NOTIFY-070, REQ-ORCH-153; the 401 note's part A, third repair
+round).** `Run.recordRootModelFailure` records the failed model with the run's last failure on every root turn, the plan
+cycle's included; the **runtime view** says so. No package, edge, channel, command or store column changed.
+
 **The re-authentication prompt is laid out in flow and overlays nothing (REQ-NOTIFY-071, ADR-0048, OQ-180; the part B
 second repair round).** AppShell's **`windowPanel`** slot is removed; the Workspace view draws the followed session's
 prompt (`WorkspaceView`'s `reauthPrompt`) as its own grid row, **`reauth`**, between the run header and the transcript,

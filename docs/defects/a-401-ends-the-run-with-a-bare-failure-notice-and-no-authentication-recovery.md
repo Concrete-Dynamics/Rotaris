@@ -65,6 +65,14 @@ restarted prompt's own user row cannot be written), a second row says it could n
 failed pair, and the pin is taken back — pinned by the "user row cannot be written" case (second repair round). Pinned in `packages/engine/src/run/ladder.test.ts` ("REQ-NOTIFY-070 / REQ-MONITOR-147 /
   REQ-SESSION-026 …"), `resilience.test.ts`, `autopsy.test.ts`, and shown by `resilience-proof`'s new `auth-fallback`
   scenario (`fail:401:only=scripted`, `fallback_model: beta`). REQ-NOTIFY-068 holds: the 401 is not retried on the pair.
+- **Plan mode** (third repair round, 2026-10-02). A first 401 in a session whose run starts in plan mode
+  (`runtime.run_start_mode: plan`, REQ-ORCH-152/153) fell on the plan cycle's turn, which recorded the run's failure but
+  not the model it was calling (`failedModel` was set by an iteration's failed turn alone), so `restartOnFallback` refused
+  it with `no-model-failure` and the generic notice was published — no restart, no prompt (the verifier's reproduction in
+  the built app). Every root turn now records the two together (`Run.recordRootModelFailure`, from `iterate` and from
+  `parkAtPlanGate`). The restart re-submits the prompt under the same mode, so it is a plan cycle on the fallback that parks
+  at the gate. Pinned by the REQ-ORCH-153 case in `ladder.test.ts` (red on the code before: `no-model-failure`) and a
+  plan cycle that ends on no model failure still refused; shown by `auth-fallback`'s third launch, `auth-fallback-plan`.
 - **Readings** the build proceeds under (the restart re-submits the prompt as a new row, a restart that cannot begin takes
   the pin back, the first-failure bookkeeping lives in main for the process's life): OQ-179.
 

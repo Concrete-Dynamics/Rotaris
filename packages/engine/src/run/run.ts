@@ -676,6 +676,17 @@ export class Run {
   get failedEntryModel(): ModelRef | null {
     return this.failedModel;
   }
+
+  /**
+   * REQ-NOTIFY-070 / REQ-MONITOR-147: a root turn's model call failed — an iteration's (`iterate`) or a plan cycle's
+   * (`parkAtPlanGate`). The run's last failure and the model the root's cell was calling (after any ladder move) are
+   * recorded together, in this one place, so no root turn records the one without the other: a plan cycle's turn did,
+   * and its first 401 was never restarted on the fallback.
+   */
+  private recordRootModelFailure(error: ModelError): void {
+    this.lastFailure = describe(error);
+    this.failedModel = this.rootCell?.model.model ?? null;
+  }
   get outcome(): RunResult | null {
     return this.result;
   }
@@ -1025,9 +1036,8 @@ export class Run {
       } else {
         // REQ-ORCH-074: failed → the task is abandoned; for the root agent the run ends agent_session_aborted.
         outcome = 'failed';
-        this.lastFailure = describe(report.error);
-        this.failedModel = this.rootCell?.model.model ?? null;
-        summary = this.lastFailure;
+        this.recordRootModelFailure(report.error);
+        summary = this.lastFailure ?? describe(report.error);
         this.todo.abandon(task);
         this.todo.releaseHeld(iteration, false);
         escalate = true;
@@ -2099,9 +2109,13 @@ export class Run {
       ];
       const report = await this.turn(`${preamble}\n\n${this.deps.task}`, 0, content);
       plan = report.status === 'failed' ? '' : report.text.trim();
-      if (report.status === 'failed') this.lastFailure = describe(report.error);
+      // REQ-NOTIFY-070: a plan cycle's turn is the root's model call too, so its failure records the model it was calling,
+      // as an iteration's does — a first 401 here restarts on the fallback like any other (the repair of the plan-mode
+      // finding on a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md).
+      if (report.status === 'failed') this.recordRootModelFailure(report.error);
     } catch (cause) {
       this.lastFailure = String(cause);
+      this.failedModel = null;
     }
     // A stopped cycle, and one whose turn produced no plan, end the run in teardown, whose own close records a prompt still
     // pending as not delivered because the run ended — reached before anything is awaited, as the park's close below is.

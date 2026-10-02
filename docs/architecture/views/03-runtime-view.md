@@ -1177,7 +1177,9 @@ refused sandboxed launch to main; a quota or rate-limit marker; anything else) a
 run failed, the session and the draft were kept, the failure text as detail, `Return to the workspace`
 (`open-view: workspace`). A **first authentication failure** of the session, with the run host and the session's
 workspace service present (REQ-NOTIFY-069), asks the run host `session.restartOnFallback`: `Sessions.restartOnFallback`
-reads the model the root's failing call was addressed to (`Run.failedEntryModel`), resolves `fallback_model`, and —
+reads the model the root's failing call was addressed to (`Run.failedEntryModel`, recorded with the run's last failure by
+every root turn — an iteration's or, in plan mode, the plan cycle's: `Run.recordRootModelFailure`; the plan cycle's was
+missed until the third repair round, so a plan-mode 401 was never restarted), resolves `fallback_model`, and —
 where the fallback is configured and is another pair — pins it in the session's `ResilienceMemory` keyed by the pair that
 failed and records the `model_override` timeline entry (`cause: authentication`) that `ResilienceMemory.rehydrate`
 replays on every later run and after a reload (REQ-SESSION-026); then `prompt` re-submits the last user prompt, a new

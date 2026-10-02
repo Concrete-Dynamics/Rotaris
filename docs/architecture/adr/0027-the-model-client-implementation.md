@@ -337,4 +337,11 @@ cause: authentication}`, the restart's one call on `scripted-b/beta`, the sessio
 fails too not tried again, a restart that cannot begin taken back durably. *Corrected 2026-10-02 (the repair round):* the
 first build wrote the system row "The run restarts on the fallback …" before `prompt`'s refusals, so a restart that could
 not begin left that row standing beside the generic notice; the row is now written only once the restart has begun
-(`promptHeld`'s `beginning` hook), and the "cannot begin" case asserts that no row claims a restart.
+(`promptHeld`'s `beginning` hook), and the "cannot begin" case asserts that no row claims a restart. *Corrected again
+2026-10-02 (the third repair round):* `Run.failedEntryModel` was recorded only by an iteration's failed turn, so a session in
+plan mode (`runtime.run_start_mode: plan`, REQ-ORCH-152/153), whose first turn is the plan cycle's, was never restarted
+on the fallback — `restartOnFallback` refused it as "no model call failing" and the generic notice was published (the
+verifier's reproduction in the built app). The run's last failure and the failed model are now recorded together in one
+place for every root turn (`Run.recordRootModelFailure`, called by `iterate` and by `parkAtPlanGate`); the restarted plan
+cycle runs on the fallback and parks at the gate. Pinned by the REQ-ORCH-153 case in `ladder.test.ts` (red before) and
+shown by `auth-fallback`'s plan-mode launch.

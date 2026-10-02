@@ -85,6 +85,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     over?: Partial<RunConfig>;
     /** The configure call (1-based) from which configuration is refused — a restart that cannot begin. */
     configureFailsFrom?: number;
+    /** REQ-ORCH-152/153: `runtime.run_start_mode`. */
+    runStartMode?: 'auto' | 'plan';
   }
 
   function sessionsWith(script: (persona: string, turn: number) => ScriptedCall, opts: Opts = {}) {
@@ -112,7 +114,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: (_sid, r) => results.push(r.status),
       configure: () => (++configured >= (opts.configureFailsFrom ?? Infinity) ? { ok: false, error: { reason: 'the configuration could not be loaded' } } : { ok: true, value: {
         model: { backend, config }, models, personas,
-        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, ...(opts.childTimeoutMs === undefined ? {} : { childTimeoutMs: opts.childTimeoutMs }), ...(opts.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: opts.childStallTimeoutMs }) },
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, ...(opts.runStartMode === undefined ? {} : { runStartMode: opts.runStartMode }), ...(opts.childTimeoutMs === undefined ? {} : { childTimeoutMs: opts.childTimeoutMs }), ...(opts.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: opts.childStallTimeoutMs }) },
         resilience: { catalogue, fallbackModel: opts.fallbackModel ?? null },
       } }),
       ...(opts.delegation ? { tools: (ctx) => (ctx.delegation ? delegationPort(ctx.delegation, ctx.parentId ?? 'root', opts.tool) : { specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }), cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false }) } : {}),
@@ -1056,6 +1058,29 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       if (!again.ok) throw new Error(again.error.reason);
       await fresh.sessions.running(sid)!;
       expect(fresh.client.requests.map((r) => r.model.modelId)).toEqual(['f1']);
+    });
+
+    it('REQ-ORCH-153: a first 401 on a plan cycle\'s turn restarts on the fallback too — the restarted plan cycle runs on it and parks at the gate', async () => {
+      const { sessions, client } = sessionsWith((_p, turn) => (turn === 1 ? failing(unauthorized()) : answer('1. Do the thing on the fallback.')), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' }, runStartMode: 'plan' });
+      const sid = (sessions.start(dal, 'C:/ws', 'plan the thing') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
+      const restarted = sessions.restartOnFallback(sid);
+      if (!restarted.ok) throw new Error(`${restarted.error.code}: ${restarted.error.reason}`);
+      expect(restarted.value).toEqual({ failed: { provider: 'a', model: 'a1', key: 'a1' }, fallback: { provider: 'f', model: 'f1', key: 'f1' }, prompt: 'plan the thing' });
+      await sessions.running(sid)!;
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
+      // The restart is the same prompt under the same mode: a plan cycle, held at the gate with the fallback's plan.
+      expect(dal.getSession(sid)!.execution_status).toBe('awaiting_plan_decision');
+      expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'model_override')!.metadata)).toMatchObject({ provider: 'a', model: 'a1', model_key: 'f1', cause: 'authentication' });
+    });
+
+    it('a plan cycle whose turn ended on no model call\'s failure records no failed model: refused (REQ-NOTIFY-069)', async () => {
+      // The plan cycle produced no plan text (a succeeded, empty turn): the run ends, but no model call failed.
+      const { sessions } = sessionsWith(() => answer(''), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' }, runStartMode: 'plan' });
+      const sid = (sessions.start(dal, 'C:/ws', 'plan the thing') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(sessions.restartOnFallback(sid)).toMatchObject({ ok: false, error: { code: 'no-model-failure' } });
     });
 
     it('the fallback failing too is not tried again: refused, nothing written (REQ-NOTIFY-072, REQ-NOTIFY-075)', async () => {

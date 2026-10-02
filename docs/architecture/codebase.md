@@ -1149,7 +1149,8 @@ switch's REQ-MONITOR-142 row says (OQ-177;
 session and the draft were kept, `Return to the workspace` — and the new `auth-fallback` scenario (`fallback_model: beta`,
 the scripted step `fail:401:only=scripted`) asserts the pin of the fallback keyed by the failed pair, the acknowledgement
 naming both models and the restart with the same prompt completing on `scripted-b/beta` (REQ-NOTIFY-070,
-REQ-MONITOR-147, REQ-SESSION-026), and since part B the non-modal re-authentication prompt beside the continuing run
+REQ-MONITOR-147, REQ-SESSION-026) — in plan mode too, where the 401 falls on the plan cycle's turn and the restarted cycle
+parks at the gate on the fallback (`auth-fallback-plan`, the third repair round) — and since part B the non-modal re-authentication prompt beside the continuing run
 with the composer, every title-bar control and every notice button usable beside it and no control under it, at the
 opening size and at 1000x680 with an API-key provider's key field (REQ-NOTIFY-071, ADR-0048), drawn in flow as the
 Workspace view's own `reauth` row for the followed session alone (REQ-NOTIFY-030, OQ-180). The recovery

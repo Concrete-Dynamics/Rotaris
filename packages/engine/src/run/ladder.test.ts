@@ -1136,7 +1136,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(dal.getSession(sid)!.plan_released).toBe(1);
       expect(dal.planCyclesOf(sid)).toHaveLength(1);
       expect(users(sid)).toEqual(['plan the thing']);
-      // The failed run's task stays abandoned (REQ-ORCH-074) and the relaunch carried the request out again (OQ-180).
+      // The failed run's task stays abandoned (REQ-ORCH-074) and the relaunch carried the request out again (OQ-182).
       expect(taskStates(sid)).toEqual(['abandoned', 'complete']);
     });
 

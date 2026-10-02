@@ -68,6 +68,7 @@ export function createRequirementsHost({ bridge, workspace, onOpenSession }: Req
     previewLocation: (epic: ReqId | undefined) => send<LocationPreviewOutcome>({ name: 'requirements.source.previewLocation', ...(epic === undefined ? {} : { epic }) }),
     launchPreview: (id: ReqId, action: BoardAction) => runs<LaunchPreview>({ op: 'preview', id, action }),
     dispatchRuns: () => runs<DispatchOutcome>({ op: 'dispatch' }),
+    acceptDisclosure: () => runs<unknown>({ op: 'accept' }),
     suppressDisclosure: () => runs<unknown>({ op: 'suppress', suppressed: true }),
     onChanged: (listener: (change: RequirementsChanged) => void) => bridge.onRequirementsChanged((p) => listener(p as RequirementsChanged)),
     async readPreferences(): Promise<BoardPreferences> {

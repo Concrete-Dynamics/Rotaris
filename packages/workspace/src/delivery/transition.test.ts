@@ -188,6 +188,16 @@ describe('the bound transition (REQ-TRACE-388/399/405; ADR-0041 one transaction)
     expect(t.inFlight.size).toBe(0);
     expect(dal.countAudit()).toBe(2);
   });
+  it('REQ-TRACE-464: a worktree the claim provisioned is recorded as its row at once, with no history entry, no audit row and no state move; recording it again keeps one row', () => {
+    const dal = new DeliveryDal(r.db);
+    const tree = { ref: 'REQ-101/u2', unit: 'u2', path: '/ws/.rotaris/requirements/worktrees/u2', branch: 'rotaris/req/req-101/u2' };
+    t.recordWorktreeProvisioned('REQ-101', tree);
+    t.recordWorktreeProvisioned('REQ-101', tree);
+    expect(dal.worktreesOf('REQ-101').map((w) => ({ ref: w.ref, unit: w.unit, path: w.path, branch: w.branch, kept: w.kept }))).toEqual([{ ...tree, kept: 0 }]);
+    expect(dal.historyOf('REQ-101')).toHaveLength(0);
+    expect(dal.countAudit()).toBe(0);
+    expect(dal.read('REQ-101')).toBeUndefined();
+  });
   it('a rejection in beforeCommit refuses the action with its message and writes nothing (REQ-TRACE-472\'s declined disclosure)', async () => {
     const dal = new DeliveryDal(r.db);
     const out = await t.transition('REQ-101', 'release', USER, { now: now() }, { beforeCommit: () => Promise.reject(new Error('The disclosure was declined.')) });

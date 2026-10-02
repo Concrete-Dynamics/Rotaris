@@ -8881,7 +8881,76 @@ are owed, `packages/providers/src/catalogue.ts`); that is a gap of the build, no
 the model reads (a write into the user's project files, which REQ-NOTIFY-047 keeps out of notice actions but not out of a
 dialog), or into the credential store with the model then pointed at it — or only the sentence this build shows.
 
-**OQ-180 — What is REQ-NOTIFY-070's restart "with the same prompt", what does "the fallback bookkeeping is cleared" take back,
+**OQ-180 — Where does a board run that stops at its iteration limit rest, and does automatic scheduling start it again?**
+*(REQ-TRACE-477, a flow's ending delivered to the surface told it began; REQ-TRACE-482, "the system itself picks up the
+next candidate as capacity becomes available"; REQ-TRACE-463; REQ-TRACE-476, "without re-running completed units".
+Raised 2026-10-02 by the repair of
+[`a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`](../defects/fixed/a-rejected-card-back-in-ready-can-never-start-its-next-unit.md),
+bundle `fin9-queue-dispatch-and-disclosure`, as OQ-179, and renumbered OQ-180 when the bundle merged `origin/main`,
+which had taken OQ-179 meanwhile. Open.)*
+
+A board run that reaches its iteration limit persists `stopped`; main's coordinator classifies `stopped` and `cancelling`
+as `cancelled` (`outcomeOf`, `apps/desktop/src/main/requirements-runs.ts`), and a `cancelled` ending rests the card in
+`ready` (`recordRunEnded`, `packages/workspace/src/delivery/transition.ts`). The specification classifies a board run's
+ending as completed (review) or not, and says a run-time block returns to the released state; it names no state for a
+run that ended neither completed nor failed, and nothing bounds how often automatic scheduling may pick the same card up.
+
+**What the build proceeds under**: as built — the card rests in `ready` on its next unit, and under `automatic` the
+dispatch that follows every run's end starts that unit at once on a fresh worktree (the repair above), the finished
+unit's tree kept; under `manual` it waits for the queue's release. So a requirement whose runs keep reaching the limit is
+re-run, one unit after another, until a person holds it or the queue is stopped.
+
+**What a ruling decides.** Whether an iteration-limited run ends `cancelled` into `ready`, or `failed` into `blocked` with
+a `run-failure` blocker (whose resume provisions the next unit), as a stop by the user has since R-067; and, if it rests
+in `ready`, whether automatic scheduling may pick it up again without bound.
+
+**OQ-181 — Where does REQ-NOTIFY-071's prompt stand "beside the continuing run", and is it drawn while the window shows
+another view?** *(REQ-NOTIFY-071, "a successful fallback restart opens a non-modal re-authentication prompt beside the
+continuing run"; ADR-0048's non-modal window-level level, "an in-window panel that does not trap focus and leaves the rest
+navigable"; REQ-SHELL-022's minimum; REQ-CHAT-010's 180 px transcript floor; REQ-NOTIFY-030. Raised 2026-10-02 by the
+401 note's part B, second repair round,
+[`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md),
+as OQ-180, and renumbered OQ-181 at the branch's merge beside the note's parts C and D (2026-10-02) because `origin/main` had
+taken OQ-179 meanwhile and the branch's own OQ-179 took OQ-180 (since renumbered OQ-182, at the branch's third merge,
+because `origin/main` had taken OQ-180). Open.)*
+
+The requirement places the prompt by the run, not by the window, and the level ADR-0048 gives it requires the rest of the
+window to stay navigable while it is open — and it stays open until it is answered. Two overlay placements were built
+and both covered controls in the built app: `fixed` at the window's top corner (the title bar's Sessions, minimise,
+maximise, close and the notice's dismissal), then `absolute` at the top corner of the rail-and-view region (at the
+1000x680 minimum the run header's model and reasoning switches and Compress context; with a key field, the composer's
+submit; in the other views each one's top-right controls). Any overlay that stays open covers something at some size.
+The specification does not say which region "beside the continuing run" is, nor whether the prompt is drawn while the
+window shows a view other than the one the run is shown in.
+
+**What the build proceeds under** (`WorkspaceView`'s `reauthPrompt` row, `packages/ui/src/shell.css`):
+- the prompt is drawn **in flow in the Workspace view**, the view that shows the run, as its own row of the view's grid
+  between the run header and the transcript (the plan gate's kind of place, REQ-SHELL-168). It overlays nothing at any
+  window size: the transcript keeps REQ-CHAT-010's floor and the prompt takes what is left, scrolling when that is less
+  than it needs with its answers pinned to its floor ~~— at every size~~ (*corrected 2026-10-02, the third repair round*:
+  beside an EXPANDED plan gate the transcript is not drawn and the gate's row has no floor, and the prompt, sized first,
+  left the gate 42 px with its three answers unreachable at 1000x680. There the prompt **yields to the gate** as the
+  transcript does, one action away: it is drawn as a bar — its title and its answers on one row — and its sentence, the
+  provider's words and the key's hint are drawn again when the gate is collapsed or answered; the gate, the run's stop
+  and the reading area (REQ-ORCH-153, PD-ORCH-002 revision 2), takes the rest. A ruling may also decide whether REQ-NOTIFY-071's
+  quote may be withheld from view that way while a plan awaits a decision);
+- it is **not drawn while another view is shown**. The window keeps holding it (by session, REQ-NOTIFY-030) and draws it
+  again when the Workspace view returns; the run's acknowledgement (REQ-NOTIFY-070) is the window-wide signal, shown in
+  any view. A key half-typed into the field is not kept across a view change.
+
+**What a ruling decides.** Whether "beside the continuing run" means the Workspace view's run column (as built), a region
+of the window shown in every view (which then has to take space from every view at REQ-SHELL-022's minimum), or a
+separate window; and whether a prompt the user has not answered should be reachable from the other views. *Added at the
+fourth repair round (2026-10-02, the verifier's optional findings):* in the bar beside an expanded plan gate the only words
+drawn are its title, "Re-authenticate <provider>", and its answers — so while a plan awaits a decision the bar names
+neither the primary model that failed nor that the run continues on the fallback (REQ-NOTIFY-071's two statements), and
+for a provider re-authenticated elsewhere — a device-code or browser provider, whose method this build does not provide,
+or one whose key the model configuration carries — it does not say that the method is unavailable here: those sentences,
+with the provider's quoted error, are in the document and drawn again when the gate is collapsed or answered. A ruling
+may decide whether any of them must stay drawn in the bar (each one taken from the height the plan, the largest part of
+the gate under PD-ORCH-002, keeps at REQ-SHELL-022's minimum).
+
+**OQ-182 — What is REQ-NOTIFY-070's restart "with the same prompt", what does "the fallback bookkeeping is cleared" take back,
 and how long does "the first authentication failure of a session" last?** *(REQ-NOTIFY-070, "the run restarts with the
 same prompt. Where the restart cannot begin, the fallback bookkeeping is cleared and the generic failure notice is
 published instead"; REQ-NOTIFY-069, "a recorded last prompt"; REQ-NOTIFY-045, whose retry "resubmits the current composer
@@ -8890,7 +8959,9 @@ draft, or the last submitted prompt"; REQ-NOTIFY-072/075, "a second authenticati
 [`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md),
 as OQ-177, renumbered OQ-179 at its first merge because `origin/main` had taken OQ-177 and OQ-178 meanwhile, and renumbered
 OQ-180 at its second (2026-10-02, beside the note's parts C and D) because `origin/main` had taken OQ-179 meanwhile, part D's
-question above; the branch's commit subjects still say OQ-177. Open.)*
+question above, and renumbered OQ-182 at its third (2026-10-02) because `origin/main` had taken OQ-180 meanwhile (bundle
+`fin9-queue-dispatch-and-disclosure`'s question above) and the branch's own OQ-181 kept its number; the branch's commit
+subjects say OQ-177, and those of its fourth repair round OQ-180. Open.)*
 
 Three things the requirements leave to the build:
 
@@ -8941,48 +9012,3 @@ the application; whether the pin covers every agent on the failed pair or the en
 with no usable fallback spends the session's automatic fallback; whether a session not on screen is restarted at once,
 in the background, or when it is focused; and whether "the same prompt" of a run a plan decision launched is that decision
 (as built) or the session's last prompt.
-
-**OQ-181 — Where does REQ-NOTIFY-071's prompt stand "beside the continuing run", and is it drawn while the window shows
-another view?** *(REQ-NOTIFY-071, "a successful fallback restart opens a non-modal re-authentication prompt beside the
-continuing run"; ADR-0048's non-modal window-level level, "an in-window panel that does not trap focus and leaves the rest
-navigable"; REQ-SHELL-022's minimum; REQ-CHAT-010's 180 px transcript floor; REQ-NOTIFY-030. Raised 2026-10-02 by the
-401 note's part B, second repair round,
-[`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md),
-as OQ-180, and renumbered OQ-181 at the branch's merge beside the note's parts C and D (2026-10-02) because `origin/main` had
-taken OQ-179 meanwhile and the branch's own OQ-179 took OQ-180. Open.)*
-
-The requirement places the prompt by the run, not by the window, and the level ADR-0048 gives it requires the rest of the
-window to stay navigable while it is open — and it stays open until it is answered. Two overlay placements were built
-and both covered controls in the built app: `fixed` at the window's top corner (the title bar's Sessions, minimise,
-maximise, close and the notice's dismissal), then `absolute` at the top corner of the rail-and-view region (at the
-1000x680 minimum the run header's model and reasoning switches and Compress context; with a key field, the composer's
-submit; in the other views each one's top-right controls). Any overlay that stays open covers something at some size.
-The specification does not say which region "beside the continuing run" is, nor whether the prompt is drawn while the
-window shows a view other than the one the run is shown in.
-
-**What the build proceeds under** (`WorkspaceView`'s `reauthPrompt` row, `packages/ui/src/shell.css`):
-- the prompt is drawn **in flow in the Workspace view**, the view that shows the run, as its own row of the view's grid
-  between the run header and the transcript (the plan gate's kind of place, REQ-SHELL-168). It overlays nothing at any
-  window size: the transcript keeps REQ-CHAT-010's floor and the prompt takes what is left, scrolling when that is less
-  than it needs with its answers pinned to its floor ~~— at every size~~ (*corrected 2026-10-02, the third repair round*:
-  beside an EXPANDED plan gate the transcript is not drawn and the gate's row has no floor, and the prompt, sized first,
-  left the gate 42 px with its three answers unreachable at 1000x680. There the prompt **yields to the gate** as the
-  transcript does, one action away: it is drawn as a bar — its title and its answers on one row — and its sentence, the
-  provider's words and the key's hint are drawn again when the gate is collapsed or answered; the gate, the run's stop
-  and the reading area (REQ-ORCH-153, PD-ORCH-002 revision 2), takes the rest. A ruling may also decide whether REQ-NOTIFY-071's
-  quote may be withheld from view that way while a plan awaits a decision);
-- it is **not drawn while another view is shown**. The window keeps holding it (by session, REQ-NOTIFY-030) and draws it
-  again when the Workspace view returns; the run's acknowledgement (REQ-NOTIFY-070) is the window-wide signal, shown in
-  any view. A key half-typed into the field is not kept across a view change.
-
-**What a ruling decides.** Whether "beside the continuing run" means the Workspace view's run column (as built), a region
-of the window shown in every view (which then has to take space from every view at REQ-SHELL-022's minimum), or a
-separate window; and whether a prompt the user has not answered should be reachable from the other views. *Added at the
-fourth repair round (2026-10-02, the verifier's optional findings):* in the bar beside an expanded plan gate the only words
-drawn are its title, "Re-authenticate <provider>", and its answers — so while a plan awaits a decision the bar names
-neither the primary model that failed nor that the run continues on the fallback (REQ-NOTIFY-071's two statements), and
-for a provider re-authenticated elsewhere — a device-code or browser provider, whose method this build does not provide,
-or one whose key the model configuration carries — it does not say that the method is unavailable here: those sentences,
-with the provider's quoted error, are in the document and drawn again when the gate is collapsed or answered. A ruling
-may decide whether any of them must stay drawn in the bar (each one taken from the height the plan, the largest part of
-the gate under PD-ORCH-002, keeps at REQ-SHELL-022's minimum).

@@ -1190,7 +1190,7 @@ limit's notice or its own summary. *Since repair round 1 (2026-10-02):* every no
 failed run's class publication passes the **focus gate** (`RunFailurePublisher`, REQ-NOTIFY-030/032): a session a main
 window follows (`MainWindows.followerOfSession`, no fallback to the active window) publishes at once; any other raises
 REQ-NOTIFY-032's warning — naming the session, the failure text as detail, `focus-session` — and holds the class notice, and
-for an authentication failure the automatic fallback's restart and the recovery dialog (OQ-180's reading), until a main
+for an authentication failure the automatic fallback's restart and the recovery dialog (OQ-182's reading), until a main
 window's `session.subscribe` follows that session; a later
 ending of the session supersedes what was held. Main also keeps, by session, every provider/model pair that failed
 authentication since its provider's credentials last changed (`AuthRecovery.refusedPair`, REQ-NOTIFY-068): the dialog

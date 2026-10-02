@@ -43,6 +43,17 @@ export function moveStartsRun(action: BoardAction, target: ColumnToken | undefin
   return false;
 }
 
+/**
+ * REQ-TRACE-482/476: whether an accepted act is followed by a kick of the coordinator. A run-starting move always is (the
+ * coordinator then starts whatever the scheduler offers, and reports the reason when nothing began for this card); an act
+ * that lands a card in `ready` without starting a run — a `reject` from review, chiefly — is too when the queue schedules
+ * automatically, since "the system itself picks up the next candidate" and nothing else would until a person acted or a
+ * run ended (defect note `an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md`).
+ */
+export function dispatchesAfter(action: BoardAction, target: ColumnToken | undefined, landed: ColumnToken, automatic: boolean): boolean {
+  return moveStartsRun(action, target) || (automatic && landed === 'ready');
+}
+
 /** REQ-TRACE-383: the six that require a stated consequence before they happen (REQ-TRACE-389). */
 export const CONFIRM_ACTIONS: ReadonlySet<BoardAction> = new Set<BoardAction>(['release', 'rerun', 'send-back', 'accept', 'accept-proposal', 'accept-change-work']);
 

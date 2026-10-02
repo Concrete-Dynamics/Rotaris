@@ -231,8 +231,8 @@ failed pair, and the pin is taken back — pinned by the "user row cannot be wri
   gate reading "You asked for: USE-THE-ZEBRA-LIBRARY" beside the prompt's bar).
 - **Readings** the build proceeds under (the restart re-submits the prompt as a new row — a plan decision's run relaunched
   as that decision instead, since the fourth repair round — a restart that cannot begin takes the pin back, the
-  first-failure bookkeeping lives in main for the process's life): OQ-180 (raised as OQ-177, renumbered
-  OQ-179 and then OQ-180 at the branch's merges).
+  first-failure bookkeeping lives in main for the process's life): OQ-182 (raised as OQ-177, renumbered
+  OQ-179, then OQ-180, then OQ-182 at the branch's merges).
 
 ## Progress — part B built 2026-10-02
 
@@ -326,7 +326,7 @@ REQ-NOTIFY-064's notice; the merge keeps one of each and orders the rest:
   preconditions or a restart that cannot begin publish the generic notice; a run active again raises nothing. A first
   failure with no usable fallback spends the session's first failure, so a model chosen by hand that fails too reopens the
   dialog and never the fallback (REQ-NOTIFY-075); and an unfocused session's restart waits for its focus with the rest of
-  its class's publication — both readings added to OQ-180.
+  its class's publication — both readings added to OQ-182.
 - **REQ-NOTIFY-079.** The dialog's opening closes every re-authentication prompt open (`closePrompts` →
   `closeAllPrompts`), each session keeping its fallback.
 - **REQ-NOTIFY-068 across the two halves.** The primary the automatic fallback restarted away from joins the dialog's
@@ -368,5 +368,5 @@ provider's own flow in place … and offers a control confirming that re-authent
 device-code and browser-PKCE authenticators the build does not have (`packages/providers/src/catalogue.ts`'s header;
 [`../../architecture/first-release-plan.md`](../../architecture/first-release-plan.md)'s deferred product gaps); until they
 exist the dialog and the prompt say the method is not provided by this build. **Open questions** the build proceeds under:
-OQ-179 (a provider whose key the model configuration carries), OQ-180 (the restart's readings), OQ-181 (where the prompt
+OQ-179 (a provider whose key the model configuration carries), OQ-182 (the restart's readings), OQ-181 (where the prompt
 stands).

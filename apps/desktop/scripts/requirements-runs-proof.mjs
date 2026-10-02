@@ -3,7 +3,7 @@
  * §Delivery Queue, §Editing and Creating Requirements; REQ-TRACE-369/375, 417..426, 434..454, 463..483, 498).
  *
  * It builds a REAL scratch Git repository from Part AJ's fixture requirement store, then runs the Part AP suites
- * through vitest with the JSON reporter and reads the SEVEN proof assertions back by their `it` titles from
+ * through vitest with the JSON reporter and reads the EIGHT proof assertions back by their `it` titles from
  * `apps/desktop/src/main/requirements-runs.proof.test.ts`. That suite drives the real delivery service, the real
  * traceability engine (in-thread executor) and main's real run coordinator over the real store and the real Git
  * helper; only the run host is scripted, and it records the live configuration state in force at each request so
@@ -58,7 +58,7 @@ const SUITES = [
   'apps/desktop/src/run-host/launch.test.ts',
   'packages/workspace/src/delivery/proof.test.ts',
 ];
-/** The plan's five assertions for this row, and the restart's sixth and seventh, verbatim as `it` titles in requirements-runs.proof.test.ts. */
+/** The plan's five assertions for this row, the restart's sixth and seventh, and the reject's eighth, verbatim as `it` titles in requirements-runs.proof.test.ts. */
 const ASSERTIONS = {
   runStartsInItsOwnWorktreeElevated: "release → disclosure → accept: the run starts in a new worktree with the permissive preset, and the composer's next run does not",
   runRowCarriesTheSessionId: 'the run row carries the session id while the unit runs',
@@ -69,6 +69,8 @@ const ASSERTIONS = {
   restingCardStartsAfterRestart: 'a card resting in ready across a restart is disclosed and started from the queue, on the worktree its release provisioned',
   // The verifier's second finding on that note (REQ-TRACE-472/482): main's standing disclosure travels on its claim.
   suppressedCardPickedUpAfterRestart: 'a card resting in ready is picked up by automatic scheduling after a restart once the disclosure is suppressed permanently, on its recorded tree',
+  // Defect note `a-rejected-card-back-in-ready-can-never-start-its-next-unit.md` (REQ-TRACE-423/482/464).
+  rejectedCardStartsItsNextUnit: "a rejected card back in ready begins its next unit on a fresh worktree, the rejected unit's worktree kept",
 };
 
 const jsonPath = join(output, 'vitest.json');

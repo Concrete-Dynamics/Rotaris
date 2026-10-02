@@ -238,15 +238,18 @@ describe('REQ-CONFIG-259/341: a role edit is held under the scope each field was
 });
 
 describe('the requirements command envelope (REQ-TRACE-472/478)', () => {
-  it('carries main\'s standing disclosure beside the actor, and refuses a value outside due, suppressed and off', async () => {
+  it('carries main\'s standing disclosure beside the actor, and refuses a value outside due, accepted, suppressed and off', async () => {
     const { WorkspaceServiceRequestSchema } = await import('./process-protocol.js');
     const base = { kind: 'requirements.command', workspaceRoot: '/ws', command: { name: 'requirements.board', workspace: '/ws' }, actor: { kind: 'system' } };
-    for (const disclosure of ['due', 'suppressed', 'off']) {
+    // `accepted`: a plain acceptance earlier in this launch, held by main for the rest of it (REQ-TRACE-472; defect note
+    // `accepting-the-disclosure-once-does-not-suppress-it-for-the-rest-of-the-launch.md`).
+    for (const disclosure of ['due', 'accepted', 'suppressed', 'off']) {
       const parsed = WorkspaceServiceRequestSchema.safeParse({ ...base, disclosure });
       expect(parsed.success).toBe(true);
       expect(parsed.data).toMatchObject({ disclosure });
     }
     expect(WorkspaceServiceRequestSchema.safeParse(base).success).toBe(true);
-    expect(WorkspaceServiceRequestSchema.safeParse({ ...base, disclosure: 'accepted' }).success).toBe(false);
+    // `unattended` is the preview's silence (REQ-TRACE-474), never a standing value main stamps.
+    expect(WorkspaceServiceRequestSchema.safeParse({ ...base, disclosure: 'unattended' }).success).toBe(false);
   });
 });

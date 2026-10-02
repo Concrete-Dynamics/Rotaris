@@ -2222,7 +2222,7 @@ export class Sessions {
    * a plan decision launched is relaunched as that decision (`relaunchPlanDecision`): approve carries the plan as the user
    * left it again, and revise starts the same further cycle — its number, the changes stated, the plan as it stood — and
    * nothing is re-submitted, since a decision is no prompt. Any other run re-submits the session's last prompt
-   * (`promptHeld`, OQ-180's reading). `beginning` runs once every refusal has passed, just before the launch.
+   * (`promptHeld`, OQ-182's reading). `beginning` runs once every refusal has passed, just before the launch.
    *
    * Until 2026-10-02's fourth repair round every restart took the second path, so a revise cycle that failed on a first 401
    * came back as a fresh cycle from the original prompt, the changes stated and the plan they revised dropped (and an
@@ -2263,7 +2263,7 @@ export class Sessions {
      * The decision's own launch appends no task: the held run's todo carries the gated work (REQ-ORCH-004 / OQ-104). Its
      * relaunch lets the todo decide (`restatesUnfinished`): after a failed revise cycle — which takes up no task — the work
      * is still pending and nothing is appended; after a failed approved run, whose iteration abandoned the task
-     * (REQ-ORCH-074), the request is appended again so the plan is carried out, as a re-submitted prompt's is (OQ-180).
+     * (REQ-ORCH-074), the request is appended again so the plan is carried out, as a re-submitted prompt's is (OQ-182).
      */
     this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, [], decided.decision === 'revise' ? { cycle: decided.cycle + 1, changes: decided.changes } : undefined, { message: null }, true);
     // The relaunched run is the decision's now: a further authentication restart of it relaunches the same decision again.

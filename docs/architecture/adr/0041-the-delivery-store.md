@@ -1160,3 +1160,83 @@ its own. The service holds the last value it received and schedules the publishe
 claim under it; a command whose value moved republishes the queue before answering and its reply carries `changed`. A
 permanent acceptance reads the board at once, so the service learns of it without waiting for another act. The seventh
 assertion now also requires the published entry to read `next` before the dispatch.
+
+## Repair — 2026-10-02: a card's next unit is provisioned at the claim
+
+*Reported back in place, under CLAUDE.md's standing policy, by the repair of
+[`a-rejected-card-back-in-ready-can-never-start-its-next-unit.md`](../../defects/fixed/a-rejected-card-back-in-ready-can-never-start-its-next-unit.md).*
+
+**One clause of the repair above is replaced, and kept above as written: "It never provisions: the queue's release
+writes no worktree row, and REQ-TRACE-464 forbids a second tree."** It held for the card that repair was about — a
+card released and resting in `ready`, whose unit a run-starting action had provisioned — and not for a card resting in
+`ready` on a unit nothing provisioned. A reject (review → `ready`, not run-starting, REQ-TRACE-386) and a run ending
+classified `cancelled` (a run stopped at its iteration limit persists `stopped`, which main's `outcomeOf` reads as
+`cancelled`) both rest a card in `ready` after a run began, so its `Units` fact has moved and its next unit has no
+tree. The launch the service held was the finished unit's: under `automatic` the scheduler named the card `next` on the
+finished unit, the claim handed that launch out, main started a session in the rejected unit's kept tree, and
+`requirements.run.started` was refused by `delivery_runs`' primary key, which also skipped `claimed.delete` and left the
+card `next` holding a slot; under `manual` the queue's release found no row for the next unit and stated the stall.
+
+Now the held launch of an earlier unit is **spent**: the scheduler names the card's current unit (`unitOfCard`), and the
+claim never hands the finished unit out. Its disclosure carries to the next unit (it was given in this launch of the
+application, REQ-TRACE-472); its tree stays where REQ-TRACE-423 keeps it, and a send-back's instructions do not carry.
+**The claim provisions** the card's current unit when the store records no tree row for it at all — the system's
+dispatch, under both modes; the queue's release only records the disclosure and arms — and writes the row at once
+through the writer's new `recordWorktreeProvisioned` (`workspace/src/delivery/transition.ts`), so a restart before the
+run starts takes the tree over rather than provisioning a second one (REQ-TRACE-464). A recorded row whose tree is gone
+stays the stated stall. The read pass never provisions (REQ-TRACE-408), and neither does the reject (REQ-TRACE-389 and
+REQ-TRACE-422 fix what it says it does to the worktree). `requirements.run.started` settles the claim whatever its write
+does (pinned by a `delivery.test.ts` case whose start the primary key refuses: the next candidate takes the freed slot). A claim made before the first pass under `manual` with nothing armed answers `null` without parsing the store, so a
+kick at a workspace open costs a `manual` workspace no parse. `requirements-runs-proof`'s eighth assertion shows it
+against a real scratch repository: a reviewed card rejected, `runs.dispatch()`, and u2 runs on its own worktree beside
+the kept u1.
+
+## Repair — 2026-10-02: an automatic queue resumes at a workspace open
+
+*Reported back in place, under CLAUDE.md's standing policy, by the repair of
+[`an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md`](../../defects/fixed/an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md).*
+
+**The clause "Nothing dispatches when the application launches, so the pick-up waits for the first kick" (the second
+round of the repair of a card resting in `ready`) is replaced, and kept above as written.** It described the build and
+named the gap; REQ-TRACE-476 ("The queue SHALL resume where it stopped") and REQ-TRACE-482 ("the system itself picks up
+the next candidate as capacity becomes available") leave no reading in which a relaunch waits for a person. Main's
+post-open slot now kicks the coordinator once per workspace open, after the window is interactive, through
+`requirementsRuns.opened(root, workspaceId)`: a dispatch for the workspace just opened, not for the most recently focused
+window. The coordinator's dispatches are serialised per workspace root, so a kick for one workspace is never swallowed by
+another's in flight. The board's first read is not the placement (REQ-TRACE-408: a read creates no execution unit;
+REQ-TRACE-512: nothing starts on its own initiative from opening the view). The claim's parse runs in the workspace
+service, off main's thread, and a `manual` workspace with nothing armed is answered without one (the claim's guard, from
+the repair before). A sibling gap of the same shape is closed with it: under automatic scheduling the board now kicks the
+coordinator after an act that rests a card in `ready` without starting a run, a `reject` chiefly (`dispatchesAfter`).
+`requirements-proof`'s `ready-restart-automatic` stage shows it across a quit and a relaunch of the built app.
+
+## Repair — 2026-10-02: one acceptance holds for the rest of the launch
+
+*Reported back in place, under CLAUDE.md's standing policy, by the repair of
+[`accepting-the-disclosure-once-does-not-suppress-it-for-the-rest-of-the-launch.md`](../../defects/fixed/accepting-the-disclosure-once-does-not-suppress-it-for-the-rest-of-the-launch.md).*
+
+Part AP's second execution built REQ-TRACE-472's disclosure with **two** desktop preferences and **one** reading of a
+launch nobody disclosed — `due`, `suppressed` (accepted permanently) or `off` — and the repairs above stamped that value
+on every command. **Only the permanent half of "Accepting SHALL suppress the disclosure for the remainder of that launch,
+and accepting it permanently SHALL suppress it in subsequent launches too" was built**: a plain acceptance wrote no
+preference, main held nothing for it, and the next card's preview read `due` again. The launch is read as the
+application's, as "subsequent launches" requires, and main's lifetime is that launch. So main's coordinator now holds a
+plain acceptance in memory, told by the board through `requirements.runs {op: 'accept'}`, and reads `accepted` — a new
+value of `StandingDisclosure` and of `LaunchPreview.disclosure` — in the standing disclosure it stamps on every service
+command and in the launch preview, which the board answers without the dialog (`disclosureFor`) and passes straight
+through as the act's or release's payload. The workspace service needed no change: it already treats any standing
+value but `due` and `off` as disclosed and permissive. The next launch reads `due` again. `requirements-proof`'s
+`disclosure-launch` stage shows it.
+
+## Repair — 2026-10-02: a board run is settled against its own workspace
+
+*Reported back in place, under CLAUDE.md's standing policy, by the repair of
+[`a-board-run-is-settled-against-the-focused-windows-workspace-not-its-own.md`](../../defects/fixed/a-board-run-is-settled-against-the-focused-windows-workspace-not-its-own.md).*
+
+Part AP's second execution has main's coordinator settle "the row from the run host's own terminal event (REQ-TRACE-477)"
+and mark a run waiting on a person from its snapshots. It addressed both, the dispatch after a run's end and the run host's
+exit reap, to the most recently focused window's workspace, which is the run's own only while one workspace is open. Now
+the coordinator keeps each board run's workspace root and id, and addresses that workspace's service; the run host's exit
+reaps every workspace that held a run, beside the focused one. `requirements-runs.test.ts` pins it with two workspaces and
+the focus moved to the other; `requirements-runs-proof` has no two-window stage.
+

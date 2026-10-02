@@ -168,7 +168,8 @@ What picks the next candidate up, `manual` or `automatic`, bounded by a concurre
 **Disclosure**:
 The declaration, at the first action of a launch that would start a run, of the permissions the run
 receives and the worktree it is confined to, with a way to abandon. It is `due` until accepted;
-accepted permanently it is `suppressed` in later launches; switched off in settings it is `off`, and
+accepted, it is `accepted` for the remainder of that launch of the application; accepted
+permanently it is `suppressed` in later launches; switched off in settings it is `off`, and
 the run adopts the workspace's own permission mode; a workspace that already runs unattended needs
 none. Declining it changes nothing. — `REQ-TRACE-472`, `REQ-TRACE-474`
 _Avoid_: consent, warning, prompt

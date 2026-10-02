@@ -31,7 +31,7 @@ import { KEY_NOT_STORED } from './auth-recovery.js';
  * says so in the provider service's own words. Opening the recovery dialog closes every prompt (REQ-NOTIFY-079,
  * `closeAllPrompts`).
  *
- * The bookkeeping lives here, in main, for the life of the process (OQ-180's reading): the pin itself is the run host's,
+ * The bookkeeping lives here, in main, for the life of the process (OQ-182's reading): the pin itself is the run host's,
  * durable in the session's timeline, so after a relaunch the session runs on the fallback and its next failure is the
  * fallback's own, which this then reads as a first failure whose fallback is the model that failed — the dialog's case.
  */

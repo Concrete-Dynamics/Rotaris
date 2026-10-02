@@ -187,7 +187,7 @@ export interface WorkspaceViewProps {
   readonly slash?: SlashHost | undefined;
   /**
    * REQ-NOTIFY-071 / ADR-0048 (the 401 note's part B): the followed session's non-modal re-authentication prompt, drawn
-   * IN FLOW as the view's own row between the run header and the transcript — beside the continuing run (OQ-180), taking
+   * IN FLOW as the view's own row between the run header and the transcript — beside the continuing run (OQ-181), taking
    * its height from the transcript, overlaying no control. The renderer root holds the prompts and passes the one for
    * the session this view shows; `null` when none is open, and the row is then zero high.
    */
@@ -1353,7 +1353,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
         * controls and follow the OPPOSITE enablement rule to the composer's chips (REQ-CHAT-006's closing sentence).
         */}
       <RunHeader runState={runState} session={session} runActive={runActive} stepStartedAt={stepStartedAt} models={models} onSetModel={onSetModel} onSetReasoning={onSetReasoning} onError={setError} />
-      {/* REQ-NOTIFY-071 / ADR-0048: the re-authentication prompt in its own row beside the continuing run (OQ-180) — in flow,
+      {/* REQ-NOTIFY-071 / ADR-0048: the re-authentication prompt in its own row beside the continuing run (OQ-181) — in flow,
         * so it overlays nothing; zero high while none is open. */}
       {reauthPrompt}
       {/*

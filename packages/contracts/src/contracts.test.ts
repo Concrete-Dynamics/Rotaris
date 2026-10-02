@@ -225,3 +225,28 @@ describe('REQ-TOOLS-002 / REQ-MONITOR-060: declaredToolsOf', () => {
     for (const role of BUILT_IN_ROLE_NAMES) expect(BUILT_IN_ROLE_TOOLS[role].length).toBeGreaterThan(0);
   });
 });
+
+describe('REQ-CONFIG-259/341: a role edit is held under the scope each field was edited at', () => {
+  it('admits field edits at two scopes, the same field at both, and refuses the old one-scope shape', async () => {
+    const { DesktopSaveSchema } = await import('./config.js');
+    expect(DesktopSaveSchema.safeParse({ roles: { tester: { workspace: { unsetModel: true }, global: { unsetThinking: true } } } }).success).toBe(true);
+    expect(DesktopSaveSchema.safeParse({ roles: { tester: { workspace: { unsetModel: true }, global: { model: 'gpt-4o' } } } }).success).toBe(true);
+    expect(DesktopSaveSchema.safeParse({ roles: { tester: { scope: 'workspace', unsetModel: true } } }).success).toBe(false);
+    expect(DesktopSaveSchema.safeParse({ roles: { tester: { modelScope: 'workspace', model: 'gpt-4o' } } }).success).toBe(false);
+    expect(DesktopSaveSchema.safeParse({ roles: { tester: { workspace: { model: 'gpt-4o', scope: 'global' } } } }).success).toBe(false);
+  });
+});
+
+describe('the requirements command envelope (REQ-TRACE-472/478)', () => {
+  it('carries main\'s standing disclosure beside the actor, and refuses a value outside due, suppressed and off', async () => {
+    const { WorkspaceServiceRequestSchema } = await import('./process-protocol.js');
+    const base = { kind: 'requirements.command', workspaceRoot: '/ws', command: { name: 'requirements.board', workspace: '/ws' }, actor: { kind: 'system' } };
+    for (const disclosure of ['due', 'suppressed', 'off']) {
+      const parsed = WorkspaceServiceRequestSchema.safeParse({ ...base, disclosure });
+      expect(parsed.success).toBe(true);
+      expect(parsed.data).toMatchObject({ disclosure });
+    }
+    expect(WorkspaceServiceRequestSchema.safeParse(base).success).toBe(true);
+    expect(WorkspaceServiceRequestSchema.safeParse({ ...base, disclosure: 'accepted' }).success).toBe(false);
+  });
+});

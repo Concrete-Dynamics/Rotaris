@@ -15,7 +15,7 @@ import { GitViewStateSchema, RepositoryStateSchema, WorktreeBindingSchema } from
 import { SANDBOX_MODE_NAMES } from './config.js';
 import { CHECKPOINT_KINDS, CheckpointListSchema, PreviewEntrySchema } from './checkpoints.js';
 import { PromptListSchema, PromptStateSchema } from './library.js';
-import { ActorSchema, RequirementsCommandSchema } from './requirements.js'; // Part AK
+import { ActorSchema, RequirementsCommandSchema, STANDING_DISCLOSURES } from './requirements.js'; // Part AK
 import { PromptsRootsResultSchema } from './slash.js'; // Part AO
 import { SkillsStateSchema } from './skills.js'; // ADR-0063
 import { ImprovementAnalysisJobSchema, ImprovementArtifactSchema, ImprovementCommandSchema, RunTypeSchema } from './improvements.js';
@@ -112,6 +112,17 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.restartOnFallback'), sessionId: z.string().min(1) }),
   /** REQ-NOTIFY-078: re-authentication re-pins the primary model — the authentication pin on its pair taken back (`Sessions.repinPrimary`). */
   z.object({ kind: z.literal('session.repinPrimary'), sessionId: z.string().min(1), provider: z.string().min(1), model: z.string().min(1) }),
+  /**
+   * REQ-NOTIFY-069/072/074 (the 401 note's part C): the facts the authentication recovery dialog is drawn from — the model the
+   * failed root call was addressed to, the active model, the configured models a restart can pin, and whether a last prompt
+   * is recorded (`Sessions.authRecoveryFacts`). Main asks after classifying a run's failure (REQ-NOTIFY-060/067).
+   */
+  z.object({ kind: z.literal('session.authRecovery'), sessionId: z.string().min(1) }),
+  /**
+   * REQ-NOTIFY-074/076 (parts C and D): the dialog's restart — `modelKey` is pinned against the pair that failed and the run
+   * restarts with the same prompt; null restarts on the same model after a re-authentication (`Sessions.restartAfterAuthFailure`).
+   */
+  z.object({ kind: z.literal('session.authRestart'), sessionId: z.string().min(1), modelKey: z.string().min(1).nullable() }),
   /** REQ-ORCH-153/154 (ADR-0062) and PD-ORCH-003: the plan gate's three entries, forwarded to the run host that owns the session. */
   z.object({ kind: z.literal('session.planEdit'), sessionId: z.string().min(1), text: z.string() }),
   z.object({ kind: z.literal('session.planDecision'), sessionId: z.string().min(1), decision: z.enum(PLAN_DECISIONS), changes: z.string().optional() }),
@@ -374,8 +385,10 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
   /** Part U / REQ-GIT-069: every ref under `refs/rotaris/checkpoints/<sid>/` in the tree, best-effort; a missing tree is a detail, never a failure. */
   z.object({ kind: z.literal('checkpoint.deleteNamespace'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1) }),
   // Part AK — ADR-0041: the requirements command family, relayed whole; the ACTOR is stamped by main at the boundary
-  // the action arrived through (REQ-CONFIG-198) and is the one field a renderer never sends.
-  z.object({ kind: z.literal('requirements.command'), workspaceRoot: z.string(), command: RequirementsCommandSchema, actor: ActorSchema }),
+  // the action arrived through (REQ-CONFIG-198) and is the one field a renderer never sends. `disclosure` is main's
+  // standing disclosure (REQ-TRACE-472's two preferences, which only main holds), stamped beside the actor on every
+  // command so the queue the service publishes and the claim it answers read the same value (REQ-TRACE-478).
+  z.object({ kind: z.literal('requirements.command'), workspaceRoot: z.string(), command: RequirementsCommandSchema, actor: ActorSchema, disclosure: z.enum(STANDING_DISCLOSURES).optional() }),
   // Part AJ
   /**
    * ADR-0040 (Part AJ): the four toolchain operations of REQ-TRACE-508..511 against the open workspace's root
@@ -449,6 +462,16 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.primaryRepinned'), sessionId: z.string(), applies: z.enum(['next-iteration', 'next-run']) }),
   /** REQ-NOTIFY-070: the pair that failed and the fallback now pinned; the restart has begun. */
   z.object({ kind: z.literal('session.fallbackRestarted'), sessionId: z.string(), failed: z.object({ provider: z.string(), model: z.string(), key: z.string().nullable() }), fallback: z.object({ provider: z.string(), model: z.string(), key: z.string() }) }),
+  /** REQ-NOTIFY-072/074: `session.authRecovery`'s answer. A model's `key` is null where no `models:` entry produced it. */
+  z.object({
+    kind: z.literal('session.authRecovery'), sessionId: z.string(),
+    failed: z.object({ key: z.string().nullable(), provider: z.string(), model: z.string() }).nullable(),
+    active: z.object({ key: z.string().nullable(), provider: z.string(), model: z.string() }).nullable(),
+    models: z.array(z.object({ key: z.string(), provider: z.string(), model: z.string() })),
+    lastPrompt: z.boolean(),
+  }),
+  /** REQ-NOTIFY-074/076: the restart has begun; `pinned` names the pair that failed and the model now pinned, null after a re-authentication. */
+  z.object({ kind: z.literal('session.authRestarted'), sessionId: z.string(), pinned: z.object({ from: z.object({ provider: z.string(), model: z.string() }), to: z.object({ key: z.string(), provider: z.string(), model: z.string() }) }).nullable() }),
   /** REQ-ORCH-154: the cycle the answer settled, and whether a further segment launched (approve and revise) or not (cancel). */
   z.object({ kind: z.literal('session.planResolved'), sessionId: z.string(), cycle: z.number().int().positive(), relaunched: z.boolean() }),
   /** REQ-CHAT-165: a span older than `beforeIndex`, oldest first; `oldest` says the first recorded row is in it. */

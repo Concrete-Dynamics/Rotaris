@@ -25,7 +25,7 @@ import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, ca
 // What a transcript surface reads about the session it is following, shared with the persona window (`session-view.ts`).
 import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery, useShownSession } from './session-view.js';
 // The other windows this same bundle is the root of, each one a role on the route (`windows.tsx`, ADR-0056).
-import { bootApproval, bootHookReview, bootPause, bootPersona, bootProvider, bootTerminal } from './windows.js';
+import { bootApproval, bootAuthRecovery, bootHookReview, bootPause, bootPersona, bootProvider, bootTerminal } from './windows.js';
 /**
  * THE RENDERER'S ROOT. One bundle for every window; the window's role arrives by route (ADR-0056), and `boot` at the
  * bottom is the only place that reads it. Sandboxed: no Node, no filesystem, no store handle — everything this bundle
@@ -1319,7 +1319,7 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
         // Part AL2: the terminal host around the Workspace — the row previews, the pop-out click and the toolbar control read it (REQ-SHELL-079/080/108).
         workspace: <TerminalHostProvider host={terminalHost}><Workspace models={models} modelsLoaded={modelsLoaded} workspace={workspace} popOut={popOut} prompts={prompts} onOpenStash={() => setStashOpen(true)} groupTools={groupTools} layout={workspaceLayout} onLayout={onWorkspaceLayout} onOpenTrailer={openTrailer}
           // REQ-NOTIFY-071 / ADR-0048: the followed session's re-authentication prompt (REQ-NOTIFY-030), drawn by the Workspace
-          // view in its own row beside the continuing run (OQ-180) — in flow, so no control of the window or the view is under it.
+          // view in its own row beside the continuing run (OQ-181) — in flow, so no control of the window or the view is under it.
           reauthPrompt={reauth.prompt !== null ? <ReauthPrompt key={reauth.prompt.sessionId} prompt={reauth.prompt} onSubmit={reauth.onSubmit} onDismiss={reauth.onDismiss} /> : null} /></TerminalHostProvider>,
         mission: <Mission workspace={workspace} popOut={popOut} />,
         git: <Git workspace={workspace} git={git} layout={gitLayout} onLayout={onGitLayout} />,
@@ -1503,6 +1503,7 @@ async function boot(): Promise<void> {
   const role = new URLSearchParams(window.location.search).get('role');
   if (role === 'approval') { await bootApproval(); return; }
   if (role === 'pause') { await bootPause(); return; }
+  if (role === 'auth-recovery') { await bootAuthRecovery(); return; } // REQ-NOTIFY-072
   if (role === 'provider') { await bootProvider(); return; }
   if (role === 'hook-review') { await bootHookReview(); return; }
   if (role === 'persona') { await bootPersona(); return; }

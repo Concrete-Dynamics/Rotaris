@@ -1,8 +1,8 @@
-import type { FailureRecovery } from '../failure-recovery.js';
 import type { BrowserWindow, UtilityProcess } from 'electron';
 import type { Clocks } from '@rotaris/kernel';
 import type {
   ApprovalPayload,
+  AuthRecoveryPayload,
   CommandOutcome,
   CommandRequest,
   HooksSummary,
@@ -29,6 +29,9 @@ import type { MainWindows, MainWindowView } from '../main-windows.js';
 import type { PersonaWindows, TerminalWindows } from '../windows.js';
 import type { NoticeStore } from '../notices.js';
 import type { LibraryRevision } from '../library.js';
+import type { AuthFallback } from '../auth-fallback.js';
+import type { AuthRecovery } from '../auth-recovery.js';
+import type { RunFailurePublisher } from '../run-failure-notice.js';
 import type { InitializationCoordinator } from '../initialization.js';
 import type { createRequirementsRuns } from '../requirements-runs.js';
 import type { Updater } from '../updater/updater.js';
@@ -100,6 +103,11 @@ export interface CommandContext {
   readonly pauseWindows: Map<string, BrowserWindow>;
   readonly pausePayloads: Map<number, PausePayload>;
   readonly presentPause: (payload: PausePayload) => Promise<void>;
+  /** REQ-NOTIFY-072..080: the authentication recovery (`auth-recovery.ts`) and the payload each recovery window was opened for. */
+  readonly authRecovery: AuthRecovery;
+  readonly authRecoveryPayloads: Map<number, AuthRecoveryPayload>;
+  /** REQ-NOTIFY-030/032: a failed run's class publication held until its session is followed (`run-failure-notice.ts`). */
+  readonly runFailures: RunFailurePublisher;
   readonly reviewPayloads: Map<number, { workspace: string; entries: HooksSummary['review']; decided: boolean; win: BrowserWindow }>;
   readonly measurePersonaPaint: (persona: string, dlg: BrowserWindow, shownAt: number) => void;
   readonly terminalWindowCommand: (req: TerminalWindowCommand, senderId: number) => Promise<CommandOutcome>;
@@ -119,8 +127,8 @@ export interface CommandContext {
    * waved-off version is recorded before the offer notice is cleared (REQ-STARTUP-116/117).
    */
   readonly updater: Updater;
-  /** REQ-NOTIFY-060..071/078: a run failure's classes and the re-authentication prompt they open (`failure-recovery.ts`). */
-  readonly failureRecovery: FailureRecovery;
+  /** REQ-NOTIFY-070/071/078: the first authentication failure's automatic fallback and its re-authentication prompt (`auth-fallback.ts`). */
+  readonly authFallback: AuthFallback;
 
   // The provider surface and the health it caches between asks.
   readonly providers: ProviderService;

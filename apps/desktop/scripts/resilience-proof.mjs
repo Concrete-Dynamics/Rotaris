@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createServer } from 'node:http';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { logTail, overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { choose, startApp, stopApp, stopOverrunMessage, until } from './lib/driver.mjs';
@@ -10,8 +11,9 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
 /**
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
  * (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..093/263), and since OQ-173 that a wait the run imposes is not a stall
- * (REQ-MONITOR-117..119), since OQ-177 that an entry switch after a ladder move applies as its row says (REQ-MONITOR-142),
- * and since the 401 note's parts A and B the authentication class (REQ-NOTIFY-060/067/070/071). Thirteen scenarios, each
+ * (REQ-MONITOR-117..119), and since OQ-177 that an entry switch after a ladder move applies as its row says (REQ-MONITOR-142).
+ * Fifteen scenarios (since 2026-10-02 the authentication class's: `fatal` and `reauth` the recovery dialog's, `generic`
+ * REQ-NOTIFY-064's notice, `auth-fallback` the first failure's automatic fallback and its re-authentication prompt), each
  * asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
@@ -59,7 +61,8 @@ function scenario(name, agentsYaml, opts = {}) {
     'models:',
     `  alpha: { provider: ${opts.alphaProvider ?? 'scripted'}, model_id: alpha }`,
     '  beta: { provider: scripted-b, model_id: beta }',
-    'small_model: alpha', 'medium_model: alpha', 'large_model: alpha',
+    ...(opts.models ?? []),
+    ...['small_model', 'medium_model', 'large_model'].map((slot) => `${slot}: ${opts.tier ?? 'alpha'}`),
     ...(opts.fallback ? [`fallback_model: ${opts.fallback}`] : []),
     'runtime:', '  permission_mode: autonomous', ...agentsYaml,
     // Since Part T the shipped code_intelligence entry is enabled by default and its discovery costs every run start
@@ -457,36 +460,283 @@ await scenarioRun('transient', async () => {
   expect(modelCalls(r.log).filter((c) => c.who === 'orchestrator').length === 2, 'the transient retry did not happen exactly once');
   results.transient = { status: row.execution_status, issue: JSON.parse(t.metadata), png: r.png, elapsedMs: r.elapsedMs };
 });
+/**
+ * A DRIVEN launch, bounded as `drivenOverride` is (its steps by `boundMs`, its ending by `stopApp`), for the scenarios whose
+ * subject is a window the capture seams cannot reach — the authentication recovery dialog (REQ-NOTIFY-072), which is its
+ * own modal window. `body(d, step, giveUp)` runs the steps; each lands in `<name>.steps.json`. It fails as `launch` fails.
+ */
+async function drivenLaunch(name, s, extra, body, { boundMs = 240_000 } = {}) {
+  const png = join(output, `${name}.png`);
+  rmSync(join(s.root, 'app.log'), { force: true });
+  const trail = [];
+  const started = Date.now();
+  const launched = await startApp({ root: s.root, workspace: s.workspace, timeoutMs: 60_000, extra })
+    .catch((cause) => { throw new Error(`${name}: ${cause instanceof Error ? cause.message : String(cause)}`); });
+  const step = async (label, pending) => {
+    const at = Date.now() - started;
+    try {
+      const value = await pending;
+      trail.push({ at, ms: Date.now() - started - at, label, value });
+      return value;
+    } catch (cause) {
+      trail.push({ at, ms: Date.now() - started - at, label, error: cause instanceof Error ? cause.message : String(cause) });
+      throw cause;
+    }
+  };
+  const giveUp = new AbortController();
+  let value;
+  let failure = null;
+  let bound;
+  try {
+    value = await Promise.race([
+      body(launched.driver, step, giveUp.signal),
+      new Promise((_, reject) => { bound = setTimeout(() => reject(new Error(`the steps did not finish within ${boundMs} ms`)), boundMs); }),
+    ]);
+  } catch (cause) {
+    failure = cause;
+  } finally {
+    clearTimeout(bound);
+    giveUp.abort(new Error(`the ${name} launch was given up`));
+  }
+  await launched.driver.useWindow().catch(() => undefined);
+  const stopped = await stopApp(launched, { screenshot: png });
+  const log = existsSync(launched.logFile) ? readFileSync(launched.logFile, 'utf8') : '';
+  writeFileSync(join(output, `${name}.log`), log);
+  writeFileSync(join(output, `${name}.steps.json`), `${JSON.stringify(trail, null, 2)}\n`);
+  const problems = [];
+  if (failure) problems.push(`${name}: ${failure.message} (see ${name}.steps.json)`);
+  if (backgroundSetupStarted(log)) problems.push(`${name}: the workspace's initialization started code-intelligence-setup in the background, so its notice may stand in the notice slot`);
+  if (stopped.overran) problems.push(stopOverrunMessage(name, stopped, log).split('\n--- ')[0]);
+  else if (stopped.exit.code !== 0) problems.push(`${name} exited ${stopped.exit.code ?? stopped.exit.signal} on the driver's quit`);
+  if (problems.length > 0) throw new Error(`${problems.join('; ')}\n--- the launch's last words ---\n${logTail(log)}\n(see ${name}.log)`);
+  return { log, png, value, elapsedMs: Date.now() - started };
+}
+
+/** The session's newest row, polled until it has settled. */
+const settled = (s, signal, what) => until(() => { const db = open(s); try { return session(db); } finally { db.close(); } }, (row) => row !== undefined && SETTLED.has(row.execution_status), { timeoutMs: 90_000, what, signal });
+/** The recovery dialog as the driver reads it in its own window: title, error, the listed models, Retry's state, and its geometry. */
+const RECOVERY_READING = `(() => {
+  const q = (s) => document.querySelector(s);
+  const error = q('[data-testid="auth-recovery-error"]');
+  const probe = document.createElement('span');
+  probe.style.color = 'var(--rt-danger-300)';
+  document.body.append(probe);
+  const failureColour = getComputedStyle(probe).color;
+  probe.remove();
+  return {
+    title: q('[data-testid="auth-recovery-title"]')?.textContent ?? null,
+    role: q('[data-testid="auth-recovery"]')?.getAttribute('role') ?? null,
+    modal: q('[data-testid="auth-recovery"]')?.getAttribute('aria-modal') ?? null,
+    error: error?.textContent ?? null,
+    errorColour: error ? getComputedStyle(error).color : null,
+    failureColour,
+    models: [...document.querySelectorAll('[data-testid="auth-recovery-models"] [role="radio"]')].map((b) => ({ key: b.getAttribute('data-value'), provider: b.getAttribute('data-provider'), label: b.textContent, checked: b.getAttribute('aria-checked') })),
+    empty: q('[data-testid="auth-recovery-empty"]')?.textContent ?? null,
+    retryDisabled: q('[data-action="retry"]')?.disabled ?? null,
+    width: window.innerWidth,
+  };
+})()`;
+const recoveryWindows = async (d) => ((await d.windows()).auxiliary ?? []).filter((w) => w.role === 'auth-recovery');
+
+// 8. REQ-NOTIFY-060/067/068/072..075/079/080 (the 401 note's part C): a 401 with no usable fallback (none configured, so
+// `fallback_model` resolves to `small_model`, alpha, the model that failed) is never retried, and opens the 560 px modal
+// recovery dialog over the session beside the authentication class's notice. Cancel closes it and nothing else (the run stays
+// failed, its notice stays). A second prompt fails again and reopens it; beta, from another provider, is chosen and the run
+// restarts on it; beta's provider refuses too (`fail:401:only=scripted+scripted-b`), which reopens the dialog naming beta
+// (REQ-NOTIFY-075) and offering neither beta nor alpha — both failed authentication with the credentials their providers
+// still hold (REQ-NOTIFY-068); gpt-4o, a shipped model on a third provider, is chosen and the run completes on it. Driven,
+// because the dialog is its own window (`drivenLaunch`).
 const s7b = scenario('fatal', []);
 await scenarioRun('fatal', async () => {
-  const r = await launch('fatal', s7b, { ROTARIS_SCRIPT: 'fail:401,answer', ROTARIS_CAPTURE_PROMPT: 'bad key', ROTARIS_CAPTURE_PROBE: '.notice-slot', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
+  const r = await drivenLaunch('fatal', s7b, { ROTARIS_SCRIPT: 'fail:401:only=scripted+scripted-b' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    // The first-launch notice (REQ-WORKSPACE-152 (3)) is raised 800 ms after the workspace opens, into the ONE slot this
+    // scenario reads (REQ-NOTIFY-024): it is waited for first, so it cannot replace the failure's notice afterwards.
+    await step('the first-launch notice', until(() => d.probe('.notice-slot'), (found) => Array.isArray(found) && /No model provider is authenticated yet/.test(found[0]?.text ?? ''), { timeoutMs: 30_000, what: 'the first-launch notice', signal }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('bad key', { enter: true }));
+    const failedOnce = await step('the run failed', settled(s7b, signal, 'the first run failing'));
+    await step('the recovery dialog', until(() => recoveryWindows(d), (w) => w.length === 1 && w[0].visible, { timeoutMs: 30_000, what: 'the recovery window', signal }));
+    await step('the dialog drawn', d.waitFor('[data-testid="auth-recovery-models"]', { window: 'auth-recovery', timeoutMs: 30_000 }));
+    const first = await step('the dialog read', d.send('eval', { expression: RECOVERY_READING, window: 'auth-recovery' }));
+    await step('the dialog picture', d.send('screenshot', { path: join(output, 'fatal-dialog.png'), window: 'auth-recovery' }));
+    const noticeWhileOpen = await step('the notice beside it', until(() => d.probe('.notice-slot'), (found) => Array.isArray(found) && /Authentication failed/.test(found[0]?.text ?? ''), { timeoutMs: 15_000, what: 'the authentication notice', signal }));
+    await step('Cancel', d.click('[data-action="cancel"]', { window: 'auth-recovery' }));
+    await step('the dialog closed', until(() => recoveryWindows(d), (w) => w.length === 0, { timeoutMs: 15_000, what: 'the recovery window closing', signal }));
+    const afterCancel = { row: await step('the run after Cancel', settled(s7b, signal, 'the run after Cancel')), notice: await step('the notice after Cancel', d.probe('.notice-slot')) };
+    // A second failure of the session reopens the dialog (REQ-NOTIFY-072's "a second authentication failure").
+    await step('Ctrl+L again', d.chord('Ctrl+L'));
+    await step('the caret back in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus again', signal }));
+    await step('the second prompt', d.type('bad key again', { enter: true }));
+    await step('the second dialog', until(() => recoveryWindows(d), (w) => w.length === 1 && w[0].visible, { timeoutMs: 60_000, what: 'the recovery window reopening', signal }));
+    await step('the second dialog drawn', d.waitFor('[data-testid="auth-recovery-models"]', { window: 'auth-recovery', timeoutMs: 30_000 }));
+    await step('beta', d.click('[role="radio"][data-value="beta"]', { window: 'auth-recovery' }));
+    await step('Retry on beta', d.click('[data-action="retry"]', { window: 'auth-recovery' }));
+    // beta fails too: the dialog reopens, naming beta (REQ-NOTIFY-075), at most one open (REQ-NOTIFY-079).
+    await step('the third dialog', until(async () => { const w = await recoveryWindows(d); if (w.length !== 1) return null; const read = await d.send('eval', { expression: RECOVERY_READING, window: 'auth-recovery' }).catch(() => null); return read; }, (read) => read !== null && read.title === 'Authentication failed for beta', { timeoutMs: 60_000, what: 'the dialog naming beta', signal }));
+    const third = await step('the third dialog read', d.send('eval', { expression: RECOVERY_READING, window: 'auth-recovery' }));
+    await step('gpt-4o', d.click('[role="radio"][data-value="gpt-4o"]', { window: 'auth-recovery' }));
+    await step('Retry on gpt-4o', d.click('[data-action="retry"]', { window: 'auth-recovery' }));
+    const done = await step('the run completed', until(() => { const db = open(s7b); try { return session(db); } finally { db.close(); } }, (row) => row?.execution_status === 'completed', { timeoutMs: 90_000, what: 'the restarted run completing', signal }));
+    const closedAtEnd = await step('no dialog at the end', recoveryWindows(d));
+    return { failedOnce, first, noticeWhileOpen, afterCancel, third, done, closedAtEnd };
+  });
   const db = open(s7b);
   const row = session(db);
   const kinds = issues(db, row.session_id).map((i) => i.kind);
+  const overrides = names(db, row.session_id).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata));
   const events = db.prepare("SELECT payload FROM events WHERE session_id = ? AND kind = 'result'").all(row.session_id).map((e) => JSON.parse(e.payload));
   db.close();
-  expect(row.execution_status === 'failed', `a 401 did not fail the run at once: ${JSON.stringify(row)}`);
+  const v = r.value;
+  const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator').map((c) => c.model);
+  // REQ-NOTIFY-068: a 401 is never retried against the same provider with the same credentials.
+  expect(v.failedOnce.execution_status === 'failed', `a 401 did not fail the run at once: ${JSON.stringify(v.failedOnce)}`);
   expect(!kinds.includes('transient_llm_error') && !kinds.includes('model_wait'), `a 401 was retried or waited: ${kinds.join(',')}`);
-  expect(modelCalls(r.log).filter((c) => c.who === 'orchestrator').length === 1, 'a 401 was retried');
+  expect(JSON.stringify(calls) === JSON.stringify(['scripted/alpha', 'scripted/alpha', 'scripted-b/beta', 'openai/gpt-4o']), `the calls are not one per run, on the model each run was given: ${JSON.stringify(calls)}`);
   const error = events[0]?.result?.error ?? null;
   expect(typeof error === 'string' && /HTTP 401/.test(error), `the result does not carry the 401: ${JSON.stringify(events[0])}`);
-  // The notice is asserted as the 401's OWN, not merely as "not a limit": it carries the run's failure text as its
-  // detail (REQ-NOTIFY-064, REQ-NOTIFY-065) and is dismissable. "Not a limit" alone was satisfied by a background
-  // project setup's notice standing in the one slot (REQ-NOTIFY-024;
-  // `docs/defects/fixed/resilience-proofs-cancel-scenario-reads-a-failed-project-setup-in-place-of-the-limit-notice.md`).
-  const notice = probes(r.log, 'probe').find((p) => p.selector === '.notice-slot')?.found[0];
-  expect(notice !== undefined && notice.text.includes(error) && /Dismiss/.test(notice.text), `the 401's own notice is not the one on screen: ${JSON.stringify(notice)}`);
-  expect(!/provider limit was reached/.test(notice.text), `a 401 was reported as a provider limit: ${JSON.stringify(notice)}`);
-  // REQ-NOTIFY-060/067: the 401 is classified authentication first. No usable fallback: `fallback_model` is unset, so it
-  // resolves to small_model (REQ-CONFIG-067), alpha, the model that failed — nothing is pinned and nothing restarts.
-  // REQ-NOTIFY-072's recovery dialog is not built (the 401 note's part C); until it is, REQ-NOTIFY-064's notice: the run
-  // failed, the session and the draft were kept, the action returning to the workspace view.
-  expect(/authentication recovery: session \S+ was not restarted on a fallback/.test(r.log) && /failure classified generic/.test(r.log), `the 401 did not take the authentication class's no-fallback path: see fatal.log`);
-  expect(/The run failed/.test(notice.text) && /The session and the draft were kept\./.test(notice.text) && /Return to the workspace/.test(notice.text), `the failure notice is not REQ-NOTIFY-064's: ${JSON.stringify(notice)}`);
-  results.fatal = { status: row.execution_status, error, notice: notice.text, png: r.png, elapsedMs: r.elapsedMs };
+  // REQ-NOTIFY-070 ahead of REQ-NOTIFY-072: the automatic fallback was asked first and found none usable — `fallback_model`
+  // is unset, so it resolves to small_model (REQ-CONFIG-067), alpha, the model that failed — so the dialog's case.
+  expect(/authentication recovery: session \S+ has no usable fallback \(.*fallback model .*is the model that failed/.test(r.log), `the automatic fallback was not asked first, or did not find "no usable fallback": see fatal.log`);
+  expect(!/re-authentication prompt opened/.test(r.log), 'a re-authentication prompt opened although no restart happened');
+  // REQ-NOTIFY-072/073/074: the modal dialog, 560 px wide, titled for the failed model, the error in the failure colour, beta listed.
+  expect(v.first.role === 'alertdialog' && v.first.modal === 'true' && v.first.title === 'Authentication failed for alpha', `the dialog is not titled for alpha: ${JSON.stringify(v.first)}`);
+  expect(v.first.width === 560, `the dialog is not 560 px wide: ${v.first.width}`);
+  expect(v.first.error === error.replace(/\s+/g, ' ').trim().slice(0, 320) + (error.replace(/\s+/g, ' ').trim().length > 320 ? '…' : ''), `the dialog does not reproduce the provider's error: ${JSON.stringify(v.first.error)} vs ${JSON.stringify(error)}`);
+  expect(v.first.errorColour === v.first.failureColour, `the error is not drawn in the failure text colour: ${v.first.errorColour} vs ${v.first.failureColour}`);
+  // Every configured model a restart could reach is listed but alpha; here each is on a provider other than alpha's, so the
+  // ordering's second half (alpha's provider's others) is empty, and that half is the unit test's (`auth-recovery.test.ts`).
+  const firstKeys = v.first.models.map((m) => m.key);
+  expect(!firstKeys.includes('alpha') && firstKeys.includes('beta') && firstKeys.includes('gpt-4o') && v.first.models.every((m) => m.provider !== 'scripted'), `the dialog does not list the other providers' models, and only those: ${JSON.stringify(v.first.models)}`);
+  expect(v.first.models.find((m) => m.key === 'beta')?.label === 'beta · scripted-b' && v.first.models[0].checked === 'true' && v.first.retryDisabled === false, `the models are not labelled with their providers, or none is chosen: ${JSON.stringify(v.first.models)}`);
+  // The authentication class's notice stands beside the dialog: its own title, the failure text as detail, the workspace action.
+  const notice = v.noticeWhileOpen.find(Boolean);
+  expect(notice !== undefined && /Authentication failed/.test(notice.text) && notice.text.includes(error) && /Dismiss/.test(notice.text) && /Back to the workspace/.test(notice.text), `the authentication notice is not on screen: ${JSON.stringify(notice)}`);
+  // REQ-NOTIFY-080: Cancel closed the dialog and did nothing else.
+  expect(v.afterCancel.row.execution_status === 'failed' && v.afterCancel.row.session_id === v.failedOnce.session_id, `the run did not stay failed after Cancel: ${JSON.stringify(v.afterCancel.row)}`);
+  expect(v.afterCancel.notice.find(Boolean)?.text === notice.text, `the notice did not stay on screen after Cancel: ${JSON.stringify(v.afterCancel.notice)}`);
+  // REQ-NOTIFY-075: the hand-chosen beta failed too, and the dialog came back naming beta. REQ-NOTIFY-068: neither beta nor
+  // alpha is listed — each failed authentication with the credentials its provider still holds — so gpt-4o is what is left.
+  const thirdKeys = v.third.models.map((m) => m.key);
+  expect(!thirdKeys.includes('beta') && !thirdKeys.includes('alpha') && thirdKeys.includes('gpt-4o'), `the reopened dialog offers a pair that already failed authentication, or not gpt-4o: ${JSON.stringify(v.third)}`);
+  expect(v.done.execution_status === 'completed' && v.closedAtEnd.length === 0, `the run did not complete on gpt-4o, or a dialog stayed: ${JSON.stringify(v.done)} / ${JSON.stringify(v.closedAtEnd)}`);
+  // REQ-SESSION-026: the pins are recorded, each keyed by the pair that failed.
+  expect(overrides.some((o) => o.provider === 'scripted' && o.model === 'alpha' && o.model_key === 'beta' && o.cause === 'authentication')
+    && overrides.some((o) => o.provider === 'scripted-b' && o.model === 'beta' && o.model_key === 'gpt-4o' && o.cause === 'authentication'), `the pins are not recorded: ${JSON.stringify(overrides)}`);
+  results.fatal = { status: row.execution_status, error, dialog: v.first, notice: notice.text, afterCancel: v.afterCancel.row.execution_status, reopenedFor: v.third.title, calls, overrides, png: join(output, 'fatal-dialog.png'), elapsedMs: r.elapsedMs };
 });
 
-// 8. `auth-fallback` — REQ-NOTIFY-070 / REQ-MONITOR-147 / REQ-SESSION-026: a first 401 with `fallback_model: beta` configured pins beta as the
+// 9. REQ-NOTIFY-076/077/202 (the 401 note's part D): the dialog's re-authenticate path. The entry model `gamma` signs in
+// through an OpenAI-compatible instance (`openai-compatible--proof`) whose catalog is a loopback stand-in answering any
+// non-empty bearer; the instance is signed in through the product's own `provider.signIn` with `stale-key`. The scripted
+// model refuses every call not carrying `fresh-key` (`fail:401:unless-key=fresh-key`), so the run fails, the dialog opens
+// with the masked key field, `fresh-key` is typed and saved — validated against the catalog, then stored — and the run
+// restarts on the same model with the new key and completes. The stand-in records only whether each bearer was the fixture.
+const catalogSeen = [];
+const catalog = createServer((req, res) => {
+  const bearer = /^Bearer (.+)$/.exec(req.headers.authorization ?? '')?.[1] ?? '';
+  catalogSeen.push({ path: req.url, bearer: bearer === 'stale-key' ? 'stale-key' : bearer === 'fresh-key' ? 'fresh-key' : bearer === '' ? 'none' : 'other' });
+  if (req.method === 'GET' && /\/models$/.test(req.url ?? '') && bearer !== '') { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ data: [{ id: 'gamma' }] })); return; }
+  res.writeHead(401, { 'content-type': 'application/json' }); res.end('{"error":{"message":"Incorrect API key provided"}}');
+});
+await new Promise((resolve) => catalog.listen(0, '127.0.0.1', resolve));
+const catalogBase = `http://127.0.0.1:${catalog.address().port}/v1`;
+const s9 = scenario('reauth', [], { models: [`  gamma: { provider: openai-compatible, model_id: gamma, auth_provider: openai-compatible--proof, base_url: ${catalogBase} }`], tier: 'gamma' });
+await scenarioRun('reauth', async () => {
+  const r = await drivenLaunch('reauth', s9, { ROTARIS_SCRIPT: 'fail:401:unless-key=fresh-key' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    await step('the first-launch notice', until(() => d.probe('.notice-slot'), (found) => Array.isArray(found) && /No model provider is authenticated yet/.test(found[0]?.text ?? ''), { timeoutMs: 30_000, what: 'the first-launch notice', signal }));
+    const signedIn = await step('the instance signed in with stale-key', d.command({ kind: 'provider.signIn', providerId: 'openai-compatible', label: 'Proof', baseUrl: catalogBase, apiKey: 'stale-key' }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('stale key', { enter: true }));
+    const failed = await step('the run failed', settled(s9, signal, 'the first run failing'));
+    await step('the recovery dialog', until(() => recoveryWindows(d), (w) => w.length === 1 && w[0].visible, { timeoutMs: 30_000, what: 'the recovery window', signal }));
+    await step('the key field drawn', d.waitFor('[data-testid="auth-recovery-key"]', { window: 'auth-recovery', timeoutMs: 30_000 }));
+    const READ = `(() => ({ title: document.querySelector('[data-testid="auth-recovery-title"]')?.textContent ?? null, method: document.querySelector('[data-testid="auth-recovery-reauth"]')?.getAttribute('data-method') ?? null, message: document.querySelector('[data-testid="auth-recovery-reauth-message"]')?.textContent ?? null, inputType: document.querySelector('[data-testid="auth-recovery-key"]')?.getAttribute('type') ?? null, saveDisabled: document.querySelector('[data-action="save-and-retry"]')?.disabled ?? null, text: document.body.textContent }))()`;
+    const blank = await step('the path read blank', d.send('eval', { expression: READ, window: 'auth-recovery' }));
+    await step('the key field focused', d.click('[data-testid="auth-recovery-key"]', { window: 'auth-recovery' }));
+    await step('fresh-key typed', d.type('fresh-key', { window: 'auth-recovery' }));
+    const typed = await step('the path read typed', until(() => d.send('eval', { expression: READ, window: 'auth-recovery' }), (v) => v?.saveDisabled === false, { timeoutMs: 10_000, what: 'Save and retry enabled', signal }));
+    await step('the re-authenticate picture', d.send('screenshot', { path: join(output, 'reauth-dialog.png'), window: 'auth-recovery' }));
+    await step('Save and retry', d.click('[data-action="save-and-retry"]', { window: 'auth-recovery' }));
+    const done = await step('the run completed', until(() => { const db = open(s9); try { return session(db); } finally { db.close(); } }, (row) => row?.execution_status === 'completed', { timeoutMs: 90_000, what: 'the restarted run completing', signal }));
+    const closedAtEnd = await step('no dialog at the end', recoveryWindows(d));
+    return { signedIn, failed, blank, typed, done, closedAtEnd };
+  });
+  const db = open(s9);
+  const row = session(db);
+  const overrides = names(db, row.session_id).filter((t) => t.name === 'model_override');
+  const rows = systemRows(db, row.session_id);
+  db.close();
+  const v = r.value;
+  const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator').map((c) => c.model);
+  expect(v.signedIn?.value?.outcome === 'signed-in' && v.signedIn.value.id === 'openai-compatible--proof', `the instance did not sign in: ${JSON.stringify(v.signedIn)}`);
+  expect(v.failed.execution_status === 'failed', `the stale key did not fail the run: ${JSON.stringify(v.failed)}`);
+  // REQ-NOTIFY-076: the provider that failed is key-based, so the dialog offers a masked field, Save and retry enabled only while it is non-blank.
+  expect(v.blank.title === 'Authentication failed for gamma' && v.blank.method === 'api-key' && v.blank.inputType === 'password' && v.blank.saveDisabled === true, `the key path is not offered as REQ-NOTIFY-076 says: ${JSON.stringify({ ...v.blank, text: undefined })}`);
+  expect(v.typed.saveDisabled === false, 'Save and retry stayed disabled with a key typed');
+  expect(!/terminal|shell|command line/i.test(v.blank.text ?? ''), `the dialog directs the user to a terminal: ${v.blank.text}`);
+  // REQ-NOTIFY-202: the new key was validated against the catalog before it was saved, and the restarted run carried it.
+  expect(catalogSeen.some((c) => c.bearer === 'stale-key') && catalogSeen.some((c) => c.bearer === 'fresh-key'), `the catalog did not see the sign-in and the re-authentication: ${JSON.stringify(catalogSeen)}`);
+  expect(v.done.execution_status === 'completed' && v.closedAtEnd.length === 0, `the run did not complete after the re-authentication, or the dialog stayed: ${JSON.stringify(v.done)}`);
+  expect(JSON.stringify(calls) === JSON.stringify(['openai-compatible/gamma', 'openai-compatible/gamma']), `the restart was not on the same model: ${JSON.stringify(calls)}`);
+  expect(overrides.length === 0, `a re-authentication pinned a model: ${JSON.stringify(overrides)}`);
+  expect(rows.some((b) => b.startsWith('Re-authenticated after the authentication failure')), `no row says the run restarted after the re-authentication: ${rows.join(' | ')}`);
+  // REQ-PROVIDER-131: the key typed into the dialog reaches no log line.
+  expect(!r.log.split('\n').filter((l) => !l.includes('ROTARIS_SCRIPT')).some((l) => l.includes('fresh-key')), 'the new key reached the application log');
+  results.reauth = { status: row.execution_status, dialog: { ...v.blank, text: undefined }, catalogSeen, calls, png: join(output, 'reauth-dialog.png'), elapsedMs: r.elapsedMs };
+});
+catalog.close();
+
+// 10. REQ-NOTIFY-060/064/065: a failure matching no earlier class — the scripted `fail` step, an HTTP 400 carrying no
+// authentication or limit marker — raises the generic error notice: the run failed, the session and the draft were kept,
+// the failure text as copyable detail, persistent, scoped to the session, and the action returning to the workspace view,
+// which is followed from another view. No recovery dialog opens. Driven, as `fatal` is, so the session is the one on screen
+// (REQ-NOTIFY-032 holds a failure of a session no window follows; `run-failure-notice.test.ts` pins that half).
+const s10 = scenario('generic', []);
+await scenarioRun('generic', async () => {
+  const NOTICE = `(() => { const n = document.querySelector('.notice-slot [data-testid="notice"]'); return n === null ? null : { severity: n.getAttribute('data-severity'), session: n.getAttribute('data-session'), title: n.querySelector('[data-testid="notice-title"]')?.textContent ?? null, message: n.querySelector('[data-testid="notice-message"]')?.textContent ?? null, detail: n.querySelector('[data-testid="notice-detail"]')?.textContent ?? null, action: n.querySelector('.notice__action')?.textContent ?? null, actionKind: n.querySelector('.notice__action')?.getAttribute('data-action') ?? null, dismiss: n.querySelector('.notice__dismiss') !== null }; })()`;
+  const VIEW = `document.querySelector('.app-shell')?.getAttribute('data-view') ?? null`;
+  const r = await drivenLaunch('generic', s10, { ROTARIS_SCRIPT: 'fail' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    await step('the first-launch notice', until(() => d.probe('.notice-slot'), (found) => Array.isArray(found) && /No model provider is authenticated yet/.test(found[0]?.text ?? ''), { timeoutMs: 30_000, what: 'the first-launch notice', signal }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('a request the provider rejects', { enter: true }));
+    const failed = await step('the run failed', settled(s10, signal, 'the run failing'));
+    const notice = await step('the generic notice', until(() => d.eval(NOTICE), (n) => n !== null && n.title === 'The run failed', { timeoutMs: 30_000, what: 'the generic failure notice', signal }));
+    const windows = await step('no recovery window', recoveryWindows(d));
+    await step('Ctrl+1', d.chord('Ctrl+1'));
+    const away = await step('another view', until(() => d.eval(VIEW), (v) => v !== null && v !== 'workspace', { timeoutMs: 10_000, what: 'a view other than the workspace', signal }));
+    await step('Back to the workspace', d.click('.notice-slot .notice__action'));
+    const back = await step('the workspace view', until(() => d.eval(VIEW), (v) => v === 'workspace', { timeoutMs: 10_000, what: 'the workspace view after the action', signal }));
+    return { failed, notice, windows, away, back };
+  });
+  const db = open(s10);
+  const row = session(db);
+  const events = db.prepare("SELECT payload FROM events WHERE session_id = ? AND kind = 'result'").all(row.session_id).map((e) => JSON.parse(e.payload));
+  db.close();
+  const v = r.value;
+  const error = events[0]?.result?.error ?? null;
+  expect(v.failed.execution_status === 'failed' && typeof error === 'string' && /HTTP 400/.test(error), `the run did not fail on the 400: ${JSON.stringify(v.failed)} / ${JSON.stringify(events[0])}`);
+  // REQ-NOTIFY-064/065: severity error, the two statements, the failure text exactly as detail, persistent, the workspace action.
+  expect(v.notice.severity === 'error' && v.notice.title === 'The run failed' && v.notice.message === 'The session and the draft were kept.', `the generic notice does not say the run failed and the session and the draft were kept: ${JSON.stringify(v.notice)}`);
+  expect(v.notice.detail === error, `the generic notice does not carry the failure text as detail: ${JSON.stringify(v.notice.detail)} vs ${JSON.stringify(error)}`);
+  expect(v.notice.dismiss === true && v.notice.session === row.session_id, `the generic notice is not persistent or not scoped to the session: ${JSON.stringify(v.notice)}`);
+  expect(v.notice.action === 'Back to the workspace' && v.notice.actionKind === 'open-view' && v.back === 'workspace' && v.away !== 'workspace', `the action does not return to the workspace view: ${JSON.stringify({ notice: v.notice, away: v.away, back: v.back })}`);
+  expect(v.windows.length === 0, `a recovery dialog opened for a failure that is not an authentication failure: ${JSON.stringify(v.windows)}`);
+  results.generic = { status: row.execution_status, error, notice: v.notice, away: v.away, back: v.back, elapsedMs: r.elapsedMs };
+});
+
+// 11. `auth-fallback` — REQ-NOTIFY-070 / REQ-MONITOR-147 / REQ-SESSION-026: a first 401 with `fallback_model: beta` configured pins beta as the
 // session's model override (keyed by the pair that failed), acknowledges both models, and restarts the run with the same
 // prompt on beta, which answers. The acknowledgement is transient (REQ-NOTIFY-020's lifetime), so the wait expression
 // writes its text onto the body the moment it is drawn and the probe reads it back from there.
@@ -554,7 +804,9 @@ await scenarioRun('auth-fallback', async () => {
     const ack = body?.data['data-ack-seen'] ?? '';
     expect(ack.includes(`Authentication failed on ${primary}`) && /scripted-b\/beta/.test(ack), `${v.name}: the acknowledgement did not name both models: ${JSON.stringify(ack)}`);
     const notice = probes(r.log, 'probe').find((p) => p.selector === '.notice-slot')?.found[0];
-    expect(notice === undefined || !/The run failed/.test(notice.text), `${v.name}: the restarted run left a failure notice on screen: ${JSON.stringify(notice)}`);
+    expect(notice === undefined || !/The run failed|Authentication failed\b(?! on)/.test(notice.text), `${v.name}: the restarted run left a failure notice on screen: ${JSON.stringify(notice)}`);
+    // REQ-NOTIFY-070 ahead of REQ-NOTIFY-072: the first failure with a usable fallback restarts and opens no recovery dialog.
+    expect(!/authentication recovery: the dialog is open for session/.test(r.log), `${v.name}: the recovery dialog opened for a first failure with a usable fallback: see ${v.name}.log`);
     // REQ-NOTIFY-071: the non-modal prompt beside the continuing run — the primary named, the fallback in use, the provider's
     // error quoted, the dismissal that keeps the fallback offered — and, ADR-0048, no modality: no aria-modal, the composer usable.
     const prompt = probes(r.log, 'probe').find((p) => p.selector === '[data-testid="reauth-prompt"]')?.found[0];

@@ -34,7 +34,9 @@ interface Harness {
   readonly reported: ReportInput[];
   readonly svcAsked: WorkspaceServiceRequest[];
   readonly hostAsked: RunHostRequest[];
-  readonly ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runHost' | 'services'>;
+  readonly ctx: Pick<CommandContext, 'capturing' | 'clocks' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runFailures' | 'runHost' | 'services'>;
+  /** REQ-NOTIFY-030/032: the sessions whose held failure `session.subscribe` released. */
+  readonly focused: string[];
   /** PD-ORCH-005 clause 9: what `quitting()` answers. */
   readonly quit: { now: boolean };
 }
@@ -46,6 +48,7 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
   const svcAsked: WorkspaceServiceRequest[] = [];
   const hostAsked: RunHostRequest[] = [];
   const quit = { now: false };
+  const focused: string[] = [];
   const ctx = {
     capturing: false,
     clocks: new FakeClock(),
@@ -58,10 +61,11 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
     raiseNotice: (...args: Parameters<CommandContext['raiseNotice']>) => { raised.push({ severity: args[0], headline: args[1], detail: args[2] }); },
     recoveryFor: () => [],
     relay: {} as CommandContext['relay'],
+    runFailures: { focused: async (sid: string) => { focused.push(sid); } } as unknown as CommandContext['runFailures'],
     runHost: { request: async (req: RunHostRequest) => { hostAsked.push(req); return host(req); } },
     services: new Map([[canonicalPath(WORKSPACE), { link: { request: async (req: WorkspaceServiceRequest) => { svcAsked.push(req); return svc(req); } } }]]) as unknown as CommandContext['services'],
   };
-  return { logs, raised, reported, svcAsked, hostAsked, ctx, quit };
+  return { logs, raised, reported, svcAsked, hostAsked, ctx, quit, focused };
 }
 
 const created = { kind: 'worktree.created', path: `${WORKSPACE}/.rotaris/worktrees/minted-1`, branch: 'rotaris/session/minted-1', baseBranch: 'main', baseRevision: 'abc' } as const;
@@ -202,7 +206,7 @@ describe("session.subscribe's verification seam: the reply held after the attach
     const ctx = {
       ...h.ctx, capturing, clocks: clock,
       relay: { subscribe: () => undefined } as unknown as CommandContext['relay'],
-      mainWindows: { setFollowedSession: () => undefined } as unknown as CommandContext['mainWindows'],
+      mainWindows: { setFollowedSession: () => undefined, followerOfSession: () => undefined } as unknown as CommandContext['mainWindows'],
     };
     return { h, clock, commands: sessionCommands(ctx) };
   };
@@ -230,5 +234,42 @@ describe("session.subscribe's verification seam: the reply held after the attach
       expect(await commands['session.subscribe'](subscribe, windowOn('ws-1'))).toEqual({ ok: true });
       expect(h.logs).toEqual([]);
     } finally { delete process.env['ROTARIS_CAPTURE_SUBSCRIBE_HOLD_MS']; }
+  });
+});
+
+/*
+ * REQ-NOTIFY-030/032: a failure of a session no main window followed is held (`run-failure-notice.ts`); following the
+ * session is the focus change that publishes it — its class notice and, for an authentication failure, the recovery dialog.
+ */
+describe('session.subscribe releases a failure held while the session was not focused (REQ-NOTIFY-030/032)', () => {
+  const subscribe = { kind: 'session.subscribe', sessionId: 'S2' } as const;
+  const withWindows = (mainWindow: boolean, attach: ProcessReply = { kind: 'ack' }) => {
+    const h = harness(() => ({ kind: 'ack' }), () => attach);
+    const followed = new Map<number, string>();
+    const ctx = {
+      ...h.ctx,
+      relay: { subscribe: () => undefined } as unknown as CommandContext['relay'],
+      mainWindows: {
+        // A persona or terminal window subscribing moves no main window's follow (A2): only a main window records it.
+        setFollowedSession: (sender: number, sid: string) => { if (mainWindow) followed.set(sender, sid); },
+        followerOfSession: (sid: string, ids: readonly number[]) => (ids.some((id) => followed.get(id) === sid) ? {} : undefined),
+      } as unknown as CommandContext['mainWindows'],
+    };
+    return { h, commands: sessionCommands(ctx) };
+  };
+
+  it('a main window following the session releases its held failure', async () => {
+    const { h, commands } = withWindows(true);
+    expect(await commands['session.subscribe'](subscribe, windowOn('ws-1'))).toEqual({ ok: true });
+    expect(h.focused).toEqual(['S2']);
+  });
+
+  it('a persona or terminal window subscribing, or an attach the run host refused, releases nothing', async () => {
+    const aux = withWindows(false);
+    await aux.commands['session.subscribe'](subscribe, windowOn('ws-1'));
+    expect(aux.h.focused).toEqual([]);
+    const refused = withWindows(true, { kind: 'refused', code: 'session.not-live', headline: 'No such session' });
+    await refused.commands['session.subscribe'](subscribe, windowOn('ws-1'));
+    expect(refused.h.focused).toEqual([]);
   });
 });

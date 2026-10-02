@@ -713,20 +713,31 @@ two sign-in methods, Copilot's and codex's discovery, the bridges, the usage and
 the grant on Windows; `<data>/tokens` replacing the reserved `credentials`; the lock inside the directory (OQ-19); the
 shipped capability metadata empty (OQ-18); REQ-PROVIDER-091's override read as the named-entry overlay; the zero-model
 recovery without "edit by hand" (no configuration editor). `ROTARIS_CAPTURE_PROVIDER_FILL`, `ROTARIS_CAPTURE_WAIT`
-and `ROTARIS_CAPTURE_WAIT_MS` are verification seams; a third `>>key` segment on the fill seam fills the key field and presses the dialog's own button, which is how `pnpm live-run` signs in unattended (`AGENTS.md`); `ROTARIS_CAPTURE_PROVIDER_EMPTY_OK` takes the
+and `ROTARIS_CAPTURE_WAIT_MS` are verification seams; a third `>>key` segment on the fill seam fills the key field and presses the dialog's own button, which is how `pnpm live-run` signs in unattended (`AGENTS.md`) and how `pnpm slice-proof` gives the registered endpoint its stored key; `ROTARIS_CAPTURE_PROVIDER_EMPTY_OK` takes the
 zero-model alert's own "Continue anyway", so an endpoint whose `/models` answers with nothing does not strand a run
 that no one is watching.
 
-**What `pnpm slice-proof` does.** It builds Electron and carries ONE scratch profile across five launches, because
-the credential the owner pastes in the first must be the one the third leases: (1) first launch — the notice, Settings
-→ Models → Add endpoint with the label and URL filled, the owner pastes the OpenRouter key (never read from the
-environment, never logged), then the credential file's five keys and exact protection, the snapshot's record and
-picks, the bootstrapped `agents.yaml`, and a log free of the key are asserted; (2) the three tier slots set to
-`anthropic/claude-haiku-4.5` and saved; (3) one real run — the lease, the request to OpenRouter, a settled tool row,
-usage figures and the terminal result from the store; (4) spike 6's live harness against the same endpoint with the
-stored credential; (3b, Part L) three more real runs, one prompt per intent family, each asserted to classify from the small
-slot and never fall back, the answering rung recorded; (5) sign-out from the card — the file gone, the snapshot kept, a prompt refused. `--resume` keeps
-the profile and skips the paste; `--skip-build` skips the build. Evidence lands under `.proof/slice-proof/`. `--from=<scenario>` replays the
+**What `pnpm slice-proof` does.** It builds Electron and carries ONE scratch profile across the launches, because
+the credential the first writes must be the one the runs lease. Since 2026-10-02 ([R-068](../product/requests.md#r-068))
+it signs into the live-run registry's endpoint (`~/.rotaris/live-run/endpoints.json`: its default, or `--endpoint=<name>`),
+read through `apps/desktop/scripts/lib/endpoint-registry.mjs`, the module `live-run` reads it through: the label, base
+URL and model are the registry's and the provider id is the one the product mints for the label (REQ-PROVIDER-051).
+**A registered endpoint with a stored key runs it unattended**: the key (`ROTARIS_LIVE_API_KEY`, else the file beside
+the registry) is filled into the dialog's key field and the dialog's own button pressed, as `live-run` signs in. **An
+endpoint without a stored key takes `--paste-key`**: the label and URL are filled and the owner pastes the key, the
+proof's original design. Until then it signed into OpenRouter constants (`anthropic/claude-haiku-4.5`) and always waited
+for the owner's paste. The key never reaches a log (each is written with it substituted out and asserted to have held
+none), the repository or `.proof/slice-proof/`: the scratch profile, whose credential store holds the key as a person's
+would, lives in the system temp directory, and `credential-facts.json` records the credential file's shape without its
+token. Scenarios: (1) first launch — the notice, Settings → Models → Add endpoint, the credential file's five keys,
+the key it holds being the one the dialog was given, its exact protection, the snapshot's record and picks, the
+discovered-models count read as a count (at least one, its noun agreeing with it, REQ-SHELL-044), the bootstrapped
+`agents.yaml`, and a log free of the key; (2) the three tier slots set to the registered model and saved, or, on a one-model endpoint whose discovery picks already name it, asserted through the discovered picks; (3) one real
+run — the lease, the request to the endpoint, a settled tool row, usage figures and the terminal result from the store;
+(3b, Part L) three more real runs, one prompt per intent family, each asserted to classify from the small slot and never
+fall back, the answering rung recorded; (4) spike 6's live harness against the same URL, model and key; (5) sign-out
+from the card — the file gone, the snapshot kept; (6) a prompt refused. `--resume` keeps the profile and skips the
+sign-in; `--skip-build` skips the build. Evidence lands under `.proof/slice-proof/`. `--from=<scenario>` replays the
 earlier scenarios from their evidence. On 2026-09-05 every scenario passed on the owner's re-run with an OpenRouter
 key (`.proof/slice-proof/results.json`), after two runs that each found a defect. Since 2026-09-29 (R-067) it reads the
 credential file where the product writes it on the running platform (`tokensDirFor`): the Windows spelling it used
@@ -735,7 +746,17 @@ everywhere left the first launch's wait, the strays check and the sign-out check
 Since 2026-10-01 step 3 reads the priming from the run host's opening credential report (`lib/priming-report.mjs`,
 pinned against `LeaseReportLog`): the provider among the authenticated, nothing unresolved (REQ-PROVIDER-067/068), in
 place of "credentials: 1 provider(s) authenticated", a line nothing writes
-([note](../defects/fixed/slice-proof-asserts-a-priming-line-the-product-does-not-write.md); not yet run since).
+([note](../defects/fixed/slice-proof-asserts-a-priming-line-the-product-does-not-write.md)). ~~Not yet run since.~~
+**First run against a self-hosted endpoint, 2026-10-02** (`katalyst`, `qwen3.8-flash-next`, the stored key,
+xvfb, as root): every scenario passed on a fresh profile — first launch (`Added Katalyst; discovered 1 model.`), slots,
+run (`completed`, one settled tool row, the request at `…/v1/chat/completions`), the three intents (`question`,
+`explicit_trivial`, `small_feature`, each by `json_schema`, none falling back), spike 6 (four of four), sign-out and the
+refusal — after the runs before it found four defects of the proof, each repaired in the same bundle: the model slots
+named as native selects, the sign-out pressed in a panel that no longer holds it, the run replayed from the newest
+session, and spike 6's figures lost on a green run (notes under `docs/defects/fixed/slice-proof-*`). On a one-model
+endpoint the sign-in's discovery picks already name the model for every tier, so scenario 2 asserts the tiers through
+the discovered layer (the Models page shows them `discovered`; re-selecting the shown value is no edit) rather than a
+saved file. Recorded in [`first-executions.md`](first-executions.md).
 
 **What `pnpm live-run` does.** It is the only check here that answers to a real model rather than a scripted one,
 and the only one that spends money, so it never runs on its own: `pnpm check` does not reach it and without
@@ -1143,21 +1164,37 @@ Since 2026-10-02 a `switch-back` scenario follows the same-tier move with a swit
 configured key from the run header, and a follow-up queued beside it: iteration 2 runs on the configured model, as the
 switch's REQ-MONITOR-142 row says (OQ-177;
 [note](../defects/fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md)); and
-`--only=<name>[,<name>…]` runs the named scenarios alone.
-**Since 2026-10-02 (the 401 note's part A)** a failed run is classified in REQ-NOTIFY-060's order by main
-(`main/failure-class.ts`, `main/failure-recovery.ts`): `fatal` (no usable fallback) asserts REQ-NOTIFY-064's notice — the
-session and the draft were kept, `Return to the workspace` — and the new `auth-fallback` scenario (`fallback_model: beta`,
-the scripted step `fail:401:only=scripted`) asserts the pin of the fallback keyed by the failed pair, the acknowledgement
-naming both models and the restart with the same prompt completing on `scripted-b/beta` (REQ-NOTIFY-070,
-REQ-MONITOR-147, REQ-SESSION-026) — in plan mode too, where the 401 falls on the plan cycle's turn and the restarted cycle
-parks at the gate on the fallback (`auth-fallback-plan`, the third repair round) — and since part B the non-modal re-authentication prompt beside the continuing run
-with the composer, every title-bar control and every notice button usable beside it and no control under it, at the
-opening size and at 1000x680 with an API-key provider's key field (REQ-NOTIFY-071, ADR-0048), and beside an expanded
-plan gate at 1000x680 drawn as its bar with the gate's three answers reachable and the plan the largest part of the gate
-(`auth-fallback-plan`, REQ-ORCH-153, PD-ORCH-002), drawn in flow as the
-Workspace view's own `reauth` row for the followed session alone (REQ-NOTIFY-030, OQ-180). The recovery
-dialog and its re-authentication path are owed
-([note](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).
+`--only=<name>[,<name>…]` runs the named scenarios alone. **Since 2026-10-02 the authentication class (the 401 note's four
+parts) is the proof's.** A failed run is classified in REQ-NOTIFY-060's order by main (`main/failure-class.ts`) and published
+through the focus gate (`main/run-failure-notice.ts`, which also holds a failed run's class publication until its session
+is followed by a main window, REQ-NOTIFY-030/032); an authentication failure asks the automatic fallback first
+(`main/auth-fallback.ts`, parts A and B) and opens the recovery dialog (`main/auth-recovery.ts`,
+`packages/ui/src/AuthRecoveryDialog.tsx`, parts C and D) only where that answers it is the dialog's — a second failure, or
+a first with no usable fallback (REQ-NOTIFY-072). **`fatal` is driven** (`drivenLaunch`, its steps in `fatal.steps.json`):
+a 401 with no usable fallback — the automatic fallback finding none — opens the dialog, read in its own window (560 px, its
+title, the error in the failure colour, the other providers' models), Cancelled with the run left failed and the class's
+notice on screen, reopened by a second failure, answered with beta (refused too, `fail:401:only=scripted+scripted-b`, which
+reopens it naming beta, with neither beta nor alpha offered — REQ-NOTIFY-068, both failed with the credentials their
+providers still hold) and then gpt-4o, on which the run completes; the pins are read from the timeline
+(`Sessions.authRecoveryFacts` / `restartAfterAuthFailure`). A `reauth` scenario (part D, REQ-NOTIFY-076/077) signs an
+OpenAI-compatible instance in with a stale key against a loopback catalog stand-in, fails the run on it
+(`fail:401:unless-key=fresh-key`), types the new key into the dialog's masked field, and reads the key validated against
+the catalog, saved, and carried by the restarted run on the same model to completion, no pin written and the key in no log
+line. A `generic` scenario (scripted `fail`, an HTTP 400) reads REQ-NOTIFY-064's notice — the run failed, the session and
+the draft were kept, the failure text as detail, persistent, scoped to the session — and follows its **Back to the
+workspace** action from Overview; every run-ending notice's words are `main/run-failure-notice.ts`'s. The `auth-fallback`
+scenario (`fallback_model: beta`, the scripted step `fail:401:only=<alpha's provider>`) asserts the pin of the fallback keyed
+by the failed pair, the acknowledgement naming both models and the restart with the same prompt completing on
+`scripted-b/beta` (REQ-NOTIFY-070, REQ-MONITOR-147, REQ-SESSION-026), no recovery dialog opening — in plan mode too, where
+the 401 falls on the plan cycle's turn and the restarted cycle parks at the gate on the fallback (`auth-fallback-plan`) — and
+the non-modal re-authentication prompt beside the continuing run with the composer, every title-bar control and every
+notice button usable beside it and no control under it, at the opening size and at 1000x680 with an API-key provider's key
+field (REQ-NOTIFY-071, ADR-0048), and beside an expanded plan gate at 1000x680 drawn as its bar with the gate's three
+answers reachable and the plan the largest part of the gate (REQ-ORCH-153, PD-ORCH-002), drawn in flow as the Workspace
+view's own `reauth` row for the followed session alone (REQ-NOTIFY-030, OQ-181).
+**What the 401 recovery does not do:** a device-code or browser provider is told its method is not provided by this build,
+the sign-in flows being owed (REQ-NOTIFY-076's second branch,
+[note](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).
 
 **A probe is a deadline, not an appointment (2026-09-12).** Three of this proof's assertions were mid-run DOM probes
 fired at a fixed instant — `.wait-header@1700` — and they failed intermittently on a busy machine with nothing wrong
@@ -1890,7 +1927,7 @@ numbers — a verdict reached inside the page can only be exercised by launching
 
 **Verified on the merged branch.** `pnpm check` green (symbol generator, `tsc --noEmit`, `eslint`, **1,598 passed and 25
 skipped across 135 files**) and `pnpm build`. **Of the thirty-seven proof scripts, thirty-six ran — `slice-proof` alone
-needs the owner's pasted key — and the list was generated from the filesystem rather than typed.** Thirty-two passed on
+needs the owner's pasted key *(so it did then; since 2026-10-02, [R-068](../product/requests.md#r-068), a registered endpoint with a stored key runs it unattended and an endpoint without one takes `--paste-key`)* — and the list was generated from the filesystem rather than typed.** Thirty-two passed on
 the first sweep, `code-intel-proof` among them.
 **Three of the four reds pass alone on an idle machine** — `composer-proof` after the repair above, and `mcp-proof` (229 s)
 and `transcript-proof` (its 1200-row growth bound, 39.1 ms against 22.1 ms) unchanged, which is the standing rule that a
@@ -2141,7 +2178,7 @@ but a false one, sitting in the evidence, waiting to be believed. `code-intel-pr
 TypeScript language server provisioned on first use, so it is IC-7's and the owner's rather than a session's.
 
 **The sweep of 2026-09-08 (Part AH), and what attributing a red proof actually takes.** Twenty-four scripts ran;
-`slice-proof` was not among them (it needs the owner's pasted key) and `code-intel-proof` stays IC-7's. Nineteen
+`slice-proof` was not among them (it needs the owner's pasted key *(so it did then; since 2026-10-02, [R-068](../product/requests.md#r-068), a registered endpoint with a stored key runs it unattended and an endpoint without one takes `--paste-key`)*) and `code-intel-proof` stays IC-7's. Nineteen
 were green, `compression-proof` was green, and **four were red**. Each was then re-run against **clean HEAD with
 Part AH stashed**, because the rule above says to repair what *this* change falsified and nothing tells you which
 that is until you measure it. All four were red on HEAD too, so none is Part AH's:
@@ -2241,7 +2278,7 @@ free to change.
 
 **A requirement quoted in part is a requirement misread.** T2-1's reading passed every review for two waves because the quotation looked like the requirement. What caught it was not a re-reading but an arrangement no proof had built — a second window. The one unit test that already had two windows asserted the bound "at either window", which a per-window ledger satisfies by construction: a proof that could not fail. Beside the sixty-eighth defect's lesson, this is the second of the same family in two days, and the family is *the measurement agreed with the code because it was written from the code*.
 
-**Verified on merged main** (`bf55233`): the symbol generator unchanged at 4,398 identifiers, `tsc --noEmit` green, `eslint` green, the suite at **1,494 passed and 25 skipped** with four failures across three files that **each pass alone** — `guard.test.ts` 5/5 (its red was a thirty-second cap on a walk of every file under `packages/` and `apps/`, not a `REQ-TRACE-399` violation), `terminal.test.ts` 19/19, `mcp.test.ts` 15/15 — and `pnpm build`. **Of the thirty-three proof scripts, thirty-two ran and twenty-nine pass**, nothing skipped; `slice-proof` alone was not run because it needs the owner's pasted key. **The list was generated from `ls apps/desktop/scripts/*-proof.mjs` rather than typed**, which is how `attachments-proof` and `todo-proof` returned to the sweep after merge 2's hand-written list had silently dropped them — both pass. **The reds are three, not four:** `part-h-proof`'s window sizing, `theme-proof`'s disabled-contrast finding and `transcript-proof`'s 1200-row bound (64.7 ms against 45), each measured with 2.6 GB or more free after the machine was twice killed for low memory mid-sweep and the runner was changed to **wait for memory rather than measure a starved machine**. `library-proof` has left that list: Part C″ closed `REQ-CHAT-044` by correcting a reading Part AB had falsified on 2026-09-08, not by relaxing the assertion. **The tally stands at eighty.** **All seven primary views were then walked in the built product on merged main** — Ctrl+1 to Ctrl+7 in REQ-SHELL-049s order and back to Overview — and each `.app-shell` reported its own `data-view` and a full-size box; the viewport measured **1264 x 755**, so the plan verification width is read from the product rather than assumed, and the run logged nothing error-shaped.
+**Verified on merged main** (`bf55233`): the symbol generator unchanged at 4,398 identifiers, `tsc --noEmit` green, `eslint` green, the suite at **1,494 passed and 25 skipped** with four failures across three files that **each pass alone** — `guard.test.ts` 5/5 (its red was a thirty-second cap on a walk of every file under `packages/` and `apps/`, not a `REQ-TRACE-399` violation), `terminal.test.ts` 19/19, `mcp.test.ts` 15/15 — and `pnpm build`. **Of the thirty-three proof scripts, thirty-two ran and twenty-nine pass**, nothing skipped; `slice-proof` alone was not run because it needs the owner's pasted key *(so it did then; since 2026-10-02, [R-068](../product/requests.md#r-068), a registered endpoint with a stored key runs it unattended and an endpoint without one takes `--paste-key`)*. **The list was generated from `ls apps/desktop/scripts/*-proof.mjs` rather than typed**, which is how `attachments-proof` and `todo-proof` returned to the sweep after merge 2's hand-written list had silently dropped them — both pass. **The reds are three, not four:** `part-h-proof`'s window sizing, `theme-proof`'s disabled-contrast finding and `transcript-proof`'s 1200-row bound (64.7 ms against 45), each measured with 2.6 GB or more free after the machine was twice killed for low memory mid-sweep and the runner was changed to **wait for memory rather than measure a starved machine**. `library-proof` has left that list: Part C″ closed `REQ-CHAT-044` by correcting a reading Part AB had falsified on 2026-09-08, not by relaxing the assertion. **The tally stands at eighty.** **All seven primary views were then walked in the built product on merged main** — Ctrl+1 to Ctrl+7 in REQ-SHELL-049s order and back to Overview — and each `.app-shell` reported its own `data-view` and a full-size box; the viewport measured **1264 x 755**, so the plan verification width is read from the product rather than assumed, and the run logged nothing error-shaped.
 
 **Wave 2 of the three-lane build — 2026-09-10.** The same five worktrees carried the second wave (AJ′ the parse-requiring checks and the reachable operations, AK′ the board, AP the panes and the runs, AL′ the terminal wired end to end, AO the chat controls and the prompt files), and the wave cost three model-usage interruptions before it finished: two limits killed every agent at once with nothing committed, and the recovery was to relaunch the same workflow with one added paragraph telling each agent that the dirty tree it found was its own predecessor's and to commit the first green slice early. **Merge order was AK′, AP, AJ′, AL′, AO**, and the twenty-four conflicts sorted into five kinds, only one of which is keep-both: disjoint banner blocks; a shared array or object where both sides added an entry and concatenation would have produced two arrays; a shared import line where the wider form must win or a symbol binds twice; a paragraph one side had extended rather than duplicated; and — the one that mattered — **each side's real implementation against the other's placeholder**, in `workspace-service/delivery.ts`, where AJ′ ran the four operations and refused the source writer while main did the reverse, so keeping both texts would have left every `case` label twice with a stub shadowing the implementation beside it.
 
@@ -2249,7 +2286,7 @@ free to change.
 
 **Three defects, and all three are the merge's own** (sixty-one to sixty-three). The sixty-first: the repair of the sixtieth taught `sessions-proof` to plant a `delivery_runs` row with a literal INSERT, which tripped REQ-TRACE-399's guard that no module writes the delivery store around the one DAL; the guard already exempted every `.test.ts`, and the proof harnesses under `apps/desktop/scripts/` are the same category, so the exemption is stated rather than the assertion deleted (`327a3e1`). The sixty-second: a blanket `git add -A` tracked two files of proof evidence, because Part AK′ renamed `delivery-proof` to `requirements-proof` and took the ignore line with it, leaving the old evidence directory unignored. The sixty-third, and the one only the merge could show: **two Parts registered the same two preference keys with DIFFERENT coercions** — same names, same defaults, one comparing a stored string exactly and one trimming and lower-casing it first. Each branch compiled alone; together they are an object literal with a property named twice. The tolerant pair stays, because this table's own rule is that a boolean read tolerates however the backend spelled it, and deduplicating by line number would have quietly made two preferences case-sensitive (`7c8260c`). **A duplicate sweep written for the occasion reported all eight of its checks CLEAN minutes before `tsc` found this**: a sweep localises a problem and is worth nothing as evidence of its absence.
 
-**Verified on merged main** (`7c8260c`): the symbol generator, `tsc --noEmit` with zero errors, `eslint`, the test suite at 1,474 passed and 25 skipped with the only red the known parallel-pool signature (`terminal.test.ts`, 19/19 alone), and `pnpm build`. Of the thirty-three proof scripts, thirty were run - `slice-proof` needs the owner's pasted key, and `attachments-proof` and `todo-proof` were simply missed off the list, which is a finding against the sweep rule and not against any Part. Twenty-six of the thirty pass. Four reds are the ones recorded above and unchanged by this wave (`transcript-proof`'s 1200-row timing bound, `library-proof`'s REQ-CHAT-044 double append owed to the CHAT domain, `part-h-proof`'s window sizing and `theme-proof`'s disabled-contrast finding). `code-intel-proof` is green as of 2026-09-11, at the cost of the sixty-eighth defect, and the reason first recorded for its redness was falsified by the very run it was owed; the paragraphs below keep both. The proof pass itself found four more, sixty-four to sixty-seven: three count pins `palette-proof` had as literals and the merge outran; the renderer's `control` helper discarding the engine's refusal message and substituting the caller's fallback, which was true until Part AO armed the operations and false the moment it did; an assertion in `slash-proof` demanding a race it could not win; and `code-intel-proof` indexing an empty step list so that silence failed as a type error. **The tally stands at sixty-eight**, the last of them below.
+**Verified on merged main** (`7c8260c`): the symbol generator, `tsc --noEmit` with zero errors, `eslint`, the test suite at 1,474 passed and 25 skipped with the only red the known parallel-pool signature (`terminal.test.ts`, 19/19 alone), and `pnpm build`. Of the thirty-three proof scripts, thirty were run - `slice-proof` needs the owner's pasted key *(so it did then; since 2026-10-02, [R-068](../product/requests.md#r-068), a registered endpoint with a stored key runs it unattended and an endpoint without one takes `--paste-key`)*, and `attachments-proof` and `todo-proof` were simply missed off the list, which is a finding against the sweep rule and not against any Part. Twenty-six of the thirty pass. Four reds are the ones recorded above and unchanged by this wave (`transcript-proof`'s 1200-row timing bound, `library-proof`'s REQ-CHAT-044 double append owed to the CHAT domain, `part-h-proof`'s window sizing and `theme-proof`'s disabled-contrast finding). `code-intel-proof` is green as of 2026-09-11, at the cost of the sixty-eighth defect, and the reason first recorded for its redness was falsified by the very run it was owed; the paragraphs below keep both. The proof pass itself found four more, sixty-four to sixty-seven: three count pins `palette-proof` had as literals and the merge outran; the renderer's `control` helper discarding the engine's refusal message and substituting the caller's fallback, which was true until Part AO armed the operations and false the moment it did; an assertion in `slash-proof` demanding a race it could not win; and `code-intel-proof` indexing an empty step list so that silence failed as a type error. **The tally stands at sixty-eight**, the last of them below.
 
 **The sixty-eighth defect: a proof that read the wrong store, and the reading that hid it.** The run owed on an idle machine failed a third time, in a third place, with 2.9 GB free - so load was never the cause, and the reason recorded for the first two failures is kept here beside its replacement: *"it passed at merge 1, wave 2 touched none of its code, and it failed twice in two different places with one call taking 241 s, which is a timing-dependent harness on a machine that was being killed for low memory."* What was actually there: the proof drives two workspaces - `workspace`, which holds one TypeScript file, and `workspace-nocode`, which holds none - and the product keys each store directory by a hash of the workspace path. The read was *the last `workspace.db` by path sort*, which names whichever hash sorts last rather than the workspace the launch was given; in this checkout `workspace` hashes to `v1-08b5...` and `workspace-nocode` to `v1-fb8c...`, so section 4 read the no-code store, found no `get_symbols_overview` row in it, and reported the call as unmade - while its own run log held the language server's answer (`{"Class": ["Counter"], "Function": ["greet"], "Interface": ["Greeter"]}`) and the row sat in the other store with status `ok`. Sorted hashes are fixed within a checkout and arbitrary across checkouts, which is why the same bytes passed in the worktree they were written in and could not pass here. The proof now takes the newest session across every store and asserts it began after the launch being measured - the premise every section already meant - and section 4 passes with the wrong store still on disk beside the right one. The whole proof then passed on a clean profile in 558 s, every section, which is the first green `code-intel-proof` since merge 1.
 

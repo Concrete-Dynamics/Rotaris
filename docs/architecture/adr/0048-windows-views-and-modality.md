@@ -358,7 +358,7 @@ a bar, its title and its answers on one row, its words drawn again when the gate
 takes the rest (the run is stopped on it, REQ-ORCH-153; it is the reading area, PD-ORCH-002 revision 2). The decision is untouched: the level never said which of two in-flow panels gives way, and the
 build's answer is the one the run is stopped on keeps the room. That it is drawn in the view that
 shows the run, and not while another view is shown, is the build's reading of "beside the continuing run", raised as
-[OQ-180](../open-questions.md). The decision holds for this placement: the level is still an in-window panel, non-modal,
+[OQ-181](../open-questions.md). The decision holds for this placement: the level is still an in-window panel, non-modal,
 with no focus trap, and nothing else in the window is under it. It is fed by main on its own channel
 (`reauth:prompt`, channel 13), ~~to the one window that follows the session~~ — also corrected: to every main window,
 each drawing the followed session's prompt alone (REQ-NOTIFY-030), with `reauth.read` for a window that mounts later.
@@ -371,4 +371,35 @@ answers are each the element under their own centre (`promptControls`); and a th
 the key field, the gate expanded beside the prompt, each of the gate's three answers the element under its own centre
 (`gateAnswers`). Not measured: Escape, which this surface does not answer (only its
 two buttons close it — the dismissal keeps the fallback, REQ-NOTIFY-071), and REQ-NOTIFY-079's rule that the modal
-recovery dialog closes it, since that dialog is not built (part C).
+recovery dialog closes it, ~~since that dialog is not built (part C)~~ — *corrected at the merge of parts C and D beside
+this one, 2026-10-02*: the dialog is built (the section below), and its opening closes every prompt open
+(`RunFailurePublisher.publish` → `closePrompts`, `auth-fallback.ts`'s `closeAllPrompts`), each session keeping its
+fallback; pinned by `run-failure-notice.test.ts` and `auth-fallback.test.ts`, and measured in the built app by
+`resilience-proof`'s `auth-fallback-dialog` launch (the fallback refused too: the dialog opens over the window and the
+prompt is gone from it).
+
+## The authentication recovery dialog — first executed 2026-10-02 (the 401 note's part C)
+
+`REQ-NOTIFY-072`'s "modal recovery dialog 560 px wide" is built as the pause, provider and approval dialogs are: a child
+`BrowserWindow` with the platform's `modal` flag against the main window following the failed session, its role by route
+(`auth-recovery`), its payload read by its own command (`apps/desktop/src/main/index.ts`, `presentAuthRecovery`;
+`packages/ui/src/AuthRecoveryDialog.tsx`). The width is the window's, fixed at 560 by `minWidth`/`maxWidth`
+(`AUTH_RECOVERY_DIALOG_WIDTH`). `REQ-NOTIFY-079`'s "at most one" is main's single slot: opening one closes any other first.
+
+**Reported back, not repaired.** The decision above says a window-modal surface is "an in-window overlay with a focus trap".
+Every window-modal dialog this product draws — the pause, the provider sign-in, the approval, and now this one — is a modal
+child window instead; the platform flag makes it window-modal against its parent, which is what the decision's level asks
+for, but the means differs from the one written here. This execution followed the built precedent rather than the text and
+records the difference here; it changes nothing the three levels promise.
+
+**Measured** by `pnpm resilience-proof`'s `fatal` scenario through the driver, which since this date addresses the window
+as `auth-recovery`: `window.innerWidth` 560; the dialog is `role="alertdialog"` with `aria-modal="true"`; Cancel closed the
+window and nothing else. **Found while running it:** the first-launch notice (REQ-WORKSPACE-152 (3)), raised 800 ms after the
+workspace opens, replaced the failure's notice in the one slot when the driven prompt failed sooner — a race of the proof,
+not of the product, so the scenario now waits for that notice before it types.
+
+~~The non-modal window-level re-authentication prompt this ADR names (`REQ-NOTIFY-071`) is not built on this base (the note's
+part B, on `fin6-auth-recovery-1`, unmerged).~~ *Corrected at the merge, 2026-10-02:* it is built (the section above) and
+merged beside this dialog. The automatic fallback goes ahead of the dialog, which keeps REQ-NOTIFY-072's two cases, and the
+dialog's opening closes every prompt open (REQ-NOTIFY-079) — so at most one of the two authentication surfaces is drawn for
+a failure, the modal one taking the place of the non-modal one.

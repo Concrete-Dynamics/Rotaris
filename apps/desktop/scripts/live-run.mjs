@@ -109,13 +109,14 @@
  *
  * The run is unattended and its window is hidden; `--gui` shows it, for watching rather than using.
  */
-import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
+import { KEY_ENV, endpointKey, endpointStore, instanceIdFor, powershell, selectEndpoint } from './lib/endpoint-registry.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
 import { KEPT_FILE, sweepSandboxes, writeOwner } from './lib/sandbox-sweep.mjs';
 import { restatedFacts } from './lib/restated-facts.mjs';
@@ -249,80 +250,11 @@ if (DURESS_FIXTURE !== null && wanted.some((name) => name !== 'duress')) {
 }
 
 // ── The endpoint registry and the key store ──────────────────────────────────────────────────────────────────
-const HOME_DIR = join(homedir(), '.rotaris', 'live-run');
-const REGISTRY = join(HOME_DIR, 'endpoints.json');
-const KEY_ENV = 'ROTARIS_LIVE_API_KEY';
-/**
- * The shell the key store talks to, probed once: PowerShell 7 first, because Windows PowerShell 5.1 cannot always
- * load `Microsoft.PowerShell.Security` — where the DPAPI cmdlets live — and a host that cannot load it cannot
- * encrypt. The probe is the cmdlet itself, not the version banner; when neither host answers, `storeKey` falls back.
- */
-let powershellProbed;
-function powershell() {
-  if (powershellProbed !== undefined) return powershellProbed;
-  const candidates = process.platform === 'win32' ? ['pwsh.exe', join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')] : ['pwsh'];
-  for (const candidate of candidates) {
-    const probe = spawnSync(candidate, ['-NoProfile', '-NonInteractive', '-Command', 'ConvertTo-SecureString -String 1 -AsPlainText -Force | Out-Null'], { encoding: 'utf8', windowsHide: true });
-    if (probe.status === 0) { powershellProbed = candidate; return powershellProbed; }
-  }
-  powershellProbed = candidates[candidates.length - 1];
-  return powershellProbed;
-}
-const dpapiFileFor = (name) => join(HOME_DIR, `${name}.key.dpapi`);
-const plainFileFor = (name) => join(HOME_DIR, `${name}.key`);
-/** Whichever form this account's key is in: the DPAPI ciphertext when there is one, the protected file otherwise. */
-const keyFileFor = (name) => (existsSync(dpapiFileFor(name)) ? dpapiFileFor(name) : plainFileFor(name));
-const hasKey = (name) => existsSync(dpapiFileFor(name)) || existsSync(plainFileFor(name));
-/** The file's own protection: inheritance off and this account alone on Windows, mode 600 elsewhere. */
-function lockDown(file) {
-  if (process.platform !== 'win32') { chmodSync(file, 0o600); return; }
-  const icacls = join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'icacls.exe');
-  spawnSync(icacls, [file, '/inheritance:r', '/grant:r', `${process.env['USERNAME'] ?? ''}:F`], { encoding: 'utf8', windowsHide: true });
-}
-/** REQ-PROVIDER-051, repeated here so the script can name the credential file before the app writes it. */
-const instanceIdFor = (label) => `openai-compatible--${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
+// Shared with `slice-proof.mjs` since 2026-10-02 (R-068): `lib/endpoint-registry.mjs` holds the registry, the key store
+// and the provider id the product mints for a label; this script keeps only its prompts and its own flags.
+const keyStore = endpointStore();
+const { dpapiFileFor, plainFileFor, keyFileFor, hasKey, registry, writeRegistry, storeKey, storedKey } = keyStore;
 
-function registry() {
-  if (!existsSync(REGISTRY)) return { default: null, endpoints: {} };
-  const read = JSON.parse(readFileSync(REGISTRY, 'utf8'));
-  return { default: read.default ?? null, endpoints: read.endpoints ?? {} };
-}
-function writeRegistry(next) {
-  mkdirSync(HOME_DIR, { recursive: true });
-  writeFileSync(REGISTRY, `${JSON.stringify(next, null, 2)}\n`);
-}
-/**
- * Storage, best available first: DPAPI through PowerShell's SecureString — ciphertext this account on this
- * machine can read and nothing else — and, where that shell cannot load `Microsoft.PowerShell.Security` (a
- * constrained host, a policy), the key in a file whose ACL names this account alone. Which one was used is
- * returned and printed; it is never quietly the weaker of the two.
- */
-function storeKey(name, secret) {
-  mkdirSync(HOME_DIR, { recursive: true });
-  if (process.platform === 'win32') {
-    const file = dpapiFileFor(name);
-    const script = `$k = ConvertTo-SecureString -String $env:ROTARIS_LIVE_RUN_SECRET -AsPlainText -Force; ConvertFrom-SecureString -SecureString $k | Set-Content -NoNewline -Encoding ascii -Path ${JSON.stringify(file)}`;
-    const written = spawnSync(powershell(),['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', windowsHide: true, env: { ...process.env, ROTARIS_LIVE_RUN_SECRET: secret } });
-    if (written.status === 0 && existsSync(file)) { lockDown(file); rmSync(plainFileFor(name), { force: true }); return { file, protection: 'DPAPI, this account on this machine' }; }
-    rmSync(file, { force: true });
-    const plain = plainFileFor(name);
-    writeFileSync(plain, secret);
-    lockDown(plain);
-    return { file: plain, protection: `an owner-only ACL — DPAPI was not available (${(written.stderr ?? '').split('\n')[0]?.trim() || `powershell exited ${written.status}`})` };
-  }
-  const plain = plainFileFor(name);
-  writeFileSync(plain, secret, { mode: 0o600 });
-  lockDown(plain);
-  return { file: plain, protection: 'mode 600' };
-}
-function storedKey(name) {
-  const file = keyFileFor(name);
-  if (!existsSync(file)) return null;
-  if (!file.endsWith('.dpapi')) return readFileSync(file, 'utf8').trim();
-  const read = spawnSync(powershell(),['-NoProfile', '-NonInteractive', '-Command', `$s = Get-Content -Raw -Path ${JSON.stringify(file)} | ConvertTo-SecureString; [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($s))`], { encoding: 'utf8', windowsHide: true });
-  if (read.status !== 0) throw new Error(`${file} could not be decrypted — DPAPI binds it to one account on one machine. Store it again with \`pnpm live-run --set-key --endpoint=${name}\`.\n${read.stderr?.trim() ?? ''}`);
-  return read.stdout.trim();
-}
 /** A hidden prompt: PowerShell's own on Windows, `stty -echo` elsewhere. The secret never reaches a command line. */
 function promptSecret(what) {
   if (!process.stdin.isTTY) throw new Error(`there is no terminal to prompt on; put the key in ${KEY_ENV} for this command instead`);
@@ -454,12 +386,9 @@ if (value('remove-endpoint', null) !== null) {
 
 /** The endpoint this invocation is about: --endpoint, else the registry's default. */
 function chosenEndpoint() {
-  const reg = registry();
-  const name = value('endpoint', reg.default);
-  if (name === null) return null;
-  const found = reg.endpoints[name];
-  if (!found) throw new Error(`no endpoint named "${name}"; \`pnpm live-run --endpoints\` lists them`);
-  return { name, ...found, baseUrl: value('base-url', found.baseUrl).replace(/\/+$/, ''), model: value('model', found.model) };
+  const found = selectEndpoint(registry(), value('endpoint', null));
+  if (found === null) return null;
+  return { ...found, baseUrl: value('base-url', found.baseUrl).replace(/\/+$/, ''), model: value('model', found.model) };
 }
 
 if (has('set-key')) {
@@ -482,9 +411,7 @@ if (endpoint === null) {
   console.error('No endpoint is registered. Run `pnpm live-run --add-endpoint` first.');
   process.exit(1);
 }
-const envKey = (process.env[KEY_ENV] ?? '').trim();
-const keySource = envKey !== '' ? `the environment (${KEY_ENV})` : hasKey(endpoint.name) ? keyFileFor(endpoint.name) : null;
-const key = envKey !== '' ? envKey : hasKey(endpoint.name) ? storedKey(endpoint.name) : null;
+const { key, source: keySource } = endpointKey(keyStore, endpoint.name);
 
 /**
  * The model the run uses, asked of the ENDPOINT rather than remembered.

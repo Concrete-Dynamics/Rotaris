@@ -27,6 +27,7 @@ export function requirementsCommands(
       return createRequirementsRelay({
         currentWorkspace: () => (w.workspaceId && w.workspace !== '(no workspace)' ? canonicalPath(w.workspace) : undefined),
         awaitWorkspace,
+        disclosure: () => requirementsRuns.standingDisclosure(),
         request: (root, r, bound) => services.get(root)?.link.request(r, bound),
         person: () => { try { return userInfo().username; } catch { return process.env['USERNAME'] ?? process.env['USER'] ?? 'unknown'; } },
         broadcast: (payload) => { for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.requirementsChanged, payload); },

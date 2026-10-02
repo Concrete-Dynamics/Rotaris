@@ -236,7 +236,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
   };
   return {
     async *stream(req: ModelRequest) {
-      await req.resolveCredential();
+      const credential = await req.resolveCredential();
       const system = req.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '';
       const who = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise a finished agent transcript/i.test(system) ? 'summariser' : /^You condense an agent conversation/.test(system) ? 'compressor' : /^You classify a user request/.test(system) ? 'classifier' : /^You classify an agent conversation/.test(system) ? 'loop-classifier' : 'child';
       call += 1;
@@ -366,11 +366,6 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       const ordinal = ordinalAt(scripts[who] ?? [], (calls[counterKey] ?? 1) - 1);
       const callId = `call-${call}-s${ordinal}`;
       const marked = (text: string) => `${text} (scripted step ${ordinal})`;
-      // `<fault>:only=<provider>`: the fault answers a call addressed to that provider alone, and a call to any other answers
-      // as `answer` does — a credential refused by one provider, which a model on another provider does not share (the 401
-      // note's fallback restart, REQ-NOTIFY-070, whose restarted root takes the script from its first step again).
-      const scoped = /^(fail:(?:429|quota|503|401)(?::retry-after=\d+)?):only=([\w-]+)$/.exec(step);
-      if (scoped) step = req.model.providerId === scoped[2] ? scoped[1]! : 'answer';
       if (step === 'fail') {
         yield { ok: false as const, error: { code: 'http' as const, headline: 'scripted failure (HTTP 400)', status: 400, transient: false } };
         return;
@@ -381,7 +376,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         return;
       }
       // Part Q's fault steps (REQ-ORCH-088/090/091/092): `fail:429[:retry-after=<s>]`, `fail:quota`, `fail:503`, `fail:401`,
-      // each optionally `:only=<provider>` (above);
+      // each optionally `:only=<provider>[+<provider>…]` or `:unless-key=<key>` (below);
       // tokens:<n> — Part AH: a step that REPORTS n prompt tokens and then calls a tool so the turn goes round
       // again. REQ-MONITOR-081 prefers the provider's own figure, so this is how a scripted run crosses the
       // automatic threshold without composing a genuinely enormous conversation. Verification only.
@@ -393,6 +388,18 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         yield finished('other');
         return;
       }
+      // `<fault>:only=<provider>[+<provider>…]`: the fault answers a call addressed to one of those providers, and a call to any
+      // other answers as `answer` does — a credential refused by one provider that a model on another does not share (the
+      // automatic fallback restart, REQ-NOTIFY-070, and the authentication recovery dialog's restart on a chosen model,
+      // REQ-NOTIFY-074, whose restarted root takes the script from its first step again, a failed call leaving nothing in
+      // its record). Verification only.
+      const scoped = /^(fail:(?:429|quota|503|401)(?::retry-after=\d+)?):only=([\w+-]+)$/.exec(step);
+      if (scoped) step = scoped[2]!.split('+').includes(req.model.providerId) ? scoped[1]! : 'answer';
+      // `<fault>:unless-key=<key>`: the fault answers a call whose resolved credential is not that key, and the call answers as
+      // `answer` does once it is — a key the user replaced through the recovery dialog's re-authentication taking effect on
+      // the restarted run (REQ-NOTIFY-076). The key is a proof's fixture value, compared and never logged. Verification only.
+      const keyed = /^(fail:(?:429|quota|503|401)(?::retry-after=\d+)?):unless-key=(\S+)$/.exec(step);
+      if (keyed) step = credential === keyed[2] ? 'answer' : keyed[1]!;
       // `hang` streams nothing until the caller aborts (the unresponsive-model timer or the child timeout).
       const fault = /^fail:(429|quota|503|401)(?::retry-after=(\d+))?$/.exec(step);
       if (fault) {

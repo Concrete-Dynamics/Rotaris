@@ -79,7 +79,7 @@ describe('the non-modal re-authentication prompt (REQ-NOTIFY-071/078, ADR-0048)'
     expect(reauthPromptFor(seeded, 'S3')?.sessionId).toBe('S3');
   });
 
-  it('ADR-0048 / OQ-180: the Workspace view draws the prompt in flow, in its own row after the run header and before the transcript', () => {
+  it('ADR-0048 / OQ-181: the Workspace view draws the prompt in flow, in its own row after the run header and before the transcript', () => {
     const panel = createElement(ReauthPrompt, { prompt: base, onSubmit: async () => ({ ok: true as const, applies: 'next-run' as const }), onDismiss: async () => undefined });
     const html = renderToStaticMarkup(createElement(WorkspaceView, { session: null, rows: [], onSubmit: async () => ({ ok: true as const }), onStop: async () => ({ ok: true as const }), reauthPrompt: panel }));
     const prompt = html.indexOf('data-testid="reauth-prompt"');
@@ -152,7 +152,7 @@ describe('the re-authentication prompt overlays nothing (ADR-0048 "leaves the re
     }
   });
 
-  it('beside an expanded plan gate the prompt yields as a bar — its title and its answers on one row, nothing pinned, no height written — and is whole again beside a collapsed gate (REQ-ORCH-153, PD-ORCH-002, OQ-180)', () => {
+  it('beside an expanded plan gate the prompt yields as a bar — its title and its answers on one row, nothing pinned, no height written — and is whole again beside a collapsed gate (REQ-ORCH-153, PD-ORCH-002, OQ-181)', () => {
     // A `minmax(0, auto)` track is maximised before a flexible one is expanded (CSS Grid §12.5-12.7). With the gate expanded
     // the transcript is not drawn and the gate's row is `minmax(0, 1fr)`, so the whole prompt took its height first and left
     // the gate 42 px at 1000x680, its three answers unreachable (the verifier's probe, 2026-10-02).

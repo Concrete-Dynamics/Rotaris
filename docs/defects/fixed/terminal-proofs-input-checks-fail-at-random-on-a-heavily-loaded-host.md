@@ -85,7 +85,7 @@ None of these reds was the product's:
 No input check went red in those forty runs, and no fence timed out. The one `live.floodPainted` red was a second
 mechanism. The grid showed `line 10000` but the row preview was empty: the closing frame had reset the preview's emulator,
 and the read fell before it had parsed the final screen. The read now waits for that, and the product's side is recorded
-in [`a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`](../a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md).
+in [`a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`](a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md).
 The echo reds stayed red, as they should: the bound is the requirement's. Each missed by one keystroke of three, with
 the key queued in the renderer for at most 11 ms and the rest in the frame or its paint.
 

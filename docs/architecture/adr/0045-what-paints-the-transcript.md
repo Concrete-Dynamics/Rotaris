@@ -767,3 +767,15 @@ after the frame releases the hold and rebinds what it held back. The row that gr
 it moved, which is what the synchronous render is for. Such a delivery came in 3 of 24 append launches, and the line in
 none of them (`docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`).
 Nothing else this record decided moved.
+
+**The append comparison under host load, 2026-10-02 (fin7).** fin4's verifiers saw the append comparison red at load
+averages of 5 to 14.7 on 4 CPUs (164.1 against 130.0 ms, 110.1 against 90.9, 175.9 against 135.6), once with loaded
+launches that ran none of the hold's code, and the stage recorded no load to tell a red by. Each launch now records the
+host's load averages and CPU count at its start and end, the verdict prints them, and a red with a launch above the CPU
+count runs the four alternating launches once more and is judged on that set, both kept in `append.json`
+(`transcript-proof/append-rerun.mjs`, with its test). The slack and the statistic are unchanged. Before relying on it, the
+comparison was alternated between dc796f5's build and f2bddcf's, the commit before the hold above, three runs each at load
+averages of 0.6 to 4.8: all six passed, the build with the hold reading the loaded side at 78.45 to 102.1 ms against
+101.2 to 108.8 empty, and the build without it at 124 to 171.95 against 127 to 155.55, so the reds were not the hold's.
+Nothing this record decided moved
+(`docs/defects/fixed/transcript-proofs-append-comparison-goes-red-under-host-load.md`).

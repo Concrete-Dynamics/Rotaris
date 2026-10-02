@@ -49,6 +49,13 @@ does not match it.
   fails on the unrepaired script). Repair round 1 added that the step holds no first-place lease check, and
   that an unresolved OTHER provider's error says the proof's provider is authenticated, so the owner does not read a
   second, unauthenticated provider in the configuration as a failure to prime openrouter.
-- **Not run:** `slice-proof` itself. It spends against an OpenRouter key the owner has not authorized for this round
+- ~~**Not run:** `slice-proof` itself. It spends against an OpenRouter key the owner has not authorized for this round
   (only the self-hosted `katalyst` endpoint is), so the repair is shown by the reader's test against the product's own
-  writer and not by a run; the owner's next `slice-proof` run is its end-to-end check.
+  writer and not by a run; the owner's next `slice-proof` run is its end-to-end check.~~
+- **Run, 2026-10-02** (branch `fin6-slice-proof-endpoint`, R-068): the proof was retargeted from OpenRouter to the
+  live-run registry's default endpoint (`katalyst`, self-hosted, unmetered, its stored key), and step 3 passed on the
+  built app against it: `primingProblem(log3, 'openai-compatible--katalyst')` found the run host's opening report
+  `credentials: leased for openai-compatible--katalyst (workspace …)` with nothing unresolved, and the run completed
+  (`tasks_complete`, one settled tool row, the request at the registered base URL's `…/v1/chat/completions`).
+  Every other scenario passed on the same fresh profile (`.proof/slice-proof/results.json` of that run; the row in
+  [`first-executions.md`](../../architecture/first-executions.md), 2026-10-02).

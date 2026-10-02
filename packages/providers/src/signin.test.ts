@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, ok } from '@rotaris/kernel';
+import { FakeClock, failure, ok } from '@rotaris/kernel';
 import { CredentialStore } from './credentials/store.js';
 import { ProjectSettingsStore } from './project-settings.js';
 import { ProviderService } from './signin.js';
@@ -165,9 +165,9 @@ describe('the rest of the provider service', () => {
   it('replaceKey validates by discovery and refuses a non-api-key provider; refresh counts (REQ-PROVIDER-108/147)', async () => {
     const { svc } = service();
     await svc.addInstance({ label: 'OpenRouter', baseUrl: OR, apiKey: KEY });
-    expect(await svc.replaceKey('openai-compatible--openrouter', 'sk-or-other')).toEqual({ ok: false, error: 'Validation failed for OpenRouter: Authentication failed for OpenRouter: 401' });
-    expect(await svc.replaceKey('openai-compatible--openrouter', KEY)).toEqual({ ok: true, value: 'Validated OpenRouter; discovered 3 models.' });
-    expect(await svc.replaceKey('codex', KEY)).toEqual({ ok: false, error: 'OpenAI Codex does not sign in with an API key.' });
+    expect(await svc.replaceKey('openai-compatible--openrouter', 'sk-or-other')).toEqual({ ok: false, stage: 'validation', message: 'Validation failed for OpenRouter: Authentication failed for OpenRouter: 401' });
+    expect(await svc.replaceKey('openai-compatible--openrouter', KEY)).toEqual({ ok: true, message: 'Validated OpenRouter; discovered 3 models.' });
+    expect(await svc.replaceKey('codex', KEY)).toEqual({ ok: false, stage: 'method', message: 'OpenAI Codex does not sign in with an API key.' });
     const lines: string[] = [];
     expect(await svc.refresh('all', (l) => lines.push(l))).toEqual({ succeeded: 1, failed: 0, skipped: 5, complete: false });
     expect(lines.at(-1)).toContain('finished with failures or skips: 1 succeeded, 5 skipped (not authenticated)');
@@ -175,5 +175,57 @@ describe('the rest of the provider service', () => {
     expect(await svc.refresh(['deepseek'], (l) => one.push(l))).toMatchObject({ failed: 1, skipped: 0 });
     expect(one[0]).toContain('DeepSeek was skipped: it is not authenticated');
     expect(existsSync(join(dir, 'config', 'project_settings.yaml.lock'))).toBe(false);
+  });
+});
+
+describe('the recovery dialog\'s re-authentication (REQ-NOTIFY-076/077, REQ-NOTIFY-202)', () => {
+  const failingProtector = () => {
+    const lock = { pid: process.pid, startedAt: '2026-09-05T00:00:00.000Z', timers: clock, monotonic: clock };
+    const credentials = new CredentialStore({ dir: join(dir, 'data', 'tokens'), protector: { protect: async () => ({ ok: false as const, error: { code: 'acl', headline: 'the ACL could not be set' } }) }, lock, random: () => 'r', warn: (m) => log.push(`warn:${m}`), info: (m) => log.push(`info:${m}`) });
+    const settings = new ProjectSettingsStore({ path: join(dir, 'config', 'project_settings.yaml'), lock, timers: clock, warn: (m) => log.push(`warn:${m}`) });
+    return new ProviderService({ credentials, settings, wall: clock, fetch: okCatalogue, log: (m) => log.push(`log:${m}`), warn: (m) => log.push(`warn:${m}`) });
+  };
+
+  it('names the method: a key field for an API-key provider, unavailable for device-code and browser ones, configuration for an id no method resolves', async () => {
+    const { svc } = service();
+    expect(await svc.addInstance({ label: 'OpenRouter', baseUrl: OR, apiKey: KEY })).toMatchObject({ outcome: 'signed-in' });
+    expect(svc.reauthentication('openai-compatible--openrouter')).toMatchObject({ method: 'api-key' });
+    expect(svc.reauthentication('deepseek')).toMatchObject({ method: 'api-key' });
+    expect(svc.reauthentication('copilot')).toEqual({ method: 'unavailable', message: 'GitHub Copilot signs in with "Code shown here, entered at the provider", which this build does not provide yet, so it cannot be re-authenticated here. Choose a model from another provider instead.' });
+    expect(svc.reauthentication('codex').method).toBe('unavailable');
+    expect(svc.reauthentication('concrete-cloud')).toEqual({ method: 'unavailable', message: 'Rotaris Cloud is coming soon.' });
+    expect(svc.reauthentication('scripted')).toMatchObject({ method: 'configuration', message: expect.stringMatching(/^Authentication is managed by model configuration\./) });
+    // No message sends the user to a shell, a terminal or a separate program (REQ-NOTIFY-076's last sentence).
+    for (const id of ['openai-compatible--openrouter', 'copilot', 'codex', 'claude-code', 'scripted']) expect(svc.reauthentication(id).message).not.toMatch(/terminal|shell|command line|cli\b|run `/i);
+  });
+
+  it('validates the new key before storing it, and stores it: the provider refusing it is the validation stage, nothing stored', async () => {
+    const { svc, credentials } = service();
+    await svc.addInstance({ label: 'OpenRouter', baseUrl: OR, apiKey: KEY });
+    const refused = await svc.reauthenticateWithKey('openai-compatible--openrouter', 'sk-or-wrong');
+    expect(refused).toEqual({ ok: false, stage: 'validation', message: 'Validation failed for OpenRouter: Authentication failed for OpenRouter: 401' });
+    expect(credentials.load('openai-compatible--openrouter')!.access_token).toBe(KEY);
+    expect(await svc.reauthenticateWithKey('openai-compatible--openrouter', '   ')).toMatchObject({ ok: false, stage: 'key' });
+    expect(await svc.reauthenticateWithKey('openai-compatible--openrouter', KEY)).toEqual({ ok: true, message: 'Validated OpenRouter; discovered 3 models.' });
+    expect(credentials.load('openai-compatible--openrouter')!.extra).toEqual({ provider_family: 'openai-compatible', api_base: OR });
+    expect(await svc.reauthenticateWithKey('copilot', KEY)).toMatchObject({ ok: false, stage: 'method' });
+    expect(JSON.stringify(log)).not.toContain('sk-or-wrong');
+  });
+
+  it('a key stored whose discovered models cannot be recorded is the catalog stage, never the storage one', async () => {
+    const { svc, credentials, settings } = service();
+    settings.upsertProvider = async () => ({ ok: false as const, error: failure('settings.write', 'the provider settings could not be written') });
+    const r = await svc.reauthenticateWithKey('deepseek', KEY);
+    expect(r).toEqual({ ok: false, stage: 'catalog', message: 'The key for DeepSeek was saved, but its discovered models could not be recorded: the provider settings could not be written' });
+    // The key itself reached the credential store.
+    expect(credentials.load('deepseek')?.access_token).toBe(KEY);
+  });
+
+  it('REQ-NOTIFY-077: a key that cannot be stored answers the storage stage, naming the storage failure', async () => {
+    const svc = failingProtector();
+    const r = await svc.reauthenticateWithKey('deepseek', KEY);
+    expect(r.ok).toBe(false);
+    expect(r.ok ? null : r.stage).toBe('storage');
+    expect(r.ok ? '' : r.message).toMatch(/^No credential was stored: the credential store at .* could not be protected$/);
   });
 });

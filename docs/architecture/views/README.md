@@ -45,7 +45,52 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
-**The re-authentication prompt yields to an expanded plan gate (REQ-NOTIFY-071, REQ-ORCH-153, ADR-0048, OQ-180; the 401
+**The automatic fallback goes ahead of the recovery dialog (REQ-NOTIFY-068, REQ-NOTIFY-070, REQ-NOTIFY-072, REQ-NOTIFY-079;
+the 401 note's parts A and B merged beside C and D, 2026-10-02).** The two builds of REQ-NOTIFY-060's classes are one:
+`main/failure-class.ts` and `main/run-failure-notice.ts` (parts C and D) classify and word every ending, and the focus gate
+(`RunFailurePublisher`) asks the automatic half first for an authentication failure — `main/failure-recovery.ts`, renamed
+**`main/auth-fallback.ts`** and narrowed to the first failure's restart and the prompt (its notices and its classifier were
+the gate's twins and are gone) — and opens the recovery dialog only where that answers `dialog` (a second failure, or a first
+with no usable fallback); the dialog's opening closes every prompt, and the primary the fallback restarted away from joins
+the dialog's refused pairs (`AuthRecovery.refuse`). The run host's `session.restartOnFallback` refusals now carry the code
+main reads that by (`NO_USABLE_FALLBACK`). The **runtime view**'s classification paragraph, the **state-ownership** rows of
+the first-failure bookkeeping, the prompt and the refused pairs, and the **seams view** §1 (nineteen facets) and §2 say so.
+No package, edge, process, channel, command or store column changed.
+
+**A failed run's notice waits for its session to be on screen, and a pair that failed authentication is not offered again
+(REQ-NOTIFY-030/032, REQ-NOTIFY-064, REQ-NOTIFY-068; the 401 note's repair round 1).** Every run-ending notice is built by
+`main/run-failure-notice.ts`; a failed run of a session no main window follows raises REQ-NOTIFY-032's warning and holds its
+class publication — the recovery dialog included — until `session.subscribe` follows it (`MainWindows.followerOfSession`).
+Main keeps the pairs that failed authentication by session until their provider's credentials change. The **runtime view**'s
+classification paragraph and two **state-ownership** rows say so. No package, edge, process, channel, command or store
+column changed.
+
+**The recovery dialog re-authenticates the provider that failed (REQ-NOTIFY-076, REQ-NOTIFY-077, REQ-NOTIFY-202, OQ-179; the
+401 note's part D).** A fourth command, `authRecovery.reauthenticate {apiKey}`, carries a key inward to main's provider key
+store (`ProviderService.reauthenticateWithKey`, stage-typed so a storage failure is told apart) and relays
+`session.authRestart` with no model key, which restarts on the same model without a pin. The **process view**'s command
+and run-host message entries and the **runtime view**'s classification paragraph say so. No package, edge, process, channel
+or store column changed.
+
+**A failed run is classified, and an authentication failure opens the recovery dialog (REQ-NOTIFY-060, REQ-NOTIFY-064,
+REQ-NOTIFY-067, REQ-NOTIFY-072..075, REQ-NOTIFY-079/080; the 401 note's part C).** Main matches a failed run in REQ-NOTIFY-060's
+order (`main/failure-class.ts`); the generic class raises REQ-NOTIFY-064's notice with the workspace action; the
+authentication class asks the run host `session.authRecovery` and opens a 560 px modal window, role `auth-recovery`, whose
+Retry is relayed as `session.authRestart` (`Sessions.restartAfterAuthFailure`: a `model_override` pin against the failed pair,
+the last prompt re-submitted). The **process view** gains the window, the two run-host message kinds and the three
+`authRecovery.*` commands; the **runtime view** the classification paragraph; the **seams view** §1 the `auth-recovery`
+facet (its count corrected: eighteen, not sixteen); the **state-ownership view** the open dialog's row. No package, edge,
+process, channel or store column changed.
+
+**A closing terminal frame no longer blanks a preview (REQ-SHELL-102, REQ-CHAT-063, REQ-CHAT-076).** The renderer's
+`TerminalStreamSet` holds, for `previewOf`, the screen a `screen` frame's reset replaces, from the parser reaching that
+reset (`applyFrame`'s `resetReached` hook, an empty write queued ahead of it) until the text has parsed (its `parsed`
+hook), and notifies its listeners again with a new outcome, `parsed`, once it has. The **process
+view**'s live-terminal paragraph says so. This repairs
+`a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`. No package, edge, process, message kind,
+command or store column changed.
+
+**The re-authentication prompt yields to an expanded plan gate (REQ-NOTIFY-071, REQ-ORCH-153, ADR-0048, OQ-181; the 401
 note's part B, third repair round).** Beside an expanded gate the prompt is drawn as a bar (its title and its answers) so the
 gate keeps its three answers and the plan its height. The **seams view** §2 states the rule (in flow is not enough beside
 another panel open until answered: the one the run is not stopped on yields to one row of its answers) and the **runtime view** the placement. No package, edge, channel, command or
@@ -55,7 +100,7 @@ store column changed.
 round).** `Run.recordRootModelFailure` records the failed model with the run's last failure on every root turn, the plan
 cycle's included; the **runtime view** says so. No package, edge, channel, command or store column changed.
 
-**The re-authentication prompt is laid out in flow and overlays nothing (REQ-NOTIFY-071, ADR-0048, OQ-180; the part B
+**The re-authentication prompt is laid out in flow and overlays nothing (REQ-NOTIFY-071, ADR-0048, OQ-181; the part B
 second repair round).** AppShell's **`windowPanel`** slot is removed; the Workspace view draws the followed session's
 prompt (`WorkspaceView`'s `reauthPrompt`) as its own grid row, **`reauth`**, between the run header and the transcript,
 declared in every template of the view's grid. The **seams view** §2 states the rule this leaves (a non-modal surface open
@@ -81,7 +126,7 @@ back from the next iteration. No package, edge or store column changed.
 
 **A failed run is classified in REQ-NOTIFY-060's order, and a first 401 restarts on the fallback (REQ-NOTIFY-060/064/
 067/069/070, REQ-MONITOR-147, REQ-SESSION-026; the 401 note's part A).** Main's run-result handler hands a result carrying
-failure text to `main/failure-recovery.ts` (classes in `main/failure-class.ts`), the one writer of a run failure's notice:
+failure text to `main/failure-recovery.ts` (now `main/auth-fallback.ts`, below; classes in `main/failure-class.ts`), the one writer of a run failure's notice:
 REQ-NOTIFY-064's generic notice with `Return to the workspace`, REQ-NOTIFY-063's as before, and for a first authentication
 failure the new run-host request **`session.restartOnFallback {sessionId}`** → `session.fallbackRestarted {failed,
 fallback}` (`Sessions.restartOnFallback`: the `model_override` entry keyed by the failed pair, `cause: authentication`,
@@ -127,6 +172,33 @@ ended and still reads `running`, it asks the run host's status once. This repair
 `a-setup-that-finishes-before-its-start-is-answered-is-never-seen-to-finish.md`; `workspace-proof`'s scenario 8g shows it.
 The **process view**'s initialization paragraph says so. No package, edge, process, message kind, channel, command or
 store column changed.
+
+**A role's pending edits keep each field's scope through the save (REQ-CONFIG-259, REQ-CONFIG-341).** The Personas
+table's pending edits are held per role and per scope (`PendingRoleEdit` is `{ workspace?, global? }`), and
+`applyChange` writes a change under its own scope only. `RoleEditSchema` carries the same two-scope shape in place of one
+`scope`, strictly. `saveDesktop` writes each scope's part in its own file (`roleEditAt`). The Personas row shows the
+pending edit made at the selected scope. This repairs `a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md`,
+in two rounds. The first gave each field one scope, and a second edit of the same field at the other scope dropped the
+first. `settings-proof`'s launches 9 and 10 show it. The **seams view** §5 says so. The `config.save` payload's role entry
+changed shape. No package, edge, process, message kind, channel, command or store column changed.
+
+**A card resting in `ready` across a restart is disclosed and started from the queue (REQ-TRACE-472, REQ-TRACE-482,
+REQ-TRACE-464).** The delivery service's `recoverLaunch` (`workspace-service/delivery.ts`) rebuilds a launch the restart
+lost from the store's worktree row through `RunGitPort.takeOver`, never by provisioning. It runs once on the first pass
+after a start and again on the queue's release, which records the disclosure it carries. A tree that cannot be taken
+over is stated on the queue entry. `beforeCommit`'s own take-over now shares `takeOverRecorded` with it. This repairs
+`a-card-resting-in-ready-across-a-restart-can-never-be-started.md`; `requirements-runs-proof`'s sixth assertion shows
+it. The verifier falsified two of its clauses the same day. First, the recovery ran on the restart reap's pass only, so a
+first parse that failed used it up; it now runs on every pass that parses. Second, a recovered launch was undisclosed with
+no way to learn main's preferences. Main's coordinator now sends its standing disclosure (`due`, `suppressed`, `off`) on
+`requirements.run.claim`, a new optional field of that command. `requirements-runs-proof`'s seventh assertion shows it.
+The **sequences view**'s board section says so. No package, edge, process, message kind, channel or store column changed.
+**Corrected in a second round the same day:** sent on the claim alone, the value split the scheduler, and the queue the
+board published still asked for a disclosure the claim no longer needed. The field moved off `requirements.run.claim`
+onto the `requirements.command` envelope, beside the actor, stamped by main's relay and its coordinator on every command;
+the service holds the last value and schedules the published queue, the preview and the claim under it. The **process
+view**'s requirements contracts and the **sequences view**'s board section say so. No package, edge, process, message
+kind, channel or store column changed.
 
 **A unit's worktree is provisioned once, and a later start of the same unit takes it over (REQ-TRACE-464,
 REQ-GIT-140).** The delivery service's `beforeCommit` takes over the tree of the launch it holds when that launch is

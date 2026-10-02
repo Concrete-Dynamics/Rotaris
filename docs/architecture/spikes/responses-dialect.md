@@ -93,3 +93,27 @@ mapping delivers the figures REQ-MONITOR-081 needs from a real stream; ADR-0027'
 responses dialect) is **not needed** and is no longer priced. **What it does not settle:** OpenRouter's
 `/responses` is one implementation; a second endpoint's shape is a second measurement. The first attempt (above)
 and the fifteenth defect are what the live half cost before it could run.
+
+## Live half, second endpoint — 2026-10-02, a self-hosted vLLM, `qwen3.8-flash-next`
+
+Run by `pnpm slice-proof` scenario 4 after the proof was retargeted to the live-run registry's default endpoint
+([R-068](../../product/requests.md#r-068)): `katalyst`, a self-hosted vLLM server (its base URL is the
+registry's, kept outside the repository), unmetered, with the key stored beside the registry. Since that run the harness
+runs under vitest's verbose reporter, so the `[spike6]` lines reach the pack on a green run as well
+([note](../../defects/fixed/slice-proof-keeps-no-spike6-figures.md)).
+
+| Measurement | `responses` | `chat` |
+|---|---|---|
+| endpoint reached | `…/v1/responses` | `…/v1/chat/completions` |
+| text deltas for "Reply with the single word: pong" | 1 | 1 |
+| time to first delta | 1289 ms | 1029 ms |
+| total | 1296 ms | 1031 ms |
+| provider usage | input 59, output 30 | input 59, output 30 |
+| a bad key (`responses`) | `401`, status and body kept: `{"error":"Unauthorized"}` | — |
+| abort after three deltas (`responses`, "count slowly to 200") | `aborted` | — |
+
+Four of four assertions held. **What it settles:** the second measurement the section above owed — a second
+implementation of `/responses`, vLLM's, serves the dialect through the same constructor, credential and headers, its
+usage mapped the same way, its refusal kept with status and body. **What it does not settle:** the single delta per
+answer is this server's chunking of a five-token reply, not a property of the dialect; a longer answer streamed in
+several (the abort case stopped after three).

@@ -1,8 +1,8 @@
 import { StrictMode, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { RUN_AGENT_ID, TERMINAL_REFUSALS, type ApprovalOption, type ApprovalPayload, type CommandOutcome, type HooksSummary, type PausePayload, type PauseResolution, type ProviderDialogPayload, type ProviderSignInResult, type SessionListItemPayload, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
-import { Acknowledgements, ApprovalDialog, ArtifactInspector, createTerminalWindowStreams, type ArtifactLoaded, HookReviewDialog, PauseDialog, PersonaWindow, ProviderDialog, restingView, TerminalWindow, terminalWindowTitle, ToggleSwitch, type TerminalActionResult, type TerminalActions, type TerminalStreamSet } from '@rotaris/ui';
+import { RUN_AGENT_ID, TERMINAL_REFUSALS, type ApprovalOption, type AuthRecoveryPayload, type AuthRecoveryResult, type ApprovalPayload, type CommandOutcome, type HooksSummary, type PausePayload, type PauseResolution, type ProviderDialogPayload, type ProviderSignInResult, type SessionListItemPayload, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
+import { Acknowledgements, ApprovalDialog, AuthRecoveryDialog, ArtifactInspector, createTerminalWindowStreams, type ArtifactLoaded, HookReviewDialog, PauseDialog, PersonaWindow, ProviderDialog, restingView, TerminalWindow, terminalWindowTitle, ToggleSwitch, type TerminalActionResult, type TerminalActions, type TerminalStreamSet } from '@rotaris/ui';
 import { acknowledge, acknowledgements, bridge, cancelAgent, cancelRun, control, displayPrefs, openLink, replica, terminalHost, terminalStreams } from './shell.js';
 import { entryOf, useCancelOverlaid, useConfigSnapshot, useElapsedTick, useNeedsRecovery } from './session-view.js';
 import { followCoalesced } from './coalesced-follow.js';
@@ -10,7 +10,8 @@ import { followCoalesced } from './coalesced-follow.js';
 /**
  * THE WINDOWS BESIDE THE MAIN ONE (ADR-0056: one bundle for every window, the role by route).
  *
- * Six roles, two shapes. Four are DIALOGS — the approval, the provider sign-in, the pause and the hook review: each
+ * Seven roles, two shapes. Five are DIALOGS — the approval, the provider sign-in, the pause, the hook review and the
+ * authentication recovery (REQ-NOTIFY-072): each
  * asks main for the payload its window was opened for, draws one component over it, answers through one command and
  * closes. That shape was written out four times, including four copies of "if main refused, draw its headline
  * instead of the dialog", which is what `mountWindow` is and why none of them says it any more.
@@ -71,6 +72,24 @@ export function bootPause(): Promise<void> {
     // Verification only: the proof answers the dialog through a query the main process set from its seam.
     const scripted = new URLSearchParams(window.location.search).get('answer');
     if (scripted === 'continue' || scripted === 'double' || scripted === 'cancel') setTimeout(() => { void onResolve(scripted); }, 400);
+  });
+}
+
+/**
+ * REQ-NOTIFY-072..077, REQ-NOTIFY-080 (the 401 note's parts C and D): the authentication recovery window. Main closes it once a
+ * retry has restarted the run; Cancel asks main to close it and does nothing else.
+ */
+export function bootAuthRecovery(): Promise<void> {
+  return mountWindow<AuthRecoveryPayload>({ kind: 'authRecovery.payload' }, (payload, root) => {
+    const answer = async (request: Parameters<typeof bridge.command>[0]): Promise<AuthRecoveryResult> => {
+      const c = await bridge.command(request);
+      return c.ok ? (c.value as AuthRecoveryResult) : { ok: false, message: c.detail ?? c.headline };
+    };
+    const onRetry = (modelKey: string) => answer({ kind: 'authRecovery.retry', modelKey });
+    // REQ-NOTIFY-076: the key travels inward to main's provider key store and nowhere else.
+    const onReauthenticate = (apiKey: string) => answer({ kind: 'authRecovery.reauthenticate', apiKey });
+    const onCancel = () => { void bridge.command({ kind: 'authRecovery.cancel' }); };
+    root.render(<StrictMode><AuthRecoveryDialog payload={payload} onRetry={onRetry} onReauthenticate={onReauthenticate} onCancel={onCancel} /><Acknowledgements store={acknowledgements} /></StrictMode>);
   });
 }
 

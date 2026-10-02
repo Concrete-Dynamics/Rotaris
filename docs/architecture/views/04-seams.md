@@ -43,9 +43,11 @@ it there gives it to every window at once, because `shell.ts` makes that set one
 reads or writes for itself stays in the root that draws it: `main.tsx` for the main window's six views,
 `windows.tsx` for the approval, provider, pause, hook-review, persona and terminal windows.
 
-**Which facet.** Seventeen sit beside `commands/context.ts`, one per family: `dialogs`, `providers`, `session`,
+**Which facet.** Nineteen sit beside `commands/context.ts`, one per family: `dialogs`, `providers`, `session`,
 `hooks`, `mcp`, `initialization`, `skills`, `shell`, `git`, `checkpoints`, `library`, `improvements`, `config`,
-`requirements`, `windows`, `workspace`, and `reauth` (2026-10-02, REQ-NOTIFY-071/078). Add the kind to the one whose name it already carries; a family with no
+`requirements`, `windows`, `workspace`, `update` (the updater's), `auth-recovery` (REQ-NOTIFY-072's recovery window,
+2026-10-02; this line said sixteen until then, `update` uncounted) and `reauth` (REQ-NOTIFY-071/078's prompt, 2026-10-02).
+Add the kind to the one whose name it already carries; a family with no
 facet yet is a new file and one more spread in the table. Each declares the slice of `CommandContext` it uses
 (`Pick<CommandContext, 'runHost' | …>`) — take what you need and nothing more, because that slice is what a
 test has to satisfy. A member that does not exist yet is added to `CommandContext` and supplied in `index.ts`.
@@ -86,11 +88,12 @@ any session) nor channel 12 (one workspace's initialization) could carry without
 worked example of a **window-level non-modal surface fed by main** (ADR-0048): the payload schema and the two commands
 in `packages/contracts/src/reauth.ts`, the counter in `packages/shell/src/relay.ts`'s total record, the publisher in
 `main/index.ts` sending each opening and closing, keyed by session, to every main window, the state in
-`main/failure-recovery.ts`, the facet `main/commands/reauth.ts` (the two answers, and `reauth.read` for a window that
+`main/auth-fallback.ts` (`failure-recovery.ts` until the merge beside the recovery dialog, 2026-10-02; the dialog's opening
+closes every prompt through it, REQ-NOTIFY-079), the facet `main/commands/reauth.ts` (the two answers, and `reauth.read` for a window that
 mounts later), the hook in `renderer/main.tsx` holding the prompts by session and choosing the followed session's
 (`reauthPromptFor`, REQ-NOTIFY-030: a recovery affordance moves with the focused session), and the surface
 `packages/ui/src/ReauthPrompt.tsx`, drawn **in flow** by the Workspace view (`WorkspaceView`'s `reauthPrompt`) as its
-own row of the view's grid, `reauth`, between the run header and the transcript (OQ-180's reading of "beside the
+own row of the view's grid, `reauth`, between the run header and the transcript (OQ-181's reading of "beside the
 continuing run") — so a panel open until answered overlays no control at any window size. *Corrected 2026-10-02
 (the repair rounds):* the first build sent to the one window following the session and mounted the surface beside the
 shell, `fixed` at the window's corner like `ProjectSetupDialog`; the verifier measured the session browser, the three
@@ -219,6 +222,12 @@ Invariants:
   re-emission was the eleventh first-execution defect — if you touch the writer, prove the comments survive.
 - `initialization:` / `project_init:` are read **outside** the layered merge, because `REQ-WORKSPACE-078`
   names one file.
+- **A role edit is held per (role, scope), each field within** (`REQ-CONFIG-259`, `REQ-CONFIG-341`'s "pending unset of
+  (role, field, scope)"). The pending entry (`PendingRoleEdit`, `ui/src/settings/config-state.ts`), the save contract
+  (`RoleEditSchema`: `{ workspace?, global? }`, strict) and the writer (`saveDesktop`'s `roleEditAt`) keep each scope's
+  field edits apart, so one role's edits at two scopes, the same field's included, each land in their own file. The
+  first repair's one scope per field was falsified by a model Unset at Workspace followed by a model pick at Global
+  (2026-10-02).
 
 ---
 

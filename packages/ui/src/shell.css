@@ -1041,7 +1041,7 @@
 /*
  * REQ-NOTIFY-071 / ADR-0048 — the re-authentication prompt: non-modal, window-level, open until answered, and LAID OUT
  * IN FLOW. It is its own row of the Workspace view's grid (`reauth`, between the run header and the plan gate), so it
- * takes its height from the transcript and overlays nothing, at any window size (OQ-180's reading of "beside the
+ * takes its height from the transcript and overlays nothing, at any window size (OQ-181's reading of "beside the
  * continuing run"). Two earlier placements were overlays and both covered controls in the built app: `fixed` at the
  * window's top corner (copied from `.project-setup`: the title bar's Sessions, minimise, maximise, close and the notice's
  * dismissal), then `absolute` at the top corner of the rail-and-view region (at REQ-SHELL-022's 1000x680 minimum the run
@@ -1066,7 +1066,7 @@
  * key field, label inline, and the two buttons) on one wrapping row, nothing pinned since nothing scrolls. Its sentence,
  * the provider's words and the key's hint stay in the document (the dialog's description, `aria-describedby`) and are
  * drawn again the moment the gate is collapsed or answered. No height is written: the bar is as tall as one row of
- * controls, so the gate's row takes the rest at every size from REQ-SHELL-022's minimum up (OQ-180's reading).
+ * controls, so the gate's row takes the rest at every size from REQ-SHELL-022's minimum up (OQ-181's reading).
  */
 .workspace > .reauth-prompt { grid-area: reauth; }
 .reauth-prompt {
@@ -2440,3 +2440,47 @@
 .check__input:disabled ~ .check__label { color: var(--rt-text-disabled); }
 .check__label { min-width: 0; }
 .check__hint { display: block; font-size: var(--rt-text-xs); }
+
+/* REQ-NOTIFY-072..075 — the authentication recovery dialog (`AuthRecoveryDialog.tsx`), in its own 560 px modal window. Craft
+   from the design material's provider-auth and question-stepper modals: the error in a quiet inset on the page ground, the
+   models as single-select option cards. REQ-NOTIFY-073: the error is drawn in the failure text colour, `--rt-danger-300`,
+   the fail state's readable-text token. */
+.auth-recovery { min-height: 100vh; box-sizing: border-box; }
+.auth-recovery__error {
+  margin: 0;
+  padding: var(--rt-space-2) var(--rt-space-3);
+  color: var(--rt-danger-300);
+  background: var(--rt-bg);
+  border: var(--rt-hairline-width) solid var(--rt-border);
+  border-radius: var(--rt-radius-md);
+  font-size: var(--rt-text-xs);
+  overflow-wrap: anywhere;
+}
+.auth-recovery__path { display: flex; flex-direction: column; gap: var(--rt-space-2); }
+.auth-recovery__heading {
+  margin: 0;
+  font-size: var(--rt-text-2xs);
+  letter-spacing: var(--rt-tracking-label);
+  text-transform: uppercase;
+  color: var(--rt-text-tertiary);
+  font-weight: var(--rt-weight-medium);
+}
+.auth-recovery__options { display: flex; flex-direction: column; gap: var(--rt-space-2); max-height: 40vh; overflow: auto; }
+.auth-recovery__option {
+  display: flex;
+  text-align: left;
+  padding: var(--rt-space-2) var(--rt-space-3);
+  border: var(--rt-hairline-width) solid var(--rt-border);
+  border-radius: var(--rt-radius-md);
+  background: var(--rt-surface-2);
+  color: var(--rt-text-secondary);
+  cursor: pointer;
+  transition: background var(--rt-duration) var(--rt-ease), border-color var(--rt-duration) var(--rt-ease);
+}
+.auth-recovery__option:hover:not(:disabled) { border-color: var(--rt-border-strong); }
+.auth-recovery__option.is-selected { border-color: var(--rt-accent-500); background: var(--rt-accent-tint-14); color: var(--rt-text); }
+.auth-recovery__option-label { font-size: var(--rt-text-sm); font-weight: var(--rt-weight-medium); }
+/* REQ-NOTIFY-076: the masked key field and its save-and-retry control on one line. */
+.auth-recovery__key { display: flex; gap: var(--rt-space-2); align-items: center; }
+.auth-recovery__key .input { flex: 1; min-width: 0; }
+.auth-recovery__path > .text-secondary { margin: 0; font-size: var(--rt-text-xs); }

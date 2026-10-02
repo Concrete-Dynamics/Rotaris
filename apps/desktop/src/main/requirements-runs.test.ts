@@ -67,6 +67,26 @@ describe('the launch preview (REQ-TRACE-472/473/474, 467/468)', () => {
 });
 
 describe('the dispatch (REQ-TRACE-464/470/471/463)', () => {
+  it('REQ-TRACE-472: every command to the service carries the standing disclosure the two preferences make — due, suppressed after a permanent acceptance, off with the elevation switched off', async () => {
+    const claimOf = (h: ReturnType<typeof harness>) => h.sent.find((r) => r.kind === 'requirements.command' && r.command.name === 'requirements.run.claim');
+    const due = harness();
+    await due.runs.dispatch();
+    expect(claimOf(due)).toMatchObject({ command: { name: 'requirements.run.claim' }, disclosure: 'due' });
+    const suppressed = harness({ prefs: { suppressed: true } });
+    await suppressed.runs.dispatch();
+    expect(claimOf(suppressed)).toMatchObject({ disclosure: 'suppressed' });
+    const off = harness({ prefs: { runs: false, suppressed: true } });
+    await off.runs.dispatch();
+    expect(claimOf(off)).toMatchObject({ disclosure: 'off' });
+    expect(off.runs.standingDisclosure()).toBe('off');
+    await off.runs.handle({ kind: 'requirements.runs', op: 'preview', id: 'REQ-101', action: 'release' });
+    expect(off.sent.every((r) => r.kind === 'requirements.command' && r.disclosure === 'off')).toBe(true);
+  });
+  it('REQ-TRACE-472/478: a permanent acceptance tells the service at once, so the queue it publishes stops asking for the disclosure', async () => {
+    const h = harness();
+    await h.runs.handle({ kind: 'requirements.runs', op: 'suppress', suppressed: true });
+    expect(h.sent).toEqual([{ kind: 'requirements.command', workspaceRoot: 'C:\\ws', command: { name: 'requirements.board', workspace: 'C:\\ws' }, actor: { kind: 'system' }, disclosure: 'suppressed' }]);
+  });
   it('claims, carries the grant on one start, then records the session id', async () => {
     const h = harness({ claims: [CLAIM] });
     const report = await h.runs.dispatch();

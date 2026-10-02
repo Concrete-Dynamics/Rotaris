@@ -8855,15 +8855,42 @@ is followed or there is nothing to resubmit. The composer keeps the draft: nothi
 action (which REQ-SHELL-114's single action would then have to allow), REQ-NOTIFY-064's, or none — and whether a draft a
 retry resubmitted is cleared from the composer as a submitted one is.
 
-**OQ-179 — What is REQ-NOTIFY-070's restart "with the same prompt", what does "the fallback bookkeeping is cleared" take back,
+**OQ-179 — What does the recovery dialog's re-authenticate path offer for a provider whose key the model configuration
+carries?** *(REQ-NOTIFY-076, "For key-based providers it offers a masked key field with a save-and-retry control … For
+browser and device-code providers it starts that provider's own flow in place"; REQ-NOTIFY-077; REQ-NOTIFY-202;
+REQ-CONFIG-083 and REQ-PROVIDER-092, a model's `api_key` / `api_key_env`, read per request, when it names no
+`auth_provider`; REQ-PROVIDER-118/140, "Authentication is managed by model configuration." for a provider that resolves to
+no sign-in method. Raised 2026-10-02 by the 401 note's part D on `fin6-auth-recovery-2`. Open.)*
+
+REQ-NOTIFY-076 sorts the provider that failed into two kinds: key-based, re-authenticated through a key field, and
+browser or device-code, through their own flow. A model can also reach a provider with a key it states itself — `api_key`
+or `api_key_env` in `agents.yaml`, with no `auth_provider` — and then no provider record or credential-store entry exists
+for it: a key typed into the dialog and stored would never be read by that model, so "save and retry" would retry with the
+same credentials, which REQ-NOTIFY-068 forbids. The scripted test provider is one such provider. The specification does not
+say what the dialog's second path offers for it.
+
+**What the build proceeds under** (`ProviderService.reauthentication` in `packages/providers/src/signin.ts`;
+`AuthRecoveryDialog.tsx`): a provider id that resolves to no sign-in method reads `configuration`, and the dialog's second
+path shows REQ-PROVIDER-118/140's sentence and says to correct the key the model configuration names, then retry — no key
+field, no save-and-retry control, and nothing directing the user to a shell or a terminal. The first path (another model) is
+unaffected. Device-code and browser providers read `unavailable` and say their flow is not provided by this build (the flows
+are owed, `packages/providers/src/catalogue.ts`); that is a gap of the build, not of the specification, and is recorded on
+[the 401 note](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md).
+
+**What a ruling decides.** Whether such a provider is offered a key field at all — writing the key into the configuration
+the model reads (a write into the user's project files, which REQ-NOTIFY-047 keeps out of notice actions but not out of a
+dialog), or into the credential store with the model then pointed at it — or only the sentence this build shows.
+
+**OQ-180 — What is REQ-NOTIFY-070's restart "with the same prompt", what does "the fallback bookkeeping is cleared" take back,
 and how long does "the first authentication failure of a session" last?** *(REQ-NOTIFY-070, "the run restarts with the
 same prompt. Where the restart cannot begin, the fallback bookkeeping is cleared and the generic failure notice is
 published instead"; REQ-NOTIFY-069, "a recorded last prompt"; REQ-NOTIFY-045, whose retry "resubmits the current composer
 draft, or the last submitted prompt"; REQ-NOTIFY-072/075, "a second authentication failure"; REQ-SESSION-026. Raised
 2026-10-02 by the 401 note's part A,
 [`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md),
-as OQ-177, and renumbered OQ-179 at its merge because `origin/main` had taken OQ-177 and OQ-178 meanwhile; the branch's
-commit subjects still say OQ-177. Open.)*
+as OQ-177, renumbered OQ-179 at its first merge because `origin/main` had taken OQ-177 and OQ-178 meanwhile, and renumbered
+OQ-180 at its second (2026-10-02, beside the note's parts C and D) because `origin/main` had taken OQ-179 meanwhile, part D's
+question above; the branch's commit subjects still say OQ-177. Open.)*
 
 Three things the requirements leave to the build:
 
@@ -8874,7 +8901,7 @@ Three things the requirements leave to the build:
 - **The session's first failure.** "The first authentication failure of a session" has no stated lifetime: across an
   application restart, the session is the same session, but nothing says the bookkeeping is durable.
 
-**What the build proceeds under** (`Sessions.restartOnFallback`, `apps/desktop/src/main/failure-recovery.ts`):
+**What the build proceeds under** (`Sessions.restartOnFallback`, `apps/desktop/src/main/auth-fallback.ts` — `failure-recovery.ts` until the merge beside parts C and D):
 - the restart **re-submits the last user prompt as a new user row** (`Sessions.prompt`), so the transcript shows it sent
   twice, preceded by a system row naming the model that failed and the fallback; the prompt's text is re-sent and its
   attachments are not (the row keeps only their metadata, REQ-CHAT-170);
@@ -8889,18 +8916,32 @@ Three things the requirements leave to the build:
 - The pin is keyed by the **pair** that failed (`provider|model`), as a wait's choice is, so every agent of the session on
   that pair — a child on the primary model included — moves to the fallback; REQ-NOTIFY-070 says "that session's model
   override", which is the one session-wide override REQ-SESSION-026 names.
+- *Since the merge beside the note's parts C and D (2026-10-02):* **a first failure with no usable fallback spends the
+  session's first failure too.** It opens the recovery dialog (REQ-NOTIFY-072's "a first one with no usable fallback"), and
+  the session's next authentication failure — a model chosen by hand in the dialog, or a later prompt after the dialog was
+  cancelled — is "a second authentication failure" and the dialog's again, even where a usable fallback has been configured
+  meanwhile; only REQ-NOTIFY-078's submission, or a restart that could not begin, makes the next failure the first again
+  (`auth-fallback.ts`'s `spent`).
+- *Since the same merge:* **a session not on screen is restarted when it is focused.** REQ-NOTIFY-032 holds an unfocused
+  session's class publication until a main window follows it, and the automatic restart is the authentication class's
+  recovery, so it waits with the rest (`RunFailurePublisher`): the session stays failed under REQ-NOTIFY-032's warning, and
+  its restart, its acknowledgement and its prompt arrive with the focus change (REQ-NOTIFY-030). The dialog's restarts
+  (`Sessions.restartAfterAuthFailure`, parts C and D) re-submit the prompt as this one does.
 
 **What a ruling decides.** Whether the restart appends a user turn or continues the failed request (and so whether the
 failed run's task stays abandoned beside the restart's); whether attachments are re-sent; whether a restart that could not begin leaves the pin standing; whether the first-failure bookkeeping outlives
-the application; and whether the pin covers every agent on the failed pair or the entry agent alone.
+the application; whether the pin covers every agent on the failed pair or the entry agent alone; whether a first failure
+with no usable fallback spends the session's automatic fallback; and whether a session not on screen is restarted at once,
+in the background, or when it is focused.
 
-**OQ-180 — Where does REQ-NOTIFY-071's prompt stand "beside the continuing run", and is it drawn while the window shows
+**OQ-181 — Where does REQ-NOTIFY-071's prompt stand "beside the continuing run", and is it drawn while the window shows
 another view?** *(REQ-NOTIFY-071, "a successful fallback restart opens a non-modal re-authentication prompt beside the
 continuing run"; ADR-0048's non-modal window-level level, "an in-window panel that does not trap focus and leaves the rest
 navigable"; REQ-SHELL-022's minimum; REQ-CHAT-010's 180 px transcript floor; REQ-NOTIFY-030. Raised 2026-10-02 by the
 401 note's part B, second repair round,
-[`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md).
-Open.)*
+[`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md),
+as OQ-180, and renumbered OQ-181 at the branch's merge beside the note's parts C and D (2026-10-02) because `origin/main` had
+taken OQ-179 meanwhile and the branch's own OQ-179 took OQ-180. Open.)*
 
 The requirement places the prompt by the run, not by the window, and the level ADR-0048 gives it requires the rest of the
 window to stay navigable while it is open — and it stays open until it is answered. Two overlay placements were built

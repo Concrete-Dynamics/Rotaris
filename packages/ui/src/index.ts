@@ -22,6 +22,8 @@ export * from './theme.js';
 export * from './motion.js';
 export * from './SessionBrowser.js';
 export * from './PauseDialog.js';
+export * from './AuthRecoveryDialog.js'; // REQ-NOTIFY-072..080
+export * from './auth-recovery.js';
 export * from './PlanGate.js';
 export * from './settings/config-state.js';
 export * from './settings/ConfigSettings.js';

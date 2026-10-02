@@ -357,9 +357,10 @@ export class Run {
   private initialIterations = 0;
   private lastFailure: string | null = null;
   /**
-   * REQ-NOTIFY-070 / REQ-MONITOR-147: the model the root's last failed turn was calling when its model call failed —
-   * the root cell's model at that moment, after any ladder move — or null when the run's last failure was no model
-   * call's. Main's authentication recovery pins the fallback against this model (`Sessions.restartOnFallback`).
+   * REQ-NOTIFY-070 / REQ-NOTIFY-072 / REQ-MONITOR-147: the model the root's failed model call was addressed to — the root
+   * cell's model at that moment, after any ladder move — or null when the run's last failure was no root model call's.
+   * The automatic fallback pins the fallback against this model (`Sessions.restartOnFallback`); the recovery dialog names
+   * it and pins a chosen model against its pair (`Sessions.authRecoveryFacts`, `restartAfterAuthFailure`).
    */
   private failedModel: ModelRef | null = null;
   private todo: Todo;
@@ -672,7 +673,7 @@ export class Run {
   get isEnded(): boolean {
     return this.ended;
   }
-  /** REQ-NOTIFY-070: the model the root's failing call was addressed to, when the run's last failure was a model call's. */
+  /** REQ-NOTIFY-070 / REQ-NOTIFY-072: the model the root's failing call was addressed to, when the run's last failure was a root model call's. */
   get failedEntryModel(): ModelRef | null {
     return this.failedModel;
   }

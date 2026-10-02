@@ -32,12 +32,13 @@ import { inputEvent, submitEvents, textEvents } from './capture/probe.js';
 /**
  * A window the driver can address that is not a main window
  * (`docs/defects/fixed/the-driver-cannot-address-persona-or-approval-windows.md`): a persona window (ADR-0048,
- * REQ-SHELL-072), the approval dialog a main window holds open (REQ-TOOLS-063), or its terminal window (ADR-0047).
+ * REQ-SHELL-072), the approval dialog a main window holds open (REQ-TOOLS-063), its terminal window (ADR-0047), or the
+ * authentication recovery dialog presented over it (REQ-NOTIFY-072).
  */
 export interface AuxiliaryWindow {
-  /** What `window` and `useWindow` name it by: `persona:<persona>`, `approval` or `terminal`. */
+  /** What `window` and `useWindow` name it by: `persona:<persona>`, `approval`, `terminal` or `auth-recovery`. */
   readonly selector: string;
-  readonly role: 'persona' | 'approval' | 'terminal';
+  readonly role: 'persona' | 'approval' | 'terminal' | 'auth-recovery';
   /** The main window it belongs to, by its index in `windows`. */
   readonly owner: number;
   readonly wcId: number;
@@ -47,7 +48,7 @@ export interface AuxiliaryWindow {
 
 /** Whether a selector names an auxiliary window's role rather than a main window. */
 export function namesAuxiliary(which: string): boolean {
-  return which === 'approval' || which === 'terminal' || which.startsWith('persona:');
+  return which === 'approval' || which === 'terminal' || which === 'auth-recovery' || which.startsWith('persona:');
 }
 
 export interface DriverDeps {
@@ -241,7 +242,7 @@ export function startDriver(endpointFile: string, deps: DriverDeps): Driver {
     deps.auxiliary().filter((a) => !a.win.isDestroyed()).map(({ selector, role, owner, wcId, visible }) => ({ selector, role, owner, wcId, visible }));
 
   /**
-   * Since 2026-09-29 a selector may name an auxiliary window by its role — `persona:<name>`, `approval`, `terminal` —
+   * Since 2026-09-29 a selector may name an auxiliary window by its role — `persona:<name>`, `approval`, `terminal`, `auth-recovery` —
    * as well as a main window by index or workspace suffix. Before, only main windows could be reached, so a persona
    * window's state was read from screen captures and an approval was answered through `session.control` rather than
    * in its dialog. A role word is a role, never a workspace suffix: a main window whose path ends in one is named with

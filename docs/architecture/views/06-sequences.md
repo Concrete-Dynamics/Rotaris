@@ -277,7 +277,7 @@ sequenceDiagram
   M->>B: channel 10 requirements:changed
   Note over M,B: persist before publish — channel 10 is broadcast<br/>only from a reply whose transaction committed
 
-  C->>WS: requirements.run.claim
+  C->>WS: requirements.run.claim (envelope: actor system, disclosure due | suppressed | off)
   WS-->>C: prompt, worktree, unit
   C->>RH: session.start {effectiveRoot, worktree, boardPermissions?}
   RH-->>C: session.started {sessionId}
@@ -304,6 +304,21 @@ sequenceDiagram
   REQ-GIT-140). Such an action is a card held out of `ready` before its run began and then resumed, or returned and
   released again. The tree comes from the launch the service holds, or, after a restart, from the store's worktree row
   through `takeOverUnitWorktree`, which admits only a tree Git lists at that path on that branch (2026-10-02).
+- **A card resting in `ready` keeps a way to start after a restart.** The launch (unit, disclosure, tree) lives in the
+  workspace service's memory, and the queue's release has no transition. So `recoverLaunch` rebuilds a lost launch
+  from the store's worktree row by take-over, never by provisioning: on every pass that parses, for a card holding no
+  launch (undisclosed), and on the queue's release, which records the disclosure "Disclose and start" carries and arms
+  the card. A tree that cannot be taken over is stated on the entry as the last start's stall, and the claim still
+  refuses the card (REQ-TRACE-472/482/464, REQ-TRACE-463; 2026-10-02).
+- **Every requirements command carries main's standing disclosure.** Only main holds the two preferences of
+  REQ-TRACE-472, so main stamps what they make of an undisclosed launch on every `requirements.command` envelope, beside
+  the actor — the relay for a person's commands and the coordinator for its own: `due`, `suppressed` (accepted
+  permanently) or `off` (the elevation switched off). The service holds the last value and schedules the published
+  queue, the launch preview and the claim under the same one, so the queue names what the claim takes (REQ-TRACE-478); a
+  value that moved republishes the queue before the answer, which carries `changed`. A launch recorded undisclosed, as a
+  recovered one is, is claimed when that is not `due`, and `off` gives the run the workspace's own mode. A permanent
+  acceptance reads the board at once. (Until the second repair round of 2026-10-02 it rode the claim alone.) Nothing dispatches at launch, so an automatic
+  queue picks a recovered card up at the first kick (a defect note records that gap; 2026-10-02).
 - The elevated grant (`boardPermissions: 'permissive'`) travels **on the `session.start` of that launch** and
   applies to the configuration captured for it. It is not a mode anything stays in.
 - A board read is bounded at 120 s because it may run the engine's three passes; everything else is a store

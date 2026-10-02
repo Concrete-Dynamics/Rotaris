@@ -47,6 +47,19 @@ given one child the read and the other two an answer. Every item of the proof pa
 script their children without a `wait:` (`mcp:alpha.echo,answer`, `answer`, `terminal:…`), and `chat-controls-proof`
 and `palette-proof` delegate a single child, so a splice could not reach another child there; they were not re-run.
 
+`mission-proof`'s own comments had described the spliced list as the double's intended shape: scenario 1 (`painted`)
+said only the first child waits 14 s and the others finish at once, scenario 2 (`parity`) chose its probe times "once
+the two quick children have settled", and scenario 4 (`cancel`) said the next two calls after alpha's delegation each
+wait 16 s. On the repaired build the three children of scenarios 1 and 2 are all `running` at 6 s and through the
+7.5–9.5 s parity probes. The comments now say so (and name `run-host/scripted-client.ts`, not `run-host/index.ts`), and
+scenario 1's assertion now requires every row to be `running` at 6 s and every row's elapsed to advance, where it had
+accepted any mix with one live row. Its settled-row check, which only a child that took another's answer could reach,
+is gone: no row settles inside those probes now, and an ended agent's fixed figure stays pinned by
+`packages/ui/src/agent-clock.test.ts`. Scenario 1b (`waiting`, one slot) now runs its three 14 s waits one after
+another, about 42 s against its 120 s wait.
+
+## Specs
+
 None. The scripted client is verification only; no requirement says what a double's children take.
 
 ## Relevant files

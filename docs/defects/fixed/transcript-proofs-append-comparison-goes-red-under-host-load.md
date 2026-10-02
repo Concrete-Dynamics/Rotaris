@@ -44,6 +44,11 @@ count, the four alternating launches run once more (`append-empty-rerun-1` …) 
 set. Both sets are kept in `append.json` (`sets.first` with its figures, `sets.rerun` with the call that took it), and the
 verdict's words name the re-run and the first set's load. The slack (one measured frame) and the statistic (the medians)
 are unchanged. A red with no launch above the CPU count stands, and so does a red on the second set, whatever its load.
+Each side's launches append to one session of their own (`S0` empty, `S1200` loaded), so the re-run's "empty" launches
+start from the rows the first set's empty launches appended (some sixty), not from none; the first set's second empty
+launch already starts from the rows its first empty launch appended. That leans
+the "empty" side toward the loaded one, and so toward a pass, by the cost of those rows; it was so before this repair and
+the re-run adds no new kind of it.
 
 The decision lives in `apps/desktop/scripts/transcript-proof/append-rerun.mjs`, beside the script rather than in
 `lib/` (another plan's area this round), so that it has a test of its own: `append-rerun.test.ts`, six cases (the load

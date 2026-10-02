@@ -244,6 +244,18 @@ describe('R-043 — the run-autopsy snapshot', () => {
         });
         expect(readAutopsy(dal, sid, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model → spare-model → root-model', agents: ['orchestrator'], tool_calls: 3 });
       });
+      // the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot: a switch onto another key is
+      // held on its run, and whether it reaches the next is an open question, so a continuation naming no entry model leaves
+      // the key undetermined (until 2026-10-02: `… → child-model`, the switched key kept as the configured one).
+      it('a continuation recording no entry model after a switch onto another key prints the key undetermined', () => {
+        const sid = plant('S-switch-then-bare-continue', 'completed');
+        dal.transaction(() => {
+          run(sid); audit(sid, 'root-model', models);
+          dal.insertTimeline(sid, 1, 't1', 'entry_model_switched', 'user', 'The entry model switched to child-model.', JSON.stringify({ model: 'child-model', rebuilds: true, supersedes: false }), 'aaaaaaaaaai1', 'info');
+          dal.insertTimeline(sid, 2, 't2', 'run_continuation_intent', 'rotaris', 'Continuation intent: answer.', JSON.stringify({ config_snapshot: {} }), 'aaaaaaaaaai2', 'info');
+        });
+        expect(readAutopsy(dal, sid, clock.wall)!.requests[0]).toEqual({ endpoint: `root-model → child-model → ${ENTRY_KEY_UNDETERMINED}`, agents: ['orchestrator'], tool_calls: 3 });
+      });
     });
 
     it('a child is known by the name its own records carry (its canonical name), never by the name it was given', () => {

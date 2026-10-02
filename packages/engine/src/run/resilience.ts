@@ -251,8 +251,19 @@ export class ResilienceMemory {
   isExhausted(provider: string, modelId: string): boolean {
     return this.exhausted.has(pairKey(provider, modelId));
   }
+  /**
+   * REQ-MONITOR-194: "Choosing it explicitly clears the recorded exclusion for that pair, so it is eligible again until a
+   * further insufficient-quota response re-records it." Persisted as a `model_exhausted` entry carrying `cleared: true`
+   * (the shape of `clearOverride`'s entry), which `rehydrate` replays in order. True when the pair was excluded.
+   */
+  clearExhausted(provider: string, modelId: string): boolean {
+    return this.exhausted.delete(pairKey(provider, modelId));
+  }
+  /** The map's order is the order the overrides were last set in (`follow` reads the newest of a cycle by it). */
   setOverride(fromProvider: string, fromModelId: string, override: Override): void {
-    this.overrides.set(pairKey(fromProvider, fromModelId), override);
+    const key = pairKey(fromProvider, fromModelId);
+    this.overrides.delete(key);
+    this.overrides.set(key, override);
   }
   /**
    * REQ-NOTIFY-070 / REQ-NOTIFY-074 / REQ-NOTIFY-076 / REQ-NOTIFY-078: the pin on a pair taken back — an authentication
@@ -283,12 +294,29 @@ export class ResilienceMemory {
     return this.follow(choice, catalogue).last;
   }
 
+  /**
+   * The chain followed to its end. A chain that comes back to a pair it passed is a cycle — which no choice this run makes
+   * leaves (a wait choice takes back any override from the pair it chooses, `Run.takeBackOverrideOf`), but a store written
+   * before 2026-10-02 can replay one — and it ends on the target of the newest
+   * override in it, the choice that superseded the others. Until then the walk was bounded at eight hops and ended wherever
+   * the parity of the cycle left it, on the pair just replaced as often as not.
+   */
   private follow(choice: ModelChoice, catalogue: readonly CatalogueEntry[]): { readonly choice: ModelChoice; readonly last: Override | null } {
     let current = choice;
     let last: Override | null = null;
-    for (let hops = 0; hops < 8; hops++) {
-      const o = this.overrides.get(pairKey(providerIdentity(catalogue, current.model), current.model.modelId));
+    const path: string[] = [];
+    for (;;) {
+      const key = pairKey(providerIdentity(catalogue, current.model), current.model.modelId);
+      const at = path.indexOf(key);
+      if (at >= 0) {
+        const order = [...this.overrides.keys()];
+        const newest = path.slice(at).reduce((a, b) => (order.indexOf(b) > order.indexOf(a) ? b : a));
+        const o = this.overrides.get(newest)!;
+        return { choice: o.choice, last: o };
+      }
+      const o = this.overrides.get(key);
       if (!o || sameRef(o.choice.model, current.model)) break;
+      path.push(key);
       current = o.choice;
       last = o;
     }
@@ -296,7 +324,9 @@ export class ResilienceMemory {
   }
 
   /**
-   * Rehydrate from the session's timeline; an override whose key no longer resolves is dropped with a warning. An entry
+   * Rehydrate from the session's timeline; an override whose key no longer resolves is dropped with a warning. A
+   * `model_exhausted` entry carrying `cleared: true` takes the exclusion of its pair back (an explicit choice of it,
+   * REQ-MONITOR-194), and a later one without it records it again. A `model_override` entry
    * carrying `cleared: true` takes back the pin on its pair (an authentication restart that could not begin, REQ-NOTIFY-070/074;
    * REQ-NOTIFY-078's re-pinned primary), so the entries replay in order to the memory the session last held.
    */
@@ -309,7 +339,11 @@ export class ResilienceMemory {
       const provider = typeof meta['provider'] === 'string' ? meta['provider'] : null;
       const model = typeof meta['model'] === 'string' ? meta['model'] : null;
       if (provider === null || model === null) continue;
-      if (t.name === 'model_exhausted') { memory.exhausted.add(pairKey(provider, model)); continue; }
+      if (t.name === 'model_exhausted') {
+        if (meta['cleared'] === true) memory.clearExhausted(provider, model);
+        else memory.exhausted.add(pairKey(provider, model));
+        continue;
+      }
       if (meta['cleared'] === true) { memory.clearOverride(provider, model); continue; }
       const key = typeof meta['model_key'] === 'string' ? meta['model_key'] : null;
       if (key === null) continue;

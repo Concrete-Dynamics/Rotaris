@@ -112,7 +112,7 @@ prompt's bar), never a written height, then measure both panels' answers at the 
 the rule above cannot place: in flow it would take room from every view at the minimum. It goes in AppShell's
 `windowDialog` slot, `absolute` against the rail-and-view region (`.body`) at its top corner with the `--rt-space-4`
 inset and bounded by that region, so the title bar and the notice slot are never under it, and it lies over the view's
-corner while open (OQ-186; since 2026-10-02, when it moved off the window's corner,
+corner while open (OQ-187; since 2026-10-02, when it moved off the window's corner,
 `../../defects/fixed/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`). Measure the chrome's and
 the notice's buttons at their centres with it open (`init-proof`'s `consent`).
 

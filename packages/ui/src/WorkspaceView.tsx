@@ -437,9 +437,10 @@ export const EXCLUDED_MODEL_HINT = 'provider reported insufficient quota in this
 /**
  * REQ-MONITOR-194 / REQ-MONITOR-303: the change-model list of the wait header. Every configured key, as the selector has
  * always listed them (which list the picker offers — REQ-MONITOR-193's same-tier candidates or REQ-NOTIFY-074's — is an
- * open question, OQ-185); a key whose pair the session recorded out of quota (`wait.excluded`) is listed in place,
+ * open question, OQ-186); a key whose pair the session recorded out of quota (`wait.excluded`) is listed in place,
  * never hidden, with the reason as its hint. It stays choosable — no `unavailableReason`, which would grey it out — since
- * choosing it explicitly is what clears the exclusion (REQ-MONITOR-194, the run's `setEntryModel`).
+ * choosing it explicitly is what clears the exclusion (REQ-MONITOR-194, the run's `setEntryModel` through
+ * `ResilienceMemory.clearExhausted`; in a quota wait on that very pair, a retry on it).
  */
 export function waitModelOptions(models: readonly string[], excluded: readonly string[]): SearchableOption[] {
   return [{ value: '', label: 'Choose a model…' }, ...models.map((m) => (excluded.includes(m) ? { value: m, label: m, hint: EXCLUDED_MODEL_HINT } : { value: m, label: m }))];

@@ -50,8 +50,7 @@ after the change-model resolution: `beta`, where it read `alpha` (2026-10-02, lo
 **Left open: a mid-run switch.** Whether a switch of the entry model or reasoning from the run header or the inspector
 (REQ-MONITOR-142) reaches the session's next run — and so whether the chips should name it after the run ends — is the
 owner's: plan fin8's ladder-overrides bundle raises it as "Does a mid-run switch of the entry model or reasoning level
-reach the session's next run?" (OQ-185 on its branch `fin8-ladder-overrides`; its number on `origin/main` is fixed when that
-branch merges, and this branch's own OQ-185 is the quota-wait chooser's, so one of the two is renumbered then). Under the
+reach the session's next run?" (OQ-185 on `origin/main` since that bundle's merge, d0012a2). Under the
 reading built there, a switch ends with its run, so the chips naming the configured key (or the override in force) after
 it are consistent with what the next run does; if a ruling makes the switch reach the next run, the chips owe it too, and
 this note stays open for that.

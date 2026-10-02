@@ -132,12 +132,12 @@ Pinned by:
 What stays coarse, stated in both copies' doc comments: a child's wait choice made after a pending switch is read after
 that switch as recorded, since nothing says whether the root's next turn came before it, so a switched key it overrode
 before that turn is printed though the root never ran on it. That residual is an open note,
-[the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md](../the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md).
+[the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md](the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md).
 A store recording no `switch_pending` reads a move where it stands until a superseding switch places it.
 
 The other coarse reading these doc comments state is a different defect: a switched key is carried across a continuation
 that records no snapshot. It is now recorded as an open note,
-[the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md](../the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md).
+[the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md](the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md).
 
 The product's own row is a separate matter and is recorded, not repaired, here:
 [a-switch-onto-the-configured-entry-model-leaves-a-ladder-fallback-in-force.md](a-switch-onto-the-configured-entry-model-leaves-a-ladder-fallback-in-force.md)

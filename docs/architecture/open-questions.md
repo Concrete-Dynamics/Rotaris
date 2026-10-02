@@ -8819,11 +8819,19 @@ rest of the session: the entry agent runs on Y from the next iteration." The ite
 it had: the root's ladder is read once per root turn, so a root resumed after its children in the same iteration is not
 moved by a switch made meanwhile. The exclusion of an exhausted pair is not touched by a switch (whether an explicit choice
 clears it is REQ-MONITOR-194's, recorded in
-[`an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md`](../defects/an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md)).
+[`an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md`](../defects/fixed/an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion.md); *since 2026-10-02 an explicit choice clears it, on a switch and in a quota wait, where the waiting pair itself may be chosen*).
 
 **What a ruling decides.** Whether a switch onto the configured key ends a ladder move (as built) or leaves it in force —
 and, if it leaves it, what the row says; whether a later switch onto a pair an override moved supersedes that override for
-the entry agent, or the override stands (as built) and only the row says so.
+the entry agent, or the override stands (as built) and only the row says so. REQ-MONITOR-194's clearing is in force beside
+it since 2026-10-02, which sharpens the second half: a pair a quota wait moved is both excluded and overridden, and a later
+switch onto it clears the exclusion while the override, as built, still sends the entry agent elsewhere — so the pair the
+user explicitly chose is not what runs, and only the row says so. The wait path is read the other way, and the two
+readings stand side by side: a choice made on a wait surface (REQ-MONITOR-303's "change model now … resolves the wait as a
+retry on the chosen model") takes back any override an earlier choice set from the pair chosen, so the agent resumes on it
+as the wait's row says (`Run.takeBackOverrideOf`, since 2026-10-02, the third round of
+[`a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md`](../defects/fixed/a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md));
+a ruling that a switch also supersedes the override would make the header and inspector path match it.
 
 **OQ-178 — Which notice offers REQ-NOTIFY-045's retry, when a notice carries one action?** *(REQ-NOTIFY-044, whose
 vocabulary includes "retry the failed run under REQ-NOTIFY-045"; REQ-NOTIFY-045; REQ-NOTIFY-030; REQ-NOTIFY-066;
@@ -9081,7 +9089,42 @@ record; the verifier's finding above withdrew it.
 **What a ruling decides.** Whether the indicator belongs in the status strip (and then its place among REQ-SHELL-038's items
 and its REQ-SHELL-047 threshold) or on another workspace surface; its wording beyond the backend's name.
 
-**OQ-185 — Which models does the quota-wait surface's "change model" list: REQ-MONITOR-193's candidates or REQ-NOTIFY-074's
+**OQ-185 — Does a mid-run switch of the entry model or reasoning level reach the session's next run?** *(REQ-MONITOR-142,
+"A switch of the run's entry model, or of its entry reasoning level, applies from the next iteration onward", its row
+saying "it applies from the next iteration"; REQ-MONITOR-143, after the loop has closed "a switch still records the
+override"; REQ-SESSION-026, "A mid-session runtime model override (active model key and runtime model configurations) MUST
+persist across calls and across reloads of the session"; REQ-MONITOR-146, "Composer-side model, persona, and reasoning
+choices apply to the next prompt". Raised 2026-10-02 by
+[`an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation.md`](../defects/an-entry-switch-made-in-a-runs-last-iteration-does-not-reach-a-continuation.md)
+(fin8, ladder-overrides, task 2), as OQ-183, and renumbered OQ-185 at its merge because `origin/main` had taken OQ-183
+and OQ-184 meanwhile. Open.)*
+
+A switch of the entry model or reasoning level from the run header or the inspector (`setModel`, `setReasoning`) is held
+on its `Run` (`entryOverride`). When the iteration in flight is the run's last, the next iteration is a continuation —
+the user's next prompt starts a new `Run`, built from the configuration (`Sessions.launchContinuation`) — so the switch
+never applies, though its row said it applies from the next iteration. The requirements pull two ways. REQ-MONITOR-142
+speaks of "the run's" entry model and "the next iteration", which a continuation is in the session's numbering;
+REQ-MONITOR-143 keeps the override recorded once the loop has closed, which has a purpose only if something later reads
+it; and REQ-SESSION-026 makes a mid-session runtime model override persist "across calls and across reloads of the
+session". Against them, REQ-MONITOR-146 gives the next run its own selector — the composer's "Model for the next run",
+which writes the entry persona's model into the configuration — and a switch that reached the next run would sit beside
+that chip, which shows the configured model, with no rule for which wins.
+
+**What the build proceeds under** (`packages/engine/src/run/run.ts`, `entryOverride`, `setEntryModel`,
+`setEntryReasoning`; `packages/engine/src/sessions.ts`, `launchContinuation`): a switch **ends with its run**. Its row
+still says "it applies from the next iteration", which is true while the run has a next iteration of its own (a queued
+prompt, a task added while it runs) and untrue when it has none. A change-model resolution of a wait (REQ-ORCH-091 d) is
+not such a switch: its override is session-wide and reaches every later run. The autopsy reader prints the entry key
+`undetermined` after a continuation whose snapshot names no entry model when a switch onto another key preceded it
+([the repair](../defects/fixed/the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md)),
+so its reading is right under either answer; a continuation whose snapshot names the entry model says which it ran on.
+
+**What a ruling decides.** Whether a switch made from the run header or the inspector reaches the session's next run
+(recorded session-wide, as REQ-SESSION-026's override, and taken by the continuation unless the composer's next-run choice
+differs), or ends with its run (and its row then says so when no further iteration of the run is queued); the same for a
+reasoning switch; and, if it reaches the next run, how it stands beside the composer's next-run chip.
+
+**OQ-186 — Which models does the quota-wait surface's "change model" list: REQ-MONITOR-193's candidates or REQ-NOTIFY-074's
 list?** *(REQ-MONITOR-303, "a model picker offering the fallback candidates of REQ-MONITOR-193, listing excluded pairs with
 their reason rather than hiding them (REQ-MONITOR-194)"; REQ-MONITOR-193, "exactly the configured models … whose size tier
 equals the current model's tier, less any model excluded … in the order their models are declared"; REQ-NOTIFY-263,
@@ -9090,7 +9133,8 @@ REQ-NOTIFY-074, "lists models from providers other than the one that failed, ahe
 offers a model, every model except the one that failed is listed"; REQ-MONITOR-194, "from any model selector or from the
 quota-wait decision surface … listed there rather than hidden, annotated". Raised 2026-10-02 by the repair of
 [`the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md`](../defects/fixed/the-quota-wait-picker-lists-every-model-without-marking-the-excluded-pairs.md)
-(fin8, bundle `fin8-noticed-gaps-4`). Open.)*
+(fin8, bundle `fin8-noticed-gaps-4`), as OQ-185, and renumbered OQ-186 at its merge of `origin/main` because the
+ladder-overrides bundle had taken OQ-185 meanwhile. Open.)*
 
 Two requirements describe the one control. REQ-MONITOR-303 lists REQ-MONITOR-193's candidates — the same-tier configured
 models from any provider, in declaration order, less the pairs held out of quota — and beside them the excluded pairs,
@@ -9108,23 +9152,24 @@ was built. The picker lists every configured model key as the configuration snap
 waiting model included), which holds REQ-MONITOR-193's candidates and REQ-NOTIFY-074's models alike, with neither one's
 filter nor its order applied; a key whose provider-and-model pair the session recorded out of quota is listed in place,
 annotated "provider reported insufficient quota in this session", and stays choosable. Choosing it is the run's explicit
-choice (`setEntryModel`). On `origin/main` 4ae715a, the base this was built on, that choice neither clears an exclusion nor
-accepts the waiting pair itself (it is refused as "the model that is waiting"); plan fin8's ladder-overrides bundle, not yet
-merged when this was written, makes it clear the chosen pair's exclusion (`ResilienceMemory.clearExhausted`) and resolve a
-wait on its own excluded pair as a retry on it. No model is labelled with its provider.
+choice (`setEntryModel`), which clears the chosen pair's exclusion (`ResilienceMemory.clearExhausted`, plan fin8's
+ladder-overrides bundle) and, in a quota wait on that very pair, resolves the wait as a retry on it with no override
+persisted. (Built first on `origin/main` 4ae715a, where that choice cleared nothing and the waiting pair was refused as "the
+model that is waiting"; the ladder-overrides merge brought the clearing.) No model is labelled with its provider.
 
 **What a ruling decides.** Which list the picker offers — REQ-MONITOR-193's same-tier candidates beside the excluded pairs,
 REQ-NOTIFY-074's (other providers first, each labelled with its provider), or one ahead of the other — and in which order;
 whether the waiting pair is listed when it is not held out of quota (a rate-limit wait); and whether a model of no tier is
 offered here.
 
-**OQ-186 — Where does the project setup consent dialog stand: over a corner of the view, or in a region of the window that
+**OQ-187 — Where does the project setup consent dialog stand: over a corner of the view, or in a region of the window that
 takes room from every view?** *(REQ-WORKSPACE-106, "a non-modal, window-level dialog (the rest of the app stays
 navigable)"; REQ-WORKSPACE-105, opened by itself once per workspace open and open until answered; ADR-0048's non-modal
 window-level level, "an in-window panel that does not trap focus and leaves the rest navigable"; REQ-SHELL-022's 1000x680
 minimum; REQ-SHELL-024's vertical order. Raised 2026-10-02 by the repair of
 [`the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md`](../defects/fixed/the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md)
-(fin8, bundle `fin8-noticed-gaps-4`). Open.)*
+(fin8, bundle `fin8-noticed-gaps-4`), as OQ-186, and renumbered OQ-187 at its merge of `origin/main` because the
+ladder-overrides bundle had taken OQ-185 meanwhile. Open.)*
 
 The dialog is window-level: it belongs to no view and is shown whichever view is on screen, so the decision it waits on is
 not lost by navigating. Every placement of such a surface takes something. Fixed at the window's corner it lay over the

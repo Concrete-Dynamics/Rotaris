@@ -52,7 +52,7 @@ the composer's model chip, the inspector and a persona window say what the next 
 `SessionRecord` sentence says so. No package, edge, process, channel, command or store column changed. Whether a mid-run
 entry switch reaches the next run is the ladder-overrides bundle's open question and is not decided here.
 
-**The project setup dialog stands below the window chrome (REQ-WORKSPACE-106, ADR-0048; fin8, OQ-186).** AppShell gains
+**The project setup dialog stands below the window chrome (REQ-WORKSPACE-106, ADR-0048; fin8, OQ-187).** AppShell gains
 a `windowDialog` slot inside the rail-and-view region; `ProjectSetupDialog` is mounted there, `absolute` at the region's
 top corner, where it was `fixed` at the window's and lay over the title bar's controls and the notice's answers. The
 **seams view** §2's rule for a panel open until answered names it as the window-level exception. No package, edge, process, channel, command or
@@ -65,11 +65,35 @@ session and its normalised state, focusing it) in place of its summary. A new re
 main a window no longer follows the session "New session" released; the **process view**'s Part R paragraph says so. No
 package, edge, process, channel or store column changed; one command was added.
 
-**The quota-wait chooser annotates the pairs held out of quota (REQ-MONITOR-194, REQ-MONITOR-303; fin8, OQ-185).** The
+**The quota-wait chooser annotates the pairs held out of quota (REQ-MONITOR-194, REQ-MONITOR-303; fin8, OQ-186).** The
 record's `wait` gains `excluded`, the configured keys whose pair the run's `ResilienceMemory` holds out of quota
 (`excludedModelKeys`, read by `Run.currentWait` at every snapshot); the wait header's change-model chooser lists each with
 the reason as its hint and leaves it choosable. The **runtime view**'s `setModel` row says so. No package, edge, process,
 channel, command or store column changed.
+**A take-back records a root on any pair of the override's chain as having followed it (REQ-ORCH-091 d, REQ-MONITOR-142;
+the fourth round of `a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced`).** `Run.onChainFrom` classifies
+`root_cell: 'followed'` for a root on the taken-back override's own target or any pair past it, not only the chain's end.
+The **runtime view**'s ladder paragraph says so. No package, edge, process, channel, timeline name or store column changed.
+
+**An entry switch ends with its run, and OQ-185 asks whether it should (REQ-MONITOR-142/143, REQ-SESSION-026,
+REQ-MONITOR-146).** The **runtime view**'s `setModel` row says where a switch is held. No code moved.
+
+**The entry agent's context limit is its ladder cell's model's (REQ-MONITOR-049, REQ-MONITOR-089; the repair of
+`the-entry-agents-context-limit-is-read-from-the-requested-model-not-the-one-it-runs-on`).** `Run.entryContext` reads the
+limit from the root cell's model. The **runtime view**'s `SessionRecord.entryContext` sentence says so. Nothing else moved.
+
+**An explicit choice clears an exclusion (REQ-MONITOR-194; the repair of
+`an-explicit-choice-of-an-exhausted-pair-does-not-clear-its-exclusion`).** `ResilienceMemory.clearExhausted`, persisted as a
+`model_exhausted` entry carrying `cleared: true`; `setEntryModel` clears the chosen pair, and in a quota wait the waiting
+pair itself is a retry. The **runtime view**'s ladder paragraph and its `setModel` row say so. No package, edge, process,
+channel, command, timeline name or store column changed.
+
+**A session-wide override is followed from every agent's next call (REQ-ORCH-091 a/d, REQ-MONITOR-194; the repair of
+`a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced`).** The ladder reads the session's overrides before
+every call (`followOverride`), not only where a cell is built, and the summariser's model is carried through them at each
+attempt. The **runtime view**'s ladder paragraph says so. A child's wait choice records `switch_pending` on its
+`model_override`, which the autopsy reader places before a pending switch; the **runtime view**'s `setModel` row says so.
+No package, edge, process, channel, command or store column changed.
 
 **The status strip names the focused session's confinement backend (REQ-SANDBOX-121, REQ-MONITOR-257, REQ-NOTIFY-030;
 fin8).** Store v31 appends `sessions.sandbox_backend`, written beside `sandboxed` when a run starts; the record carries

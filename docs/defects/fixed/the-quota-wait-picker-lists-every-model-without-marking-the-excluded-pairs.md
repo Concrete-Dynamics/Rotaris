@@ -14,7 +14,10 @@ REQ-NOTIFY-074's (other providers first, the failed model left out), which REQ-N
 Found by the fourth triage of 2026-10-02 (`unbundled.candidatesToRecord`) and recorded first by plan fin8's
 ladder-overrides bundle under this same name, while it made an explicit choice of an excluded pair clear its exclusion
 (`ResilienceMemory.clearExhausted`); recorded here, under the same name so the two become one note, by bundle
-`fin8-noticed-gaps-4` before its repair.
+`fin8-noticed-gaps-4` before its repair. The two copies became this one at that bundle's merge of `origin/main` d0012a2:
+the ladder-overrides copy (open, the same finding and requirements; it added that the record carried no list of excluded
+pairs, which this text says, and that REQ-NOTIFY-263/089 may read differently from REQ-MONITOR-303, which OQ-186 asks) was
+removed and its one link repointed here.
 
 ## Specs
 
@@ -35,7 +38,7 @@ ladder-overrides bundle under this same name, while it made an explicit choice o
 ## Outcome
 
 Repaired 2026-10-02 (fin8, bundle `fin8-noticed-gaps-4`) in the part both requirements decide; which list the picker
-offers is raised, not ruled (OQ-185).
+offers is raised, not ruled (OQ-186).
 
 - The record's `wait` carries `excluded` (`packages/contracts/src/channels.ts`): the configured model keys whose pair the
   session's memory holds out of quota, in declaration order (`excludedModelKeys`, `packages/engine/src/run/resilience.ts`),
@@ -45,10 +48,13 @@ offers is raised, not ruled (OQ-185).
   tertiary qualifier), and leaves it choosable — not greyed out as an unavailable model is — since an explicit choice of it
   is what clears the exclusion (`waitModelOptions` and `EXCLUDED_MODEL_HINT`, `packages/ui/src/WorkspaceView.tsx`).
 - The list itself is unchanged: every configured key, the waiting one included, alphabetical. REQ-MONITOR-303 asks for
-  REQ-MONITOR-193's same-tier candidates and REQ-NOTIFY-263 for REQ-NOTIFY-074's list; OQ-185 asks which.
-- The clearing on an explicit choice is the run's (`setEntryModel`). On the base this was built on (`origin/main` 4ae715a)
-  that choice neither clears an exclusion nor accepts the waiting pair; plan fin8's ladder-overrides bundle makes it do both
-  (`ResilienceMemory.clearExhausted`). This repair adds the annotation over whichever the run does.
+  REQ-MONITOR-193's same-tier candidates and REQ-NOTIFY-263 for REQ-NOTIFY-074's list; OQ-186 asks which.
+- The clearing on an explicit choice is the run's (`setEntryModel`): plan fin8's ladder-overrides bundle made it clear the
+  chosen pair's exclusion (`ResilienceMemory.clearExhausted`) and resolve a quota wait on its own excluded pair as a retry
+  on it, pinned by its `ladder.test.ts` cases and `resilience-proof`'s `quota-retry`. This repair was built first on
+  `origin/main` 4ae715a, where that choice cleared nothing and the waiting pair was refused as "the model that is waiting";
+  it reached this branch at its merge of `origin/main` d0012a2, so the annotated pair the chooser offers now does what its
+  annotation implies when chosen.
 
 Pinned by `packages/engine/src/run/resilience.test.ts` (`excludedModelKeys`: declaration order, each once, a discovered
 model and an unknown pair naming nothing), `packages/engine/src/run/ladder.test.ts` (an indefinite quota wait's record

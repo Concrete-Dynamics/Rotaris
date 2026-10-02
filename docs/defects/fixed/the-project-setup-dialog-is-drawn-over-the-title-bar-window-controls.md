@@ -58,7 +58,7 @@ standing): at 1440x900 in the Overview and Workspace views and at 1000x680 in al
   over the view's top corner instead (at 1440x900 the Overview's List sessions and New session, the Workspace inspector's
   Persona, Steer, Cancel and Pop out; at 1000x680 also the run header's switches, the composer's right part and other
   views' top-right controls). Any overlay that stays open until answered lies over something; whether this one may lie
-  over the view, or must stand in a region every view yields room to, is raised as OQ-186 with the reading built
+  over the view, or must stand in a region every view yields room to, is raised as OQ-187 with the reading built
   ([open-questions.md](../../architecture/open-questions.md)).
 
 Pinned by `packages/ui/src/project-setup-placement.test.ts` (AppShell draws the dialog inside `.body`, after the title bar

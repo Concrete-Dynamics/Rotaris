@@ -7,11 +7,24 @@ user's next prompt starts a new `Run`, which builds the root on its configuratio
 switch's system row nonetheless said "Entry model switched to <key>; it applies from the next iteration." (and the same
 for the reasoning level), and the next iteration does not run on it. The autopsy reader already states the
 corresponding coarse reading
-([the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md](the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md)).
+([the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md](fixed/the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md)).
 Noticed by the verifier of `fin5-noticed-gaps` (repair round 1, optional finding) and recorded there. Not repaired. The
 specification says "the run's entry model", and REQ-MONITOR-143 says a switch after the run loop has closed "still
 records the override". Whether a continuation is the same run for this purpose, and so inherits the override, or the
 row should say the switch ends with the run, is for the owner, raised with the repair.
+
+## Status — 2026-10-02 (fin8, ladder-overrides, task 2): raised as OQ-185 (OQ-183 on the branch, renumbered at its merge); the reader's share repaired; the product part open
+
+- **Raised:** [OQ-185](../architecture/open-questions.md) asks the owner whether a mid-run switch of the entry model or
+  reasoning level reaches the session's next run. The build proceeds under "a switch ends with its run", as it stands.
+  The product part of this note waits on that ruling and stays open: no agent rules it.
+- **Repaired, the reader's share:** the autopsy reader no longer carries a switched key across a continuation whose
+  snapshot names no entry model; it prints `undetermined`, right under either answer
+  ([the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md](fixed/the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot.md)).
+- **When it is ruled:** if the switch reaches the next run, it is recorded session-wide (REQ-SESSION-026's runtime
+  override) and `launchContinuation` starts from it unless the composer's next-run choice differs, pinned by a sessions test
+  (a switch in the last iteration, a continuation, the root's first call on the switched key). If it ends with its run,
+  the row says so when no further iteration of the run is queued. Either way the reader then reads the ruling.
 
 ## Specs
 

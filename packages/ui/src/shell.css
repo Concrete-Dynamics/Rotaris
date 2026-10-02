@@ -1030,7 +1030,7 @@
  * begins below the title bar and the notice slot at any notice height. Until 2026-10-02 it was `position: fixed` at the
  * WINDOW's corner and lay over the title bar's Sessions, Minimize, Maximize and Close window and the notice's Dismiss
  * (measured in the built app; the-project-setup-dialog-is-drawn-over-the-title-bar-window-controls.md). It still lies
- * over the view's top corner, as any overlay that stays open until answered lies over something (OQ-186).
+ * over the view's top corner, as any overlay that stays open until answered lies over something (OQ-187).
  * Bounded by the region, it scrolls when shorter than it needs and keeps its answers at its floor.
  */
 .project-setup {

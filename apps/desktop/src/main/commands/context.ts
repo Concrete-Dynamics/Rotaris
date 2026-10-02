@@ -29,6 +29,7 @@ import type { MainWindows, MainWindowView } from '../main-windows.js';
 import type { PersonaWindows, TerminalWindows } from '../windows.js';
 import type { NoticeStore } from '../notices.js';
 import type { LibraryRevision } from '../library.js';
+import type { AuthFallback } from '../auth-fallback.js';
 import type { AuthRecovery } from '../auth-recovery.js';
 import type { RunFailurePublisher } from '../run-failure-notice.js';
 import type { InitializationCoordinator } from '../initialization.js';
@@ -126,6 +127,8 @@ export interface CommandContext {
    * waved-off version is recorded before the offer notice is cleared (REQ-STARTUP-116/117).
    */
   readonly updater: Updater;
+  /** REQ-NOTIFY-070/071/078: the first authentication failure's automatic fallback and its re-authentication prompt (`auth-fallback.ts`). */
+  readonly authFallback: AuthFallback;
 
   // The provider surface and the health it caches between asks.
   readonly providers: ProviderService;

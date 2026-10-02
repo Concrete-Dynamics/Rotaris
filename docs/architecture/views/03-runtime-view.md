@@ -1172,21 +1172,26 @@ recovery facts and opens the 560 px modal recovery dialog beside the class's own
 REQ-NOTIFY-072..075/079/080), or — REQ-NOTIFY-069's preconditions unmet — takes the generic path. Retry pins the chosen
 model against the pair the failed root call was addressed to (`Run.failedEntryModel`, recorded with the run's last
 failure) in the session's `ResilienceMemory` and as a `model_override` timeline entry carrying `cause: authentication`, then
-re-submits the session's last prompt through `promptHeld` (`Sessions.restartAfterAuthFailure`); a pin away from the chosen
+re-submits the session's last prompt through `promptHeld` (`Sessions.restartAfterAuthFailure`) — *since the fourth repair
+round of parts A and B, the failed run's own launch relaunched (`relaunchAfterAuthFailure`, below)*; a pin away from the chosen
 model is taken back first, and a restart that cannot begin takes its own pin back (`cleared: true`, which `rehydrate`
 replays in order). The dialog's second path (REQ-NOTIFY-076/077, part D) stores a new key for a key-based provider through
 main's provider key store — validated by discovery first — and restarts on the same model with no pin, the continuation
 lease reading the new credential; a storage failure and a refused restart each raise their own error acknowledgement. A
 device-code or browser provider, and one whose key the model configuration carries (OQ-179), are told the path is not
-available here. REQ-NOTIFY-070's automatic first-failure fallback restart and REQ-NOTIFY-071's prompt are not built on
-this base (the 401 note's parts A and B), so every authentication failure the preconditions admit opens the dialog.
+available here. ~~REQ-NOTIFY-070's automatic first-failure fallback restart and REQ-NOTIFY-071's prompt are not built on
+this base (the 401 note's parts A and B), so every authentication failure the preconditions admit opens the dialog.~~
+*Since parts A and B were merged beside C and D (2026-10-02):* the authentication class asks the automatic fallback first
+(below) and opens the dialog only for REQ-NOTIFY-072's two cases — a second authentication failure of the session, or a
+first one with no usable fallback — closing every re-authentication prompt open as it does (REQ-NOTIFY-079).
 A run that ended otherwise with a failure text — a cancelled quota wait, a completion with a task abandoned — keeps the
 limit's notice or its own summary. *Since repair round 1 (2026-10-02):* every notice a run's ending raises is built by
 `main/run-failure-notice.ts` (`runEndingPublication`, a failed run with no failure text taking the generic class too), and a
 failed run's class publication passes the **focus gate** (`RunFailurePublisher`, REQ-NOTIFY-030/032): a session a main
 window follows (`MainWindows.followerOfSession`, no fallback to the active window) publishes at once; any other raises
 REQ-NOTIFY-032's warning — naming the session, the failure text as detail, `focus-session` — and holds the class notice, and
-for an authentication failure the recovery dialog, until a main window's `session.subscribe` follows that session; a later
+for an authentication failure the automatic fallback's restart and the recovery dialog (OQ-182's reading), until a main
+window's `session.subscribe` follows that session; a later
 ending of the session supersedes what was held. Main also keeps, by session, every provider/model pair that failed
 authentication since its provider's credentials last changed (`AuthRecovery.refusedPair`, REQ-NOTIFY-068): the dialog
 leaves them out and a retry refuses them; a re-authentication, or a sign-in, saved key, sign-out or removal under Settings,
@@ -1199,6 +1204,54 @@ and the reopen action on it (OQ-42). **Part V:** a starting run first clears the
 is unscoped or scoped to that same session and no other (REQ-NOTIFY-029/058), and every `warning` or `error` notice is
 written to the session's timeline as a `notice` entry BEFORE it is broadcast (REQ-NOTIFY-268, `timeline.append` to the
 run host), so a notice replaced within the same turn is still readable afterwards.
+**The automatic fallback (REQ-NOTIFY-070, 2026-10-02, the 401 note's part A).** ~~A result carrying failure text — a
+`failed` run, or a quota condition whatever its status — is classified in REQ-NOTIFY-060's order by `main/failure-class.ts`
+(…) and its recovery published by `main/failure-recovery.ts`, the one writer of a run failure's notice: REQ-NOTIFY-063's
+notice, or REQ-NOTIFY-064's — the run failed, the session and the draft were kept, the failure text as detail, `Return to
+the workspace` (`open-view: workspace`).~~ *At the merge beside parts C and D the classification and every notice became
+the focus gate's (the paragraph above, `Back to the workspace`), and `main/failure-recovery.ts`, renamed
+`main/auth-fallback.ts`, kept the automatic half alone, which the gate asks first for an authentication failure.* A
+**first authentication failure** of the session, with the run host and the session's
+workspace service present (REQ-NOTIFY-069), asks the run host `session.restartOnFallback`: `Sessions.restartOnFallback`
+reads the model the root's failing call was addressed to (`Run.failedEntryModel`, recorded with the run's last failure by
+every root turn — an iteration's or, in plan mode, the plan cycle's: `Run.recordRootModelFailure`; the plan cycle's was
+missed until the third repair round, so a plan-mode 401 was never restarted), resolves `fallback_model`, and —
+where the fallback is configured and is another pair — pins it in the session's `ResilienceMemory` keyed by the pair that
+failed and records the `model_override` timeline entry (`cause: authentication`) that `ResilienceMemory.rehydrate`
+replays on every later run and after a reload (REQ-SESSION-026); then ~~`prompt` re-submits the last user prompt~~ the
+failed run's launch is relaunched (`Sessions.relaunchAfterAuthFailure`, the fourth repair round): the last user prompt
+re-submitted, a new run on the fallback — or, where a plan decision launched the failed run (`Live.planLaunch`, kept with
+that run), the same decision again (`relaunchPlanDecision`, REQ-ORCH-154: approve's plan as the user left it, revise's
+cycle, plan and changes; nothing re-submitted; the todo's own rule decides whether the request is appended) — and a system
+row says so, written by the `beginning` hook once every refusal has passed, just before the launch, so a restart that
+cannot begin leaves no row claiming one. A restart that
+cannot begin takes the pin back with a `model_override` entry carrying `cleared: true`, which the replay and the autopsy
+reader honour (and, where it failed after the row — the user row's own write — a second row says the session stays on the
+model it had). Main then raises an error acknowledgement naming
+both models (REQ-NOTIFY-070), adds the pair that failed to the dialog's refused pairs (`AuthRecovery.refuse`,
+REQ-NOTIFY-068) and keeps "this session's first failure is spent" for the life of the process; ~~a refusal, a missing run
+channel, a missing service, or a second authentication failure publishes REQ-NOTIFY-064's notice — the recovery dialog of
+REQ-NOTIFY-072 is not built (the note's part C)~~ *since the merge:* a second authentication failure, or a refusal for no
+usable fallback (none configured, the fallback being the model that failed, or the failed model unknown —
+`NO_USABLE_FALLBACK`, read from the refusal's code), opens the recovery dialog above, and spends the first failure too; a
+restart that could not begin, a missing run channel or a missing service publishes REQ-NOTIFY-064's notice and clears the
+bookkeeping; a refusal because a run of the session is active again raises nothing.
+**The re-authentication prompt (REQ-NOTIFY-071/078, ADR-0048; part B, 2026-10-02).** The restart opens the non-modal
+prompt (channel 13, to every main window; a window draws the followed session's alone, REQ-NOTIFY-030, ~~in AppShell's
+`windowPanel` slot inside the rail-and-view region, below the title bar and the notice slot~~ — corrected in the second
+repair round, since that overlay covered the run header's switches and the composer's submit at 1000x680: in flow, as the
+Workspace view's own `reauth` row between the run header and the transcript, overlaying nothing, OQ-181; beside an
+expanded plan gate it yields as a bar, its title and its answers, so the gate's three answers stay reachable — the third
+repair round): the primary that failed, the run continuing on the fallback,
+the switch back from the next iteration, the provider's error quoted, a key field for a key-based provider (a device-code
+or browser provider is told its method is unavailable in this build). Dismissing it keeps the fallback, and so does the
+recovery dialog's opening, which closes every prompt open (REQ-NOTIFY-079). Submitting saves a key supplied — through the
+dialog's key path, `ProviderService.reauthenticateWithKey`, so a key that could not be stored raises REQ-NOTIFY-077's
+acknowledgement and a stored key releases the provider's refused pairs — clears main's bookkeeping and sends
+`session.repinPrimary`: `Sessions.repinPrimary` takes the pin back
+(`cleared: true`, `cause: reauthentication`) and, where a run is live, has it rebuild the root's cell from the memory at
+its next turn (`Run.rebuildEntryFromMemory`) — the turn in flight finishes on the fallback — and the acknowledgement says
+"from the next iteration" or "for the next run".
 
 **The application's end, and the locks the run host holds (ADR-0014 "Main is gone only after the run host",
 2026-09-28).** A run's teardown releases its lock at the end of cleanup; the application's end reaches the same point

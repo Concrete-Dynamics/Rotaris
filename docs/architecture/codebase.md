@@ -1164,26 +1164,42 @@ Since 2026-10-02 a `switch-back` scenario follows the same-tier move with a swit
 configured key from the run header, and a follow-up queued beside it: iteration 2 runs on the configured model, as the
 switch's REQ-MONITOR-142 row says (OQ-177;
 [note](../defects/fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md)); and
-`--only=<name>[,<name>…]` runs the named scenarios alone. **Since 2026-10-02 `fatal` is driven** (`drivenLaunch`, its steps in
-`fatal.steps.json`): a 401 with no usable fallback opens the authentication recovery dialog — REQ-NOTIFY-072..075/079/080,
-the 401 note's part C (`main/failure-class.ts`, `main/auth-recovery.ts`, `packages/ui/src/AuthRecoveryDialog.tsx`,
-`Sessions.authRecoveryFacts` / `restartAfterAuthFailure`) — read in its own window (560 px, its title, the error in the
-failure colour, the other providers' models), Cancelled with the run left failed and the class's notice on screen,
-reopened by a second failure, answered with beta (refused too, `fail:401:only=scripted+scripted-b`, which reopens it
-naming beta, with neither beta nor alpha offered — REQ-NOTIFY-068, both failed with the credentials their providers still
-hold) and then gpt-4o, on which the run completes; the pins are read from the timeline
-([note](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md), open: parts A and B are
-not built on this base). A `reauth` scenario (part D, REQ-NOTIFY-076/077) signs an OpenAI-compatible instance in with a
-stale key against a loopback catalog stand-in, fails the run on it (`fail:401:unless-key=fresh-key`), types the new key into
-the dialog's masked field, and reads the key validated against the catalog, saved, and carried by the restarted run on the
-same model to completion, no pin written and the key in no log line. A `generic` scenario (scripted `fail`, an HTTP 400)
-reads REQ-NOTIFY-064's notice — the run failed, the session and the draft were kept, the failure text as detail, persistent,
-scoped to the session — and follows its **Back to the workspace** action from Overview; every run-ending notice's words are
-`main/run-failure-notice.ts`'s, which also holds a failed run's class publication until its session is followed by a main
-window (REQ-NOTIFY-030/032). **What the 401 recovery does not yet do:** the
-automatic first-failure fallback restart and the non-modal re-authentication prompt (REQ-NOTIFY-070/071/078, parts A and B,
-built on `fin6-auth-recovery-1` and not merged), so every authentication failure opens the dialog; and a device-code or
-browser provider is told its method is not provided by this build, the sign-in flows being owed.
+`--only=<name>[,<name>…]` runs the named scenarios alone. **Since 2026-10-02 the authentication class (the 401 note's four
+parts) is the proof's.** A failed run is classified in REQ-NOTIFY-060's order by main (`main/failure-class.ts`) and published
+through the focus gate (`main/run-failure-notice.ts`, which also holds a failed run's class publication until its session
+is followed by a main window, REQ-NOTIFY-030/032); an authentication failure asks the automatic fallback first
+(`main/auth-fallback.ts`, parts A and B) and opens the recovery dialog (`main/auth-recovery.ts`,
+`packages/ui/src/AuthRecoveryDialog.tsx`, parts C and D) only where that answers it is the dialog's — a second failure, or
+a first with no usable fallback (REQ-NOTIFY-072). **`fatal` is driven** (`drivenLaunch`, its steps in `fatal.steps.json`):
+a 401 with no usable fallback — the automatic fallback finding none — opens the dialog, read in its own window (560 px, its
+title, the error in the failure colour, the other providers' models), Cancelled with the run left failed and the class's
+notice on screen, reopened by a second failure, answered with beta (refused too, `fail:401:only=scripted+scripted-b`, which
+reopens it naming beta, with neither beta nor alpha offered — REQ-NOTIFY-068, both failed with the credentials their
+providers still hold) and then gpt-4o, on which the run completes; the pins are read from the timeline
+(`Sessions.authRecoveryFacts` / `restartAfterAuthFailure`). A `reauth` scenario (part D, REQ-NOTIFY-076/077) signs an
+OpenAI-compatible instance in with a stale key against a loopback catalog stand-in, fails the run on it
+(`fail:401:unless-key=fresh-key`), types the new key into the dialog's masked field, and reads the key validated against
+the catalog, saved, and carried by the restarted run on the same model to completion, no pin written and the key in no log
+line. A `generic` scenario (scripted `fail`, an HTTP 400) reads REQ-NOTIFY-064's notice — the run failed, the session and
+the draft were kept, the failure text as detail, persistent, scoped to the session — and follows its **Back to the
+workspace** action from Overview; every run-ending notice's words are `main/run-failure-notice.ts`'s. The `auth-fallback`
+scenario (`fallback_model: beta`, the scripted step `fail:401:only=<alpha's provider>`) asserts the pin of the fallback keyed
+by the failed pair, the acknowledgement naming both models and the restart with the same prompt completing on
+`scripted-b/beta` (REQ-NOTIFY-070, REQ-MONITOR-147, REQ-SESSION-026), no recovery dialog opening — in plan mode too, where
+the 401 falls on the plan cycle's turn and the restarted cycle parks at the gate on the fallback (`auth-fallback-plan`) — and
+the non-modal re-authentication prompt beside the continuing run with the composer, every title-bar control and every
+notice button usable beside it and no control under it, at the opening size and at 1000x680 with an API-key provider's key
+field (REQ-NOTIFY-071, ADR-0048), and beside an expanded plan gate at 1000x680 drawn as its bar with the gate's three
+answers reachable and the plan the largest part of the gate (REQ-ORCH-153, PD-ORCH-002), drawn in flow as the Workspace
+view's own `reauth` row for the followed session alone (REQ-NOTIFY-030, OQ-181). `auth-fallback-dialog` (driven,
+`fail:401:only=scripted+scripted-b`) follows the fallback refused too: the second failure opens the dialog naming beta,
+the prompt is closed as it opens (REQ-NOTIFY-079), neither alpha — the automatic fallback's primary — nor beta is offered
+(REQ-NOTIFY-068), and the run completes on gpt-4o. `auth-fallback-revise` (driven, plan mode) fails a **revise** cycle's
+turn on a first 401 and reads the restart relaunch the same revise on beta — cycle 2 with the changes stated, no prompt
+re-submitted, the gate reading "You asked for: …" (REQ-ORCH-154, the fourth repair round's `relaunchAfterAuthFailure`).
+**What the 401 recovery does not do:** a device-code or browser provider is told its method is not provided by this build,
+the sign-in flows being owed (REQ-NOTIFY-076's second branch,
+[note](../defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).
 
 **A probe is a deadline, not an appointment (2026-09-12).** Three of this proof's assertions were mid-run DOM probes
 fired at a fixed instant — `.wait-header@1700` — and they failed intermittently on a busy machine with nothing wrong

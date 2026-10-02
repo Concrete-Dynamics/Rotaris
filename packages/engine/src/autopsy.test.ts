@@ -159,6 +159,16 @@ describe('R-043 — the run-autopsy snapshot', () => {
         expect(readAutopsy(dal, sid, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model → spare-model', agents: ['orchestrator'], tool_calls: 3 });
       });
 
+      it('REQ-NOTIFY-070/078: an authentication pin taken back (cleared: true) returns the root to its own key at the next run', () => {
+        const sid = plant('S-override-cleared', 'completed');
+        dal.transaction(() => {
+          run(sid); audit(sid, 'root-model', models);
+          dal.insertTimeline(sid, 1, 't1', 'model_override', 'rotaris', 'Authentication failed; the fallback is pinned.', JSON.stringify({ provider: 'katalyst', model: 'r', model_key: 'spare-model', to_provider: 'anthropic', to_model: 's', cause: 'authentication' }), 'aaaaaaaaaaf1', 'info');
+          dal.insertTimeline(sid, 2, 't2', 'model_override', 'rotaris', 'The primary is re-pinned.', JSON.stringify({ provider: 'katalyst', model: 'r', cleared: true, cause: 'authentication' }), 'aaaaaaaaaaf2', 'info');
+        });
+        expect(readAutopsy(dal, sid, clock.wall)!.requests[0]).toEqual({ endpoint: 'root-model → spare-model → root-model', agents: ['orchestrator'], tool_calls: 3 });
+      });
+
       it('where the snapshot does not say which pair the root\'s key resolves to, an override makes the key undetermined from that point', () => {
         const sid = plant('S-override-unknown', 'completed');
         dal.transaction(() => { run(sid); audit(sid, 'root-model'); override(sid, 1, 'openai', 'c', 'spare-model', ['anthropic', 's']); });

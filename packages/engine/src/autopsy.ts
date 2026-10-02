@@ -356,6 +356,12 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
       const meta = parseJson(t.metadata);
       const provider = meta?.['provider'];
       const model = meta?.['model'];
+      // REQ-NOTIFY-070/078: an entry carrying `cleared: true` takes the pin on its pair back (`ResilienceMemory.rehydrate`).
+      if (typeof provider === 'string' && typeof model === 'string' && meta?.['cleared'] === true) {
+        s.overrides.delete(`${provider}|${model}`);
+        add(s, effective(s));
+        return;
+      }
       const key = str(meta?.['model_key']);
       if (typeof provider !== 'string' || typeof model !== 'string' || key === '') return;
       const toProvider = meta?.['to_provider'];

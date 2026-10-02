@@ -117,6 +117,19 @@ describe('engine/run/resilience — REQ-NOTIFY-092 wordings', () => {
 });
 
 describe('engine/run/resilience — the session-wide memory (REQ-ORCH-091 a/d, REQ-NOTIFY-088/089)', () => {
+  it('REQ-NOTIFY-070/078: an entry carrying cleared: true takes the pin on its pair back, in replay order', () => {
+    const catalogue = [entry('x', 'a', ['small_model']), entry('y', 'b', ['small_model'])];
+    const resolve = (key: string) => (key === 'y' ? { model: catalogue[1]!.model, thinking: 'unset' as const } : null);
+    const pin = { name: 'model_override', metadata: JSON.stringify({ provider: 'a', model: 'x', model_key: 'y', cause: 'authentication' }) };
+    const clear = { name: 'model_override', metadata: JSON.stringify({ provider: 'a', model: 'x', cleared: true }) };
+    expect(ResilienceMemory.rehydrate([pin], resolve).overrideFor('a', 'x')?.key).toBe('y');
+    expect(ResilienceMemory.rehydrate([pin, clear], resolve).overrideFor('a', 'x')).toBeUndefined();
+    expect(ResilienceMemory.rehydrate([pin, clear, pin], resolve).overrideFor('a', 'x')?.key).toBe('y');
+    const m = ResilienceMemory.rehydrate([pin], resolve);
+    expect(m.clearOverride('a', 'x')).toBe(true);
+    expect(m.effective({ model: catalogue[0]!.model, thinking: 'unset' }, catalogue).model.modelId).toBe('x');
+  });
+
   it('marks a pair once, follows an override chain, and rehydrates both from timeline entries', () => {
     const m = new ResilienceMemory();
     expect(m.markExhausted('a', 'x')).toBe(true);

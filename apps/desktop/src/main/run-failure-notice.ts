@@ -1,4 +1,5 @@
 import type { ReportInput } from './notices.js';
+import type { FallbackOutcome } from './auth-fallback.js';
 import { classifyRunFailure, isQuotaFailure, type RunFailureClass } from './failure-class.js';
 
 /**
@@ -112,15 +113,26 @@ export interface RunFailurePublisherDeps {
   /** REQ-NOTIFY-030/032: whether a main window follows the session — the session is on screen. */
   readonly isFocused: (sessionId: string) => boolean;
   readonly report: (notice: ReportInput) => void;
-  /** The authentication class's recovery: opens the dialog over the session's window, or answers why it did not. */
+  /**
+   * REQ-NOTIFY-070 (the 401 note's part A, `auth-fallback.ts`): the authentication class's automatic half, asked first —
+   * `restarted` (the fallback pinned, its acknowledgement raised and the prompt of REQ-NOTIFY-071 open: nothing more is
+   * published), `dialog` (a second failure, or a first with no usable fallback: REQ-NOTIFY-072), `generic` (REQ-NOTIFY-069's
+   * preconditions, or a restart that could not begin) or `stale` (a run of the session is active again: nothing).
+   */
+  readonly fallBack: (sessionId: string, failure: string) => Promise<FallbackOutcome>;
+  /** The authentication class's recovery dialog: opens it over the session's window, or answers why it did not. */
   readonly recoverAuthentication: (sessionId: string, failure: string) => Promise<AuthenticationRecoveryOutcome>;
+  /** REQ-NOTIFY-079: the recovery dialog opened — every non-modal re-authentication prompt open is closed. */
+  readonly closePrompts: () => void;
   readonly log: (message: string) => void;
 }
 
 /**
  * REQ-NOTIFY-060/064 with REQ-NOTIFY-030/032 — the focus gate over a failed run's class publication. A failure of a session
- * on screen publishes its class at once: the authentication class opens the recovery dialog beside its own notice (or, where
- * REQ-NOTIFY-069's preconditions fail, falls to the generic notice); every other class raises its notice. A failure of a
+ * on screen publishes its class at once: the authentication class tries the session's automatic fallback first
+ * (REQ-NOTIFY-070) and, where that is not the first failure's or no usable fallback exists, opens the recovery dialog beside
+ * its own notice (REQ-NOTIFY-072) — or, where REQ-NOTIFY-069's preconditions fail or the restart cannot begin, falls to the
+ * generic notice; every other class raises its notice. A failure of a
  * session NOT on screen raises REQ-NOTIFY-032's warning and nothing else, and the class publication is held until a main
  * window follows that session — so no recovery dialog opens over another session's window, and two notices about one
  * failure are never on screen at once. A later ending of the same session replaces what was held.
@@ -162,8 +174,23 @@ export class RunFailurePublisher {
 
   private async publish(sessionId: string, failureClass: RunFailureClass, failure: string): Promise<void> {
     if (failureClass !== 'authentication') { this.deps.report(classFailureNotice(sessionId, failureClass, failure)); return; }
+    // REQ-NOTIFY-070 ahead of REQ-NOTIFY-072: the session's first failure restarts on its fallback where it can; the dialog
+    // takes the rest.
+    const automatic = await this.deps.fallBack(sessionId, failure);
+    if (automatic.kind === 'restarted') return;
+    if (automatic.kind === 'stale') { this.deps.log(`authentication recovery: nothing to recover for session ${sessionId} (${automatic.reason})`); return; }
+    if (automatic.kind === 'generic') {
+      this.deps.log(`authentication recovery: session ${sessionId} takes the generic failure notice (${automatic.reason})`);
+      this.deps.report(genericFailureNotice(sessionId, failure));
+      return;
+    }
     const r = await this.deps.recoverAuthentication(sessionId, failure);
-    if (r.opened) { this.deps.report(authenticationFailureNotice(sessionId, failure)); return; }
+    if (r.opened) {
+      // REQ-NOTIFY-079: at most one authentication dialog is visible — the modal one closes every non-modal prompt.
+      this.deps.closePrompts();
+      this.deps.report(authenticationFailureNotice(sessionId, failure));
+      return;
+    }
     if (r.stale === true) { this.deps.log(`authentication recovery: nothing to recover for session ${sessionId} (${r.reason})`); return; }
     this.deps.log(`authentication recovery: no dialog for session ${sessionId} (${r.reason}); the generic failure notice is raised`);
     this.deps.report(genericFailureNotice(sessionId, failure));

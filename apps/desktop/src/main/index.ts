@@ -5,7 +5,9 @@ import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2
 import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu, type CloseGuard } from './main-windows.js';
 import { createNoticeStore } from './notices.js';
 import { AuthRecovery } from './auth-recovery.js'; // REQ-NOTIFY-072..080 (the 401 note's parts C and D)
+import { createAuthFallback } from './auth-fallback.js'; // REQ-NOTIFY-070/071/078 (the 401 note's parts A and B)
 import { RunFailurePublisher, runEndingPublication } from './run-failure-notice.js'; // REQ-NOTIFY-060/064 with REQ-NOTIFY-030/032
+import { reauthCommands } from './commands/reauth.js';
 import { createLibraryRevision } from './library.js';
 // The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
 import { startDriver, type AuxiliaryWindow } from './driver.js';
@@ -31,7 +33,7 @@ import { classifyThisInstallation, createUpdaterPorts, successorArguments, succe
 import { updateCommands } from './commands/update.js';
 import { productVersion } from './version.js';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
-import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
+import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, unavailableMethodMessage, validateCatalog } from '@rotaris/providers';
 import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
 import { deliverSetupCancel, InitializationCoordinator } from './initialization.js'; // Part AS (ADR-0064)
 import { runCapture } from './capture/index.js'; // the scripted launch that ends in a photograph (verification only)
@@ -631,6 +633,70 @@ async function main(): Promise<void> {
     acknowledge: (kind, title, body) => notices.acknowledge(kind, title, body),
   });
   /**
+   * REQ-NOTIFY-069/070/071/078 (the 401 note's parts A and B, `auth-fallback.ts`): the session's first authentication failure
+   * restarted on the configured fallback, and the non-modal re-authentication prompt beside the continuing run. The run
+   * channel is the run host's link; the configuration service is the workspace service of the window that follows the
+   * session (REQ-NOTIFY-069).
+   */
+  const authFallback = createAuthFallback({
+    acknowledge: (kind, title, body) => notices.acknowledge(kind, title, body),
+    restartOnFallback: async (sessionId) => {
+      const r = await runHost.request({ kind: 'session.restartOnFallback', sessionId }, millis(10_000));
+      if (r.kind === 'session.fallbackRestarted') return { ok: true, value: { failed: r.failed, fallback: r.fallback } };
+      return r.kind === 'refused'
+        ? { ok: false, code: r.code, reason: `${r.headline}${r.detail ? `: ${r.detail}` : ''}` }
+        : { ok: false, code: 'unanswered', reason: `the run host answered ${r.kind}` };
+    },
+    configurationService: (sessionId) => {
+      const owner = ownerOf(sessionId) ?? activeWindow();
+      return owner !== undefined && owner.workspace !== '(no workspace)' && services.has(canonicalPath(owner.workspace));
+    },
+    /**
+     * REQ-NOTIFY-071 / ADR-0048 with REQ-NOTIFY-030: the prompt is window-level and moves with the focused session, so its
+     * opening and its closing go to every main window on channel 13; each holds the prompts by session and draws only the
+     * one for the session it follows. A window that mounts later reads the open ones (`reauth.read`).
+     */
+    publishPrompt: (sessionId, prompt) => {
+      const windows = orderedMainWindows().filter((w) => !w.win.isDestroyed());
+      for (const w of windows) w.win.webContents.send(CHANNEL.reauthPrompt, { v: CONTRACT_SCHEMA_VERSION, sessionId, prompt });
+      log(`authentication recovery: re-authentication prompt ${prompt === null ? 'closed' : 'opened'} for session ${sessionId} (sent to ${windows.length} main window(s))`);
+    },
+    /**
+     * REQ-NOTIFY-076's method, as the recovery dialog reads it (`ProviderService.reauthentication`): a key-based provider gets
+     * the key field; a device-code or browser provider — whose flows are owed — is told so in the provider service's words;
+     * one whose key the model configuration carries (OQ-179) is offered switching back alone.
+     */
+    describeProvider: (id) => {
+      const known = providers.allKnownIds().includes(id);
+      const name = known ? providers.displayName(id) : id;
+      const how = known ? providers.reauthentication(id) : { method: 'configuration' as const, message: '' };
+      if (how.method === 'api-key') return { provider: { id, name }, method: 'api-key' };
+      if (how.method === 'configuration') return { provider: { id, name }, method: 'none' };
+      const signIn = providers.method(id);
+      return { provider: { id, name }, method: 'unavailable', unavailableReason: signIn === 'device-code' || signIn === 'browser-pkce' ? unavailableMethodMessage(name, signIn) : how.message };
+    },
+    /** REQ-NOTIFY-078 / REQ-NOTIFY-202: the dialog's key path (`reauthenticateWithKey`) — validated, stored, the refusing stage named. */
+    saveKey: async (providerId, apiKey) => {
+      const r = await providers.reauthenticateWithKey(providerId, apiKey);
+      // `catalog`: the key IS stored and only its discovered models were not recorded — the credentials changed.
+      if (r.ok || r.stage === 'catalog') {
+        if (!r.ok) log(`authentication recovery: ${r.message}`);
+        healthCache.delete(providerId);
+        await afterProviderChange();
+        return { ok: true };
+      }
+      return { ok: false, stage: r.stage, message: r.message };
+    },
+    repinPrimary: async (sessionId, primary) => {
+      const r = await runHost.request({ kind: 'session.repinPrimary', sessionId, provider: primary.provider, model: primary.model }, millis(10_000));
+      if (r.kind === 'session.primaryRepinned') return { ok: true, applies: r.applies };
+      return { ok: false, reason: r.kind === 'refused' ? `${r.headline}${r.detail ? `: ${r.detail}` : ''}` : `the run host answered ${r.kind}` };
+    },
+    refusePair: (sessionId, pair) => authRecovery.refuse(sessionId, pair),
+    credentialsChanged: (providerId) => authRecovery.credentialsChanged(providerId),
+    log: (m) => log(m),
+  });
+  /**
    * REQ-NOTIFY-060/064 with REQ-NOTIFY-030/032 (`run-failure-notice.ts`): a failed run's class publication, gated on its
    * session being on screen — followed by a main window. A session no main window follows gets REQ-NOTIFY-032's warning, and
    * its class notice (and, for the authentication class, the recovery dialog) waits for `session.subscribe` to follow it.
@@ -638,7 +704,9 @@ async function main(): Promise<void> {
   const runFailures = new RunFailurePublisher({
     isFocused: (sessionId) => mainWindows.followerOfSession(sessionId, relay.subscribersOf(sessionId).map((sink) => sink.id)) !== undefined,
     report: (notice) => { void notices.report(notice); },
+    fallBack: async (sessionId, failure) => await authFallback.onAuthenticationFailure(sessionId, failure),
     recoverAuthentication: async (sessionId, failure) => await authRecovery.onAuthenticationFailure(sessionId, failure),
+    closePrompts: () => { authFallback.closeAllPrompts('the recovery dialog opened, REQ-NOTIFY-079'); },
     log: (message) => log(message),
   });
 
@@ -1000,18 +1068,20 @@ async function main(): Promise<void> {
       // REQ-SESSION-186 / REQ-NOTIFY-003: the terminal outcome, presented once, at the severity summarisation assigned.
       // REQ-NOTIFY-060: a FAILED run's failure is matched against four classes in order (`failure-class.ts`), the first match
       // handling it, and published through the focus gate (`RunFailurePublisher`, REQ-NOTIFY-030/032). (1) Authentication
-      // (REQ-NOTIFY-067's markers): the recovery dialog of REQ-NOTIFY-072..077 opens over the session (`auth-recovery.ts`)
-      // beside the class's error notice — or, where REQ-NOTIFY-069's preconditions do not hold, the generic notice. The
-      // automatic first-failure fallback restart ahead of the dialog (REQ-NOTIFY-070/071, the 401 note's parts A and B) is not
-      // built on this branch's base, so every authentication failure the preconditions admit opens the dialog. (2) The
-      // sandbox class (REQ-NOTIFY-061) never reaches this handler: a refused confinement mode is refused before a session or a
-      // run exists, and its notice is raised where the start, the prompt or the continue is refused
-      // (`confinementRefusalNotice`, `commands/session.ts`). (3) Part Q (REQ-NOTIFY-063/093): a rate-limit or quota condition —
-      // the provider limit was reached, the session is preserved, the action opening model settings; a run that ENDED
-      // otherwise on a limit (a cancelled quota wait) raises it too, unclassified. (REQ-NOTIFY-062's hosted-credit branch is
-      // not built: no hosted provider exists.) (4) REQ-NOTIFY-064's generic notice: the run failed, the session and the draft
-      // were kept, the failure text (else the run's summary) as detail, the action returning to the workspace view.
-      // Every word and action is `run-failure-notice.ts`'s, pinned by `run-failure-notice.test.ts`.
+      // (REQ-NOTIFY-067's markers): the session's FIRST authentication failure tries the automatic fallback
+      // (`auth-fallback.ts`, REQ-NOTIFY-070): the configured fallback pinned, an acknowledgement naming both models, the run
+      // restarted, and the non-modal re-authentication prompt opened beside it (REQ-NOTIFY-071). A second failure, or a
+      // first with no usable fallback, opens the recovery dialog of REQ-NOTIFY-072..077 over the session (`auth-recovery.ts`)
+      // beside the class's error notice, closing any prompt open (REQ-NOTIFY-079); where REQ-NOTIFY-069's preconditions do
+      // not hold, or the restart cannot begin, the generic notice. (2) The sandbox class (REQ-NOTIFY-061) never reaches this
+      // handler: a refused confinement mode is refused before a session or a run exists, and its notice is raised where the
+      // start, the prompt or the continue is refused (`confinementRefusalNotice`, `commands/session.ts`). (3) Part Q
+      // (REQ-NOTIFY-063/093): a rate-limit or quota condition — the provider limit was reached, the session is preserved, the
+      // action opening model settings; a run that ENDED otherwise on a limit (a cancelled quota wait) raises it too,
+      // unclassified. (REQ-NOTIFY-062's hosted-credit branch is not built: no hosted provider exists.) (4) REQ-NOTIFY-064's
+      // generic notice: the run failed, the session and the draft were kept, the failure text (else the run's summary) as
+      // detail, the action returning to the workspace view. Every word and action is `run-failure-notice.ts`'s, pinned by
+      // `run-failure-notice.test.ts`.
       /**
        * REQ-EVENTS-088 (OQ-42): a run whose terminal persistence could not be confirmed has ALREADY been
        * reported — the run host published one failure notice carrying the last durable ordinal and the reopen
@@ -1526,7 +1596,7 @@ async function main(): Promise<void> {
     initialization, libraryRevision, requirementsRuns, improvementUndo, improvementRuns,
     enqueueImprovement: (job) => improvementCoordinator.enqueue(job),
     chooseSave, chooseExportPath, chooseDirectory, chooseSkillFile,
-    openHookReview, restoreFlow, checkpointOp, quitting,
+    openHookReview, restoreFlow, checkpointOp, quitting, authFallback,
   };
   /**
    * Every command this product answers, filed under its kind. `CommandHandlers` is total over
@@ -1550,6 +1620,7 @@ async function main(): Promise<void> {
     ...shellCommands(commandContext),
     ...skillsCommands(commandContext),
     ...updateCommands(commandContext),
+    ...reauthCommands(commandContext),
     ...windowCommands(commandContext),
     ...windowsCommands(commandContext),
     ...workspaceCommands(commandContext),

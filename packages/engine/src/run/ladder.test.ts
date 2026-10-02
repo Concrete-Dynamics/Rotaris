@@ -85,6 +85,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     over?: Partial<RunConfig>;
     /** The configure call (1-based) from which the configuration refuses — a restart that cannot begin. */
     configureRefusesFrom?: number;
+    /** REQ-ORCH-152/153: `runtime.run_start_mode`. */
+    runStartMode?: 'auto' | 'plan';
   }
 
   function sessionsWith(script: (persona: string, turn: number) => ScriptedCall, opts: Opts = {}) {
@@ -112,7 +114,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: (_sid, r) => results.push(r.status),
       configure: () => (++configured >= (opts.configureRefusesFrom ?? Infinity) ? { ok: false as const, error: { reason: 'the configuration no longer loads' } } : { ok: true, value: {
         model: { backend, config }, models, personas,
-        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, ...(opts.childTimeoutMs === undefined ? {} : { childTimeoutMs: opts.childTimeoutMs }), ...(opts.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: opts.childStallTimeoutMs }) },
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, ...(opts.runStartMode === undefined ? {} : { runStartMode: opts.runStartMode }), ...(opts.childTimeoutMs === undefined ? {} : { childTimeoutMs: opts.childTimeoutMs }), ...(opts.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: opts.childStallTimeoutMs }) },
         resilience: { catalogue, fallbackModel: opts.fallbackModel ?? null },
       } }),
       ...(opts.delegation ? { tools: (ctx) => (ctx.delegation ? delegationPort(ctx.delegation, ctx.parentId ?? 'root', opts.tool) : { specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }), cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false }) } : {}),
@@ -1021,6 +1023,278 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     clock.advance(1000);
     expect((await validation.sessions.running(sid3)!).status).toBe('completed');
     expect(issues(sid3)).toEqual(['validation_llm_error']);
+  });
+
+  describe('REQ-NOTIFY-070 / REQ-MONITOR-147 / REQ-SESSION-026: a first authentication failure pins fallback_model session-wide and restarts', () => {
+    const unauthorized = () => modelError({ code: 'http', status: 401, headline: 'Unauthorized', providerMessage: 'Incorrect API key provided', transient: false });
+    const catalogue = () => [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+
+    it('pins the fallback keyed by the failed pair, restarts with the same prompt on it, and the pin outlives the run and a reload', async () => {
+      const { sessions, client } = sessionsWith((_p, turn) => (turn === 1 ? failing(unauthorized()) : answer(`answer ${turn}`)), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
+      const sid = (sessions.start(dal, 'C:/ws', 'do the thing') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      // REQ-NOTIFY-068: the 401 is not retried.
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
+      const restarted = sessions.restartOnFallback(sid);
+      if (!restarted.ok) throw new Error(restarted.error.reason);
+      expect(restarted.value).toEqual({ failed: { provider: 'a', model: 'a1', key: 'a1' }, fallback: { provider: 'f', model: 'f1', key: 'f1' }, prompt: 'do the thing' });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
+      expect(dal.residentRows(sid).filter((r) => r.kind === 'user').map((r) => r.body)).toEqual(['do the thing', 'do the thing']);
+      // The restart's row stands just before the restarted prompt — written once the restart began, never before.
+      const kinds = dal.residentRows(sid).map((r) => `${r.kind}:${/restarts on the fallback/.test(r.body) ? 'restart' : r.body}`);
+      expect(kinds.indexOf('system:restart')).toBe(kinds.lastIndexOf('user:do the thing') - 1);
+      expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'model_override')!.metadata)).toMatchObject({ provider: 'a', model: 'a1', model_key: 'f1', to_provider: 'f', to_model: 'f1', cause: 'authentication' });
+      // Session-wide, not one run's: a later prompt in this process stays on the fallback.
+      const later = sessions.prompt(sid, 'again');
+      if (!later.ok) throw new Error(later.error.reason);
+      await sessions.running(sid)!;
+      expect(client.requests.at(-1)!.model.modelId).toBe('f1');
+      // And a reload of the session: the pin is rehydrated from the timeline.
+      const fresh = sessionsWith(() => answer('fresh'), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
+      const resumed = fresh.sessions.resume(dal, 'C:/ws', sid);
+      if (!resumed.ok) throw new Error(resumed.error.reason);
+      const again = fresh.sessions.prompt(sid, 'once more');
+      if (!again.ok) throw new Error(again.error.reason);
+      await fresh.sessions.running(sid)!;
+      expect(fresh.client.requests.map((r) => r.model.modelId)).toEqual(['f1']);
+    });
+
+    it('REQ-ORCH-153: a first 401 on a plan cycle\'s turn restarts on the fallback too — the restarted plan cycle runs on it and parks at the gate', async () => {
+      const { sessions, client } = sessionsWith((_p, turn) => (turn === 1 ? failing(unauthorized()) : answer('1. Do the thing on the fallback.')), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' }, runStartMode: 'plan' });
+      const sid = (sessions.start(dal, 'C:/ws', 'plan the thing') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
+      const restarted = sessions.restartOnFallback(sid);
+      if (!restarted.ok) throw new Error(`${restarted.error.code}: ${restarted.error.reason}`);
+      expect(restarted.value).toEqual({ failed: { provider: 'a', model: 'a1', key: 'a1' }, fallback: { provider: 'f', model: 'f1', key: 'f1' }, prompt: 'plan the thing' });
+      await sessions.running(sid)!;
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
+      // The restart is the same prompt under the same mode: a plan cycle, held at the gate with the fallback's plan.
+      expect(dal.getSession(sid)!.execution_status).toBe('awaiting_plan_decision');
+      expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'model_override')!.metadata)).toMatchObject({ provider: 'a', model: 'a1', model_key: 'f1', cause: 'authentication' });
+    });
+
+    /*
+     * REQ-ORCH-154 with REQ-NOTIFY-070/074: a plan decision launches a run carrying more than the last prompt — revise "starts
+     * a further plan cycle with the plan as it currently stands and the changes stated", approve carries the plan as the
+     * user left it (edited where they edited it). A restart after that run's first 401 relaunches the same decision on the
+     * model just pinned: the plan, the changes and the cycle reach the fallback, and no prompt is re-submitted, since a
+     * decision is no prompt. Re-submitting the last user row instead opened a fresh cycle from the original prompt and
+     * dropped both (the fourth repair round's blocking finding).
+     */
+    const planned = (script: (turn: number) => ScriptedCall) => {
+      const h = sessionsWith((_p, turn) => script(turn), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' }, runStartMode: 'plan' });
+      const sid = (h.sessions.start(dal, 'C:/ws', 'plan the thing') as { value: SessionId }).value;
+      return { ...h, sid };
+    };
+    const users = (sid: SessionId) => dal.residentRows(sid).filter((r) => r.kind === 'user').map((r) => r.body);
+    const taskStates = (sid: SessionId) => (JSON.parse(dal.getSession(sid)!.todo ?? '{"phases":[]}') as { phases: { tasks: { state: string }[] }[] }).phases.flatMap((p) => p.tasks.map((t) => t.state));
+
+    it('REQ-ORCH-154: a revise cycle that fails on a first 401 is restarted as the same revise — the stated changes and the plan they revise reach the fallback', async () => {
+      const { sessions, client, sid } = planned((turn) => (turn === 1 ? answer('1. Original plan.') : turn === 2 ? failing(unauthorized()) : answer('1. Revised plan on the fallback.')));
+      await sessions.running(sid)!;
+      expect(dal.getSession(sid)!.execution_status).toBe('awaiting_plan_decision');
+      expect(sessions.planDecision(sid, 'revise', 'USE-THE-ZEBRA-LIBRARY')).toEqual({ ok: true, value: { relaunched: true, cycle: 1 } });
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1']);
+      const restarted = sessions.restartOnFallback(sid);
+      if (!restarted.ok) throw new Error(`${restarted.error.code}: ${restarted.error.reason}`);
+      await sessions.running(sid)!;
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1', 'f1']);
+      const sent = JSON.stringify(client.requests[2]!.messages);
+      expect(sent).toContain('USE-THE-ZEBRA-LIBRARY');
+      expect(sent).toContain('1. Original plan.');
+      // The revise's own cycle, parked at the gate with the fallback's plan and the changes it was asked for.
+      expect(dal.getSession(sid)!.execution_status).toBe('awaiting_plan_decision');
+      expect(dal.planCyclesOf(sid).map((c) => ({ cycle: c.cycle, changes: c.changes, plan: c.plan }))).toEqual([
+        { cycle: 1, changes: '', plan: '1. Original plan.' },
+        { cycle: 2, changes: 'USE-THE-ZEBRA-LIBRARY', plan: '1. Revised plan on the fallback.' },
+      ]);
+      // A decision is no prompt: nothing is re-submitted, and a row says the run restarted on the fallback.
+      expect(users(sid)).toEqual(['plan the thing']);
+      expect(dal.residentRows(sid).some((r) => r.kind === 'system' && /^Authentication failed on a\/a1\. The run restarts on the fallback model f1/.test(r.body))).toBe(true);
+      // Approving the revised plan carries the work out once, on the fallback: the request was never abandoned or doubled.
+      expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1', 'f1', 'f1']);
+      expect(JSON.stringify(client.requests[3]!.messages)).toContain('1. Revised plan on the fallback.');
+      expect(taskStates(sid)).toEqual(['complete']);
+    });
+
+    it('REQ-ORCH-154: an approved plan whose run fails on a first 401 is restarted as the same approval — the plan as the user edited it reaches the fallback', async () => {
+      const { sessions, client, sid } = planned((turn) => (turn === 1 ? answer('1. Original plan.') : turn === 2 ? failing(unauthorized()) : answer('carried out on the fallback')));
+      await sessions.running(sid)!;
+      expect(sessions.planEdit(sid, '1. THE-EDITED-STEP.').ok).toBe(true);
+      expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      const restarted = sessions.restartOnFallback(sid);
+      if (!restarted.ok) throw new Error(`${restarted.error.code}: ${restarted.error.reason}`);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1', 'f1']);
+      expect(JSON.stringify(client.requests[2]!.messages)).toContain('THE-EDITED-STEP');
+      expect(dal.getSession(sid)!.plan_released).toBe(1);
+      expect(dal.planCyclesOf(sid)).toHaveLength(1);
+      expect(users(sid)).toEqual(['plan the thing']);
+      // The failed run's task stays abandoned (REQ-ORCH-074) and the relaunch carried the request out again (OQ-182).
+      expect(taskStates(sid)).toEqual(['abandoned', 'complete']);
+    });
+
+    it('REQ-NOTIFY-074 with REQ-ORCH-154: the recovery dialog\'s restart relaunches a failed revise as the same revise too', async () => {
+      const { sessions, client, sid } = planned((turn) => (turn === 1 ? answer('1. Original plan.') : turn === 2 ? failing(unauthorized()) : answer('1. Revised plan on the chosen model.')));
+      await sessions.running(sid)!;
+      expect(sessions.planDecision(sid, 'revise', 'USE-THE-ZEBRA-LIBRARY').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      const restarted = sessions.restartAfterAuthFailure(sid, 'f1');
+      if (!restarted.ok) throw new Error(`${restarted.error.code}: ${restarted.error.reason}`);
+      await sessions.running(sid)!;
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1', 'f1']);
+      expect(JSON.stringify(client.requests[2]!.messages)).toContain('USE-THE-ZEBRA-LIBRARY');
+      expect(dal.planCyclesOf(sid).map((c) => c.changes)).toEqual(['', 'USE-THE-ZEBRA-LIBRARY']);
+      expect(users(sid)).toEqual(['plan the thing']);
+    });
+
+    it('a restart after a later PROMPT re-submits that prompt, not an earlier decision (REQ-NOTIFY-070)', async () => {
+      // Cycle 1 parks, is approved and completes; the next prompt (plan mode again, released) fails on a first 401.
+      const { sessions, client, sid } = planned((turn) => (turn === 1 ? answer('1. Original plan.') : turn === 2 ? answer('done') : turn === 3 ? failing(unauthorized()) : answer('the follow-up on the fallback')));
+      await sessions.running(sid)!;
+      expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const next = sessions.prompt(sid, 'and a follow-up');
+      if (!next.ok) throw new Error(next.error.reason);
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      const restarted = sessions.restartOnFallback(sid);
+      if (!restarted.ok) throw new Error(`${restarted.error.code}: ${restarted.error.reason}`);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'a1', 'a1', 'f1']);
+      expect(users(sid)).toEqual(['plan the thing', 'and a follow-up', 'and a follow-up']);
+    });
+
+    it('a plan cycle whose turn ended on no model call\'s failure records no failed model: refused (REQ-NOTIFY-069)', async () => {
+      // The plan cycle produced no plan text (a succeeded, empty turn): the run ends, but no model call failed.
+      const { sessions } = sessionsWith(() => answer(''), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' }, runStartMode: 'plan' });
+      const sid = (sessions.start(dal, 'C:/ws', 'plan the thing') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(sessions.restartOnFallback(sid)).toMatchObject({ ok: false, error: { code: 'no-model-failure' } });
+    });
+
+    it('the fallback failing too is not tried again: refused, nothing written (REQ-NOTIFY-072, REQ-NOTIFY-075)', async () => {
+      const { sessions, client } = sessionsWith(() => failing(unauthorized()), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      const first = sessions.restartOnFallback(sid);
+      expect(first.ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
+      const overrides = dal.timelineOf(sid).filter((t) => t.name === 'model_override').length;
+      const second = sessions.restartOnFallback(sid);
+      expect(second).toMatchObject({ ok: false, error: { code: 'fallback-failed' } });
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'model_override')).toHaveLength(overrides);
+      expect(client.requests).toHaveLength(2);
+    });
+
+    it('with no fallback configured, or with the fallback being the model that failed, it is refused and nothing is written (REQ-NOTIFY-069/072)', async () => {
+      for (const fallbackModel of [null, { model: A1, thinking: 'unset' as const }]) {
+        const { sessions, client } = sessionsWith(() => failing(unauthorized()), { catalogue: catalogue(), fallbackModel });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await sessions.running(sid)!;
+        expect(sessions.restartOnFallback(sid)).toMatchObject({ ok: false, error: { code: fallbackModel === null ? 'no-fallback' : 'fallback-failed' } });
+        expect(timeline(sid)).not.toContain('model_override');
+        expect(client.requests).toHaveLength(1);
+      }
+    });
+
+    it('a run whose failure was no model call\'s is refused (REQ-NOTIFY-069)', async () => {
+      const { sessions } = sessionsWith(() => answer('fine'), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(sessions.restartOnFallback(sid)).toMatchObject({ ok: false, error: { code: 'no-model-failure' } });
+    });
+
+    it('REQ-NOTIFY-078: re-authentication re-pins the primary — for the next run after the run ended, durably; from the next iteration while one runs', async () => {
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      // Turn 1 is the 401 on a1; turn 2 (the restart on f1) is held so a re-pin lands while the run is live; then answers.
+      const { sessions, client } = sessionsWith((_p, turn) => (turn === 1 ? failing(unauthorized()) : turn === 2 ? { parts: [{ hold, part: { kind: 'text', delta: 'on the fallback' } }, { part: { kind: 'finish', reason: 'stop' } }] } : answer(`answer ${turn}`)), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(sessions.restartOnFallback(sid).ok).toBe(true);
+      await tick();
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
+      expect(sessions.repinPrimary(sid, { provider: 'a', model: 'a1' })).toEqual({ ok: true, value: { applies: 'next-iteration' } });
+      // A queued prompt gives the run a next iteration: the turn in flight finishes on f1, the next one runs on a1.
+      expect(sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: 'and then this' } }).ok).toBe(true);
+      release();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'f1', 'a1']);
+      expect(dal.residentRows(sid).some((r) => r.kind === 'system' && r.body === 'Re-authenticated: the run switches back to a/a1 from the next iteration.')).toBe(true);
+      // The next prompt runs on the primary again.
+      const next = sessions.prompt(sid, 'again');
+      if (!next.ok) throw new Error(next.error.reason);
+      await sessions.running(sid)!;
+      expect(client.requests.at(-1)!.model.modelId).toBe('a1');
+      // With no run live the answer is "the next run".
+      expect(sessions.repinPrimary(sid, { provider: 'a', model: 'a1' })).toEqual({ ok: true, value: { applies: 'next-run' } });
+      // And a reload replays the taken-back pin: the primary.
+      const fresh = sessionsWith(() => answer('fresh'), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
+      const resumed = fresh.sessions.resume(dal, 'C:/ws', sid);
+      if (!resumed.ok) throw new Error(resumed.error.reason);
+      const again = fresh.sessions.prompt(sid, 'once more');
+      if (!again.ok) throw new Error(again.error.reason);
+      await fresh.sessions.running(sid)!;
+      expect(fresh.client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
+      expect(JSON.parse(dal.timelineOf(sid).filter((t) => t.name === 'model_override').at(-1)!.metadata)).toMatchObject({ provider: 'a', model: 'a1', cleared: true, cause: 'reauthentication' });
+    });
+
+    it('a restart that cannot begin takes the pin back, durably, so the session stays on the model it had (REQ-NOTIFY-070)', async () => {
+      // Configure answers the start and the pin's resolution (calls 1 and 2) and refuses the restart's own (call 3).
+      const { sessions, client } = sessionsWith(() => failing(unauthorized()), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' }, configureRefusesFrom: 3 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(sessions.restartOnFallback(sid)).toMatchObject({ ok: false, error: { code: 'restart-failed' } });
+      expect(client.requests).toHaveLength(1);
+      const entries = dal.timelineOf(sid).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+      expect(entries).toHaveLength(2);
+      expect(entries[1]).toMatchObject({ provider: 'a', model: 'a1', cleared: true });
+      // The transcript says nothing that did not happen: no row claims a restart on the fallback, and no second user row.
+      const rows = dal.residentRows(sid).map((r) => `${r.kind}: ${r.body}`);
+      expect(rows.filter((r) => /fallback/i.test(r))).toEqual([]);
+      expect(rows.filter((r) => r.startsWith('user:'))).toEqual(['user: x']);
+      // A reload replays both: no override stands.
+      const fresh = sessionsWith(() => answer('fresh'), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
+      const resumed = fresh.sessions.resume(dal, 'C:/ws', sid);
+      if (!resumed.ok) throw new Error(resumed.error.reason);
+      const again = fresh.sessions.prompt(sid, 'once more');
+      if (!again.ok) throw new Error(again.error.reason);
+      await fresh.sessions.running(sid)!;
+      expect(fresh.client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
+    });
+
+    it('a restart whose own user row cannot be written, after the announcement, says so and takes the pin back (REQ-NOTIFY-070)', async () => {
+      const { sessions, client } = sessionsWith(() => failing(unauthorized()), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      // Every refusal passes and the announcement is written; then the restarted prompt's user row fails to write.
+      type Writer = { appendRow: (kind: string, ...rest: unknown[]) => unknown };
+      const writer = (sessions as unknown as { live: Map<SessionId, { writer: Writer }> }).live.get(sid)!.writer;
+      const original = writer.appendRow.bind(writer);
+      writer.appendRow = (kind, ...rest) => (kind === 'user' ? { ok: false, error: { code: 'history-failed', reason: 'the disk is full' } } : original(kind, ...rest));
+      const answer = sessions.restartOnFallback(sid);
+      writer.appendRow = original;
+      expect(answer).toMatchObject({ ok: false, error: { code: 'restart-failed', reason: 'the disk is full' } });
+      expect(client.requests).toHaveLength(1);
+      // The transcript says what happened, in order: the restart announced, then that it could not begin, on the model it had.
+      const rows = dal.residentRows(sid).map((r) => `${r.kind}: ${r.body}`);
+      const fallbackRows = rows.filter((r) => /fallback/i.test(r));
+      expect(fallbackRows).toHaveLength(2);
+      expect(fallbackRows[0]).toMatch(/^system: Authentication failed on a\/a1\. The run restarts on the fallback model f1 \(f\/f1\)/);
+      expect(fallbackRows[1]).toBe('system: The run could not restart on the fallback model f1 (the disk is full); the session stays on a/a1.');
+      expect(rows.filter((r) => r.startsWith('user:'))).toEqual(['user: x']);
+      // And the pin is taken back, durably.
+      const entries = dal.timelineOf(sid).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+      expect(entries).toHaveLength(2);
+      expect(entries[1]).toMatchObject({ provider: 'a', model: 'a1', cleared: true });
+    });
   });
 
   describe('REQ-NOTIFY-072/074/076 (the 401 note\'s parts C and D): the authentication recovery dialog\'s facts and its restart', () => {

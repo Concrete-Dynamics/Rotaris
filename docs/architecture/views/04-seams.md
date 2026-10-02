@@ -43,10 +43,11 @@ it there gives it to every window at once, because `shell.ts` makes that set one
 reads or writes for itself stays in the root that draws it: `main.tsx` for the main window's six views,
 `windows.tsx` for the approval, provider, pause, hook-review, persona and terminal windows.
 
-**Which facet.** Eighteen sit beside `commands/context.ts`, one per family: `dialogs`, `providers`, `session`,
+**Which facet.** Nineteen sit beside `commands/context.ts`, one per family: `dialogs`, `providers`, `session`,
 `hooks`, `mcp`, `initialization`, `skills`, `shell`, `git`, `checkpoints`, `library`, `improvements`, `config`,
-`requirements`, `windows`, `workspace`, `update` (the updater's) and `auth-recovery` (REQ-NOTIFY-072's recovery window,
-2026-10-02; this line said sixteen until then, `update` uncounted). Add the kind to the one whose name it already carries; a family with no
+`requirements`, `windows`, `workspace`, `update` (the updater's), `auth-recovery` (REQ-NOTIFY-072's recovery window,
+2026-10-02; this line said sixteen until then, `update` uncounted) and `reauth` (REQ-NOTIFY-071/078's prompt, 2026-10-02).
+Add the kind to the one whose name it already carries; a family with no
 facet yet is a new file and one more spread in the table. Each declares the slice of `CommandContext` it uses
 (`Pick<CommandContext, 'runHost' | …>`) — take what you need and nothing more, because that slice is what a
 test has to satisfy. A member that does not exist yet is added to `CommandContext` and supplied in `index.ts`.
@@ -80,7 +81,34 @@ Update the process view's **renderer → main** list.
 
 ## 2. A main → renderer channel
 
-Twelve exist. A thirteenth is a real decision — ask whether an existing one carries it first.
+Thirteen exist. A fourteenth is a real decision — ask whether an existing one carries it first. The thirteenth,
+`reauth:prompt` (2026-10-02, REQ-NOTIFY-071), was that decision taken: the re-authentication prompt is window-scoped
+state main opens and closes on its own account (after a fallback restart), which neither the notice slot (one notice,
+any session) nor channel 12 (one workspace's initialization) could carry without changing what they mean. It is the
+worked example of a **window-level non-modal surface fed by main** (ADR-0048): the payload schema and the two commands
+in `packages/contracts/src/reauth.ts`, the counter in `packages/shell/src/relay.ts`'s total record, the publisher in
+`main/index.ts` sending each opening and closing, keyed by session, to every main window, the state in
+`main/auth-fallback.ts` (`failure-recovery.ts` until the merge beside the recovery dialog, 2026-10-02; the dialog's opening
+closes every prompt through it, REQ-NOTIFY-079), the facet `main/commands/reauth.ts` (the two answers, and `reauth.read` for a window that
+mounts later), the hook in `renderer/main.tsx` holding the prompts by session and choosing the followed session's
+(`reauthPromptFor`, REQ-NOTIFY-030: a recovery affordance moves with the focused session), and the surface
+`packages/ui/src/ReauthPrompt.tsx`, drawn **in flow** by the Workspace view (`WorkspaceView`'s `reauthPrompt`) as its
+own row of the view's grid, `reauth`, between the run header and the transcript (OQ-181's reading of "beside the
+continuing run") — so a panel open until answered overlays no control at any window size. *Corrected 2026-10-02
+(the repair rounds):* the first build sent to the one window following the session and mounted the surface beside the
+shell, `fixed` at the window's corner like `ProjectSetupDialog`; the verifier measured the session browser, the three
+window controls and the notice's dismissal under it, and the prompt staying over whatever session that window focused
+next. ~~A window-level non-modal surface goes in the `windowPanel` slot~~ — the second build drew it `absolute` in an
+AppShell `windowPanel` slot inside the rail-and-view region, and at 1000x680 the run header's switches and, under a key
+field, the composer's submit were under it; the slot is gone. **A non-modal surface that stays open until answered is
+laid out in flow, in a row or column of the view it belongs to, never as an overlay**: add its grid area to every
+template of that view (`layout-proof` fails a child naming an area the template lacks) and measure it at REQ-SHELL-022's
+minimum. **In flow is not enough beside another panel open until answered** (the third repair round, 2026-10-02): an
+`auto`-maximum row is grown before a `1fr` one, so beside the expanded plan gate (whose row has no floor once the
+transcript is hidden) the prompt took the height first and left the gate's three answers unreachable at 1000x680. Decide
+which of the two yields — the one the run is not stopped on — and give it a form whose height is one row of its answers
+on the state where they meet (`.workspace[data-plan-gate='1']:not([data-plan-gate-collapsed='1']) > .reauth-prompt`, the
+prompt's bar), never a written height, then measure both panels' answers at the minimum in that state.
 
 | # | File | What lands here |
 |---|---|---|

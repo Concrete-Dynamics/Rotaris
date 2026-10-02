@@ -1,12 +1,12 @@
-import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StrictMode, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload } from '@rotaris/contracts';
+import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type ReauthPrompt as ReauthPromptState, type ReauthSubmitResult } from '@rotaris/contracts';
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
 import { TerminalHostProvider } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripRunItem, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripModeItem, statusStripRunItem, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, ReauthPrompt, type ReauthPrompts, applyReauthPublish, seedReauthPrompts, reauthPromptFor, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -183,7 +183,7 @@ bindRetrospectiveStarter(() => { void bridge.command({ kind: 'improvements.retro
 // through them, so neither `Workspace`'s props nor App's view map changes for the catalogue's sake.
 const slashOpeners: { newSession?: () => Promise<{ ok: true } | { ok: false; reason: string }>; openSessions?: () => void } = {};
 
-function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenStash, groupTools, layout, onLayout, onOpenTrailer }: { models: readonly string[]; modelsLoaded: boolean; workspace: string; popOut: boolean; prompts: PromptsApi; onOpenStash: () => void; groupTools: boolean; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void; onOpenTrailer: (trailer: TrailerRow) => void }) {
+function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenStash, groupTools, layout, onLayout, onOpenTrailer, reauthPrompt }: { models: readonly string[]; modelsLoaded: boolean; workspace: string; popOut: boolean; prompts: PromptsApi; onOpenStash: () => void; groupTools: boolean; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void; onOpenTrailer: (trailer: TrailerRow) => void; reauthPrompt: ReactNode }) {
   // REQ-MONITOR-128 / REQ-MONITOR-296: the record under this window's optimistic cancels of one agent.
   const session = useShownSession();
   const rows: readonly TranscriptRow[] = useStore(replica, (s) => s.rows);
@@ -291,7 +291,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
         onCreate={async (branch, path) => { const r = await bridge.command({ kind: 'worktree.create', branch, path }); if (r.ok) git.refresh(); return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline }; }}
         onClose={() => setWorktreeOpen(false)} />
     )}
-    <WorkspaceView slash={slashHost}
+    <WorkspaceView slash={slashHost} reauthPrompt={reauthPrompt}
     onOpenLink={openLink} onReadAttachment={async (attachment) => { if (!session) return null; const r = await bridge.command({ kind: 'session.readAttachment', sessionId: session.id, path: attachment.path, digest: attachment.digest }); return r.ok ? `data:${attachment.mediaType};base64,${(r.value as { base64: string }).base64}` : null; }} onAcknowledge={acknowledge} showReasoning={display.showReasoning} autoCollapseTools={display.autoCollapseTools}
     needsRecovery={needsRecovery} modelsLoaded={modelsLoaded} history={prompts.history} configuredMode={snapshot?.runtime.permission_mode}
     projectSetupPending={promptDue} initialization={init.state} onOpenProjectSetup={openProjectSetup}
@@ -729,6 +729,37 @@ function useConfinement() {
  * window can talk, which is exactly where SR-3 withdrew polling. The four commands answer with the whole
  * state too, so a surface that acts is never a frame behind the one that listens.
  */
+/**
+ * REQ-NOTIFY-071 / REQ-NOTIFY-078 (the 401 note's part B) — the non-modal re-authentication prompts, PUSHED by main on
+ * channel 13 to every main window as each opens and closes (and read once at mount, `reauth.read`). The window holds them
+ * by session and draws the followed session's alone (REQ-NOTIFY-030). The two answers are main's to apply: the window names
+ * the session the drawn prompt was opened for and nothing else, and the key travels once, to the credential store.
+ */
+function useReauthPrompt() {
+  // REQ-NOTIFY-030: held by session, drawn for the followed one only — a focus change moves the prompt with it.
+  const [prompts, setPrompts] = useState<ReauthPrompts>(() => new Map());
+  useEffect(() => bridge.onReauthPrompt((p) => {
+    const { sessionId, prompt } = p as { sessionId: string; prompt: ReauthPromptState | null };
+    setPrompts((held) => applyReauthPublish(held, sessionId, prompt));
+  }), []);
+  // A reload or a new window draws the prompts that opened before it mounted.
+  useEffect(() => { queueMicrotask(() => { void bridge.command({ kind: 'reauth.read' }).then((r) => { if (r.ok) setPrompts((held) => seedReauthPrompts(held, (r.value as { prompts: ReauthPromptState[] }).prompts)); }); }); }, []);
+  const followed = useStore(replica, (s) => s.sessionId);
+  const prompt = reauthPromptFor(prompts, followed);
+  const onSubmit = useCallback(async (apiKey: string): Promise<ReauthSubmitResult> => {
+    if (prompt === null) return { ok: false, message: 'No re-authentication prompt is open.' };
+    const r = await bridge.command({ kind: 'reauth.submit', sessionId: prompt.sessionId, apiKey });
+    return r.ok ? r.value as ReauthSubmitResult : { ok: false, message: r.detail ? `${r.headline} ${r.detail}` : r.headline };
+  }, [prompt]);
+  const onDismiss = useCallback(async (): Promise<void> => {
+    if (prompt === null) return;
+    const r = await bridge.command({ kind: 'reauth.dismiss', sessionId: prompt.sessionId });
+    // A prompt main no longer holds is closed here too, so a stale one never stands on screen.
+    if (!r.ok) setPrompts((held) => applyReauthPublish(held, prompt.sessionId, null));
+  }, [prompt]);
+  return { prompt, onSubmit, onDismiss };
+}
+
 function useInitialization() {
   const [state, setState] = useState<InitializationStateView | null>(null);
   useEffect(() => bridge.onInitializationState((p) => setState(p as InitializationStateView)), []);
@@ -1257,6 +1288,7 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
    * same pushed state; both read, neither invents.
    */
   const initialization = useInitialization();
+  const reauth = useReauthPrompt();
   const projectSetup = useShellState((s) => s.projectSetup);
   const autoOpenProjectSetup = useShellState((s) => s.autoOpenProjectSetup);
   const closeProjectSetup = useShellState((s) => s.closeProjectSetup);
@@ -1285,7 +1317,10 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
       views={{
         overview: <Overview workspace={workspace} layout={layout} onLayout={onLayout} reducedMotion={reducedMotion} onListSessions={() => { void loadSessions(); }} onOpenSession={openSession} onNewSession={openStartDialog} libraryRevision={prompts.revision} />,
         // Part AL2: the terminal host around the Workspace — the row previews, the pop-out click and the toolbar control read it (REQ-SHELL-079/080/108).
-        workspace: <TerminalHostProvider host={terminalHost}><Workspace models={models} modelsLoaded={modelsLoaded} workspace={workspace} popOut={popOut} prompts={prompts} onOpenStash={() => setStashOpen(true)} groupTools={groupTools} layout={workspaceLayout} onLayout={onWorkspaceLayout} onOpenTrailer={openTrailer} /></TerminalHostProvider>,
+        workspace: <TerminalHostProvider host={terminalHost}><Workspace models={models} modelsLoaded={modelsLoaded} workspace={workspace} popOut={popOut} prompts={prompts} onOpenStash={() => setStashOpen(true)} groupTools={groupTools} layout={workspaceLayout} onLayout={onWorkspaceLayout} onOpenTrailer={openTrailer}
+          // REQ-NOTIFY-071 / ADR-0048: the followed session's re-authentication prompt (REQ-NOTIFY-030), drawn by the Workspace
+          // view in its own row beside the continuing run (OQ-181) — in flow, so no control of the window or the view is under it.
+          reauthPrompt={reauth.prompt !== null ? <ReauthPrompt key={reauth.prompt.sessionId} prompt={reauth.prompt} onSubmit={reauth.onSubmit} onDismiss={reauth.onDismiss} /> : null} /></TerminalHostProvider>,
         mission: <Mission workspace={workspace} popOut={popOut} />,
         git: <Git workspace={workspace} git={git} layout={gitLayout} onLayout={onGitLayout} />,
         library: <Library prompts={prompts} layout={libraryLayout} onLayout={onLibraryLayout} />,

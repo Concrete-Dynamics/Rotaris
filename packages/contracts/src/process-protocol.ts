@@ -105,6 +105,14 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   /** REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause (continue, double, cancel) or continue a manually paused session or one a crash left (PD-ORCH-005 clause 18); clause 6's `withoutPaused` declines the open iteration. */
   z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(['continue', 'double', 'cancel']), withoutPaused: z.boolean().optional() }),
   /**
+   * REQ-NOTIFY-070 / REQ-MONITOR-147: a first authentication failure's recovery — pin the configured fallback as the
+   * session's model override, keyed by the pair that failed, and restart the run with the same prompt
+   * (`Sessions.restartOnFallback`). Main sends it after classifying the run's failure (REQ-NOTIFY-060/067).
+   */
+  z.object({ kind: z.literal('session.restartOnFallback'), sessionId: z.string().min(1) }),
+  /** REQ-NOTIFY-078: re-authentication re-pins the primary model — the authentication pin on its pair taken back (`Sessions.repinPrimary`). */
+  z.object({ kind: z.literal('session.repinPrimary'), sessionId: z.string().min(1), provider: z.string().min(1), model: z.string().min(1) }),
+  /**
    * REQ-NOTIFY-069/072/074 (the 401 note's part C): the facts the authentication recovery dialog is drawn from — the model the
    * failed root call was addressed to, the active model, the configured models a restart can pin, and whether a last prompt
    * is recorded (`Sessions.authRecoveryFacts`). Main asks after classifying a run's failure (REQ-NOTIFY-060/067).
@@ -450,6 +458,10 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.resumed'), sessionId: z.string() }),
   z.object({ kind: z.literal('config.snapshot'), snapshot: ConfigSnapshotSchema }),
   z.object({ kind: z.literal('session.continued'), sessionId: z.string(), resumed: z.boolean(), messageLimit: z.number().int().nullable() }),
+  /** REQ-NOTIFY-078: whether the primary applies from the live run's next iteration or from the next run. */
+  z.object({ kind: z.literal('session.primaryRepinned'), sessionId: z.string(), applies: z.enum(['next-iteration', 'next-run']) }),
+  /** REQ-NOTIFY-070: the pair that failed and the fallback now pinned; the restart has begun. */
+  z.object({ kind: z.literal('session.fallbackRestarted'), sessionId: z.string(), failed: z.object({ provider: z.string(), model: z.string(), key: z.string().nullable() }), fallback: z.object({ provider: z.string(), model: z.string(), key: z.string() }) }),
   /** REQ-NOTIFY-072/074: `session.authRecovery`'s answer. A model's `key` is null where no `models:` entry produced it. */
   z.object({
     kind: z.literal('session.authRecovery'), sessionId: z.string(),

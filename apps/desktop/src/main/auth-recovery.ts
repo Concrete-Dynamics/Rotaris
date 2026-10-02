@@ -9,10 +9,11 @@ import type { AcknowledgementKind, AuthRecoveryMethod, AuthRecoveryModel, AuthRe
  *
  * Pure of Electron: the window is `present`/`close`, the run host is `request`, so a test drives it with plain objects.
  *
- * The automatic first-failure fallback restart (REQ-NOTIFY-070/071, the note's parts A and B) is not on this branch's base
- * (`origin/main`): every authentication failure the preconditions admit opens this dialog, a first one with a usable
- * fallback included, where the fallback is listed among the models to choose by hand. When part A lands it goes ahead of
- * this in `onAuthenticationFailure`'s caller and this dialog keeps REQ-NOTIFY-072's two cases.
+ * The automatic first-failure fallback restart (REQ-NOTIFY-070/071, the note's parts A and B, `auth-fallback.ts`) goes ahead
+ * of this in `onAuthenticationFailure`'s caller (`RunFailurePublisher`), so this dialog keeps REQ-NOTIFY-072's two cases: a
+ * second authentication failure of the session, or a first one with no usable fallback. ~~Every authentication failure the
+ * preconditions admit opens this dialog, a first one with a usable fallback included~~ — the reading this build proceeded
+ * under from parts C and D (2026-10-02) until parts A and B were merged beside them the same day.
  */
 export interface AuthRecoveryDeps {
   /** The run host's request path (`session.authRecovery`, `session.authRestart`). */
@@ -75,6 +76,17 @@ export class AuthRecovery {
   }
 
   /**
+   * REQ-NOTIFY-068: the pair failed authentication in the session with the credentials its provider holds — the model this
+   * dialog opens for, and the primary the automatic fallback restarted away from (`auth-fallback.ts`), so a dialog opened
+   * after the fallback failed too offers neither.
+   */
+  refuse(sessionId: string, model: { readonly provider: string; readonly model: string }): void {
+    const pairs = this.refused.get(sessionId) ?? new Set<string>();
+    pairs.add(pairOf(model));
+    this.refused.set(sessionId, pairs);
+  }
+
+  /**
    * REQ-NOTIFY-072: an authentication failure of `sessionId`'s run, its failure text `error`. Opens the recovery dialog, or
    * answers why it did not (REQ-NOTIFY-069's preconditions, or a run host that could not answer).
    */
@@ -92,11 +104,7 @@ export class AuthRecovery {
     const subject = reply.failed ?? reply.active;
     // REQ-NOTIFY-068: the pair that failed joins the session's refused pairs — the run host takes an unrecorded failed model
     // to be the active one, as the dialog's title does (REQ-NOTIFY-072).
-    if (subject !== null) {
-      const pairs = this.refused.get(sessionId) ?? new Set<string>();
-      pairs.add(pairOf(subject));
-      this.refused.set(sessionId, pairs);
-    }
+    if (subject !== null) this.refuse(sessionId, subject);
     const provider = subject?.provider ?? '';
     const how = provider === '' ? { method: 'configuration' as const, message: 'The provider that failed is not known, so it cannot be re-authenticated here.' } : this.deps.reauthentication(provider);
     const payload: AuthRecoveryPayload = {

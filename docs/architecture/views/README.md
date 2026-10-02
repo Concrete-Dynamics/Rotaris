@@ -45,6 +45,24 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**An authentication restart relaunches the failed run's own launch (REQ-NOTIFY-070, REQ-NOTIFY-074, REQ-ORCH-154; the
+401 note's part A, fourth repair round).** `Sessions.relaunchAfterAuthFailure` is the one restart path of the automatic
+fallback and of the recovery dialog: a run a plan decision launched (`Live.planLaunch`, kept with that run) is relaunched as
+that decision, any other by re-submitting the last prompt. The **runtime view**'s two restart paragraphs and the **process
+view**'s dialog entry say so. No package, edge, process, channel, command or store column changed.
+
+**The automatic fallback goes ahead of the recovery dialog (REQ-NOTIFY-068, REQ-NOTIFY-070, REQ-NOTIFY-072, REQ-NOTIFY-079;
+the 401 note's parts A and B merged beside C and D, 2026-10-02).** The two builds of REQ-NOTIFY-060's classes are one:
+`main/failure-class.ts` and `main/run-failure-notice.ts` (parts C and D) classify and word every ending, and the focus gate
+(`RunFailurePublisher`) asks the automatic half first for an authentication failure — `main/failure-recovery.ts`, renamed
+**`main/auth-fallback.ts`** and narrowed to the first failure's restart and the prompt (its notices and its classifier were
+the gate's twins and are gone) — and opens the recovery dialog only where that answers `dialog` (a second failure, or a first
+with no usable fallback); the dialog's opening closes every prompt, and the primary the fallback restarted away from joins
+the dialog's refused pairs (`AuthRecovery.refuse`). The run host's `session.restartOnFallback` refusals now carry the code
+main reads that by (`NO_USABLE_FALLBACK`). The **runtime view**'s classification paragraph, the **state-ownership** rows of
+the first-failure bookkeeping, the prompt and the refused pairs, and the **seams view** §1 (nineteen facets) and §2 say so.
+No package, edge, process, channel, command or store column changed.
+
 **A board run is settled against its own workspace (REQ-TRACE-477, REQ-TRACE-466, REQ-TRACE-476).** Main's run coordinator
 keeps each board run's workspace root and id; the run's ending, its waiting fact and the dispatch after its end address
 that workspace's service, and the run host's exit reaps every workspace that held a run. This repairs
@@ -110,6 +128,50 @@ hook), and notifies its listeners again with a new outcome, `parsed`, once it ha
 view**'s live-terminal paragraph says so. This repairs
 `a-closing-terminal-frame-blanks-the-preview-while-the-final-screen-is-parsed.md`. No package, edge, process, message kind,
 command or store column changed.
+
+**The re-authentication prompt yields to an expanded plan gate (REQ-NOTIFY-071, REQ-ORCH-153, ADR-0048, OQ-181; the 401
+note's part B, third repair round).** Beside an expanded gate the prompt is drawn as a bar (its title and its answers) so the
+gate keeps its three answers and the plan its height. The **seams view** §2 states the rule (in flow is not enough beside
+another panel open until answered: the one the run is not stopped on yields to one row of its answers) and the **runtime view** the placement. No package, edge, channel, command or
+store column changed.
+
+**A plan cycle's 401 is restarted on the fallback (REQ-NOTIFY-070, REQ-ORCH-153; the 401 note's part A, third repair
+round).** `Run.recordRootModelFailure` records the failed model with the run's last failure on every root turn, the plan
+cycle's included; the **runtime view** says so. No package, edge, channel, command or store column changed.
+
+**The re-authentication prompt is laid out in flow and overlays nothing (REQ-NOTIFY-071, ADR-0048, OQ-181; the part B
+second repair round).** AppShell's **`windowPanel`** slot is removed; the Workspace view draws the followed session's
+prompt (`WorkspaceView`'s `reauthPrompt`) as its own grid row, **`reauth`**, between the run header and the transcript,
+declared in every template of the view's grid. The **seams view** §2 states the rule this leaves (a non-modal surface open
+until answered is laid out in flow, never as an overlay) and the **runtime view** the placement, each with the
+falsified reading kept. No package, edge, channel, command or store column changed.
+
+**The re-authentication prompt follows the focused session and covers no window control (REQ-NOTIFY-030, REQ-NOTIFY-071,
+ADR-0048; the part B repair round).** Channel 13 now carries `{sessionId, prompt}` to every main window, a new renderer
+command **`reauth.read`** answers the open prompts for a window that mounts later, and each window draws the followed
+session's prompt alone. AppShell gains a **`windowPanel`** slot inside the rail-and-view region, where the prompt is
+drawn, below the title bar and the notice slot. The **seams view** §2, the **process view**, the **runtime view** and
+**state ownership** say so, each with the first build's reading kept beside the correction. No package, edge or store
+column changed.
+
+**The non-modal re-authentication prompt (REQ-NOTIFY-071/078, ADR-0048; the 401 note's part B).** A new main → renderer
+channel, **`reauth:prompt`** (channel 13), carries one session's prompt or null to the window that follows it; two
+renderer commands answer it, **`reauth.submit {sessionId, apiKey}`** and **`reauth.dismiss {sessionId}`** (facet
+`main/commands/reauth.ts`); and the run host gains **`session.repinPrimary`** → `session.primaryRepinned {applies}`
+(`Sessions.repinPrimary`, `Run.rebuildEntryFromMemory`). The **seams view** §2 counts thirteen channels and names this one
+the worked example of a window-level non-modal surface fed by main, §1 the seventeenth facet; the **process view** lists
+the channel, the commands and the request; **state ownership** the prompt main holds; the **runtime view** the switch
+back from the next iteration. No package, edge or store column changed.
+
+**A failed run is classified in REQ-NOTIFY-060's order, and a first 401 restarts on the fallback (REQ-NOTIFY-060/064/
+067/069/070, REQ-MONITOR-147, REQ-SESSION-026; the 401 note's part A).** Main's run-result handler hands a result carrying
+failure text to `main/failure-recovery.ts` (now `main/auth-fallback.ts`, below; classes in `main/failure-class.ts`), the one writer of a run failure's notice:
+REQ-NOTIFY-064's generic notice with `Return to the workspace`, REQ-NOTIFY-063's as before, and for a first authentication
+failure the new run-host request **`session.restartOnFallback {sessionId}`** → `session.fallbackRestarted {failed,
+fallback}` (`Sessions.restartOnFallback`: the `model_override` entry keyed by the failed pair, `cause: authentication`,
+and the last prompt re-submitted; a `cleared: true` entry takes a pin back). The **process view** lists the request, the
+**runtime view** the classes and the restart, **state ownership** main's first-failure bookkeeping. No package, edge,
+channel, command or store column changed.
 
 **The run-wide compression count reaches the record and the agent surfaces (REQ-MONITOR-086, REQ-MONITOR-281, OQ-159).**
 `SessionRecord` gains `compressions`: the live run's maintained aggregate while a run is live (`Run.compressions`), else the

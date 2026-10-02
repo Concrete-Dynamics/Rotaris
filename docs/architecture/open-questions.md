@@ -8875,7 +8875,7 @@ path shows REQ-PROVIDER-118/140's sentence and says to correct the key the model
 field, no save-and-retry control, and nothing directing the user to a shell or a terminal. The first path (another model) is
 unaffected. Device-code and browser providers read `unavailable` and say their flow is not provided by this build (the flows
 are owed, `packages/providers/src/catalogue.ts`); that is a gap of the build, not of the specification, and is recorded on
-[the 401 note](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md).
+[the 401 note](../defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md).
 
 **What a ruling decides.** Whether such a provider is offered a key field at all — writing the key into the configuration
 the model reads (a write into the user's project files, which REQ-NOTIFY-047 keeps out of notice actions but not out of a
@@ -8903,3 +8903,112 @@ re-run, one unit after another, until a person holds it or the queue is stopped.
 **What a ruling decides.** Whether an iteration-limited run ends `cancelled` into `ready`, or `failed` into `blocked` with
 a `run-failure` blocker (whose resume provisions the next unit), as a stop by the user has since R-067; and, if it rests
 in `ready`, whether automatic scheduling may pick it up again without bound.
+
+**OQ-181 — Where does REQ-NOTIFY-071's prompt stand "beside the continuing run", and is it drawn while the window shows
+another view?** *(REQ-NOTIFY-071, "a successful fallback restart opens a non-modal re-authentication prompt beside the
+continuing run"; ADR-0048's non-modal window-level level, "an in-window panel that does not trap focus and leaves the rest
+navigable"; REQ-SHELL-022's minimum; REQ-CHAT-010's 180 px transcript floor; REQ-NOTIFY-030. Raised 2026-10-02 by the
+401 note's part B, second repair round,
+[`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md),
+as OQ-180, and renumbered OQ-181 at the branch's merge beside the note's parts C and D (2026-10-02) because `origin/main` had
+taken OQ-179 meanwhile and the branch's own OQ-179 took OQ-180 (since renumbered OQ-182, at the branch's third merge,
+because `origin/main` had taken OQ-180). Open.)*
+
+The requirement places the prompt by the run, not by the window, and the level ADR-0048 gives it requires the rest of the
+window to stay navigable while it is open — and it stays open until it is answered. Two overlay placements were built
+and both covered controls in the built app: `fixed` at the window's top corner (the title bar's Sessions, minimise,
+maximise, close and the notice's dismissal), then `absolute` at the top corner of the rail-and-view region (at the
+1000x680 minimum the run header's model and reasoning switches and Compress context; with a key field, the composer's
+submit; in the other views each one's top-right controls). Any overlay that stays open covers something at some size.
+The specification does not say which region "beside the continuing run" is, nor whether the prompt is drawn while the
+window shows a view other than the one the run is shown in.
+
+**What the build proceeds under** (`WorkspaceView`'s `reauthPrompt` row, `packages/ui/src/shell.css`):
+- the prompt is drawn **in flow in the Workspace view**, the view that shows the run, as its own row of the view's grid
+  between the run header and the transcript (the plan gate's kind of place, REQ-SHELL-168). It overlays nothing at any
+  window size: the transcript keeps REQ-CHAT-010's floor and the prompt takes what is left, scrolling when that is less
+  than it needs with its answers pinned to its floor ~~— at every size~~ (*corrected 2026-10-02, the third repair round*:
+  beside an EXPANDED plan gate the transcript is not drawn and the gate's row has no floor, and the prompt, sized first,
+  left the gate 42 px with its three answers unreachable at 1000x680. There the prompt **yields to the gate** as the
+  transcript does, one action away: it is drawn as a bar — its title and its answers on one row — and its sentence, the
+  provider's words and the key's hint are drawn again when the gate is collapsed or answered; the gate, the run's stop
+  and the reading area (REQ-ORCH-153, PD-ORCH-002 revision 2), takes the rest. A ruling may also decide whether REQ-NOTIFY-071's
+  quote may be withheld from view that way while a plan awaits a decision);
+- it is **not drawn while another view is shown**. The window keeps holding it (by session, REQ-NOTIFY-030) and draws it
+  again when the Workspace view returns; the run's acknowledgement (REQ-NOTIFY-070) is the window-wide signal, shown in
+  any view. A key half-typed into the field is not kept across a view change.
+
+**What a ruling decides.** Whether "beside the continuing run" means the Workspace view's run column (as built), a region
+of the window shown in every view (which then has to take space from every view at REQ-SHELL-022's minimum), or a
+separate window; and whether a prompt the user has not answered should be reachable from the other views. *Added at the
+fourth repair round (2026-10-02, the verifier's optional findings):* in the bar beside an expanded plan gate the only words
+drawn are its title, "Re-authenticate <provider>", and its answers — so while a plan awaits a decision the bar names
+neither the primary model that failed nor that the run continues on the fallback (REQ-NOTIFY-071's two statements), and
+for a provider re-authenticated elsewhere — a device-code or browser provider, whose method this build does not provide,
+or one whose key the model configuration carries — it does not say that the method is unavailable here: those sentences,
+with the provider's quoted error, are in the document and drawn again when the gate is collapsed or answered. A ruling
+may decide whether any of them must stay drawn in the bar (each one taken from the height the plan, the largest part of
+the gate under PD-ORCH-002, keeps at REQ-SHELL-022's minimum).
+
+**OQ-182 — What is REQ-NOTIFY-070's restart "with the same prompt", what does "the fallback bookkeeping is cleared" take back,
+and how long does "the first authentication failure of a session" last?** *(REQ-NOTIFY-070, "the run restarts with the
+same prompt. Where the restart cannot begin, the fallback bookkeeping is cleared and the generic failure notice is
+published instead"; REQ-NOTIFY-069, "a recorded last prompt"; REQ-NOTIFY-045, whose retry "resubmits the current composer
+draft, or the last submitted prompt"; REQ-NOTIFY-072/075, "a second authentication failure"; REQ-SESSION-026. Raised
+2026-10-02 by the 401 note's part A,
+[`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md),
+as OQ-177, renumbered OQ-179 at its first merge because `origin/main` had taken OQ-177 and OQ-178 meanwhile, and renumbered
+OQ-180 at its second (2026-10-02, beside the note's parts C and D) because `origin/main` had taken OQ-179 meanwhile, part D's
+question above, and renumbered OQ-182 at its third (2026-10-02) because `origin/main` had taken OQ-180 meanwhile (bundle
+`fin9-queue-dispatch-and-disclosure`'s question above) and the branch's own OQ-181 kept its number; the branch's commit
+subjects say OQ-177, and those of its fourth repair round OQ-180. Open.)*
+
+Three things the requirements leave to the build:
+
+- **The restart.** REQ-NOTIFY-070 does not say whether restarting "with the same prompt" records the prompt again or
+  continues the failed run's request without a new user turn, nor what becomes of the prompt's image attachments.
+- **The clearing.** Where the restart cannot begin, "the fallback bookkeeping is cleared". The fallback was pinned before
+  the restart was tried (a run resolves its model at start); the requirement does not say whether that pin stands.
+- **The session's first failure.** "The first authentication failure of a session" has no stated lifetime: across an
+  application restart, the session is the same session, but nothing says the bookkeeping is durable.
+
+**What the build proceeds under** (`Sessions.restartOnFallback`, `apps/desktop/src/main/auth-fallback.ts` — `failure-recovery.ts` until the merge beside parts C and D):
+- the restart **re-submits the last user prompt as a new user row** (`Sessions.prompt`), so the transcript shows it sent
+  twice, preceded by a system row naming the model that failed and the fallback; the prompt's text is re-sent and its
+  attachments are not (the row keeps only their metadata, REQ-CHAT-170);
+- *since the fourth repair round (2026-10-02)*, **a run a plan decision launched is relaunched as that decision**
+  (`Sessions.relaunchAfterAuthFailure`, the dialog's restarts included): approve carries the plan as the user left it
+  again, revise starts the same further cycle with the plan as it stood and the changes stated (REQ-ORCH-154), and no
+  prompt is re-submitted — a decision is no prompt. Re-submitting the last user row there had opened a fresh cycle from the
+  original prompt and dropped the revise's changes and the plan they revised. A relaunched approval whose run abandoned
+  its task appends the request again, as a re-submitted prompt does; a relaunched revise appends none, its work still
+  pending. The decision is kept in memory with the run it launched, as the failed model is;
+- where the restart cannot begin, **the pin is taken back** as well — a `model_override` entry carrying `cleared: true` —
+  so the session stays on the model it had and the generic notice says what happened;
+- the "fallback attempted" bookkeeping lives **in main for the life of the process**. The pin itself is durable, so after
+  a relaunch the session runs on the fallback, and a failure there is a failure of the fallback, which is not tried again
+  (REQ-NOTIFY-075's reading) — the dialog's case.
+- Because the restart is a further run of the session, its todo still holds the failed run's task as abandoned
+  (REQ-ORCH-074), so a restart that succeeds ends "The run completed with failures: 1 completed, 1 abandoned" — seen in
+  `resilience-proof`'s `auth-fallback` run on 2026-10-02. The build leaves it so: the failed run's task did fail.
+- The pin is keyed by the **pair** that failed (`provider|model`), as a wait's choice is, so every agent of the session on
+  that pair — a child on the primary model included — moves to the fallback; REQ-NOTIFY-070 says "that session's model
+  override", which is the one session-wide override REQ-SESSION-026 names.
+- *Since the merge beside the note's parts C and D (2026-10-02):* **a first failure with no usable fallback spends the
+  session's first failure too.** It opens the recovery dialog (REQ-NOTIFY-072's "a first one with no usable fallback"), and
+  the session's next authentication failure — a model chosen by hand in the dialog, or a later prompt after the dialog was
+  cancelled — is "a second authentication failure" and the dialog's again, even where a usable fallback has been configured
+  meanwhile; only REQ-NOTIFY-078's submission, or a restart that could not begin, makes the next failure the first again
+  (`auth-fallback.ts`'s `spent`).
+- *Since the same merge:* **a session not on screen is restarted when it is focused.** REQ-NOTIFY-032 holds an unfocused
+  session's class publication until a main window follows it, and the automatic restart is the authentication class's
+  recovery, so it waits with the rest (`RunFailurePublisher`): the session stays failed under REQ-NOTIFY-032's warning, and
+  its restart, its acknowledgement and its prompt arrive with the focus change (REQ-NOTIFY-030). The dialog's restarts
+  (`Sessions.restartAfterAuthFailure`, parts C and D) re-submit the prompt as this one does.
+
+**What a ruling decides.** Whether the restart appends a user turn or continues the failed request (and so whether the
+failed run's task stays abandoned beside the restart's); whether attachments are re-sent; whether a restart that could not begin leaves the pin standing; whether the first-failure bookkeeping outlives
+the application; whether the pin covers every agent on the failed pair or the entry agent alone; whether a first failure
+with no usable fallback spends the session's automatic fallback; whether a session not on screen is restarted at once,
+in the background, or when it is focused; and whether "the same prompt" of a run a plan decision launched is that decision
+(as built) or the session's last prompt.

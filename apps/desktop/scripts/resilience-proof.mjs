@@ -12,8 +12,10 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
  * (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..093/263), and since OQ-173 that a wait the run imposes is not a stall
  * (REQ-MONITOR-117..119), and since OQ-177 that an entry switch after a ladder move applies as its row says (REQ-MONITOR-142).
- * Fourteen scenarios (since 2026-10-02, `fatal` and `reauth` the authentication recovery's, `generic` REQ-NOTIFY-064's notice),
- * each asserting the store's events, issues,
+ * Seventeen scenarios (since 2026-10-02 the authentication class's: `fatal` and `reauth` the recovery dialog's, `generic`
+ * REQ-NOTIFY-064's notice, `auth-fallback` the first failure's automatic fallback and its re-authentication prompt,
+ * `auth-fallback-dialog` the two together, `auth-fallback-revise` a failed revise cycle restarted as the same revise), each
+ * asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
  *
@@ -58,7 +60,7 @@ function scenario(name, agentsYaml, opts = {}) {
   writeFileSync(join(workspace, 'README.md'), '# proof\n');
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
     'models:',
-    '  alpha: { provider: scripted, model_id: alpha }',
+    `  alpha: { provider: ${opts.alphaProvider ?? 'scripted'}, model_id: alpha }`,
     '  beta: { provider: scripted-b, model_id: beta }',
     ...(opts.models ?? []),
     ...['small_model', 'medium_model', 'large_model'].map((slot) => `${slot}: ${opts.tier ?? 'alpha'}`),
@@ -597,6 +599,10 @@ await scenarioRun('fatal', async () => {
   expect(JSON.stringify(calls) === JSON.stringify(['scripted/alpha', 'scripted/alpha', 'scripted-b/beta', 'openai/gpt-4o']), `the calls are not one per run, on the model each run was given: ${JSON.stringify(calls)}`);
   const error = events[0]?.result?.error ?? null;
   expect(typeof error === 'string' && /HTTP 401/.test(error), `the result does not carry the 401: ${JSON.stringify(events[0])}`);
+  // REQ-NOTIFY-070 ahead of REQ-NOTIFY-072: the automatic fallback was asked first and found none usable — `fallback_model`
+  // is unset, so it resolves to small_model (REQ-CONFIG-067), alpha, the model that failed — so the dialog's case.
+  expect(/authentication recovery: session \S+ has no usable fallback \(.*fallback model .*is the model that failed/.test(r.log), `the automatic fallback was not asked first, or did not find "no usable fallback": see fatal.log`);
+  expect(!/re-authentication prompt opened/.test(r.log), 'a re-authentication prompt opened although no restart happened');
   // REQ-NOTIFY-072/073/074: the modal dialog, 560 px wide, titled for the failed model, the error in the failure colour, beta listed.
   expect(v.first.role === 'alertdialog' && v.first.modal === 'true' && v.first.title === 'Authentication failed for alpha', `the dialog is not titled for alpha: ${JSON.stringify(v.first)}`);
   expect(v.first.width === 560, `the dialog is not 560 px wide: ${v.first.width}`);
@@ -729,6 +735,226 @@ await scenarioRun('generic', async () => {
   expect(v.notice.action === 'Back to the workspace' && v.notice.actionKind === 'open-view' && v.back === 'workspace' && v.away !== 'workspace', `the action does not return to the workspace view: ${JSON.stringify({ notice: v.notice, away: v.away, back: v.back })}`);
   expect(v.windows.length === 0, `a recovery dialog opened for a failure that is not an authentication failure: ${JSON.stringify(v.windows)}`);
   results.generic = { status: row.execution_status, error, notice: v.notice, away: v.away, back: v.back, elapsedMs: r.elapsedMs };
+});
+
+// 11. `auth-fallback` — REQ-NOTIFY-070 / REQ-MONITOR-147 / REQ-SESSION-026: a first 401 with `fallback_model: beta` configured pins beta as the
+// session's model override (keyed by the pair that failed), acknowledges both models, and restarts the run with the same
+// prompt on beta, which answers. The acknowledgement is transient (REQ-NOTIFY-020's lifetime), so the wait expression
+// writes its text onto the body the moment it is drawn and the probe reads it back from there.
+//
+// Two launches, because the prompt's placement is a question of size: the window as it opens on this host (1600x1000,
+// alpha on `scripted`, which no credential store holds, so the shortest prompt — no key field) and REQ-SHELL-022's
+// 1000x680 minimum with alpha on `deepseek`, an API-key provider, so the prompt carries its key field and hint, and is
+// taller by them. The second form of the placement (absolute in the rail-and-view region) passed the first launch
+// and covered the run header's switches and the composer's submit at the second (the verifier's probe, 2026-10-02).
+//
+// A third launch in plan mode (`runtime.run_start_mode: plan`, REQ-ORCH-152/153): the 401 is the plan cycle's turn, which
+// recorded no failed model, so the session was never restarted on the fallback and the generic notice was published
+// (the verifier's reproduction, 2026-10-02). Restarted, the cycle runs again on beta and parks at the gate, EXPANDED beside
+// the open prompt at the minimum size — where the prompt, sized before the gate's flexible row, had left the gate 42 px and
+// its three answers unreachable. Each gate answer and each prompt control must be the element under its own centre, the
+// prompt drawn as its bar (its words not drawn), and the plan the largest part of the gate (PD-ORCH-002 revision 2).
+const authVariants = [
+  { name: 'auth-fallback', provider: 'scripted', method: 'none', resize: null, plan: false },
+  { name: 'auth-fallback-minimum', provider: 'deepseek', method: 'api-key', resize: '1000x680', plan: false },
+  { name: 'auth-fallback-plan', provider: 'deepseek', method: 'api-key', resize: '1000x680', plan: true },
+];
+await scenarioRun('auth-fallback', async () => {
+  // REQ-NOTIFY-071 / ADR-0048: with the prompt open the composer is still the element under its own centre, takes the
+  // focus and is enabled — the prompt traps nothing and covers nothing it leaves usable. Written onto the body for the probe.
+  const composerUsable = "(() => { const ta = document.querySelector('textarea.composer__input'); if (!ta) return false; const r = ta.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); ta.focus(); document.body.dataset.composerUsable = [hit === ta || ta.contains(hit) || (hit !== null && hit.closest('.slash-field') !== null), document.activeElement === ta, !ta.disabled, !(document.querySelector('[data-testid=\"reauth-prompt\"]')?.hasAttribute('aria-modal') ?? true)].join(':'); return true; })()";
+  // ADR-0048 again: the prompt stays open until answered, so it may overlay NO control — not the window's own (every
+  // title-bar and notice-slot button is the element under its own centre, `chromeUsable`), and not the view's: every
+  // control in the window that is on screen and outside the prompt is tested at its centre, and `underPrompt` lists those
+  // whose centre is the prompt's — it must be empty. The prompt's own controls are tested the same way (`promptControls`):
+  // its answers never scroll away, whatever the size. `size` and `promptRect` say what was measured.
+  const chromeUsable = "(() => { const p = document.querySelector('[data-testid=\"reauth-prompt\"]'); if (p === null) return false; const label = (b) => (b.getAttribute('aria-label') || b.textContent || b.title || b.getAttribute('data-testid') || b.tagName).trim().slice(0, 60); const centre = (b) => { const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height }; }; const centreHit = (b) => { const c = centre(b); const hit = document.elementFromPoint(c.x, c.y); return hit === b || b.contains(hit) ? 'ok' : (p.contains(hit) ? 'UNDER-PROMPT' : 'covered'); }; const onScreen = (b) => { const c = centre(b); return c.w > 0 && c.h > 0 && c.x >= 0 && c.y >= 0 && c.x < innerWidth && c.y < innerHeight; }; const chrome = [...document.querySelectorAll('.title-bar button, .notice-slot button')]; const controls = [...document.querySelectorAll('button, input, select, textarea, a[href], [role=\"separator\"][tabindex], [tabindex]:not([tabindex=\"-1\"])')].filter(onScreen); document.body.dataset.chromeUsable = chrome.map((b) => label(b) + '=' + centreHit(b)).join('|'); document.body.dataset.underPrompt = controls.filter((b) => !p.contains(b) && centreHit(b) === 'UNDER-PROMPT').map(label).join('|'); document.body.dataset.outsideControls = String(controls.filter((b) => !p.contains(b)).length); document.body.dataset.promptControls = [...p.querySelectorAll('button, input')].map((b) => label(b) + '=' + (onScreen(b) ? centreHit(b) : 'off-screen')).join('|'); const r = p.getBoundingClientRect(); document.body.dataset.promptRect = [r.left, r.top, r.width, r.height].map(Math.round).join(','); document.body.dataset.size = innerWidth + 'x' + innerHeight; return chrome.length > 0; })()";
+  // REQ-ORCH-153 beside the prompt: the gate's three answers are each the element under their own centre (`gateAnswers`).
+  const gateUsable = "(() => { const g = document.querySelector('[data-testid=\"plan-gate\"]'); if (g === null) return false; const ids = ['plan-approve', 'plan-revise', 'plan-cancel']; document.body.dataset.gateAnswers = ids.map((id) => { const b = document.querySelector('[data-testid=\"' + id + '\"]'); if (b === null) return id + '=absent'; const r = b.getBoundingClientRect(); const x = r.left + r.width / 2; const y = r.top + r.height / 2; if (!(r.width > 0 && r.height > 0 && y >= 0 && y < innerHeight)) return id + '=off-screen'; const hit = document.elementFromPoint(x, y); return id + '=' + (hit === b || b.contains(hit) ? 'ok' : 'not-hit'); }).join('|'); const r = g.getBoundingClientRect(); document.body.dataset.gateRect = [r.left, r.top, r.width, r.height].map(Math.round).join(','); document.body.dataset.gateCollapsed = String(g.classList.contains('plan-gate--collapsed')); const d = document.querySelector('.reauth-prompt__detail'); document.body.dataset.promptDetailDrawn = String(d !== null && getComputedStyle(d).display !== 'none'); document.body.dataset.gateChildren = [...g.children].map((c) => c.className.split(' ')[0] + '=' + Math.round(c.getBoundingClientRect().height)).join('|'); return true; })()";
+  const ackSeen = "(document.body.dataset.ackSeen ||= [...document.querySelectorAll('[data-testid=\"acknowledgement\"]')].map((a) => a.textContent).find((t) => t.includes('Authentication failed')) ?? '')";
+  results.authFallback = {};
+  for (const v of authVariants) {
+    const s8 = scenario(v.name, v.plan ? ['  run_start_mode: plan'] : [], { fallback: 'beta', alphaProvider: v.provider });
+    const primary = `${v.provider}/alpha`;
+    const r = await launch(v.name, s8, {
+      // `:only=<provider>`: alpha's provider refuses the key, beta's does not; the restarted root takes its script from the
+      // first step again, so the fault is scoped to the provider rather than to the step.
+      ROTARIS_SCRIPT: `fail:401:only=${v.provider}`, ROTARIS_CAPTURE_PROMPT: 'bad key, then the fallback',
+      ...(v.resize === null ? {} : { ROTARIS_CAPTURE_RESIZE: `${v.resize}@200` }),
+      ROTARIS_CAPTURE_WAIT: `js:${ackSeen} !== '' && ${v.plan ? `document.querySelector('[data-testid="plan-gate-plan"]') !== null` : `document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed'`} && document.querySelector('[data-testid="reauth-prompt"]') !== null${v.resize === null ? '' : ` && innerWidth + 'x' + innerHeight === '${v.resize}'`} && ${composerUsable} && ${chromeUsable}${v.plan ? ` && ${gateUsable}` : ''}`, ROTARIS_CAPTURE_WAIT_MS: '90000',
+      ROTARIS_CAPTURE_PROBE: 'body;;.notice-slot;;[data-testid="reauth-prompt"];;[data-action="reauth-keep"];;[data-testid="reauth-error"]', ROTARIS_CAPTURE_AFTER_MS: '800',
+    }, { timeout: 180_000 });
+    const db = open(s8);
+    const row = session(db);
+    const list = names(db, row.session_id);
+    const users = db.prepare("SELECT body FROM transcript_rows WHERE session_id = ? AND kind = 'user' ORDER BY row_index").all(row.session_id).map((u) => u.body);
+    const rows = systemRows(db, row.session_id);
+    // The first run's result carries the provider's failure text, which the prompt quotes (REQ-NOTIFY-071).
+    const error0 = db.prepare("SELECT payload FROM events WHERE session_id = ? AND kind = 'result'").all(row.session_id).map((e) => JSON.parse(e.payload)?.result?.error).find((e) => typeof e === 'string') ?? null;
+    db.close();
+    expect(row.execution_status === (v.plan ? 'awaiting_plan_decision' : 'completed'), `${v.name}: the restarted run did not ${v.plan ? 'park at the plan gate' : 'complete'} on the fallback: ${JSON.stringify(row)}`);
+    expect(typeof error0 === 'string' && /HTTP 401/.test(error0), `${v.name}: the first run's result does not carry the 401: ${error0}`);
+    const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
+    expect(calls.length === 2 && calls[0].model === primary && calls[1].model === 'scripted-b/beta', `${v.name}: the 401 was not followed by one call on the fallback: ${JSON.stringify(calls)}`);
+    const pin = list.find((t) => t.name === 'model_override');
+    const meta = pin ? JSON.parse(pin.metadata) : null;
+    expect(meta !== null && meta.provider === v.provider && meta.model === 'alpha' && meta.model_key === 'beta' && meta.cause === 'authentication', `${v.name}: the fallback was not pinned keyed by the pair that failed: ${pin?.metadata}`);
+    expect(users.length === 2 && users[0] === users[1] && users[0] === 'bad key, then the fallback', `${v.name}: the run did not restart with the same prompt: ${JSON.stringify(users)}`);
+    expect(rows.some((b) => b.startsWith(`Authentication failed on ${primary}`) && b.includes('beta')), `${v.name}: no system row names the restart on the fallback: ${rows.join(' | ')}`);
+    const body = probes(r.log, 'probe').find((p) => p.selector === 'body')?.found[0];
+    const ack = body?.data['data-ack-seen'] ?? '';
+    expect(ack.includes(`Authentication failed on ${primary}`) && /scripted-b\/beta/.test(ack), `${v.name}: the acknowledgement did not name both models: ${JSON.stringify(ack)}`);
+    const notice = probes(r.log, 'probe').find((p) => p.selector === '.notice-slot')?.found[0];
+    expect(notice === undefined || !/The run failed|Authentication failed\b(?! on)/.test(notice.text), `${v.name}: the restarted run left a failure notice on screen: ${JSON.stringify(notice)}`);
+    // REQ-NOTIFY-070 ahead of REQ-NOTIFY-072: the first failure with a usable fallback restarts and opens no recovery dialog.
+    expect(!/authentication recovery: the dialog is open for session/.test(r.log), `${v.name}: the recovery dialog opened for a first failure with a usable fallback: see ${v.name}.log`);
+    // REQ-NOTIFY-071: the non-modal prompt beside the continuing run — the primary named, the fallback in use, the provider's
+    // error quoted, the dismissal that keeps the fallback offered — and, ADR-0048, no modality: no aria-modal, the composer usable.
+    const prompt = probes(r.log, 'probe').find((p) => p.selector === '[data-testid="reauth-prompt"]')?.found[0];
+    expect(prompt !== undefined, `${v.name}: no re-authentication prompt was on screen after the restart`);
+    expect(prompt.text.includes(`${primary} could not authenticate`) && /continues on the fallback model scripted-b\/beta/.test(prompt.text) && /from the next iteration/.test(prompt.text), `${v.name}: the prompt does not say REQ-NOTIFY-071's three things: ${prompt.text}`);
+    const quoted = probes(r.log, 'probe').find((p) => p.selector === '[data-testid="reauth-error"]')?.found[0]?.text ?? '';
+    const keep = probes(r.log, 'probe').find((p) => p.selector === '[data-action="reauth-keep"]')?.found[0]?.text ?? '';
+    expect(quoted === error0 && keep === 'Keep the fallback', `${v.name}: the prompt does not quote the provider's error or offer the dismissal: ${JSON.stringify({ quoted, keep })}`);
+    // `scripted` is no provider the credential store holds, so the prompt offers switching back and no key field; `deepseek`
+    // signs in with an API key, so the prompt offers the key field (REQ-NOTIFY-078).
+    expect(prompt.data['data-method'] === v.method, `${v.name}: the prompt does not offer what this provider gets (${v.method}): ${JSON.stringify(prompt.data)}`);
+    const size = body?.data['data-size'] ?? '';
+    if (v.resize !== null) expect(size === v.resize, `${v.name}: the window was not measured at ${v.resize}: ${size}`);
+    const composer = body?.data['data-composer-usable'] ?? '';
+    expect(composer === 'true:true:true:true', `${v.name}: the composer is not usable behind a non-modal prompt (hit:focused:enabled:no-aria-modal = ${composer})`);
+    // Plan mode: the gate stands EXPANDED beside the open prompt, and each of its three answers is reachable where it stands.
+    const gateAnswers = body?.data['data-gate-answers'] ?? '';
+    if (v.plan) {
+      expect(body?.data['data-gate-collapsed'] === 'false', `${v.name}: the plan gate was not expanded beside the prompt: ${JSON.stringify(body?.data)}`);
+      expect(gateAnswers === 'plan-approve=ok|plan-revise=ok|plan-cancel=ok', `${v.name}: a plan-gate answer is not reachable beside the prompt at ${body?.data['data-size']} (gate ${body?.data['data-gate-rect']}, prompt ${body?.data['data-prompt-rect']}): ${gateAnswers}`);
+      // Beside the expanded gate the prompt is its bar: the provider's words are in the document (asserted above) but not drawn.
+      expect(body?.data['data-prompt-detail-drawn'] === 'false', `${v.name}: the prompt is drawn whole beside the expanded gate, not as its bar: ${JSON.stringify(body?.data)}`);
+      // PD-ORCH-002 revision 2, read as plan-gate-proof reads it: the plan's own text is taller than every other part of the
+      // gate. The prompt sized before the gate's flexible row left the gate a strip whose answers fit and whose plan did not.
+      const children = (body?.data['data-gate-children'] ?? '').split('|').filter((c) => c !== '').map((c) => { const [name, h] = c.split('='); return { name, h: Number(h) }; });
+      const tallest = children.reduce((a, b) => (b.h > a.h ? b : a), { name: '', h: -1 });
+      expect(/plan-gate__(preview-wrap|plan)/.test(tallest.name), `${v.name}: beside the prompt the plan is not the largest element of the gate at ${body?.data['data-size']} (gate ${body?.data['data-gate-rect']}, prompt ${body?.data['data-prompt-rect']}): ${body?.data['data-gate-children']}`);
+    }
+    const chrome = body?.data['data-chrome-usable'] ?? '';
+    const chromeControls = chrome.split('|').filter((c) => c !== '');
+    expect(chromeControls.length >= 4 && chromeControls.every((c) => c.endsWith('=ok')) && chromeControls.some((c) => c.startsWith('Close')), `${v.name}: a title-bar or notice control is not usable beside the non-modal prompt: ${chrome}`);
+    // The placement itself: no control outside the prompt has the prompt at its centre, and the prompt's own controls are
+    // usable where they stand (the key field and both answers, which never scroll away).
+    const underPrompt = body?.data['data-under-prompt'] ?? '';
+    const outside = Number(body?.data['data-outside-controls'] ?? '0');
+    expect(outside >= 10 && underPrompt === '', `${v.name}: the prompt overlays ${underPrompt === '' ? 'nothing, but too few controls were tested' : 'controls'} at ${size} (${outside} tested): ${underPrompt}`);
+    const own = (body?.data['data-prompt-controls'] ?? '').split('|').filter((c) => c !== '');
+    const expectedOwn = v.method === 'api-key' ? 3 : 2;
+    expect(own.length === expectedOwn && own.every((c) => c.endsWith('=ok')), `${v.name}: the prompt's own controls are not all usable at ${size}: ${own.join('|')}`);
+    results.authFallback[v.name] = { size, status: row.execution_status, calls, pin: meta, acknowledgement: ack, users, prompt: prompt.text, method: prompt.data['data-method'], promptRect: body?.data['data-prompt-rect'] ?? '', composerUsable: composer, chromeUsable: chrome, outsideControlsTested: outside, underPrompt, promptControls: own.join('|'), ...(v.plan ? { gateAnswers, gateRect: body?.data['data-gate-rect'] ?? '', gateChildren: body?.data['data-gate-children'] ?? '' } : {}), png: r.png, elapsedMs: r.elapsedMs };
+  }
+});
+
+// 12. `auth-fallback-dialog` — the automatic fallback and the recovery dialog together (the merge of the 401 note's four
+// parts): a first 401 with `fallback_model: beta` restarts on beta and opens the re-authentication prompt; beta's provider
+// refuses too (`fail:401:only=scripted+scripted-b`), a second authentication failure, which opens REQ-NOTIFY-072's dialog
+// naming beta (REQ-NOTIFY-075: the fallback is not tried again) and closes the prompt (REQ-NOTIFY-079); the dialog offers
+// neither alpha — the automatic fallback's primary, refused with the credentials it still has — nor beta (REQ-NOTIFY-068);
+// gpt-4o is chosen and the run completes on it. Driven, because the dialog is its own window.
+const s13 = scenario('auth-fallback-dialog', [], { fallback: 'beta' });
+await scenarioRun('auth-fallback-dialog', async () => {
+  const PROMPT_OPEN = `document.querySelector('[data-testid="reauth-prompt"]')?.getAttribute('data-session') ?? null`;
+  const r = await drivenLaunch('auth-fallback-dialog', s13, { ROTARIS_SCRIPT: 'fail:401:only=scripted+scripted-b' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    await step('the first-launch notice', until(() => d.probe('.notice-slot'), (found) => Array.isArray(found) && /No model provider is authenticated yet/.test(found[0]?.text ?? ''), { timeoutMs: 30_000, what: 'the first-launch notice', signal }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('bad keys on both providers', { enter: true }));
+    await step('the recovery dialog', until(() => recoveryWindows(d), (w) => w.length === 1 && w[0].visible, { timeoutMs: 60_000, what: 'the recovery window', signal }));
+    await step('the dialog drawn', d.waitFor('[data-testid="auth-recovery-models"]', { window: 'auth-recovery', timeoutMs: 30_000 }));
+    const dialog = await step('the dialog read', d.send('eval', { expression: RECOVERY_READING, window: 'auth-recovery' }));
+    const promptWhileOpen = await step('the prompt behind it', d.eval(PROMPT_OPEN));
+    await step('gpt-4o', d.click('[role="radio"][data-value="gpt-4o"]', { window: 'auth-recovery' }));
+    await step('Retry on gpt-4o', d.click('[data-action="retry"]', { window: 'auth-recovery' }));
+    const done = await step('the run completed', until(() => { const db = open(s13); try { return session(db); } finally { db.close(); } }, (row) => row?.execution_status === 'completed', { timeoutMs: 90_000, what: 'the restarted run completing', signal }));
+    const closedAtEnd = await step('no dialog at the end', recoveryWindows(d));
+    return { dialog, promptWhileOpen, done, closedAtEnd };
+  });
+  const db = open(s13);
+  const row = session(db);
+  const overrides = names(db, row.session_id).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata));
+  db.close();
+  const v = r.value;
+  const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator').map((c) => c.model);
+  expect(JSON.stringify(calls) === JSON.stringify(['scripted/alpha', 'scripted-b/beta', 'openai/gpt-4o']), `the calls are not alpha, the automatic fallback beta, then the dialog's gpt-4o: ${JSON.stringify(calls)}`);
+  // REQ-NOTIFY-070 then REQ-NOTIFY-071: the first failure restarted on beta and opened the prompt; REQ-NOTIFY-072/075: the
+  // second opened the dialog naming beta; REQ-NOTIFY-079: the dialog's opening closed the prompt.
+  const at = (re) => r.log.search(re);
+  const order = [at(/pinned scripted-b\/beta in place of scripted\/alpha/), at(/re-authentication prompt opened for session/), at(/authentication recovery: the dialog is open for session \S+ \(scripted-b\/beta failed/), at(/re-authentication prompt\(s\) closed \(the recovery dialog opened/)];
+  expect(order.every((n) => n >= 0) && order.every((n, k) => k === 0 || n > order[k - 1]), `the restart, the prompt, the dialog and the prompt's closing are not in that order: ${JSON.stringify(order)} (see auth-fallback-dialog.log)`);
+  expect(v.dialog.title === 'Authentication failed for beta', `the dialog does not name the fallback that failed: ${JSON.stringify(v.dialog.title)}`);
+  expect(v.promptWhileOpen === null, `the re-authentication prompt stayed drawn beside the recovery dialog (REQ-NOTIFY-079): ${v.promptWhileOpen}`);
+  // REQ-NOTIFY-068: neither pair that failed with the credentials it still has is offered.
+  const keys = v.dialog.models.map((m) => m.key);
+  expect(!keys.includes('alpha') && !keys.includes('beta') && keys.includes('gpt-4o'), `the dialog offers a pair that already failed authentication, or not gpt-4o: ${JSON.stringify(keys)}`);
+  expect(v.done.execution_status === 'completed' && v.closedAtEnd.length === 0, `the run did not complete on gpt-4o, or a dialog stayed: ${JSON.stringify(v.done)}`);
+  expect(overrides.some((o) => o.provider === 'scripted' && o.model === 'alpha' && o.model_key === 'beta' && o.cause === 'authentication')
+    && overrides.some((o) => o.provider === 'scripted-b' && o.model === 'beta' && o.model_key === 'gpt-4o' && o.cause === 'authentication'), `the two pins are not recorded: ${JSON.stringify(overrides)}`);
+  results.authFallbackDialog = { status: row.execution_status, calls, dialog: { title: v.dialog.title, models: keys }, promptWhileOpen: v.promptWhileOpen, overrides, png: r.png, elapsedMs: r.elapsedMs };
+});
+
+// 13. `auth-fallback-revise` — REQ-ORCH-154 with REQ-NOTIFY-070 (the fourth repair round's blocking finding): a revise cycle
+// whose turn fails on a first 401 is restarted on the fallback AS THE SAME REVISE — the changes the user stated and the plan
+// they revised reach the fallback, the cycle is the revise's, and no prompt is re-submitted. Plan mode, `fallback_model:
+// beta`. Cycle 1 runs on alpha (`scripted`) and parks; the gate's changes field is filled and Revise pressed with alpha's
+// provider swapped to `deepseek` in the workspace's agents.yaml first (a run reads the configuration at its start, ADR-0037),
+// so the revise cycle's call is refused (`fail:401:only=deepseek`) — a key revoked between the cycle and the revise, made
+// reproducible — and the restart's call on beta answers. Driven, because the gate's changes and its Revise are clicked.
+const s12 = scenario('auth-fallback-revise', ['  run_start_mode: plan'], { fallback: 'beta' });
+await scenarioRun('auth-fallback-revise', async () => {
+  const CHANGES = 'USE-THE-ZEBRA-LIBRARY';
+  const r = await drivenLaunch('auth-fallback-revise', s12, { ROTARIS_SCRIPT: 'fail:401:only=deepseek' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    await step('the first-launch notice', until(() => d.probe('.notice-slot'), (found) => Array.isArray(found) && /No model provider is authenticated yet/.test(found[0]?.text ?? ''), { timeoutMs: 30_000, what: 'the first-launch notice', signal }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('plan the thing', { enter: true }));
+    await step('cycle 1 at the gate', d.waitFor('[data-testid="plan-gate-plan"]', { timeoutMs: 60_000 }));
+    // alpha's provider refuses from now on: the revise cycle's call is alpha's, on `deepseek`.
+    const yaml = join(s12.workspace, '.rotaris', 'agents.yaml');
+    writeFileSync(yaml, readFileSync(yaml, 'utf8').replace('alpha: { provider: scripted, model_id: alpha }', 'alpha: { provider: deepseek, model_id: alpha }'));
+    await step('the changes field opened', d.click('.plan-gate__changes-summary'));
+    await step('the changes field', d.waitFor('#plan-gate-changes', { timeoutMs: 10_000 }));
+    await step('the changes field focused', d.click('#plan-gate-changes'));
+    await step('the changes typed', d.type(CHANGES));
+    await step('Revise', d.click('[data-testid="plan-revise"]'));
+    // The restarted revise parks at cycle 2, the gate drawn again with the changes it was asked for.
+    const prior = await step('cycle 2 at the gate', until(() => d.eval(`document.querySelector('[data-testid="plan-gate-prior"]')?.textContent ?? null`), (t) => typeof t === 'string' && t.includes(CHANGES), { timeoutMs: 90_000, what: 'the restarted revise at the gate', signal }));
+    const prompt = await step('the prompt beside it', until(() => d.eval(`document.querySelector('[data-testid="reauth-prompt"]')?.getAttribute('data-session') ?? null`), (v) => typeof v === 'string', { timeoutMs: 15_000, what: 'the re-authentication prompt', signal }));
+    const windows = await step('no recovery window', recoveryWindows(d));
+    return { prior, prompt, windows };
+  });
+  const db = open(s12);
+  const row = session(db);
+  const cycles = db.prepare('SELECT cycle, changes, plan FROM plan_cycles WHERE session_id = ? ORDER BY cycle').all(row.session_id);
+  const users = db.prepare("SELECT body FROM transcript_rows WHERE session_id = ? AND kind = 'user' ORDER BY row_index").all(row.session_id).map((u) => u.body);
+  const overrides = names(db, row.session_id).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata));
+  const rows = systemRows(db, row.session_id);
+  db.close();
+  const v = r.value;
+  const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator').map((c) => c.model);
+  expect(row.execution_status === 'awaiting_plan_decision', `the restarted revise did not park at the gate: ${JSON.stringify(row)}`);
+  expect(JSON.stringify(calls) === JSON.stringify(['scripted/alpha', 'deepseek/alpha', 'scripted-b/beta']), `the calls are not cycle 1 on alpha, the revise refused on alpha, the restart on beta: ${JSON.stringify(calls)}`);
+  // REQ-ORCH-154: the restarted cycle is the revise's — cycle 2, the changes stated — and its plan is the fallback's.
+  expect(cycles.length === 2 && cycles[0].cycle === 1 && cycles[0].changes === '' && cycles[1].cycle === 2 && cycles[1].changes === CHANGES, `the restart was not the same revise: ${JSON.stringify(cycles)}`);
+  expect(v.prior.includes(CHANGES), `the gate does not show the changes the restarted cycle was asked for: ${v.prior}`);
+  // A decision is no prompt: nothing re-submitted.
+  expect(users.length === 1 && users[0] === 'plan the thing', `the restart re-submitted a prompt: ${JSON.stringify(users)}`);
+  expect(overrides.some((o) => o.provider === 'deepseek' && o.model === 'alpha' && o.model_key === 'beta' && o.cause === 'authentication'), `the fallback was not pinned for the pair that failed: ${JSON.stringify(overrides)}`);
+  expect(rows.some((b) => b.startsWith('Authentication failed on deepseek/alpha') && b.includes('beta')), `no row names the restart on the fallback: ${rows.join(' | ')}`);
+  // REQ-NOTIFY-070/071: the restart's prompt beside the gate, and no recovery dialog for a first failure with a usable fallback.
+  expect(v.prompt === row.session_id && v.windows.length === 0 && !/authentication recovery: the dialog is open for session/.test(r.log), `the first failure did not take the automatic fallback alone: ${JSON.stringify({ prompt: v.prompt, windows: v.windows })}`);
+  results.authFallbackRevise = { status: row.execution_status, calls, cycles: cycles.map((c) => ({ cycle: c.cycle, changes: c.changes })), users, prior: v.prior, png: r.png, elapsedMs: r.elapsedMs };
 });
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify({ ...results, ...(only === null ? {} : { only }), failures }, null, 2)}\n`);

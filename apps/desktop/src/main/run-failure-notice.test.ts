@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ReportInput } from './notices.js';
+import type { FallbackOutcome } from './auth-fallback.js';
 import {
   AUTHENTICATION_FAILED, authenticationFailureNotice, genericFailureNotice, PROVIDER_LIMIT_REACHED, quotaFailureNotice, RUN_FAILED,
   RunFailurePublisher, runEndingPublication, SESSION_AND_DRAFT_KEPT, unfocusedFailureNotice, type AuthenticationRecoveryOutcome, type RunEnding,
@@ -57,16 +58,21 @@ describe('main/run-failure-notice — runEndingPublication: REQ-NOTIFY-060 class
 });
 
 describe('main/run-failure-notice — RunFailurePublisher: the class publication waits for the focus (REQ-NOTIFY-030/032)', () => {
-  function harness(focused: Set<string>, recovery: (sid: string) => AuthenticationRecoveryOutcome = () => ({ opened: true })) {
+  // The automatic fallback (REQ-NOTIFY-070, `auth-fallback.ts`) answers `dialog` unless a case says otherwise, so the cases
+  // below that are about the dialog read as they did before the fallback was asked first.
+  function harness(focused: Set<string>, recovery: (sid: string) => AuthenticationRecoveryOutcome = () => ({ opened: true }), automatic: (sid: string) => FallbackOutcome = () => ({ kind: 'dialog', reason: 'no usable fallback' })) {
     const reported: ReportInput[] = [];
     const recovered: string[] = [];
+    const order: string[] = [];
     const publisher = new RunFailurePublisher({
       isFocused: (sid) => focused.has(sid),
-      report: (n) => reported.push(n),
-      recoverAuthentication: async (sid) => { recovered.push(sid); return recovery(sid); },
+      report: (n) => { reported.push(n); order.push(`notice:${n.title}`); },
+      fallBack: async (sid) => { const r = automatic(sid); order.push(`fallback:${r.kind}`); return r; },
+      recoverAuthentication: async (sid) => { recovered.push(sid); order.push('dialog'); return recovery(sid); },
+      closePrompts: () => { order.push('prompts-closed'); },
       log: () => undefined,
     });
-    return { publisher, reported, recovered };
+    return { publisher, reported, recovered, order };
   }
 
   it('a focused session\'s failure publishes its class at once: the generic and quota notices, or the dialog beside the authentication notice', async () => {
@@ -77,6 +83,41 @@ describe('main/run-failure-notice — RunFailurePublisher: the class publication
     expect(h.reported).toEqual([genericFailureNotice('S1', 'HTTP 400'), quotaFailureNotice('S1', 'HTTP 429'), authenticationFailureNotice('S1', 'HTTP 401')]);
     expect(h.recovered).toEqual(['S1']);
     expect(h.publisher.holds('S1')).toBe(false);
+  });
+
+  it('REQ-NOTIFY-070 ahead of REQ-NOTIFY-072: the automatic fallback is asked first; a restart publishes nothing more and opens no dialog', async () => {
+    const restarted = harness(new Set(['S1']), undefined, () => ({ kind: 'restarted', restart: { failed: { provider: 'a', model: 'a1', key: 'a1' }, fallback: { provider: 'f', model: 'f1', key: 'f1' } } }));
+    await restarted.publisher.failed('S1', 'authentication', 'HTTP 401');
+    expect(restarted.order).toEqual(['fallback:restarted']);
+    expect(restarted.reported).toEqual([]);
+    expect(restarted.recovered).toEqual([]);
+    // No usable fallback, or a second failure: the dialog opens, every prompt is closed (REQ-NOTIFY-079), and the class's notice stands beside it.
+    const dialog = harness(new Set(['S1']));
+    await dialog.publisher.failed('S1', 'authentication', 'HTTP 401');
+    expect(dialog.order).toEqual(['fallback:dialog', 'dialog', 'prompts-closed', `notice:${AUTHENTICATION_FAILED}`]);
+    // REQ-NOTIFY-069's preconditions, or a restart that could not begin: the generic notice, and no dialog.
+    const generic = harness(new Set(['S1']), undefined, () => ({ kind: 'generic', reason: 'the restart could not begin' }));
+    await generic.publisher.failed('S1', 'authentication', 'HTTP 401');
+    expect(generic.reported).toEqual([genericFailureNotice('S1', 'HTTP 401')]);
+    expect(generic.recovered).toEqual([]);
+    // Superseded by a run of the session that is active again: nothing.
+    const stale = harness(new Set(['S1']), undefined, () => ({ kind: 'stale', reason: 'A run is already active.' }));
+    await stale.publisher.failed('S1', 'authentication', 'HTTP 401');
+    expect(stale.order).toEqual(['fallback:stale']);
+    // A dialog that could not open closes no prompt.
+    const unopened = harness(new Set(['S1']), () => ({ opened: false, reason: 'the run host did not answer' }));
+    await unopened.publisher.failed('S1', 'authentication', 'HTTP 401');
+    expect(unopened.order).toEqual(['fallback:dialog', 'dialog', `notice:${RUN_FAILED}`]);
+  });
+
+  it('REQ-NOTIFY-032 with REQ-NOTIFY-070: an unfocused session\'s first failure is not restarted until it is focused', async () => {
+    const focused = new Set<string>();
+    const h = harness(focused, undefined, () => ({ kind: 'restarted', restart: { failed: { provider: 'a', model: 'a1', key: 'a1' }, fallback: { provider: 'f', model: 'f1', key: 'f1' } } }));
+    await h.publisher.failed('S2', 'authentication', 'HTTP 401');
+    expect(h.order).toEqual([`notice:Session S2 failed`]);
+    focused.add('S2');
+    await h.publisher.focused('S2');
+    expect(h.order).toEqual([`notice:Session S2 failed`, 'fallback:restarted']);
   });
 
   it('REQ-NOTIFY-069: an authentication failure whose dialog cannot open takes the generic notice; a superseded one raises nothing', async () => {

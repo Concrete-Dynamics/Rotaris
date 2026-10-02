@@ -623,6 +623,6 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
       if (!isScripted && e.auth_provider && !bearers[e.auth_provider]) return { ok: false, reason: `provider ${e.auth_provider} is not authenticated for this run` };
       return { ok: true, key, choice: { model: ref, thinking: thinkingOf(e), ...settingsOf(e) } };
     };
-    return { cfg, model: setup, runtime, configurationSnapshot, retentionCap: runtime.retentionCap, personas, models, warnings, scripted: isScripted, authProviders, entryAuthProvider, tier, resilience: { catalogue, fallbackModel }, contextLimits: contextLimitsOf(cfg) };
+    return { cfg, model: setup, runtime, configurationSnapshot, retentionCap: runtime.retentionCap, personas, models, warnings, scripted: isScripted, authProviders, entryAuthProvider, tier, resilience: { catalogue, fallbackModel, ...(fallbackModel && fallbackName ? { fallbackKey: fallbackName } : {}) }, contextLimits: contextLimitsOf(cfg) };
   } });
 }

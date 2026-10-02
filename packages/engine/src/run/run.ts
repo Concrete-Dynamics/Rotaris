@@ -357,9 +357,10 @@ export class Run {
   private initialIterations = 0;
   private lastFailure: string | null = null;
   /**
-   * REQ-NOTIFY-072 / REQ-MONITOR-147: the model the root's failed model call was addressed to — the root cell's model at
-   * that moment, after any ladder move — or null when the run's last failure was no root model call's. The authentication
-   * recovery dialog names it and pins a chosen model against its pair (`Sessions.authRecoveryFacts`, `restartAfterAuthFailure`).
+   * REQ-NOTIFY-070 / REQ-NOTIFY-072 / REQ-MONITOR-147: the model the root's failed model call was addressed to — the root
+   * cell's model at that moment, after any ladder move — or null when the run's last failure was no root model call's.
+   * The automatic fallback pins the fallback against this model (`Sessions.restartOnFallback`); the recovery dialog names
+   * it and pins a chosen model against its pair (`Sessions.authRecoveryFacts`, `restartAfterAuthFailure`).
    */
   private failedModel: ModelRef | null = null;
   private todo: Todo;
@@ -488,6 +489,8 @@ export class Run {
   private readonly catalogue: readonly CatalogueEntry[];
   /** The root agent's ladder state for this run (one same-tier fallback, one role fallback — REQ-ORCH-091 b / REQ-ORCH-144). */
   private rootCell: AgentResilienceCell | null = null;
+  /** REQ-NOTIFY-078: the session's memory changed under the root (a pin taken back), so its cell is rebuilt at its next turn. */
+  private entryRebuild = false;
   /**
    * REQ-MONITOR-085 (Part AH): the agents whose context is being compressed right now, by name, with the instant each
    * began. Part AO made this a map: a manual pass compresses every live conversation CONCURRENTLY (REQ-MONITOR-092),
@@ -670,11 +673,17 @@ export class Run {
   get isEnded(): boolean {
     return this.ended;
   }
-  /** REQ-NOTIFY-072: the model the root's failing call was addressed to, when the run's last failure was a root model call's. */
+  /** REQ-NOTIFY-070 / REQ-NOTIFY-072: the model the root's failing call was addressed to, when the run's last failure was a root model call's. */
   get failedEntryModel(): ModelRef | null {
     return this.failedModel;
   }
-  /** A root turn's model call failed (an iteration's or a plan cycle's): the failure and the model it was addressed to, together. */
+
+  /**
+   * REQ-NOTIFY-070 / REQ-MONITOR-147: a root turn's model call failed — an iteration's (`iterate`) or a plan cycle's
+   * (`parkAtPlanGate`). The run's last failure and the model the root's cell was calling (after any ladder move) are
+   * recorded together, in this one place, so no root turn records the one without the other: a plan cycle's turn did,
+   * and its first 401 was never restarted on the fallback.
+   */
   private recordRootModelFailure(error: ModelError): void {
     this.lastFailure = describe(error);
     this.failedModel = this.rootCell?.model.model ?? null;
@@ -1339,7 +1348,8 @@ export class Run {
     const thinking = this.entryOverride.thinking ?? config.thinking;
     // The cell is settled here for whatever switch is in force: a switch recorded from now on supersedes none.
     this.entrySwitchPending = false;
-    if (this.rootCell === null || this.rootRebuildsFor(entryModel)) {
+    if (this.rootCell === null || this.entryRebuild || this.rootRebuildsFor(entryModel)) {
+      this.entryRebuild = false;
       const base = withSettings(this.catalogue, { model: entryModel, thinking });
       const current = this.memory.effective(base, this.catalogue);
       const persona = this.deps.personas?.resolve(config.persona)?.persona;
@@ -1997,6 +2007,16 @@ export class Run {
     this.deps.warn(message);
     this.waits.reject(message);
   }
+  /**
+   * REQ-NOTIFY-078: re-authentication re-pinned the primary model — the session's memory no longer maps the failed pair to
+   * the fallback — so the root's cell is rebuilt from the memory at its next turn: the switch applies from the next
+   * iteration, and the turn in flight finishes on the model it has. False for a run that has ended.
+   */
+  rebuildEntryFromMemory(): boolean {
+    if (this.ended) return false;
+    this.entryRebuild = true;
+    return true;
+  }
   setEntryReasoning(level: ThinkingLevel): boolean {
     if (this.ended) return false;
     this.entryOverride = { ...this.entryOverride, thinking: level };
@@ -2090,6 +2110,9 @@ export class Run {
       ];
       const report = await this.turn(`${preamble}\n\n${this.deps.task}`, 0, content);
       plan = report.status === 'failed' ? '' : report.text.trim();
+      // REQ-NOTIFY-070: a plan cycle's turn is the root's model call too, so its failure records the model it was calling,
+      // as an iteration's does — a first 401 here restarts on the fallback like any other (the repair of the plan-mode
+      // finding on docs/defects/fixed/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md).
       if (report.status === 'failed') this.recordRootModelFailure(report.error);
     } catch (cause) {
       this.lastFailure = String(cause);

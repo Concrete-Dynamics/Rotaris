@@ -30,6 +30,8 @@ const bridge: RendererBridge = Object.freeze({
   onImprovementActivity: subscribe(CHANNEL.improvementActivity),
   // Part AS — channel 12, the nine values and the live run report (ADR-0064, REQ-WORKSPACE-105/109).
   onInitializationState: subscribe(CHANNEL.initializationState),
+  // Channel 13 — the non-modal re-authentication prompt (REQ-NOTIFY-071, ADR-0048).
+  onReauthPrompt: subscribe(CHANNEL.reauthPrompt),
 });
 
 contextBridge.exposeInMainWorld(BRIDGE_KEY, bridge);

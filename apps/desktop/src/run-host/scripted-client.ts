@@ -375,7 +375,8 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
         yield { ok: false as const, error: { code: 'http' as const, headline: 'scripted rejection: prompt is too long', status: 400, providerMessage: 'The maximum context length of this model is 8192 tokens; reduce the length of the messages.', transient: false } };
         return;
       }
-      // Part Q's fault steps (REQ-ORCH-088/090/091/092): `fail:429[:retry-after=<s>]`, `fail:quota`, `fail:503`, `fail:401`;
+      // Part Q's fault steps (REQ-ORCH-088/090/091/092): `fail:429[:retry-after=<s>]`, `fail:quota`, `fail:503`, `fail:401`,
+      // each optionally `:only=<provider>[+<provider>…]` or `:unless-key=<key>` (below);
       // tokens:<n> — Part AH: a step that REPORTS n prompt tokens and then calls a tool so the turn goes round
       // again. REQ-MONITOR-081 prefers the provider's own figure, so this is how a scripted run crosses the
       // automatic threshold without composing a genuinely enormous conversation. Verification only.
@@ -389,8 +390,9 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       }
       // `<fault>:only=<provider>[+<provider>…]`: the fault answers a call addressed to one of those providers, and a call to any
       // other answers as `answer` does — a credential refused by one provider that a model on another does not share (the
-      // authentication recovery dialog's restart on a chosen model, REQ-NOTIFY-074, whose restarted root takes the script from
-      // its first step again, a failed call leaving nothing in its record). Verification only.
+      // automatic fallback restart, REQ-NOTIFY-070, and the authentication recovery dialog's restart on a chosen model,
+      // REQ-NOTIFY-074, whose restarted root takes the script from its first step again, a failed call leaving nothing in
+      // its record). Verification only.
       const scoped = /^(fail:(?:429|quota|503|401)(?::retry-after=\d+)?):only=([\w+-]+)$/.exec(step);
       if (scoped) step = scoped[2]!.split('+').includes(req.model.providerId) ? scoped[1]! : 'answer';
       // `<fault>:unless-key=<key>`: the fault answers a call whose resolved credential is not that key, and the call answers as

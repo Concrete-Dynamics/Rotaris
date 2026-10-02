@@ -323,6 +323,21 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       log(`session ${req.sessionId} ${req.action}: ${r.value.resumed ? 'a continuation run is executing' : 'left paused'}${r.value.messageLimit === null ? '' : ` (message limit ${r.value.messageLimit})`}`);
       return { kind: 'session.continued', sessionId: req.sessionId, resumed: r.value.resumed, messageLimit: r.value.messageLimit };
     }
+    case 'session.restartOnFallback': {
+      // REQ-NOTIFY-070: the restart launches a run — refresh the bearers first (REQ-PROVIDER-066's continuation lease).
+      const leaseRefusal = await continuationLeaseForSession(req.sessionId);
+      if (leaseRefusal) return leaseRefusal;
+      const r = sessions.restartOnFallback(asSessionId(req.sessionId));
+      if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The run could not restart on the fallback model', detail: r.error.reason };
+      log(`session ${req.sessionId}: authentication failed on ${r.value.failed.provider}/${r.value.failed.model}; restarted on the fallback ${r.value.fallback.key} (${r.value.fallback.provider}/${r.value.fallback.model})`);
+      return { kind: 'session.fallbackRestarted', sessionId: req.sessionId, failed: r.value.failed, fallback: r.value.fallback };
+    }
+    case 'session.repinPrimary': {
+      const r = sessions.repinPrimary(asSessionId(req.sessionId), { provider: req.provider, model: req.model });
+      if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The primary model could not be re-pinned', detail: r.error.reason };
+      log(`session ${req.sessionId}: re-authenticated; ${req.provider}/${req.model} re-pinned (${r.value.applies})`);
+      return { kind: 'session.primaryRepinned', sessionId: req.sessionId, applies: r.value.applies };
+    }
     case 'session.authRecovery': {
       // REQ-NOTIFY-069/072/074: what the authentication recovery dialog is drawn from; a refusal sends main down the generic path.
       const r = sessions.authRecoveryFacts(asSessionId(req.sessionId));

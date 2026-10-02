@@ -11,7 +11,7 @@ pack holds two waits on different pairs at once.
 The same holds on the quota-wait retry path (REQ-MONITOR-194, since 2026-10-02): choosing the waiting pair itself clears its
 exclusion and persists no override for it, but every other waiting pair is overridden to the chosen one in memory alone,
 with no `model_override` entry at all. (Since the second round of
-[a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md](fixed/a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md)
+[a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md](a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md)
 the shown wait's chosen pair has an older override taken back (`Run.takeBackOverrideOf`, persisted as a `model_override`
 entry carrying `cleared: true`), but the new override itself is still written for the shown wait alone.)
 
@@ -20,6 +20,25 @@ On `origin/main` 97e1de4 the two loops of `setEntryModel`'s wait branches in `pa
 `this.memory.setOverride` directly for every `waits.all()` entry — the change-model branch's, then one `model_override` entry
 for `waits.current()` alone; the quota-retry branch's, then no `model_override` entry at all — and the taking-back of an
 older override goes through `takeBackOverrideOf`, for the chosen pair only.
+
+## Outcome — repaired 2026-10-02 (fin10, quota-exclusions-and-choices, task 1)
+
+- `packages/engine/src/run/run.ts`: both wait branches of `setEntryModel` call `Run.overrideWaitingPairs`, which overrides
+  every waiting pair but the one chosen — in the memory and as a `model_override` entry of its own (the pair, the chosen key,
+  `to_provider`/`to_model`, and the placement of that wait's own agent: `supersedes` for the root's, `switch_pending` for a
+  child's) — so `ResilienceMemory.rehydrate` and both autopsy readers replay every override the run holds. A root parked in a
+  wait that is not the one shown takes the choice as its entry model, as when its own wait is shown, so its entry's
+  `supersedes` and the run agree. A wait on the chosen pair itself is retried with no override (no entry onto itself).
+- Pinned in `packages/engine/src/run/ladder.test.ts` ("REQ-ORCH-091 (d) / REQ-SESSION-026: a choice that resolves several
+  waits persists the override of every waiting pair", with a new harness shape: the root on `a1` and a child of a role
+  configured on `b1` parked at once): a choice of `c1` in the child's wait writes two entries, the rehydrated memory sends
+  both `a1` and `b1` to `c1`, a fresh process's continuation runs on `c1`, and the autopsy reader reads the root `a1, c1` (red
+  before: one entry, `b1 → c1`); `a1` chosen in its own wait persists `b1 → a1` (red before: no entry).
+- Shown in the built app by `resilience-proof`'s new driven `two-waits` launch: the root on alpha and a child configured on
+  beta both refused on quota, gamma chosen in the shown wait (the child's), two `model_override` entries
+  (`scripted/alpha → gamma`, `scripted-b/beta → gamma`); a relaunch that resumes the session and delegates again calls gamma
+  for the root and the new child, and the composer's chip reads gamma. Red on a build of the code before (one entry,
+  `scripted-b/beta` alone), green after.
 
 ## Specs
 

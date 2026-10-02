@@ -12,10 +12,11 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
  * (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..093/263), and since OQ-173 that a wait the run imposes is not a stall
  * (REQ-MONITOR-117..119), and since OQ-177 that an entry switch after a ladder move applies as its row says (REQ-MONITOR-142).
- * Eighteen scenarios (since 2026-10-02 the authentication class's: `fatal` and `reauth` the recovery dialog's, `generic`
+ * Nineteen scenarios (since 2026-10-02 the authentication class's: `fatal` and `reauth` the recovery dialog's, `generic`
  * REQ-NOTIFY-064's notice, `auth-fallback` the first failure's automatic fallback and its re-authentication prompt,
  * `auth-fallback-dialog` the two together, `auth-fallback-revise` a failed revise cycle restarted as the same revise; and
- * `quota-retry`, REQ-MONITOR-194's explicit choice of the waiting pair clearing its exclusion), each
+ * `quota-retry`, REQ-MONITOR-194's explicit choice of the waiting pair clearing its exclusion; since fin10 `two-waits`, one
+ * choice resolving two waits on two pairs and persisting both overrides across a reload), each
  * asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
@@ -462,6 +463,55 @@ await scenarioRun('quota-retry', async () => {
   expect(calls.map((c) => c.model).join(',') === 'scripted/alpha,scripted/alpha,scripted-b/beta', `the calls were not alpha, alpha (the retry), beta: ${JSON.stringify(calls)}`);
   expect(kinds.filter((i) => i.kind === 'model_wait').length === 2, 'the retry did not park the run a second time');
   results.quotaRetry = { status: row.execution_status, exhausted, overrides, calls, headerDuringSecondWait: r.value.during[0]?.text ?? null, png: r.png, elapsedMs: r.elapsedMs };
+});
+
+// 4c. REQ-ORCH-091 (d) / REQ-SESSION-026 (the repair of a-wait-choice-persists-the-override-for-the-shown-wait-alone): two
+// agents parked at once on different pairs — the root on alpha, a child of `coding-agent` (configured on beta) on beta, both
+// refused on quota with no same-tier candidate — and one choice of gamma in the shown wait resolves both. Every waiting pair
+// gets its own `model_override` entry; a relaunch that resumes the session and delegates again runs the root and the new
+// child on gamma, as the run that made the choice did. Before the repair only the shown wait's pair was written, so after the
+// reload one of the two agents returned to its pair (the child called beta, or the root parked on alpha).
+const s4c = scenario('two-waits', ['  max_active_children: 2'], { delegation: true, models: ['  gamma: { provider: scripted-c, model_id: gamma }'], personas: ['personas:', '  coding-agent:', '    model: beta'] });
+await scenarioRun('two-waits', async () => {
+  const waits = () => { const db = open(s4c); try { const row = session(db); return row === undefined ? 0 : issues(db, row.session_id).filter((i) => i.kind === 'model_wait').length; } finally { db.close(); } };
+  const r = await drivenLaunch('two-waits', s4c, { ROTARIS_SCRIPT: 'delegate:coding-agent:side,fail:quota,answer', ROTARIS_CHILD_SCRIPT: 'fail:quota,answer' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('two agents parked on two pairs', { enter: true }));
+    await step('both waits', until(waits, (n) => n >= 2, { timeoutMs: 60_000, what: 'two model_wait issues', signal }));
+    await step('the wait header', d.waitFor('.wait-header', { timeoutMs: 60_000 }));
+    const during = await step('the header during the waits', d.probe('.wait-header'));
+    await step('Change model', d.click('.wait-header .btn-secondary', { text: 'Change model' }));
+    const chosen = await step('the chooser → gamma', choose(d, '.wait-header button[aria-label="Change model"]', 'gamma'));
+    const row = await step('the run settled', until(() => { const db = open(s4c); try { return session(db); } finally { db.close(); } }, (x) => x !== undefined && SETTLED.has(x.execution_status), { timeoutMs: 90_000, what: 'the session settling', signal }));
+    return { during, chosen, row };
+  });
+  const db = open(s4c);
+  const row = session(db);
+  const list = names(db, row.session_id);
+  db.close();
+  expect(row.execution_status === 'completed', `the run did not complete after the choice: ${JSON.stringify(row)}`);
+  const overrides = list.filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata));
+  const pairs = overrides.map((o) => `${o.provider}/${o.model}→${o.model_key}`).sort();
+  expect(pairs.join(',') === 'scripted-b/beta→gamma,scripted/alpha→gamma', `the choice did not persist an override for each waiting pair: ${JSON.stringify(overrides)}`);
+  const calls = modelCalls(r.log);
+  // The relaunch: the session resumed from the browser, a further prompt delegating again — every call on gamma.
+  const again = await launch('two-waits-resume', s4c, { ROTARIS_SCRIPT: 'delegate:coding-agent:again,answer', ROTARIS_CHILD_SCRIPT: 'answer', ROTARIS_CAPTURE_RESUME: 'latest', ROTARIS_CAPTURE_PROMPT: 'delegate again after the reload', ROTARIS_CAPTURE_PROBE: '[data-testid="chip-model"]', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '60000', ROTARIS_CAPTURE_AFTER_MS: '800' }, { timeout: 150_000 });
+  // The run's own agents, up to its end: the intent classifier and the post-run analyst take configured slots and follow no
+  // override (a residual recorded on its own note), and the scripted client names the analyst `child` as well.
+  const ended = again.log.search(/run [0-9a-f-]+ ended /);
+  const calls2 = modelCalls(ended < 0 ? again.log : again.log.slice(0, ended)).filter((c) => c.who === 'orchestrator' || c.who === 'child');
+  expect(calls2.some((c) => c.who === 'child') && calls2.some((c) => c.who === 'orchestrator'), `the relaunch did not call both the root and a child: ${JSON.stringify(calls2)}`);
+  expect(calls2.every((c) => c.model === 'scripted-c/gamma'), `an agent returned to a pair the choice replaced after the reload: ${JSON.stringify(calls2)}`);
+  const db2 = open(s4c);
+  const row2 = session(db2);
+  db2.close();
+  expect(row2.execution_status === 'completed' && row2.iterations_completed >= 2, `the continuation did not complete: ${JSON.stringify(row2)}`);
+  const chip = probes(again.log, 'probe').find((p) => p.selector === '[data-testid="chip-model"]')?.found[0]?.text ?? null;
+  results.twoWaits = { status: row.execution_status, shownWait: r.value.during[0]?.text ?? null, overrides, calls, relaunchCalls: calls2, relaunchAllCalls: modelCalls(again.log), chipAfterReload: chip, session: row2, png: r.png, elapsedMs: r.elapsedMs };
 });
 
 // 5. An unresponsive model: no event for 30 s with a fallback slot → the fallback; the same script with no fallback keeps waiting.

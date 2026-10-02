@@ -92,6 +92,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     runStartMode?: 'auto' | 'plan';
     /** REQ-MONITOR-049: each model's advertised input limit, by model id, through the compression section's `triggerFor`. */
     inputLimits?: Record<string, number>;
+    /** A role's own model (`Persona.modelRef`, REQ-CONFIG-094), by role name — a child of that role is built on it. */
+    roleModels?: Record<string, ModelRef>;
   }
 
   function sessionsWith(script: (persona: string, turn: number, req: Parameters<ScriptedModelClient['stream']>[0]) => ScriptedCall, opts: Opts = {}) {
@@ -110,7 +112,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const catalogue = opts.catalogue ?? [entry('a1', 'a', A1, ['small_model'])];
     const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: opts.entryModel ?? A1, credentialFor: () => async () => 'k', llmResponseTimeoutMs: opts.llmResponseTimeoutMs ?? 120_000, ...opts.over };
     const models = (key: string): ModelLookup => { const e = catalogue.find((c) => c.key === key); return e ? { ok: true, key, choice: { model: e.model, thinking: e.thinking } } : { ok: false, reason: `'${key}' is not a configured model` }; };
-    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: { ...base, ...(opts.roleFallback ? { fallbackModel: opts.roleFallback } : {}), ...(opts.roleStallTimeoutMs === undefined ? {} : { stallTimeoutMs: opts.roleStallTimeoutMs }) }, alias: null } : null; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
+    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: { ...base, ...(opts.roleModels?.[name] ? { modelRef: opts.roleModels[name] } : {}), ...(opts.roleFallback ? { fallbackModel: opts.roleFallback } : {}), ...(opts.roleStallTimeoutMs === undefined ? {} : { stallTimeoutMs: opts.roleStallTimeoutMs }) }, alias: null } : null; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
     const backend = new DefaultAgentBackend(client);
     const results: string[] = [];
     const restingReads: string[] = [];
@@ -1292,6 +1294,90 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect((await fresh.sessions.running(sid)!).status).toBe('completed');
       expect(fresh.client.requests.map((r) => r.model.modelId)).toEqual(['b1']);
       expect(timeline(sid).filter((n) => n === 'model_exhausted')).toHaveLength(1);
+    });
+  });
+
+  /*
+   * The repair of a-wait-choice-persists-the-override-for-the-shown-wait-alone (REQ-ORCH-091 d: "persists the override in session
+   * state for the rest of the session"; REQ-SESSION-026/196: across reloads). Two agents parked at once on different pairs —
+   * the root on a1 and a child of a role configured on b1 — and one choice resolves both: every waiting pair the memory
+   * overrides gets its own `model_override` entry, so a reload (`ResilienceMemory.rehydrate`) and both autopsy readers replay
+   * every override the run holds. Until this repair only the shown wait's pair was written (and on the quota-retry path none).
+   */
+  describe('REQ-ORCH-091 (d) / REQ-SESSION-026: a choice that resolves several waits persists the override of every waiting pair', () => {
+    const resolveIn = (catalogue: CatalogueEntry[]) => (key: string) => { const e = catalogue.find((c) => c.key === key); return e ? { model: e.model, thinking: e.thinking } : null; };
+    const overrides = (sid: SessionId) => dal.timelineOf(sid).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+    /** The root on a1 delegates a child of `coding-agent` (configured on b1) and then meets insufficient quota; so does the child. */
+    function twoWaits(first: 'root' | 'child') {
+      const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, []), entry('c1', 'c', C1, [])];
+      let releaseSecond!: () => void;
+      const second = new Promise<void>((r) => { releaseSecond = r; });
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]);
+          if (turn === 2) return first === 'root' ? failing(quota()) : { parts: [{ hold: second }, { error: quota() }] };
+          return answer(`root ${turn}`);
+        }
+        if (turn === 1) return first === 'child' ? failing(quota()) : { parts: [{ hold: second }, { error: quota() }] };
+        return answer('I did it.');
+      };
+      const harness = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 600_000, roleModels: { 'coding-agent': B1 } });
+      return { ...harness, catalogue, releaseSecond };
+    }
+    async function parkBoth(h: ReturnType<typeof twoWaits>, firstModel: string) {
+      const sid = (h.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 60 && lastWait(h.pub) === null; i++) await tick();
+      expect(lastWait(h.pub)).toMatchObject({ model: firstModel, exhausted: true });
+      h.releaseSecond();
+      const issuesOfWait = () => dal.issuesOf(sid).filter((i) => i.kind === 'model_wait').length;
+      for (let i = 0; i < 60 && issuesOfWait() < 2; i++) await tick();
+      expect(issuesOfWait()).toBe(2);
+      return sid;
+    }
+
+    it('a change of model in one wait writes one entry per waiting pair, and a reload sends an agent on b1 to c1 as the run does', async () => {
+      const h = twoWaits('child');
+      const sid = await parkBoth(h, 'b1');
+      // The shown wait is the oldest: the child's on b1; the root waits on a1 beside it.
+      expect(lastWait(h.pub)).toMatchObject({ provider: 'b', model: 'b1' });
+      expect(h.sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+      expect((await h.sessions.running(sid)!).status).toBe('completed');
+      // Both agents resumed on c1, and both pairs are recorded (before: b1 → c1 alone).
+      expect(overrides(sid)).toEqual([
+        expect.objectContaining({ provider: 'b', model: 'b1', model_key: 'c1', to_provider: 'c', to_model: 'c1', switch_pending: false }),
+        expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1', to_provider: 'c', to_model: 'c1', supersedes: false }),
+      ]);
+      expect(overrides(sid)[1]).not.toHaveProperty('switch_pending');
+      // The autopsy reader replays the root's own entry: it ran on a1, then on c1 (before: a1 alone, no entry for its pair).
+      const models = { a1: { provider: 'a', model_id: 'a1' }, b1: { provider: 'b', model_id: 'b1' }, c1: { provider: 'c', model_id: 'c1' } };
+      const audit = JSON.stringify({ session_id: sid, config_snapshot: { default_persona: 'orchestrator', personas: { orchestrator: { model: 'a1' } }, models } });
+      expect(entryModelKeys(audit, dal.timelineOf(sid), childModelKeys(dal.childrenOf(sid)))).toEqual(['a1', 'c1']);
+      const memory = ResilienceMemory.rehydrate(dal.timelineOf(sid), resolveIn(h.catalogue));
+      expect(memory.effective({ model: A1, thinking: 'unset' }, h.catalogue).model).toEqual(C1);
+      expect(memory.effective({ model: B1, thinking: 'unset' }, h.catalogue).model).toEqual(C1);
+      // A fresh process: the continuation's root, configured on a1, runs on c1 — as the run that made the choice would.
+      const fresh = sessionsWith(() => answer('fresh'), { catalogue: h.catalogue });
+      const resumed = fresh.sessions.resume(dal, 'C:/ws', sid);
+      if (!resumed.ok) throw new Error(resumed.error.reason);
+      const again = fresh.sessions.prompt(sid, 'again');
+      if (!again.ok) throw new Error(again.error.reason);
+      expect((await fresh.sessions.running(sid)!).status).toBe('completed');
+      expect(fresh.client.requests.map((r) => r.model.modelId)).toEqual(['c1']);
+    });
+
+    it('the waiting pair itself chosen in its wait persists the other waiting pair\'s override to it', async () => {
+      const h = twoWaits('root');
+      const sid = await parkBoth(h, 'a1');
+      expect(lastWait(h.pub)).toMatchObject({ provider: 'a', model: 'a1', agent: 'orchestrator' });
+      expect(h.sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
+      expect((await h.sessions.running(sid)!).status).toBe('completed');
+      // a1 is retried with no override of its own; b1 → a1 is recorded (before: no entry at all).
+      expect(overrides(sid)).toEqual([expect.objectContaining({ provider: 'b', model: 'b1', model_key: 'a1', to_provider: 'a', to_model: 'a1', switch_pending: false })]);
+      const memory = ResilienceMemory.rehydrate(dal.timelineOf(sid), resolveIn(h.catalogue));
+      expect(memory.overrideFor('b', 'b1')?.key).toBe('a1');
+      expect(memory.overrideFor('a', 'a1')).toBeUndefined();
+      expect(memory.isExhausted('a', 'a1')).toBe(false);
     });
   });
 

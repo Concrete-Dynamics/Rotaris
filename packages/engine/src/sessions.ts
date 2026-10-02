@@ -2378,8 +2378,9 @@ export class Sessions {
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
     const failed = s.run?.failedEntryModel ?? null;
     if (failed === null) return err({ code: 'no-model-failure', reason: 'The session\'s last run did not end on a model call failing.' });
-    const lastPrompt = this.lastPromptOf(s, sessionId);
-    if (lastPrompt.trim() === '') return err({ code: 'no-prompt', reason: 'No prompt is recorded for this session.' });
+    const promptRead = this.lastPromptOf(s, sessionId);
+    if (!promptRead.ok) return err(promptRead.error);
+    const lastPrompt = promptRead.value;
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, false));
@@ -2479,12 +2480,17 @@ export class Sessions {
   }
 
   /**
-   * The text of the session's last submitted prompt — the one a restart re-submits (REQ-NOTIFY-070/074/076) — or '' when none
-   * is recorded (`lastSubmittedPrompt`, over released rows too). The restarts re-send the text alone (OQ-182's reading), so a
-   * prompt of images alone reads as none here and the restart is refused rather than sending an empty prompt.
+   * The text of the session's last submitted prompt — the one a restart re-submits (REQ-NOTIFY-070/074/076) — read by
+   * `lastSubmittedPrompt`, over released rows too; refused as `no-prompt` where there is no text to re-send. The restarts
+   * re-send the text alone (OQ-182's reading), so a last prompt of images alone is refused rather than sent empty, and the
+   * refusal says so: a prompt IS recorded, the restart does not re-send what it carries (an optional finding of fin8's
+   * verifier — it had read "No prompt is recorded for this session.").
    */
-  private lastPromptOf(s: Live, sessionId: SessionId): string {
-    return lastSubmittedPrompt(s.dal, sessionId)?.text ?? '';
+  private lastPromptOf(s: Live, sessionId: SessionId): Result<string, { readonly code: string; readonly reason: string }> {
+    const last = lastSubmittedPrompt(s.dal, sessionId);
+    if (last !== null && last.text.trim() !== '') return ok(last.text);
+    if (last !== null && last.attachments.length > 0) return err({ code: 'no-prompt', reason: 'The last prompt carries images only, which the restart does not re-send (OQ-182), so there is no text to restart with.' });
+    return err({ code: 'no-prompt', reason: 'No prompt is recorded for this session.' });
   }
 
   /**
@@ -2515,7 +2521,7 @@ export class Sessions {
       seen.add(e.key);
       models.push({ key: e.key, provider: e.provider, model: e.model.modelId });
     }
-    return ok({ failed: failed === null ? null : named(failed), active: named(active), models, lastPrompt: this.lastPromptOf(s, sessionId).trim() !== '' });
+    return ok({ failed: failed === null ? null : named(failed), active: named(active), models, lastPrompt: this.lastPromptOf(s, sessionId).ok });
   }
 
   /**
@@ -2535,8 +2541,9 @@ export class Sessions {
     const s = this.live.get(sessionId);
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
-    const lastPrompt = this.lastPromptOf(s, sessionId);
-    if (lastPrompt.trim() === '') return err({ code: 'no-prompt', reason: 'No prompt is recorded for this session.' });
+    const promptRead = this.lastPromptOf(s, sessionId);
+    if (!promptRead.ok) return err(promptRead.error);
+    const lastPrompt = promptRead.value;
     const hold: HoldSlot = {};
     if (modelKey === null) {
       const restarted = this.relaunchAfterAuthFailure(s, sessionId, lastPrompt, hold, () => {

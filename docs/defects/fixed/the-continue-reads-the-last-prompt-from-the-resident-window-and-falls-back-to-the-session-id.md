@@ -38,9 +38,19 @@ their "Latest user request" from it (`latestRequestOf`), and the authentication 
 recovery dialog's reading (`lastPromptOf`) take the text the restart re-sends from it. The session id stands in as the
 request only for a session with no submitted prompt at all, which a transcript cleared under REQ-CHAT-084 is; a released
 prompt never reaches that fallback. The restarts still re-send the text alone (OQ-182's reading), so a last prompt of
-images alone reads as none there and the restart is refused rather than sending an empty prompt.
+images alone is refused rather than sent empty — since repair round 1 with its own wording ("The last prompt carries images
+only, which the restart does not re-send (OQ-182) …"), not "No prompt is recorded for this session.", which is kept for a
+session with no prompt at all.
 
 Pinned by `packages/engine/src/last-prompt.test.ts`: a session planted with its prompt and `RESIDENT_ROW_CAP + 10` rows
 after it, the prompt released to a page, is read back by `lastSubmittedPrompt` with its stored image, and continued with
 "Latest user request:" naming the prompt — on the code before the repair that test read `Latest user request:\nR7`, the
 session's id.
+
+The restart paths are pinned by `packages/engine/src/run/ladder.test.ts` ("REQ-NOTIFY-069/070/074/076 with
+REQ-SESSION-192: the restarts read a prompt that has been released", added in repair round 1 after fin8's verifier found
+nothing failed with `lastPromptOf` put back to the resident search): a session whose prompt lies `RESIDENT_ROW_CAP + 10`
+rows back is continued and fails on a 401; the recovery dialog's facts say a prompt is recorded, `restartOnFallback`
+re-sends the released prompt's text on the fallback, and `restartAfterAuthFailure(sid, null)` re-sends it too. With the
+resident search back, both tests fail ("expected false to be true"; "No prompt is recorded for this session."). A third
+test pins the images-only refusal's wording.

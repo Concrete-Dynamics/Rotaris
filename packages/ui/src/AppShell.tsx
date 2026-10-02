@@ -70,7 +70,6 @@ export interface AppShellProps {
   readonly onOpenSessions?: (() => void) | undefined;
   /** ADR-0048 (Part W): the application-modal registration with main's window registry (`window.modality`). */
   readonly onModality?: ((active: boolean) => void) | undefined;
-  /** PD-SHELL-003: the main window's product-drawn frame. */
   /**
    * REQ-WORKSPACE-106 / ADR-0048: a non-modal, window-level dialog — the project setup consent dialog. Drawn in the
    * rail-and-view region, at its top corner, so it is shown in every view and stands below the title bar's controls and
@@ -79,6 +78,7 @@ export interface AppShellProps {
    * over the view's own controls is OQ-187.
    */
   readonly windowDialog?: ReactNode;
+  /** PD-SHELL-003: the main window's product-drawn frame. */
   readonly windowControls?: {
     readonly maximized: boolean;
     readonly onMinimize: () => void;

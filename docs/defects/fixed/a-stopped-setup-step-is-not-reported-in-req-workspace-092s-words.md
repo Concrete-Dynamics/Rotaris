@@ -54,4 +54,4 @@ terminated`; on the repair, `… configuration: Setup was stopped before this st
 the unit cases only: no proof holds a step for 300 s.
 
 **Noticed while repairing, recorded separately:** the other step details the run host writes are not REQ-WORKSPACE-091/092's
-either ([`the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`](../the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md)).
+either ([`the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`](the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md)).

@@ -57,6 +57,12 @@ export const CANCELLED_BEFORE_SETUP_ERROR = `${SETUP_REASON}: the setup was canc
  */
 export const SETUP_RUN_HOST_EXITED_DETAIL = 'the run host exited before the setup finished.';
 export const SETUP_OVERDUE_DETAIL = 'no outcome arrived within the setup\'s time budgets.';
+/**
+ * REQ-WORKSPACE-084/093: the third way, before any stage: the setup's start never answered — main's request rejected on its
+ * bound, as when the run host has exited. A retryable failure under `SETUP_REASON`, its detail this sentence and the
+ * request's own error; the build's, under OQ-167/OQ-169.
+ */
+export const SETUP_START_UNANSWERED_DETAIL = 'the run host did not answer the setup\'s start';
 /** REQ-WORKSPACE-092: once a step is stopped, nothing it launched is still running 5 s later. */
 const SETUP_STOP_GRACE_MS = 5_000;
 /**
@@ -72,8 +78,45 @@ export const SETUP_FOLLOW_BOUND_MS = CODE_INTELLIGENCE_SETUP_STEPS.reduce((sum, 
  */
 export const STEP_STOPPED_BY_CANCEL = 'Setup was stopped before this step finished.';
 export const STEP_STOPPED_BY_BUDGET = 'This step did not finish within its time budget.';
-const stepDetail = (s: McpSetupStatus['steps'][number]): string =>
-  s.stopped === 'cancelled' ? STEP_STOPPED_BY_CANCEL : s.stopped === 'budget' ? STEP_STOPPED_BY_BUDGET : s.detail;
+/** REQ-WORKSPACE-091: creation skipped because the runtime's marker file is present reports success with this output. */
+export const STEP_MARKER_PRESENT = 'project file already exists; left as is';
+/** REQ-WORKSPACE-091: the two stages a `non-code` workspace skips, each with its own fixed detail. */
+export const STEP_NO_CODE: Readonly<Record<string, string>> = {
+  index: 'No source files found, so there are no symbols to index.',
+  memory: 'No source files found, so no memory layout was seeded.',
+};
+/** REQ-WORKSPACE-092: "every other step's detail SHALL be the last 400 bytes of its combined standard output and standard error". */
+export const STEP_DETAIL_BYTES = 400;
+
+/**
+ * The last `bytes` bytes of `text` as UTF-8, cut where a character begins, so a character is never split (REQ-WORKSPACE-092:
+ * non-ASCII characters survive into the detail).
+ */
+export function lastUtf8Bytes(text: string, bytes: number): string {
+  const encoded = Buffer.from(text, 'utf8');
+  if (encoded.length <= bytes) return text;
+  let from = encoded.length - bytes;
+  // A UTF-8 continuation byte is 10xxxxxx: the character it belongs to began before the cut, so it is left out whole.
+  while (from < encoded.length && (encoded[from]! & 0xc0) === 0x80) from += 1;
+  return encoded.subarray(from).toString('utf8');
+}
+
+/**
+ * REQ-WORKSPACE-091/092: a setup step's detail in this domain's words, read from the facts the run host's status carries
+ * beside its own `detail` — which stays the MCP category's (REQ-MCP-099/112) and is never shown here
+ * (`docs/defects/fixed/the-other-setup-step-details-are-not-in-req-workspace-091-092s-words.md`). A stopped step and a
+ * skipped one read in the requirements' fixed sentences; every other step's detail is the last 400 bytes of its output, with
+ * no prefix, empty for a step that wrote nothing or never ran. A step whose command could not be started has no output and
+ * reads in the launch's own error (OQ-175 records that reading and the empty ones).
+ */
+const stepDetail = (s: McpSetupStatus['steps'][number]): string => {
+  if (s.stopped === 'cancelled') return STEP_STOPPED_BY_CANCEL;
+  if (s.stopped === 'budget') return STEP_STOPPED_BY_BUDGET;
+  if (s.skipped === 'marker-present') return STEP_MARKER_PRESENT;
+  if (s.skipped === 'no-code' || s.status === 'skipped-no-code') return STEP_NO_CODE[s.id] ?? '';
+  if (s.startError !== undefined) return s.startError;
+  return lastUtf8Bytes(s.output ?? '', STEP_DETAIL_BYTES);
+};
 
 /** REQ-WORKSPACE-095: the two success summaries, by classification. */
 export const CODE_INTELLIGENCE_SUCCESS_CODE = 'Code intelligence is set up for this project and its symbols are indexed.';
@@ -265,7 +308,17 @@ export class InitializationCoordinator {
           // REQ-WORKSPACE-109: cancelled while it waited, the task never starts its setup and fails as REQ-WORKSPACE-093 says.
           // A workspace no window holds any more had its run aborted when it closed (`close`), so it fails the same way.
           if (workspaceId === null || !await this.turnReached(previous, ctx.signal)) return this.failure(CANCELLED_BEFORE_SETUP_ERROR, CODE_INTELLIGENCE_FAILED_SUMMARY, true, []);
-          const started = await this.deps.setup.start(workspaceId);
+          // REQ-WORKSPACE-084/093: a start the run host never answers — main's request rejects on its bound, as when the run
+          // host has exited — is this task's own retryable failure, not one that ended without an outcome
+          // (`docs/defects/fixed/a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`).
+          let started: Awaited<ReturnType<SetupPort['start']>>;
+          try {
+            started = await this.deps.setup.start(workspaceId);
+          } catch (cause) {
+            const error = cause instanceof Error ? cause.message : String(cause);
+            this.deps.log(`initialization: the run host did not answer ${CODE_INTELLIGENCE_TASK_ID}'s setup start for ${ctx.workspaceRoot} (${error})`, 'warn');
+            return this.failure(`${SETUP_REASON}: ${SETUP_START_UNANSWERED_DETAIL} (${error})`, CODE_INTELLIGENCE_FAILED_SUMMARY, true, []);
+          }
           // REQ-WORKSPACE-093/094: a refused start is not REQ-WORKSPACE-094's "not a local launch" — that one arrives as an
           // `unavailable` status, which `resultOf` maps — but a condition that may not hold at the next open: retryable, in
           // this domain's summary, the refusal's own words as the detail

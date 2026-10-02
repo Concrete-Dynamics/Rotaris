@@ -43,5 +43,5 @@ under Xvfb, Node 24, `--skip-build` after `pnpm build`, load average about 9 fro
 ending 101 ms after the kill with "Code intelligence could not create this project's configuration: the run host exited
 before the setup finished." and the queued run attempted and ending 15 s later. **Found besides:** that queued run's start,
 sent to the run host that is gone, is reported as a task with no outcome rather than in REQ-WORKSPACE-093's words
-([`a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`](../a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md),
+([`a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md`](a-setup-start-the-run-host-never-answers-is-reported-as-a-task-with-no-outcome.md),
 recorded, not repaired).

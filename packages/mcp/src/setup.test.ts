@@ -14,7 +14,7 @@ const realClocks = (): Clocks => {
   const timers: Timers = { after: (ms, fn) => { const h = setTimeout(fn, ms); return { cancel: () => clearTimeout(h) }; } } as Timers;
   return { monotonic: { now: () => performance.now() }, timers } as Clocks;
 };
-const script = 'const a = process.argv.slice(1); const step = a[0]; if (step === "ok") process.exit(0); if (step === "fail") { process.stdout.write("x".repeat(500) + "END-OF-OUTPUT"); process.exit(3); } if (step === "sleep") setTimeout(() => {}, 20000);';
+const script = 'const a = process.argv.slice(1); const step = a[0]; if (step === "ok") process.exit(0); if (step === "say") { process.stdout.write("Fehler: ä  \\n"); process.stderr.write("indexed"); process.exit(0); } if (step === "fail") { process.stdout.write("x".repeat(500) + "END-OF-OUTPUT"); process.exit(3); } if (step === "sleep") setTimeout(() => {}, 20000);';
 const invocation = { command: process.execPath, args: ['-e', script] };
 const log = { info: () => undefined, warn: () => undefined, debug: () => undefined };
 const step = (id: string, sub: string, patch: Partial<SetupStepSpec> = {}): SetupStepSpec => ({ id, label: id, subcommand: [sub], budgetMs: 10_000, needsCode: false, ...patch });
@@ -26,6 +26,27 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
     expect(r.outcome).toBe('completed');
     expect(r.steps.map((s) => s.status)).toEqual(['succeeded', 'succeeded', 'succeeded']);
     expect(seen).toEqual(['create:running', 'create:succeeded', 'index:running', 'index:succeeded', 'memory:running', 'memory:succeeded']);
+    // A step that ran carries its output apart from `detail`, which the MCP category shows empty for a success (REQ-MCP-112).
+    expect(r.steps.map((s) => [s.detail, s.output, s.skipped, s.startError])).toEqual([['', '', undefined, undefined], ['', '', undefined, undefined], ['', '', undefined, undefined]]);
+  });
+
+  it('carries a succeeded step\'s combined output, UTF-8 intact, apart from its detail (REQ-WORKSPACE-092)', async () => {
+    const r = await runSetupSteps({ invocation, workspaceRoot: process.cwd(), steps: [step('create', 'say')], creationStepId: 'create', markerPresent: false, containsCode: true, env: process.env as Record<string, string>, clocks: realClocks(), log, signal: new AbortController().signal, onStep: () => undefined, pollMs: millis(50) });
+    expect(r.steps[0]!.status).toBe('succeeded');
+    expect(r.steps[0]!.detail).toBe('');
+    // Both streams, trimmed; the order between them is the pipes', so only their content is asserted.
+    expect(r.steps[0]!.output).toContain('Fehler: ä');
+    expect(r.steps[0]!.output).toContain('indexed');
+  });
+
+  it('carries a step that could not be started as its launch error, with no output', async () => {
+    const r = await runSetupSteps({ invocation: { command: join(tmpdir(), 'rotaris-no-such-runtime', 'ci'), args: [] }, workspaceRoot: process.cwd(), steps: [step('create', 'ok'), step('index', 'ok')], creationStepId: 'create', markerPresent: false, containsCode: true, env: process.env as Record<string, string>, clocks: realClocks(), log, signal: new AbortController().signal, onStep: () => undefined, pollMs: millis(50) });
+    expect(r.outcome).toBe('failed');
+    expect(r.steps[0]!.status).toBe('failed');
+    expect(r.steps[0]!.startError).toBeTruthy();
+    expect(r.steps[0]!.detail).toBe(`the setup command could not be started: ${r.steps[0]!.startError}`);
+    expect(r.steps[0]!.output).toBeUndefined();
+    expect(r.steps[1]!.status).toBe('not-attempted');
   });
 
   it('PD-MONITOR-002, live-run finding a71-9: a step\'s outcome is the caller\'s to log (its onStep), never the runner\'s as well', async () => {
@@ -45,6 +66,9 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
     expect(r.outcome).toBe('completed');
     expect(r.steps.map((s) => s.status)).toEqual(['succeeded', 'skipped-no-code', 'skipped-no-code']);
     expect(r.steps[0]!.detail).toContain('creation skipped');
+    // The reasons travel as facts, so a reader owing its own words for them need not read the prose (REQ-WORKSPACE-091).
+    expect(r.steps.map((s) => s.skipped)).toEqual(['marker-present', 'no-code', 'no-code']);
+    expect(r.steps.map((s) => s.output)).toEqual([undefined, undefined, undefined]);
   });
 
   it('stops after a failure with the LAST 400 characters of its output, the rest not attempted', async () => {
@@ -56,6 +80,10 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
     expect(tail.endsWith('END-OF-OUTPUT')).toBe(true);
     expect(r.steps[1]!.detail).toContain('code 3');
     expect(r.steps[1]!.stopped).toBeUndefined();
+    // The same tail travels without the prose around it.
+    expect(r.steps[1]!.output).toBe(tail);
+    expect(r.steps[1]!.skipped).toBeUndefined();
+    expect(r.steps[2]!.output).toBeUndefined();
   });
 
   it('terminates a step past its budget and reports it failed', async () => {
@@ -64,6 +92,7 @@ describe('runSetupSteps (REQ-MCP-099)', () => {
     expect(r.steps[0]!.status).toBe('failed');
     expect(r.steps[0]!.detail).toContain('exceeded its budget');
     expect(r.steps[0]!.stopped).toBe('budget');
+    expect(r.steps[0]!.output).toBe('');
     expect(r.steps[1]!.stopped).toBeUndefined();
     expect(r.steps[1]!.status).toBe('not-attempted');
   }, 20_000);

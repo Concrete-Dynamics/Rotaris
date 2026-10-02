@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { contextPercent, type AgentRecord } from '@rotaris/contracts';
 import { clockAdvances, elapsedLabel, elapsedShown } from './AgentTree.js';
-import { stalledText, tableOrder } from './agents.js';
+import { countNoun, stalledText, tableOrder } from './agents.js';
 import { markMotionStart } from './motion.js';
 import { Button as DesignButton, EmptyState as DesignEmptyState, Table as DesignTable, Tag as DesignTag } from './design-system/index.js';
 
@@ -9,8 +9,11 @@ import { Button as DesignButton, EmptyState as DesignEmptyState, Table as Design
  * REQ-MONITOR-274/275/116/281 (Part R): the Mission view's agent activity table — one row per agent in the tree's
  * depth-first order: the state dot with the state as text (REQ-SHELL-149), the name, the persona, the activity
  * text, the tool-call count, the elapsed time advancing once a second while the agent is running, waiting or queued
- * (REQ-MONITOR-107/111, `clockAdvances`, the caller's clock), the context as `{used}/{limit}` with its percent (045), and the compression count where the record has
- * one — this record has none, so the cell says so (281). A row is a memoised component keyed by agent id: only
+ * (REQ-MONITOR-107/111, `clockAdvances`, the caller's clock), the context as `{used}/{limit}` with its percent (045), and the
+ * agent's compression count (`AgentRecord.compressions`, REQ-MONITOR-086), in its own column whose header names the unit, as the
+ * tool-call column's does (281). Until 2026-10-01 that cell read `not recorded`, titled "The record carries no compression
+ * count in this build", though the record had carried the count since Part AH
+ * (docs/defects/fixed/the-mission-table-says-the-record-carries-no-compression-count.md). A row is a memoised component keyed by agent id: only
  * rows whose record changed re-render (275's row-by-row refresh); the elapsed cell is the one that changes on
  * the tick, and only for rows whose clock advances. Structure from docs/spec; language from docs/design/system.
  */
@@ -34,7 +37,7 @@ const Row = memo(function Row({ a, selected, elapsed, onSelect, onOpen, onPopOut
       <td className="agent-table__calls mono">{a.toolCalls}</td>
       <td className="agent-table__elapsed mono" data-testid="agent-elapsed">{elapsed}</td>
       <td className="agent-table__context mono" title={`${a.contextUsed.toLocaleString()} of ${a.contextLimit.toLocaleString()} tokens`}>{a.contextUsed.toLocaleString()}/{a.contextLimit.toLocaleString()} <span className="text-secondary">({percent}%)</span></td>
-      <td className="agent-table__compressions text-secondary" title="The record carries no compression count in this build (REQ-MONITOR-281).">not recorded</td>
+      <td className="agent-table__compressions mono" title={countNoun(a.compressions, 'compression')}>{a.compressions}</td>
       <td className="agent-table__actions">
         <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={(e) => { e.stopPropagation(); onOpen(a); }} title="Open this agent in the inspector, or in its persona window when the agent pop-out preference is on.">Open</DesignButton>
         <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={(e) => { e.stopPropagation(); onPopOut(a); }} title="Open this agent's persona window.">Pop out</DesignButton>

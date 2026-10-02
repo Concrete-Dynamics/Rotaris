@@ -1,9 +1,10 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type SessionRecord } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type AgentRecord, type SessionRecord } from '@rotaris/contracts';
 import { agentStateLabel, restingView } from './agents.js';
 import { createCancelOverlayStore, shownSession } from './cancel-overlay.js';
+import { Inspector } from './Inspector.js';
 import { PersonaWindow } from './PersonaWindow.js';
 
 /**
@@ -66,5 +67,37 @@ describe('agentStateLabel: only the run\'s own live instance takes the run\'s `c
     // In REQ-CHAT-008's recovery state the run-level agent is not live and reads its own presentation.
     expect(agentStateLabel({ id: RUN_AGENT_ID, presentationState: 'cancelled', live: false }, { executionStatus: 'cancelling' })).toBe('cancelled');
     expect(agentStateLabel({ id: RUN_AGENT_ID, presentationState: 'running', live: true }, null)).toBe('running');
+  });
+});
+
+/**
+ * The inspector's half (docs/defects/fixed/the-inspector-meta-line-reads-the-run-level-agent-running-while-the-run-is-cancelling.md):
+ * its meta line read `presentationState` alone, so beside the run header's `Cancelling…` it read `running · …`.
+ */
+const inspector = (shown: SessionRecord, selected: string) => {
+  const { runLevel } = restingView(shown, ENTRY, false);
+  return renderToStaticMarkup(createElement(Inspector, {
+    session: shown, rows: [], personas: [{ role: ENTRY.persona, tools: [...ENTRY.tools], thinking: null, effectiveModel: ENTRY.model }], runLevel, selectedAgentId: selected, onSelect: () => undefined, models: [], compressionThresholdPercent: 60, runActive: true, resting: false, nowIso: '2026-10-01T10:01:04.000Z',
+    onSteer: () => undefined, onCancel: () => undefined, onPopOut: () => undefined,
+  }));
+};
+const meta = (html: string) => html.match(/data-testid="inspector-meta">([^<]*)</)?.[1] ?? '';
+
+describe('REQ-MONITOR-127 / REQ-MONITOR-130: the inspector\'s meta line shows a confirmed run cancel on the run-level agent', () => {
+  it('reads `cancelling` under the overlay, the dot keeping the live motion; a child keeps the agent vocabulary', () => {
+    const child: AgentRecord = { id: 'bg_00000001', name: 'helper', givenName: 'Helper', persona: 'coding-agent', state: 'running', presentationState: 'running', parentId: RUN_AGENT_ID, dependencies: [], activity: '', model: 'scripted/alpha',
+      depth: 1, background: true, category: '', spawnedAt: '2026-10-01T10:00:05.000Z', completedAt: null, toolCalls: 1, delegationTask: '', reasoning: 'medium', contextUsed: 0, contextLimit: DEFAULT_CONTEXT_CAPACITY,
+      grantedTools: [], calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantRecorded: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null, stalledSeconds: null };
+    const store = createCancelOverlayStore();
+    const record = session({ agents: [child], entryToolCalls: 3 });
+    expect(meta(inspector(record, RUN_AGENT_ID)).startsWith('running · ')).toBe(true);
+    expect(store.getState().beginRun(record, '2026-10-01T10:00:20.000Z')).not.toBeNull();
+    const shown = shownSession(record, store.getState())!;
+    const html = inspector(shown, RUN_AGENT_ID);
+    expect(meta(html)).toBe('cancelling · 1m 4s · 3 tool calls');
+    expect(html).toContain('agent-row__dot agent-row__dot--running');
+    expect(meta(inspector(shown, child.id))).toBe('running · 59s · 1 tool call');
+    // The engine's own `cancelling` (the stop's) reads the same.
+    expect(meta(inspector(session({ executionStatus: 'cancelling', entryToolCalls: 3 }), RUN_AGENT_ID))).toBe('cancelling · 1m 4s · 3 tool calls');
   });
 });

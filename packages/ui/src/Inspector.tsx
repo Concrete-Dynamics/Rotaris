@@ -135,7 +135,7 @@ export function Inspector(props: InspectorProps) {
             <span ref={(element) => { if (element && shown.live) markMotionStart(element); }} className={`agent-row__dot agent-row__dot--${shown.presentationState}`} aria-hidden="true" />
             <span className="inspector__name" data-testid="inspector-name">{shown.name}</span>
           </div>
-          <div className="inspector__meta mono" data-testid="inspector-meta">{metaLine(shown, elapsed)}</div>
+          <div className="inspector__meta mono" data-testid="inspector-meta">{metaLine(shown, session, elapsed)}</div>
           <div className="inspector__ring">
             <ContextRing used={shown.contextUsed} limit={shown.contextLimit} thresholdPercent={compressionThresholdPercent} label={`${shown.name}'s context window`} />
             <div className="inspector__ring-caption text-secondary">

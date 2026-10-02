@@ -45,7 +45,7 @@ describe('agents — the shared selection (REQ-MONITOR-042) and the run-level ag
     // live count is ahead of the total too. The total less the children read 0 beside the root's used chips.
     const live = session({ toolCalls: { total: 0, agents: 1, byTool: [] }, agents: [agent({ toolCalls: 1 })], entryTools: { resolved: ['delegate', 'artifact_write'], called: ['delegate', 'artifact_write'], active: [] }, entryToolCalls: 2 });
     expect(runLevelAgent(live, entry, false)?.toolCalls).toBe(2);
-    expect(metaLine(runLevelAgent(live, entry, false)!, '8s')).toBe('running · 8s · 2 tool calls');
+    expect(metaLine(runLevelAgent(live, entry, false)!, live, '8s')).toBe('running · 8s · 2 tool calls');
     // A record with no projection still derives it.
     expect(runLevelAgent(session({ agents: [agent({ toolCalls: 2 })] }), entry, false)?.toolCalls).toBe(3);
   });
@@ -226,12 +226,26 @@ describe('agents — the table order, the ring, the meta line, the nouns (REQ-MO
     expect(ringFigures(10, 100, 500).threshold).toBe(100);
   });
   it('the meta line and the nouns', () => {
-    expect(metaLine(agent({ toolCalls: 1 }), '12s')).toBe('running · 12s · 1 tool call');
-    expect(metaLine(agent({ toolCalls: 0 }), null)).toBe('running · — · 0 tool calls');
+    expect(metaLine(agent({ toolCalls: 1 }), null, '12s')).toBe('running · 12s · 1 tool call');
+    expect(metaLine(agent({ toolCalls: 0 }), null, null)).toBe('running · — · 0 tool calls');
     // REQ-ORCH-089 / REQ-MONITOR-119: a stalled agent's line ends with the watch's figure.
-    expect(metaLine(agent({ toolCalls: 1, stalledSeconds: 95 }), '12s')).toBe('running · 12s · 1 tool call · stalled\u00a095s');
+    expect(metaLine(agent({ toolCalls: 1, stalledSeconds: 95 }), null, '12s')).toBe('running · 12s · 1 tool call · stalled\u00a095s');
     expect(countNoun(1, 'instance')).toBe('1 instance');
     expect(countNoun(2, 'instance')).toBe('2 instances');
+  });
+  it('REQ-MONITOR-127/130 with OQ-165\'s reading: the run-level agent\'s meta line reads the run\'s `cancelling` while it is live and the shown session cancels; a child keeps its own state', () => {
+    const entry = { persona: 'orchestrator', model: 'scripted/alpha', reasoning: 'high', tools: [] };
+    // The confirmed cancel's overlay (or the stop's own record) reads `cancelling`; the run-level agent is still live.
+    const cancelling = session({ executionStatus: 'cancelling', entryToolCalls: 3 });
+    const runLevel = runLevelAgent(cancelling, entry, false)!;
+    expect(runLevel.presentationState).toBe('running');
+    expect(metaLine(runLevel, cancelling, '1m 4s')).toBe('cancelling · 1m 4s · 3 tool calls');
+    // A child is settled by the engine in the teardown: the run's cancel shows no agent cancelled before it does.
+    expect(metaLine(agent({ toolCalls: 1 }), cancelling, '12s')).toBe('running · 12s · 1 tool call');
+    // Before the confirmation, and once the record at rest arrives, the agent vocabulary reads.
+    expect(metaLine(runLevel, session({}), '1m 4s')).toBe('running · 1m 4s · 3 tool calls');
+    const atRest = session({ executionStatus: 'stopped', entryToolCalls: 3 });
+    expect(metaLine(runLevelAgent(atRest, entry, false)!, atRest, null)).toBe('cancelled · — · 3 tool calls');
   });
   it('a persona colour is a named token, stable for a name', () => {
     expect(personaColourToken('coding-agent')).toBe(personaColourToken('coding-agent'));
@@ -293,7 +307,7 @@ describe('agents — PD-ORCH-005 clause 13 (revision 4): a paused agent presents
   });
   it('the inspector\'s meta line names it; it is not live, so it offers no steer, and its Cancel is clause 16\'s alone', () => {
     const paused = agent({ id: 'bg_00000002', parentId: 'bg_00000001', state: 'paused', presentationState: 'paused', live: false, interruption: 'stop' });
-    expect(metaLine(paused, null)).toBe('paused · — · 2 tool calls');
+    expect(metaLine(paused, null, null)).toBe('paused · — · 2 tool calls');
     // REQ-MONITOR-063's live-agent rule offers a paused agent nothing but Pop out; `cancelOffered` decides its Cancel.
     expect(inspectorEnablement('paused')).toEqual({ steer: false, cancel: false, popOut: true });
   });

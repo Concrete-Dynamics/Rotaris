@@ -856,6 +856,28 @@ host in the verification's repair round, read the parse at 2.19 to 2.33 and the 
 18 to 23 ms, under the floor, so its ratio stays recorded and not asserted. The note is
 [`traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`](../../defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md).
 
+**Corrected 2026-10-02 (fin5): the minimum screens out load only while some reading of each side runs uncontended.**
+The falsified reason was point 2's "load can only make a pass slower, never faster, so of repeated readings of one pass
+the **minimum** is the least contaminated estimate". It holds while some reading of each side escapes the load. On a
+host with more runnable work than CPUs none need: with eight CPU-bound loops beside the other plan's agents on four
+CPUs (load average 9.9 to 20.6), the parse ratio read 3.08 to 5.52 and the sweep's 0.34 and 3.32, and on this branch four
+runs before the repair stopped on growth four times (sweep 3.19, parse 3.1 and 3.89, parser 5.24). The minimum of a
+contended side is still contended, by an amount the other side need not share.
+
+The replacement: each pass is read on two clocks, and the ratio is the quotient of the minima of the thread's own CPU
+time (`process.threadCpuUsage()`, user plus system), the measure of REQ-TRACE-088's reference conditions, one execution
+thread timing the pass alone. A reader returns `{ wallMs, cpuMs }` (`PassReading`, `growth-readings.ts`); the sweep,
+which times itself, is handed a clock that reads the thread's CPU time and keeps the wall instants beside it
+(`dualClock`, `traceability.proof.test.ts`). The wall readings, their quotient and the host's load averages and CPU count
+are recorded beside the CPU figures in `spike-results.json`, and `growthVerdict` prints them on every line. The minimum is
+kept, now over CPU readings. Point 1, the lower bounds, the 3.0 ceiling and the 25 ms floor are unchanged, and the two
+"about one second" budgets stay on the wall clock: a red there above the CPU count is re-run alone. Under the same eight
+loops, ten runs after the repair passed at load averages of 10.4 to 14.7, the parse reading 2.06 to 2.62 and the parser
+1.96 to 2.23 on the thread's CPU time while their wall ratios read 1.84 to 3.56 and 1.73 to 6.69. The half-size sweep reads
+14 to 23 ms of thread CPU, under the floor, so its ratio stays recorded and not asserted, as on an idle host's wall clock.
+The note is
+[`traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`](../../defects/fixed/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md).
+
 **Corrected 2026-10-01 (R-062): the second execution's busy pair raced, and is now held in flight.** The falsified
 claim was "two concurrent checks yielded exactly one `busy` (`REQ-TRACE-512`)". The proof posted two board-path checks
 over the eleven-requirement fixture in one `Promise.all`, and a check there takes about 8 ms, so whenever the first

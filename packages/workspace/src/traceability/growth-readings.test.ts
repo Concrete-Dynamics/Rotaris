@@ -3,7 +3,8 @@ import { growthPair, interleavedMinima } from './growth-readings.js';
 
 /**
  * REQ-TRACE-501 / REQ-TRACE-088: the readings the proof's linear-growth ratio is computed from
- * (`docs/defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).
+ * (`docs/defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`, and on an
+ * oversubscribed host `docs/defects/fixed/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`).
  *
  * The pass is modelled, not run: a reader that costs `work × warmth(n)`, where `n` counts every pass the process has
  * made so far and `warmth` falls as the JIT warms, which is the shape that made the half-size side read cheap when it
@@ -96,6 +97,31 @@ describe('interleavedMinima (REQ-TRACE-501, REQ-TRACE-088)', () => {
     expect(pair.fullRunsMs).toEqual(fulls);
     expect(pair.halfRunsMs).toEqual(halves);
     expect(pair).toMatchObject({ fullMinMs: 138.8, halfMinMs: 43.9, ratio: 3.16, work: { full: 1501, half: 701 } });
+  });
+
+  it('REQ-TRACE-088: on an oversubscribed host the ratio is read on the thread\'s CPU time, which the contention that inflates the wall clock does not reach', () => {
+    // The shape of the reds in traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host: the CPU time each pass
+    // costs is its work, while its wall reading is that cost stretched by however long the thread waited for a CPU, and
+    // on more runnable work than CPUs no round of either side escapes the wait. Here every full-size reading waits 2.5×
+    // and every half-size one 1.2×, so the wall minima read 4.46 against a work ratio of 2.14.
+    const oversubscribed = (stretch: Record<'full' | 'half', number>) => {
+      const pass = (side: 'full' | 'half') => { const cpuMs = WORK[side] * 40; return { wallMs: cpuMs * stretch[side], cpuMs }; };
+      return { full: () => pass('full'), half: () => pass('half') };
+    };
+    const pair = growthPair(interleavedMinima(oversubscribed({ full: 2.5, half: 1.2 })), { full: 1501, half: 701 });
+    expect(pair.clock).toBe('thread-cpu');
+    expect(pair.wallRatio).toBe(4.46);
+    expect(pair.ratio).toBe(2.14);
+    for (const [field, value] of [['fullCpuMinMs', 85.6], ['halfCpuMinMs', 40], ['fullMinMs', 214], ['halfMinMs', 48]] as const) expect(pair[field]).toBeCloseTo(value, 6);
+    expect(pair.fullCpuRunsMs).toHaveLength(7);
+    expect(pair.halfRunsMs).toHaveLength(7);
+    // The other direction of the reds (the sweep read 0.34): the half side waits, the full side does not.
+    expect(growthPair(interleavedMinima(oversubscribed({ full: 1, half: 6 })), { full: 1000, half: 500 })).toMatchObject({ clock: 'thread-cpu', ratio: 2.14, wallRatio: 0.36 });
+  });
+
+  it('REQ-TRACE-501: readers returning wall-clock milliseconds alone keep the wall ratio, and say so', () => {
+    const pair = growthPair(interleavedMinima({ full: () => 214, half: () => 100 }), { full: 1501, half: 701 });
+    expect(pair).toMatchObject({ clock: 'wall', ratio: 2.14, wallRatio: 2.14, fullCpuMinMs: null, halfCpuMinMs: null, fullCpuRunsMs: null, halfCpuRunsMs: null });
   });
 
   it('refuses a measurement with no recorded round or a fractional warm-up count', () => {

@@ -10,7 +10,13 @@
  * (`docs/defects/fixed/traceability-proofs-growth-ratio-times-the-full-and-half-trees-unevenly.md`).
  *
  * A pair is what `growthPair` in `packages/workspace/src/traceability/growth-readings.ts` records:
- * `{ work: { full, half }, fullRunsMs, halfRunsMs, fullMinMs, halfMinMs, ratio }`.
+ * `{ work: { full, half }, clock, ratio, fullRunsMs, halfRunsMs, fullMinMs, halfMinMs, wallRatio, fullCpuRunsMs,
+ * halfCpuRunsMs, fullCpuMinMs, halfCpuMinMs }`, and the proof adds the `host` it was read on.
+ *
+ * 2026-10-02: where `clock` is `thread-cpu` the ratio, the floor and the readings the verdict names are the thread's CPU
+ * time, and the wall-clock readings, their ratio and the host's load are printed beside them; a pair with no `clock`
+ * (wall-clock readings alone) is judged on the wall clock as before. The ceiling, the lower bounds, the floor and the
+ * work range are unchanged (`docs/defects/fixed/traceability-proofs-growth-ratio-goes-red-on-an-oversubscribed-host.md`).
  */
 
 export const GROWTH_FLOOR_MS = 25;
@@ -28,16 +34,22 @@ export function growthVerdict(label, pair, lower, { floorMs = GROWTH_FLOOR_MS, c
   if (!(workRatio > WORK_RANGE.above && workRatio < WORK_RANGE.below)) {
     return { ok: false, asserted: false, message: `${label}: the half-size tree is not about half the work (${pair.work.full} against ${pair.work.half}, ratio ${workRatio})` };
   }
-  const readings = `${JSON.stringify(pair.fullRunsMs ?? [])} full (minimum ${pair.fullMinMs} ms) against ${JSON.stringify(pair.halfRunsMs ?? [])} half (minimum ${pair.halfMinMs} ms)`;
-  if (pair.fullMinMs < floorMs || pair.halfMinMs < floorMs) {
-    return { ok: true, asserted: false, message: `${label} growth ratio ${pair.ratio} recorded, NOT asserted: ${pair.fullMinMs} ms against ${pair.halfMinMs} ms is below the ${floorMs} ms floor at which a wall clock can tell two passes apart (work ratio ${workRatio} asserted instead)` };
+  const cpu = pair.clock === 'thread-cpu';
+  const side = cpu
+    ? { full: pair.fullCpuRunsMs, half: pair.halfCpuRunsMs, fullMin: pair.fullCpuMinMs, halfMin: pair.halfCpuMinMs }
+    : { full: pair.fullRunsMs, half: pair.halfRunsMs, fullMin: pair.fullMinMs, halfMin: pair.halfMinMs };
+  const readings = `${cpu ? 'thread CPU ' : ''}${JSON.stringify(side.full ?? [])} full (minimum ${side.fullMin} ms) against ${JSON.stringify(side.half ?? [])} half (minimum ${side.halfMin} ms)`;
+  const load = pair.host ? `, load average ${pair.host.loadAverage?.[0]} on ${pair.host.cpus} CPUs` : '';
+  const beside = cpu ? `; wall clock ${JSON.stringify(pair.fullRunsMs ?? [])} full against ${JSON.stringify(pair.halfRunsMs ?? [])} half, ratio ${pair.wallRatio}${load}` : load;
+  if (side.fullMin < floorMs || side.halfMin < floorMs) {
+    return { ok: true, asserted: false, message: `${label} growth ratio ${pair.ratio} recorded, NOT asserted: ${side.fullMin} ms against ${side.halfMin} ms${cpu ? ' of thread CPU' : ''} is below the ${floorMs} ms floor at which a ${cpu ? 'clock' : 'wall clock'} can tell two passes apart (work ratio ${workRatio} asserted instead)${beside}` };
   }
   const ok = pair.ratio > lower && pair.ratio < ceiling;
   return {
     ok,
     asserted: true,
     message: ok
-      ? `${label} growth ratio ${pair.ratio} against work ratio ${workRatio} — readings ${readings}`
-      : `${label} growth ratio ${pair.ratio} is not linear — the readings ${readings}, work ratio ${workRatio}`,
+      ? `${label} growth ratio ${pair.ratio} against work ratio ${workRatio} — readings ${readings}${beside}`
+      : `${label} growth ratio ${pair.ratio} is not linear — the readings ${readings}, work ratio ${workRatio}${beside}`,
   };
 }

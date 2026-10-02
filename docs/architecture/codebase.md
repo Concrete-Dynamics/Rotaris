@@ -100,6 +100,13 @@ plain process with no React and the restore run against a fake run host with a c
   whose `#fragment` names no heading or anchor in it; fenced and inline code and HTML comments are text, not links.
   A defect note moved to `docs/defects/fixed/` takes every link to it along in the same commit, or the gate says
   which one stayed behind (since 2026-09-28, R-062).
+- **No merge leaves a conflict marker behind** — `tools/check-conflict-markers.mjs` (in `pnpm lint`, after
+  `check-line-endings.mjs`) reads every tracked text file in the working copy and the index, through `git grep`, and
+  fails on a line git writes as a marker: seven `<`, `|` or `>` at column 0 followed by a space or the line's end, and
+  a line of exactly seven `=` only between an opening and a closing marker, since alone it is a Markdown setext
+  heading underline. It names the file and the line, and skips where there is no git checkout. A typecheck catches a
+  marker in TypeScript; nothing else read one in Markdown or JSON read as text (since 2026-10-02,
+  [the note](../defects/fixed/the-gate-passes-a-committed-merge-conflict-marker.md)).
 - **A design-equivalent control is written once** — `tools/check-ui-language.mjs` (in `pnpm lint`, beside
   `check-theme-colours.mjs`) fails on a raw `button`, `input`, `textarea`, `select` or `table` anywhere under
   `packages/ui/src` or `apps/desktop/src/renderer` except `design-system/` itself, which is where they live.

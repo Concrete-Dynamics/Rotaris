@@ -43,6 +43,13 @@ Abandoning a branch because the merge is hard is not an outcome an agent may cho
   other branch's placeholder (the implementation wins, or the stub shadows it).
 - **Never `git add -A` or `git commit -a` during a merge, or in a shared checkout.** Stage
   the conflicted paths by name.
+- **A conflict marker left behind fails the lint.** `tools/check-conflict-markers.mjs` reads
+  every tracked text file, working copy and index, and fails `pnpm lint` on a line git writes
+  as a marker: seven `<`, `|` or `>` at column 0 followed by a space or the line's end, and a
+  line of exactly seven `=` between an opening and a closing marker (alone, that line is a
+  Markdown heading underline and passes). It names the file and the line. Markdown and JSON
+  read as text are where it matters: a marker there broke nothing else the gate runs
+  ([the note](../defects/fixed/the-gate-passes-a-committed-merge-conflict-marker.md)).
 - **After a keep-both merge, run the compiler, not a sweep you wrote.** Command ids,
   preference keys, barrel re-exports, zod literal kinds, `case` labels, script names and
   ignore entries all duplicate silently; `tsc` finds in seconds what a regex misses.

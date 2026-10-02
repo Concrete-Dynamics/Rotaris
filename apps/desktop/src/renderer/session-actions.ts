@@ -237,7 +237,7 @@ export function createSessionActions({ bridge, replica, cancels, now = () => new
   }
 
   /**
-   * REQ-NOTIFY-045 with REQ-NOTIFY-030 and REQ-NOTIFY-066 (OQ-177): a notice's retry. It resubmits the current composer
+   * REQ-NOTIFY-045 with REQ-NOTIFY-030 and REQ-NOTIFY-066 (OQ-178): a notice's retry. It resubmits the current composer
    * draft, or — the draft blank — the followed session's last submitted prompt, its newest `user` row (the prompt the
    * engine's own continue reads as the last one). It goes through `submitPrompt`, the composer's own path, so it reaches
    * the session this window follows and never another's, and a refusal carries the engine's words. With no session

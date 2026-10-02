@@ -981,7 +981,7 @@ function dispatchNoticeAction(action: NoticeAction): void {
       void bridge.command({ kind: 'update.restart' });
       return;
     case 'retry-run':
-      // REQ-NOTIFY-045 (OQ-177): the draft as the window last published it, else as stored (REQ-NOTIFY-066), else the
+      // REQ-NOTIFY-045 (OQ-178): the draft as the window last published it, else as stored (REQ-NOTIFY-066), else the
       // followed session's last submitted prompt — `retryRun` decides, and a refusal is said rather than swallowed.
       void (async () => {
         let draft = composerDraft.current;

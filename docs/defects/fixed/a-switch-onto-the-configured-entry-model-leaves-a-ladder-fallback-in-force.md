@@ -40,7 +40,7 @@ Repaired 2026-10-02 on `fin5-noticed-gaps`, as the same defect as
 [an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md](an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md),
 which that branch recorded in parallel from the same triage finding (the two notes met at its merge of `origin/main`;
 that note carries the repair, its tests and its proof). Whether a user's switch onto the configured model should end a
-ladder move is raised as OQ-176 for the owner; the build proceeds under the reading that it does, REQ-MONITOR-145's
+ladder move is raised as OQ-177 for the owner; the build proceeds under the reading that it does, REQ-MONITOR-145's
 recovery lever. `rootRebuildsFor` now counts a pending model switch, so the root's cell is rebuilt on the chosen model at
 its next turn (the once-per-agent budgets carried over) and every switch records `rebuilds: true`. The `rebuilds: false`
 this note described is found only in stores written before the repair, and the autopsy reader keeps reading it.

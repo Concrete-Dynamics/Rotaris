@@ -11,7 +11,7 @@ different one"), where REQ-MONITOR-194 names the quota-wait surface as a place t
 exhausted pair therefore stays excluded from every same-tier candidate list (REQ-MONITOR-193) for the rest of the session
 however the user chose it. Noticed 2026-10-02 while repairing
 [an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md](fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md)
-(OQ-176); not reproduced in a built app, read from the code.
+(OQ-177); not reproduced in a built app, read from the code.
 
 ## Specs
 

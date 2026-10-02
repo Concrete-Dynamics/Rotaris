@@ -412,9 +412,9 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(pub.snapshots.every((s) => s.wait === null)).toBe(true);
   });
 
-  // Until OQ-176 (2026-10-02) the switch onto a1 recorded `rebuilds: false` and the fallback stood
+  // Until OQ-177 (2026-10-02) the switch onto a1 recorded `rebuilds: false` and the fallback stood
   // (a-switch-onto-the-configured-entry-model-leaves-a-ladder-fallback-in-force); now every switch rebuilds the cell.
-  it('REQ-MONITOR-142 over REQ-ORCH-091 b (OQ-176): a switch records that the root\'s cell is rebuilt for it — even for the model it was last built from, so a fallback in force ends', async () => {
+  it('REQ-MONITOR-142 over REQ-ORCH-091 b (OQ-177): a switch records that the root\'s cell is rebuilt for it — even for the model it was last built from, so a fallback in force ends', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model']), entry('c1', 'c', C1, [])];
     let release!: () => void;
     const held = new Promise<void>((r) => { release = r; });
@@ -424,7 +424,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     // The root fell back a1 → b1 and its call on b1 is in flight: no wait, so a switch is the next-iteration switch.
     expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
     const switched = () => dal.timelineOf(sid).filter((t) => t.name === 'entry_model_switched').map((t) => JSON.parse(t.metadata) as unknown);
-    // The configured key: the cell was built from a1, and it is rebuilt on a1 all the same (OQ-176), ending b1.
+    // The configured key: the cell was built from a1, and it is rebuilt on a1 all the same (OQ-177), ending b1.
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'a1' } })).toEqual({ ok: true });
     // Another model: rebuilt from the next iteration.
     expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
@@ -437,13 +437,13 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   /*
    * The verifier's away-and-back case of the same note: with the root on its fallback, a switch away from the configured
    * model and one back onto it before the root's next turn. `rebuilds: true` on the first was a prediction the second
-   * overtook; the run says so (`supersedes`). Since OQ-176 the second rebuilds the cell on a1, so the next iteration's root
+   * overtook; the run says so (`supersedes`). Since OQ-177 the second rebuilds the cell on a1, so the next iteration's root
    * runs on a1 and the reader, over the run's own store, reads b1 then a1. (Until 2026-10-02 the second recorded
    * `rebuilds: false`, the root kept b1 and the reader read b1 alone.) The control: the switch away alone moves the next
    * iteration's root to c1. A second task gives the run that next iteration: a switch applies from the next iteration, and
    * the root's resume after its child is still this one (REQ-MONITOR-142).
    */
-  it('REQ-MONITOR-142 over REQ-ORCH-091 b (OQ-176): a switch away and back before the root\'s next turn supersedes the first — the root returns to the configured model, and the record and the autopsy reader say so', async () => {
+  it('REQ-MONITOR-142 over REQ-ORCH-091 b (OQ-177): a switch away and back before the root\'s next turn supersedes the first — the root returns to the configured model, and the record and the autopsy reader say so', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model']), entry('c1', 'c', C1, [])];
     const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
     const runWith = async (switches: readonly string[]) => {
@@ -489,13 +489,13 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   /*
    * The verifier's second case of the same note: the root's ladder move recorded BETWEEN a switch and the switch that
    * supersedes it. The move happens in the turn already running when the first switch was made, on the cell from before
-   * it, so undoing the superseded switch keeps it until the superseding switch applies: since OQ-176 that switch back onto
+   * it, so undoing the superseded switch keeps it until the superseding switch applies: since OQ-177 that switch back onto
    * a1 rebuilds the cell, so the next iteration's root runs on a1 and the reader, over the run's own store, reads b1 then
    * a1. (Until 2026-10-02 the switch back recorded `rebuilds: false`, the root stayed on b1 and the reader ended on b1.)
    * The run records on the move that a switch was pending (`switch_pending`), so the reader also places a move before a
    * switch that is never superseded — the control: the switch to c1 alone ends the move at the next iteration's root.
    */
-  it('REQ-MONITOR-142 over REQ-ORCH-091 b (OQ-176): a root fallback made while a switch is pending is recorded so, and the reader places it before the switch — superseded, then ended by the switch that supersedes it; ended when the switch applies', async () => {
+  it('REQ-MONITOR-142 over REQ-ORCH-091 b (OQ-177): a root fallback made while a switch is pending is recorded so, and the reader places it before the switch — superseded, then ended by the switch that supersedes it; ended when the switch applies', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model']), entry('c1', 'c', C1, [])];
     const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
     const runWith = async (back: boolean) => {
@@ -1033,10 +1033,10 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   });
 
   /*
-   * REQ-MONITOR-142 over REQ-ORCH-090/091 (OQ-176): the row a switch appends says what the entry agent runs on from the
+   * REQ-MONITOR-142 over REQ-ORCH-090/091 (OQ-177): the row a switch appends says what the entry agent runs on from the
    * next iteration, whatever the ladder did before it — and the iteration in flight finishes on the setting it had.
    */
-  describe('REQ-MONITOR-142 with REQ-ORCH-090/091 (OQ-176): an entry switch row is what the next iteration runs on', () => {
+  describe('REQ-MONITOR-142 with REQ-ORCH-090/091 (OQ-177): an entry switch row is what the next iteration runs on', () => {
     const systemRows = (sid: SessionId) => dal.residentRows(sid).filter((r) => r.kind === 'system').map((r) => r.body);
     const isRoot = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => /^You are the orchestrator/.test(r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '');
     const rootModels = (client: ScriptedModelClient) => client.requests.filter(isRoot).map((r) => r.model.modelId);

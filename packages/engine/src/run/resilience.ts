@@ -232,7 +232,7 @@ export class ResilienceMemory {
   }
 
   /**
-   * REQ-MONITOR-142 with REQ-ORCH-091 (d) (OQ-176): the override `effective` ends on for this choice — the last hop of
+   * REQ-MONITOR-142 with REQ-ORCH-091 (d) (OQ-177): the override `effective` ends on for this choice — the last hop of
    * its chain — or null when none moves it, so a switch onto an overridden pair can say where the agent really runs.
    */
   overrideReaching(choice: ModelChoice, catalogue: readonly CatalogueEntry[]): Override | null {

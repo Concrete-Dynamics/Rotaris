@@ -6,7 +6,7 @@ appends "Entry model switched to X; it applies from the next iteration." but the
 still. `rootResilience` rebuilds the root's cell only when the *requested* model changes (`sameRef(appliedEntryModel,
 entryModel)`), and a switch onto the key already requested changes nothing it compares, so the cell the ladder moved
 is kept for the rest of the run. The row is untrue. Found read-only by the third triage of open defect notes; confirmed
-on `fin5-noticed-gaps` by `packages/engine/src/run/ladder.test.ts` (the `OQ-176` block): the requests after the switch
+on `fin5-noticed-gaps` by `packages/engine/src/run/ladder.test.ts` (the `OQ-177` block): the requests after the switch
 went to `b1` (same-tier) and `f1` (unresponsive), not `a1`.
 
 The same comparison makes three more rows of the same family untrue, confirmed by the same block:
@@ -22,14 +22,14 @@ The same comparison makes three more rows of the same family untrue, confirmed b
   applies.
 
 Whether a user's switch onto the configured model ends a REQ-ORCH-090/091 b move is a question the specification leaves
-open: [OQ-176](../../architecture/open-questions.md).
+open: [OQ-177](../../architecture/open-questions.md).
 
 ## Specs
 
 - REQ-MONITOR-142 — "applies from the next iteration onward; the iteration already in flight finishes on the previous
   setting. Each switch appends a system transcript row stating the new model or reasoning level and that it applies from
   the next iteration." The row is the requirement's; what it states did not happen.
-- REQ-ORCH-090, REQ-ORCH-091 (b) and (d) — the moves and the override the switch meets; OQ-176.
+- REQ-ORCH-090, REQ-ORCH-091 (b) and (d) — the moves and the override the switch meets; OQ-177.
 
 ## Relevant files
 
@@ -41,7 +41,7 @@ open: [OQ-176](../../architecture/open-questions.md).
 
 ## Outcome
 
-Repaired 2026-10-02 on `fin5-noticed-gaps`, under OQ-176's reading (the question stays open for the owner; the row is
+Repaired 2026-10-02 on `fin5-noticed-gaps`, under OQ-177's reading (the question stays open for the owner; the row is
 true under either answer, because it now says what the next iteration runs on).
 
 - `Run.rootResilience` rebuilds the root's cell when a user's model switch is pending (`pendingEntrySwitch`), not only
@@ -54,7 +54,7 @@ true under either answer, because it now says what the next iteration runs on).
   (`ResilienceMemory.overrideReaching`); when one did, the row names the model the entry agent runs on instead of saying
   the switch applies.
 
-Pinned by `packages/engine/src/run/ladder.test.ts`'s `OQ-176` block, five tests that each failed before the repair (the
+Pinned by `packages/engine/src/run/ladder.test.ts`'s `OQ-177` block, five tests that each failed before the repair (the
 requests went to `b1`, `f1`, the old reasoning level, `c1` within the iteration, and the row said "it applies"). Shown in
 the built app by `resilience-proof`'s new `switch-back` scenario: a 429 moves the root from alpha to beta, the user
 switches back to alpha from the run header and queues a follow-up, and iteration 2 runs on alpha under the row

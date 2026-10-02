@@ -99,7 +99,7 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * (REQ-ORCH-090). A child's move leaves the root where it is; the next continuation ends a move (its snapshot's key, or
  * the configured key when it records none), and so does a switch the run rebuilt the root's cell for — not one it
  * records `rebuilds: false` on, onto the model the cell was last built from (a store recording no `rebuilds` reads as
- * rebuilt; since OQ-176 the run records `rebuilds: true` on every switch, so only older stores carry `false`). A switch or a wait choice that `supersedes` a switch the run had not applied yet reads the timeline as if
+ * rebuilt; since OQ-177 the run records `rebuilds: true` on every switch, so only older stores carry `false`). A switch or a wait choice that `supersedes` a switch the run had not applied yet reads the timeline as if
  * that switch were not recorded — the state before it, the key it printed taken back, every record since read again —
  * and a root move recording `switch_pending: true` is read before the pending switch, which applies after it (the
  * engine's copy says why; a store recording neither reads each record where it stands). A

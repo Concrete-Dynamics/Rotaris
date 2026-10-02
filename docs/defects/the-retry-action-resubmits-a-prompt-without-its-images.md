@@ -9,7 +9,7 @@ transcript carries only their metadata (name, media type, size, path, digest; RE
 the images as bytes (`ImageAttachmentInputSchema`), so the renderer cannot resubmit them without reading them back,
 through a command it does not have. Noticed by the verifier of `fin5-noticed-gaps` (repair round 1, optional finding)
 and recorded there. Not repaired: carrying the images means a way back to their bytes (an engine-side "resubmit the
-last prompt" command, or a read of the session's files), which is more than the retry's wiring. OQ-177 already asks
+last prompt" command, or a read of the session's files), which is more than the retry's wiring. OQ-178 already asks
 what the retry is for.
 
 ## Specs

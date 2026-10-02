@@ -261,7 +261,7 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * A child's move leaves the root where it is. A switch ends a move only when the run rebuilt the root's cell for
  * it: the run records `rebuilds: false` on a switch onto the model the cell was last built from (`rootResilience`,
  * `sameRef`), and the move then stands while the switched key becomes the configured one; a store written before the
- * run recorded `rebuilds` is read as rebuilt. Since 2026-10-02 (OQ-176) the run rebuilds the cell on every switch and
+ * run recorded `rebuilds` is read as rebuilt. Since 2026-10-02 (OQ-177) the run rebuilds the cell on every switch and
  * records `rebuilds: true` on each, so `rebuilds: false` is found only in stores written before then; this reading keeps
  * them right. A switch applies at the root's next turn, which the record does not show,
  * so the run records what places the records around that turn:

@@ -23,7 +23,7 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  *     REQ-NOTIFY-224): the unreviewed-hooks notice offers `open-hook-review` naming its workspace, and activating it
  *     opens REQ-HOOKS-106's review for THAT workspace. The identity main writes and the identity the renderer checks
  *     it against come from two different processes, so only the built application proves they are the same string.
- *  7. The retry action reaches its target (REQ-NOTIFY-045, REQ-NOTIFY-030, OQ-177): activated on a failed session, it
+ *  7. The retry action reaches its target (REQ-NOTIFY-045, REQ-NOTIFY-030, OQ-178): activated on a failed session, it
  *     resubmits that session's last submitted prompt as a second run of that session.
  *
  * Every assertion reads the application's own log, its store, or the rendered DOM.
@@ -306,9 +306,9 @@ const s4 = scenario('review-action', { workspaceHook: true });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 7. REQ-NOTIFY-045 (OQ-177): the retry action reaches its target. A run fails at its first model call (a 401, which no
+// 7. REQ-NOTIFY-045 (OQ-178): the retry action reaches its target. A run fails at its first model call (a 401, which no
 // recovery retries), so the session's last submitted prompt is the one that failed and the composer, submitted, is empty.
-// No failure notice in this build carries the retry as its one action (OQ-177's reading: each failure class names
+// No failure notice in this build carries the retry as its one action (OQ-178's reading: each failure class names
 // another), so the proof publishes one carrying it through the REAL store, scoped to the failed session, and clicks it:
 // the window resubmits the last submitted prompt to the session it follows, and a second run of that session starts on
 // it. (Its outcome is the double's: a new iteration's root starts the script again, so it meets the same 401; what is

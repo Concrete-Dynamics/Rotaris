@@ -144,7 +144,7 @@ The product's own row is a separate matter and is recorded, not repaired, here:
 (the system row says the switch applies from the next iteration, and REQ-MONITOR-145 names the switch as the way back to a
 primary model, while the run keeps the fallback).
 
-**The run's side changed after this repair, 2026-10-02.** Under OQ-176's reading the run now rebuilds the root's cell
+**The run's side changed after this repair, 2026-10-02.** Under OQ-177's reading the run now rebuilds the root's cell
 on every switch, even onto the model it was last built from, and records `rebuilds: true` on each
 ([an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md](an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md)).
 The reader repaired here is unchanged: `rebuilds: false` is now found only in stores written before that change, and

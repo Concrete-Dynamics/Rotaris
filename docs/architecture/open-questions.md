@@ -8756,13 +8756,13 @@ removed from every other detail. It also decides whether "the last 400 bytes of 
 error" are counted on the output as written or, as built, on the output trimmed of its leading and trailing blank space:
 the two differ for output that ends in blank lines, and for a tail whose first characters are blank.
 
-**OQ-176 — Does a user's switch of the entry model onto the model the run was configured with end a move the ladder made?**
+**OQ-177 — Does a user's switch of the entry model onto the model the run was configured with end a move the ladder made?**
 *(REQ-MONITOR-142, "A switch of the run's entry model … applies from the next iteration onward"; REQ-ORCH-090, the role's
 fallback "tried once per child by rebuilding the agent and transparently re-running"; REQ-ORCH-091 (b), "at most one
 same-tier automatic model fallback per child", and (d), a manual model change "persists the override in session state for
 the rest of the session"; REQ-MONITOR-194, a pair chosen explicitly is "eligible again". Raised 2026-10-02 by the repair of
-[`an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md`](../defects/fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md).
-Open.)*
+[`an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md`](../defects/fixed/an-entry-model-switch-row-says-it-applies-while-a-ladder-move-keeps-the-root.md),
+as OQ-176, and renumbered OQ-177 at its merge because `origin/main` had taken OQ-176 meanwhile. Open.)*
 
 After the ladder moves the entry agent off its configured model — to the role's fallback when the model is unresponsive
 (REQ-ORCH-090), or to a same-tier model on another provider after a rate-limit or quota response (REQ-ORCH-091 b) — the
@@ -8793,13 +8793,15 @@ clears it is REQ-MONITOR-194's, recorded in
 and, if it leaves it, what the row says; whether a later switch onto a pair an override moved supersedes that override for
 the entry agent, or the override stands (as built) and only the row says so.
 
-**OQ-177 — Which notice offers REQ-NOTIFY-045's retry, when a notice carries one action?** *(REQ-NOTIFY-044, whose
+**OQ-178 — Which notice offers REQ-NOTIFY-045's retry, when a notice carries one action?** *(REQ-NOTIFY-044, whose
 vocabulary includes "retry the failed run under REQ-NOTIFY-045"; REQ-NOTIFY-045; REQ-NOTIFY-030; REQ-NOTIFY-066;
 REQ-SHELL-114, a notice's "optional action (label plus action identifier)"; REQ-NOTIFY-061, "offers no retry";
 REQ-NOTIFY-062, "an action opening the cloud account surface"; REQ-NOTIFY-063, "offering another model or a retry once the
 provider resets … and offering an action opening model settings"; REQ-NOTIFY-064, "an action returning to the workspace
 view". Raised 2026-10-02 by the repair of
-[`the-retry-run-notice-action-has-no-target.md`](../defects/fixed/the-retry-run-notice-action-has-no-target.md). Open.)*
+[`the-retry-run-notice-action-has-no-target.md`](../defects/fixed/the-retry-run-notice-action-has-no-target.md),
+as OQ-177, and renumbered OQ-178 at its merge because `origin/main` had taken OQ-176 meanwhile and this branch's OQ-176
+became OQ-177. Open.)*
 
 REQ-NOTIFY-045 says what a retry does and REQ-NOTIFY-044 lists it among a notice's actions, and REQ-NOTIFY-061 takes the
 trouble to say its notice offers none, which reads as though another failure notice does. But every failure class names

@@ -10,7 +10,7 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
 /**
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
  * (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..093/263), and since OQ-173 that a wait the run imposes is not a stall
- * (REQ-MONITOR-117..119), and since OQ-176 that an entry switch after a ladder move applies as its row says (REQ-MONITOR-142).
+ * (REQ-MONITOR-117..119), and since OQ-177 that an entry switch after a ladder move applies as its row says (REQ-MONITOR-142).
  * Twelve scenarios, each asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
@@ -314,7 +314,7 @@ await scenarioRun('same-tier', async () => {
   results.sameTier = { status: row.execution_status, fallback: meta, calls, png: r.png, elapsedMs: r.elapsedMs };
 });
 
-// 3b. OQ-176 (REQ-MONITOR-142 over REQ-ORCH-091 b): after the same-tier move the user switches the entry model back to the
+// 3b. OQ-177 (REQ-MONITOR-142 over REQ-ORCH-091 b): after the same-tier move the user switches the entry model back to the
 // configured key from the run header while iteration 1 holds on beta, and queues a follow-up beside it. Iteration 1 finishes
 // on beta (the iteration in flight keeps its setting); iteration 2, the follow-up, runs on alpha, as the switch's row says.
 // Before the repair the root's cell was rebuilt only when the requested model changed, so iteration 2 ran on beta under a

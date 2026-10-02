@@ -7,7 +7,7 @@ dispatcher sends it nowhere: `dispatchNoticeAction` in `apps/desktop/src/rendere
 "whose target does not exist in this build", logs `notice action "retry-run" has no target in this build` and returns.
 A notice carrying the action would therefore show a control that does nothing, which REQ-NOTIFY-044 ("activating one
 produces the stated result") does not allow. No notice in this build carries it either; which notice should is a
-question the specification leaves open ([OQ-177](../../architecture/open-questions.md)). Found read-only by the third
+question the specification leaves open ([OQ-178](../../architecture/open-questions.md)). Found read-only by the third
 triage of open defect notes; confirmed on `fin5-noticed-gaps` by reading the dispatcher, and by the absence of any
 renderer action that resubmits a draft or a prompt.
 
@@ -28,7 +28,7 @@ renderer action that resubmits a draft or a prompt.
 
 ## Outcome
 
-Repaired 2026-10-02 on `fin5-noticed-gaps`; which notice should carry the action stays open as OQ-177.
+Repaired 2026-10-02 on `fin5-noticed-gaps`; which notice should carry the action stays open as OQ-178.
 
 - `retryRun` (`apps/desktop/src/renderer/session-actions.ts`) resubmits the draft it is handed, or — the draft blank — the
   followed session's newest `user` row, through `submitPrompt`, so it reaches the session the window follows

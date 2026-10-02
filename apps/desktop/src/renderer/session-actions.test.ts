@@ -234,7 +234,7 @@ describe('PD-ORCH-005 clauses 3 and 15: the stop comes to rest, and the confirme
 });
 
 /*
- * REQ-NOTIFY-045 with REQ-NOTIFY-030 and REQ-NOTIFY-066 (OQ-177): the notice's retry, which had no target until the repair
+ * REQ-NOTIFY-045 with REQ-NOTIFY-030 and REQ-NOTIFY-066 (OQ-178): the notice's retry, which had no target until the repair
  * of `docs/defects/fixed/the-retry-run-notice-action-has-no-target.md` — the window logged that and dispatched nothing.
  */
 describe('REQ-NOTIFY-045: a notice\'s retry resubmits the draft, or the session\'s last submitted prompt', () => {

@@ -169,6 +169,8 @@ async function drivenOverride(s, { boundMs = 180_000 } = {}) {
         await step('the chooser opened', d.click('.wait-header button[aria-label="Change model"]'));
         await step('the chooser\'s rows', d.waitFor('[role="option"][data-value="alpha"]'));
         const picker = await step('the chooser read', d.eval(`[...document.querySelectorAll('[role="listbox"][aria-label="Change model"] [role="option"]')].map((o) => { const ref = (a) => (o.getAttribute(a) ?? '').split(' ').filter(Boolean).map((id) => document.getElementById(id)?.textContent ?? '').join(' '); return { value: o.dataset.value, text: o.textContent, disabled: o.getAttribute('aria-disabled'), name: o.hasAttribute('aria-labelledby') ? ref('aria-labelledby') : o.textContent, description: ref('aria-describedby') }; })`));
+        // The panel rises in (`rt-rise`, `--rt-duration-slow`): photographed once its entrance has finished, never mid-fade.
+        await step('the chooser risen', until(() => d.eval(`(() => { const p = document.querySelector('[role="listbox"][aria-label="Change model"]')?.closest('.chip-menu__panel'); return p ? p.getAnimations().every((a) => a.playState === 'finished') : null; })()`), (v) => v === true, { timeoutMs: 5_000, what: 'the chooser panel\'s entrance finishing', signal: giveUp.signal }));
         await step('the chooser picture', d.screenshot(join(output, 'override-picker.png')));
         await step('the chooser → beta', d.click('[role="option"][data-value="beta"]'));
         const chosen = { kind: 'design-system', value: 'beta' };

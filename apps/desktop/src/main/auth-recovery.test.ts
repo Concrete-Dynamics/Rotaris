@@ -150,6 +150,15 @@ describe('main/auth-recovery — the recovery dialog\'s coordinator (REQ-NOTIFY-
     expect(h.closed).toEqual([]);
   });
 
+  it('a key stored whose discovered models could not be recorded still restarts, and is never told as a key that could not be stored', async () => {
+    const h = harness((req) => req.kind === 'session.authRecovery' ? facts() : { kind: 'session.authRestarted', sessionId: 'S1', pinned: null }, () => ({ ok: false, stage: 'catalog', message: 'The key for scripted was saved, but its discovered models could not be recorded: disk full' }));
+    await h.recovery.onAuthenticationFailure('S1', 'HTTP 401');
+    expect(await h.recovery.reauthenticate(h.presented[0]!, 'k')).toEqual({ ok: true });
+    expect(h.acknowledged).toEqual([]);
+    expect(h.requests.at(-1)).toEqual({ kind: 'session.authRestart', sessionId: 'S1', modelKey: null });
+    expect(h.recovery.refusedPair('S1', { provider: 'scripted', model: 'alpha' })).toBe(false);
+  });
+
   it('REQ-NOTIFY-077: a key that cannot be stored, and a restart refused after a stored key, each raise their own error acknowledgement', async () => {
     const storage = harness(() => facts(), () => ({ ok: false, stage: 'storage', message: 'No credential was stored: the credential store could not be protected' }));
     await storage.recovery.onAuthenticationFailure('S1', 'HTTP 401');

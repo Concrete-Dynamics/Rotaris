@@ -620,7 +620,8 @@ async function main(): Promise<void> {
     reauthentication: (id) => providers.reauthentication(id),
     reauthenticate: async (id, apiKey) => {
       const r = await providers.reauthenticateWithKey(id, apiKey);
-      if (r.ok) { healthCache.delete(id); await afterProviderChange(); }
+      // `catalog`: the key is stored though its models were not recorded — what depends on the provider is refreshed too.
+      if (r.ok || r.stage === 'catalog') { healthCache.delete(id); await afterProviderChange(); }
       return r;
     },
     acknowledge: (kind, title, body) => notices.acknowledge(kind, title, body),

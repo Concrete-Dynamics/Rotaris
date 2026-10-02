@@ -100,7 +100,10 @@ path (REQ-NOTIFY-076/077).
     workspace** returns to the workspace view from Overview.
   - *Carried from the verifier's optional findings.* The model list is a keyboard radio group (the arrow keys, Home and End
     move the choice — `radioStep`, pinned in `packages/ui/src/auth-recovery.test.ts`); the retry guard checks the chosen key
-    against the filtered list and the refused pairs (`AuthRecovery.retry`) rather than the payload alone.
+    against the filtered list and the refused pairs (`AuthRecovery.retry`) rather than the payload alone. For D: a key that
+    was stored but whose discovered models could not be recorded is now its own stage (`catalog`), so it is no longer told
+    as "The key could not be stored" — the run restarts with the stored key and the shortfall is logged (`signin.test.ts`,
+    `auth-recovery.test.ts`).
 
 **Why the note is still open.** Parts C and D are built; A and B are not on this base (above). The note closes when the
 first-failure fallback restart and the non-modal prompt land — `fin6-auth-recovery-1` or a rebuild of it — and then the

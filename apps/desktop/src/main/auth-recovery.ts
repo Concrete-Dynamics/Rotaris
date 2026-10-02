@@ -30,7 +30,7 @@ export interface AuthRecoveryDeps {
    * REQ-NOTIFY-076/077 / REQ-NOTIFY-202: the provider key store's path — the key validated, then stored, the stage that refused
    * named (`ProviderService.reauthenticateWithKey`); on success the caller has also refreshed what depends on the provider.
    */
-  readonly reauthenticate: (providerId: string, apiKey: string) => Promise<{ readonly ok: true; readonly message: string } | { readonly ok: false; readonly stage: 'method' | 'key' | 'validation' | 'storage'; readonly message: string }>;
+  readonly reauthenticate: (providerId: string, apiKey: string) => Promise<{ readonly ok: true; readonly message: string } | { readonly ok: false; readonly stage: 'method' | 'key' | 'validation' | 'storage' | 'catalog'; readonly message: string }>;
   /** REQ-NOTIFY-077's two error acknowledgements, on the transient stack (REQ-NOTIFY-003). */
   readonly acknowledge: (kind: AcknowledgementKind, title: string, body?: string) => void;
 }
@@ -147,13 +147,16 @@ export class AuthRecovery {
     if (method !== 'api-key') return { ok: false, message };
     if (apiKey.trim() === '') return { ok: false, message: `Enter the new API key for ${providerName}.` };
     const stored = await this.deps.reauthenticate(provider, apiKey);
-    if (!stored.ok) {
+    // `catalog`: the key IS stored and only the discovered models could not be recorded — the credentials changed, so the
+    // run restarts with them as on success; the shortfall is logged, and is not REQ-NOTIFY-077's "could not be stored".
+    if (!stored.ok && stored.stage === 'catalog') this.deps.log(`authentication recovery: ${stored.message}`);
+    else if (!stored.ok) {
       if (stored.stage !== 'storage') return { ok: false, message: stored.message };
       this.deps.acknowledge('fail', KEY_NOT_STORED, `${providerName}: ${stored.message}`);
       this.deps.log(`authentication recovery: the key for ${provider} could not be stored (${stored.message})`);
       return { ok: false, message: `${KEY_NOT_STORED}: ${stored.message}` };
     }
-    this.deps.log(`authentication recovery: ${provider} re-authenticated (${stored.message})`);
+    if (stored.ok) this.deps.log(`authentication recovery: ${provider} re-authenticated (${stored.message})`);
     // REQ-NOTIFY-068: the credentials changed, so the provider's pairs are no longer refused.
     this.credentialsChanged(provider);
     let reply: ProcessReply;

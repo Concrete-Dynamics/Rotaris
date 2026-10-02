@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, ok } from '@rotaris/kernel';
+import { FakeClock, failure, ok } from '@rotaris/kernel';
 import { CredentialStore } from './credentials/store.js';
 import { ProjectSettingsStore } from './project-settings.js';
 import { ProviderService } from './signin.js';
@@ -210,6 +210,15 @@ describe('the recovery dialog\'s re-authentication (REQ-NOTIFY-076/077, REQ-NOTI
     expect(credentials.load('openai-compatible--openrouter')!.extra).toEqual({ provider_family: 'openai-compatible', api_base: OR });
     expect(await svc.reauthenticateWithKey('copilot', KEY)).toMatchObject({ ok: false, stage: 'method' });
     expect(JSON.stringify(log)).not.toContain('sk-or-wrong');
+  });
+
+  it('a key stored whose discovered models cannot be recorded is the catalog stage, never the storage one', async () => {
+    const { svc, credentials, settings } = service();
+    settings.upsertProvider = async () => ({ ok: false as const, error: failure('settings.write', 'the provider settings could not be written') });
+    const r = await svc.reauthenticateWithKey('deepseek', KEY);
+    expect(r).toEqual({ ok: false, stage: 'catalog', message: 'The key for DeepSeek was saved, but its discovered models could not be recorded: the provider settings could not be written' });
+    // The key itself reached the credential store.
+    expect(credentials.load('deepseek')?.access_token).toBe(KEY);
   });
 
   it('REQ-NOTIFY-077: a key that cannot be stored answers the storage stage, naming the storage failure', async () => {

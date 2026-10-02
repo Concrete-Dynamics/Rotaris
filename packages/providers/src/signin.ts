@@ -42,11 +42,13 @@ export type ReauthenticationMethod = { readonly method: 'api-key' | 'unavailable
 
 /**
  * REQ-NOTIFY-076/077: what storing a re-authentication key answered, by the stage that refused it — so a key that could not
- * be STORED is told apart from one the provider refused (`validation`), which REQ-NOTIFY-077 names separately.
+ * be STORED is told apart from one the provider refused (`validation`), which REQ-NOTIFY-077 names separately. `catalog`:
+ * the key WAS stored, and only the models its validation discovered could not be recorded in the provider settings — not a
+ * key that could not be stored, so it never takes REQ-NOTIFY-077's "could not be stored" wording.
  */
 export type ReauthenticationOutcome =
   | { readonly ok: true; readonly message: string }
-  | { readonly ok: false; readonly stage: 'method' | 'key' | 'validation' | 'storage'; readonly message: string };
+  | { readonly ok: false; readonly stage: 'method' | 'key' | 'validation' | 'storage' | 'catalog'; readonly message: string };
 
 export interface AddInstanceRequest {
   readonly label: string;
@@ -274,7 +276,7 @@ export class ProviderService {
     if (!saved.ok) return { ok: false, stage: 'storage', message: saved.error.headline };
     if (models) {
       const p = await this.persistModels(id, this.displayName(id), isInstanceId(id) ? 'openai-compatible' : null, isInstanceId(id) ? baseUrl : this.recordBase(id, previous), models);
-      if (!p.ok) return { ok: false, stage: 'storage', message: p.error.headline };
+      if (!p.ok) return { ok: false, stage: 'catalog', message: `The key for ${this.displayName(id)} was saved, but its discovered models could not be recorded: ${p.error.headline}` };
     }
     this.clearError(id);
     return { ok: true, message: models ? `Validated ${this.displayName(id)}; discovered ${countNoun(models.length, 'model')}.` : `Saved the key for ${this.displayName(id)}.` };

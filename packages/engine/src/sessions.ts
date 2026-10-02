@@ -2258,23 +2258,32 @@ export class Sessions {
   }
 
   /**
-   * REQ-NOTIFY-074 / REQ-MONITOR-147 / REQ-SESSION-026 (the 401 note's part C): the recovery dialog's restart. The model
-   * chosen in the dialog is pinned as the session's model override, keyed by the pair that failed — the `model_override`
-   * entry `ResilienceMemory.rehydrate` replays, so the pin outlives the failed run and a reload — and the run restarts with
-   * the same prompt (REQ-NOTIFY-068: the model changes).
+   * REQ-NOTIFY-074 / REQ-NOTIFY-076 / REQ-MONITOR-147 / REQ-SESSION-026 (the 401 note's parts C and D): the recovery dialog's
+   * restart. With `modelKey`, the model chosen in the dialog is pinned as the session's model override, keyed by the pair
+   * that failed — the `model_override` entry `ResilienceMemory.rehydrate` replays, so the pin outlives the failed run and a
+   * reload — and the run restarts with the same prompt (REQ-NOTIFY-068: the model changes). With none, the provider was just
+   * re-authenticated: the run restarts with the same prompt on the same model, its new credential read by the continuation
+   * lease the caller took (REQ-NOTIFY-068: the credentials change).
    *
    * Refused, with nothing written, where the run is still active, no prompt is recorded (REQ-NOTIFY-069), the key does not
    * resolve, or it names the model that failed. Where the restart itself cannot begin, a pin just written is taken back
    * (`cleared: true`) before the refusal is returned, so the session is left on the model it had. A failed model the run did
    * not record is taken to be the active entry model — the one REQ-NOTIFY-072's dialog then names.
    */
-  restartAfterAuthFailure(sessionId: SessionId, modelKey: string): Result<{ readonly pinned: { readonly from: AuthRecoveryModel; readonly to: AuthRecoveryModel & { readonly key: string } } }, { readonly code: string; readonly reason: string }> {
+  restartAfterAuthFailure(sessionId: SessionId, modelKey: string | null): Result<{ readonly pinned: { readonly from: AuthRecoveryModel; readonly to: AuthRecoveryModel & { readonly key: string } } | null }, { readonly code: string; readonly reason: string }> {
     const s = this.live.get(sessionId);
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
     const lastPrompt = this.lastPromptOf(s, sessionId);
     if (lastPrompt.trim() === '') return err({ code: 'no-prompt', reason: 'No prompt is recorded for this session.' });
     const hold: HoldSlot = {};
+    if (modelKey === null) {
+      const restarted = this.promptHeld(sessionId, lastPrompt, [], hold, () => {
+        s.writer.appendRow('system', 'Re-authenticated after the authentication failure; the run restarts with the same prompt.', true);
+      });
+      if (!restarted.ok) { hold.release?.(); return err({ code: 'restart-failed', reason: restarted.error.reason }); }
+      return ok({ pinned: null });
+    }
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, false));

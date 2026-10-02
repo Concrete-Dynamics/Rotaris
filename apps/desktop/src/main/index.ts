@@ -627,6 +627,13 @@ async function main(): Promise<void> {
     present: (payload) => { void presentAuthRecovery(payload); },
     close: (sessionId) => closeAuthRecovery(sessionId),
     log: (message) => log(message),
+    reauthentication: (id) => providers.reauthentication(id),
+    reauthenticate: async (id, apiKey) => {
+      const r = await providers.reauthenticateWithKey(id, apiKey);
+      if (r.ok) { healthCache.delete(id); await afterProviderChange(); }
+      return r;
+    },
+    acknowledge: (kind, title, body) => notices.acknowledge(kind, title, body),
   });
 
   // ADR-0030 / REQ-PROVIDER-116/117/142: the authentication window — one at a time, its payload read by its own command.
@@ -1018,7 +1025,7 @@ async function main(): Promise<void> {
         if (failed && failureClass === 'authentication') {
           const sessionId = e.sessionId;
           void authRecovery.onAuthenticationFailure(sessionId, failure).then((r) => {
-            if (r.opened) raiseRunFailure(failure, AUTHENTICATION_FAILED, 'The session and the draft were kept. Choose another model in the recovery dialog.');
+            if (r.opened) raiseRunFailure(failure, AUTHENTICATION_FAILED, 'The session and the draft were kept. Choose another model or re-authenticate in the recovery dialog.');
             else { log(`authentication recovery: no dialog for session ${sessionId} (${r.reason}); the generic failure notice is raised`); raiseRunFailure(failure); }
           });
         } else if (failureClass === 'quota' || (!failed && isQuotaFailure(failure))) {

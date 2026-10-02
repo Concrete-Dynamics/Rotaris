@@ -236,7 +236,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
   };
   return {
     async *stream(req: ModelRequest) {
-      await req.resolveCredential();
+      const credential = await req.resolveCredential();
       const system = req.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '';
       const who = /^You are the orchestrator/.test(system) ? 'orchestrator' : /summarise a finished agent transcript/i.test(system) ? 'summariser' : /^You condense an agent conversation/.test(system) ? 'compressor' : /^You classify a user request/.test(system) ? 'classifier' : /^You classify an agent conversation/.test(system) ? 'loop-classifier' : 'child';
       call += 1;
@@ -393,6 +393,11 @@ export function scriptedClient(c: Clocks, log: (message: string) => void, record
       // its first step again, a failed call leaving nothing in its record). Verification only.
       const scoped = /^(fail:(?:429|quota|503|401)(?::retry-after=\d+)?):only=([\w+-]+)$/.exec(step);
       if (scoped) step = scoped[2]!.split('+').includes(req.model.providerId) ? scoped[1]! : 'answer';
+      // `<fault>:unless-key=<key>`: the fault answers a call whose resolved credential is not that key, and the call answers as
+      // `answer` does once it is — a key the user replaced through the recovery dialog's re-authentication taking effect on
+      // the restarted run (REQ-NOTIFY-076). The key is a proof's fixture value, compared and never logged. Verification only.
+      const keyed = /^(fail:(?:429|quota|503|401)(?::retry-after=\d+)?):unless-key=(\S+)$/.exec(step);
+      if (keyed) step = credential === keyed[2] ? 'answer' : keyed[1]!;
       // `hang` streams nothing until the caller aborts (the unresponsive-model timer or the child timeout).
       const fault = /^fail:(429|quota|503|401)(?::retry-after=(\d+))?$/.exec(step);
       if (fault) {

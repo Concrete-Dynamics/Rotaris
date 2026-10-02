@@ -1023,7 +1023,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(issues(sid3)).toEqual(['validation_llm_error']);
   });
 
-  describe('REQ-NOTIFY-072/074 (the 401 note\'s part C): the authentication recovery dialog\'s facts and its restart', () => {
+  describe('REQ-NOTIFY-072/074/076 (the 401 note\'s parts C and D): the authentication recovery dialog\'s facts and its restart', () => {
     const unauthorized = () => failing(modelError({ code: 'http', status: 401, headline: 'Unauthorized', providerMessage: 'Incorrect API key provided', transient: false }));
     const catalogue = () => [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model']), entry('c1', 'c', C1, [], { usable: false })];
     const failedSession = async (script: (persona: string, turn: number) => ScriptedCall = (_p, turn) => (turn === 1 ? unauthorized() : answer('restarted')), opts: Opts = {}) => {
@@ -1064,6 +1064,18 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       if (!again.ok) throw new Error(again.error.reason);
       await fresh.sessions.running(sid)!;
       expect(fresh.client.requests.map((q) => q.model.modelId)).toEqual(['b1']);
+    });
+
+    it('REQ-NOTIFY-076: a re-authentication restarts with the same prompt on the same model and pins nothing', async () => {
+      const { sessions, client, sid } = await failedSession();
+      const r = sessions.restartAfterAuthFailure(sid, null);
+      if (!r.ok) throw new Error(r.error.reason);
+      expect(r.value.pinned).toBeNull();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((q) => q.model.modelId)).toEqual(['a1', 'a1']);
+      expect(dal.timelineOf(sid).some((t) => t.name === 'model_override')).toBe(false);
+      expect(dal.residentRows(sid).filter((row) => row.kind === 'user').map((row) => row.body)).toEqual(['the first prompt', 'the first prompt']);
+      expect(dal.residentRows(sid).some((row) => row.kind === 'system' && row.body.startsWith('Re-authenticated after the authentication failure'))).toBe(true);
     });
 
     it('REQ-NOTIFY-075: a hand-chosen model that also fails is replaced by the next choice, and choosing back the first model leaves no pin away from it', async () => {

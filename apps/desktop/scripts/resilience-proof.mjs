@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createServer } from 'node:http';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { logTail, overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { choose, startApp, stopApp, stopOverrunMessage, until } from './lib/driver.mjs';
@@ -58,7 +59,8 @@ function scenario(name, agentsYaml, opts = {}) {
     'models:',
     '  alpha: { provider: scripted, model_id: alpha }',
     '  beta: { provider: scripted-b, model_id: beta }',
-    'small_model: alpha', 'medium_model: alpha', 'large_model: alpha',
+    ...(opts.models ?? []),
+    ...['small_model', 'medium_model', 'large_model'].map((slot) => `${slot}: ${opts.tier ?? 'alpha'}`),
     ...(opts.fallback ? [`fallback_model: ${opts.fallback}`] : []),
     'runtime:', '  permission_mode: autonomous', ...agentsYaml,
     // Since Part T the shipped code_intelligence entry is enabled by default and its discovery costs every run start
@@ -618,6 +620,71 @@ await scenarioRun('fatal', async () => {
     && overrides.some((o) => o.provider === 'scripted-b' && o.model === 'beta' && o.model_key === 'gpt-4o' && o.cause === 'authentication'), `the pins are not recorded: ${JSON.stringify(overrides)}`);
   results.fatal = { status: row.execution_status, error, dialog: v.first, notice: notice.text, afterCancel: v.afterCancel.row.execution_status, reopenedFor: v.third.title, calls, overrides, png: join(output, 'fatal-dialog.png'), elapsedMs: r.elapsedMs };
 });
+
+// 9. REQ-NOTIFY-076/077/202 (the 401 note's part D): the dialog's re-authenticate path. The entry model `gamma` signs in
+// through an OpenAI-compatible instance (`openai-compatible--proof`) whose catalog is a loopback stand-in answering any
+// non-empty bearer; the instance is signed in through the product's own `provider.signIn` with `stale-key`. The scripted
+// model refuses every call not carrying `fresh-key` (`fail:401:unless-key=fresh-key`), so the run fails, the dialog opens
+// with the masked key field, `fresh-key` is typed and saved — validated against the catalog, then stored — and the run
+// restarts on the same model with the new key and completes. The stand-in records only whether each bearer was the fixture.
+const catalogSeen = [];
+const catalog = createServer((req, res) => {
+  const bearer = /^Bearer (.+)$/.exec(req.headers.authorization ?? '')?.[1] ?? '';
+  catalogSeen.push({ path: req.url, bearer: bearer === 'stale-key' ? 'stale-key' : bearer === 'fresh-key' ? 'fresh-key' : bearer === '' ? 'none' : 'other' });
+  if (req.method === 'GET' && /\/models$/.test(req.url ?? '') && bearer !== '') { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ data: [{ id: 'gamma' }] })); return; }
+  res.writeHead(401, { 'content-type': 'application/json' }); res.end('{"error":{"message":"Incorrect API key provided"}}');
+});
+await new Promise((resolve) => catalog.listen(0, '127.0.0.1', resolve));
+const catalogBase = `http://127.0.0.1:${catalog.address().port}/v1`;
+const s9 = scenario('reauth', [], { models: [`  gamma: { provider: openai-compatible, model_id: gamma, auth_provider: openai-compatible--proof, base_url: ${catalogBase} }`], tier: 'gamma' });
+await scenarioRun('reauth', async () => {
+  const r = await drivenLaunch('reauth', s9, { ROTARIS_SCRIPT: 'fail:401:unless-key=fresh-key' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    await step('the first-launch notice', until(() => d.probe('.notice-slot'), (found) => Array.isArray(found) && /No model provider is authenticated yet/.test(found[0]?.text ?? ''), { timeoutMs: 30_000, what: 'the first-launch notice', signal }));
+    const signedIn = await step('the instance signed in with stale-key', d.command({ kind: 'provider.signIn', providerId: 'openai-compatible', label: 'Proof', baseUrl: catalogBase, apiKey: 'stale-key' }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the composer', d.waitFor('.composer__input'));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('stale key', { enter: true }));
+    const failed = await step('the run failed', settled(s9, signal, 'the first run failing'));
+    await step('the recovery dialog', until(() => recoveryWindows(d), (w) => w.length === 1 && w[0].visible, { timeoutMs: 30_000, what: 'the recovery window', signal }));
+    await step('the key field drawn', d.waitFor('[data-testid="auth-recovery-key"]', { window: 'auth-recovery', timeoutMs: 30_000 }));
+    const READ = `(() => ({ title: document.querySelector('[data-testid="auth-recovery-title"]')?.textContent ?? null, method: document.querySelector('[data-testid="auth-recovery-reauth"]')?.getAttribute('data-method') ?? null, message: document.querySelector('[data-testid="auth-recovery-reauth-message"]')?.textContent ?? null, inputType: document.querySelector('[data-testid="auth-recovery-key"]')?.getAttribute('type') ?? null, saveDisabled: document.querySelector('[data-action="save-and-retry"]')?.disabled ?? null, text: document.body.textContent }))()`;
+    const blank = await step('the path read blank', d.send('eval', { expression: READ, window: 'auth-recovery' }));
+    await step('the key field focused', d.click('[data-testid="auth-recovery-key"]', { window: 'auth-recovery' }));
+    await step('fresh-key typed', d.type('fresh-key', { window: 'auth-recovery' }));
+    const typed = await step('the path read typed', until(() => d.send('eval', { expression: READ, window: 'auth-recovery' }), (v) => v?.saveDisabled === false, { timeoutMs: 10_000, what: 'Save and retry enabled', signal }));
+    await step('the re-authenticate picture', d.send('screenshot', { path: join(output, 'reauth-dialog.png'), window: 'auth-recovery' }));
+    await step('Save and retry', d.click('[data-action="save-and-retry"]', { window: 'auth-recovery' }));
+    const done = await step('the run completed', until(() => { const db = open(s9); try { return session(db); } finally { db.close(); } }, (row) => row?.execution_status === 'completed', { timeoutMs: 90_000, what: 'the restarted run completing', signal }));
+    const closedAtEnd = await step('no dialog at the end', recoveryWindows(d));
+    return { signedIn, failed, blank, typed, done, closedAtEnd };
+  });
+  const db = open(s9);
+  const row = session(db);
+  const overrides = names(db, row.session_id).filter((t) => t.name === 'model_override');
+  const rows = systemRows(db, row.session_id);
+  db.close();
+  const v = r.value;
+  const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator').map((c) => c.model);
+  expect(v.signedIn?.value?.outcome === 'signed-in' && v.signedIn.value.id === 'openai-compatible--proof', `the instance did not sign in: ${JSON.stringify(v.signedIn)}`);
+  expect(v.failed.execution_status === 'failed', `the stale key did not fail the run: ${JSON.stringify(v.failed)}`);
+  // REQ-NOTIFY-076: the provider that failed is key-based, so the dialog offers a masked field, Save and retry enabled only while it is non-blank.
+  expect(v.blank.title === 'Authentication failed for gamma' && v.blank.method === 'api-key' && v.blank.inputType === 'password' && v.blank.saveDisabled === true, `the key path is not offered as REQ-NOTIFY-076 says: ${JSON.stringify({ ...v.blank, text: undefined })}`);
+  expect(v.typed.saveDisabled === false, 'Save and retry stayed disabled with a key typed');
+  expect(!/terminal|shell|command line/i.test(v.blank.text ?? ''), `the dialog directs the user to a terminal: ${v.blank.text}`);
+  // REQ-NOTIFY-202: the new key was validated against the catalog before it was saved, and the restarted run carried it.
+  expect(catalogSeen.some((c) => c.bearer === 'stale-key') && catalogSeen.some((c) => c.bearer === 'fresh-key'), `the catalog did not see the sign-in and the re-authentication: ${JSON.stringify(catalogSeen)}`);
+  expect(v.done.execution_status === 'completed' && v.closedAtEnd.length === 0, `the run did not complete after the re-authentication, or the dialog stayed: ${JSON.stringify(v.done)}`);
+  expect(JSON.stringify(calls) === JSON.stringify(['openai-compatible/gamma', 'openai-compatible/gamma']), `the restart was not on the same model: ${JSON.stringify(calls)}`);
+  expect(overrides.length === 0, `a re-authentication pinned a model: ${JSON.stringify(overrides)}`);
+  expect(rows.some((b) => b.startsWith('Re-authenticated after the authentication failure')), `no row says the run restarted after the re-authentication: ${rows.join(' | ')}`);
+  // REQ-PROVIDER-131: the key typed into the dialog reaches no log line.
+  expect(!r.log.split('\n').filter((l) => !l.includes('ROTARIS_SCRIPT')).some((l) => l.includes('fresh-key')), 'the new key reached the application log');
+  results.reauth = { status: row.execution_status, dialog: { ...v.blank, text: undefined }, catalogSeen, calls, png: join(output, 'reauth-dialog.png'), elapsedMs: r.elapsedMs };
+});
+catalog.close();
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify({ ...results, ...(only === null ? {} : { only }), failures }, null, 2)}\n`);
 console.log(JSON.stringify({ ...results, ...(only === null ? {} : { only }), failures }, null, 2));

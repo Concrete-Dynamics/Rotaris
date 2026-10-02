@@ -49,3 +49,8 @@ export function recoveryModelList<M extends AuthRecoveryModel & { readonly key: 
   const same = candidates.filter((m) => m.provider === failed.provider);
   return [...others, ...same];
 }
+
+/** REQ-NOTIFY-076: the save-and-retry control is enabled only while the key field is non-blank. */
+export function canSaveKey(apiKey: string): boolean {
+  return apiKey.trim() !== '';
+}

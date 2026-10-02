@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**The recovery dialog re-authenticates the provider that failed (REQ-NOTIFY-076, REQ-NOTIFY-077, REQ-NOTIFY-202, OQ-179; the
+401 note's part D).** A fourth command, `authRecovery.reauthenticate {apiKey}`, carries a key inward to main's provider key
+store (`ProviderService.reauthenticateWithKey`, stage-typed so a storage failure is told apart) and relays
+`session.authRestart` with no model key, which restarts on the same model without a pin. The **process view**'s command
+and run-host message entries and the **runtime view**'s classification paragraph say so. No package, edge, process, channel
+or store column changed.
+
 **A failed run is classified, and an authentication failure opens the recovery dialog (REQ-NOTIFY-060, REQ-NOTIFY-064,
 REQ-NOTIFY-067, REQ-NOTIFY-072..075, REQ-NOTIFY-079/080; the 401 note's part C).** Main matches a failed run in REQ-NOTIFY-060's
 order (`main/failure-class.ts`); the generic class raises REQ-NOTIFY-064's notice with the workspace action; the

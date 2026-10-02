@@ -1174,7 +1174,11 @@ model against the pair the failed root call was addressed to (`Run.failedEntryMo
 failure) in the session's `ResilienceMemory` and as a `model_override` timeline entry carrying `cause: authentication`, then
 re-submits the session's last prompt through `promptHeld` (`Sessions.restartAfterAuthFailure`); a pin away from the chosen
 model is taken back first, and a restart that cannot begin takes its own pin back (`cleared: true`, which `rehydrate`
-replays in order). REQ-NOTIFY-070's automatic first-failure fallback restart and REQ-NOTIFY-071's prompt are not built on
+replays in order). The dialog's second path (REQ-NOTIFY-076/077, part D) stores a new key for a key-based provider through
+main's provider key store — validated by discovery first — and restarts on the same model with no pin, the continuation
+lease reading the new credential; a storage failure and a refused restart each raise their own error acknowledgement. A
+device-code or browser provider, and one whose key the model configuration carries (OQ-179), are told the path is not
+available here. REQ-NOTIFY-070's automatic first-failure fallback restart and REQ-NOTIFY-071's prompt are not built on
 this base (the 401 note's parts A and B), so every authentication failure the preconditions admit opens the dialog.
 A run that ended otherwise with a failure text — a cancelled quota wait, a completion with a task abandoned — keeps the
 limit's notice or its own summary.

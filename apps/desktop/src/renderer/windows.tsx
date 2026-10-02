@@ -76,7 +76,7 @@ export function bootPause(): Promise<void> {
 }
 
 /**
- * REQ-NOTIFY-072..075, REQ-NOTIFY-080 (the 401 note's part C): the authentication recovery window. Main closes it once a
+ * REQ-NOTIFY-072..077, REQ-NOTIFY-080 (the 401 note's parts C and D): the authentication recovery window. Main closes it once a
  * retry has restarted the run; Cancel asks main to close it and does nothing else.
  */
 export function bootAuthRecovery(): Promise<void> {
@@ -86,8 +86,10 @@ export function bootAuthRecovery(): Promise<void> {
       return c.ok ? (c.value as AuthRecoveryResult) : { ok: false, message: c.detail ?? c.headline };
     };
     const onRetry = (modelKey: string) => answer({ kind: 'authRecovery.retry', modelKey });
+    // REQ-NOTIFY-076: the key travels inward to main's provider key store and nowhere else.
+    const onReauthenticate = (apiKey: string) => answer({ kind: 'authRecovery.reauthenticate', apiKey });
     const onCancel = () => { void bridge.command({ kind: 'authRecovery.cancel' }); };
-    root.render(<StrictMode><AuthRecoveryDialog payload={payload} onRetry={onRetry} onCancel={onCancel} /><Acknowledgements store={acknowledgements} /></StrictMode>);
+    root.render(<StrictMode><AuthRecoveryDialog payload={payload} onRetry={onRetry} onReauthenticate={onReauthenticate} onCancel={onCancel} /><Acknowledgements store={acknowledgements} /></StrictMode>);
   });
 }
 

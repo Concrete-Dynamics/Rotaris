@@ -55,15 +55,40 @@ path (REQ-NOTIFY-076/077).
   now driven: a 401 with no fallback configured opens the dialog (title, 560 px, the error in the failure colour, the other
   providers' models), Cancel leaves the run failed and the notice on screen, a second prompt reopens it, beta is chosen and
   refused too, the dialog comes back naming beta, and the run completes on gpt-4o.
-- **D — not yet built** (the same bundle's next task).
+- **D — built 2026-10-02 on `fin6-auth-recovery-2`.** The dialog's second path, "Re-authenticate <provider>", names how the
+  provider that failed can be re-authenticated here (`ProviderService.reauthentication`): a key-based provider gets a masked
+  key field and **Save and retry**, enabled only while the field is non-blank; main stores the key through the provider key
+  store (`ProviderService.reauthenticateWithKey`, the same validate-then-save path `providers.save` takes: discovery against
+  the provider's catalog before anything is stored, REQ-NOTIFY-202), refreshes what depends on the provider, and restarts the
+  run with the same prompt on the same model (`session.authRestart` with no key; the continuation lease carries the new
+  credential — REQ-NOTIFY-068's "the credentials change"). A key the provider refuses stays in the dialog as its sentence; a
+  key that cannot be **stored** raises the error acknowledgement "The key could not be stored" naming the storage failure,
+  and a run that cannot be restarted after a stored key raises "The run could not be restarted after re-authentication"
+  (REQ-NOTIFY-077). **Device-code and browser providers** (Copilot, Codex, Claude Code) can only be told that their method
+  is not provided by this build, because those sign-in flows are owed (`packages/providers/src/catalogue.ts`'s header): the
+  dialog says so and offers no key field, so REQ-NOTIFY-076's "starts that provider's own flow in place … a control
+  confirming that re-authentication has been completed" is **not met** for them until the flows exist. A provider whose key
+  the model configuration carries reads "managed by model configuration" (OQ-179, raised with that reading). No path names a
+  shell, a terminal or a separate program. Pinned by `signin.test.ts` (the method per provider, the stages, a storage failure),
+  `auth-recovery.test.ts` (main: the key path, both acknowledgements; ui: the field, the disabled control, the unavailable
+  sentence), the `REQ-NOTIFY-076` case of `ladder.test.ts` and `scripted-client.test.ts`'s `:unless-key=`; shown by
+  `pnpm resilience-proof`'s new `reauth` scenario: an OpenAI-compatible instance signed in with a stale key fails the run,
+  the dialog offers the masked field, the new key is validated against the catalog, saved, and the run restarts on the same
+  model with it and completes, no pin written and the key in no log line.
+
+**Why the note is still open.** Parts C and D are built; A and B are not on this base (above). The note closes when the
+first-failure fallback restart and the non-modal prompt land — `fin6-auth-recovery-1` or a rebuild of it — and then the
+reading recorded above (every authentication failure opens the dialog) is retired.
 
 ## Specs
 
 - REQ-NOTIFY-060 — the authentication class is matched first; here it is never matched.
 - REQ-NOTIFY-067..079 — the authentication recovery (fallback restart, re-authentication prompt, recovery dialog) is not
-  built.
+  built. *Since 2026-10-02 (parts C and D): REQ-NOTIFY-067's classifier, the recovery dialog (REQ-NOTIFY-072..075/079/080)
+  and its key path (REQ-NOTIFY-076/077) are built; REQ-NOTIFY-070/071/078 are not, and REQ-NOTIFY-076's device-code and
+  browser branch says the method is unavailable.*
 - REQ-NOTIFY-064 — the generic failure notice states neither that the session and the draft were kept nor offers the
-  action returning to the workspace view.
+  action returning to the workspace view. *Built 2026-10-02 (`raiseRunFailure` in `apps/desktop/src/main/index.ts`).*
 - REQ-NOTIFY-068 holds: a 401 is not retried (`resilience-proof`'s `fatal` asserts one call).
 
 ## Relevant files
@@ -71,4 +96,8 @@ path (REQ-NOTIFY-076/077).
 - `apps/desktop/src/main/index.ts` — the run-result handler: the quota class (REQ-NOTIFY-063) and the bare fallback
   `raiseNotice(sev, e.result.summary, e.result.error)`, with no authentication class ahead of them.
 - `apps/desktop/scripts/resilience-proof.mjs` — the `fatal` scenario, which shows the notice a 401 gets today.
-- `apps/desktop/src/run-host/scripted-client.ts` — the `fail:401` fault step.
+- `apps/desktop/src/run-host/scripted-client.ts` — the `fail:401` fault step, and since 2026-10-02 its `:only=` and
+  `:unless-key=` forms.
+- `apps/desktop/src/main/failure-class.ts`, `apps/desktop/src/main/auth-recovery.ts`, `packages/ui/src/AuthRecoveryDialog.tsx`,
+  `packages/providers/src/signin.ts` (`reauthentication`, `reauthenticateWithKey`), `packages/engine/src/sessions.ts`
+  (`authRecoveryFacts`, `restartAfterAuthFailure`) — parts C and D.

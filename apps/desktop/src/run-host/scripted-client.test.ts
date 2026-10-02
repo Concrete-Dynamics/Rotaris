@@ -84,6 +84,22 @@ describe('scriptedClient — the step a call takes', () => {
     expect(await on('openai')).toBe('answered');
   });
 
+  it('REQ-NOTIFY-076 (verification only): a fault `:unless-key=` answers until the call carries that credential', async () => {
+    vi.stubEnv('ROTARIS_SCRIPT', 'fail:401:unless-key=fresh-key,fail:401:unless-key=fresh-key');
+    const client = scriptedClient(clock, () => {});
+    const root = [text('system', ORCHESTRATOR_SYSTEM), text('user', 'hello')];
+    const withKey = async (key: string): Promise<string> => {
+      const parts = client.stream({ ...request(root), resolveCredential: async () => key })[Symbol.asyncIterator]();
+      const next = parts.next();
+      let first = await Promise.race([next, settled()]);
+      while (first === undefined) { clock.advance(200); first = await Promise.race([next, settled()]); }
+      await parts.return?.();
+      return first.done === true ? 'done' : first.value.ok ? 'answered' : `failed:${first.value.error.headline}`;
+    };
+    expect(await withKey('stale-key')).toBe('failed:scripted authentication failure (HTTP 401)');
+    expect(await withKey('fresh-key')).toBe('answered');
+  });
+
   it('PD-ORCH-005: a fresh agent takes its script from the first step, one step per call', async () => {
     vi.stubEnv('ROTARIS_CHILD_SCRIPT', 'glob,write,git');
     const client = scriptedClient(clock, () => {});

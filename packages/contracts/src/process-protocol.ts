@@ -111,10 +111,10 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
    */
   z.object({ kind: z.literal('session.authRecovery'), sessionId: z.string().min(1) }),
   /**
-   * REQ-NOTIFY-074 (part C): the dialog's restart — `modelKey` is pinned against the pair that failed and the run restarts
-   * with the same prompt (`Sessions.restartAfterAuthFailure`).
+   * REQ-NOTIFY-074/076 (parts C and D): the dialog's restart — `modelKey` is pinned against the pair that failed and the run
+   * restarts with the same prompt; null restarts on the same model after a re-authentication (`Sessions.restartAfterAuthFailure`).
    */
-  z.object({ kind: z.literal('session.authRestart'), sessionId: z.string().min(1), modelKey: z.string().min(1) }),
+  z.object({ kind: z.literal('session.authRestart'), sessionId: z.string().min(1), modelKey: z.string().min(1).nullable() }),
   /** REQ-ORCH-153/154 (ADR-0062) and PD-ORCH-003: the plan gate's three entries, forwarded to the run host that owns the session. */
   z.object({ kind: z.literal('session.planEdit'), sessionId: z.string().min(1), text: z.string() }),
   z.object({ kind: z.literal('session.planDecision'), sessionId: z.string().min(1), decision: z.enum(PLAN_DECISIONS), changes: z.string().optional() }),
@@ -456,8 +456,8 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
     models: z.array(z.object({ key: z.string(), provider: z.string(), model: z.string() })),
     lastPrompt: z.boolean(),
   }),
-  /** REQ-NOTIFY-074: the restart has begun; `pinned` names the pair that failed and the model now pinned. */
-  z.object({ kind: z.literal('session.authRestarted'), sessionId: z.string(), pinned: z.object({ from: z.object({ provider: z.string(), model: z.string() }), to: z.object({ key: z.string(), provider: z.string(), model: z.string() }) }) }),
+  /** REQ-NOTIFY-074/076: the restart has begun; `pinned` names the pair that failed and the model now pinned, null after a re-authentication. */
+  z.object({ kind: z.literal('session.authRestarted'), sessionId: z.string(), pinned: z.object({ from: z.object({ provider: z.string(), model: z.string() }), to: z.object({ key: z.string(), provider: z.string(), model: z.string() }) }).nullable() }),
   /** REQ-ORCH-154: the cycle the answer settled, and whether a further segment launched (approve and revise) or not (cancel). */
   z.object({ kind: z.literal('session.planResolved'), sessionId: z.string(), cycle: z.number().int().positive(), relaunched: z.boolean() }),
   /** REQ-CHAT-165: a span older than `beforeIndex`, oldest first; `oldest` says the first recorded row is in it. */

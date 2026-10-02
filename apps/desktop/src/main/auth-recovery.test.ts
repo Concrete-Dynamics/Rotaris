@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AuthRecoveryPayload, ProcessReply } from '@rotaris/contracts';
-import { AuthRecovery, type AuthRecoveryDeps } from './auth-recovery.js';
+import { AuthRecovery, KEY_NOT_STORED, RESTART_AFTER_REAUTH_FAILED, type AuthRecoveryDeps } from './auth-recovery.js';
 
 const facts = (over: Partial<Extract<ProcessReply, { kind: 'session.authRecovery' }>> = {}): ProcessReply => ({
   kind: 'session.authRecovery', sessionId: 'S1',
@@ -10,18 +10,25 @@ const facts = (over: Partial<Extract<ProcessReply, { kind: 'session.authRecovery
   lastPrompt: true, ...over,
 });
 
-function harness(answers: (req: Parameters<AuthRecoveryDeps['request']>[0]) => ProcessReply | Promise<ProcessReply>) {
+type Stored = Awaited<ReturnType<AuthRecoveryDeps['reauthenticate']>>;
+function harness(answers: (req: Parameters<AuthRecoveryDeps['request']>[0]) => ProcessReply | Promise<ProcessReply>, store: (id: string, key: string) => Stored = () => ({ ok: true, message: 'Validated scripted.' })) {
   const presented: AuthRecoveryPayload[] = [];
   const closed: string[] = [];
   const requests: Parameters<AuthRecoveryDeps['request']>[0][] = [];
+  const acknowledged: { kind: string; title: string; body?: string }[] = [];
+  const stored: { id: string; key: string }[] = [];
+  const logged: string[] = [];
   const recovery = new AuthRecovery({
     request: async (req) => { requests.push(req); return await answers(req); },
     providerName: (id) => (id === 'scripted-b' ? 'Scripted B' : id),
     present: (p) => presented.push(p),
     close: (sid) => closed.push(sid),
-    log: () => undefined,
+    log: (m) => logged.push(m),
+    reauthentication: (id) => (id === 'copilot' ? { method: 'unavailable', message: 'GitHub Copilot signs in with a code, which this build does not provide yet.' } : { method: 'api-key', message: `Enter a new API key for ${id}.` }),
+    reauthenticate: async (id, key) => { stored.push({ id, key }); return store(id, key); },
+    acknowledge: (kind, title, body) => acknowledged.push({ kind, title, ...(body === undefined ? {} : { body }) }),
   });
-  return { recovery, presented, closed, requests };
+  return { recovery, presented, closed, requests, acknowledged, stored, logged };
 }
 
 describe('main/auth-recovery — the recovery dialog\'s coordinator (REQ-NOTIFY-069/072/074/080)', () => {
@@ -65,5 +72,52 @@ describe('main/auth-recovery — the recovery dialog\'s coordinator (REQ-NOTIFY-
     h.recovery.cancel(h.presented[0]!);
     expect(h.closed).toEqual(['S1']);
     expect(h.requests.length).toBe(before);
+  });
+
+  it('REQ-NOTIFY-076: the payload names the failed provider and how it is re-authenticated here', async () => {
+    const h = harness(() => facts());
+    await h.recovery.onAuthenticationFailure('S1', 'HTTP 401');
+    expect(h.presented[0]!.reauth).toEqual({ provider: 'scripted', providerName: 'scripted', method: 'api-key', message: 'Enter a new API key for scripted.' });
+    const unknown = harness(() => facts({ failed: null, active: { key: 'c', provider: 'copilot', model: 'c' } }));
+    await unknown.recovery.onAuthenticationFailure('S1', 'HTTP 401');
+    expect(unknown.presented[0]!.reauth).toMatchObject({ provider: 'copilot', method: 'unavailable' });
+  });
+
+  it('REQ-NOTIFY-076: a stored key restarts the run on the same model and closes the dialog; the key is never logged', async () => {
+    const h = harness((req) => req.kind === 'session.authRecovery' ? facts() : { kind: 'session.authRestarted', sessionId: 'S1', pinned: null });
+    await h.recovery.onAuthenticationFailure('S1', 'HTTP 401');
+    expect(await h.recovery.reauthenticate(h.presented[0]!, 'sk-fresh-secret')).toEqual({ ok: true });
+    expect(h.stored).toEqual([{ id: 'scripted', key: 'sk-fresh-secret' }]);
+    expect(h.requests.at(-1)).toEqual({ kind: 'session.authRestart', sessionId: 'S1', modelKey: null });
+    expect(h.closed).toEqual(['S1']);
+    expect(h.acknowledged).toEqual([]);
+    expect(JSON.stringify(h.logged)).not.toContain('sk-fresh-secret');
+  });
+
+  it('REQ-NOTIFY-076: a blank key, an unavailable method or a key the provider refused is the dialog\'s sentence, nothing restarted', async () => {
+    const h = harness(() => facts(), () => ({ ok: false, stage: 'validation', message: 'Validation failed for scripted: 401' }));
+    await h.recovery.onAuthenticationFailure('S1', 'HTTP 401');
+    const payload = h.presented[0]!;
+    expect(await h.recovery.reauthenticate(payload, '  ')).toEqual({ ok: false, message: 'Enter the new API key for scripted.' });
+    expect(await h.recovery.reauthenticate({ ...payload, reauth: { ...payload.reauth, method: 'unavailable', message: 'not here' } }, 'k')).toEqual({ ok: false, message: 'not here' });
+    expect(await h.recovery.reauthenticate(payload, 'bad')).toEqual({ ok: false, message: 'Validation failed for scripted: 401' });
+    expect(h.requests.filter((r) => r.kind === 'session.authRestart')).toEqual([]);
+    expect(h.acknowledged).toEqual([]);
+    expect(h.closed).toEqual([]);
+  });
+
+  it('REQ-NOTIFY-077: a key that cannot be stored, and a restart refused after a stored key, each raise their own error acknowledgement', async () => {
+    const storage = harness(() => facts(), () => ({ ok: false, stage: 'storage', message: 'No credential was stored: the credential store could not be protected' }));
+    await storage.recovery.onAuthenticationFailure('S1', 'HTTP 401');
+    expect(await storage.recovery.reauthenticate(storage.presented[0]!, 'k')).toEqual({ ok: false, message: `${KEY_NOT_STORED}: No credential was stored: the credential store could not be protected` });
+    expect(storage.acknowledged).toEqual([{ kind: 'fail', title: KEY_NOT_STORED, body: 'scripted: No credential was stored: the credential store could not be protected' }]);
+    expect(storage.requests.filter((r) => r.kind === 'session.authRestart')).toEqual([]);
+
+    const restart = harness((req) => req.kind === 'session.authRecovery' ? facts() : { kind: 'refused', code: 'session.run-active', headline: 'The run could not be restarted', detail: 'A run is already active.' });
+    await restart.recovery.onAuthenticationFailure('S1', 'HTTP 401');
+    const r = await restart.recovery.reauthenticate(restart.presented[0]!, 'k');
+    expect(r.ok).toBe(false);
+    expect(restart.acknowledged).toEqual([{ kind: 'fail', title: RESTART_AFTER_REAUTH_FAILED, body: 'scripted was re-authenticated and its key is saved; The run could not be restarted: A run is already active.' }]);
+    expect(restart.closed).toEqual([]);
   });
 });

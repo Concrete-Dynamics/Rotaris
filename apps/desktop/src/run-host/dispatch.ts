@@ -330,14 +330,15 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       return { kind: 'session.authRecovery', sessionId: req.sessionId, failed: r.value.failed, active: r.value.active, models: [...r.value.models], lastPrompt: r.value.lastPrompt };
     }
     case 'session.authRestart': {
-      // REQ-NOTIFY-074: the restart launches a run — refresh the bearers first (REQ-PROVIDER-066's continuation lease).
+      // REQ-NOTIFY-074/076: the restart launches a run — refresh the bearers first (REQ-PROVIDER-066's continuation lease),
+      // which is also how a key just stored by a re-authentication reaches the restarted run (REQ-NOTIFY-068: new credentials).
       const leaseRefusal = await continuationLeaseForSession(req.sessionId);
       if (leaseRefusal) return leaseRefusal;
       const r = sessions.restartAfterAuthFailure(asSessionId(req.sessionId), req.modelKey);
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The run could not be restarted', detail: r.error.reason };
       const pinned = r.value.pinned;
-      log(`session ${req.sessionId}: authentication recovery restarted the run on ${pinned.to.key} (${pinned.to.provider}/${pinned.to.model}), pinned for ${pinned.from.provider}/${pinned.from.model}`);
-      return { kind: 'session.authRestarted', sessionId: req.sessionId, pinned: { from: { provider: pinned.from.provider, model: pinned.from.model }, to: pinned.to } };
+      log(`session ${req.sessionId}: authentication recovery restarted the run${pinned === null ? ' after a re-authentication' : ` on ${pinned.to.key} (${pinned.to.provider}/${pinned.to.model}), pinned for ${pinned.from.provider}/${pinned.from.model}`}`);
+      return { kind: 'session.authRestarted', sessionId: req.sessionId, pinned: pinned === null ? null : { from: { provider: pinned.from.provider, model: pinned.from.model }, to: pinned.to } };
     }
     case 'session.planEdit': {
       // REQ-ORCH-154: the edit is recorded and nothing else moves — the gate stays held on the same cycle.

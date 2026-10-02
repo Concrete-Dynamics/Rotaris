@@ -1150,10 +1150,14 @@ the 401 note's part C (`main/failure-class.ts`, `main/auth-recovery.ts`, `packag
 failure colour, the other providers' models), Cancelled with the run left failed and the class's notice on screen,
 reopened by a second failure, answered with beta (refused too, `fail:401:only=scripted+scripted-b`, which reopens it
 naming beta) and then gpt-4o, on which the run completes; the pins are read from the timeline
-([note](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md), open: parts A, B and D
-are not built on this base). **What the 401 recovery does not yet do:** the automatic first-failure fallback restart and the
-non-modal re-authentication prompt (REQ-NOTIFY-070/071/078, parts A and B, built on `fin6-auth-recovery-1` and not merged),
-so every authentication failure opens the dialog.
+([note](../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md), open: parts A and B are
+not built on this base). A `reauth` scenario (part D, REQ-NOTIFY-076/077) signs an OpenAI-compatible instance in with a
+stale key against a loopback catalog stand-in, fails the run on it (`fail:401:unless-key=fresh-key`), types the new key into
+the dialog's masked field, and reads the key validated against the catalog, saved, and carried by the restarted run on the
+same model to completion, no pin written and the key in no log line. **What the 401 recovery does not yet do:** the
+automatic first-failure fallback restart and the non-modal re-authentication prompt (REQ-NOTIFY-070/071/078, parts A and B,
+built on `fin6-auth-recovery-1` and not merged), so every authentication failure opens the dialog; and a device-code or
+browser provider is told its method is not provided by this build, the sign-in flows being owed.
 
 **A probe is a deadline, not an appointment (2026-09-12).** Three of this proof's assertions were mid-run DOM probes
 fired at a fixed instant — `.wait-header@1700` — and they failed intermittently on a busy machine with nothing wrong

@@ -16,7 +16,8 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  * REQ-NOTIFY-064's notice, `auth-fallback` the first failure's automatic fallback and its re-authentication prompt,
  * `auth-fallback-dialog` the two together, `auth-fallback-revise` a failed revise cycle restarted as the same revise; and
  * `quota-retry`, REQ-MONITOR-194's explicit choice of the waiting pair clearing its exclusion; since fin10 `two-waits`, one
- * choice resolving two waits on two pairs and persisting both overrides across a reload), each
+ * choice resolving two waits on two pairs and persisting both overrides across a reload; and `next-run-choice`, the
+ * composer's next-run model chip clearing the exclusion of the pair it chooses), each
  * asserting the store's events, issues,
  * timeline and children, the record's `wait` through the capture probes or the driver, and the log.
  * `pnpm resilience-proof`.
@@ -347,6 +348,49 @@ await scenarioRun('same-tier', async () => {
   expect(moves.length === 2 && moves[0].pre_call === undefined && moves[1].pre_call === true && moves[1].from_model === 'alpha' && moves[1].to_model === 'beta', `the second prompt's move was not made before its call: ${JSON.stringify(moves)}`);
   expect(list2.filter((t) => t.name === 'model_exhausted').length === 1, `the move without a call recorded a second exclusion: ${list2.map((t) => t.name).join(',')}`);
   results.sameTierResume = { calls: calls2, session: row2, moves, png: again.png, elapsedMs: again.elapsedMs };
+});
+
+// 3c. REQ-MONITOR-194 / REQ-MONITOR-146 (the repair of a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion):
+// the composer's "Model for the next run" is a model selector, so choosing a pair the session holds out of quota there clears
+// its exclusion. A first launch meets insufficient quota on alpha and moves to beta (same tier); a driven relaunch resumes the
+// session, chooses beta and then alpha in the composer's model chip (a select fires only on a change, and the chip shows the
+// configured alpha), and sends a further prompt, which runs on alpha. Before the repair the chip wrote the configuration
+// alone, the exclusion stood, and the prompt's root moved to beta before calling (`pre_call`).
+const s3c = scenario('next-run-choice', [], { snapshot: true });
+await scenarioRun('next-run-choice', async () => {
+  await launch('next-run-choice', s3c, { ROTARIS_SCRIPT: 'fail:quota,answer', ROTARIS_CAPTURE_PROMPT: 'quota, then the next run on alpha', ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_AFTER_MS: '800' });
+  const cleared = () => { const db = open(s3c); try { const row = session(db); return row === undefined ? [] : names(db, row.session_id).filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata)); } finally { db.close(); } };
+  const iterations = () => { const db = open(s3c); try { return session(db)?.iterations_completed ?? 0; } finally { db.close(); } };
+  const r = await drivenLaunch('next-run-choice-resume', s3c, { ROTARIS_SCRIPT: 'answer,answer' }, async (d, step, signal) => {
+    await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+    // The user's route to a stored session (REQ-SHELL-126, REQ-SESSION-118): the title bar's Sessions, then the row's Open.
+    await step('Sessions', d.click('.title-bar__sessions', { timeoutMs: 15_000 }));
+    await step('the row\'s Open', d.click('.session-browser tr[data-session-id] button', { timeoutMs: 15_000 }));
+    await step('Ctrl+2', d.chord('Ctrl+2'));
+    await step('the resumed transcript', until(() => d.eval(`[...document.querySelectorAll('.composer__input')].length > 0 && document.body.innerText.includes('quota, then the next run on alpha') && !document.querySelector('.session-browser')`), (v) => v === true, { timeoutMs: 60_000, what: 'the resumed session on screen', signal }));
+    const chip = 'button[aria-label="Model for the next run"]';
+    await step('the chip enabled', until(() => d.eval(`document.querySelector(${JSON.stringify(chip)})?.disabled === false`), (v) => v === true, { timeoutMs: 30_000, what: 'the model chip enabled', signal }));
+    await step('the chip → beta', choose(d, chip, 'beta'));
+    const choice = await step('the chip → alpha', choose(d, chip, 'alpha'));
+    const entries = await step('the exclusion cleared', until(cleared, (list) => list.some((m) => m.cleared === true && m.model === 'alpha'), { timeoutMs: 30_000, what: "alpha's exclusion cleared", signal }));
+    await step('Ctrl+L', d.chord('Ctrl+L'));
+    await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal }));
+    await step('the prompt', d.type('a further prompt on alpha', { enter: true }));
+    await step('the further run settled', until(iterations, (n) => n >= 2, { timeoutMs: 90_000, what: 'the second iteration completing', signal }));
+    return { choice, entries };
+  });
+  const db = open(s3c);
+  const row = session(db);
+  const list = names(db, row.session_id);
+  db.close();
+  expect(row.execution_status === 'completed' && row.iterations_completed >= 2, `the further prompt did not complete: ${JSON.stringify(row)}`);
+  const exhausted = list.filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata));
+  expect(exhausted.length === 2 && exhausted[0].cleared === undefined && exhausted[1].cleared === true && exhausted[1].model === 'alpha' && exhausted[1].model_key === 'alpha', `the choice did not clear alpha's exclusion: ${JSON.stringify(exhausted)}`);
+  const calls = modelCalls(r.log).filter((c) => c.who === 'orchestrator');
+  expect(calls.length > 0 && calls.every((c) => c.model === 'scripted/alpha'), `the further prompt did not run on alpha: ${JSON.stringify(calls)}`);
+  const moves = list.filter((t) => t.name === 'quota_fallback_model').map((t) => JSON.parse(t.metadata));
+  expect(moves.length === 1 && moves[0].pre_call === undefined, `the further prompt moved off alpha: ${JSON.stringify(moves)}`);
+  results.nextRunChoice = { status: row.execution_status, exhausted, calls, png: r.png, elapsedMs: r.elapsedMs };
 });
 
 // 3b. OQ-177 (REQ-MONITOR-142 over REQ-ORCH-091 b): after the same-tier move the user switches the entry model back to the

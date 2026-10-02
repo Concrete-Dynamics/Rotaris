@@ -379,6 +379,13 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       log(`session ${req.sessionId}: the plan gate is re-armed — the next run is held`);
       return { kind: 'ack' };
     }
+    case 'session.chooseNextModel': {
+      // REQ-MONITOR-194 / REQ-MONITOR-146: the composer's explicit choice clears the pair's exclusion; nothing is launched.
+      const r = sessions.chooseNextModel(asSessionId(req.sessionId), req.modelKey);
+      if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The model for the next run could not be applied to the session', detail: r.error.reason };
+      if (r.value.cleared) log(`session ${req.sessionId}: ${req.modelKey} chosen for the next run; its pair is no longer excluded as out of quota`);
+      return { kind: 'ack' };
+    }
     case 'session.prompt': {
       // REQ-PROVIDER-066 (the continuation lease): a prompt on a resumed session launches a run — refresh first.
       const leaseRefusal = await continuationLeaseForSession(req.sessionId);

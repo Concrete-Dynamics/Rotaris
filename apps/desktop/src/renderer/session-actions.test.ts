@@ -285,3 +285,30 @@ describe('REQ-NOTIFY-045: a notice\'s retry resubmits the draft, or asks the eng
     expect(await a.retryRun('')).toEqual({ ok: false, reason: 'A run is already active.' });
   });
 });
+
+/*
+ * REQ-MONITOR-146 / REQ-MONITOR-194: the composer's "Model for the next run" is a model selector. The choice is written to the
+ * configuration, and then the engine is told it was chosen explicitly so the pair's exclusion clears (the repair of
+ * a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion); before, the write was all it sent.
+ */
+describe('REQ-MONITOR-146 / REQ-MONITOR-194: the composer\'s model for the next run', () => {
+  it('writes the entry persona\'s model, then tells the engine the followed session chose it', async () => {
+    const a = actions([{ ok: true, value: null }, { ok: true, value: null }]);
+    expect(await a.setNextModel('orchestrator', 'alpha')).toEqual({ ok: true });
+    expect(a.sent).toEqual([
+      { kind: 'config.setField', patch: { personas: { orchestrator: { model: 'alpha' } } } },
+      { kind: 'session.chooseNextModel', sessionId: 'S1', modelKey: 'alpha' },
+    ]);
+  });
+
+  it('with no session followed, writes the configuration alone; a refused write sends nothing further; a refused choice is reported', async () => {
+    const none = actions([{ ok: true, value: null }], null);
+    expect(await none.setNextModel('orchestrator', 'alpha')).toEqual({ ok: true });
+    expect(none.sent.map((r) => r.kind)).toEqual(['config.setField']);
+    const refusedWrite = actions([{ ok: false, code: 'config.invalid', headline: 'The setting could not be saved', detail: 'models.alpha is not defined' }]);
+    expect(await refusedWrite.setNextModel('orchestrator', 'alpha')).toEqual({ ok: false, reason: 'models.alpha is not defined' });
+    expect(refusedWrite.sent.map((r) => r.kind)).toEqual(['config.setField']);
+    const refusedChoice = actions([{ ok: true, value: null }, { ok: false, code: 'session.unknown-model', headline: 'The model for the next run could not be applied to the session', detail: "'alpha' is not a configured model" }]);
+    expect(await refusedChoice.setNextModel('orchestrator', 'alpha')).toEqual({ ok: false, reason: "'alpha' is not a configured model" });
+  });
+});

@@ -2626,6 +2626,10 @@ export class Sessions {
     // A model chosen by hand is the one to use: a pin that moved it away (an earlier choice in this dialog, REQ-NOTIFY-075) is
     // taken back first, so the override chain cannot lead off it again — or back and forth between the two.
     if (memory.clearOverride(to.provider, to.model)) s.writer.appendTimeline('model_override', 'user', `${modelKey} (${to.provider}/${to.model}) was chosen in the recovery dialog; the pin that replaced it is taken back.`, { provider: to.provider, model: to.model, cleared: true, cause: 'authentication' });
+    // REQ-MONITOR-194: the dialog is a model selector, so choosing a pair the session holds out of quota clears its exclusion,
+    // as the run's own selectors do (`Run.clearChosenExclusion`); until 2026-10-02 (fin10) the restart's first call on it was
+    // refused by the ladder's pre-call read and went to its same-tier candidate or a wait.
+    const exclusionCleared = this.clearChosenExclusion(s, sessionId, modelKey, to.provider, to.model, 'in the recovery dialog');
     memory.setOverride(from.provider, from.model, { key: modelKey, choice: withSettings(catalogue, resolved.choice) });
     s.writer.appendTimeline('model_override', 'user', `Authentication failed on ${from.provider}/${from.model}; ${modelKey} (${to.provider}/${to.model}), chosen in the recovery dialog, is pinned for the rest of the session and the run restarts with the same prompt.`, { provider: from.provider, model: from.model, model_key: modelKey, to_provider: to.provider, to_model: to.model, cause: 'authentication' });
     const restarted = this.relaunchAfterAuthFailure(s, sessionId, lastPrompt, hold, () => {
@@ -2635,9 +2639,52 @@ export class Sessions {
       hold.release?.();
       memory.clearOverride(from.provider, from.model);
       s.writer.appendTimeline('model_override', 'rotaris', `The run could not restart on ${modelKey} (${restarted.error.reason}); the pin on ${from.provider}/${from.model} is taken back.`, { provider: from.provider, model: from.model, cleared: true, cause: 'authentication' });
+      // The choice did not take: the exclusion it cleared stands again, so the session is left as it was.
+      if (exclusionCleared) {
+        memory.markExhausted(to.provider, to.model);
+        s.restingMemory?.markExhausted(to.provider, to.model);
+        s.writer.appendTimeline('model_exhausted', 'rotaris', `The run could not restart on ${modelKey}; ${to.provider}/${to.model} is excluded as out of quota again, as it was before the choice.`, { provider: to.provider, model: to.model, model_key: modelKey, restored: true });
+      }
       return err({ code: 'restart-failed', reason: restarted.error.reason });
     }
     return ok({ pinned: { from, to } });
+  }
+
+  /**
+   * REQ-MONITOR-194 / REQ-MONITOR-146: the composer's "Model for the next run" — a model selector — chose `modelKey` for this
+   * session. The choice itself is configuration (`personas.<entry>.model`, written by the renderer first); what reaches the
+   * engine here is that it was chosen explicitly, which clears the exclusion of its pair if the session holds it out of
+   * quota — in the memory a run reads and in a resting read's — and writes the `model_exhausted` entry carrying `cleared: true`
+   * that `ResilienceMemory.rehydrate` replays. The key is resolved against the workspace's catalogue through the
+   * side-effect-free `restingCatalogue` port, never a run start's `configure`. Until 2026-10-02 (fin10) the chip wrote the
+   * configuration alone and the exclusion stood
+   * (`docs/defects/fixed/a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md`).
+   */
+  chooseNextModel(sessionId: SessionId, modelKey: string): Result<{ readonly cleared: boolean }, { readonly code: string; readonly reason: string }> {
+    const s = this.live.get(sessionId);
+    if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
+    const stored = s.dal.getSession(sessionId);
+    if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
+    const catalogue = this.deps.restingCatalogue?.(stored.workspace_root) ?? null;
+    if (catalogue === null) return err({ code: 'no-catalogue', reason: 'The workspace\'s model configuration does not load, so the model chosen for the next run cannot be resolved.' });
+    const e = catalogue.find((c) => c.key === modelKey);
+    if (!e) return err({ code: 'unknown-model', reason: `'${modelKey}' is not a configured model` });
+    return ok({ cleared: this.clearChosenExclusion(s, sessionId, modelKey, e.provider, e.model.modelId, 'as the model for the next run') });
+  }
+
+  /**
+   * REQ-MONITOR-194: an explicit choice of a pair the session holds out of quota clears its exclusion — in the session's memory
+   * (`s.memory`, the one every run of it reads) and a resting read's (`s.restingMemory`), and as a `model_exhausted` entry
+   * carrying `cleared: true`, the shape `Run.clearChosenExclusion` writes. Where no memory is built yet the timeline says
+   * whether the pair is excluded. True when it was.
+   */
+  private clearChosenExclusion(s: Live, sessionId: SessionId, key: string, provider: string, modelId: string, where: string): boolean {
+    const memories = [s.memory, s.restingMemory].filter((m): m is ResilienceMemory => m !== null && m !== undefined);
+    const excluded = s.memory !== null ? s.memory.isExhausted(provider, modelId) : memories.some((m) => m.isExhausted(provider, modelId)) || ResilienceMemory.rehydrate(s.dal.timelineOf(sessionId), () => null).isExhausted(provider, modelId);
+    if (!excluded) return false;
+    for (const m of memories) m.clearExhausted(provider, modelId);
+    s.writer.appendTimeline('model_exhausted', 'user', `The user chose ${key} (${provider}/${modelId}) explicitly ${where}; the pair is no longer excluded as out of quota and is eligible again until a further insufficient-quota response.`, { provider, model: modelId, model_key: key, cleared: true });
+    return true;
   }
 
   /**

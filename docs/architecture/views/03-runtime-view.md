@@ -562,7 +562,10 @@ and billing") → **rate limit** (429 or the three substrings) → **context win
 their own budgets (`auto_retries_transient`, `auto_retries_validation`) after min(2, n) s, each attempt a `transient_llm_error` /
 `validation_llm_error` issue. A limit never touches those budgets: (a) a quota response marks `provider|model` exhausted — in
 memory and as the `model_exhausted` timeline entry; an explicit choice of the pair clears it (REQ-MONITOR-194:
-`clearExhausted`, a `model_exhausted` entry carrying `cleared: true`, replayed in order on resume); the exclusion is read
+`clearExhausted`, a `model_exhausted` entry carrying `cleared: true`, replayed in order on resume) — from every selector: the
+run header's and the inspector's switch and the wait's picker (`Run.clearChosenExclusion`), and since fin10 the composer's
+next-run chip (`session.chooseNextModel` → `Sessions.chooseNextModel`, which reaches a session with no run too) and the
+recovery dialog (`restartAfterAuthFailure`, restored if the restart cannot begin); the exclusion is read
 **before every call** too (since fin10, `resilientStep` after `followOverride`): a cell on a pair the session holds out of
 quota — another agent's answer, or an earlier run's rehydrated — is not called but takes (b) then (c) at once (`limitPath`,
 the move or the `model_wait` issue carrying `pre_call: true`, no second `model_exhausted`); (b) at most one same-tier candidate per agent (`sameTierCandidates` over the
@@ -1195,7 +1198,8 @@ failure) in the session's `ResilienceMemory` and as a `model_override` timeline 
 re-submits the session's last prompt through `promptHeld` (`Sessions.restartAfterAuthFailure`) — *since the fourth repair
 round of parts A and B, the failed run's own launch relaunched (`relaunchAfterAuthFailure`, below)*; a pin away from the chosen
 model is taken back first, and a restart that cannot begin takes its own pin back (`cleared: true`, which `rehydrate`
-replays in order). The dialog's second path (REQ-NOTIFY-076/077, part D) stores a new key for a key-based provider through
+replays in order). The chosen pair's out-of-quota exclusion, if the session holds one, is cleared beside the pin
+(REQ-MONITOR-194, since fin10) and restored with the pin's taking-back. The dialog's second path (REQ-NOTIFY-076/077, part D) stores a new key for a key-based provider through
 main's provider key store — validated by discovery first — and restarts on the same model with no pin, the continuation
 lease reading the new credential; a storage failure and a refused restart each raise their own error acknowledgement. A
 device-code or browser provider, and one whose key the model configuration carries (OQ-179), are told the path is not

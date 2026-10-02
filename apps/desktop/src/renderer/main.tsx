@@ -21,7 +21,7 @@ import '@phosphor-icons/web/fill';
 
 // The window itself: the bridge, the replica and the two stacks, the terminal registry, the display preferences and
 // the theme — everything this window has before a surface mounts (`shell.ts`).
-import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, composerDraft, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, retryRun, setMode, setRunStartMode, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
+import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, composerDraft, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, retryRun, setMode, setNextModel, setRunStartMode, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
 // What a transcript surface reads about the session it is following, shared with the persona window (`session-view.ts`).
 import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery, useShownSession } from './session-view.js';
 // The other windows this same bundle is the root of, each one a role on the route (`windows.tsx`, ADR-0056).
@@ -298,7 +298,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     draft={drafts.draft} onPublishDraft={drafts.publish} onWriteDraft={drafts.write}
     composerHeight={layout?.sizes[1]} onComposerHeight={(sizes) => onLayout({ version: 1, panes: 2, sizes: [...sizes] })}
     onSetNextPersona={(persona) => setField({ default_persona: persona })}
-    onSetNextModel={(model) => setField({ personas: { [entryPersona]: { model } } })}
+    onSetNextModel={(model) => setNextModel(entryPersona, model)}
     onSetNextReasoning={(level) => setField({ personas: { [entryPersona]: { thinking: level } } })}
     onOpenTrailer={onOpenTrailer}
     onAnswerQuestions={answerQuestions}

@@ -237,6 +237,23 @@ export function createSessionActions({ bridge, replica, cancels, now = () => new
   }
 
   /**
+   * REQ-MONITOR-146 / REQ-MONITOR-194: the composer's "Model for the next run". The choice is the entry persona's model in the
+   * configuration (`personas.<entry>.model`), written first; then — with a session followed — the engine is told it was an
+   * explicit choice (`session.chooseNextModel`), which clears the pair's exclusion if the session holds it out of quota, as
+   * every other model selector's choice does. A refusal of either is reported. Until 2026-10-02 (fin10) the configuration
+   * write was all the chip did and the exclusion stood
+   * (`docs/defects/fixed/a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion.md`).
+   */
+  async function setNextModel(entryPersona: string, model: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const written = await send({ kind: 'config.setField', patch: { personas: { [entryPersona]: { model } } } });
+    if (!written.ok) return { ok: false, reason: written.detail ?? written.headline };
+    const sessionId = replica.getState().sessionId;
+    if (!sessionId) return { ok: true };
+    const chosen = await send({ kind: 'session.chooseNextModel', sessionId, modelKey: model });
+    return chosen.ok ? { ok: true } : { ok: false, reason: chosen.detail ?? chosen.headline };
+  }
+
+  /**
    * REQ-NOTIFY-045 with REQ-NOTIFY-030 and REQ-NOTIFY-066 (OQ-178): a notice's retry. It resubmits the current composer
    * draft through `submitPrompt`, the composer's own path; or — the draft blank — asks the engine to resubmit the followed
    * session's last submitted prompt (`session.retry`), which it reads over every row, released ones included, and sends
@@ -258,5 +275,5 @@ export function createSessionActions({ bridge, replica, cancels, now = () => new
     return r.ok ? { ok: true, resubmitted: 'last-prompt' } : { ok: false, reason: r.detail ?? r.headline };
   }
 
-  return { answerQuestions, cancelAgent, cancelQuestions, cancelRun, continueSession, control, planDecision, planEdit, retryRun, setMode, setRunStartMode, stopRun, submitPrompt };
+  return { answerQuestions, cancelAgent, cancelQuestions, cancelRun, continueSession, control, planDecision, planEdit, retryRun, setMode, setNextModel, setRunStartMode, stopRun, submitPrompt };
 }

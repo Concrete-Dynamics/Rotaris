@@ -1300,6 +1300,96 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
   });
 
   /*
+   * The repair of a-model-chosen-for-the-next-run-or-in-the-recovery-dialog-does-not-clear-an-exclusion (REQ-MONITOR-194: "A
+   * user may still choose an excluded pair explicitly, from any model selector … Choosing it explicitly clears the recorded
+   * exclusion for that pair"; spec resolution 21). The composer's next-run chip reaches the engine as a choice
+   * (`Sessions.chooseNextModel`, the `session.chooseNextModel` command the renderer sends once the configuration is written),
+   * and the recovery dialog's choice clears beside its pin (`restartAfterAuthFailure`). Each writes the `model_exhausted`
+   * entry carrying `cleared: true` that `ResilienceMemory.rehydrate` replays.
+   */
+  describe('REQ-MONITOR-194: a pair chosen for the next run or in the recovery dialog is no longer excluded', () => {
+    const catalogue = () => [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model'])];
+    const isExcluded = (sid: SessionId) => ResilienceMemory.rehydrate(dal.timelineOf(sid), () => null).isExhausted('a', 'a1');
+
+    it('the composer\'s choice of the excluded a1 clears its exclusion: the next run calls a1, where without the choice it moves to b1', async () => {
+      const { sessions, client } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer(`answer ${turn}`)), { catalogue: catalogue(), restingCatalogue: catalogue() });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+      expect(isExcluded(sid)).toBe(true);
+      expect(sessions.chooseNextModel(sid, 'a1')).toEqual({ ok: true, value: { cleared: true } });
+      expect(isExcluded(sid)).toBe(false);
+      expect(JSON.parse(dal.timelineOf(sid).filter((t) => t.name === 'model_exhausted').at(-1)!.metadata)).toEqual({ provider: 'a', model: 'a1', model_key: 'a1', cleared: true });
+      const next = sessions.prompt(sid, 'again, on a1');
+      if (!next.ok) throw new Error(next.error.reason);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // Before: a1, b1, b1 — the choice was configuration alone and the pre-call read sent the run to b1.
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1', 'a1']);
+      // A pair not excluded: nothing to clear and nothing written; an unknown key is refused.
+      const entries = dal.timelineOf(sid).length;
+      expect(sessions.chooseNextModel(sid, 'b1')).toEqual({ ok: true, value: { cleared: false } });
+      expect(sessions.chooseNextModel(sid, 'nope')).toMatchObject({ ok: false, error: { code: 'unknown-model' } });
+      expect(dal.timelineOf(sid).length).toBe(entries);
+    });
+
+    it('the composer\'s choice reaches a session no run of this process started: the resting record and the next run read it cleared', async () => {
+      const first = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer(`answer ${turn}`)), { catalogue: catalogue() });
+      const sid = (first.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      expect((await first.sessions.running(sid)!).status).toBe('completed');
+      const fresh = sessionsWith(() => answer('fresh'), { catalogue: catalogue(), restingCatalogue: catalogue() });
+      const resumed = fresh.sessions.resume(dal, 'C:/ws', sid);
+      if (!resumed.ok) throw new Error(resumed.error.reason);
+      expect(fresh.sessions.chooseNextModel(sid, 'a1')).toEqual({ ok: true, value: { cleared: true } });
+      // A second choice of it finds nothing left to clear (the memory a later read builds replays the cleared entry).
+      expect(fresh.sessions.chooseNextModel(sid, 'a1')).toEqual({ ok: true, value: { cleared: false } });
+      const again = fresh.sessions.prompt(sid, 'once more');
+      if (!again.ok) throw new Error(again.error.reason);
+      expect((await fresh.sessions.running(sid)!).status).toBe('completed');
+      expect(fresh.client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
+    });
+
+    it('the recovery dialog\'s choice of the excluded a1 restarts on a1 with the exclusion gone, after a reload too', async () => {
+      const unauthorized = () => failing(modelError({ code: 'http', status: 401, headline: 'Unauthorized', providerMessage: 'Incorrect API key provided', transient: false }));
+      // The root meets insufficient quota on a1, moves to b1 (same tier) and b1 refuses the credentials: the run fails on b1.
+      const script = (_p: string, turn: number): ScriptedCall => (turn === 1 ? failing(quota()) : turn === 2 ? unauthorized() : answer('restarted on a1'));
+      const { sessions, client } = sessionsWith(script, { catalogue: catalogue() });
+      const sid = (sessions.start(dal, 'C:/ws', 'the first prompt') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      expect(isExcluded(sid)).toBe(true);
+      const r = sessions.restartAfterAuthFailure(sid, 'a1');
+      if (!r.ok) throw new Error(r.error.reason);
+      expect(r.value.pinned).toMatchObject({ from: { provider: 'b', model: 'b1' }, to: { key: 'a1', provider: 'a', model: 'a1' } });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // Before: the restart's first call was refused by the pre-call read of a1's exclusion (no call to a1 at all).
+      expect(client.requests.map((q) => q.model.modelId)).toEqual(['a1', 'b1', 'a1']);
+      expect(isExcluded(sid)).toBe(false);
+      // A fresh process rehydrates the clearing: a1 is called again.
+      const fresh = sessionsWith(() => answer('fresh'), { catalogue: catalogue() });
+      const resumed = fresh.sessions.resume(dal, 'C:/ws', sid);
+      if (!resumed.ok) throw new Error(resumed.error.reason);
+      const again = fresh.sessions.prompt(sid, 'once more');
+      if (!again.ok) throw new Error(again.error.reason);
+      expect((await fresh.sessions.running(sid)!).status).toBe('completed');
+      expect(fresh.client.requests.map((q) => q.model.modelId)).toEqual(['a1']);
+    });
+
+    it('a recovery-dialog restart that cannot begin leaves a1 excluded, as it was before the choice', async () => {
+      const unauthorized = () => failing(modelError({ code: 'http', status: 401, headline: 'Unauthorized', providerMessage: 'Incorrect API key provided', transient: false }));
+      const script = (_p: string, turn: number): ScriptedCall => (turn === 1 ? failing(quota()) : unauthorized());
+      // The start configures once and the restart twice (its own resolution, then the prompt's): the third refuses.
+      const { sessions, client } = sessionsWith(script, { catalogue: catalogue(), configureRefusesFrom: 3 });
+      const sid = (sessions.start(dal, 'C:/ws', 'the first prompt') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      const r = sessions.restartAfterAuthFailure(sid, 'a1');
+      expect(r.ok ? null : r.error.code).toBe('restart-failed');
+      expect(client.requests).toHaveLength(2);
+      const exhausted = dal.timelineOf(sid).filter((t) => t.name === 'model_exhausted').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+      expect(exhausted.map((m) => (m['cleared'] === true ? 'cleared' : m['restored'] === true ? 'restored' : 'recorded'))).toEqual(['recorded', 'cleared', 'restored']);
+      expect(isExcluded(sid)).toBe(true);
+    });
+  });
+
+  /*
    * The repair of a-wait-choice-persists-the-override-for-the-shown-wait-alone (REQ-ORCH-091 d: "persists the override in session
    * state for the rest of the session"; REQ-SESSION-026/196: across reloads). Two agents parked at once on different pairs —
    * the root on a1 and a child of a role configured on b1 — and one choice resolves both: every waiting pair the memory

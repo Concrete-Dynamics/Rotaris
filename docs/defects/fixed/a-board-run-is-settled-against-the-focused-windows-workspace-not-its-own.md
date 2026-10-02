@@ -13,6 +13,15 @@ The run host's exit reaps only the focused window's workspace, so the runs of th
 restart. Found by code reading on 2026-10-02 (the fifth triage of the open defect notes, on origin/main `c1381f5`), and
 recorded before any repair by bundle `fin9-queue-dispatch-and-disclosure`.
 
+**Outcome — repaired 2026-10-02 (bundle `fin9-queue-dispatch-and-disclosure`).** `runs` in
+`apps/desktop/src/main/requirements-runs.ts` keeps each board run's workspace root and id, written at its start. The
+`run.result` handler sends `run.ended` to that root's service and dispatches for that workspace after it; the
+`publish.snapshot` handler sends `run.waiting` there; the run host's exit reaps every root that held a run, beside the
+focused window's. Pinned by a case in `requirements-runs.test.ts` with two workspaces and the focus moved to the other
+mid-run (the waiting fact, the ending and the next claim all addressed `C:\ws` while `D:\other` held the focus; the exit
+reaped `C:\ws`), red on the coordinator before. `requirements-runs-proof` has no two-window stage, so the unit test
+carries it. ADR-0041 records it in "Repair — 2026-10-02: a board run is settled against its own workspace".
+
 ## Specs
 
 - `REQ-TRACE-477`: "a flow that terminates on its worker SHALL deliver its ending to the same surface that was told it

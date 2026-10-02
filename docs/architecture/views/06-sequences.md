@@ -340,7 +340,11 @@ sequenceDiagram
 - A board read is bounded at 120 s because it may run the engine's three passes; everything else is a store
   read or one transaction, bounded at 30 s.
 - If the run host exits holding board runs, the coordinator **reaps with an empty live set** rather than
-  leaving rows that claim to be running.
+  leaving rows that claim to be running — every workspace that held one, beside the focused window's.
+- **A run is settled against its own workspace.** The coordinator keeps, for each board run, the workspace root and id
+  it was started for, and its ending (`run.ended`), its waiting-on-a-person fact (`run.waiting`) and the dispatch that
+  follows its end address that workspace's service, whichever window holds the focus (REQ-TRACE-477/466; until
+  2026-10-02 they read the most recently focused window's workspace).
 
 ---
 

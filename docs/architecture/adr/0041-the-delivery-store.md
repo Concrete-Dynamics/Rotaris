@@ -1228,3 +1228,15 @@ through as the act's or release's payload. The workspace service needed no chang
 value but `due` and `off` as disclosed and permissive. The next launch reads `due` again. `requirements-proof`'s
 `disclosure-launch` stage shows it.
 
+## Repair — 2026-10-02: a board run is settled against its own workspace
+
+*Reported back in place, under CLAUDE.md's standing policy, by the repair of
+[`a-board-run-is-settled-against-the-focused-windows-workspace-not-its-own.md`](../../defects/fixed/a-board-run-is-settled-against-the-focused-windows-workspace-not-its-own.md).*
+
+Part AP's second execution has main's coordinator settle "the row from the run host's own terminal event (REQ-TRACE-477)"
+and mark a run waiting on a person from its snapshots. It addressed both, the dispatch after a run's end and the run host's
+exit reap, to the most recently focused window's workspace, which is the run's own only while one workspace is open. Now
+the coordinator keeps each board run's workspace root and id, and addresses that workspace's service; the run host's exit
+reaps every workspace that held a run, beside the focused one. `requirements-runs.test.ts` pins it with two workspaces and
+the focus moved to the other; `requirements-runs-proof` has no two-window stage.
+

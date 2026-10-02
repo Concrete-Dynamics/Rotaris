@@ -14,6 +14,9 @@ function harness(opts: { claims?: RunClaim[]; startReply?: ProcessReply; prefs?:
   const sent: WorkspaceServiceRequest[] = [];
   /** The workspace root each service request was addressed to, in order. */
   const roots: string[] = [];
+  /** The focused window's workspace, which a case may move to another one mid-run (`focus`). */
+  let current = opts.current;
+  let strictRoot = opts.current === undefined;
   const hostSent: RunHostRequest[] = [];
   const broadcasts: unknown[] = [];
   const written: [string, boolean][] = [];
@@ -22,10 +25,10 @@ function harness(opts: { claims?: RunClaim[]; startReply?: ProcessReply; prefs?:
   const prefs = { runs: opts.prefs?.runs ?? true, suppressed: opts.prefs?.suppressed ?? false };
   const runs = createRequirementsRuns({
     // `current`: the most recently focused window's workspace, when a case puts the focus on another one.
-    currentWorkspace: () => opts.current?.root ?? 'C:\\ws',
-    currentWorkspaceId: () => opts.current?.id ?? 'ws-id',
+    currentWorkspace: () => current?.root ?? 'C:\\ws',
+    currentWorkspaceId: () => current?.id ?? 'ws-id',
     service: (root, req) => {
-      if (opts.current === undefined) expect(root).toBe('C:\\ws');
+      if (strictRoot) expect(root).toBe('C:\\ws');
       roots.push(root);
       sent.push(req);
       if (req.kind !== 'requirements.command') return Promise.resolve({ kind: 'refused', code: 'x', headline: 'not a requirements command' });
@@ -52,7 +55,8 @@ function harness(opts: { claims?: RunClaim[]; startReply?: ProcessReply; prefs?:
     broadcast: (p) => { broadcasts.push(p); },
     log: () => undefined,
   });
-  return { runs, sent, roots, hostSent, broadcasts, written, event: (e: ProcessEvent) => onEvent(e), exit: (code: number) => onExit(code) };
+  const focus = (to: { readonly root: string; readonly id: string }) => { current = to; strictRoot = false; };
+  return { runs, sent, roots, focus, hostSent, broadcasts, written, event: (e: ProcessEvent) => onEvent(e), exit: (code: number) => onExit(code) };
 }
 const CLAIM: RunClaim = { id: 'REQ-101', unit: 'u1', worktree: { ref: 'REQ-101/u1', path: 'C:\\ws\\.rotaris\\requirements\\worktrees\\rotaris-req-req-101-u1', branch: 'rotaris/req/req-101/u1', baseBranch: 'main', baseRevision: 'abc' }, prompt: 'Implement REQ-101', permissions: 'permissive' };
 
@@ -190,6 +194,36 @@ describe('the run\'s lifetime (REQ-TRACE-466/476/477)', () => {
     expect(outcomeOf('stopped')).toBe('cancelled');
     expect(outcomeOf('failed')).toBe('failed');
     expect(outcomeOf('interrupted')).toBe('failed');
+  });
+  /**
+   * Defect note `a-board-run-is-settled-against-the-focused-windows-workspace-not-its-own.md` (REQ-TRACE-477/466/476):
+   * the coordinator kept no workspace per run and settled a run's ending, its waiting-on-a-person fact, the dispatch
+   * after it and the run host's exit reap against the most recently focused window's workspace.
+   */
+  it('REQ-TRACE-477/466/476: a run is settled, marked waiting and reaped against its own workspace while another window holds the focus, and the next candidate is claimed there', async () => {
+    const h = harness({ claims: [CLAIM] });
+    await h.runs.dispatch();
+    h.focus({ root: 'D:\\other', id: 'other-id' });
+    const before = h.sent.length;
+    h.event({ kind: 'publish.snapshot', payload: { v: 1, sessionId: 'sess-1', seq: 1, session: { pendingApprovals: [{ request_id: 'r0' }], pendingQuestions: [] } as never } });
+    h.event(result('completed'));
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    const after = h.sent.slice(before).map((r, i) => ({ name: r.kind === 'requirements.command' ? r.command.name : r.kind, root: h.roots[before + i] }));
+    expect(after).toEqual([
+      { name: 'requirements.run.waiting', root: 'C:\\ws' },
+      { name: 'requirements.run.ended', root: 'C:\\ws' },
+      { name: 'requirements.run.claim', root: 'C:\\ws' },
+    ]);
+    // A run of the first workspace held when the run host exits is reaped there, beside the focused one.
+    const g = harness({ claims: [CLAIM] });
+    await g.runs.dispatch();
+    g.focus({ root: 'D:\\other', id: 'other-id' });
+    const mark = g.sent.length;
+    g.exit(1);
+    await new Promise((r) => setTimeout(r, 0));
+    const reaps = g.sent.slice(mark).map((r, i) => ({ name: r.kind === 'requirements.command' ? r.command.name : r.kind, root: g.roots[mark + i] }));
+    expect(reaps).toContainEqual({ name: 'requirements.run.reap', root: 'C:\\ws' });
   });
   it('a result for a session this coordinator does not own is ignored', async () => {
     const h = harness();

@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**A board run is settled against its own workspace (REQ-TRACE-477, REQ-TRACE-466, REQ-TRACE-476).** Main's run coordinator
+keeps each board run's workspace root and id; the run's ending, its waiting fact and the dispatch after its end address
+that workspace's service, and the run host's exit reaps every workspace that held a run. This repairs
+`a-board-run-is-settled-against-the-focused-windows-workspace-not-its-own.md`; `requirements-runs.test.ts` pins it. The
+**process view**'s requirements paragraph and the **sequences view**'s board section say so. No package, edge, process,
+message kind, channel, command or store column changed.
+
 **One acceptance suppresses the disclosure for the rest of the launch (REQ-TRACE-472).** `requirements.runs` gains the
 `accept` op: the board's plain acceptance tells main's coordinator, which holds it in memory for the launch and reads
 `accepted` — a new value of `StandingDisclosure` and of `LaunchPreview.disclosure` (`packages/contracts/src/requirements.ts`)

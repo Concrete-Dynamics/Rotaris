@@ -70,7 +70,12 @@ export function approvalWaitOf(seconds: number): LaunchPreview['approvalWait'] {
 }
 
 export function createRequirementsRuns(deps: RequirementsRunsDeps): RequirementsRuns {
-  interface Live { readonly id: ReqId; readonly unit: string; readonly permissions: RunPermissions; waiting: boolean }
+  /**
+   * A board run this process owns, with the workspace it was started for. Its ending, its waiting-on-a-person fact, the
+   * dispatch after it and the run host's exit reap address THAT workspace's service, never the focused window's (defect
+   * note `a-board-run-is-settled-against-the-focused-windows-workspace-not-its-own.md`, REQ-TRACE-477/466/476).
+   */
+  interface Live { readonly id: ReqId; readonly unit: string; readonly permissions: RunPermissions; readonly root: string; readonly workspaceId: string; waiting: boolean }
   const runs = new Map<string, Live>();
   /**
    * REQ-TRACE-472: "Accepting SHALL suppress the disclosure for the remainder of that launch". The launch is the
@@ -149,7 +154,7 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
         if (claim === null) break;
         const s = await startOne(workspaceId, claim);
         if (s.started) {
-          runs.set(s.sessionId, { id: claim.id, unit: claim.unit, permissions: claim.permissions, waiting: false });
+          runs.set(s.sessionId, { id: claim.id, unit: claim.unit, permissions: claim.permissions, root, workspaceId, waiting: false });
           // REQ-TRACE-464: the session id onto the run row while the run executes, in the service's one transaction.
           const rec = await ask(root, { name: 'requirements.run.started', workspace: root, id: claim.id, unit: claim.unit, sessionId: s.sessionId, permissions: claim.permissions });
           if ('refused' in rec) deps.log(`requirements: ${claim.id} unit ${claim.unit} started as ${s.sessionId} but the row was not written (${rec.refused})`);
@@ -179,11 +184,10 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
       const live = runs.get(e.sessionId);
       if (live === undefined) return;
       runs.delete(e.sessionId);
-      const root = deps.currentWorkspace();
-      if (root === undefined) return;
+      const root = live.root;
       const outcome = outcomeOf(e.result.execution_status);
       const detail = `${e.result.summary}${e.result.error ? ` — ${e.result.error}` : ''}`.trim() || `the run ended ${e.result.execution_status}`;
-      void ask(root, { name: 'requirements.run.ended', workspace: root, sessionId: e.sessionId, outcome, detail }).then(() => dispatch()).catch((x: unknown) => deps.log(`requirements: the ending of ${e.sessionId} was not recorded (${String(x)})`));
+      void ask(root, { name: 'requirements.run.ended', workspace: root, sessionId: e.sessionId, outcome, detail }).then(() => dispatchFor(root, live.workspaceId)).catch((x: unknown) => deps.log(`requirements: the ending of ${e.sessionId} was not recorded (${String(x)})`));
     } else if (e.kind === 'publish.snapshot') {
       // REQ-TRACE-466: waiting on a person = a pending approval or question on the live run; the fact rides the run row's stage.
       const live = runs.get(e.payload.sessionId);
@@ -191,19 +195,20 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
       const waiting = e.payload.session.pendingApprovals.length > 0 || e.payload.session.pendingQuestions.length > 0;
       if (waiting === live.waiting) return;
       live.waiting = waiting;
-      const root = deps.currentWorkspace();
-      if (root === undefined) return;
+      const root = live.root;
       void ask(root, { name: 'requirements.run.waiting', workspace: root, sessionId: e.payload.sessionId, waiting }, BOUND_SHORT).catch(() => undefined);
     }
   });
   // REQ-TRACE-476 under SR-2: a run host that exited owned every board run; nothing is alive, and the reap settles the rows as interrupted with their work retained.
   deps.onRunHostExit((code) => {
-    const root = deps.currentWorkspace();
-    const held = [...runs.keys()];
+    // Every workspace that held a board run is reaped, beside the focused window's as before.
+    const roots = new Set([...runs.values()].map((l) => l.root));
+    const focused = deps.currentWorkspace();
+    if (focused !== undefined) roots.add(focused);
+    const held = runs.size;
     runs.clear();
-    if (root === undefined) return;
-    deps.log(`requirements: the run host exited (${code}) holding ${held.length} board run(s); reaping with an empty live set`);
-    void ask(root, { name: 'requirements.run.reap', workspace: root, live: [] }).catch((x: unknown) => deps.log(`requirements: the reap after the run host's exit failed (${String(x)})`));
+    deps.log(`requirements: the run host exited (${code}) holding ${held} board run(s); reaping ${roots.size} workspace(s) with an empty live set`);
+    for (const root of roots) void ask(root, { name: 'requirements.run.reap', workspace: root, live: [] }).catch((x: unknown) => deps.log(`requirements: the reap of ${root} after the run host's exit failed (${String(x)})`));
   });
 
   return {

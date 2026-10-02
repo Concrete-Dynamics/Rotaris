@@ -55,4 +55,18 @@ describe('minimum-window layout regressions', () => {
     // 200-character token's content 1273 px wide in a 189 px box, the sidebar's scrollWidth 1307 against 259.
     expect(rule('.todo-task__text')).toContain('overflow-wrap: anywhere');
   });
+
+  it('keeps each session row\'s Open inside the Sessions dialog under a long workspace path (REQ-SHELL-022/126, REQ-SESSION-118)', () => {
+    // The table is `width: 100%` but sizes itself to its columns' least widths, and the Session cell's workspace path
+    // broke only at its hyphens, so its longest unbroken run set the column's floor; the Branch cell did not break at
+    // all. Measured in the built app at 1440x900 under a workspace path holding a 111-character run: the table 1123 px
+    // wide in an 878 px scroll box, the row's Open at 1279-1328 against the box's right edge at 1160, so the
+    // checkpoint proof's click on it (scenario 9, a worktree path and a `rotaris/session/<uuid>` branch) landed on
+    // nothing. Every cell that carries a path or a branch now breaks anywhere, so no column's floor is a string's length.
+    expect(rule('.session-browser__detail')).toContain('overflow-wrap: anywhere');
+    expect(rule('.session-browser__name')).toContain('overflow-wrap: anywhere');
+    const branch = rule('.session-browser__table td[data-testid="session-row-branch"]');
+    expect(branch).toContain('overflow-wrap: anywhere');
+    expect(branch).not.toContain('white-space: nowrap');
+  });
 });

@@ -323,6 +323,15 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       log(`session ${req.sessionId} ${req.action}: ${r.value.resumed ? 'a continuation run is executing' : 'left paused'}${r.value.messageLimit === null ? '' : ` (message limit ${r.value.messageLimit})`}`);
       return { kind: 'session.continued', sessionId: req.sessionId, resumed: r.value.resumed, messageLimit: r.value.messageLimit };
     }
+    case 'session.restartOnFallback': {
+      // REQ-NOTIFY-070: the restart launches a run — refresh the bearers first (REQ-PROVIDER-066's continuation lease).
+      const leaseRefusal = await continuationLeaseForSession(req.sessionId);
+      if (leaseRefusal) return leaseRefusal;
+      const r = sessions.restartOnFallback(asSessionId(req.sessionId));
+      if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The run could not restart on the fallback model', detail: r.error.reason };
+      log(`session ${req.sessionId}: authentication failed on ${r.value.failed.provider}/${r.value.failed.model}; restarted on the fallback ${r.value.fallback.key} (${r.value.fallback.provider}/${r.value.fallback.model})`);
+      return { kind: 'session.fallbackRestarted', sessionId: req.sessionId, failed: r.value.failed, fallback: r.value.fallback };
+    }
     case 'session.planEdit': {
       // REQ-ORCH-154: the edit is recorded and nothing else moves — the gate stays held on the same cycle.
       const r = sessions.planEdit(asSessionId(req.sessionId), req.text);

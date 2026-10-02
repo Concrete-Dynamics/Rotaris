@@ -356,6 +356,12 @@ export class Run {
   private iterationsCompleted = 0;
   private initialIterations = 0;
   private lastFailure: string | null = null;
+  /**
+   * REQ-NOTIFY-070 / REQ-MONITOR-147: the model the root's last failed turn was calling when its model call failed —
+   * the root cell's model at that moment, after any ladder move — or null when the run's last failure was no model
+   * call's. Main's authentication recovery pins the fallback against this model (`Sessions.restartOnFallback`).
+   */
+  private failedModel: ModelRef | null = null;
   private todo: Todo;
   /** REQ-CHAT-088: the root agent's tool-owned plan, kept alongside the loop planner in one stored envelope. */
   private agentTodo: AgentTodoDocument | null;
@@ -656,6 +662,10 @@ export class Run {
   get isEnded(): boolean {
     return this.ended;
   }
+  /** REQ-NOTIFY-070: the model the root's failing call was addressed to, when the run's last failure was a model call's. */
+  get failedEntryModel(): ModelRef | null {
+    return this.failedModel;
+  }
   get outcome(): RunResult | null {
     return this.result;
   }
@@ -920,6 +930,7 @@ export class Run {
       return await this.teardown(stopReason ?? 'no_pending_tasks');
     } catch (cause) {
       // REQ-SESSION-094: teardown runs even on any exception; REQ-SESSION-093: a runtime exception persists failed.
+      if (this.lastFailure === null) this.failedModel = null;
       this.lastFailure = this.lastFailure ?? String(cause);
       this.deps.warn(`run ${this.sessionId} raised outside an iteration: ${String(cause)}`);
       return await this.teardown('agent_session_aborted');
@@ -997,6 +1008,7 @@ export class Run {
         // REQ-ORCH-074: failed → the task is abandoned; for the root agent the run ends agent_session_aborted.
         outcome = 'failed';
         this.lastFailure = describe(report.error);
+        this.failedModel = this.rootCell?.model.model ?? null;
         summary = this.lastFailure;
         this.todo.abandon(task);
         this.todo.releaseHeld(iteration, false);
@@ -1007,6 +1019,7 @@ export class Run {
       if (this.iterationRest === null) {
         // REQ-ORCH-073 / REQ-ORCH-135: an iteration that raises closes as failed, the task abandoned.
         this.lastFailure = String(cause);
+        this.failedModel = null;
         summary = `the iteration ended with an unhandled error: ${String(cause)}`;
         this.todo.abandon(task);
         this.todo.releaseHeld(iteration, false);

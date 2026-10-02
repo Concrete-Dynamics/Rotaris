@@ -18,7 +18,7 @@ import { cut } from './run/cut.js';
 export { offersToldIn, openOffersText } from './run/offers.js';
 import { planSection } from './run/plan-text.js';
 export { planRequestSection, planSection } from './run/plan-text.js';
-import { ResilienceMemory, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
+import { entryOf, pairKey, providerIdentity, ResilienceMemory, withSettings, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
 import type { ResolvedTrigger } from './run/compression.js';
 import { SessionLog, type LogLevel } from './session-log.js';
 import { UserPresence } from './run/presence.js';
@@ -279,7 +279,7 @@ export interface RunSetup {
   /** Warnings the load produced (REQ-CONFIG-233's warn-and-continue and the referential list while attended). */
   readonly warnings?: readonly string[] | undefined;
   /** Part Q: the catalogue the same-tier rule reads (REQ-NOTIFY-082) and the run-level `fallback_model` slot (REQ-CONFIG-065). */
-  readonly resilience?: { readonly catalogue: readonly CatalogueEntry[]; readonly fallbackModel: ModelChoice | null } | undefined;
+  readonly resilience?: { readonly catalogue: readonly CatalogueEntry[]; readonly fallbackModel: ModelChoice | null; readonly fallbackKey?: string | undefined } | undefined;
   /** REQ-MONITOR-049 / REQ-CONFIG-085 (Part AH): each configured model's own maximum input tokens, by `models:` key. */
   readonly contextLimits?: Readonly<Record<string, number>> | undefined;
   /**
@@ -293,6 +293,13 @@ export interface RunSetup {
    * others will sit.
    */
   readonly contextUnits?: (() => readonly string[]) | undefined;
+}
+
+/** REQ-NOTIFY-070: what `Sessions.restartOnFallback` pinned and restarted on — the pair that failed and the fallback now in use. */
+export interface AuthFallbackRestart {
+  readonly failed: { readonly provider: string; readonly model: string; readonly key: string | null };
+  readonly fallback: { readonly provider: string; readonly model: string; readonly key: string };
+  readonly prompt: string;
 }
 
 /** PD-TOOLS-002: the requested mode always applies — no downgrade. Attendedness, confinement and the opt-in are recorded, never resolved through. */
@@ -2144,6 +2151,61 @@ export class Sessions {
     const runtimeWithLimit: RunSetup = { ...setup.value, runtime: { ...setup.value.runtime, messageLimit: limit } };
     this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), runtimeWithLimit, [], undefined, opts.withoutPaused === true ? 'decline' : { message: null });
     return ok({ resumed: true, messageLimit: limit });
+  }
+
+  /**
+   * REQ-NOTIFY-070 / REQ-MONITOR-147 / REQ-SESSION-026: the authentication recovery's automatic half. The session's last
+   * run ended on its root's model call failing authentication; main classified the failure (REQ-NOTIFY-060/067) and asks
+   * for this. The configured `fallback_model` (REQ-CONFIG-067) is pinned as the session's model override, keyed by the
+   * pair that failed — the `model_override` entry `ResilienceMemory.rehydrate` replays, so the pin outlives the failed run
+   * and a reload of the session, as a wait's choice does — and the run restarts with the same prompt (REQ-NOTIFY-068: the
+   * failing pair is not tried again; the model changes).
+   *
+   * Refused, with nothing written, where the run is still active, its last failure was no model call's, no prompt is
+   * recorded (REQ-NOTIFY-069), or no fallback is configured or the fallback is the model that failed (REQ-NOTIFY-072's
+   * "no usable fallback"). Where the restart itself cannot begin, the pin is taken back (`cleared: true`) before the
+   * refusal is returned, so the session is left on the model it had (REQ-NOTIFY-070's last sentence).
+   *
+   * Main keeps the "first failure of the session" bookkeeping (`main/auth-recovery.ts`); this answers for one restart.
+   * The restart re-submits the prompt as `prompt` does, so the transcript shows it sent again; the last prompt's
+   * attachments are not re-sent (the row keeps only their metadata).
+   */
+  restartOnFallback(sessionId: SessionId): Result<AuthFallbackRestart, { readonly code: string; readonly reason: string }> {
+    const s = this.live.get(sessionId);
+    if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
+    if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
+    const failed = s.run?.failedEntryModel ?? null;
+    if (failed === null) return err({ code: 'no-model-failure', reason: 'The session\'s last run did not end on a model call failing.' });
+    const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user')?.body ?? '';
+    if (lastPrompt.trim() === '') return err({ code: 'no-prompt', reason: 'No prompt is recorded for this session.' });
+    const stored = s.dal.getSession(sessionId);
+    if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
+    const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, false));
+    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
+    const catalogue = setup.value.resilience?.catalogue ?? [];
+    const fallback = setup.value.resilience?.fallbackModel ?? null;
+    if (fallback === null) return err({ code: 'no-fallback', reason: 'No fallback model is configured.' });
+    const fallbackKey = setup.value.resilience?.fallbackKey ?? entryOf(catalogue, fallback.model)?.key ?? null;
+    if (fallbackKey === null) return err({ code: 'no-fallback', reason: `The fallback model ${fallback.model.providerId}/${fallback.model.modelId} has no configured key to pin.` });
+    const from = { provider: providerIdentity(catalogue, failed), model: failed.modelId, key: entryOf(catalogue, failed)?.key ?? null };
+    const to = { provider: providerIdentity(catalogue, fallback.model), model: fallback.model.modelId, key: fallbackKey };
+    if (pairKey(from.provider, from.model) === pairKey(to.provider, to.model)) return err({ code: 'fallback-failed', reason: `The fallback model ${to.provider}/${to.model} is the model that failed.` });
+    const warn = (m: string) => { s.log?.warn(m); this.deps.warn(m); };
+    if (s.memory === null) {
+      const resolve = (key: string): ModelChoice | null => { const r = setup.value.models?.(key); return r && r.ok ? r.choice : null; };
+      s.memory = ResilienceMemory.rehydrate(s.dal.timelineOf(sessionId), resolve, warn);
+    }
+    const memory = s.memory;
+    memory.setOverride(from.provider, from.model, { key: fallbackKey, choice: withSettings(catalogue, fallback) });
+    s.writer.appendTimeline('model_override', 'rotaris', `Authentication failed on ${from.provider}/${from.model}; the fallback ${fallbackKey} (${to.provider}/${to.model}) is pinned for the rest of the session and the run restarts with the same prompt.`, { provider: from.provider, model: from.model, model_key: fallbackKey, to_provider: to.provider, to_model: to.model, cause: 'authentication' });
+    s.writer.appendRow('system', `Authentication failed on ${from.provider}/${from.model}. The run restarts on the fallback model ${fallbackKey} (${to.provider}/${to.model}), which stays in use for this session.`, true);
+    const restarted = this.prompt(sessionId, lastPrompt);
+    if (!restarted.ok) {
+      memory.clearOverride(from.provider, from.model);
+      s.writer.appendTimeline('model_override', 'rotaris', `The run could not restart on the fallback ${fallbackKey} (${restarted.error.reason}); the pin on ${from.provider}/${from.model} is taken back.`, { provider: from.provider, model: from.model, cleared: true, cause: 'authentication' });
+      return err({ code: 'restart-failed', reason: restarted.error.reason });
+    }
+    return ok({ failed: from, fallback: to, prompt: lastPrompt });
   }
 
   /**

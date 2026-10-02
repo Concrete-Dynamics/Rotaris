@@ -317,3 +317,21 @@ place this was visible. The new proof reads the body.
 **Not measured here.** That the schema is now *accepted* by a real provider, rather than merely sent, needs
 `pnpm live-run` against a real key. It spends the owner's money and was not run; the request-body assertion is
 what this execution proves.
+
+## Sixth execution — 2026-10-02, the session-wide override taken by a second writer (REQ-NOTIFY-070, REQ-SESSION-026)
+
+*The 401 note's part A ([`a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md`](../../defects/a-401-ends-the-run-with-a-bare-failure-notice-and-no-authentication-recovery.md)).
+Found nothing wrong with the mechanism; it gained a writer and a way to take a pin back.*
+
+The third execution's session-wide memory (`ResilienceMemory`, persisted as `model_override` timeline entries and replayed
+by `rehydrate`) had one writer: the user's choice during a wait. REQ-NOTIFY-070's authentication recovery is a second:
+`Sessions.restartOnFallback` pins `fallback_model` keyed by the pair whose call failed authentication (`Run.failedEntryModel`,
+the root cell's model at the failure) and writes the same entry with `cause: authentication`, so the pin outlives the
+failed run and a reload exactly as a wait's choice does. REQ-NOTIFY-070's "where the restart cannot begin" and
+REQ-NOTIFY-078's re-pinned primary need the pin taken back, which the memory could not express: `clearOverride` and an
+entry carrying `cleared: true`, which `rehydrate` and the autopsy reader replay in order. No new timeline name
+(`model_override` is among OQ-157's twenty-eight). Measured in the built app by `resilience-proof`'s `auth-fallback`
+scenario: `scripted/alpha` refused with a 401, the override recorded `{provider: scripted, model: alpha, model_key: beta,
+cause: authentication}`, the restart's one call on `scripted-b/beta`, the session `completed`; and in
+`packages/engine/src/run/ladder.test.ts` — the pin honoured by a later prompt and by a fresh process, a fallback that
+fails too not tried again, a restart that cannot begin taken back durably.

@@ -83,6 +83,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     tool?: TestTool;
     delegation?: boolean;
     over?: Partial<RunConfig>;
+    /** The configure call (1-based) from which configuration is refused — a restart that cannot begin. */
+    configureFailsFrom?: number;
   }
 
   function sessionsWith(script: (persona: string, turn: number) => ScriptedCall, opts: Opts = {}) {
@@ -104,10 +106,11 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: { ...base, ...(opts.roleFallback ? { fallbackModel: opts.roleFallback } : {}), ...(opts.roleStallTimeoutMs === undefined ? {} : { stallTimeoutMs: opts.roleStallTimeoutMs }) }, alias: null } : null; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
     const backend = new DefaultAgentBackend(client);
     const results: string[] = [];
+    let configured = 0;
     const sessions = new Sessions({
       clocks: clock, publisher: pub, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++minted}`,
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: (_sid, r) => results.push(r.status),
-      configure: () => ({ ok: true, value: {
+      configure: () => (++configured >= (opts.configureFailsFrom ?? Infinity) ? { ok: false, error: { reason: 'the configuration could not be loaded' } } : { ok: true, value: {
         model: { backend, config }, models, personas,
         runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, ...(opts.childTimeoutMs === undefined ? {} : { childTimeoutMs: opts.childTimeoutMs }), ...(opts.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: opts.childStallTimeoutMs }) },
         resilience: { catalogue, fallbackModel: opts.fallbackModel ?? null },
@@ -1005,6 +1008,92 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     clock.advance(1000);
     expect((await validation.sessions.running(sid3)!).status).toBe('completed');
     expect(issues(sid3)).toEqual(['validation_llm_error']);
+  });
+
+  describe('REQ-NOTIFY-070 / REQ-MONITOR-147 / REQ-SESSION-026: a first authentication failure pins fallback_model session-wide and restarts', () => {
+    const unauthorized = () => modelError({ code: 'http', status: 401, headline: 'Unauthorized', providerMessage: 'Incorrect API key provided', transient: false });
+    const catalogue = () => [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+
+    it('pins the fallback keyed by the failed pair, restarts with the same prompt on it, and the pin outlives the run and a reload', async () => {
+      const { sessions, client } = sessionsWith((_p, turn) => (turn === 1 ? failing(unauthorized()) : answer(`answer ${turn}`)), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
+      const sid = (sessions.start(dal, 'C:/ws', 'do the thing') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      // REQ-NOTIFY-068: the 401 is not retried.
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
+      const restarted = sessions.restartOnFallback(sid);
+      if (!restarted.ok) throw new Error(restarted.error.reason);
+      expect(restarted.value).toEqual({ failed: { provider: 'a', model: 'a1', key: 'a1' }, fallback: { provider: 'f', model: 'f1', key: 'f1' }, prompt: 'do the thing' });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
+      expect(dal.residentRows(sid).filter((r) => r.kind === 'user').map((r) => r.body)).toEqual(['do the thing', 'do the thing']);
+      expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'model_override')!.metadata)).toMatchObject({ provider: 'a', model: 'a1', model_key: 'f1', to_provider: 'f', to_model: 'f1', cause: 'authentication' });
+      // Session-wide, not one run's: a later prompt in this process stays on the fallback.
+      const later = sessions.prompt(sid, 'again');
+      if (!later.ok) throw new Error(later.error.reason);
+      await sessions.running(sid)!;
+      expect(client.requests.at(-1)!.model.modelId).toBe('f1');
+      // And a reload of the session: the pin is rehydrated from the timeline.
+      const fresh = sessionsWith(() => answer('fresh'), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
+      const resumed = fresh.sessions.resume(dal, 'C:/ws', sid);
+      if (!resumed.ok) throw new Error(resumed.error.reason);
+      const again = fresh.sessions.prompt(sid, 'once more');
+      if (!again.ok) throw new Error(again.error.reason);
+      await fresh.sessions.running(sid)!;
+      expect(fresh.client.requests.map((r) => r.model.modelId)).toEqual(['f1']);
+    });
+
+    it('the fallback failing too is not tried again: refused, nothing written (REQ-NOTIFY-072, REQ-NOTIFY-075)', async () => {
+      const { sessions, client } = sessionsWith(() => failing(unauthorized()), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      const first = sessions.restartOnFallback(sid);
+      expect(first.ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'f1']);
+      const overrides = dal.timelineOf(sid).filter((t) => t.name === 'model_override').length;
+      const second = sessions.restartOnFallback(sid);
+      expect(second).toMatchObject({ ok: false, error: { code: 'fallback-failed' } });
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'model_override')).toHaveLength(overrides);
+      expect(client.requests).toHaveLength(2);
+    });
+
+    it('with no fallback configured, or with the fallback being the model that failed, it is refused and nothing is written (REQ-NOTIFY-069/072)', async () => {
+      for (const fallbackModel of [null, { model: A1, thinking: 'unset' as const }]) {
+        const { sessions, client } = sessionsWith(() => failing(unauthorized()), { catalogue: catalogue(), fallbackModel });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await sessions.running(sid)!;
+        expect(sessions.restartOnFallback(sid)).toMatchObject({ ok: false, error: { code: fallbackModel === null ? 'no-fallback' : 'fallback-failed' } });
+        expect(timeline(sid)).not.toContain('model_override');
+        expect(client.requests).toHaveLength(1);
+      }
+    });
+
+    it('a run whose failure was no model call\'s is refused (REQ-NOTIFY-069)', async () => {
+      const { sessions } = sessionsWith(() => answer('fine'), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(sessions.restartOnFallback(sid)).toMatchObject({ ok: false, error: { code: 'no-model-failure' } });
+    });
+
+    it('a restart that cannot begin takes the pin back, durably, so the session stays on the model it had (REQ-NOTIFY-070)', async () => {
+      // Configure answers the start and the pin's resolution (calls 1 and 2) and refuses the restart's own (call 3).
+      const { sessions, client } = sessionsWith(() => failing(unauthorized()), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' }, configureFailsFrom: 3 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(sessions.restartOnFallback(sid)).toMatchObject({ ok: false, error: { code: 'restart-failed' } });
+      expect(client.requests).toHaveLength(1);
+      const entries = dal.timelineOf(sid).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+      expect(entries).toHaveLength(2);
+      expect(entries[1]).toMatchObject({ provider: 'a', model: 'a1', cleared: true });
+      // A reload replays both: no override stands.
+      const fresh = sessionsWith(() => answer('fresh'), { catalogue: catalogue(), fallbackModel: { model: F1, thinking: 'unset' } });
+      const resumed = fresh.sessions.resume(dal, 'C:/ws', sid);
+      if (!resumed.ok) throw new Error(resumed.error.reason);
+      const again = fresh.sessions.prompt(sid, 'once more');
+      if (!again.ok) throw new Error(again.error.reason);
+      await fresh.sessions.running(sid)!;
+      expect(fresh.client.requests.map((r) => r.model.modelId)).toEqual(['a1']);
+    });
   });
 
   it('REQ-ORCH-145: the per-model timeout and retry count reach the request; a catalogue entry without them leaves the run\'s', async () => {

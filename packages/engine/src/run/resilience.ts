@@ -219,6 +219,14 @@ export class ResilienceMemory {
   setOverride(fromProvider: string, fromModelId: string, override: Override): void {
     this.overrides.set(pairKey(fromProvider, fromModelId), override);
   }
+  /**
+   * REQ-NOTIFY-070 / REQ-NOTIFY-078: the pin on a pair taken back — an authentication fallback whose restart could not
+   * begin, or a re-authentication that re-pins the primary. Persisted as a `model_override` entry carrying
+   * `cleared: true`, which `rehydrate` replays the same way.
+   */
+  clearOverride(provider: string, modelId: string): boolean {
+    return this.overrides.delete(pairKey(provider, modelId));
+  }
   overrideFor(provider: string, modelId: string): Override | undefined {
     return this.overrides.get(pairKey(provider, modelId));
   }
@@ -237,7 +245,11 @@ export class ResilienceMemory {
     return current;
   }
 
-  /** Rehydrate from the session's timeline; an override whose key no longer resolves is dropped with a warning. */
+  /**
+   * Rehydrate from the session's timeline; an override whose key no longer resolves is dropped with a warning. An entry
+   * carrying `cleared: true` takes back the pin on its pair (REQ-NOTIFY-070's restart that could not begin,
+   * REQ-NOTIFY-078's re-pinned primary), so the entries replay in order to the memory the session last held.
+   */
   static rehydrate(timeline: readonly { readonly name: string; readonly metadata: string }[], resolve: (key: string) => ModelChoice | null, warn: (m: string) => void = () => undefined): ResilienceMemory {
     const memory = new ResilienceMemory();
     for (const t of timeline) {
@@ -248,6 +260,7 @@ export class ResilienceMemory {
       const model = typeof meta['model'] === 'string' ? meta['model'] : null;
       if (provider === null || model === null) continue;
       if (t.name === 'model_exhausted') { memory.exhausted.add(pairKey(provider, model)); continue; }
+      if (meta['cleared'] === true) { memory.clearOverride(provider, model); continue; }
       const key = typeof meta['model_key'] === 'string' ? meta['model_key'] : null;
       if (key === null) continue;
       const choice = resolve(key);

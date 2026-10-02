@@ -10,7 +10,7 @@ import { installSeams } from './seams.js';
  * layout says it lands and not where the seam hoped it would.
  */
 
-const VARIABLES = ['ROTARIS_CAPTURE_VIEW', 'ROTARIS_CAPTURE_VIEW_MS', 'ROTARIS_CAPTURE_SETTINGS', 'ROTARIS_CAPTURE_TYPE', 'ROTARIS_CAPTURE_TYPE_AT'] as const;
+const VARIABLES = ['ROTARIS_CAPTURE_VIEW', 'ROTARIS_CAPTURE_VIEW_MS', 'ROTARIS_CAPTURE_SETTINGS', 'ROTARIS_CAPTURE_TYPE', 'ROTARIS_CAPTURE_TYPE_AT', 'ROTARIS_CAPTURE_PERSONA_PROBE_AT'] as const;
 const saved = Object.fromEntries(VARIABLES.map((v) => [v, process.env[v]]));
 afterEach(() => {
   for (const v of VARIABLES) { if (saved[v] === undefined) delete process.env[v]; else process.env[v] = saved[v]; }
@@ -151,6 +151,110 @@ describe('the TYPE and TYPE_AT seams type a line break as Shift+Enter (REQ-CHAT-
       { type: 'keyDown', keyCode: 'a' }, { type: 'char', keyCode: 'a' }, { type: 'keyUp', keyCode: 'a' },
       ...['keyDown', 'char', 'keyUp'].map((type) => ({ type, keyCode: 'Return', modifiers: ['shift'] })),
       { type: 'keyDown', keyCode: 'b' }, { type: 'char', keyCode: 'b' }, { type: 'keyUp', keyCode: 'b' },
+    ]);
+  });
+});
+
+/**
+ * The first persona window as the persona seams meet it: absent until `open()`, then a document holding one element whose
+ * text the test sets (null: nothing drawn yet), and the renderer's paint mark (`__rotarisPersonaPainted`), null until
+ * `paint()`. Every script the seam evaluates in it is recorded.
+ */
+function personaWindow() {
+  const clock = new FakeClock();
+  const lines: string[] = [];
+  const doc: { text: string | null; painted: { at: number; seq: number; agents: number } | null; open: boolean } = { text: null, painted: null, open: false };
+  const scripts: string[] = [];
+  const win = {
+    isDestroyed: () => false,
+    webContents: {
+      executeJavaScript: (code: string) => {
+        scripts.push(code);
+        const found = doc.text === null ? [] : [{ text: doc.text, data: {} }];
+        if (code.includes('painted: window.__rotarisPersonaPainted')) return Promise.resolve({ painted: doc.painted !== null, found });
+        if (code.includes('__rotarisPersonaPainted')) return Promise.resolve(doc.painted);
+        if (code.includes('.some((x) =>')) {
+          const want = /x\.textContent\.trim\(\) === ("(?:[^"\\]|\\.)*")/.exec(code);
+          return Promise.resolve(doc.text !== null && (want ? JSON.parse(want[1]!) === doc.text : true));
+        }
+        return Promise.resolve(found);
+      },
+    },
+  };
+  const host = {
+    win: { webContents: { executeJavaScript: () => Promise.resolve(null), sendInputEvent: () => undefined } }, clocks: clock, log: (m: string) => { lines.push(m); },
+    personaWindows: { list: () => (doc.open ? [{ persona: 'orchestrator' }] : []), entry: () => (doc.open ? { persona: 'orchestrator', win } : undefined) },
+  } as unknown as CaptureHost;
+  for (const v of VARIABLES) delete process.env[v];
+  return { host, clock, lines, doc, scripts };
+}
+
+describe('ROTARIS_CAPTURE_PERSONA_PROBE_AT reads the first persona window (seams.ts)', () => {
+  /*
+   * docs/defects/fixed/mission-proofs-reconcile-launch-probes-the-persona-window-before-its-first-paint.md: mission-proof
+   * item 8 read the window once at 6.5 s, and under a load average of about 15 the window was created 1.6 s after the click
+   * and painted its first frame after the probe, which read `[]` (REQ-MONITOR-213's assertion then failed on a window that
+   * had not been drawn). A fixed-instant probe now waits, from its instant, for the window's first paint — bounded at 5 s,
+   * the bound main's own paint measurement uses — and says how long it waited.
+   */
+  it('REQ-MONITOR-213: a fixed-instant probe waits for a window created and painted after its instant, and says how long', async () => {
+    const p = personaWindow();
+    process.env['ROTARIS_CAPTURE_PERSONA_PROBE_AT'] = '[data-testid="persona-agent-state"]@6500';
+    installSeams(p.host, { prompt: undefined, resumeWanted: undefined });
+    await run(p.clock, 6_600);
+    // The instant has passed and no window exists yet: nothing is read.
+    expect(p.lines.filter((l) => l.startsWith('capture: persona-probe-at'))).toEqual([]);
+    p.doc.open = true;
+    p.doc.text = null;
+    await run(p.clock, 400);
+    expect(p.lines.filter((l) => l.startsWith('capture: persona-probe-at'))).toEqual([]);
+    p.doc.text = 'cancelled';
+    p.doc.painted = { at: 0, seq: 3, agents: 4 };
+    await run(p.clock, 100);
+    const read = p.lines.filter((l) => l.startsWith('capture: persona-probe-at'));
+    expect(read.at(-1)).toBe('capture: persona-probe-at 6500 [data-testid="persona-agent-state"] → [{"text":"cancelled","data":{}}]');
+    expect(read[0]).toMatch(/^capture: persona-probe-at 6500 \[data-testid="persona-agent-state"\] waited \d+ ms for the window's first paint$/);
+    expect(Number(/waited (\d+) ms/.exec(read[0]!)![1])).toBeGreaterThanOrEqual(400);
+  });
+
+  it('a window already painted at the instant is read at the instant, with no wait reported', async () => {
+    const p = personaWindow();
+    process.env['ROTARIS_CAPTURE_PERSONA_PROBE_AT'] = '[data-testid="persona-agent-state"]@1000';
+    p.doc.open = true;
+    p.doc.painted = { at: 0, seq: 1, agents: 1 };
+    p.doc.text = 'running';
+    installSeams(p.host, { prompt: undefined, resumeWanted: undefined });
+    await run(p.clock, 1_050);
+    expect(p.lines.filter((l) => l.startsWith('capture: persona-probe-at'))).toEqual(['capture: persona-probe-at 1000 [data-testid="persona-agent-state"] → [{"text":"running","data":{}}]']);
+  });
+
+  it('gives up 5 s after the instant when the window never paints, and reads what is there', async () => {
+    const p = personaWindow();
+    process.env['ROTARIS_CAPTURE_PERSONA_PROBE_AT'] = '[data-testid="persona-agent-state"]@1000';
+    installSeams(p.host, { prompt: undefined, resumeWanted: undefined });
+    await run(p.clock, 5_900);
+    expect(p.lines.filter((l) => l.startsWith('capture: persona-probe-at'))).toEqual([]);
+    await run(p.clock, 300);
+    expect(p.lines.filter((l) => l.startsWith('capture: persona-probe-at'))).toEqual([
+      'capture: persona-probe-at 1000 [data-testid="persona-agent-state"] waited 5000 ms for the window\'s first paint: not observed',
+      'capture: persona-probe-at 1000 [data-testid="persona-agent-state"] → null',
+    ]);
+  });
+
+  it('REQ-MONITOR-086/281: the waiting form `selector>>text@~ms` reads the window once the element holds that text, the label keeping the `~`', async () => {
+    const p = personaWindow();
+    process.env['ROTARIS_CAPTURE_PERSONA_PROBE_AT'] = '[data-testid="persona-compressions"]>>2 compressions across the run.@~60000';
+    installSeams(p.host, { prompt: undefined, resumeWanted: undefined });
+    await run(p.clock, 500);
+    p.doc.open = true;
+    p.doc.painted = { at: 0, seq: 1, agents: 1 };
+    p.doc.text = '1 compression across the run.';
+    await run(p.clock, 500);
+    expect(p.lines.filter((l) => l.startsWith('capture: persona-probe-at'))).toEqual([]);
+    p.doc.text = '2 compressions across the run.';
+    await run(p.clock, 200);
+    expect(p.lines.filter((l) => l.startsWith('capture: persona-probe-at'))).toEqual([
+      'capture: persona-probe-at ~60000 [data-testid="persona-compressions"] → [{"text":"2 compressions across the run.","data":{}}]',
     ]);
   });
 });

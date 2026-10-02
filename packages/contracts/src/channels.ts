@@ -370,6 +370,16 @@ export const SessionRecordSchema = z.object({
    * which of the two the run-level agent shows is OQ-159's, and this figure stays the agent's own until it is ruled.
    */
   entryToolCalls: z.number().int().nonnegative().nullable(),
+  /**
+   * REQ-MONITOR-086 with REQ-SESSION-139 (the repair of
+   * `the-inspector-and-a-persona-window-show-per-agent-metrics-without-the-compression-count.md`): the run-wide compression
+   * count — the session's maintained aggregate (ADR-0008), raised at the same completion as the compressing agent's own
+   * count, the roots' included, so it equals the sum of the per-agent counts. The live run's figure while a run is live
+   * (the stored one lags it until the pass's save), else the stored `sessions.compressions`. Under OQ-159's recorded
+   * reading the run-level agent carries it as its compression count; until this field the surfaces summed the children's
+   * counts, so a root's own compressions were counted nowhere.
+   */
+  compressions: z.number().int().nonnegative(),
 });
 export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 

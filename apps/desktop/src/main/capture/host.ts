@@ -266,16 +266,18 @@ export async function pressCategory(host: CaptureHost, label: string, timeoutMs:
 
 /**
  * Resolves when the step's selector (and its optional exact text) matches, or at the deadline. Never throws. A step
- * with `from` looks at nothing before `from`; its deadline is still `at`, counted from the same start.
+ * with `from` looks at nothing before `from`; its deadline is still `at`, counted from the same start. `read` evaluates
+ * the match in the document the step names — the main window's unless a seam passes another (the first persona
+ * window's, for `ROTARIS_CAPTURE_PERSONA_PROBE_AT`'s waiting form), where a window not there yet matches nothing.
  */
-export async function settleAt(host: CaptureHost, step: CaptureStep): Promise<void> {
+export async function settleAt(host: CaptureHost, step: CaptureStep, read: (probe: string) => Promise<unknown> = (probe) => host.win.webContents.executeJavaScript(probe)): Promise<void> {
   if (!step.until) { await pause(host, step.at); return; }
   const from = step.from ?? 0;
   if (from > 0) await pause(host, from);
   const deadline = Date.now() + Math.max(0, step.at - from);
   const probe = matchProbe(step.selector, step.arg);
   for (;;) {
-    const hit = await host.win.webContents.executeJavaScript(probe).catch(() => false) as boolean;
+    const hit = await read(probe).catch(() => false) === true;
     if (hit) { host.log(`capture: ${step.selector} matched with ${deadline - Date.now()} ms to spare`); return; }
     if (Date.now() >= deadline) { host.log(`capture: ${step.selector} never matched within ${step.at} ms`); return; }
     await pause(host, 50);

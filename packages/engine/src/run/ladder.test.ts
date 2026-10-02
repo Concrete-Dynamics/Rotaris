@@ -6,7 +6,7 @@ import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotar
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { SessionSnapshot } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRef, type ScriptedCall } from '@rotaris/model';
-import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, toSessionRecord, type CatalogueEntry, type DelegationOps, type ModelChoice, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
+import { BUILT_IN_PERSONAS, ResilienceMemory, RUN_CONFIG_DEFAULTS, Sessions, toSessionRecord, type CatalogueEntry, type DelegationOps, type ModelChoice, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
 import { conversationOf } from './record.js';
 import { childModelKeys, entryModelKeys } from '../autopsy.js';
 
@@ -83,6 +83,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     tool?: TestTool;
     delegation?: boolean;
     over?: Partial<RunConfig>;
+    /** The configure call (1-based) from which the configuration refuses — a restart that cannot begin. */
+    configureRefusesFrom?: number;
   }
 
   function sessionsWith(script: (persona: string, turn: number) => ScriptedCall, opts: Opts = {}) {
@@ -104,10 +106,11 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: { ...base, ...(opts.roleFallback ? { fallbackModel: opts.roleFallback } : {}), ...(opts.roleStallTimeoutMs === undefined ? {} : { stallTimeoutMs: opts.roleStallTimeoutMs }) }, alias: null } : null; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
     const backend = new DefaultAgentBackend(client);
     const results: string[] = [];
+    let configured = 0;
     const sessions = new Sessions({
       clocks: clock, publisher: pub, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++minted}`,
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: (_sid, r) => results.push(r.status),
-      configure: () => ({ ok: true, value: {
+      configure: () => (++configured >= (opts.configureRefusesFrom ?? Infinity) ? { ok: false as const, error: { reason: 'the configuration no longer loads' } } : { ok: true, value: {
         model: { backend, config }, models, personas,
         runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, ...(opts.childTimeoutMs === undefined ? {} : { childTimeoutMs: opts.childTimeoutMs }), ...(opts.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: opts.childStallTimeoutMs }) },
         resilience: { catalogue, fallbackModel: opts.fallbackModel ?? null },
@@ -1018,6 +1021,117 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     clock.advance(1000);
     expect((await validation.sessions.running(sid3)!).status).toBe('completed');
     expect(issues(sid3)).toEqual(['validation_llm_error']);
+  });
+
+  describe('REQ-NOTIFY-072/074/076 (the 401 note\'s parts C and D): the authentication recovery dialog\'s facts and its restart', () => {
+    const unauthorized = () => failing(modelError({ code: 'http', status: 401, headline: 'Unauthorized', providerMessage: 'Incorrect API key provided', transient: false }));
+    const catalogue = () => [entry('a1', 'a', A1, ['small_model']), entry('b1', 'b', B1, ['small_model']), entry('c1', 'c', C1, [], { usable: false })];
+    const failedSession = async (script: (persona: string, turn: number) => ScriptedCall = (_p, turn) => (turn === 1 ? unauthorized() : answer('restarted')), opts: Opts = {}) => {
+      const s = sessionsWith(script, { catalogue: catalogue(), ...opts });
+      const sid = (s.sessions.start(dal, 'C:/ws', 'the first prompt') as { value: SessionId }).value;
+      expect((await s.sessions.running(sid)!).status).toBe('failed');
+      return { ...s, sid };
+    };
+
+    it('names the model the failed root call was addressed to, the active model, every usable configured model, and a recorded prompt', async () => {
+      const { sessions, sid } = await failedSession();
+      const facts = sessions.authRecoveryFacts(sid);
+      if (!facts.ok) throw new Error(facts.error.reason);
+      expect(facts.value.failed).toEqual({ key: 'a1', provider: 'a', model: 'a1' });
+      expect(facts.value.active).toEqual({ key: 'a1', provider: 'a', model: 'a1' });
+      // c1 is not usable for this run (its provider was not leased), so a restart could never reach it.
+      expect(facts.value.models).toEqual([{ key: 'a1', provider: 'a', model: 'a1' }, { key: 'b1', provider: 'b', model: 'b1' }]);
+      expect(facts.value.lastPrompt).toBe(true);
+    });
+
+    it('a chosen model is pinned against the failed pair, the run restarts with the same prompt on it, and the pin survives a reload', async () => {
+      const { sessions, client, sid } = await failedSession();
+      const r = sessions.restartAfterAuthFailure(sid, 'b1');
+      if (!r.ok) throw new Error(r.error.reason);
+      expect(r.value.pinned).toEqual({ from: { key: 'a1', provider: 'a', model: 'a1' }, to: { key: 'b1', provider: 'b', model: 'b1' } });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // REQ-NOTIFY-068: the pair that failed is not called again; the restart is on the chosen model.
+      expect(client.requests.map((q) => q.model.modelId)).toEqual(['a1', 'b1']);
+      const users = dal.residentRows(sid).filter((row) => row.kind === 'user').map((row) => row.body);
+      expect(users).toEqual(['the first prompt', 'the first prompt']);
+      expect(dal.residentRows(sid).some((row) => row.kind === 'system' && /Authentication failed on a\/a1\. The run restarts on b1 \(b\/b1\)/.test(row.body))).toBe(true);
+      expect(JSON.parse(dal.timelineOf(sid).filter((t) => t.name === 'model_override').at(-1)!.metadata)).toMatchObject({ provider: 'a', model: 'a1', model_key: 'b1', cause: 'authentication' });
+      // REQ-SESSION-026: a fresh process rehydrates the pin, so the session's next run is on b1 too.
+      const fresh = sessionsWith(() => answer('fresh'), { catalogue: catalogue() });
+      const resumed = fresh.sessions.resume(dal, 'C:/ws', sid);
+      if (!resumed.ok) throw new Error(resumed.error.reason);
+      const again = fresh.sessions.prompt(sid, 'once more');
+      if (!again.ok) throw new Error(again.error.reason);
+      await fresh.sessions.running(sid)!;
+      expect(fresh.client.requests.map((q) => q.model.modelId)).toEqual(['b1']);
+    });
+
+    it('REQ-NOTIFY-076: a re-authentication restarts with the same prompt on the same model and pins nothing', async () => {
+      const { sessions, client, sid } = await failedSession();
+      const r = sessions.restartAfterAuthFailure(sid, null);
+      if (!r.ok) throw new Error(r.error.reason);
+      expect(r.value.pinned).toBeNull();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((q) => q.model.modelId)).toEqual(['a1', 'a1']);
+      expect(dal.timelineOf(sid).some((t) => t.name === 'model_override')).toBe(false);
+      expect(dal.residentRows(sid).filter((row) => row.kind === 'user').map((row) => row.body)).toEqual(['the first prompt', 'the first prompt']);
+      expect(dal.residentRows(sid).some((row) => row.kind === 'system' && row.body.startsWith('Re-authenticated after the authentication failure'))).toBe(true);
+    });
+
+    /*
+     * REQ-NOTIFY-068: main never offers back a pair that failed authentication while its provider holds the same credentials
+     * (`apps/desktop/src/main/auth-recovery.ts`, `refusedPair`) — the credential store is main's, so the engine cannot know
+     * whether they changed. What this pins is the engine's half once they have: a1's provider re-authenticated under
+     * Settings after a1 failed, then b1 failing too, makes a1 a legitimate choice again, and the pin that moved the session
+     * off a1 must not lead back off it.
+     */
+    it('REQ-NOTIFY-075: a hand-chosen model that also fails is replaced by the next choice; choosing back the first model once its provider\'s credentials changed leaves no pin away from it', async () => {
+      const { sessions, client, sid } = await failedSession((_p, turn) => (turn <= 2 ? unauthorized() : answer('at last')));
+      const first = sessions.restartAfterAuthFailure(sid, 'b1');
+      if (!first.ok) throw new Error(first.error.reason);
+      expect((await sessions.running(sid)!).status).toBe('failed');
+      const facts = sessions.authRecoveryFacts(sid);
+      if (!facts.ok) throw new Error(facts.error.reason);
+      expect(facts.value.failed).toEqual({ key: 'b1', provider: 'b', model: 'b1' });
+      const back = sessions.restartAfterAuthFailure(sid, 'a1');
+      if (!back.ok) throw new Error(back.error.reason);
+      expect(back.value.pinned).toEqual({ from: { key: 'b1', provider: 'b', model: 'b1' }, to: { key: 'a1', provider: 'a', model: 'a1' } });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((q) => q.model.modelId)).toEqual(['a1', 'b1', 'a1']);
+      const memory = ResilienceMemory.rehydrate(dal.timelineOf(sid), (key) => ({ model: key === 'a1' ? A1 : B1, thinking: 'unset' }));
+      expect(memory.overrideFor('a', 'a1')).toBeUndefined();
+      expect(memory.overrideFor('b', 'b1')?.key).toBe('a1');
+    });
+
+    it('a restart that cannot begin takes the pin back, so the session stays on the model it had', async () => {
+      // The start configures once and the restart twice (its own resolution, then the prompt's): the third refuses.
+      const { sessions, client, sid } = await failedSession(undefined, { configureRefusesFrom: 3 });
+      const r = sessions.restartAfterAuthFailure(sid, 'b1');
+      expect(r.ok ? null : r.error.code).toBe('restart-failed');
+      const overrides = dal.timelineOf(sid).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>);
+      expect(overrides.map((m) => m['cleared'] === true)).toEqual([false, true]);
+      // No row claims a restart that never began, and nothing was called.
+      expect(dal.residentRows(sid).some((row) => row.kind === 'system' && row.body.includes('The run restarts on'))).toBe(false);
+      expect(client.requests).toHaveLength(1);
+      expect(ResilienceMemory.rehydrate(dal.timelineOf(sid), () => ({ model: B1, thinking: 'unset' })).overrideFor('a', 'a1')).toBeUndefined();
+    });
+
+    it('refuses the model that failed, an unknown key and an active run, writing nothing', async () => {
+      const { sessions, sid } = await failedSession((_p, turn) => (turn === 1 ? unauthorized() : hanging(NEVER)));
+      const before = dal.timelineOf(sid).length;
+      const same = sessions.restartAfterAuthFailure(sid, 'a1');
+      expect(same.ok ? null : same.error.code).toBe('same-model');
+      const unknown = sessions.restartAfterAuthFailure(sid, 'nope');
+      expect(unknown.ok ? null : unknown.error.code).toBe('unknown-model');
+      expect(dal.timelineOf(sid).length).toBe(before);
+      expect(sessions.restartAfterAuthFailure(sid, 'b1').ok).toBe(true);
+      await tick();
+      const active = sessions.restartAfterAuthFailure(sid, 'b1');
+      expect(active.ok ? null : active.error.code).toBe('run-active');
+      expect(sessions.authRecoveryFacts(sid).ok).toBe(false);
+      sessions.control({ op: 'cancel', sessionId: sid, args: { force: true } });
+      await sessions.running(sid);
+    });
   });
 
   it('REQ-ORCH-145: the per-model timeout and retry count reach the request; a catalogue entry without them leaves the run\'s', async () => {

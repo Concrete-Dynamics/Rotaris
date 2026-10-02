@@ -200,11 +200,19 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
   }
 
   ownerOfSession(sessionId: string, subscriberIds: readonly number[]): MainWindowView<TWindow, TPersonaWindows, TTerminalWindows> | undefined {
+    return this.followerOfSession(sessionId, subscriberIds) ?? this.active();
+  }
+
+  /**
+   * REQ-NOTIFY-030/032: the main window following the session — the session is on screen there — or undefined where none
+   * does. Unlike `ownerOfSession` there is no fallback to the active window: a session no main window follows is not focused.
+   */
+  followerOfSession(sessionId: string, subscriberIds: readonly number[]): MainWindowView<TWindow, TPersonaWindows, TTerminalWindows> | undefined {
     for (const id of subscriberIds) {
       const record = this.#liveRecord(id);
       if (record?.followedSessionId === sessionId) return this.#view(record);
     }
-    return this.active();
+    return undefined;
   }
 
   setFollowedSession(senderId: number, sessionId: string): void {

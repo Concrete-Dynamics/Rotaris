@@ -1,6 +1,6 @@
 import { countNoun, displayMask, err, failure, ok, type Failure, type Result, type WallClock } from '@rotaris/kernel';
 import { toIsoUtc } from '@rotaris/kernel';
-import { CATALOGUE, displayNameFor, instanceId, isInstanceId, lookupProvider, METHOD_LABELS, modelsEndpoint, normalizeBaseUrl, PROVIDER_IDS, signInMethodFor, type SignInMethod } from './catalogue.js';
+import { CATALOGUE, displayNameFor, instanceId, isInstanceId, lookupProvider, MANAGED_BY_CONFIGURATION, METHOD_LABELS, modelsEndpoint, normalizeBaseUrl, PROVIDER_IDS, signInMethodFor, type SignInMethod } from './catalogue.js';
 import { credentialStatus, headerValidKey, type CredentialStatus, type CredentialStore, type StoredCredential } from './credentials/store.js';
 import { discover, type DiscoveredModel, type DiscoveryError, type FetchLike } from './discovery.js';
 import { KNOWN_LIMITS } from './limits.data.js';
@@ -31,6 +31,24 @@ export type SignInOutcome =
   | { readonly outcome: 'no-models'; readonly id: string; readonly message: string }
   | { readonly outcome: 'cancelled' }
   | { readonly outcome: 'failed'; readonly message: string };
+
+/**
+ * REQ-NOTIFY-076: how the authentication recovery dialog can re-authenticate a provider here. `api-key`: a masked key field
+ * stored through `reauthenticateWithKey`. `unavailable`: a device-code or browser provider — those flows are owed (the
+ * catalogue's header) — or one the catalogue marks unavailable; `message` says which. `configuration`: an id no sign-in
+ * method resolves for, whose credential the model configuration carries (REQ-PROVIDER-118/140, OQ-179).
+ */
+export type ReauthenticationMethod = { readonly method: 'api-key' | 'unavailable' | 'configuration'; readonly message: string };
+
+/**
+ * REQ-NOTIFY-076/077: what storing a re-authentication key answered, by the stage that refused it — so a key that could not
+ * be STORED is told apart from one the provider refused (`validation`), which REQ-NOTIFY-077 names separately. `catalog`:
+ * the key WAS stored, and only the models its validation discovered could not be recorded in the provider settings — not a
+ * key that could not be stored, so it never takes REQ-NOTIFY-077's "could not be stored" wording.
+ */
+export type ReauthenticationOutcome =
+  | { readonly ok: true; readonly message: string }
+  | { readonly ok: false; readonly stage: 'method' | 'key' | 'validation' | 'storage' | 'catalog'; readonly message: string };
 
 export interface AddInstanceRequest {
   readonly label: string;
@@ -207,13 +225,45 @@ export class ProviderService {
     return { outcome: 'signed-in', id, displayName, discovered: found.value.length, message, keyValidated: !publicCatalog };
   }
 
-  /** REQ-PROVIDER-108/141: replace the key; validated by discovery unless the user opted out. */
-  async replaceKey(id: string, apiKey: string, validate = true): Promise<Result<string, string>> {
+  /**
+   * REQ-PROVIDER-108/141: replace the key; validated by discovery unless the user opted out. The refusing stage is named,
+   * as for the recovery dialog's key path: `catalog` is a key that WAS stored, so the caller knows the credentials changed
+   * (REQ-NOTIFY-068) although the answer is a refusal.
+   */
+  async replaceKey(id: string, apiKey: string, validate = true): Promise<ReauthenticationOutcome> {
+    return this.storeKey(id, apiKey, validate);
+  }
+
+  /** REQ-NOTIFY-076: the method the recovery dialog offers for `id`, read from the catalogue and the stored family alone. */
+  reauthentication(id: string): ReauthenticationMethod {
+    const entry = CATALOGUE.find((c) => c.id === id);
+    if (entry && !entry.available) return { method: 'unavailable', message: entry.unavailabilityReason ?? `${entry.displayName} is not available.` };
+    const method = signInMethodFor(id, this.deps.credentials.load(id)?.extra['provider_family'] ?? null);
+    if (method === null) return { method: 'configuration', message: `${MANAGED_BY_CONFIGURATION} Re-authenticate ${this.displayName(id)} by correcting the key its model configuration names, then retry.` };
+    if (method !== 'api-key' || entry?.connectionMode === 'local-sdk') {
+      return { method: 'unavailable', message: `${this.displayName(id)} signs in with "${METHOD_LABELS[method]}", which this build does not provide yet, so it cannot be re-authenticated here. Choose a model from another provider instead.` };
+    }
+    return { method: 'api-key', message: `Enter a new API key for ${this.displayName(id)}. It is validated with the provider's model catalog endpoint before it is saved.` };
+  }
+
+  /**
+   * REQ-NOTIFY-076/077 / REQ-NOTIFY-202: the recovery dialog's key path — the provider's own key store, a signed-in provider
+   * or one never signed in alike: the key validated by discovery before it is saved, saved, and the discovered models
+   * persisted. The answer names the stage that refused, so the caller can tell a storage failure apart (REQ-NOTIFY-077).
+   */
+  async reauthenticateWithKey(id: string, apiKey: string): Promise<ReauthenticationOutcome> {
+    const how = this.reauthentication(id);
+    if (how.method !== 'api-key') return { ok: false, stage: 'method', message: how.message };
+    return this.storeKey(id, apiKey, true);
+  }
+
+  /** `replaceKey` and `reauthenticateWithKey`'s one path, with the refusing stage named. The key is never logged or echoed. */
+  private async storeKey(id: string, apiKey: string, validate: boolean): Promise<ReauthenticationOutcome> {
     const method = this.method(id);
-    if (method !== 'api-key') return err(`${this.displayName(id)} does not sign in with an API key.`);
+    if (method !== 'api-key') return { ok: false, stage: 'method', message: `${this.displayName(id)} does not sign in with an API key.` };
     const key = headerValidKey(apiKey);
-    if (!key.ok) return err(key.error);
-    if (key.value.length === 0) return err(`A key is required for ${this.displayName(id)}.`);
+    if (!key.ok) return { ok: false, stage: 'key', message: key.error };
+    if (key.value.length === 0) return { ok: false, stage: 'key', message: `A key is required for ${this.displayName(id)}.` };
     const previous = this.deps.credentials.load(id);
     const baseUrl = previous?.extra['api_base'] ?? this.snapshotRecord(id)?.base_url ?? null;
     const extra: Record<string, string> = { ...(previous?.extra ?? {}) };
@@ -221,18 +271,18 @@ export class ProviderService {
     let models: DiscoveredModel[] | null = null;
     if (validate) {
       const found = await this.runDiscovery(id, key.value, isInstanceId(id) ? baseUrl : null);
-      if (!found.ok) { const m = `Validation failed for ${this.displayName(id)}: ${found.error.message.split(key.value).join('[redacted]')}`; this.recordError(id, m); return err(m); }
-      if (found.value.length === 0) { const m = `Validation failed for ${this.displayName(id)}: no models discovered.`; this.recordError(id, m); return err(m); }
+      if (!found.ok) { const m = `Validation failed for ${this.displayName(id)}: ${found.error.message.split(key.value).join('[redacted]')}`; this.recordError(id, m); return { ok: false, stage: 'validation', message: m }; }
+      if (found.value.length === 0) { const m = `Validation failed for ${this.displayName(id)}: no models discovered.`; this.recordError(id, m); return { ok: false, stage: 'validation', message: m }; }
       models = found.value;
     }
     const saved = await this.deps.credentials.save(id, { access_token: key.value, refresh_token: '', expires_at: 0, account_id: null, extra });
-    if (!saved.ok) return err(saved.error.headline);
+    if (!saved.ok) return { ok: false, stage: 'storage', message: saved.error.headline };
     if (models) {
       const p = await this.persistModels(id, this.displayName(id), isInstanceId(id) ? 'openai-compatible' : null, isInstanceId(id) ? baseUrl : this.recordBase(id, previous), models);
-      if (!p.ok) return err(p.error.headline);
+      if (!p.ok) return { ok: false, stage: 'catalog', message: `The key for ${this.displayName(id)} was saved, but its discovered models could not be recorded: ${p.error.headline}` };
     }
     this.clearError(id);
-    return ok(models ? `Validated ${this.displayName(id)}; discovered ${countNoun(models.length, 'model')}.` : `Saved the key for ${this.displayName(id)}.`);
+    return { ok: true, message: models ? `Validated ${this.displayName(id)}; discovered ${countNoun(models.length, 'model')}.` : `Saved the key for ${this.displayName(id)}.` };
   }
 
   /** REQ-PROVIDER-141: a changed base URL re-runs discovery when a key is stored and updates both places. */

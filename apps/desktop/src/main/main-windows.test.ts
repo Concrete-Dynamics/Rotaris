@@ -374,6 +374,20 @@ describe('MainWindows', () => {
     expect(none.wcId).not.toBe(first.wcId);
   });
 
+  it('REQ-NOTIFY-030/032: a session is focused only where a main window subscribed to it follows it; the owner falls back to the active window, the follower does not', async () => {
+    const h = harness();
+    const first = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    const second = await h.mainWindows.build({ workspace: 'C:/b', origin: 'open-request' });
+    h.mainWindows.setFollowedSession(first.wcId, 'S1');
+    expect(h.mainWindows.followerOfSession('S1', [first.wcId, second.wcId])?.wcId).toBe(first.wcId);
+    // Followed, but by a window that is not among the session's subscribers: not on screen there.
+    expect(h.mainWindows.followerOfSession('S1', [second.wcId])).toBeUndefined();
+    expect(h.mainWindows.followerOfSession('S2', [first.wcId, second.wcId])).toBeUndefined();
+    expect(h.mainWindows.ownerOfSession('S2', [first.wcId, second.wcId])?.wcId).toBe(second.wcId);
+    h.mainWindows.clearFollowedSession(first.wcId, 'S1');
+    expect(h.mainWindows.followerOfSession('S1', [first.wcId])).toBeUndefined();
+  });
+
   it('destroys and cleans up a window if loading fails after registration', async () => {
     const h = harness({ failLoads: new Set([1]) });
     await expect(h.mainWindows.build({ workspace: 'C:/broken', origin: 'launch' })).rejects.toThrow('load-failed:1');

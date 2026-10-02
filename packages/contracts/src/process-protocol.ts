@@ -104,6 +104,17 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.resume'), workspaceId: z.string(), sessionId: z.string().min(1) }),
   /** REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause (continue, double, cancel) or continue a manually paused session or one a crash left (PD-ORCH-005 clause 18); clause 6's `withoutPaused` declines the open iteration. */
   z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(['continue', 'double', 'cancel']), withoutPaused: z.boolean().optional() }),
+  /**
+   * REQ-NOTIFY-069/072/074 (the 401 note's part C): the facts the authentication recovery dialog is drawn from — the model the
+   * failed root call was addressed to, the active model, the configured models a restart can pin, and whether a last prompt
+   * is recorded (`Sessions.authRecoveryFacts`). Main asks after classifying a run's failure (REQ-NOTIFY-060/067).
+   */
+  z.object({ kind: z.literal('session.authRecovery'), sessionId: z.string().min(1) }),
+  /**
+   * REQ-NOTIFY-074/076 (parts C and D): the dialog's restart — `modelKey` is pinned against the pair that failed and the run
+   * restarts with the same prompt; null restarts on the same model after a re-authentication (`Sessions.restartAfterAuthFailure`).
+   */
+  z.object({ kind: z.literal('session.authRestart'), sessionId: z.string().min(1), modelKey: z.string().min(1).nullable() }),
   /** REQ-ORCH-153/154 (ADR-0062) and PD-ORCH-003: the plan gate's three entries, forwarded to the run host that owns the session. */
   z.object({ kind: z.literal('session.planEdit'), sessionId: z.string().min(1), text: z.string() }),
   z.object({ kind: z.literal('session.planDecision'), sessionId: z.string().min(1), decision: z.enum(PLAN_DECISIONS), changes: z.string().optional() }),
@@ -439,6 +450,16 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.resumed'), sessionId: z.string() }),
   z.object({ kind: z.literal('config.snapshot'), snapshot: ConfigSnapshotSchema }),
   z.object({ kind: z.literal('session.continued'), sessionId: z.string(), resumed: z.boolean(), messageLimit: z.number().int().nullable() }),
+  /** REQ-NOTIFY-072/074: `session.authRecovery`'s answer. A model's `key` is null where no `models:` entry produced it. */
+  z.object({
+    kind: z.literal('session.authRecovery'), sessionId: z.string(),
+    failed: z.object({ key: z.string().nullable(), provider: z.string(), model: z.string() }).nullable(),
+    active: z.object({ key: z.string().nullable(), provider: z.string(), model: z.string() }).nullable(),
+    models: z.array(z.object({ key: z.string(), provider: z.string(), model: z.string() })),
+    lastPrompt: z.boolean(),
+  }),
+  /** REQ-NOTIFY-074/076: the restart has begun; `pinned` names the pair that failed and the model now pinned, null after a re-authentication. */
+  z.object({ kind: z.literal('session.authRestarted'), sessionId: z.string(), pinned: z.object({ from: z.object({ provider: z.string(), model: z.string() }), to: z.object({ key: z.string(), provider: z.string(), model: z.string() }) }).nullable() }),
   /** REQ-ORCH-154: the cycle the answer settled, and whether a further segment launched (approve and revise) or not (cancel). */
   z.object({ kind: z.literal('session.planResolved'), sessionId: z.string(), cycle: z.number().int().positive(), relaunched: z.boolean() }),
   /** REQ-CHAT-165: a span older than `beforeIndex`, oldest first; `oldest` says the first recorded row is in it. */

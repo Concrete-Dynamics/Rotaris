@@ -25,7 +25,7 @@ import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, ca
 // What a transcript surface reads about the session it is following, shared with the persona window (`session-view.ts`).
 import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery, useShownSession } from './session-view.js';
 // The other windows this same bundle is the root of, each one a role on the route (`windows.tsx`, ADR-0056).
-import { bootApproval, bootHookReview, bootPause, bootPersona, bootProvider, bootTerminal } from './windows.js';
+import { bootApproval, bootAuthRecovery, bootHookReview, bootPause, bootPersona, bootProvider, bootTerminal } from './windows.js';
 /**
  * THE RENDERER'S ROOT. One bundle for every window; the window's role arrives by route (ADR-0056), and `boot` at the
  * bottom is the only place that reads it. Sandboxed: no Node, no filesystem, no store handle — everything this bundle
@@ -1468,6 +1468,7 @@ async function boot(): Promise<void> {
   const role = new URLSearchParams(window.location.search).get('role');
   if (role === 'approval') { await bootApproval(); return; }
   if (role === 'pause') { await bootPause(); return; }
+  if (role === 'auth-recovery') { await bootAuthRecovery(); return; } // REQ-NOTIFY-072
   if (role === 'provider') { await bootProvider(); return; }
   if (role === 'hook-review') { await bootHookReview(); return; }
   if (role === 'persona') { await bootPersona(); return; }

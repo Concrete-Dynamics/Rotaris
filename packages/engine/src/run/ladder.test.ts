@@ -540,6 +540,39 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(between.keys).toEqual(['b1']);
   });
 
+  // The same placement for the ladder's other automatic move (REQ-ORCH-090): an unresponsive fallback made while a switch
+  // is pending records so, the switch ends it at the root's next turn, and the reader reads f1's pair then c1, as the root ran.
+  it('REQ-MONITOR-142 over REQ-ORCH-090: a root unresponsive fallback made while a switch is pending is recorded so, and the switch it preceded ends it', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, []), entry('f1', 'f', F1, [])];
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      if (persona !== 'orchestrator') return answer('child done');
+      // On a1: no event within llm_response_timeout, so the call is re-run on the fallback f1 inside this turn.
+      if (turn === 1) return hanging(NEVER);
+      // On f1: a delegation; the root resumes with the child's report in a new turn.
+      if (turn === 2) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]);
+      return answer(`root ${turn}`);
+    };
+    const { sessions, client } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 10_000, fallbackModel: { model: F1, thinking: 'unset' }, llmResponseTimeoutMs: 30_000 });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && client.requests.length < 1; i++) await tick();
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+    clock.advance(30_000);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const rows = dal.timelineOf(sid);
+    expect(rows.filter((t) => t.name === 'entry_model_switched' || t.name === 'llm_unresponsive').map((t) => ({ name: t.name, ...(JSON.parse(t.metadata) as Record<string, unknown>) }))).toEqual([
+      { name: 'entry_model_switched', model: 'c1', rebuilds: true, supersedes: false },
+      expect.objectContaining({ name: 'llm_unresponsive', agent: 'orchestrator', from_model: 'a1', to_model: 'f1', switch_pending: true }),
+    ]);
+    const root = client.requests.filter((r) => /^You are the orchestrator/.test(systemOf(r))).map((r) => r.model.modelId);
+    expect(root.slice(0, 2)).toEqual(['a1', 'f1']);
+    expect(root.length).toBeGreaterThan(2);
+    expect(root.at(-1)).toBe('c1');
+    // No launch audit here, so no `models:` key names f1's pair and the reader prints the pair itself (REQ-ORCH-090's entry records no key).
+    expect(entryModelKeys(undefined, rows, childModelKeys(dal.childrenOf(sid)))).toEqual(['f/f1', 'c1']);
+  });
+
   it('REQ-MONITOR-142 over REQ-MONITOR-303: the root\'s own wait choice supersedes a switch recorded since its last turn, and its override says so', async () => {
     const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, []), entry('f1', 'f', F1, [])];
     let release!: () => void;

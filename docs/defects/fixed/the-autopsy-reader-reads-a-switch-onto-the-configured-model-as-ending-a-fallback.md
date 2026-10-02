@@ -117,6 +117,12 @@ Pinned by:
   (`rebuilds: false, supersedes: true`). The root's turns after the first all go to `b1` and the reader over the run's own
   store reads `['b1']`. In the control (no switch back) the root ends on `c1` and the reader reads `['b1', 'c1']`; it read
   `['c1', 'b1']` with the earlier reader, and the records assertion failed without the run change.
+- `packages/engine/src/run/ladder.test.ts`, "a root unresponsive fallback made while a switch is pending is recorded so
+  …" (added in repair round 3): the same placement for `llm_unresponsive`. The root's call on `a1` hangs, the user
+  switches to `c1`, and the response timeout moves the root to `f1` (`switch_pending: true`). Its next turn runs on `c1`,
+  and the reader reads `['f/f1', 'c1']`. The reader prints the pair because the case has no launch audit, so no `models:`
+  key names it. The case failed with the reader's placement removed (`['c1', 'f/f1']`), and failed at the records
+  assertion with the entry's `switch_pending` removed.
 - `apps/desktop/scripts/lib/autopsy-entry-model.test.ts`, six moves-table rows: the move between two switches, with and
   without `switch_pending`; the root's superseding wait choice with a move since the switch; a pending-switch move read
   before a switch that is never superseded; a move after the switch applied (`switch_pending: false`, read as recorded);

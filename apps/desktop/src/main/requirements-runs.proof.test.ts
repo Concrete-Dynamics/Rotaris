@@ -64,7 +64,7 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
     (await delivery.handle({ name: 'requirements.act', workspace: workspaceRoot, id, action, ...(payload === undefined ? {} : { payload }) }, USER)).value as { ok: boolean; value?: TransitionOutcome; error?: Refusal };
 
   /** The workspace service and main's coordinator as a start builds them; the restart assertion builds a second pair over the same store. */
-  let start: () => void = () => undefined;
+  let start: (prefs?: { readonly suppressed?: boolean }) => void = () => undefined;
 
   beforeAll(async () => {
     const storeDir = join(out!, 'store');
@@ -74,7 +74,7 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
     const clocks = nodeClocks();
     resolved = openWorkspaceStore(storeDir, mintWorkspaceId('000000000000000000000000000000ap'.replace(/[^0-9a-f]/g, '0')), workspaceRoot);
     const engine = createTraceabilityEngine({ executor: createInThreadExecutor(clocks), io: fsArtifactIo(clocks.timers), clocks });
-    start = () => {
+    start = (prefs = {}) => {
       delivery = createDeliveryService({ db: resolved.db, workspaceRoot, engine, clocks, configDir, log: () => undefined });
       runs = createRequirementsRuns({
         currentWorkspace: () => workspaceRoot,
@@ -90,7 +90,7 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
         },
         runHost: { request: host, onEvent: (fn) => { emit = fn; return () => undefined; } },
         onRunHostExit: (fn) => { exit = fn; },
-        preferences: { read: (key) => key === 'requirements/fullPermissionRuns', write: async () => undefined },
+        preferences: { read: (key) => key === 'requirements/fullPermissionRuns' || (key === 'requirements/fullPermissionNoticeSuppressed' && prefs.suppressed === true), write: async () => undefined },
         mintSessionId: () => `proof-session-${(minted += 1)}`,
         broadcast: () => undefined,
         log: () => undefined,
@@ -270,5 +270,38 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
     expect(card.column).toBe('running');
     expect(card.run?.unit).toBe('u1');
     results.restartRelease = { deferredBefore: waiting.reason, started: report.started.map((s) => s.id), worktree: tree, worktreesForUnit: worktreesOf('REQ-106').length };
+  });
+  /**
+   * The verifier's second finding on the same note (REQ-TRACE-472/482). The concurrency assertion's third release rests in
+   * `ready` with its tree, through the restart above and one more. Its launch is rebuilt undisclosed, because the service
+   * cannot read the preferences. Meanwhile the person has accepted the disclosure permanently, and the workspace schedules
+   * automatically. Main's coordinator sends the standing disclosure on its claim, so the scheduler picks the card up with
+   * no release. The run begins, elevated, on the tree its release provisioned.
+   */
+  it('a card resting in ready is picked up by automatic scheduling after a restart once the disclosure is suppressed permanently, on its recorded tree', async () => {
+    const id = (results['concurrency'] as { deferred: ReqId }).deferred;
+    const worktreesOf = (req: string): string[] => execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd: workspaceRoot }).toString().split(/\n/).filter((l) => l.startsWith(`branch refs/heads/rotaris/req/${req.toLowerCase()}/`));
+    const tree = requirementWorktreePath(workspaceRoot, `rotaris/req/${id.toLowerCase()}/u1`);
+    expect(existsSync(tree)).toBe(true);
+    expect((await board()).cards.find((c) => c.id === id)!.column).toBe('ready');
+    // REQ-TRACE-480: automatic scheduling is written into the workspace configuration, so the relaunch reads it.
+    await delivery.handle({ name: 'requirements.queue.set', workspace: workspaceRoot, automatic: true }, USER);
+    const requestsBefore = hostRequests.length;
+    start({ suppressed: true });
+    const before = await board();
+    expect(before.queue.automatic).toBe(true);
+    expect(before.cards.find((c) => c.id === id)!.column).toBe('ready');
+    const report = await runs.dispatch();
+    expect(report.abandoned).toEqual([]);
+    expect(report.started.map((s) => s.id)).toContain(id);
+    const startRequest = hostRequests.slice(requestsBefore).find((h) => h.request.kind === 'session.start' && (h.request as { effectiveRoot?: string }).effectiveRoot === tree);
+    expect(startRequest, `no session.start on ${id}'s recorded tree`).toBeDefined();
+    expect(startRequest!.request).toHaveProperty('boardPermissions', 'permissive');
+    // REQ-TRACE-464: taken over, never provisioned a second time.
+    expect(worktreesOf(id)).toHaveLength(1);
+    const card = (await board()).cards.find((c) => c.id === id)!;
+    expect(card.column).toBe('running');
+    expect(card.run?.unit).toBe('u1');
+    results.restartAutomatic = { id, started: report.started.map((s) => s.id), worktree: tree, worktreesForUnit: worktreesOf(id).length, permissions: 'permissive' };
   });
 });

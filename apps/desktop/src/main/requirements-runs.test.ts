@@ -67,6 +67,18 @@ describe('the launch preview (REQ-TRACE-472/473/474, 467/468)', () => {
 });
 
 describe('the dispatch (REQ-TRACE-464/470/471/463)', () => {
+  it('REQ-TRACE-472: every claim carries the standing disclosure the two preferences make — due, suppressed after a permanent acceptance, off with the elevation switched off', async () => {
+    const claimOf = (h: ReturnType<typeof harness>) => h.sent.find((r) => r.kind === 'requirements.command' && r.command.name === 'requirements.run.claim');
+    const due = harness();
+    await due.runs.dispatch();
+    expect(claimOf(due)).toMatchObject({ command: { name: 'requirements.run.claim', disclosure: 'due' } });
+    const suppressed = harness({ prefs: { suppressed: true } });
+    await suppressed.runs.dispatch();
+    expect(claimOf(suppressed)).toMatchObject({ command: { disclosure: 'suppressed' } });
+    const off = harness({ prefs: { runs: false, suppressed: true } });
+    await off.runs.dispatch();
+    expect(claimOf(off)).toMatchObject({ command: { disclosure: 'off' } });
+  });
   it('claims, carries the grant on one start, then records the session id', async () => {
     const h = harness({ claims: [CLAIM] });
     const report = await h.runs.dispatch();

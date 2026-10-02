@@ -1,4 +1,4 @@
-import type { Actor, BlockerPayload, BoardAction, BoardCard, BoardProjection, DisclosureState, Reachability, ReqId, RequirementDetail, RequirementRecord, RequirementsCommandPayload, ReviewPayload, RunClaim, RunLaunchPreview, RunPermissions, RunReaped, RunSettled, StoreParse, TraceabilityEngine, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
+import type { Actor, BlockerPayload, BoardAction, BoardCard, BoardProjection, DisclosureState, Reachability, ReqId, RequirementDetail, RequirementRecord, RequirementsCommandPayload, ReviewPayload, RunClaim, RunLaunchPreview, RunPermissions, RunReaped, RunSettled, StandingDisclosure, StoreParse, TraceabilityEngine, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
 import { SYSTEM_ONLY_REQUIREMENTS_COMMANDS } from '@rotaris/contracts'; // Part AP
 import { asSessionId, err, millis, toIsoUtc, type Clocks } from '@rotaris/kernel';
 import { StoreDal, type ResolvedStore } from '@rotaris/store';
@@ -124,11 +124,19 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
   const launches = new Map<ReqId, Launch>();
   const recordOf = (id: ReqId): RequirementRecord | undefined => parse?.records.find((x) => x.id === id);
   const workspaceUnattended = (): boolean => permissionMode === 'autonomous';
-  /** REQ-TRACE-497: a run started while its disclosure was due and not accepted is never observable — a launch without one is not claimable. */
-  const disclosed = (l: Launch | undefined): boolean => l !== undefined && (l.disclosure !== 'undisclosed' || workspaceUnattended());
-  const permissionsOf = (l: Launch | undefined): RunPermissions => (l === undefined || l.disclosure === 'off' || workspaceUnattended() ? 'workspace' : 'permissive');
+  /**
+   * REQ-TRACE-497: a run started while its disclosure was due and not accepted is never observable — a launch without one
+   * is not claimable. `standing` is what main's two preferences make of a launch nobody disclosed (REQ-TRACE-472): only
+   * main holds them, and it sends them on a claim; everywhere else the service assumes the disclosure is `due`. A launch
+   * recorded undisclosed (one the restart recovery rebuilt) is disclosed once the disclosure is permanently suppressed or
+   * the elevation is switched off, as a launch disclosed in this process would be (the verifier's second finding on
+   * `a-card-resting-in-ready-across-a-restart-can-never-be-started.md`).
+   */
+  const disclosed = (l: Launch | undefined, standing: StandingDisclosure = 'due'): boolean => l !== undefined && (l.disclosure !== 'undisclosed' || standing !== 'due' || workspaceUnattended());
+  /** REQ-TRACE-472: with the elevation switched off a board-started run adopts the workspace's own permission mode, whatever its launch recorded. */
+  const permissionsOf = (l: Launch | undefined, standing: StandingDisclosure = 'due'): RunPermissions => (l === undefined || l.disclosure === 'off' || standing === 'off' || workspaceUnattended() ? 'workspace' : 'permissive');
   /** The scheduler over the store's current state (REQ-TRACE-478): the base projection supplies the candidates, then the queue is the scheduler's own order and reasons. */
-  const schedule = (base: BoardProjection) => {
+  const schedule = (base: BoardProjection, standing: StandingDisclosure = 'due') => {
     const stamp = now();
     const candidates = base.cards.filter((c) => c.column === 'ready').map((c) => {
       if (!since.has(c.id)) since.set(c.id, stamp);
@@ -140,7 +148,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     // arming — a resume that returns to `ready` provisions and arms — and the queue then called `next` a candidate
     // `claim()` refuses, so nothing started and the slot it held was denied to candidates that could have used it.
     const undisclosed = new Map<ReqId, string>();
-    for (const c of candidates) if (!disclosed(launches.get(c.id))) undisclosed.set(c.id, UNDISCLOSED_REASON(c.id));
+    for (const c of candidates) if (!disclosed(launches.get(c.id), standing)) undisclosed.set(c.id, UNDISCLOSED_REASON(c.id));
     return scheduleQueue({
       candidates, executing: reader.runningRuns().map((r) => ({ id: r.id, unit: r.unit })),
       settings: { ...reader.queue(), stopped }, held, armed, claimed, stalled, undisclosed,
@@ -180,7 +188,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
       return undefined;
     }
     const reason = taken === undefined
-      ? `no worktree recorded for ${id} unit ${unit} is on disk to take over, and the queue provisions none: hold it and resume it from the board to provision one.`
+      ? `${id} unit ${unit} has no recorded worktree on disk to take over, and a start from the queue provisions none: restore the tree, or hold the card and resume it from the board, which provisions one.`
       : `the worktree recorded for ${id} unit ${unit} was not taken over: ${taken.error}`;
     launches.set(id, { unit, disclosure, ...kept });
     log(`requirements: ${id} unit ${unit} rests in ready with no launch to start: ${reason}`, 'warn');
@@ -227,18 +235,18 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
     log(`requirements: ${id} unit ${unit} provisioned at ${made.value.path} on ${made.value.branch} (disclosure ${disclosure})`);
     return { worktree: { ref: made.value.ref, unit, path: made.value.path, branch: made.value.branch } };
   };
-  const claim = (): RunClaim | null => {
+  const claim = (standing: StandingDisclosure = 'due'): RunClaim | null => {
     if (current === undefined) return null;
-    const out = schedule(current);
+    const out = schedule(current, standing);
     for (const id of out.dispatch) {
       const l = launches.get(id);
       // The invariant defect AP-4 broke: what the scheduler offers, the claim takes. A mismatch is a defect of the
       // scheduler's inputs, so it is logged rather than passed over in silence.
-      if (l?.worktree === undefined || !disclosed(l)) { log(`requirements: the scheduler offered ${id} but its launch is ${l === undefined ? 'absent' : l.worktree === undefined ? 'unprovisioned' : 'undisclosed'}; nothing was claimed for it`, 'warn'); continue; }
+      if (l?.worktree === undefined || !disclosed(l, standing)) { log(`requirements: the scheduler offered ${id} but its launch is ${l === undefined ? 'absent' : l.worktree === undefined ? 'unprovisioned' : 'undisclosed'}; nothing was claimed for it`, 'warn'); continue; }
       const record = recordOf(id);
       if (record === undefined) continue;
       claimed.add(id);
-      return { id, unit: l.unit, worktree: { ref: l.worktree.ref, path: l.worktree.path, branch: l.worktree.branch, baseBranch: l.worktree.baseBranch, baseRevision: l.worktree.baseRevision }, prompt: runPromptFor(record, l.unit, l.instructions), permissions: permissionsOf(l) };
+      return { id, unit: l.unit, worktree: { ref: l.worktree.ref, path: l.worktree.path, branch: l.worktree.branch, baseBranch: l.worktree.baseBranch, baseRevision: l.worktree.baseRevision }, prompt: runPromptFor(record, l.unit, l.instructions), permissions: permissionsOf(l, standing) };
     }
     return null;
   };
@@ -365,23 +373,24 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
         }
       }
       // REQ-TRACE-476: the restart reap runs once, after the first parse, so the settling entries carry the hash of that instant.
-      const firstPass = reaped === undefined;
       if (reaped === undefined) {
         reaped = reapStaleRuns(reader, writer, new Set(), (id) => nowOf(id)?.canonicalHash);
         for (const r of reaped) log(`requirements reap: ${r.id} unit ${r.unit} ${r.statement}${r.held ? ' (held, returns to ready)' : ''}`, 'warn');
       }
       // Part AP — REQ-TRACE-407/437: a delivered requirement whose text moved is moved out of the terminal state by the pass, through the normal evaluation.
       if (parse !== undefined) for (const r of parse.records) { const n = nowOf(r.id); if (n !== undefined) { const m = writer.recordSpecificationMoved(r.id, { now: n }); if (m.ok && m.value.historyEntry !== 0) log(`requirements: ${r.id} moved ${m.value.from} → ${m.value.to} (specification changed since it was accepted)`); } }
-      // Defect note `a-card-resting-in-ready-across-a-restart-can-never-be-started.md`: once after a start, every card
-      // resting in `ready` with no launch takes over the tree its release recorded, undisclosed — the queue's release
-      // records the disclosure; an unattended workspace needs none (REQ-TRACE-474), so its scheduler can claim it. Git is
-      // only read here: nothing is provisioned and no delivery record is written (REQ-TRACE-408).
-      if (firstPass && parse !== undefined) {
-        for (const card of reader.board(input()).cards) {
-          if (card.column !== 'ready' || launches.get(card.id)?.worktree !== undefined) continue;
-          const failed = await recoverLaunch(card, 'undisclosed');
-          if (failed !== undefined) stalled.set(card.id, failed);
-        }
+      // Defect note `a-card-resting-in-ready-across-a-restart-can-never-be-started.md`: every pass that parses gives each
+      // card resting in `ready` with NO launch held (a restart lost it; nothing else leaves a candidate without one) the
+      // tree its release recorded, undisclosed — the queue's release records the disclosure; an unattended workspace needs
+      // none (REQ-TRACE-474) and main's claim carries the standing one (REQ-TRACE-472), so the scheduler can claim it. It
+      // was tied to the restart reap's one pass, and a first parse that failed used it up for the session (the verifier's
+      // first finding). A card it could not recover keeps a launch with no tree, so it is tried once, not on every pass.
+      // Git is only read here: nothing is provisioned and no delivery record is written (REQ-TRACE-408).
+      // The cards' take-overs are independent Git reads, so they run together rather than one after another before the
+      // first projection is published.
+      if (parse !== undefined) {
+        const resting = reader.board(input()).cards.filter((card) => card.column === 'ready' && !launches.has(card.id) && !inFlight.has(card.id));
+        await Promise.all(resting.map(async (card) => { const failed = await recoverLaunch(card, 'undisclosed'); if (failed !== undefined) stalled.set(card.id, failed); }));
       }
       return rebuild();
     })().finally(() => { refreshing = undefined; });
@@ -607,7 +616,7 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
         }
         case 'requirements.run.claim': {
           await ensure();
-          return { value: claim() };
+          return { value: claim(command.disclosure ?? 'due') };
         }
         case 'requirements.run.started': {
           await ensure();

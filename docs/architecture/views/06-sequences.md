@@ -277,7 +277,7 @@ sequenceDiagram
   M->>B: channel 10 requirements:changed
   Note over M,B: persist before publish — channel 10 is broadcast<br/>only from a reply whose transaction committed
 
-  C->>WS: requirements.run.claim
+  C->>WS: requirements.run.claim {disclosure: due | suppressed | off}
   WS-->>C: prompt, worktree, unit
   C->>RH: session.start {effectiveRoot, worktree, boardPermissions?}
   RH-->>C: session.started {sessionId}
@@ -306,10 +306,15 @@ sequenceDiagram
   through `takeOverUnitWorktree`, which admits only a tree Git lists at that path on that branch (2026-10-02).
 - **A card resting in `ready` keeps a way to start after a restart.** The launch (unit, disclosure, tree) lives in the
   workspace service's memory, and the queue's release has no transition. So `recoverLaunch` rebuilds a lost launch
-  from the store's worktree row by take-over, never by provisioning: once on the first pass after a start (undisclosed,
-  which an unattended workspace's scheduler claims as it is), and on the queue's release, which records the disclosure
-  "Disclose and start" carries and arms the card. A tree that cannot be taken over is stated on the entry as the last
-  start's stall, and the claim still refuses the card (REQ-TRACE-472/482/464, REQ-TRACE-463; 2026-10-02).
+  from the store's worktree row by take-over, never by provisioning: on every pass that parses, for a card holding no
+  launch (undisclosed), and on the queue's release, which records the disclosure "Disclose and start" carries and arms
+  the card. A tree that cannot be taken over is stated on the entry as the last start's stall, and the claim still
+  refuses the card (REQ-TRACE-472/482/464, REQ-TRACE-463; 2026-10-02).
+- **The claim carries main's standing disclosure.** Only main holds the two preferences of REQ-TRACE-472, so its
+  coordinator sends what they make of an undisclosed launch on every `requirements.run.claim`: `due`, `suppressed` (accepted
+  permanently) or `off` (the elevation switched off). A launch recorded undisclosed, as a recovered one is, is claimed
+  when that is not `due`, and `off` gives the run the workspace's own mode. Nothing dispatches at launch, so an automatic
+  queue picks a recovered card up at the first kick (a defect note records that gap; 2026-10-02).
 - The elevated grant (`boardPermissions: 'permissive'`) travels **on the `session.start` of that launch** and
   applies to the configuration captured for it. It is not a mode anything stays in.
 - A board read is bounded at 120 s because it may run the engine's three passes; everything else is a store

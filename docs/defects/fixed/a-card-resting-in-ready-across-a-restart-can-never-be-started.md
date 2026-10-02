@@ -77,6 +77,42 @@ And by `requirements-proof`'s `ready-restart` stage (two launches of the built a
 path already exists"). Both proofs passed on the repair: `requirements-runs-proof` 117/117 tests, and the whole
 `requirements-proof` 139 tests with every stage, at a load average of 3.7 falling to 0.9.
 
+**Two gaps the verifier found, 2026-10-02 (repair round 1), kept beside their repairs.**
+
+- *The once-only recovery could be used up.* "Once on the service's first pass after a start" was tied to the restart
+  reap's pass, which runs whether or not the store parses. A first parse that failed (a document mid-edit when the app
+  opened) used the recovery up, and no later pass recovered the card. An unattended automatic workspace then never
+  claimed it for the session. **Now** every pass that parses recovers each card in `ready` that holds no launch at all
+  and has no action in flight. A card it cannot recover keeps a launch with no tree, so it is tried once, not on every
+  pass. The take-overs of several resting cards run together.
+- *A recovered launch was always undisclosed.* The service cannot read the two preferences REQ-TRACE-472 names, so a
+  card released with the disclosure suppressed permanently, or with the elevation switched off, was never claimed after
+  a restart in a workspace that schedules automatically without being unattended. The entry kept asking for a disclosure
+  that would never be shown. **Now** main's coordinator sends its standing disclosure (`due`, `suppressed` or `off`, from
+  the two preferences) on every `requirements.run.claim` (`StandingDisclosure` in `packages/contracts/src/requirements.ts`).
+  The service treats a launch recorded undisclosed as disclosed when that disclosure is not `due`. It starts the run on
+  the workspace's own mode when the elevation is `off`, whatever the launch recorded (REQ-TRACE-472: "with it switched
+  off, a board-started run SHALL adopt the workspace's own permission mode").
+
+The stall's wording no longer contradicts the advice `stalledReason` appends. It reads "… has no recorded worktree on
+disk to take over, and a start from the queue provisions none: restore the tree, or hold the card and resume it from the
+board, which provisions one. Release it from the queue to try again."
+
+**Pinned by** four more cases:
+- `delivery.test.ts`: a first parse that fails, then a refresh and a claim of u1; claims carrying `due`, `suppressed`
+  and `off` after a restart (`null`, `permissive` and `workspace`); and `off` overriding an accepted launch.
+- `requirements-runs.test.ts`: every claim carries the standing disclosure the preferences make.
+
+Each was red on the round's first repair. `requirements-runs-proof` gains a seventh assertion: the concurrency
+assertion's third release rests in `ready` through two restarts; with automatic scheduling and the disclosure
+suppressed permanently, a third service and coordinator pick it up with no release and start it, elevated, on its
+recorded tree. It was red with the round's first `delivery.ts` and `requirements-runs.ts` and green with these; the
+whole proof passed, 122/122 tests, at a load average of 1.0.
+
+Still owed, and recorded rather than repaired: nothing dispatches when the application launches, so an automatic queue
+starts a recovered card only at its first kick (a person's act or queue change, or a run ending). See
+[`../an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md`](../an-automatic-queue-starts-nothing-after-a-launch-until-something-kicks-the-dispatch.md).
+
 Noticed while repairing it, and recorded rather than repaired: a rejected card back in `ready` can never start its next
 unit. Before the repair the claim handed out the rejected unit's held launch and `run.started` failed on the run
 table's key; the queue's release now states a stall instead, and automatic scheduling still meets the store error. See

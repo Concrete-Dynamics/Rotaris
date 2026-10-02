@@ -227,6 +227,59 @@ describe('createDeliveryService', () => {
     expect(claim).toMatchObject({ id: 'REQ-101', unit: 'u1', worktree: { path: join(ws, '.rotaris', 'requirements', 'worktrees', 'u1') }, permissions: 'workspace' });
     expect(calls).toEqual(['u1']);
   });
+  /**
+   * Verifier's finding, repair round 1: the recovery ran only on the pass that did the restart reap, whether or not the
+   * store parsed there. A first parse that failed (a document mid-edit when the app opened) used it up, and no later
+   * pass recovered the card, so an unattended automatic workspace never claimed it for the rest of the session.
+   */
+  it('REQ-TRACE-482/464: a first parse that fails does not use up the recovery; the next pass that parses recovers the card and the scheduler claims it', async () => {
+    const { port, calls } = provisioningGit();
+    const deps = { db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port };
+    const before = createDeliveryService(deps);
+    await before.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
+    await before.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    writeFileSync(join(root, 'agents.yaml'), 'runtime:\n  permission_mode: autonomous\nrequirements:\n  scheduling:\n    mode: automatic\n');
+    let failOnce = true;
+    const flaky: TraceabilityEngine = { ...engine, parseStore: async (root_, o) => { if (failOnce) { failOnce = false; return err({ kind: 'layout', message: 'the store is mid-edit' } as never); } return engine.parseStore(root_, o); } };
+    const after = createDeliveryService({ ...deps, engine: flaky });
+    await after.handle({ name: 'requirements.board', workspace: 'x' }, USER);
+    await after.handle({ name: 'requirements.refresh', workspace: 'x' }, USER);
+    const claim = (await after.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value as { id: string; unit: string; worktree: { path: string } } | null;
+    expect(claim).toMatchObject({ id: 'REQ-101', unit: 'u1', worktree: { path: join(ws, '.rotaris', 'requirements', 'worktrees', 'u1') } });
+    expect(calls).toEqual(['u1']);
+  });
+  /**
+   * Verifier's finding, repair round 1: the recovery recorded every recovered launch as undisclosed, and the service
+   * never learnt main's standing disclosure (the two preferences REQ-TRACE-472 names). A card released with the
+   * disclosure suppressed permanently, or with the elevation switched off, in a workspace that schedules automatically
+   * but is not unattended, was never claimed after a restart. The claim now carries main's standing disclosure.
+   */
+  it('REQ-TRACE-472/482: after a restart, a claim carrying a permanently suppressed disclosure starts the card permissive; one carrying the elevation off starts it on the workspace\'s own mode; one with the disclosure due starts nothing', async () => {
+    const { port, calls } = provisioningGit();
+    const deps = { db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port };
+    const before = createDeliveryService(deps);
+    await before.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
+    await before.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'suppressed' } }, USER);
+    writeFileSync(join(root, 'agents.yaml'), 'requirements:\n  scheduling:\n    mode: automatic\n');
+    const due = createDeliveryService(deps);
+    expect((await due.handle({ name: 'requirements.run.claim', workspace: 'x', disclosure: 'due' }, SYSTEM)).value).toBeNull();
+    const suppressed = createDeliveryService(deps);
+    const s = (await suppressed.handle({ name: 'requirements.run.claim', workspace: 'x', disclosure: 'suppressed' }, SYSTEM)).value as { id: string; unit: string; permissions: string } | null;
+    expect(s).toMatchObject({ id: 'REQ-101', unit: 'u1', permissions: 'permissive' });
+    const off = createDeliveryService(deps);
+    const o = (await off.handle({ name: 'requirements.run.claim', workspace: 'x', disclosure: 'off' }, SYSTEM)).value as { id: string; unit: string; permissions: string } | null;
+    expect(o).toMatchObject({ id: 'REQ-101', unit: 'u1', permissions: 'workspace' });
+    expect(calls).toEqual(['u1']);
+  });
+  it('REQ-TRACE-472: with the elevation switched off when the claim is made, a launch accepted earlier starts on the workspace\'s own mode', async () => {
+    const { port } = provisioningGit();
+    const s = createDeliveryService({ db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port });
+    await s.handle({ name: 'requirements.queue.set', workspace: 'x', stop: true }, USER);
+    await s.handle({ name: 'requirements.act', workspace: 'x', id: 'REQ-101', action: 'release', payload: { disclosure: 'accepted' } }, USER);
+    await s.handle({ name: 'requirements.queue.set', workspace: 'x', start: true }, USER);
+    const c = (await s.handle({ name: 'requirements.run.claim', workspace: 'x', disclosure: 'off' }, SYSTEM)).value as { id: string; permissions: string } | null;
+    expect(c).toMatchObject({ id: 'REQ-101', permissions: 'workspace' });
+  });
   it('REQ-TRACE-464/463: a recorded tree that cannot be taken over is stated on the entry, and nothing is provisioned from the queue', async () => {
     const { port, calls } = provisioningGit();
     const deps = { db: r.db, workspaceRoot: ws, engine, clocks: clock, log: () => undefined, configDir: root, git: port };
@@ -238,7 +291,7 @@ describe('createDeliveryService', () => {
     const released = await after.handle({ name: 'requirements.queue.set', workspace: 'x', release: 'REQ-101', disclosure: 'accepted' }, USER);
     const e = (released.value as BoardProjection['queue']).entries.find((x) => x.id === 'REQ-101');
     expect(e).toMatchObject({ state: 'deferred' });
-    expect(e?.reason).toMatch(/^The last start of REQ-101 did not begin: no worktree recorded for REQ-101 unit u1 is on disk to take over/);
+    expect(e?.reason).toBe('The last start of REQ-101 did not begin: REQ-101 unit u1 has no recorded worktree on disk to take over, and a start from the queue provisions none: restore the tree, or hold the card and resume it from the board, which provisions one. Release it from the queue to try again.');
     expect((await after.handle({ name: 'requirements.run.claim', workspace: 'x' }, SYSTEM)).value).toBeNull();
     expect(calls).toEqual(['u1']);
   });

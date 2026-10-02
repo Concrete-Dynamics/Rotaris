@@ -99,8 +99,11 @@ lost from the store's worktree row through `RunGitPort.takeOver`, never by provi
 after a start and again on the queue's release, which records the disclosure it carries. A tree that cannot be taken
 over is stated on the queue entry. `beforeCommit`'s own take-over now shares `takeOverRecorded` with it. This repairs
 `a-card-resting-in-ready-across-a-restart-can-never-be-started.md`; `requirements-runs-proof`'s sixth assertion shows
-it. The **sequences view**'s board section says so. No package, edge, process, message kind, channel, command or store
-column changed.
+it. The verifier falsified two of its clauses the same day. First, the recovery ran on the restart reap's pass only, so a
+first parse that failed used it up; it now runs on every pass that parses. Second, a recovered launch was undisclosed with
+no way to learn main's preferences. Main's coordinator now sends its standing disclosure (`due`, `suppressed`, `off`) on
+`requirements.run.claim`, a new optional field of that command. `requirements-runs-proof`'s seventh assertion shows it.
+The **sequences view**'s board section says so. No package, edge, process, message kind, channel or store column changed.
 
 **A unit's worktree is provisioned once, and a later start of the same unit takes it over (REQ-TRACE-464,
 REQ-GIT-140).** The delivery service's `beforeCommit` takes over the tree of the launch it holds when that launch is

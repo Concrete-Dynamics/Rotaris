@@ -117,6 +117,16 @@ export interface BoardProjection {
 }
 export interface RequirementDetail { readonly card: BoardCard; readonly prose: string; readonly history: readonly { readonly at: string; readonly action: BoardAction; readonly actor: Actor; readonly from: ColumnToken; readonly to: ColumnToken; readonly current: boolean }[] | 'unavailable' | 'reading'; readonly runs: readonly { readonly unit: string; readonly sessionId?: string; readonly branch?: string; readonly worktree?: string; readonly status: string }[]; readonly evidenceDetail: readonly AnnotationSite[]; readonly findings: readonly Finding[] }
 
+/**
+ * REQ-TRACE-472: what main's two preferences make of a launch nobody disclosed — `due` while the elevation is on and the
+ * disclosure is not suppressed, `suppressed` once it was accepted permanently ("suppress it in subsequent launches too"),
+ * `off` when the elevation is switched off in settings (the run "adopt[s] the workspace's own permission mode"). Main
+ * owns both preferences and sends this on every claim, so a launch the service recovered after a restart (recorded
+ * undisclosed) is claimed exactly as a launch disclosed in this process would be (defect note
+ * `a-card-resting-in-ready-across-a-restart-can-never-be-started.md`, the verifier's second finding).
+ */
+export const STANDING_DISCLOSURES = ['due', 'suppressed', 'off'] as const;
+export type StandingDisclosure = (typeof STANDING_DISCLOSURES)[number];
 // ---- commands (channel 5), main → workspace service; Actor is stamped by main, never sent by a renderer ----
 export type RequirementsCommand =
   | { readonly name: 'requirements.board'; readonly workspace: string }                       // → BoardProjection
@@ -131,7 +141,7 @@ export type RequirementsCommand =
   | { readonly name: 'requirements.source.previewLocation'; readonly workspace: string; readonly epic?: ReqId }
   // Part AP — the run family (spec 08 §Runs Started from the Board; ADR-0041): main's coordinator speaks these to the service as the SYSTEM; a person's copy is refused (REQ-TRACE-392).
   | { readonly name: 'requirements.run.preview'; readonly workspace: string; readonly id: ReqId; readonly action: BoardAction }   // → RunLaunchPreview (REQ-TRACE-472/474: the disclosure's facts, nothing provisioned)
-  | { readonly name: 'requirements.run.claim'; readonly workspace: string }                                                   // → RunClaim | null (the scheduler's next dispatch, claimed)
+  | { readonly name: 'requirements.run.claim'; readonly workspace: string; readonly disclosure?: StandingDisclosure }          // → RunClaim | null (the scheduler's next dispatch, claimed; `disclosure`: main's two preferences, REQ-TRACE-472)
   | { readonly name: 'requirements.run.started'; readonly workspace: string; readonly id: ReqId; readonly unit: string; readonly sessionId: string; readonly permissions: string }   // → Result<TransitionOutcome, Refusal> (REQ-TRACE-464)
   | { readonly name: 'requirements.run.ended'; readonly workspace: string; readonly sessionId: string; readonly outcome: RunOutcome; readonly detail: string }   // → RunSettled
   | { readonly name: 'requirements.run.abandon'; readonly workspace: string; readonly id: ReqId; readonly unit: string; readonly reason: string }   // → { released: boolean } (REQ-TRACE-463: the reason nothing started is reported on the queue)
@@ -200,7 +210,7 @@ export const RequirementsCommandSchema = z.discriminatedUnion('name', [
   z.object({ name: z.literal('requirements.source.previewLocation'), workspace, epic: ReqIdSchema.optional() }),
   // Part AP — the run family.
   z.object({ name: z.literal('requirements.run.preview'), workspace, id: ReqIdSchema, action: BoardActionSchema }),
-  z.object({ name: z.literal('requirements.run.claim'), workspace }),
+  z.object({ name: z.literal('requirements.run.claim'), workspace, disclosure: z.enum(STANDING_DISCLOSURES).optional() }),
   z.object({ name: z.literal('requirements.run.started'), workspace, id: ReqIdSchema, unit: z.string().min(1), sessionId: z.string().min(1), permissions: z.string() }),
   z.object({ name: z.literal('requirements.run.ended'), workspace, sessionId: z.string().min(1), outcome: z.enum(['completed', 'failed', 'cancelled']), detail: z.string() }),
   z.object({ name: z.literal('requirements.run.abandon'), workspace, id: ReqIdSchema, unit: z.string().min(1), reason: z.string() }),

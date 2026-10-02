@@ -1,4 +1,4 @@
-import type { CommandOutcome, DispatchReport, LaunchPreview, LiveBoardRun, ProcessEvent, ProcessReply, ReqId, RequirementsChanged, RequirementsCommandPayload, RequirementsRunsCommand, RunClaim, RunLaunchPreview, RunOutcome, RunPermissions, RunHostRequest, WorkspaceServiceRequest, WorktreeBinding } from '@rotaris/contracts';
+import type { CommandOutcome, DispatchReport, LaunchPreview, LiveBoardRun, ProcessEvent, ProcessReply, ReqId, RequirementsChanged, RequirementsCommandPayload, RequirementsRunsCommand, RunClaim, RunLaunchPreview, RunOutcome, RunPermissions, RunHostRequest, StandingDisclosure, WorkspaceServiceRequest, WorktreeBinding } from '@rotaris/contracts';
 import { CONTRACT_SCHEMA_VERSION } from '@rotaris/contracts';
 import { millis, type Millis } from '@rotaris/kernel';
 
@@ -78,6 +78,13 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
     return { value: r.value, ...(r.changed === undefined ? {} : { changed: r.changed }) };
   };
 
+  /**
+   * REQ-TRACE-472: what the two preferences make of a launch nobody disclosed — `off` with the elevation switched off,
+   * `suppressed` once accepted permanently, else `due`. Sent on every claim, because the service cannot read them and a
+   * launch it recovered after a restart is recorded undisclosed.
+   */
+  const standingDisclosure = (): StandingDisclosure => (!deps.preferences.read('requirements/fullPermissionRuns') ? 'off' : deps.preferences.read('requirements/fullPermissionNoticeSuppressed') ? 'suppressed' : 'due');
+
   const preview = async (root: string, id: ReqId, action: RunLaunchPreview['action']): Promise<CommandOutcome> => {
     const a = await ask(root, { name: 'requirements.run.preview', workspace: root, id, action });
     if ('refused' in a) return { ok: false, code: 'requirements.preview', headline: 'The launch could not be previewed', detail: a.refused };
@@ -118,7 +125,7 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
       if (root === undefined || workspaceId === undefined) return { started, abandoned };
       // Bounded by the scheduler: a claim comes back only while a slot is free and a disclosed launch is next (REQ-TRACE-478/481/483).
       for (let guard = 0; guard < 64; guard += 1) {
-        const c = await ask(root, { name: 'requirements.run.claim', workspace: root });
+        const c = await ask(root, { name: 'requirements.run.claim', workspace: root, disclosure: standingDisclosure() });
         if ('refused' in c) { deps.log(`requirements: no claim (${c.refused})`); break; }
         const claim = c.value as RunClaim | null;
         if (claim === null) break;

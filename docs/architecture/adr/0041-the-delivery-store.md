@@ -1139,3 +1139,14 @@ on the queue's release, which records the disclosure it carries and arms the car
 provisions: the queue's release writes no worktree row, and REQ-TRACE-464 forbids a second tree. A tree it cannot take
 over is stated on the entry as the last start's stall (REQ-TRACE-463), and the claim still refuses the card.
 `requirements-proof`'s `ready-restart` stage shows it across a quit and a relaunch of the built app.
+
+**Two clauses of that repair were falsified by the verifier the same day, and are kept above as written.** "Once on
+the first pass after a start": the pass was the restart reap's, which runs whether or not the store parses, so a first
+parse that failed used the recovery up for the session. Now every pass that parses recovers each card in `ready` that
+holds no launch. "Undisclosed, so an unattended workspace's scheduler claims the card": only an unattended workspace,
+because the service cannot read the two preferences REQ-TRACE-472 names. A card whose disclosure was suppressed
+permanently, or whose elevation was switched off, was never claimed by automatic scheduling after a restart. Now main's
+coordinator sends its standing disclosure (`StandingDisclosure`: `due`, `suppressed`, `off`) on every
+`requirements.run.claim`. The service treats an undisclosed launch as disclosed when that is not `due`, and gives the run
+the workspace's own mode when it is `off`. `requirements-runs-proof`'s seventh assertion shows it. Nothing dispatches
+when the application launches, so the pick-up waits for the first kick; that gap is recorded as its own defect note.

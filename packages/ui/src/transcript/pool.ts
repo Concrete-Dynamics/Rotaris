@@ -468,6 +468,30 @@ export function visibleRange(table: OffsetTable, scrollTop: number, viewportHeig
 }
 
 /**
+ * The span of displayed rows the pool binds in a render: `held` while a measurement delivery holds the pool to the span
+ * it last committed, else `needed`, the span the viewport needs (`visibleRange`). A held span that no longer fits the
+ * displayed rows or the pool is not held.
+ *
+ * ADR-0045 (heights are measured): the measurement observer renders synchronously, inside its own delivery, so a row that
+ * grew is painted with the row beneath it already moved. A slot is bound by position (slot `i` holds row `first + i`), so a
+ * render that moved `first` rebound EVERY slot: a corrected height above the viewport moved `first` by one row or several,
+ * each slot changed size inside the delivery, at the depth just delivered, and the browser deferred those sizes to the
+ * next frame and reported "ResizeObserver loop completed with undelivered notifications"
+ * (docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md). So a delivery's
+ * render repositions the rows the pool holds and rebinds none; where it held back a span the viewport needs, the pane
+ * rebinds by an ordinary render after the frame, outside any delivery. The held span is the viewport's with `OVERSCAN`
+ * rows either side, and the delivery's render pins the tail or restores the anchor, so the rows on screen stay bound
+ * meanwhile.
+ */
+export function bindRange(
+  held: { readonly first: number; readonly last: number } | null,
+  needed: { readonly first: number; readonly last: number }, count: number, capacity: number,
+): { first: number; last: number } {
+  if (held !== null && held.last < count && held.last - held.first + 1 <= capacity) return { first: held.first, last: held.last };
+  return { first: needed.first, last: needed.last };
+}
+
+/**
  * REQ-CHAT-071 / REQ-CHAT-053: the reader's position is preserved BY ANCHOR — the identity and viewport offset of
  * the top visible row — and restored by locating that row again after geometry settles, **never** by re-applying a
  * stored pixel offset. `capture` is taken before rows move; `restore` is applied after they have.

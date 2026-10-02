@@ -94,3 +94,48 @@ failed on it. On the repair with `slotRef`: 0 of 10 geometry launches beside two
 launches of three whole runs (load 5 to 11). Two of the whole runs passed. The second was red on REQ-CHAT-055's append
 comparison alone (103.45 ms against 53.8 ms, load average 5 to 6 from the other plan's agents, no busy loop of this
 round's), and the third, taken at once after it, passed.
+
+**Falsified by verification, 2026-10-02, kept above beside its replacement: "0 of the 33 launches of three whole runs".**
+The verifier ran the branch at `0d6eb2b` (as root under Xvfb, Node 24, `--skip-build`, load average 1.8 to 5.4, no busy
+loops) and the proof's check failed 3 of 5 runs on the line: whole run 1 in `append-loaded-2`, and two `--only=append` runs
+in `append-loaded-traced` and `append-empty-traced`, each 20 to 120 ms after the run ended `completed`. The two repairs
+above did not reach a third cause.
+
+**The third cause: a delivery's render moved the bound span.** Reproduced on the branch at `1227a30` with the diagnostics
+of 2026-10-01 wrapped around every `ResizeObserver` in a scratch build: 1 of 4 `--only=append` runs (1 of 24 launches,
+load 1.4 to 3.9), in `append-loaded-traced`, about 200 ms after `run S1200 ended completed`. The measurement observer's
+delivery had changed a height and rendered synchronously. Slots are bound by position (slot `i` holds row `first + i`),
+and the corrected height moved `first` six rows: the slot that held `row:1221` now held `row:1227`, and likewise every
+slot. Six slots emptied (33.4 and 47.3 px to 0), and twenty-one were observed again inside the callback by
+`observeAgain` under their new keys. Every one is at the depth just delivered, so the browser deferred them and reported
+the line. This is the cause the paragraph at the top guessed ("a render inside a delivery can rebind a slot"), which
+the first round did not see in its geometry launches. The triage's sketch, marking the keys `measureAtCommit` reads as
+observed, would not have repaired it either: a rebound slot changes size whether or not it is observed again.
+
+**The repair.** `pool.ts`'s `bindRange`: a render binds the span the pool last committed while a delivery holds it, else
+the span the viewport needs (`visibleRange`). `TranscriptPane.tsx` records the span each commit binds, and the observer's
+delivery sets the hold in the same `flushSync` as the measured version, then releases it with an ordinary update, which
+renders after the frame, outside any delivery, and rebinds what the delivery held back. The delivery's render therefore
+moves rows and rebinds none, and the row that grew is still painted with the row beneath it moved. The held span is the
+viewport's with `OVERSCAN` rows either side, and the same render pins the tail or restores the anchor, so the rows on
+screen stay bound for that frame.
+- **Pinned** by two `transcript.test.ts` cases. `bindRange` over sixty 40 px rows, the reader at the tail: a delivery that
+  corrects the forty rows above to 20 px moves the viewport's span from rows 35 to 59 to rows 49 to 59, and the held render
+  binds 35 to 59 still (red with the hold ignored: "expected { first: 49, last: 59 } to deeply equal { first: 35, last: 59 }").
+  The other reads the pane's source, as the two above do: the hold and the measured version in one synchronous render,
+  the release outside it (red on `1227a30`'s pane).
+- **Shown** by `transcript-proof`'s check. Without the scratch diagnostics, on a build that counted each delivery that
+  changed a height and each render the hold changed: 0 of 24 launches in four `--only=append` runs (load 3.6 to 14.7, the
+  other plan's gates running) carried the line. Such a delivery came in 3 of the 24 launches, and in 2 the hold kept a
+  span the old code would have rebound (`held 1015-1042 instead of 1022-1042`: seven rows). With the observer diagnostics
+  also in place (they read every observed element's computed style after each callback), 0 of 30 launches in five more
+  runs carried it, one of them holding, and three of the five were red on the append comparison. The four runs' REQ-CHAT-055 append
+  comparison went red twice (164.1 against 130.0 ms at load 14.7, 110.1 against 90.9 ms at load 5 to 7); in the second the
+  loaded side's launches had no changed delivery at all, so they ran no code the hold adds. The figures after the
+  diagnostics were removed are in the next paragraph.
+
+**On the repair as committed, 2026-10-02** (no diagnostics; as root under Xvfb, Node 24, `--skip-build` after one
+`pnpm build`; the other plan's proofs and gates running beside it, load average 1.5 to 6.6): three whole runs and two
+`--only=append` runs, 0 of 47 launches carrying the line. Four of the five passed. Whole run 3 was red on REQ-CHAT-055's
+append comparison alone (175.9 against 135.6 ms, load 5.9 to 6.6, the other plan's app proofs running); the line was in
+none of its launches. `rows-proof` and `theme-proof` passed on the same build (the scroller's held gutter).

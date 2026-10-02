@@ -8,7 +8,7 @@ import {
 } from './project.js';
 import type { DisplayRow } from './types.js';
 import {
-  beginMeasuring, buildOffsets, captureAnchor, commitTable, createMeasureLedger, estimateHeight, forgetMeasured, indexAt, markMeasured, measureAtCommit,
+  beginMeasuring, bindRange, buildOffsets, captureAnchor, commitTable, createMeasureLedger, estimateHeight, forgetMeasured, indexAt, markMeasured, measureAtCommit,
   newUpdatesLabel, observeAgain, readHeight, remeasuredSince, restoreAnchor, reuseOffsets, slotRef, updateShape, visibleRange,
 } from './pool.js';
 import { countLabel, indexAll, indexSuffix, matchRow, step } from './search.js';
@@ -469,6 +469,37 @@ describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the o
     const scroll = /^\.transcript__scroll \{([^}]*)\}/m.exec(css)?.[1] ?? '';
     expect(scroll).toContain('overflow: auto');
     expect(scroll).toContain('scrollbar-gutter: stable');
+  });
+
+  it('ADR-0045: a measurement delivery\'s render binds the span the pool last committed, so it rebinds no slot', () => {
+    // Slots are bound by position: slot i holds row `first + i`. Sixty rows of 40 px, the reader at the tail of a 600 px
+    // viewport: the pool binds rows 35 to 59.
+    const before = buildOffsets(Array.from({ length: 60 }, () => 40));
+    const committed = visibleRange(before, 1_800, 600, 60, POOL_CAPACITY);
+    expect(committed).toEqual({ first: 35, last: 59 });
+    // A delivery corrects the forty rows above the viewport to 20 px. Read against the scroll offset the render still
+    // has, the viewport's span moves, and every slot would hold another row: the size change, inside the delivery and at
+    // the depth just delivered, that the browser reported as a ResizeObserver loop.
+    const after = buildOffsets([...Array.from({ length: 40 }, () => 20), ...Array.from({ length: 20 }, () => 40)]);
+    expect(visibleRange(after, 1_800, 600, 60, POOL_CAPACITY).first).not.toBe(committed.first);
+    const needed = visibleRange(after, 1_800, 600, 60, POOL_CAPACITY);
+    // Held, the delivery's render binds what the pool committed: every slot keeps its row, repositioned by the new table.
+    expect(bindRange(committed, needed, 60, POOL_CAPACITY)).toEqual(committed);
+    // Outside a delivery, a render binds the viewport's span.
+    expect(bindRange(null, needed, 60, POOL_CAPACITY)).toEqual(needed);
+    // A held span that no longer fits the displayed rows, or the pool, is not held.
+    expect(bindRange(committed, visibleRange(after, 1_800, 600, 50, POOL_CAPACITY), 50, POOL_CAPACITY)).toEqual(visibleRange(after, 1_800, 600, 50, POOL_CAPACITY));
+    expect(bindRange(committed, needed, 60, 20)).toEqual(needed);
+  });
+
+  it('ADR-0045: the observer\'s synchronous render is held to the committed span, and released by an ordinary update after it', () => {
+    // The pane mounts under Electron and this suite has no document, so what pins the delivery's use of `bindRange` is
+    // its source: the hold and the measured version in ONE synchronous render, the release outside it.
+    const pane = readFileSync(new URL('./TranscriptPane.tsx', import.meta.url), 'utf8');
+    expect(pane).toContain('const range = bindRange(heldRange, needed, display.length, capacity);');
+    expect(pane).toContain('useLayoutEffect(() => { committedRange.current = range; });');
+    expect(pane).toMatch(/flushSync\(\(\) => \{ setHeldRange\(held\); setMeasuredVersion\(\(v\) => v \+ 1\); \}\);\n\s+setHeldRange\(null\);/);
+    expect(pane).not.toContain('flushSync(() => setMeasuredVersion((v) => v + 1))');
   });
 
   it('ADR-0045: a slot whose node unmounts is forgotten and unobserved, so a node mounted later in it is observed under the key the old one held', () => {

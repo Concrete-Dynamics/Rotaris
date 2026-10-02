@@ -756,3 +756,14 @@ measurement key carries the width, and it once painted a re-wrapped row 30.7 px 
 holds its scrollbar gutter**, so the width the rows are measured at never changes with the bar. `transcript-proof` now fails
 on the line in any launch. Nothing else this record decided moved
 (`docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`).
+
+**A delivery held to the committed span, 2026-10-02 (R-062, after verification).** The two repairs above did not remove the
+line: on the branch carrying them, the proof's check failed 3 of 5 runs, in the append launches, 20 to 120 ms after the
+scripted run ended. The third cause was the one the 2026-10-01 paragraph named ("where that render rebinds or re-observes a slot"): slots are bound by position, so when the
+observer's delivery corrected a height above the viewport, its synchronous render moved the bound span (six rows in the
+launch traced) and rebound every slot, each changing size inside the delivery at the depth just delivered. **A delivery's
+render now binds the span the pool last committed** (`bindRange`); it moves rows and rebinds none, and an ordinary update
+after the frame releases the hold and rebinds what it held back. The row that grew is still painted with the row beneath
+it moved, which is what the synchronous render is for. Such a delivery came in 3 of 24 append launches, and the line in
+none of them (`docs/defects/fixed/the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`).
+Nothing else this record decided moved.

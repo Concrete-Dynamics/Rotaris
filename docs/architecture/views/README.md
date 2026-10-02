@@ -45,13 +45,18 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
-**One measurement observer per transcript pane, and a held scrollbar gutter (ADR-0045, REQ-CHAT-055, REQ-CHAT-058).**
+**One measurement observer per transcript pane, a held scrollbar gutter, and a delivery held to the committed span (ADR-0045, REQ-CHAT-055, REQ-CHAT-058).**
 `TranscriptPane.tsx` makes its measurement observer once, at mount. Its effect no longer depends on the displayed rows or
 the capacity, so a pending passive effect flushed inside the delivery's own `flushSync` can no longer disconnect the
 delivering observer and observe every slot again. A slot that a displayed change rebinds is observed by the every-commit
 `observeAgain`. Each slot's ref callback is made once (`slotRef`, `pool.ts`); a slot whose node unmounts is unobserved and
 forgotten, so a node mounted later in that slot is observed again. `.transcript__scroll` holds its scrollbar gutter, so the
-width the rows are measured at never changes with the bar. The **runtime view**'s transcript paragraph says both. This repairs
+width the rows are measured at never changes with the bar. And the delivery's synchronous render binds the span of rows the
+pool last committed (`bindRange`, `pool.ts`), so it moves rows and rebinds no slot; an ordinary render after the frame
+releases it. Without the hold, a corrected height above the viewport moved the span and rebound every slot inside the
+delivery, which left the console line at the end of `transcript-proof`'s append runs after the first two repairs. The
+**runtime view**'s transcript paragraph says all three, and corrects its "never added to or removed from" for the pool,
+which the capacity growth of 2026-10-01 had falsified. This repairs
 `the-observers-synchronous-render-can-leave-a-resize-observer-loop-notification.md`, and `transcript-proof` fails on the
 console line in any launch. No package, edge, process, message kind, channel, command or store column changed.
 

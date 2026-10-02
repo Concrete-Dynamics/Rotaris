@@ -33,6 +33,10 @@
  *                     `personas.tester.model`: the tester's Unset is found by its accessible name ("Unset model for
  *                     tester") and clicked; while the unset is pending no row reads its old origin and no Unset is
  *                     offered; Discard brings `model: workspace` and its named Unset back.
+ *   9. personas-two-scopes — one role's edits at two scopes (REQ-CONFIG-259/341): the tester's model Unset clicked at
+ *                     Workspace and its reasoning Unset at Global, then Save; the workspace file loses the model, the
+ *                     global file loses the reasoning and keeps its model, and the row reads the global model and the
+ *                     default reasoning afterwards.
  *
  * The legal links and the licence bundle are exercised through the capture seam's scripted opener
  * (`ROTARIS_CAPTURE_OPEN_EXTERNAL`), which reports success or the platform refusal without launching a browser.
@@ -524,6 +528,63 @@ results.personasUnset = {
   before: { cell: beforeTester[0].text, unsetName: 'Unset model for tester' },
   pending: { rows: pendingCells.length, testerReadsOldOrigin: false, modelDefaultRows: `${modelDefault(beforeCells)} → ${modelDefault(pendingCells)}`, unsetOffered: 0, status: 'Unsaved changes' },
   discarded: { cell: discarded[0].text, unsetName: 'Unset model for tester', status: 'All changes saved' },
+};
+
+// ── 9. One role's edits at two scopes, saved each at its own (REQ-CONFIG-259, REQ-CONFIG-341) ──────────────────
+// A workspace whose file sets `personas.tester.model`, under a global file that sets `personas.tester.thinking`, so the
+// tester reads `model: workspace` and `reasoning: global`. With Workspace selected the model's Unset is clicked; the edit
+// scope is switched to Global and the reasoning's Unset is clicked; Save. Each unset must land in the file it was made
+// in: until 2026-10-02 the role's pending entry held one scope, both unsets were saved at Global, the global layer was
+// asked to unset a model it did not hold, and the workspace's model stayed
+// (docs/defects/fixed/a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md).
+const twoRoot = join(output, 'personas-two-scopes');
+const tWorkspace = join(twoRoot, 'workspace');
+const tLocal = join(twoRoot, 'local');
+const tPreferences = join(twoRoot, 'preferences');
+// `proofIsolationEnv` puts XDG_CONFIG_HOME at <local>/rotaris/config, and the global scope is its `rotaris` directory.
+const tGlobalDir = join(tLocal, 'rotaris', 'config', 'rotaris');
+mkdirSync(join(tWorkspace, '.rotaris'), { recursive: true });
+mkdirSync(tGlobalDir, { recursive: true });
+const tWorkspaceFile = join(tWorkspace, '.rotaris', 'agents.yaml');
+const tGlobalFile = join(tGlobalDir, 'agents.yaml');
+writeFileSync(tWorkspaceFile, [
+  '# scratch configuration written by the proof script',
+  'models:', '  scripted: { provider: scripted, model_id: scripted }',
+  'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
+  'personas:', '  tester:', '    model: large_model', '',
+].join('\n'));
+writeFileSync(tGlobalFile, ['# the global scope, written by the proof script', 'personas:', '  tester:', '    model: small_model', '    thinking: high', ''].join('\n'));
+const UNSET_REASONING = '.settings__scope button[aria-label="Unset reasoning for tester"]';
+const twoScopes = await launch('personas-two-scopes', tWorkspace, tLocal, tPreferences, {
+  ...openCategory('Personas'),
+  ROTARIS_CAPTURE_PROBE_AT: [`.settings__scope@2400`, `${UNSET_MODEL}@2400`, `${UNSET_REASONING}@4800`, `.settings__scope@5400`, `.save-bar__status@5400`].join(';;'),
+  ROTARIS_CAPTURE_SELECT: '[aria-label="Edit scope"]>>global@3800',
+  ROTARIS_CAPTURE_CLICKS: `${UNSET_MODEL}@3000;;${UNSET_REASONING}@4600;;.save-bar .btn-primary>>Save@6000`,
+  ROTARIS_CAPTURE_PROBE: [...PROBES, '.settings__scope'].join(';;'),
+  ROTARIS_CAPTURE_AFTER_MS: '8000',
+});
+const twoAt = (ms, selector) => JSON.parse(new RegExp(`probe-at ${ms} ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\[.*\\])`).exec(twoScopes.log)?.[1] ?? 'null');
+const twoBefore = (twoAt(2400, '.settings__scope') ?? []).find((c) => c.text.startsWith('model: workspace'));
+if (!twoBefore || !/reasoning: global/.test(twoBefore.text)) throw new Error(`the tester did not read a workspace model and a global reasoning level before the edits: ${JSON.stringify((twoAt(2400, '.settings__scope') ?? []).map((c) => c.text))}`);
+if ((twoAt(2400, UNSET_MODEL) ?? []).length !== 1) throw new Error('the tester\'s model Unset was not offered at Workspace');
+if ((twoAt(4800, UNSET_REASONING) ?? []).length !== 0) throw new Error('the tester\'s reasoning Unset was still offered after it was clicked at Global');
+if (!twoScopes.log.includes(`capture: clicked "${UNSET_MODEL}"`) || !twoScopes.log.includes(`capture: clicked "${UNSET_REASONING}"`)) throw new Error(`the two Unsets were not both clicked:\n${twoScopes.log.split('\n').filter((l) => /capture: (clicked|select)/.test(l)).join('\n')}`);
+if (!(twoAt(5400, '.save-bar__status') ?? []).some((c) => c.text === 'Unsaved changes')) throw new Error('the two pending unsets did not dirty the form');
+const wsAfter = readFileSync(tWorkspaceFile, 'utf8');
+const globalAfter = readFileSync(tGlobalFile, 'utf8');
+// REQ-CONFIG-259/341: the model's unset at the workspace removed the workspace's model; the reasoning's at the global
+// layer removed the global reasoning and left the global model, which nobody touched.
+if (/tester:/.test(wsAfter)) throw new Error(`the model unset made at Workspace did not reach the workspace file:\n${wsAfter}`);
+if (/thinking:/.test(globalAfter)) throw new Error(`the reasoning unset made at Global did not reach the global file:\n${globalAfter}`);
+if (!/tester:\n {4}model: small_model\n/.test(globalAfter)) throw new Error(`the global file lost the tester's model, which was never unset at Global:\n${globalAfter}`);
+if ((text(twoScopes.probes, '.save-bar__status')[0] ?? '') !== 'All changes saved') throw new Error('the save did not leave the form clean');
+const twoAfter = rows(twoScopes.probes, '.settings__scope').find((c) => c.text.startsWith('model: global'));
+if (!twoAfter || !/reasoning: default/.test(twoAfter.text)) throw new Error(`after the save the tester did not read the global model and the default reasoning: ${JSON.stringify(rows(twoScopes.probes, '.settings__scope').map((c) => c.text))}`);
+results.personasTwoScopes = {
+  before: twoBefore.text,
+  after: twoAfter.text,
+  workspaceFile: wsAfter.includes('personas') ? 'personas left' : 'personas removed',
+  globalFile: globalAfter.trim().split('\n').slice(1).join(' / '),
 };
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

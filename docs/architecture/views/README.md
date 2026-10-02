@@ -84,6 +84,14 @@ ended and still reads `running`, it asks the run host's status once. This repair
 The **process view**'s initialization paragraph says so. No package, edge, process, message kind, channel, command or
 store column changed.
 
+**A role's pending edits keep each field's scope through the save (REQ-CONFIG-259, REQ-CONFIG-341).** The Personas
+table's pending entry holds `modelScope` and `thinkingScope` (`PendingRoleEdit`) and `applyChange` sets only the touched
+field's scope. `RoleEditSchema` carries the two scopes in place of one `scope`, and refuses a field edited with none.
+`saveDesktop` writes each field at its own layer (`roleEditAt`). This repairs
+`a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md`; `settings-proof`'s launch 9 shows it. The **seams
+view** §5 says so. The `config.save` payload's role entry changed shape; no package, edge, process, message kind,
+channel, command or store column changed.
+
 **A card resting in `ready` across a restart is disclosed and started from the queue (REQ-TRACE-472, REQ-TRACE-482,
 REQ-TRACE-464).** The delivery service's `recoverLaunch` (`workspace-service/delivery.ts`) rebuilds a launch the restart
 lost from the store's worktree row through `RunGitPort.takeOver`, never by provisioning. It runs once on the first pass

@@ -61,8 +61,23 @@ export interface PendingSettings {
   readonly instructions: {
     readonly overrides: Readonly<Record<string, InstructionStateName>>;
   };
-  /** Role edits keyed by role, per field scoped (REQ-CONFIG-259); an entry exists only once the user touched the role. */
-  readonly roles: Readonly<Record<string, { readonly scope: 'workspace' | 'global'; readonly model?: string | null; readonly thinking?: string | null; readonly unsetModel?: boolean; readonly unsetThinking?: boolean }>>;
+  /**
+   * Role edits keyed by role, each FIELD scoped (REQ-CONFIG-259: "Role edits carry a per-field scope"); an entry exists
+   * only once the user touched the role. A field's scope is the edit scope selected when that field was last edited, so
+   * an edit of the other field at another scope never moves it (defect note
+   * `a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md`).
+   */
+  readonly roles: Readonly<Record<string, PendingRoleEdit>>;
+}
+
+/** One role's pending edit (REQ-CONFIG-259/341): the model's and the reasoning's edits, each with the scope it was made at. */
+export interface PendingRoleEdit {
+  readonly model?: string | null;
+  readonly unsetModel?: boolean;
+  readonly modelScope?: 'workspace' | 'global';
+  readonly thinking?: string | null;
+  readonly unsetThinking?: boolean;
+  readonly thinkingScope?: 'workspace' | 'global';
 }
 
 const SLOT_KEYS: readonly ModelSlotName[] = ['default_summary_model', 'improvement_collector_model', 'retrospective_model', 'gatekeeper_model', 'small_model', 'medium_model', 'large_model', 'fallback_model'];
@@ -219,8 +234,19 @@ export function applyChange(pending: PendingSettings, change: PendingChange): Pe
     case 'instructionToggle':
       return pending.instructions.overrides[change.id] === change.value ? pending : { ...pending, instructions: { overrides: { ...pending.instructions.overrides, [change.id]: change.value } } };
     case 'role': {
-      const current = pending.roles[change.role] ?? { scope: change.scope };
-      const next = { ...current, scope: change.scope, ...(change.model !== undefined ? { model: change.model, unsetModel: false } : {}), ...(change.thinking !== undefined ? { thinking: change.thinking, unsetThinking: false } : {}), ...(change.unsetModel ? { unsetModel: true } : {}), ...(change.unsetThinking ? { unsetThinking: true } : {}) };
+      // REQ-CONFIG-259/341: only the field the change touches takes the change's scope; the other keeps its own.
+      const current: PendingRoleEdit = pending.roles[change.role] ?? {};
+      const touchesModel = change.model !== undefined || change.unsetModel === true;
+      const touchesThinking = change.thinking !== undefined || change.unsetThinking === true;
+      const next: PendingRoleEdit = {
+        ...current,
+        ...(touchesModel ? { modelScope: change.scope } : {}),
+        ...(touchesThinking ? { thinkingScope: change.scope } : {}),
+        ...(change.model !== undefined ? { model: change.model, unsetModel: false } : {}),
+        ...(change.thinking !== undefined ? { thinking: change.thinking, unsetThinking: false } : {}),
+        ...(change.unsetModel ? { unsetModel: true } : {}),
+        ...(change.unsetThinking ? { unsetThinking: true } : {}),
+      };
       if (sameValue(current, next)) return pending;
       return { ...pending, roles: { ...pending.roles, [change.role]: next } };
     }
@@ -305,11 +331,13 @@ export function savePayload(saved: PendingSettings, pending: PendingSettings): D
   for (const id of Object.keys(saved.instructions.overrides)) if (pending.instructions.overrides[id] === undefined) instructionOverrides[id] = null;
   if (Object.keys(instructionOverrides).length > 0) out.instructions = { overrides: instructionOverrides };
   if (Object.keys(pending.roles).length > 0) {
+    // REQ-CONFIG-259: each field travels with its own scope, and the writer applies it at that layer.
     out.roles = Object.fromEntries(Object.entries(pending.roles).map(([role, e]) => [role, {
-      scope: e.scope,
+      ...(e.modelScope !== undefined && (e.unsetModel || e.model !== undefined) ? { modelScope: e.modelScope } : {}),
       ...(e.model !== undefined && !e.unsetModel ? { model: e.model } : {}),
-      ...(e.thinking !== undefined && !e.unsetThinking ? { thinking: e.thinking as 'default' } : {}),
       ...(e.unsetModel ? { unsetModel: true } : {}),
+      ...(e.thinkingScope !== undefined && (e.unsetThinking || e.thinking !== undefined) ? { thinkingScope: e.thinkingScope } : {}),
+      ...(e.thinking !== undefined && !e.unsetThinking ? { thinking: e.thinking as 'default' } : {}),
       ...(e.unsetThinking ? { unsetThinking: true } : {}),
     }]));
   }

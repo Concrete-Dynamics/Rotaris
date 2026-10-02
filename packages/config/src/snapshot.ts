@@ -126,7 +126,8 @@ export function readSnapshot(globalDir: string, workspaceRoot: string, now?: () 
 /** The contract's save payload as the writer's argument (the two are one shape; the cast is over the runtime record). */
 function toDesktopSave(save: DesktopSavePayload): DesktopSave {
   const roles: Record<string, RoleEdit> = {};
-  for (const [role, edit] of Object.entries(save.roles ?? {})) roles[role] = { scope: edit.scope, ...(edit.model !== undefined ? { model: edit.model } : {}), ...(edit.thinking !== undefined ? { thinking: edit.thinking } : {}), ...(edit.unsetModel ? { unsetModel: true } : {}), ...(edit.unsetThinking ? { unsetThinking: true } : {}) };
+  // REQ-CONFIG-259: each field keeps its own scope through to the writer.
+  for (const [role, edit] of Object.entries(save.roles ?? {})) roles[role] = { ...(edit.modelScope !== undefined ? { modelScope: edit.modelScope } : {}), ...(edit.model !== undefined ? { model: edit.model } : {}), ...(edit.unsetModel ? { unsetModel: true } : {}), ...(edit.thinkingScope !== undefined ? { thinkingScope: edit.thinkingScope } : {}), ...(edit.thinking !== undefined ? { thinking: edit.thinking } : {}), ...(edit.unsetThinking ? { unsetThinking: true } : {}) };
   return {
     ...(save.slots ? { slots: save.slots } : {}),
     ...(save.slotThinking ? { slotThinking: save.slotThinking } : {}),

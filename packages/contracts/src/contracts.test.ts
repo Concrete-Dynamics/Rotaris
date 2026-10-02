@@ -225,3 +225,13 @@ describe('REQ-TOOLS-002 / REQ-MONITOR-060: declaredToolsOf', () => {
     for (const role of BUILT_IN_ROLE_NAMES) expect(BUILT_IN_ROLE_TOOLS[role].length).toBeGreaterThan(0);
   });
 });
+
+describe('REQ-CONFIG-259: a role edit carries a per-field scope', () => {
+  it('admits a model and a reasoning edit at two scopes, and refuses a field edited with no scope', async () => {
+    const { DesktopSaveSchema } = await import('./config.js');
+    expect(DesktopSaveSchema.safeParse({ roles: { tester: { modelScope: 'workspace', unsetModel: true, thinkingScope: 'global', unsetThinking: true } } }).success).toBe(true);
+    expect(DesktopSaveSchema.safeParse({ roles: { tester: { modelScope: 'workspace', model: 'gpt-4o' } } }).success).toBe(true);
+    expect(DesktopSaveSchema.safeParse({ roles: { tester: { unsetModel: true } } }).success).toBe(false);
+    expect(DesktopSaveSchema.safeParse({ roles: { tester: { modelScope: 'workspace', model: 'gpt-4o', thinking: 'high' } } }).success).toBe(false);
+  });
+});

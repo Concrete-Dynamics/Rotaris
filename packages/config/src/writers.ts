@@ -176,14 +176,46 @@ export async function writeVerifierSection(file: string, section: unknown, deps:
 
 export type RoleEditScope = 'workspace' | 'global';
 
-export interface RoleEdit {
-  readonly scope: RoleEditScope;
-  /** A model to write; null writes an explicit null; absent leaves the key. */
+/** One role's field edits at one layer: what `applyRoleEdit` writes into one document. */
+export interface RoleFieldEdits {
+  /** A model to write; null removes the key (REQ-CONFIG-041); absent leaves the key. */
   readonly model?: string | null;
   readonly thinking?: RoleReasoning | null;
   /** REQ-CONFIG-341: an unset removes the key at the edited scope. */
   readonly unsetModel?: boolean;
   readonly unsetThinking?: boolean;
+}
+
+/**
+ * REQ-CONFIG-259: "Role edits carry a per-field scope". The model's edit is written at `modelScope` and the reasoning's at
+ * `thinkingScope`, so one role's edits at two scopes each land in their own file (defect note
+ * `a-roles-pending-edits-at-two-scopes-save-at-the-last-scope-only.md`; until 2026-10-02 one `scope` routed the whole entry).
+ */
+export interface RoleEdit extends RoleFieldEdits {
+  readonly modelScope?: RoleEditScope;
+  readonly thinkingScope?: RoleEditScope;
+}
+
+/** The part of a role edit made at `scope`, or undefined when neither field was edited there. */
+function roleEditAt(edit: RoleEdit, scope: RoleEditScope): RoleFieldEdits | undefined {
+  const model = edit.modelScope === scope && (edit.model !== undefined || edit.unsetModel === true);
+  const thinking = edit.thinkingScope === scope && (edit.thinking !== undefined || edit.unsetThinking === true);
+  if (!model && !thinking) return undefined;
+  return {
+    ...(model && edit.model !== undefined ? { model: edit.model } : {}),
+    ...(model && edit.unsetModel === true ? { unsetModel: true } : {}),
+    ...(thinking && edit.thinking !== undefined ? { thinking: edit.thinking } : {}),
+    ...(thinking && edit.unsetThinking === true ? { unsetThinking: true } : {}),
+  };
+}
+
+/** A field edited with no scope to write it at: the save is refused rather than guessing a layer. */
+function unscopedRoleField(roles: Readonly<Record<string, RoleEdit>>): string | undefined {
+  for (const [role, e] of Object.entries(roles)) {
+    if ((e.model !== undefined || e.unsetModel === true) && e.modelScope === undefined) return `personas.${role}.model: the edit carries no scope`;
+    if ((e.thinking !== undefined || e.unsetThinking === true) && e.thinkingScope === undefined) return `personas.${role}.thinking: the edit carries no scope`;
+  }
+  return undefined;
 }
 
 export interface DesktopSave {
@@ -233,7 +265,7 @@ function ensureMapping(root: YAMLMap, key: string, doc: Document): YAMLMap {
   return fresh;
 }
 
-function applyRoleEdit(doc: Document, root: YAMLMap, role: string, edit: RoleEdit): void {
+function applyRoleEdit(doc: Document, root: YAMLMap, role: string, edit: RoleFieldEdits): void {
   const canonical = LEGACY_ROLE_ALIASES[role] ?? role;
   const personas = ensureMapping(root, 'personas', doc);
   // REQ-CONFIG-251: a legacy alias key whose canonical name is now present is deleted.
@@ -265,9 +297,14 @@ export async function saveDesktop(files: { workspace: string; global: string }, 
   if (save.compressorThresholdPercentage !== undefined && (!Number.isInteger(save.compressorThresholdPercentage) || save.compressorThresholdPercentage < 1 || save.compressorThresholdPercentage > 100)) {
     return err({ code: 'invalid', file: files.workspace, fault: 'compressor.threshold_percentage: must be an integer between 1 and 100' });
   }
+  const unscoped = unscopedRoleField(save.roles ?? {});
+  if (unscoped !== undefined) return err({ code: 'invalid', file: files.workspace, fault: unscoped });
   const ws = openDocument(files.workspace);
   if (!ws.ok) return ws.error.code === 'not-a-mapping' ? err({ ...ws.error, fault: `the workspace agents.yaml is not a mapping (${ws.error.fault})` }) : ws;
-  const globalEdits = Object.entries(save.roles ?? {}).filter(([, e]) => e.scope === 'global');
+  // REQ-CONFIG-259: each field at its own layer — the workspace's part of every role edit, then the global's.
+  const atScope = (scope: RoleEditScope) => Object.entries(save.roles ?? {}).flatMap(([role, e]) => { const part = roleEditAt(e, scope); return part === undefined ? [] : [[role, part] as const]; });
+  const workspaceEdits = atScope('workspace');
+  const globalEdits = atScope('global');
   let global: { doc: Document.Parsed } | null = null;
   if (globalEdits.length > 0) {
     const g = openDocument(files.global);
@@ -331,7 +368,7 @@ export async function saveDesktop(files: { workspace: string; global: string }, 
     }
     if (instructions.items.length === 0) root.delete('instructions');
   }
-  for (const [role, edit] of Object.entries(save.roles ?? {})) if (edit.scope === 'workspace') applyRoleEdit(doc, root, role, edit);
+  for (const [role, edit] of workspaceEdits) applyRoleEdit(doc, root, role, edit);
   if (global) for (const [role, edit] of globalEdits) applyRoleEdit(global.doc, rootOf(global.doc), role, edit);
 
   const wrote = await commit(files.workspace, doc, deps.timers);
@@ -374,6 +411,6 @@ export async function writeModelPreferences(file: string, prefs: ModelPreference
     if (level === null) root.delete(key);
     else if (level !== undefined) root.set(key, doc.createNode(level));
   }
-  for (const [role, edit] of Object.entries(prefs.roles ?? {})) applyRoleEdit(doc, root, role, { scope: 'workspace', ...edit });
+  for (const [role, edit] of Object.entries(prefs.roles ?? {})) applyRoleEdit(doc, root, role, edit);
   return commit(file, doc, deps.timers);
 }

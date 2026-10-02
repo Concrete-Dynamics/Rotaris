@@ -193,6 +193,10 @@ Invariants:
   re-emission was the eleventh first-execution defect — if you touch the writer, prove the comments survive.
 - `initialization:` / `project_init:` are read **outside** the layered merge, because `REQ-WORKSPACE-078`
   names one file.
+- **A role edit is scoped per field** (`REQ-CONFIG-259`). The pending entry (`PendingRoleEdit`,
+  `ui/src/settings/config-state.ts`), the save contract (`RoleEditSchema`: `modelScope`, `thinkingScope`) and the
+  writer (`saveDesktop`'s `roleEditAt`) carry the model's scope and the reasoning's apart, so one role's edits at two
+  scopes each land in their own file. A field edited with no scope is refused, never routed to a guessed layer (2026-10-02).
 
 ---
 

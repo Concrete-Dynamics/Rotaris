@@ -23,6 +23,8 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  *     REQ-NOTIFY-224): the unreviewed-hooks notice offers `open-hook-review` naming its workspace, and activating it
  *     opens REQ-HOOKS-106's review for THAT workspace. The identity main writes and the identity the renderer checks
  *     it against come from two different processes, so only the built application proves they are the same string.
+ *  7. The retry action reaches its target (REQ-NOTIFY-045, REQ-NOTIFY-030, OQ-177): activated on a failed session, it
+ *     resubmits that session's last submitted prompt as a second run of that session.
  *
  * Every assertion reads the application's own log, its store, or the rendered DOM.
  */
@@ -299,6 +301,49 @@ const s4 = scenario('review-action', { workspaceHook: true });
     actionLabel: actions[0].text, member: actions[0].attrs['data-action'],
     reviewOpenedFor: opened[1], hooks: Number(opened[2]), workspaceMatched: sameRoot,
     png: join(output, 'review-action.png'), elapsedMs: r.elapsedMs,
+  };
+  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. REQ-NOTIFY-045 (OQ-177): the retry action reaches its target. A run fails at its first model call (a 401, which no
+// recovery retries), so the session's last submitted prompt is the one that failed and the composer, submitted, is empty.
+// No failure notice in this build carries the retry as its one action (OQ-177's reading: each failure class names
+// another), so the proof publishes one carrying it through the REAL store, scoped to the failed session, and clicks it:
+// the window resubmits the last submitted prompt to the session it follows, and a second run of that session starts on
+// it. (Its outcome is the double's: a new iteration's root starts the script again, so it meets the same 401; what is
+// measured is that the retry reached its target.) Before the repair of
+// `docs/defects/fixed/the-retry-run-notice-action-has-no-target.md` the window logged "has no target" and nothing ran.
+const s5 = scenario('retry-action');
+{
+  const step = (at, obj) => `${JSON.stringify(obj)}@${at}`;
+  const PROMPT = 'the prompt that failed once';
+  const r = await launch('retry-action', s5, {
+    ROTARIS_SCRIPT: 'fail:401',
+    ROTARIS_CAPTURE_PROMPT: PROMPT,
+    ROTARIS_CAPTURE_NOTICES: step(6000, { op: 'report', severity: 'error', title: 'The run failed', message: 'Retry the failed run.', persistent: true, action: { label: 'Retry', action: { kind: 'retry-run' } } }),
+    ROTARIS_CAPTURE_INSPECT_AT: '.notice__action@6600',
+    ROTARIS_CAPTURE_CLICKS: '.notice__action>>Retry@7000',
+    ROTARIS_CAPTURE_AFTER_MS: '14000',
+  });
+  const action = inspectAt(r.log, 6600, '.notice__action')?.matches ?? [];
+  expect(action.length === 1 && action[0].text === 'Retry' && action[0].attrs['data-action'] === 'retry-run', `the notice offers ${JSON.stringify(action.map((a) => [a.text, a.attrs['data-action']]))}`);
+  expect(/capture: clicked "Retry"/.test(r.log), 'the retry action was not clicked — see retry-action.log');
+  expect(!/notice action "retry-run" has no target/.test(r.log), 'the window still dispatches retry-run nowhere');
+  const db = open(s5);
+  const sessions = db.prepare('SELECT session_id, execution_status, iterations_completed FROM sessions ORDER BY created_at').all();
+  const users = sessions.length === 1 ? db.prepare("SELECT body FROM transcript_rows WHERE session_id = ? AND kind = 'user' ORDER BY row_index").all(sessions[0].session_id).map((row) => row.body) : [];
+  db.close();
+  expect(sessions.length === 1, `the retry went to ${sessions.length} sessions, not the one that failed (REQ-NOTIFY-030)`);
+  expect(users.length === 2 && users.every((b) => b === PROMPT), `the session's submitted prompts: ${JSON.stringify(users)} — the retry did not resubmit the last one (REQ-NOTIFY-045)`);
+  // The retried run is a second run of the same session: a second iteration, and an orchestrator call after the click.
+  expect(sessions[0].iterations_completed === 2, `the retry started no second run of the session: ${JSON.stringify(sessions[0])}`);
+  const afterClick = r.log.slice(r.log.indexOf('capture: clicked "Retry"'));
+  expect(/scripted model call: [^\n]* \(orchestrator\)/.test(afterClick), 'no model call followed the retry');
+  expect((r.log.match(/run [0-9a-f-]+ ended /g) ?? []).length === 2, `the session did not run twice: ${(r.log.match(/run [0-9a-f-]+ ended [^\n]*/g) ?? []).join(' | ')}`);
+  results.retryAction = {
+    actionLabel: action[0].text, member: action[0].attrs['data-action'], submittedPrompts: users,
+    session: sessions[0], png: join(output, 'retry-action.png'), elapsedMs: r.elapsedMs,
   };
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
 }

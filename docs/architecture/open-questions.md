@@ -8781,3 +8781,31 @@ clears it is REQ-MONITOR-194's, recorded in
 **What a ruling decides.** Whether a switch onto the configured key ends a ladder move (as built) or leaves it in force —
 and, if it leaves it, what the row says; whether a later switch onto a pair an override moved supersedes that override for
 the entry agent, or the override stands (as built) and only the row says so.
+
+**OQ-177 — Which notice offers REQ-NOTIFY-045's retry, when a notice carries one action?** *(REQ-NOTIFY-044, whose
+vocabulary includes "retry the failed run under REQ-NOTIFY-045"; REQ-NOTIFY-045; REQ-NOTIFY-030; REQ-NOTIFY-066;
+REQ-SHELL-114, a notice's "optional action (label plus action identifier)"; REQ-NOTIFY-061, "offers no retry";
+REQ-NOTIFY-062, "an action opening the cloud account surface"; REQ-NOTIFY-063, "offering another model or a retry once the
+provider resets … and offering an action opening model settings"; REQ-NOTIFY-064, "an action returning to the workspace
+view". Raised 2026-10-02 by the repair of
+[`the-retry-run-notice-action-has-no-target.md`](../defects/fixed/the-retry-run-notice-action-has-no-target.md). Open.)*
+
+REQ-NOTIFY-045 says what a retry does and REQ-NOTIFY-044 lists it among a notice's actions, and REQ-NOTIFY-061 takes the
+trouble to say its notice offers none, which reads as though another failure notice does. But every failure class names
+its notice's action, and none names the retry: REQ-NOTIFY-062's opens the cloud account, REQ-NOTIFY-063's opens model
+settings, REQ-NOTIFY-064's and REQ-NOTIFY-061's return to the workspace view; REQ-SHELL-114 gives a notice one action.
+REQ-NOTIFY-063 "offers" a retry in words beside its action, and it is the only failure notice that mentions one. The
+specification also says nothing of the composer after the draft has been resubmitted from a notice.
+
+**What the build proceeds under** (`apps/desktop/src/renderer/session-actions.ts`, `retryRun`;
+`apps/desktop/src/renderer/main.tsx`, `dispatchNoticeAction`): the action has its target, and no run-failure notice
+carries it — each class keeps the action its requirement names, and REQ-NOTIFY-063's retry stays in its message ("Choose
+another model, or retry once the provider resets."). Activated, the action resubmits the composer's draft as the window
+last published it (REQ-CHAT-014), else as stored (REQ-NOTIFY-066), else — the draft blank — the focused session's newest
+`user` row, the prompt the engine's own continue reads as the last one; it goes through the composer's submit path to
+the session the window follows (REQ-NOTIFY-030), and is refused, with the reason in a warning notice, when no session
+is followed or there is nothing to resubmit. The composer keeps the draft: nothing outside the composer clears it.
+
+**What a ruling decides.** Which notice carries the retry — REQ-NOTIFY-063's in place of, or beside, its model-settings
+action (which REQ-SHELL-114's single action would then have to allow), REQ-NOTIFY-064's, or none — and whether a draft a
+retry resubmitted is cleared from the composer as a submitted one is.

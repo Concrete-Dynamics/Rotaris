@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentRecord, CommandOutcome, CommandRequest, SessionRecord } from '@rotaris/contracts';
+import type { AgentRecord, CommandOutcome, CommandRequest, SessionRecord, TranscriptRow } from '@rotaris/contracts';
 import { createCancelOverlayStore, shownSession } from '@rotaris/ui';
 import { createSessionActions, type SessionActionDeps } from './session-actions.js';
 
@@ -230,5 +230,48 @@ describe('PD-ORCH-005 clauses 3 and 15: the stop comes to rest, and the confirme
     expect(seen).toEqual(['cancelling', 'cancelling', 'cancelling']);
     // Accepted: the engine's records of the run keep reading `running` through the graceful stop, and are shown cancelling.
     expect(shownSession({ ...record }, cancels.getState())!.executionStatus).toBe('cancelling');
+  });
+});
+
+/*
+ * REQ-NOTIFY-045 with REQ-NOTIFY-030 and REQ-NOTIFY-066 (OQ-177): the notice's retry, which had no target until the repair
+ * of `docs/defects/fixed/the-retry-run-notice-action-has-no-target.md` — the window logged that and dispatched nothing.
+ */
+describe('REQ-NOTIFY-045: a notice\'s retry resubmits the draft, or the session\'s last submitted prompt', () => {
+  const row = (index: number, kind: string, body: string): TranscriptRow => ({ index, kind, settled: true, body, at: '2026-10-02T09:00:00.000Z', ts: '09:00:00' });
+  function retrying(rows: readonly TranscriptRow[], sessionId: string | null = 'S1', reply: CommandOutcome = { ok: true, value: null }) {
+    const sent: CommandRequest[] = [];
+    const a = createSessionActions({
+      bridge: { command: async (req) => { sent.push(req); return reply; } },
+      replica: { getState: () => ({ sessionId, follow: () => undefined, rows }) },
+    });
+    return { a, sent };
+  }
+  const history = [row(0, 'user', 'first prompt'), row(1, 'agent', 'an answer'), row(2, 'user', 'the prompt that failed'), row(3, 'system', 'The run failed.')];
+
+  it('a draft is resubmitted to the followed session as the composer would submit it', async () => {
+    const { a, sent } = retrying(history);
+    expect(await a.retryRun('the draft I kept')).toEqual({ ok: true, resubmitted: 'draft' });
+    expect(sent).toEqual([{ kind: 'session.prompt', sessionId: 'S1', prompt: 'the draft I kept' }]);
+  });
+
+  it('a blank draft resubmits the session\'s newest submitted prompt, not an earlier one and not a system row', async () => {
+    const { a, sent } = retrying(history);
+    expect(await a.retryRun('  \n ')).toEqual({ ok: true, resubmitted: 'last-prompt' });
+    expect(sent).toEqual([{ kind: 'session.prompt', sessionId: 'S1', prompt: 'the prompt that failed' }]);
+  });
+
+  it('nothing to resubmit, or no session followed, is a refusal that sends nothing and starts nothing', async () => {
+    const empty = retrying([row(0, 'system', 'nothing yet')]);
+    expect(await empty.a.retryRun('')).toEqual({ ok: false, reason: 'There is no draft and no submitted prompt in this session to retry.' });
+    expect(empty.sent).toEqual([]);
+    const none = retrying(history, null);
+    expect(await none.a.retryRun('a draft')).toEqual({ ok: false, reason: 'No session is loaded.' });
+    expect(none.sent).toEqual([]);
+  });
+
+  it('the engine\'s refusal is the retry\'s reason', async () => {
+    const { a } = retrying(history, 'S1', { ok: false, code: 'session.run-active', headline: 'A run is already active.', detail: 'A run is already active.' });
+    expect(await a.retryRun('')).toEqual({ ok: false, reason: 'A run is already active.' });
   });
 });

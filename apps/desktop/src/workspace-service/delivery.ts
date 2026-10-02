@@ -126,7 +126,8 @@ export function createDeliveryService(deps: DeliveryServiceDeps): DeliveryServic
   const recordOf = (id: ReqId): RequirementRecord | undefined => parse?.records.find((x) => x.id === id);
   const workspaceUnattended = (): boolean => permissionMode === 'autonomous';
   /**
-   * What main's two preferences make of a launch nobody disclosed (REQ-TRACE-472): only main holds them, and it stamps
+   * What main's two preferences and the launch's own acceptance (`accepted`, held in main's memory) make of a launch
+   * nobody disclosed (REQ-TRACE-472): only main holds them, and it stamps
    * the value on every command it sends; this is the last one received, `due` until the first. ONE value feeds the
    * queue the service publishes, the launch preview and the claim, so the queue shows the candidate the scheduler takes
    * next, for the reason it takes or defers it (REQ-TRACE-478). The verifier's second finding on

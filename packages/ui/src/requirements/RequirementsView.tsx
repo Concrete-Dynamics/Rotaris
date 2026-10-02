@@ -92,9 +92,9 @@ export interface RequirementsHost {
   launchPreview(id: ReqId, action: BoardAction): Promise<HostResult<LaunchPreview>>;
   /** REQ-TRACE-463/478: the coordinator claims and starts whatever the scheduler offers now. */
   dispatchRuns(): Promise<HostResult<DispatchOutcome>>;
-  /** REQ-TRACE-472: accepting permanently suppresses the disclosure in later launches. */
   /** REQ-TRACE-472: a plain acceptance, which suppresses the disclosure for the remainder of this launch (main holds it). */
   acceptDisclosure(): Promise<HostResult<unknown>>;
+  /** REQ-TRACE-472: accepting permanently suppresses the disclosure in later launches. */
   suppressDisclosure(): Promise<HostResult<unknown>>;
   onChanged(listener: (change: RequirementsChanged) => void): () => void;
   readPreferences(): Promise<BoardPreferences>;

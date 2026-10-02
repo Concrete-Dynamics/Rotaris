@@ -277,7 +277,7 @@ sequenceDiagram
   M->>B: channel 10 requirements:changed
   Note over M,B: persist before publish — channel 10 is broadcast<br/>only from a reply whose transaction committed
 
-  C->>WS: requirements.run.claim (envelope: actor system, disclosure due | suppressed | off)
+  C->>WS: requirements.run.claim (envelope: actor system, disclosure due | accepted | suppressed | off)
   WS-->>C: prompt, worktree, unit
   C->>RH: session.start {effectiveRoot, worktree, boardPermissions?}
   RH-->>C: session.started {sessionId}

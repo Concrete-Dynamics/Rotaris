@@ -118,17 +118,17 @@ export interface BoardProjection {
 export interface RequirementDetail { readonly card: BoardCard; readonly prose: string; readonly history: readonly { readonly at: string; readonly action: BoardAction; readonly actor: Actor; readonly from: ColumnToken; readonly to: ColumnToken; readonly current: boolean }[] | 'unavailable' | 'reading'; readonly runs: readonly { readonly unit: string; readonly sessionId?: string; readonly branch?: string; readonly worktree?: string; readonly status: string }[]; readonly evidenceDetail: readonly AnnotationSite[]; readonly findings: readonly Finding[] }
 
 /**
- * REQ-TRACE-472: what main's two preferences make of a launch nobody disclosed — `due` while the elevation is on and the
- * disclosure is not suppressed, `suppressed` once it was accepted permanently ("suppress it in subsequent launches too"),
- * `off` when the elevation is switched off in settings (the run "adopt[s] the workspace's own permission mode"). Main
- * owns both preferences and stamps this on every `requirements.command` it sends the service (`process-protocol.ts`,
+ * REQ-TRACE-472: what main's two preferences and this launch's own acceptance make of a launch nobody disclosed — `due`
+ * while the elevation is on and the disclosure is neither accepted nor suppressed, `accepted` once it was accepted (not
+ * permanently) earlier in this launch of the application ("suppress the disclosure for the remainder of that launch":
+ * main holds it in memory, so the next launch reads `due` again), `suppressed` once it was accepted permanently
+ * ("suppress it in subsequent launches too"), `off` when the elevation is switched off in settings (the run "adopt[s]
+ * the workspace's own permission mode"). Main owns all three and stamps this on every `requirements.command` it sends the service (`process-protocol.ts`,
  * beside the actor), so a launch the service recovered after a restart (recorded undisclosed) is scheduled, published
  * on the queue and claimed exactly as a launch disclosed in this process would be (defect note
  * `a-card-resting-in-ready-across-a-restart-can-never-be-started.md`: the verifier's second finding put it on the
  * claim alone, and the published queue then still called a card the claim takes "deferred" — the third).
  */
-// `accepted`: accepted (not permanently) earlier in this launch of the application, which suppresses the disclosure for
-// the remainder of the launch (REQ-TRACE-472); main holds it in memory, so the next launch reads `due` again.
 export const STANDING_DISCLOSURES = ['due', 'accepted', 'suppressed', 'off'] as const;
 export type StandingDisclosure = (typeof STANDING_DISCLOSURES)[number];
 // ---- commands (channel 5), main → workspace service; Actor is stamped by main, never sent by a renderer ----

@@ -323,6 +323,22 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       log(`session ${req.sessionId} ${req.action}: ${r.value.resumed ? 'a continuation run is executing' : 'left paused'}${r.value.messageLimit === null ? '' : ` (message limit ${r.value.messageLimit})`}`);
       return { kind: 'session.continued', sessionId: req.sessionId, resumed: r.value.resumed, messageLimit: r.value.messageLimit };
     }
+    case 'session.authRecovery': {
+      // REQ-NOTIFY-069/072/074: what the authentication recovery dialog is drawn from; a refusal sends main down the generic path.
+      const r = sessions.authRecoveryFacts(asSessionId(req.sessionId));
+      if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The session cannot be recovered here', detail: r.error.reason };
+      return { kind: 'session.authRecovery', sessionId: req.sessionId, failed: r.value.failed, active: r.value.active, models: [...r.value.models], lastPrompt: r.value.lastPrompt };
+    }
+    case 'session.authRestart': {
+      // REQ-NOTIFY-074: the restart launches a run — refresh the bearers first (REQ-PROVIDER-066's continuation lease).
+      const leaseRefusal = await continuationLeaseForSession(req.sessionId);
+      if (leaseRefusal) return leaseRefusal;
+      const r = sessions.restartAfterAuthFailure(asSessionId(req.sessionId), req.modelKey);
+      if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The run could not be restarted', detail: r.error.reason };
+      const pinned = r.value.pinned;
+      log(`session ${req.sessionId}: authentication recovery restarted the run on ${pinned.to.key} (${pinned.to.provider}/${pinned.to.model}), pinned for ${pinned.from.provider}/${pinned.from.model}`);
+      return { kind: 'session.authRestarted', sessionId: req.sessionId, pinned: { from: { provider: pinned.from.provider, model: pinned.from.model }, to: pinned.to } };
+    }
     case 'session.planEdit': {
       // REQ-ORCH-154: the edit is recorded and nothing else moves — the gate stays held on the same cycle.
       const r = sessions.planEdit(asSessionId(req.sessionId), req.text);

@@ -356,6 +356,12 @@ export class Run {
   private iterationsCompleted = 0;
   private initialIterations = 0;
   private lastFailure: string | null = null;
+  /**
+   * REQ-NOTIFY-072 / REQ-MONITOR-147: the model the root's failed model call was addressed to — the root cell's model at
+   * that moment, after any ladder move — or null when the run's last failure was no root model call's. The authentication
+   * recovery dialog names it and pins a chosen model against its pair (`Sessions.authRecoveryFacts`, `restartAfterAuthFailure`).
+   */
+  private failedModel: ModelRef | null = null;
   private todo: Todo;
   /** REQ-CHAT-088: the root agent's tool-owned plan, kept alongside the loop planner in one stored envelope. */
   private agentTodo: AgentTodoDocument | null;
@@ -664,6 +670,15 @@ export class Run {
   get isEnded(): boolean {
     return this.ended;
   }
+  /** REQ-NOTIFY-072: the model the root's failing call was addressed to, when the run's last failure was a root model call's. */
+  get failedEntryModel(): ModelRef | null {
+    return this.failedModel;
+  }
+  /** A root turn's model call failed (an iteration's or a plan cycle's): the failure and the model it was addressed to, together. */
+  private recordRootModelFailure(error: ModelError): void {
+    this.lastFailure = describe(error);
+    this.failedModel = this.rootCell?.model.model ?? null;
+  }
   get outcome(): RunResult | null {
     return this.result;
   }
@@ -936,6 +951,7 @@ export class Run {
       return await this.teardown(stopReason ?? 'no_pending_tasks');
     } catch (cause) {
       // REQ-SESSION-094: teardown runs even on any exception; REQ-SESSION-093: a runtime exception persists failed.
+      if (this.lastFailure === null) this.failedModel = null;
       this.lastFailure = this.lastFailure ?? String(cause);
       this.deps.warn(`run ${this.sessionId} raised outside an iteration: ${String(cause)}`);
       return await this.teardown('agent_session_aborted');
@@ -1012,8 +1028,8 @@ export class Run {
       } else {
         // REQ-ORCH-074: failed → the task is abandoned; for the root agent the run ends agent_session_aborted.
         outcome = 'failed';
-        this.lastFailure = describe(report.error);
-        summary = this.lastFailure;
+        this.recordRootModelFailure(report.error);
+        summary = this.lastFailure ?? describe(report.error);
         this.todo.abandon(task);
         this.todo.releaseHeld(iteration, false);
         escalate = true;
@@ -1023,6 +1039,7 @@ export class Run {
       if (this.iterationRest === null) {
         // REQ-ORCH-073 / REQ-ORCH-135: an iteration that raises closes as failed, the task abandoned.
         this.lastFailure = String(cause);
+        this.failedModel = null;
         summary = `the iteration ended with an unhandled error: ${String(cause)}`;
         this.todo.abandon(task);
         this.todo.releaseHeld(iteration, false);
@@ -2073,9 +2090,10 @@ export class Run {
       ];
       const report = await this.turn(`${preamble}\n\n${this.deps.task}`, 0, content);
       plan = report.status === 'failed' ? '' : report.text.trim();
-      if (report.status === 'failed') this.lastFailure = describe(report.error);
+      if (report.status === 'failed') this.recordRootModelFailure(report.error);
     } catch (cause) {
       this.lastFailure = String(cause);
+      this.failedModel = null;
     }
     // A stopped cycle, and one whose turn produced no plan, end the run in teardown, whose own close records a prompt still
     // pending as not delivered because the run ended — reached before anything is awaited, as the park's close below is.

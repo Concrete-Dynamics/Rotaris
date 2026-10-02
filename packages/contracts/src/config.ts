@@ -8,8 +8,11 @@ import { SKILL_INVOCATION_MODE_NAMES, SKILL_LOAD_MODE_NAMES } from './skills.js'
  */
 export const CONFIG_SCOPES = ['workspace', 'global'] as const;
 export type ConfigScopeName = (typeof CONFIG_SCOPES)[number];
-/** REQ-CONFIG-341: workspace > global > discovered (the snapshot layer) > built-in. */
-export const CONFIG_ORIGINS = ['workspace', 'global', 'discovered', 'built-in'] as const;
+/**
+ * REQ-CONFIG-341: the Scope column's origin vocabulary, exactly these four, in the precedence it reports — workspace >
+ * global > discovered (the snapshot layer, REQ-CONFIG-034) > default (a built-in value), REQ-CONFIG-031's layer order.
+ */
+export const CONFIG_ORIGINS = ['workspace', 'global', 'discovered', 'default'] as const;
 
 export const MODEL_SLOT_NAMES = ['default_summary_model', 'improvement_collector_model', 'retrospective_model', 'gatekeeper_model', 'small_model', 'medium_model', 'large_model', 'fallback_model'] as const;
 export type ModelSlotName = (typeof MODEL_SLOT_NAMES)[number];

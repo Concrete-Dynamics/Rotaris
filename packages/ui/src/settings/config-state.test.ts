@@ -5,11 +5,11 @@ import { applyChange, clampForDisplay, isDirty, liveStateOf, pendingFrom, savePa
 const snapshot: ConfigSnapshot = {
   workspaceRoot: 'C:/ws', loadOk: true, fatal: null,
   slots: [
-    { slot: 'large_model', value: 'gpt-4o', origin: 'built-in', thinking: null },
+    { slot: 'large_model', value: 'gpt-4o', origin: 'default', thinking: null },
     { slot: 'small_model', value: 'gpt-4o-mini', origin: 'workspace', thinking: 'auto' },
   ],
   models: ['gpt-4o', 'gpt-4o-mini'], imageInputModels: [],
-  roles: [{ role: 'tester', rawModel: null, modelOrigin: 'built-in', effectiveModel: 'gpt-4o-mini', inherited: true, builtInDefault: 'medium_model', rawThinking: null, thinkingOrigin: 'built-in', tier: 'medium_model', tools: ['read_file'], declaredTools: ['read_file'] }],
+  roles: [{ role: 'tester', rawModel: null, modelOrigin: 'default', effectiveModel: 'gpt-4o-mini', inherited: true, builtInDefault: 'medium_model', rawThinking: null, thinkingOrigin: 'default', tier: 'medium_model', tools: ['read_file'], declaredTools: ['read_file'] }],
   runtime: { max_depth: 3, max_active_children: 6, max_iterations: 20, allow_outside_workspace: false, permission_mode: 'ask', improvement_collector_enabled: true, improvement_collector_timeout: 60, retrospective_timeout: 120, keep_going: false, run_start_mode: 'auto', memory_diagnostics_enabled: false, sandbox_mode: 'off', sandbox_writable_roots: [], sandbox_allow_network: false, network_egress_policy: 'ask', network_allowed_hosts: [], network_denied_hosts: [] },
   rawRuntime: { workspace: { max_depth: 3 }, global: null },
   circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { show_tool_results: true, show_tool_inputs: true, tool_result_lines: 10, tool_input_lines: 2 },

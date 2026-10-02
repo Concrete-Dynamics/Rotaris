@@ -117,6 +117,33 @@ export async function followDecision(first: DecisionResult, onWaiting: (sentence
   }
   return r.ok ? { ok: true } : { ok: false, reason: r.reason };
 }
+/**
+ * What the blockers pane says about an answer: the sentence it is waiting on, or the refusal it quotes; never both.
+ * `waiting` is a status (nothing was refused), `refusal` the alert (REQ-TRACE-454).
+ */
+export interface AnswerState { readonly waiting: string | null; readonly refusal: string | null }
+/**
+ * REQ-TRACE-453/454 with REQ-TRACE-472: the blockers pane's answer followed to what it came to. A resume that returns
+ * the card to `ready` starts a run, so its first answer is the host's "nothing has been recorded yet", held behind the
+ * disclosure. The pane is told it is WAITING while the disclosure stands; once the disclosure is accepted the answer
+ * was taken and nothing is said; an abandonment, or a refusal, is quoted. Until 2026-10-02 the pane drew the first
+ * answer as its refusal and kept it after the resume was taken
+ * (`docs/defects/fixed/a-blocker-resumed-through-the-disclosure-leaves-the-pane-saying-nothing-was-recorded.md`).
+ */
+export async function followAnswer(first: DecisionResult, onState: (state: AnswerState) => void): Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }> {
+  const r = await followDecision(first, (sentence) => onState({ waiting: sentence, refusal: null }));
+  onState({ waiting: null, refusal: r.ok ? null : r.reason });
+  return r;
+}
+/**
+ * REQ-TRACE-453/447: the host re-reads the blocker once the answer was TAKEN, which for a resume held behind the
+ * disclosure is when the disclosure is accepted, not when the first answer arrives. An abandoned or refused answer
+ * changed nothing, so nothing is re-read.
+ */
+export async function rereadWhenTaken(first: DecisionResult, reread: () => void): Promise<void> {
+  const r = await followDecision(first, () => undefined);
+  if (r.ok) reread();
+}
 /** REQ-TRACE-425's two sentences. */
 export const REVIEW_READING = 'Reading the review…';
 export const REVIEW_BUSY = 'A review is already being read; wait for it before asking again.';

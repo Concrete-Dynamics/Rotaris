@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 /**
  * REQ-TOOLS-129/130/132: the ONE workspace-boundary check. A relative path resolves against the
@@ -20,14 +20,24 @@ export type FenceVerdict =
   | { readonly ok: true; readonly resolved: string; readonly rel: string; readonly inside: boolean; readonly readOnlyRoot: boolean }
   | { readonly ok: false; readonly resolved: string; readonly message: string };
 
-/** The real path of `p`, resolving the nearest existing ancestor when `p` itself does not exist yet. */
+/**
+ * The real path of `p`, resolving the nearest existing ancestor when `p` itself does not exist yet.
+ *
+ * The missing tail is rebuilt segment by segment with `basename`. Until 2026-09-28 it was rebuilt as
+ * `existing.slice(parent.length)` less one leading separator, which is one character too few when the parent is
+ * `.` — a relative path's walk ends there, `dirname('specs')` is `.`, and `'specs'.slice(1)` is `pecs`; so
+ * `realPathOf('specs/index.md')` answered `<cwd>/pecs/index.md` and `realPathOf('D:/ws')` on POSIX `<cwd>/:/ws`
+ * (`docs/defects/fixed/realpathof-drops-a-character-from-a-relative-path.md`). The falsified premise, kept beside
+ * its replacement: "no production caller passes a relative path" — the policy's path scope did, on every
+ * workspace-relative argument, until it joined the root first (REQ-TOOLS-018).
+ */
 export function realPathOf(p: string): string {
   let existing = p;
   const tail: string[] = [];
   while (!existsSync(existing)) {
     const parent = dirname(existing);
     if (parent === existing) return p;
-    tail.unshift(existing.slice(parent.length).replace(/^[\\/]/, ''));
+    tail.unshift(basename(existing));
     existing = parent;
   }
   let real: string;
@@ -49,7 +59,8 @@ export function isInside(root: string, candidate: string): boolean {
   return c === r || c.startsWith(`${r}/`);
 }
 
-export function resolveInWorkspace(cfg: FenceConfig, input: string): string {
+/** REQ-TOOLS-018/129: a relative path resolves against the workspace root; an absolute one stands. */
+export function resolveInWorkspace(cfg: Pick<FenceConfig, 'workspaceRoot'>, input: string): string {
   return isAbsolute(input) ? resolve(input) : resolve(cfg.workspaceRoot, input);
 }
 

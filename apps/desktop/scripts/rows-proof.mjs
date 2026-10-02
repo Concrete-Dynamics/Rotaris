@@ -30,7 +30,7 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -94,7 +94,7 @@ const PROBES = [
 
 function launch(name, extra, timeoutMs = 150_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ profileRoot: root, local, preferences }),

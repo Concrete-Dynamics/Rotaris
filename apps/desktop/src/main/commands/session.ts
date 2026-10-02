@@ -10,12 +10,12 @@ import { refusal, type CommandContext, type CommandHandlers } from './context.js
  * a refusal into a notice where the surface has nowhere to show one.
  */
 export function sessionCommands(
-  ctx: Pick<CommandContext, 'capturing' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runHost' | 'services'>,
+  ctx: Pick<CommandContext, 'capturing' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runHost' | 'services'>,
 ): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.start' | 'session.newId' | 'session.resume' | 'session.control' | 'session.prompt' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.reconcile' | 'session.pageOlder'> {
-  const { capturing, dialogs, log, mainWindows, notices, pauseWindows, raiseNotice, recoveryFor, relay, runHost, services } = ctx;
+  const { capturing, dialogs, log, mainWindows, notices, pauseWindows, quitting, raiseNotice, recoveryFor, relay, runHost, services } = ctx;
   return {
     'session.continue': async (req) => {
-      const r = await runHost.request({ kind: 'session.continue', sessionId: req.sessionId, action: req.action }, millis(10_000));
+      const r = await runHost.request({ kind: 'session.continue', sessionId: req.sessionId, action: req.action, ...(req.withoutPaused === true ? { withoutPaused: true } : {}) }, millis(10_000));
       if (r.kind !== 'session.continued') { if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail); return refusal(r, 'The session could not be continued'); }
       const open = pauseWindows.get(req.sessionId);
       if (open && !open.isDestroyed()) open.close();
@@ -133,12 +133,19 @@ export function sessionCommands(
         if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail);
         return refusal(r, 'The session could not be loaded');
       }
-      raiseNotice('info', `Loaded session ${r.sessionId}.`, r.settledChildren > 0 ? `${r.settledChildren} unfinished child record(s) were settled before continuation.` : undefined);
+      raiseNotice('info', `Loaded session ${r.sessionId}.`);
       // REQ-SHELL-078 read for a loaded session too: the windows were opened onto the previous session's agents and would otherwise show them (Part R's reading, ADR-0048 note).
       if (w.followedSessionId !== null && w.followedSessionId !== r.sessionId) w.personaWindows.destroyAll('a different session was loaded');
-      return { ok: true, value: { sessionId: r.sessionId, settledChildren: r.settledChildren } };
+      return { ok: true, value: { sessionId: r.sessionId } };
     },
     'session.control': async (req, { senderId }) => {
+      // PD-CHAT-002 revision 2 with PD-ORCH-005 clause 9: the question dock cancels its prompt as its window unloads
+      // (REQ-CHAT-101). A dismissal the application's quit causes cancels nothing: the cancellation is not sent, the run
+      // host's `shutdown` withdraws the question instead, and a withdrawn question is never an answer.
+      if (req.request.op === 'cancelQuestions' && quitting()) {
+        log(`question ${String(req.request.args['requestId'] ?? '')} left for the quit to withdraw: its dock closed with the application (PD-ORCH-005 clause 9)`);
+        return { ok: true, value: { ok: true } };
+      }
       // ADR-0010 channel 1 across ADR-0013's boundary: the same arguments, the same `{ok, value?}`.
       // Part AC's seam (verification only, ROTARIS_CAPTURE_PNG): ROTARIS_CAPTURE_QUESTION_STALE corrupts the request
       // id of a forwarded `answerQuestion` so that no wait carries it. REQ-CHAT-102's failed delivery is otherwise

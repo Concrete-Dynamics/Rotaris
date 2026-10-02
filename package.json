@@ -1,7 +1,6 @@
 {
   "name": "rotaris-crw",
   "private": true,
-  "version": "0.0.0",
   "description": "Rotaris — one Electron desktop application. Clean-room rewrite.",
   "license": "UNLICENSED",
   "type": "module",
@@ -11,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "node tools/check-line-endings.mjs && node tools/check-request-log.mjs && node tools/check-directive-register.mjs && node tools/check-theme-colours.mjs && node tools/check-ui-language.mjs && eslint .",
+    "lint": "node tools/check-line-endings.mjs && node tools/check-request-log.mjs && node tools/check-directive-register.mjs && node tools/check-record-links.mjs && node tools/check-theme-colours.mjs && node tools/check-ui-language.mjs && eslint .",
     "mockup": "node tools/mockup.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -52,6 +51,7 @@
     "attachments-proof": "node apps/desktop/scripts/attachments-proof.mjs",
     "settings-proof": "node apps/desktop/scripts/settings-proof.mjs",
     "skills-proof": "node apps/desktop/scripts/skills-proof.mjs",
+    "injection-proof": "node apps/desktop/scripts/injection-proof.mjs",
     "init-proof": "node apps/desktop/scripts/init-proof.mjs",
     "requirements-proof": "node apps/desktop/scripts/requirements-proof.mjs",
     "traceability-proof": "node apps/desktop/scripts/traceability-proof.mjs",
@@ -64,6 +64,7 @@
     "autopsy": "node apps/desktop/scripts/autopsy.mjs",
     "app:drive": "node apps/desktop/scripts/drive.mjs",
     "driver-proof": "node apps/desktop/scripts/driver-proof.mjs",
+    "updater-proof": "node apps/desktop/scripts/updater-proof.mjs",
     "layout-proof": "node apps/desktop/scripts/layout-proof.mjs",
     "workspace-proof": "node apps/desktop/scripts/workspace-proof.mjs",
     "ui-audit": "node apps/desktop/scripts/ui-audit.mjs",
@@ -72,6 +73,9 @@
     "theme-proof:counterfactual:text": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=text",
     "theme-proof:counterfactual:focus": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=focus",
     "package": "pnpm --filter @rotaris/desktop package",
+    "release:guard": "node tools/release-guard/cli.mjs",
+    "notices": "node tools/notices/generate.mjs",
+    "build-id": "node tools/build-id/write.mjs",
     "check": "pnpm symbols && pnpm typecheck && pnpm lint && pnpm test"
   },
   "devDependencies": {

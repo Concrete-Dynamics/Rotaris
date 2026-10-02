@@ -1,0 +1,113 @@
+## Record links still name defect notes at their pre-`fixed/` paths
+
+Seven relative links in the record resolve to files that do not exist. Six name a defect note at `docs/defects/<name>.md`
+after that note was moved to `docs/defects/fixed/` by its repair, which left the links behind — the same slip this
+branch's verification caught for its own two notes and repaired. One names an ADR by a filename it never had. (A
+`[LICENSE](LICENSE)` at `docs/architecture/open-questions.md` line 3176 also fails to resolve, but it is quoted text
+inside an example string, not a link the record means.) Found 2026-09-28 by checking every relative link in the
+documents the `fix-config-isolation-decoding` branch touched (R-062), against the branch's merge-base: all seven
+predate that branch. Not repaired here; each is a one-target edit, and nothing checks links today, so the next move
+of a note into `fixed/` can repeat it.
+
+## Specs
+
+None contradicted. The process in `CLAUDE.md` ("When a noted defect is repaired, move its note to `docs/defects/fixed/`")
+and `docs/defects/README.md` implies the note stays findable from what cites it; a dangling link breaks that trail.
+
+## Relevant files
+
+- `docs/architecture/first-executions.md` line 121: `../defects/platform-parameterised-helpers-read-the-host-separator.md`
+  and `../defects/staging-failure-escapes-the-replacement-ladder.md` (both now under `fixed/`).
+- `docs/architecture/first-executions.md` line 130: `../defects/a-chip-option-announces-its-label-and-hint-as-one-word.md` (under `fixed/`).
+- `docs/architecture/first-executions.md` line 136: `adr/0027-model-client.md` (the file is `adr/0027-the-model-client-implementation.md`).
+- `docs/architecture/first-executions.md` line 137: `../defects/a-childs-payload-puts-the-artifact-blocks-before-the-workspace-root.md` (under `fixed/`).
+- `docs/product/directives.md` line 867: `../defects/a-chip-option-announces-its-label-and-hint-as-one-word.md` (under `fixed/`).
+- `docs/product/directives.md` line 982: `../defects/a-delegated-childs-provider-requests-never-reach-the-runs-totals.md` (under `fixed/`).
+
+## Repaired 2026-09-28 under R-062
+
+The seven links this note lists are repointed, each target checked to exist: the six defect notes at
+`docs/defects/fixed/<name>.md`, and the ADR at `adr/0027-the-model-client-implementation.md`. The `[LICENSE](LICENSE)`
+at `open-questions.md` is quoted text and is now written as inline code, so it reads as the example it is and not as
+a link.
+
+**The checker.** [`tools/check-record-links.mjs`](../../../tools/check-record-links.mjs) runs in `pnpm lint` beside
+`check-request-log.mjs` and `check-directive-register.mjs`. It reads every relative Markdown link (inline and
+reference-style) in every `.md` under `docs/`, in `CONTEXT-MAP.md`, `AGENTS.md`, `CLAUDE.md` and every `CONTEXT.md`
+under `packages/` — the nested glossaries the context map names as well as the top-level ones — and fails when the
+target file or directory does not exist, or when a `#fragment` names no heading (GitHub's slug, repeats numbered) and
+no explicit `<a id>` / `{#id}` in the file it points at. Links inside fenced code, inline code and HTML comments are
+text, not links, and are skipped. A failure names the file, the line, the link and the reason. Pinned by
+[`tools/check-record-links.test.ts`](../../../tools/check-record-links.test.ts) (13 cases): a fixture with one link
+to a note at its pre-`fixed/` path and one good heading anchor, the dangling one failing with file, line and target
+and the anchor passing; a fragment naming no heading; a same-file fragment; the set of files walked; the three kinds
+of code and comment skipped with line numbers kept; a ```` ``` ```` fence and a `~~~` fence that each hold a blank line; a stray backtick that may not pair across a blank line; the slug rules; a repeated heading and the explicit anchors.
+
+**Its first execution over the whole record** (985 relative links in 361 files, on `main` at `392f681`) found **51** dangling links, not the
+seven this note had by hand — the note's own count was of the documents one branch touched. Every one is repaired,
+forty-six by `f180732` on this branch and the five in `requests.md` on `main` (below); by kind:
+
+- **Seven** the note lists (`first-executions.md` lines 121, 130, 136, 137; `directives.md` lines 867, 982).
+- **Twenty-one more links to notes at their pre-`fixed/` path**, the same slip in the same files and two others:
+  `first-executions.md` (lines 141–154: `the-here-string-check-…`, `hook-faults-reach-only-…`,
+  `resilience-proof-cannot-launch-…`, `path-scope-resolves-…`, `an-mcp-tool-offered-…`, `skills-proof-writes-…` ×2,
+  `slash-proof-expects-…`), `first-release-plan.md` (lines 47, 48, 147, 152, 305), `directives.md` (lines 1450, 1752,
+  1808), and `requests.md` (lines 71, 75, 77 — five links in three rows' disposition cells). `f180732` repointed those five
+  too, but a branch may not edit the request log; they landed on `main` instead, by the log's owner under R-062, as
+  `6091a37`, identical to the branch's hunk, and the branch's hunk dropped out when `main` was merged into it. Not one
+  word of a request changed either way.
+- **Twenty-one inside `docs/defects/fixed/` itself**: a note moved into `fixed/` keeps the relative links it was
+  written with, and each now needs one more `../`. Twelve `../product/requests.md#r-nnn` and two
+  `../product/directives.md#pd-…` citations in seven notes (`an-mcp-tool-offered-…`, `configured-per-token-prices-…`,
+  `live-rows-are-never-measured`, `path-scope-resolves-…`, `role-gutter-truncation-…`, `the-here-string-check-…`,
+  `two-writing-children-…`); two `../../tools/check-*.mjs` in `the-directive-registers-count-…`; and five links from
+  one fixed note to another still written as `fixed/<name>` or `../<name>` (`model-calls-outside-…`,
+  `platform-parameterised-proofs-…`, `resilience-proof-cannot-launch-…`, `the-diff-e2e-times-out-…`,
+  `three-proofs-and-the-catalog-tests-…`). `check-request-log.mjs` never saw the twelve because it reads the
+  `#r-nnn` and not the path in front of it.
+- **One stale heading anchor**: `views/03-runtime-view.md`'s router still pointed at §7 as `…schemats-v19` where the
+  heading reads `v22` — the heading's version moved on and the router's link did not.
+- **The `[LICENSE](LICENSE)` example** at `open-questions.md`, made inline code.
+
+What the checker cannot show: that a link points at the *right* existing file (a repointed link that reaches a
+namesake would pass), and anchors into non-Markdown files (it does not read those). Reference-style links are read;
+autolinks (`<https://…>`) and bare URLs are not links this gate owns.
+
+**Corrected 2026-09-28 by the branch's review, before merge.** The first version of this section (and of the
+`first-executions.md` row and the commit `f180732` that carried it) gave the kinds as 7 + 21 + **22** + 1 + 1, which
+sums to 52, not the 51 it reported: re-running the gate over `main` at `392f681` counts **twenty-one** inside
+`fixed/` — twelve `requests.md#r-nnn` citations, not fourteen, and five note-to-note links, not four (the list
+already named five notes) — and 985 links, not 984. The 51 and every repair stand; only the tally was wrong. The
+same review found one false negative in the gate: inline code was allowed to span a blank line, so a stray backtick
+in one paragraph paired with one paragraphs later and hid the links between — one link in
+`views/02-process-view.md` (line 345, `#message-families`, which resolves) was not being read. A code span now ends
+at a blank line, as CommonMark's does; after that repair the gate read 991 links on the branch, every one resolving.
+
+**The five `requests.md` repoints landed on `main`, not by this branch.** The task that built the gate forbids a
+branch to edit `docs/product/requests.md`, and the bundle's verification held the hunk in `f180732` blocking on that
+rule alone (the log's own rule, "appended and never rewritten", was not the test it failed). Dropping the hunk on the
+branch would have failed `pnpm lint` on exactly those five links — with `requests.md` at `main`'s text the gate named
+lines 71, 71, 75, 77 and 77 and nothing else — and exempting the file would have narrowed a gate that covers every
+relative link under `docs/`. The log's owner landed the same five repoints on `main` under R-062 as `6091a37`
+("docs(requests): five links repointed to defect notes that moved to fixed/"). Merging `main` into the branch then
+dropped the branch's hunk with no conflict: `git diff main...HEAD -- docs/product/requests.md` is empty.
+
+**The gate's first merge.** That merge also brought in two notes `main` had moved into `docs/defects/fixed/` after the
+gate's first run (`code-intel-proofs-branch-client-waits-forever-…` and `slash-proofs-model-chip-eval-shares-…`).
+Each linked a neighbour in the same directory as `fixed/<name>.md`, which resolves to `fixed/fixed/<name>.md` from
+inside `fixed/`. The gate failed on both, naming file, line and target. Both were repointed in the commit after the
+merge (the slip this note records, caught by the first merge that could carry it). On 2026-09-28, after that merge,
+the gate read 1015 relative links in 365 files, every one resolving.
+
+**Limits the review named, none met in the record today.** A footnote definition (`[^1]: text`) is read as a
+reference link. An indented (four-space) code block is not skipped. A Setext heading (text underlined with `===` or
+`---`) is not read as an anchor. A path is checked with the host's case sensitivity, so a wrongly-cased link passes on
+Windows and macOS and fails on Linux. Each would be a false failure or a false pass if the record started to use it. A
+fragment is also accepted when it matches a heading or anchor only after lower-casing, which is lenient against a
+case-sensitive explicit `id="…"`: a wrongly-cased fragment to one passes.
+
+**A test that proved nothing, found by the branch's third review.** The fenced-code case held a fence with no blank
+line inside it, so the inline-code rule paired its ```` ``` ```` opener with its closer and blanked the link on its own:
+with the fence rule removed from `withoutCode`, all twelve cases still passed. The thirteenth case holds a
+```` ``` ```` fence and a `~~~` fence, each with a blank line before its link, which only the fence rule can blank; it
+fails with the rule removed (both fenced links extracted) and passes with it. The gate's code did not change.

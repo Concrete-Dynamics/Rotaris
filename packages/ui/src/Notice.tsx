@@ -55,7 +55,13 @@ export function NoticeBanner({ notice, onAcknowledge, onAction }: NoticeBannerPr
       {(notice.action || notice.persistent) && (
         <div className="notice__actions">
           {notice.action && (
-            <DesignButton type="button" className="btn btn-secondary notice__action" data-action={notice.action.action.kind} ui={{ id: 'notice-action', relations: [] }} onClick={() => onAction?.(notice.action!.action)}>{notice.action.label}</DesignButton>
+            /*
+              REQ-SHELL-118: while an update downloads, the offer's `Update now` is DISABLED so the same download
+              cannot be started twice, and its accessible description says why. `action.disabled` carries that
+              description (contracts `notices.ts`); nothing else about the control changes, and no other notice
+              sets it. The description is also the tooltip, so a pointer user reads the same sentence.
+            */
+            <DesignButton type="button" className="btn btn-secondary notice__action" data-action={notice.action.action.kind} ui={{ id: 'notice-action', relations: [] }} disabled={notice.action.disabled !== undefined} aria-disabled={notice.action.disabled !== undefined ? true : undefined} aria-description={notice.action.disabled} title={notice.action.disabled} onClick={() => onAction?.(notice.action!.action)}>{notice.action.label}</DesignButton>
           )}
           {notice.persistent && (
             <DesignButton type="button" className="btn btn-ghost notice__dismiss" aria-label={`Dismiss this ${word.toLowerCase()}`} ui={{ id: 'notice-dismiss', relations: notice.action ? [{ kind: 'align-y', target: 'notice-action', edge: 'middle' }] : [] }} onClick={() => onAcknowledge?.(notice.id)}>Dismiss</DesignButton>

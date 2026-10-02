@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { unpressedClicks } from './lib/capture-clicks.mjs';
 
 /**
  * ADR-0036 / ADR-0037's first execution in the built app (Part I step 5): hand-authored, commented files at
@@ -54,12 +55,27 @@ const WORKSPACE = [
   '  delegation_strategy: single',
   '',
 ].join('\n');
+// A workspace opened before: its one initialization task already recorded (REQ-WORKSPACE-078), so resolution on open
+// finds nothing pending and the section's one writer (REQ-WORKSPACE-085) has nothing to write. The Discard scenario
+// is seeded with it. On a never-initialized seed a host that carries the code-intelligence bundle records
+// `code-intelligence-setup` in this same file while Discard is pressed, and a byte comparison cannot tell the two
+// writes apart (docs/defects/fixed/config-proofs-discard-scenario-counts-the-initialization-record-as-a-discard-write.md).
+const INITIALIZED = [
+  'initialization:',
+  '  completed:',
+  '    - code-intelligence-setup',
+  '  skipped: []',
+  '  last_run: 2026-09-01T00:00:00.000Z',
+  '  classification: non-code',
+  '',
+].join('\n');
 
 function scenario(name, files = { global: GLOBAL, workspace: WORKSPACE }) {
   const root = join(output, name);
   const workspace = join(root, 'workspace');
   const local = join(root, 'local');
-  const configDir = join(local, 'rotaris', 'config');
+  // The global configuration directory by the platform that reads it (`configDirFor`), not the Windows spelling alone.
+  const configDir = configDirFor(local);
   mkdirSync(join(workspace, '.rotaris'), { recursive: true });
   mkdirSync(configDir, { recursive: true });
   writeFileSync(join(workspace, 'README.md'), '# proof\n');
@@ -70,7 +86,7 @@ function scenario(name, files = { global: GLOBAL, workspace: WORKSPACE }) {
 
 function launch(name, s, extra) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), s.workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
     cwd: app, encoding: 'utf8', timeout: 120_000, windowsHide: true,
     env: {
       ...cleanEnvironment(),
@@ -88,15 +104,31 @@ function launch(name, s, extra) {
   return log;
 }
 
+/**
+ * Every click step read back from the launch's log (`lib/capture-clicks.mjs`). A step that found no control, or pressed
+ * a point another element covered, fails HERE naming itself, rather than letting the launch carry on and the file
+ * assertions below speak for a gesture nobody made.
+ */
+function clicked(name, log, whats) {
+  const missed = unpressedClicks(log, whats);
+  if (missed.length > 0) throw new Error(`${name}: ${missed.map((m) => `the step "${m.what}" was ${m.reason === 'covered' ? 'pressed on a point another element covers' : 'never pressed'}`).join('; ')}; see ${name}.log`);
+}
+
+// The Settings category, chosen by a step that WAITS for its item: the view seam's own category click is one attempt at
+// 800 ms and says nothing when it misses, and every step after it then waits on a control that category draws. The
+// deadlines below are deadlines, not appointments (`@~`): each step acts as soon as its control is on screen.
+const RUNTIME_CATEGORY = '.settings__categories .nav-list__item>>Runtime@~6000';
+
 const results = {};
 
 // 1. Settings → Runtime: the outside-workspace toggle with its confirmation, then Save; bytes outside the written key unchanged.
 const s1 = scenario('runtime-save');
 const log1 = launch('runtime-save', s1, {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
-  ROTARIS_CAPTURE_CLICKS: '.toggle[aria-labelledby="outside-label"]@1800;;.dialog-actions .btn-warning>>Yes@2400;;.save-bar .btn-primary>>Save@3000',
-  ROTARIS_CAPTURE_AFTER_MS: '4200',
+  ROTARIS_CAPTURE_CLICKS: `${RUNTIME_CATEGORY};;.toggle[aria-labelledby="outside-label"]@~7000;;.dialog-actions .btn-warning>>Yes@~8000;;.save-bar .btn-primary>>Save@~9000`,
+  ROTARIS_CAPTURE_AFTER_MS: '10500',
 });
+clicked('runtime-save', log1, ['Runtime', '.toggle[aria-labelledby="outside-label"]', 'Yes', 'Save']);
 const ws1 = readFileSync(s1.workspaceFile, 'utf8');
 if (!ws1.includes('  allow_outside_workspace: true\n')) throw new Error(`the runtime save did not write allow_outside_workspace:\n${ws1}`);
 if (!ws1.includes('# workspace configuration\nruntime:\n  # the workspace states two keys and inherits the rest\n  permission_mode: ask\n  max_depth: 2\n')) throw new Error(`the runtime save disturbed the file's other lines:\n${ws1}`);
@@ -127,15 +159,21 @@ if (!ws2.includes('large_model: other\n') || !ws2.includes('large_model_thinking
 if (!ws2.startsWith('# workspace configuration\n')) throw new Error('the models save lost the comment header');
 results.modelsSave = { workspaceFile: ws2 };
 
-// 3. Discard: a toggle changed, then Discard; nothing written.
-const s3 = scenario('discard');
-launch('discard', s3, {
+// 3. Discard: a toggle changed, then Discard; nothing written (REQ-CONFIG-279, REQ-CONFIG-281, REQ-CONFIG-282).
+// Seeded as a workspace already initialized, so no other writer of this file is due during the launch (see INITIALIZED).
+const s3 = scenario('discard', { global: GLOBAL, workspace: WORKSPACE + INITIALIZED });
+const log3 = launch('discard', s3, {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Runtime',
-  ROTARIS_CAPTURE_CLICKS: '.toggle[aria-labelledby="keep-going-label"]@1800;;.save-bar .btn-secondary>>Discard@2400',
-  ROTARIS_CAPTURE_AFTER_MS: '3400',
+  ROTARIS_CAPTURE_CLICKS: `${RUNTIME_CATEGORY};;.toggle[aria-labelledby="keep-going-label"]@~7000;;.save-bar .btn-secondary>>Discard@~8000`,
+  ROTARIS_CAPTURE_PROBE: '.save-bar__status',
+  ROTARIS_CAPTURE_AFTER_MS: '9000',
 });
-if (readFileSync(s3.workspaceFile, 'utf8') !== WORKSPACE) throw new Error('Discard wrote the file');
-results.discard = 'the file is byte-identical';
+clicked('discard', log3, ['Runtime', '.toggle[aria-labelledby="keep-going-label"]', 'Discard']);
+if (/initialization: running/.test(log3)) throw new Error('an initialization run started on a seed that records it resolved, so the byte check below would not isolate Discard; see discard.log');
+if (readFileSync(s3.workspaceFile, 'utf8') !== WORKSPACE + INITIALIZED) throw new Error(`Discard wrote the file:\n${readFileSync(s3.workspaceFile, 'utf8')}`);
+const status3 = /capture: probe \.save-bar__status → (.*)$/m.exec(log3)?.[1] ?? '';
+if (!status3.includes('"text":"All changes saved"')) throw new Error(`after Discard the save status is not settled (REQ-CONFIG-280): ${status3 || 'no probe'}`);
+results.discard = 'the file is byte-identical; the save status reads "All changes saved"';
 
 // 4. The composer's permission-mode control writes its one key through the per-field path, with no run active (REQ-CONFIG-288).
 const s4 = scenario('composer-mode');

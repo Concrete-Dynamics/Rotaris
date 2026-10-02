@@ -59,9 +59,31 @@ export interface ReportInput {
   readonly acknowledge?: { readonly kind: AcknowledgementKind; readonly body?: string };
 }
 
+/**
+ * REQ-SHELL-118 / REQ-STARTUP-118 — what an update in place may change. Everything but the identity and the session:
+ * the notice keeps its `id`, so the surface redraws the same banner rather than replacing it. `action: null` removes
+ * the action; absent keeps it.
+ */
+export interface NoticePatch {
+  readonly severity?: NoticeSeverity;
+  readonly title?: string;
+  readonly message?: string;
+  readonly detail?: string;
+  readonly persistent?: boolean;
+  readonly action?: Notice['action'] | null;
+}
+
 export interface NoticeStore {
   /** The persistent notice (and its transient where asked). Resolves once the publication is applied; `shown` is false for a key already published. */
   report(input: ReportInput): Promise<{ readonly id: number; readonly shown: boolean }>;
+  /**
+   * REQ-SHELL-118: the one notice that is UPDATED IN PLACE rather than replaced — the update offer carrying its
+   * download progress, and the failure it becomes. Applied on the same chain as every publication, so an update and a
+   * replacement never interleave. False, and nothing drawn, when the notice is no longer current (REQ-NOTIFY-024:
+   * whatever replaced it stays). A patch that raises the severity to `warning` or `error`, or renames a notice at that
+   * severity, is recorded before it is rendered, as a fresh publication would be (REQ-NOTIFY-268).
+   */
+  update(noticeId: number, patch: NoticePatch): Promise<boolean>;
   /** A transient only (REQ-NOTIFY-003's "any other event"); no action, no severity, no record. */
   acknowledge(kind: AcknowledgementKind, title: string, body?: string): void;
   /** REQ-NOTIFY-026: with an id, compare-and-clear; without, whatever is current. */
@@ -91,6 +113,14 @@ export function createNoticeStore(deps: NoticeStoreDeps): NoticeStore {
     current = next;
     deps.broadcast({ v: CONTRACT_SCHEMA_VERSION, current: next });
   };
+  // REQ-NOTIFY-268: record BEFORE render. The notice's session, else the focused run's; neither → the diagnostics.
+  const record = async (notice: Notice): Promise<void> => {
+    if (notice.severity !== 'warning' && notice.severity !== 'error') return;
+    const sessionId = notice.sessionId !== '' ? notice.sessionId : (deps.focusedSession() ?? '');
+    let recorded = false;
+    if (sessionId !== '') recorded = await deps.record({ noticeId: notice.id, severity: notice.severity, title: notice.title, message: notice.message, detail: notice.detail, sessionId }).catch(() => false);
+    if (!recorded) deps.log(`diagnostics: notice #${notice.id} ${notice.severity} "${notice.title}"${notice.message ? ` — ${notice.message}` : ''}${notice.detail ? `\n${notice.detail}` : ''}${sessionId === '' ? ' (no session applies)' : ` (session ${sessionId}: the timeline refused the entry)`}`);
+  };
 
   return {
     report(input) {
@@ -105,16 +135,31 @@ export function createNoticeStore(deps: NoticeStoreDeps): NoticeStore {
           persistent: input.persistent ?? true, sessionId: input.sessionId ?? '',
           ...(input.action === undefined ? {} : { action: input.action }),
         };
-        // REQ-NOTIFY-268: record BEFORE render. The notice's session, else the focused run's; neither → the diagnostics.
-        if (notice.severity === 'warning' || notice.severity === 'error') {
-          const sessionId = notice.sessionId !== '' ? notice.sessionId : (deps.focusedSession() ?? '');
-          let recorded = false;
-          if (sessionId !== '') recorded = await deps.record({ noticeId: id, severity: notice.severity, title: notice.title, message: notice.message, detail: notice.detail, sessionId }).catch(() => false);
-          if (!recorded) deps.log(`diagnostics: notice #${id} ${notice.severity} "${notice.title}"${notice.message ? ` — ${notice.message}` : ''}${notice.detail ? `\n${notice.detail}` : ''}${sessionId === '' ? ' (no session applies)' : ` (session ${sessionId}: the timeline refused the entry)`}`);
-        }
+        await record(notice);
         set(notice);
         if (input.acknowledge) deps.pushAcknowledgement({ v: CONTRACT_SCHEMA_VERSION, kind: input.acknowledge.kind, title: notice.title, ...(input.acknowledge.body === undefined ? {} : { body: input.acknowledge.body }) });
         return { id, shown: true };
+      });
+    },
+    update(noticeId, patch) {
+      return enqueue(async () => {
+        if (current === null || current.id !== noticeId) return false;
+        const { action, ...fields } = patch;
+        const { action: previousAction, ...rest } = current;
+        const next: Notice = {
+          ...rest,
+          ...(fields.severity === undefined ? {} : { severity: fields.severity }),
+          ...(fields.title === undefined ? {} : { title: fields.title }),
+          ...(fields.message === undefined ? {} : { message: fields.message }),
+          ...(fields.detail === undefined ? {} : { detail: fields.detail }),
+          ...(fields.persistent === undefined ? {} : { persistent: fields.persistent }),
+          ...(action === null ? {} : action === undefined ? (previousAction === undefined ? {} : { action: previousAction }) : { action }),
+        };
+        // A patch that turns the notice into a warning or an error, or renames one, is a new fact for the record; a
+        // progress figure on a notice already recorded at that severity is not.
+        if ((next.severity === 'warning' || next.severity === 'error') && (next.severity !== current.severity || next.title !== current.title)) await record(next);
+        set(next);
+        return true;
       });
     },
     acknowledge(kind, title, body) {

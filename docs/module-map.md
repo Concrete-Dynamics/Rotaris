@@ -24,9 +24,9 @@ The only importers of `electron`. One process each, except the renderer, whose r
 
 | Root | Owns | Open first |
 |---|---|---|
-| `main/` | windows and dialogs, `runCommand`, the update relay, preferences, provider sign-in, notices, process supervision, the requirements actor stamp, project-initialization coordination, the verification driver seam | `commands/` (one facet per command family, `context.ts` for what main hands them), `index.ts` (`runCommand` and the handler table), `main-windows.ts`, `windows.ts`, `notices.ts`, `initialization.ts`, `driver.ts` |
+| `main/` | windows and dialogs, `runCommand`, the update relay, preferences, provider sign-in, notices, process supervision, the requirements actor stamp, project-initialization coordination, **the updater** (ADR-0054: the flavour, the feed, the compiled-in key set, the install sequence, the strategies), the verification driver seam | `commands/` (one facet per command family, `context.ts` for what main hands them), `index.ts` (`runCommand` and the handler table), `main-windows.ts`, `windows.ts`, `notices.ts`, `initialization.ts`, `driver.ts`, `updater/updater.ts` (the orchestrator; `electron.ts` beside it is the one file of the updater that touches Electron) |
 | `preload/` | the one frozen bridge — `window.rotaris`: `command`, plus one `subscribe` per channel | `index.ts` |
-| `renderer/` | the React roots; role by route (main, approval, pause, hook-review, provider, persona, terminal, rows-proof) | `shell.ts` (what a window has: the bridge, the replica, the stacks, the theme), `session-actions.ts` (the gestures against the followed session, and the only renderer file with tests), `session-view.ts` (what a transcript surface reads), `windows.tsx` (every role but `main`), `main.tsx` (the main window, and `boot`) |
+| `renderer/` | the React roots; role by route (main, approval, pause, hook-review, provider, persona, terminal, rows-proof) | `shell.ts` (what a window has: the bridge, the replica, the stacks, the theme), `session-actions.ts` (the gestures against the followed session, with its tests), `session-view.ts` (what a transcript surface reads, and `useNeedsRecovery`, REQ-CHAT-008's recovery fact the roots share), `recovery-wiring.test.ts` (a source test pinning how the Workspace root, the Mission root and a persona window hand that fact on — the roots themselves have no test environment), `windows.tsx` (every role but `main`), `main.tsx` (the main window, and `boot`) |
 | `run-host/` | one live session: runs, turns, tools, hooks, MCP, the skill catalog, configuration Tier B, checkpoints, terminal streams | `dispatch.ts` (one request in, one reply out), `host.ts` (`createRunHost` — everything the process holds), `index.ts` (the entry: build it, listen), `launch.ts`, `loop.ts`, `tools.ts`, `configuration.ts`, `scripted-client.ts` (the proofs' stand-in) |
 | `workspace-service/` | workspace identity, store open and **migrate**, backup and restore, configuration Tier A, delivery, traceability, improvements, saved prompts | `index.ts`, `delivery.ts`, `traceability.ts` |
 
@@ -38,9 +38,9 @@ Listed foundation-first, which is also dependency order. "Root" is the compositi
 |---|---|---|---|---|
 | `kernel` | `Result`, ids, clocks and time, redaction, similarity, the glob dialect (`glob.ts`, shared by the `glob` tool and a delegated child's write scope), exact decimal money (`money.ts`, the one place arithmetic on an amount lives — ADR-0031, `rotaris/money-only-in-money-ts`), and the re-export of the generated requirement symbols (`src/generated/requirements.ts` — gitignored, written by `pnpm symbols`; never edited by hand) | `result.ts`, `time.ts`, `clock/`, `redaction.ts` | every root | — |
 | `contracts` | every cross-boundary type: channels, commands, the child process protocol, control, requirements, tools, hooks, notices, theme data, roles | `commands.ts`, `channels.ts`, `process-protocol.ts` | every root | — |
-| `platform` | OS facts and side effects that are not `electron`: directories, the YAML document model, single-instance, machine id, liveness, clocks, the preference store | `dirs.ts`, `preferences.ts`, `document.ts`, `instance.ts` | main, run-host, workspace-service | — |
+| `platform` | OS facts and side effects that are not `electron`: directories, the YAML document model, single-instance, machine id, liveness, clocks, the preference store, the installed product version, the one Chromium switch a launch of the product's own executable inherits (`--no-sandbox`, OQ-82), the two variables naming the artifact a launch started from and their take out of main's environment (`artifact-environment.ts`, ADR-0054) | `dirs.ts`, `preferences.ts`, `document.ts`, `instance.ts`, `version.ts`, `chromium-switches.ts` | main, run-host, workspace-service | — |
 | `store` | the SQLite schema and its migrations, the DAL, open/lock/rings, backup and restore primitives, delivery and improvement tables | `schema.ts` (append a `Migration`, never edit a shipped one), `dal.ts`, `open.ts` | workspace-service (migrate), run-host (read/write) | [`store/CONTEXT.md`](../packages/store/CONTEXT.md) |
-| `config` | the three-tier layered configuration, its loader, validators and comment-preserving writers; portable skills; instruction-file discovery and merge; project initialization | `load.ts`, `merge.ts`, `tiers.ts`, `writers.ts`, `sections/`, `skills/`, `instructions.ts`, `init/` | run-host (Tier B), workspace-service (Tier A), main (init) | [`config/CONTEXT.md`](../packages/config/CONTEXT.md) |
+| `config` | the three-tier layered configuration, its loader, validators and comment-preserving writers; portable skills; instruction-file discovery and merge; project initialization; the setup-manifest schema (REQ-STARTUP-058: what `apps/desktop/resources/setup-manifest.json` must be) | `load.ts`, `merge.ts`, `tiers.ts`, `writers.ts`, `sections/`, `skills/`, `instructions.ts`, `init/`, `setup-manifest.ts` | run-host (Tier B), workspace-service (Tier A), main (init); `tools/release-guard` (the shipped defaults, the setup-manifest schema) | [`config/CONTEXT.md`](../packages/config/CONTEXT.md) |
 | `model` | the model port and its clients — the default backend, the AI-SDK client, the scripted client, reasoning, reported cost | `ports.ts`, `default-backend.ts`, `ai-sdk-client.ts`, `scripted-client.ts` | run-host | — |
 | `hooks` | lifecycle hooks: the matcher, the runner, the trust gate, policy, external import | `engine.ts`, `matcher.ts`, `runner.ts`, `trust.ts` | run-host | [`hooks/CONTEXT.md`](../packages/hooks/CONTEXT.md) |
 | `providers` | the frozen provider catalogue, the credential store, sign-in, discovery, slot assignment, `project_settings.yaml` | `catalogue.ts`, `credentials/`, `signin.ts`, `discovery.ts`, `slots.ts` | **main only** | [`providers/CONTEXT.md`](../packages/providers/CONTEXT.md) |
@@ -53,8 +53,17 @@ Listed foundation-first, which is also dependency order. "Root" is the compositi
 | `ui` | every drawn surface: the shell and views, the dialogs, the design system, the transcript engine, the terminal display, Markdown, the slash catalogue, the command vocabulary, Settings, the Library | `AppShell.tsx`, `design-system/`, `transcript/`, `settings/`, `commands/` | renderer | [`ui/CONTEXT.md`](../packages/ui/CONTEXT.md) |
 
 `tools/` holds build-time and lint-time code, not product code: `tools/eslint-rules/` (`rotaris/no-bare-timers`
-and its siblings), `tools/symbol-artifact/` (the generator behind `pnpm symbols`), `tools/release-naming/`,
-and the standalone checks `pnpm lint` runs before ESLint.
+and its siblings), `tools/symbol-artifact/` (the generator behind `pnpm symbols`), `tools/release-naming/` (the
+artifact names and the release-tag grammar), `tools/release-guard/` (`pnpm release:guard <tag>`, the pre-build version
+and package-pin guard; `cli.mjs` boots `src/guard.ts` through Vite's module runner because it reads `@rotaris/config`'s
+source), `tools/notices/` (the generator behind
+`pnpm notices` — `THIRD-PARTY-LICENSES.txt` and its validation, open
+`notices.mjs`; the three tables beside it are the reviewed exceptions, the release inputs and the bundled fonts;
+tests in `notices.test.ts`), `tools/build-id/` (the writer behind `pnpm build-id` — `build-id.txt`, REQ-SHELL-140's
+build identifier, open `build-id.mjs`; tests in `build-id.test.ts`), and the standalone checks `pnpm lint` runs
+before ESLint. `pnpm package` (`apps/desktop/scripts/package.mjs`) runs the notices and build-id steps before freezing;
+what the artifact must then carry is checked by `scripts/lib/about-assets.mjs`, which `afterPack` loads, and what it
+says when it ends is `scripts/lib/package-verdict.mjs`'s.
 
 ## Where a thing is not where you would guess
 

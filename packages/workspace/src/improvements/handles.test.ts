@@ -94,7 +94,7 @@ function opened() {
 describe("improvement store handles (ADR-0061)", () => {
   it("migrates v19, records the session association and survives reopen", () => {
     const resolved = opened();
-    expect(CURRENT_SCHEMA_VERSION).toBe(21);
+    expect(CURRENT_SCHEMA_VERSION).toBe(24); // PD-ORCH-005 revision 4 appended v24
     const sessionDal = new StoreDal(resolved.db);
     sessionDal.upsertSession({
       session_id: "typed-run",

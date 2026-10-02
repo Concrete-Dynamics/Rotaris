@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { MonotonicClock, Timers, WallClock } from '@rotaris/kernel';
-import { APPROVAL_RESOLUTION_SOURCES, denialText, type ApprovalPayload, type HeadlessPolicy, type ToolStatus } from '@rotaris/contracts';
+import { APPROVAL_RESOLUTION_SOURCES, denialText, interruptionPhrase, type ApprovalPayload, type HeadlessPolicy, type ToolStatus } from '@rotaris/contracts';
 import type { ApprovalOutcome, PendingApprovals, PresenterPort } from './approvals.js';
 import { argumentSummary, permissionRequest, requestSummary, type DecisionRecord, type PermissionRequest, type PolicyContext } from './policy.js';
 import { canonicalToolName, isPublicToolName, META_TOOL_NAMES } from './registry.js';
 import { planGateRefusal, withheldUnderPlanGate } from './planning-grants.js';
 import { checkFence } from './tools/fence.js';
 import { fencedByWriteScope, writeScopeRefusal, type WriteClaimHolder } from './write-scope.js';
-import type { Observation, ToolExecutor } from './tools/types.js';
+import { INTERRUPTED_FAILURE_KIND, type Observation, type ToolExecutor } from './tools/types.js';
 
 /**
  * ADR-0017 / REQ-TOOLS-011: the ONE gate. Every dispatch — built-in, plugin, MCP — comes through
@@ -71,6 +71,11 @@ export interface ToolResult {
   readonly blockedReason?: string;
   /** REQ-HOOKS-074: post_tool feedback for a call that produced no observation. */
   readonly followUp?: string;
+  /**
+   * PD-ORCH-005: the run came to rest while this call was under way — its approval was withdrawn (clause 9) and it never
+   * ran, or its executor reported the rest cut it short. The turn records it as interrupted and never re-runs it.
+   */
+  readonly interrupted?: boolean;
 }
 
 export interface GateSink {
@@ -84,6 +89,17 @@ export interface GateSink {
   toolOpen(open: { call_id: string; agent_name: string; tool_name: string; args: Readonly<Record<string, unknown>> }): number | null;
   toolSettle(ordinal: number, open: { call_id: string; agent_name: string; tool_name: string; args: Readonly<Record<string, unknown>> }, settle: { status: Exclude<ToolStatus, 'running'>; elapsed_ms: number; is_error: boolean; result: string; error?: string | null; outcome_kind?: string; exit_code?: number | null; failure_kind?: string | null; warnings?: readonly string[] }): void;
   warn(message: string): void;
+}
+
+/**
+ * PD-TOOLS-005: the run's away state as the gate sees it. The engine owns the holder (one per run, the same object on
+ * every agent's port, delegated children included) and clears it on the user's next input; the gate only reads it
+ * before it would prompt, and marks it when an approval wait ends by timeout.
+ */
+export interface PresencePort {
+  /** Non-null while the run treats the user as away: the timeout, in seconds, that expired unanswered. */
+  away(): { readonly afterSeconds: number } | null;
+  markAway(afterSeconds: number): void;
 }
 
 export interface GateDeps {
@@ -100,6 +116,11 @@ export interface GateDeps {
   readonly approvalTimeoutMs: number;
   readonly executors: ReadonlyMap<string, ToolExecutor>;
   readonly resolvePath: (p: string) => string | null;
+  /**
+   * PD-TOOLS-004: whether `executors` serves this callable name with the public tool of that name rather than an MCP
+   * or plugin tool offered under it. Only the root that assembled the surface knows where each executor came from.
+   */
+  readonly publicTool: (name: string) => boolean;
   readonly monotonic: MonotonicClock;
   readonly wall: WallClock;
   readonly timers: Timers;
@@ -127,6 +148,8 @@ export interface GateDeps {
    * POSIX path. Read at each dispatch of `write_file` and `haet_edit`; absent means no claim can reach this agent.
    */
   readonly writeClaimFor?: ((rel: string) => WriteClaimHolder | null) | undefined;
+  /** PD-TOOLS-005: the run's away state; absent means no run holds one, and every ask is brokered as before the directive. */
+  readonly presence?: PresencePort | undefined;
 }
 
 /** REQ-TOOLS-032's first repair: close the strings, objects and arrays still open at the cut. */
@@ -224,7 +247,17 @@ export class Gate {
      *    and `finish` settles it as `blocked` exactly as a permission denial does.
      * Meta tools are never gated (REQ-TOOLS-014, ADR-0016 c.4) and are checked first; they touch no workspace.
      */
-    if (!isMeta && deps.planGateHeld?.() === true && withheldUnderPlanGate(call.name)) {
+    /*
+     * Which tool the name reaches decides whether it is declared, not the name: a name this surface serves with
+     * something other than the public tool (a server's `read_file`, PD-TOOLS-004's `publicTool` answering false), or
+     * one this port removed at the gate (a server's `read_file` withheld from the listing is in no map at all), carries
+     * no declaration and is withheld whatever the registry says of the NAME. A name the surface neither serves nor
+     * removed is judged by the registry as before, so a public name the port never offered still takes the two
+     * branches below.
+     */
+    const removedHere = deps.planGateWithheldNames?.().has(call.name) === true;
+    const undeclared = removedHere || (executor !== undefined && !deps.publicTool(call.name));
+    if (!isMeta && deps.planGateHeld?.() === true && withheldUnderPlanGate(call.name, !undeclared)) {
       /*
        * …of a name that IS a tool. The fail-closed predicate answers `true` for every name outside the
        * registry, which is what the requirement asks for and also what made a misspelling read as a promise:
@@ -235,7 +268,7 @@ export class Gate {
        * REQ-TOOLS-032's unknown-tool refusal below, which is the true answer and the actionable one. Nothing is
        * relaxed: a name with an executor is still refused before the schema parse, the permission and the hooks.
        */
-      const isTool = executor !== undefined || isPublicToolName(canonicalToolName(call.name)) || deps.planGateWithheldNames?.().has(call.name) === true;
+      const isTool = executor !== undefined || isPublicToolName(canonicalToolName(call.name)) || removedHere;
       if (isTool) {
         const reason = planGateRefusal(call.name);
         return finish({ text: reason, isError: true, status: 'blocked', decision: null, observation: null, blockedReason: reason }, { failure_kind: 'plan_gate_withheld', error: 'withheld while the run is held at the plan gate' });
@@ -276,10 +309,22 @@ export class Gate {
     // (1) permission resolution — never raises; an ask is resolved here, so nothing below sees one.
     const req = permissionRequest(call.name, call.persona, repaired);
     const attended = deps.attended();
-    let decision = deps.policy.evaluate(req, { attended, workspaceRoot: deps.workspaceRoot, resolvePath: deps.resolvePath });
+    let decision = deps.policy.evaluate(req, { attended, workspaceRoot: deps.workspaceRoot, resolvePath: deps.resolvePath, publicTool: deps.publicTool });
     let requestId: string | undefined;
     if (decision.decision === 'ask') {
       const brokered = await this.broker(call, req, decision, attended);
+      if ('withdrawn' in brokered) {
+        /*
+         * PD-ORCH-005 clause 9: the run came to rest while this call waited on a person. The approval is withdrawn —
+         * never recorded as denied, so no decision enters the audit and no denial issue is raised — the timeline says
+         * which interruption withdrew it, and the call settles as never run (`blocked`: REQ-MONITOR-105's "refused or
+         * skipped before it ran"), marked interrupted so the turn records it that way. Asked again, it asks afresh.
+         */
+        const summary = requestSummary(req);
+        deps.sink.timeline('approval_withdrawn', call.agentId || call.persona, `The approval for ${summary} was withdrawn by ${interruptionPhrase(brokered.withdrawn)}; the call was not run.`, { request_id: brokered.requestId, tool: call.name, persona: call.persona, interruption: brokered.withdrawn });
+        const text = `The approval this call was waiting on was withdrawn by ${interruptionPhrase(brokered.withdrawn)}; the call was not run.`;
+        return finish({ text, isError: true, status: 'blocked', decision: null, observation: null, blockedReason: text, interrupted: true }, { failure_kind: 'interrupted', error: 'approval withdrawn' });
+      }
       decision = brokered.decision;
       requestId = brokered.requestId;
     }
@@ -322,7 +367,8 @@ export class Gate {
     // message, or follows as a user message when the call produced no observation (REQ-HOOKS-074).
     let text = obs.text;
     let followUp: string | undefined;
-    if (hooks) {
+    // PD-ORCH-005 clause 9: a question withdrawn by the rest was never run, so no post-execution hook sees it.
+    if (hooks && obs.withdrawnBy === undefined) {
       const post = await hooks.postTool({ ...hookCall, results: [{ kind: obs.isError ? 'error' : 'observation', text: obs.text }] });
       if (post.feedback !== '') {
         if (obs.isError) followUp = post.feedback;
@@ -330,8 +376,15 @@ export class Gate {
       }
     }
     // (5) diagnostics.
-    const status: Exclude<ToolStatus, 'running'> = obs.isError ? 'failed' : 'ok';
-    const result = finish({ text, isError: obs.isError, status, decision, observation: obs, ...(followUp === undefined ? {} : { followUp }) }, {
+    /*
+     * PD-ORCH-005: an executor the run's rest cut short (a withdrawn question, a released wait) says so by its failure
+     * kind. A question withdrawn by the rest (clause 9) was never answered and never run: it settles `blocked`
+     * (REQ-MONITOR-105's "refused or skipped before it ran") and the timeline records which interruption withdrew it.
+     */
+    const withdrawnBy = obs.withdrawnBy;
+    const status: Exclude<ToolStatus, 'running'> = withdrawnBy !== undefined ? 'blocked' : obs.isError ? 'failed' : 'ok';
+    if (withdrawnBy !== undefined) deps.sink.timeline('question_withdrawn', call.agentId || call.persona, `The ${call.name} call was withdrawn by ${interruptionPhrase(withdrawnBy)} before the user answered; it was not run.`, { tool: call.name, persona: call.persona, interruption: withdrawnBy });
+    const result = finish({ text, isError: obs.isError, status, decision, observation: obs, ...(followUp === undefined ? {} : { followUp }), ...(obs.failureKind === INTERRUPTED_FAILURE_KIND ? { interrupted: true } : {}), ...(withdrawnBy !== undefined ? { blockedReason: text } : {}) }, {
       ...(obs.outcomeKind === undefined ? {} : { outcome_kind: obs.outcomeKind }), ...(obs.exitCode === undefined ? {} : { exit_code: obs.exitCode }),
       ...(obs.failureKind === undefined ? {} : { failure_kind: obs.failureKind }), ...(obs.warnings === undefined ? {} : { warnings: obs.warnings }),
       error: obs.isError ? obs.text.slice(0, 500) : null,
@@ -360,11 +413,12 @@ export class Gate {
     if (obs.outcomeKind === 'shell_failure') this.deps.sink.issue({ kind: 'terminal_shell_failure', severity: 'error', actor, message: `A terminal command failed (exit ${obs.exitCode ?? '?'}).`, evidence_ref: ref, metadata: meta });
     else if (obs.outcomeKind === 'suspicious_success') this.deps.sink.issue({ kind: 'terminal_suspicious_success', severity: 'warning', actor, message: `A terminal command exited 0 with output that looks like a failure: ${(obs.warnings ?? []).join('; ')}`, evidence_ref: ref, metadata: meta });
     else if (obs.outcomeKind === 'timeout' || obs.failureKind === 'timeout') this.deps.sink.issue({ kind: 'terminal_timeout', severity: 'error', actor, message: 'A terminal command exceeded its timeout.', evidence_ref: ref, metadata: meta });
-    else if (obs.isError) this.deps.sink.issue({ kind: 'tool_error', severity: 'warning', actor, message: `The '${call.name}' call failed: ${obs.text.slice(0, 200)}`, evidence_ref: ref, metadata: meta });
+    // PD-ORCH-005: a call the run's rest cut short did not fail; it is recorded as interrupted, and raises no issue.
+    else if (obs.isError && obs.failureKind !== INTERRUPTED_FAILURE_KIND) this.deps.sink.issue({ kind: 'tool_error', severity: 'warning', actor, message: `The '${call.name}' call failed: ${obs.text.slice(0, 200)}`, evidence_ref: ref, metadata: meta });
   }
 
   /** ADR-0019's flow: publish, then either the headless policy (no wait at all) or the brokered wait. */
-  private async broker(call: ToolCall, req: PermissionRequest, asked: DecisionRecord, attended: boolean): Promise<{ decision: DecisionRecord; requestId: string }> {
+  private async broker(call: ToolCall, req: PermissionRequest, asked: DecisionRecord, attended: boolean): Promise<{ decision: DecisionRecord; requestId: string } | { withdrawn: string; requestId: string }> {
     const { deps } = this;
     const requestId = (deps.newRequestId ?? (() => randomUUID().replace(/-/g, '')))();
     const summary = requestSummary(req);
@@ -375,6 +429,19 @@ export class Gate {
         deps.sink.approvalRequested({ request_id: requestId, ...base, resolver: 'headless', timeout_seconds: null, unattended_reason: 'headless-policy' });
         return { requestId, decision: this.headless(asked) };
       }
+      /*
+       * PD-TOOLS-005: an earlier approval wait in this run expired unanswered, so the user is treated as away and this
+       * ask — one that WOULD prompt: a rule that resolved it never reaches here — is resolved at once exactly as the
+       * headless path resolves one, with no wait created and no dialog posted. The event is the headless shape
+       * REQ-EVENTS-049 fixes (`headless-policy` is its only defined `unattended_reason`); the DECISION's reason is
+       * where the cause is stated, and it names the timeout that expired rather than claiming no approval UI exists.
+       * The order matters: a session that has genuinely lost its presenter is still reported as such, above.
+       */
+      const away = deps.presence?.away() ?? null;
+      if (away !== null) {
+        deps.sink.approvalRequested({ request_id: requestId, ...base, resolver: 'headless', timeout_seconds: null, unattended_reason: 'headless-policy' });
+        return { requestId, decision: this.headless(asked, `The user is treated as away because an earlier approval in this run went unanswered for ${away.afterSeconds} seconds`) };
+      }
       const timeoutS = deps.approvalTimeoutMs > 0 ? deps.approvalTimeoutMs / 1000 : 0;
       deps.sink.approvalRequested({ request_id: requestId, ...base, resolver: 'brokered', timeout_seconds: timeoutS, unattended_reason: '' });
       const payload: ApprovalPayload = {
@@ -384,7 +451,17 @@ export class Gate {
       };
       const wait = deps.approvals.create(payload, deps.approvalTimeoutMs > 0 ? deps.approvalTimeoutMs : null);
       deps.sink.pendingChanged(deps.approvals.pending());
-      const shown = await deps.presenter.present(payload);
+      // REQ-TOOLS-063: a request queued behind an open dialog stays unshown until that dialog closes. If its wait ends
+      // first (a timeout, a cancellation, a withdrawal, or an answer given elsewhere), it is dropped unshown. A
+      // timeout or a cancellation of a request never shown counts as cancelled (REQ-TOOLS-054).
+      const shown = await Promise.race([deps.presenter.present(payload), wait.then((outcome) => ({ unshown: outcome }))]);
+      if ('unshown' in shown) {
+        deps.sink.pendingChanged(deps.approvals.pending());
+        deps.presenter.close(requestId);
+        const outcome = shown.unshown;
+        if (outcome.kind === 'withdrawn') return { requestId, withdrawn: outcome.cause };
+        return { requestId, decision: this.outcomeDecision(call, req, asked, outcome.kind === 'timed_out' ? { kind: 'cancelled' } : outcome) };
+      }
       if (!shown.ok) {
         // REQ-TOOLS-058: the pending request is discarded and the call denied with source presenter-error.
         deps.approvals.cancel(requestId);
@@ -395,6 +472,7 @@ export class Gate {
       const outcome = await wait;
       deps.sink.pendingChanged(deps.approvals.pending());
       deps.presenter.close(requestId);
+      if (outcome.kind === 'withdrawn') return { requestId, withdrawn: outcome.cause };
       return { requestId, decision: this.outcomeDecision(call, req, asked, outcome) };
     } catch (cause) {
       // REQ-TOOLS-026: approval resolution that raises denies with source fail-closed.
@@ -408,13 +486,17 @@ export class Gate {
   private outcomeDecision(call: ToolCall, req: PermissionRequest, asked: DecisionRecord, outcome: ApprovalOutcome): DecisionRecord {
     switch (outcome.kind) {
       case 'timed_out':
+        // PD-TOOLS-005: the first unanswered wait marks the run's user away; this decision keeps REQ-TOOLS-052's own reason.
+        this.deps.presence?.markAway(outcome.afterSeconds);
         return { decision: 'deny', ruleId: asked.ruleId, source: 'timeout', reason: `${asked.reason} Denied because no answer arrived within ${outcome.afterSeconds} seconds.`, description: asked.description };
       case 'cancelled':
+      // A withdrawn wait never reaches here (`broker` answers it first); were it to, it would read as REQ-TOOLS-052's cancellation.
+      case 'withdrawn':
         return { decision: 'deny', ruleId: asked.ruleId, source: 'cancelled', reason: `${asked.reason} Denied because the approval request was cancelled.`, description: asked.description };
       case 'resolved':
         if (outcome.option === 'once') return { decision: 'allow', ruleId: 'approval:once', source: 'user-once', reason: `The user approved '${call.name}' once (rule '${asked.ruleId}' asked).`, description: asked.description };
         if (outcome.option === 'session') {
-          const grant = this.deps.policy.grant(req);
+          const grant = this.deps.policy.grant(req, { workspaceRoot: this.deps.workspaceRoot, resolvePath: this.deps.resolvePath, publicTool: this.deps.publicTool });
           return { decision: 'allow', ruleId: 'approval:session', source: 'user-session', reason: `The user approved '${call.name}' for this session (rule '${asked.ruleId}' asked); session rule '${grant.id}' added.`, description: grant.description };
         }
         return { decision: 'deny', ruleId: asked.ruleId, source: 'user-deny', reason: `${asked.reason} Denied because the user denied the request.`, description: asked.description };
@@ -423,17 +505,20 @@ export class Gate {
     }
   }
 
-  /** REQ-TOOLS-065/066. */
-  private headless(asked: DecisionRecord): DecisionRecord {
+  /**
+   * REQ-TOOLS-065/066. `because` is the clause the reason opens with: REQ-TOOLS-065's own for a session with no
+   * presenter, and PD-TOOLS-005's — naming the timeout that expired — for a run whose user is treated as away.
+   */
+  private headless(asked: DecisionRecord, because = 'No approval UI is available in this host'): DecisionRecord {
     const { deps } = this;
     if (deps.headlessPolicy === 'abort') {
       if (deps.abortHook) {
         deps.abortHook();
-        return { decision: 'deny', ruleId: asked.ruleId, source: 'headless-policy', reason: `${asked.reason} No approval UI is available in this host, so the request was denied and the headless approval policy aborts the run.`, description: asked.description };
+        return { decision: 'deny', ruleId: asked.ruleId, source: 'headless-policy', reason: `${asked.reason} ${because}, so the request was denied and the headless approval policy aborts the run.`, description: asked.description };
       }
       deps.sink.warn(`headless approval policy 'abort' has no abort hook registered for ${deps.sessionId}; degrading to deny (REQ-TOOLS-065)`);
     }
-    return { decision: 'deny', ruleId: asked.ruleId, source: 'headless-policy', reason: `${asked.reason} No approval UI is available in this host, so the request was denied.`, description: asked.description };
+    return { decision: 'deny', ruleId: asked.ruleId, source: 'headless-policy', reason: `${asked.reason} ${because}, so the request was denied.`, description: asked.description };
   }
 }
 

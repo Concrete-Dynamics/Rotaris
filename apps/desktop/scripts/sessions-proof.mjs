@@ -32,7 +32,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { cleanEnvironment, findDatabases, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, findDatabases, hostSwitches, machineIdFileFor, proofIsolationEnv } from './lib/harness.mjs';
+import { describeLingeringHolder, lockHolderAfterExit, pidExists, plantedDeadPid } from './lib/lock-holder.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -62,7 +63,7 @@ const PROBES = [
 
 function launch(name, extra, timeoutMs = 150_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
@@ -128,7 +129,9 @@ const latestSession = () => withDb((db) => db.prepare('SELECT * FROM sessions OR
 const countIn = (table, sid) => withDb((db) => db.prepare(`SELECT count(*) AS c FROM ${table} WHERE session_id = ?`).get(sid).c);
 const tablesWithSession = () => withDb((db) => db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND EXISTS (SELECT 1 FROM pragma_table_info(m.name) WHERE name = 'session_id')").all().map((t) => t.name));
 const tablesReferencingSessions = () => withDb((db) => db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND EXISTS (SELECT 1 FROM pragma_foreign_key_list(m.name) WHERE \"table\" = 'sessions')").all().map((t) => t.name));
-const machineId = () => readFileSync(join(local, 'rotaris', 'data', 'machine-id'), 'utf8').split(/\r?\n/).map((s) => s.trim()).find((s) => s.length > 0 && !s.startsWith('#'));
+// The identifier where the product mints it on THIS platform (`dataLayout().machineId`), not the Windows spelling alone
+// (`docs/defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`).
+const machineId = () => readFileSync(machineIdFileFor(local), 'utf8').split(/\r?\n/).map((s) => s.trim()).find((s) => s.length > 0 && !s.startsWith('#'));
 /** A session a dead process would have left: rows only. */
 const plantSession = (sid, status, opts = {}) => withDb((db) => {
   const wsRoot = opts.workspaceRoot ?? db.prepare('SELECT workspace_root FROM sessions LIMIT 1').get().workspace_root;
@@ -174,7 +177,15 @@ const live = launch('live', {
   const row = sessionRow(A);
   expect(row.execution_status === 'running', `A was left ${row.execution_status}; the repair scenario needs a persisted-running session`);
   expect(sessionRow(A) && countIn('session_locks', A) === 1, 'A has no dead lock');
-  results.live = { refused: true, text: error, leftRunning: true, png: live.png, dialogPng: join(output, 'delete-confirm-live.png') };
+  // "Dead" is checked, not assumed: the lock names this launch's run host, gone before main since `endBeforeMain`.
+  // A holder still alive here would make launch 3 read A as live and repair nothing (REQ-SESSION-056)
+  // (`docs/defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`).
+  const lockRow = withDb((db) => db.prepare('SELECT pid FROM session_locks WHERE session_id = ?').get(A));
+  if (!lockRow) throw new Error("the 'live' launch left no lock behind; the repair scenario needs a persisted-running session behind a dead lock");
+  const lockPid = lockRow.pid;
+  const lockHolder = lockHolderAfterExit(lockPid);
+  expect(!lockHolder.aliveAtExit, lockHolder.aliveAtExit ? describeLingeringHolder('live', lockHolder, live.log) : '');
+  results.live = { refused: true, text: error, leftRunning: true, lockPid, lockHolderGoneAtExit: true, png: live.png, dialogPng: join(output, 'delete-confirm-live.png') };
 }
 
 // 3. repair-one — the stale row, Actions → Repair, the report; then the disclosure.
@@ -213,7 +224,12 @@ const repairOne = launch('repair-one', {
 const holder = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 300000)'], { stdio: 'ignore', windowsHide: true });
 try {
   plantSession('B-nolock', 'running');
-  plantSession('C-deadlock', 'running', { lock: { pid: 4242 } });
+  // C's pid is chosen per platform (`plantedDeadPid`): 4 242 on Windows, where it is never a pid and a freed one is soon
+  // reissued; a child this script saw exit on Linux and macOS, where a small literal can be a live process once pids wrap.
+  // A live one would make C live, not stale (REQ-SESSION-056).
+  const deadPid = plantedDeadPid();
+  expect(Number.isInteger(deadPid) && deadPid > 0 && !pidExists(deadPid), `the pid planted as dead (${deadPid}) still probes alive`);
+  plantSession('C-deadlock', 'running', { lock: { pid: deadPid } });
   plantSession('D-live', 'running', { lock: { pid: holder.pid } });
   const repairAll = launch('repair-all', {
     ROTARIS_CAPTURE_CLICKS: '.title-bar__sessions@1200;;[data-testid="session-repair-all"]@2400;;[data-testid="session-repair-all"]@4600',
@@ -223,7 +239,7 @@ try {
   });
   const first = atText(repairAll, 3800, '[data-testid="session-report"]');
   expect(first.includes("Session B-nolock was stuck at 'running' and is now 'interrupted': no process holds a lock for it"), `repair-all's first report: "${first}"`);
-  expect(first.includes("Session C-deadlock was stuck at 'running' and is now 'interrupted': the lock names this machine and its process (pid 4242) is gone"), `repair-all's first report: "${first}"`);
+  expect(first.includes(`Session C-deadlock was stuck at 'running' and is now 'interrupted': the lock names this machine and its process (pid ${deadPid}) is gone`), `repair-all's first report: "${first}"`);
   expect(!first.includes('D-live'), `the live session appears in the report: "${first}"`);
   const second = atText(repairAll, 6000, '[data-testid="session-report"]');
   expect(second.includes(NOTHING_STALE), `the second report reads "${second}"`);
@@ -231,7 +247,7 @@ try {
   expect(sessionRow('D-live').execution_status === 'running' && countIn('session_locks', 'D-live') === 1, 'the live session was touched');
   const dRow = rowAt(repairAll, 6000, 'D-live');
   expect(dRow?.data['data-stale'] === 'false', `D-live is marked stale: ${JSON.stringify(dRow)}`);
-  results.repairAll = { repaired: ['B-nolock', 'C-deadlock'], liveUntouched: 'D-live', livePid: holder.pid, nothingStaleSecondTime: true, png: repairAll.png, reportPng: join(output, 'repair-all-report.png') };
+  results.repairAll = { repaired: ['B-nolock', 'C-deadlock'], deadPid, liveUntouched: 'D-live', livePid: holder.pid, nothingStaleSecondTime: true, png: repairAll.png, reportPng: join(output, 'repair-all-report.png') };
 } finally { holder.kill(); }
 
 // 5. export-records — B capped, C empty; a separate node process parses the files.

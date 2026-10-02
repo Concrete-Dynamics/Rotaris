@@ -7,6 +7,7 @@ import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/stor
 import type { SessionSnapshot } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRef, type ScriptedCall } from '@rotaris/model';
 import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, toSessionRecord, type CatalogueEntry, type DelegationOps, type ModelChoice, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
+import { conversationOf } from './record.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000d') as MachineId;
 const ref = (providerId: string, modelId: string): ModelRef => ({ providerId, modelId, dialect: 'chat' });
@@ -26,11 +27,16 @@ function recorder(): Publisher & { snapshots: SessionSnapshot['session'][] } {
   return { snapshots, increment: () => undefined, snapshot: (p) => snapshots.push(p.session) };
 }
 
+/** A tool the test answers itself, ahead of the delegation tools; undefined leaves the call to them. */
+type TestTool = (name: string, args: Record<string, unknown>) => Promise<PortToolResult> | undefined;
+
 /** The delegation tools dispatched straight to the ops (as the children test does). */
-function delegationPort(ops: DelegationOps, parentId: string): ToolPort {
+function delegationPort(ops: DelegationOps, parentId: string, tool?: TestTool): ToolPort {
   const dispatch = async (name: string, raw: string): Promise<PortToolResult> => {
     const a = JSON.parse(raw) as Record<string, unknown>;
     const ok = (text: string): PortToolResult => ({ text, isError: false, status: 'ok', durationMs: 1, label: name, args: a });
+    const own = tool?.(name, a);
+    if (own) return own;
     if (name === 'delegate') {
       const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: [], inheritedContext: [], category: '', runInBackground: true });
       if (r.status === 'rejected') return { ...ok(`rejected — ${r.message}`), isError: true, status: 'failed' };
@@ -68,6 +74,11 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     llmResponseTimeoutMs?: number;
     childTimeoutMs?: number;
     roleFallback?: ModelRef | null;
+    /** REQ-CONFIG-108: the role's own `stall_timeout`, carried as `Persona.stallTimeoutMs`. */
+    roleStallTimeoutMs?: number;
+    /** REQ-CONFIG-113: `runtime.child_stall_timeout`. */
+    childStallTimeoutMs?: number;
+    tool?: TestTool;
     delegation?: boolean;
     over?: Partial<RunConfig>;
   }
@@ -88,7 +99,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const catalogue = opts.catalogue ?? [entry('a1', 'a', A1, ['small_model'])];
     const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: opts.entryModel ?? A1, credentialFor: () => async () => 'k', llmResponseTimeoutMs: opts.llmResponseTimeoutMs ?? 120_000, ...opts.over };
     const models = (key: string): ModelLookup => { const e = catalogue.find((c) => c.key === key); return e ? { ok: true, key, choice: { model: e.model, thinking: e.thinking } } : { ok: false, reason: `'${key}' is not a configured model` }; };
-    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: { ...base, ...(opts.roleFallback ? { fallbackModel: opts.roleFallback } : {}) }, alias: null } : null; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
+    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: { ...base, ...(opts.roleFallback ? { fallbackModel: opts.roleFallback } : {}), ...(opts.roleStallTimeoutMs === undefined ? {} : { stallTimeoutMs: opts.roleStallTimeoutMs }) }, alias: null } : null; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
     const backend = new DefaultAgentBackend(client);
     const results: string[] = [];
     const sessions = new Sessions({
@@ -96,10 +107,10 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: (_sid, r) => results.push(r.status),
       configure: () => ({ ok: true, value: {
         model: { backend, config }, models, personas,
-        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, ...(opts.childTimeoutMs === undefined ? {} : { childTimeoutMs: opts.childTimeoutMs }) },
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, ...(opts.childTimeoutMs === undefined ? {} : { childTimeoutMs: opts.childTimeoutMs }), ...(opts.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: opts.childStallTimeoutMs }) },
         resilience: { catalogue, fallbackModel: opts.fallbackModel ?? null },
       } }),
-      ...(opts.delegation ? { tools: (ctx) => (ctx.delegation ? delegationPort(ctx.delegation, ctx.parentId ?? 'root') : { specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }), cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false }) } : {}),
+      ...(opts.delegation ? { tools: (ctx) => (ctx.delegation ? delegationPort(ctx.delegation, ctx.parentId ?? 'root', opts.tool) : { specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }), cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false }) } : {}),
     });
     return { sessions, client, pub, counts, results };
   }
@@ -154,6 +165,107 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(client.requests).toHaveLength(1);
     expect(dal.getSession(sid)!.execution_status).toBe('paused');
     expect(lastWait(pub)).toBeNull();
+  });
+
+  it('PD-ORCH-005 clause 2: a pause accepted during a provider-limit wait releases it at once — no request follows, and the wait was not the user\'s cancel', async () => {
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(rateLimit()) : answer('never')));
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    expect(lastWait(pub)).not.toBeNull();
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    // REQ-MONITOR-124 (found by phase 3's second review): releasing the wait does not read `running` again.
+    expect(dal.getSession(sid)!.execution_status).toBe('pausing');
+    const result = await sessions.running(sid)!;
+    expect(result.status).toBe('interrupted');
+    expect(result.error).toBeNull();
+    expect(client.requests).toHaveLength(1);
+    expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+    expect(lastWait(pub)).toBeNull();
+  });
+
+  it('PD-ORCH-005 clause 2: the step in flight when the pause is accepted meets a provider limit — its report stands, and nothing waits or retries', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? { parts: [{ hold: held }, { error: rateLimit() }] } : answer('never')));
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    const result = await sessions.running(sid)!;
+    expect(result.status).toBe('interrupted');
+    expect(client.requests).toHaveLength(1);
+    expect(issues(sid)).not.toContain('model_wait');
+    expect(lastWait(pub)).toBeNull();
+    expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+  });
+
+  it('PD-ORCH-005 clause 2: a pause accepted during a transient retry\'s backoff makes no retry', async () => {
+    const { sessions, client } = sessionsWith((_p, turn) => (turn === 1 ? failing(modelError({ code: 'http', status: 503, headline: 'Service Unavailable' })) : answer('never')));
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    expect(issues(sid)).toEqual(['transient_llm_error']);
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    clock.advance(1000);
+    const result = await sessions.running(sid)!;
+    expect(result.status).toBe('interrupted');
+    expect(client.requests).toHaveLength(1);
+    expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+  });
+
+  it('PD-ORCH-005 clause 5: a child whose limit expires while the run comes to rest ends failed with REQ-ORCH-088\'s report — never paused, never retried on the fallback, and not summarised', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    let summaries = 0;
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: be slow' } }]) : answer('never');
+      if (persona === 'summariser') { summaries += 1; return answer('{"summary":"done"}'); }
+      return hanging(NEVER);
+    };
+    const t = sessionsWith(script, { catalogue, roleFallback: F1, childTimeoutMs: 10_000, delegation: true });
+    const sid = (t.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    expect(t.sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    // The pause waits for the step in flight; the child's limit expires meanwhile, and the backstop ends the step.
+    clock.advance(10_000);
+    await tick();
+    clock.advance(30_000);
+    await t.sessions.running(sid)!;
+    const child = dal.childrenOf(sid)[0]!;
+    expect(child).toMatchObject({ state: 'failed', interruption: null });
+    expect(JSON.parse(child.report!)).toMatchObject({ status: 'failed', errors: [{ type: 'timeout', message: 'Child timed out after 10s' }, { type: 'summary_failure', message: 'the run was coming to rest, so no summarising call was made' }] });
+    expect(timeline(sid)).not.toContain('child_timeout_fallback');
+    expect(summaries).toBe(0);
+  });
+
+  it('PD-ORCH-005 (OQ-97): a resumed child that times out is retried on its fallback from its payload, not from its record', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: be slow' } }]) : answer('ok');
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      // The step in flight at the pause asks for a call that never runs; the resumed step hangs; the fallback answers.
+      if (turn === 1) return { parts: [{ hold: held }, ...toolCalls([{ callId: 'b1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Looking.').parts] };
+      return turn === 2 ? hanging(NEVER) : answer('done on the fallback');
+    };
+    const t = sessionsWith(script, { catalogue, roleFallback: F1, childTimeoutMs: 10_000, delegation: true });
+    const sid = (t.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && (t.counts.get('child') ?? 0) < 1; i++) await tick();
+    expect(t.sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await t.sessions.running(sid)!;
+    expect(t.sessions.continueSession(sid, 'continue').ok).toBe(true);
+    for (let i = 0; i < 40 && (t.counts.get('child') ?? 0) < 2; i++) await tick();
+    // The limit expires; the landing backstop then ends the hung step, and REQ-ORCH-088 retries on the fallback.
+    clock.advance(10_000);
+    await tick();
+    clock.advance(30_000);
+    await t.sessions.running(sid)!;
+    const onFallback = t.client.requests.filter((r) => r.model.modelId === F1.modelId);
+    expect(onFallback.length).toBeGreaterThan(0);
+    // The retry starts its conversation again from the payload: one user message, the task, and nothing of the record.
+    const conversation = onFallback[0]!.messages.filter((m) => m.role !== 'system');
+    expect(conversation).toHaveLength(1);
+    expect(conversation[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).toContain('TASK: be slow');
   });
 
   it('the second wait on the same agent doubles the local backoff (REQ-NOTIFY-085)', async () => {
@@ -377,6 +489,12 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(result.status).toBe('completed');
     const child = dal.childrenOf(sid)[0]!;
     expect(child.state).toBe('succeeded');
+    // PD-ORCH-005 clause 1: the retry starts the child's conversation again from its payload, and the record says so —
+    // the conversation a resume would send carries the payload once, while the full history keeps both attempts.
+    const recorded = conversationOf(dal.agentConversation(sid, child.task_id));
+    const payloads = (ms: readonly { role: string; content: readonly { kind: string; text?: string }[] }[]) => ms.filter((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && (p.text ?? '').includes('TASK: be slow'))).length;
+    expect(payloads(recorded)).toBe(1);
+    expect(payloads(dal.agentMessagesOf(sid, child.task_id).filter((r) => r.kind === 'message').map((r) => JSON.parse(r.body) as { role: string; content: { kind: string; text?: string }[] }))).toBe(2);
     expect(timeline(sid)).toContain('child_timeout_fallback');
     expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'child_timeout_fallback')!.metadata)).toMatchObject({ from_model: 'a1', to_model: 'f1', timeout_seconds: 10 });
     // a1 hung and timed out, f1 answered; REQ-ORCH-095's one re-prompt of a text-only implementer adds a third call, on f1 still.
@@ -396,6 +514,128 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(c2.state).toBe('failed');
     expect((JSON.parse(c2.report!) as { errors: { message: string }[] }).errors.map((e) => e.message)).toContain('Child timed out after 10s');
     expect(timeline(sid2)).not.toContain('child_timeout_fallback');
+  });
+
+  /*
+   * PD-ORCH-004 on REQ-ORCH-088's own path: the parts of the progress rule that only the timeout's machinery can
+   * exercise — the fallback retry, the landing grace and the role's window. Each child here runs under a 10 s limit.
+   */
+  describe('PD-ORCH-004 on REQ-ORCH-088\'s path: the retry, the landing and the role\'s window', () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    /** A gate the test opens: a call waiting on it completes at whatever the clock reads when it is opened. */
+    const gate = () => { let open!: () => void; const p = new Promise<void>((r) => { open = r; }); return { p, open }; };
+    /** A model step that speaks only once `p` is released. */
+    const held = (p: Promise<void>, text: string): ScriptedCall => ({ parts: [{ hold: p, part: { kind: 'text', delta: text } }, { part: { kind: 'finish', reason: 'stop' } }] });
+    /** `write_file` and `read_file` answered here; a read of a gate's name completes when that gate opens. */
+    const fileTools = (gates: Record<string, Promise<void>>): TestTool => (name, a) => {
+      if (name !== 'write_file' && name !== 'read_file') return undefined;
+      const result: PortToolResult = { text: 'ok', isError: false, status: 'ok', durationMs: 1, label: name, args: a };
+      const waitOn = gates[String(a['path'])];
+      return waitOn ? waitOn.then(() => result) : Promise.resolve(result);
+    };
+    const script = (child: (turn: number) => ScriptedCall) => (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'build', task: 'TASK: build' } }]) : answer('finished');
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      return child(turn);
+    };
+    type Stored = { errors: { type: string; message: string }[]; cut_off?: { statement: string; changed_paths: string[]; continuation_offer: string | null } };
+    const reportOf = (sid: SessionId) => JSON.parse(dal.childrenOf(sid)[0]!.report!) as Stored;
+
+    it('PD-ORCH-004 / REQ-ORCH-088: the changed paths are collected across the fallback retry — attempt 1\'s write is listed beside attempt 2\'s', async () => {
+      const g = gate(); const h = gate();
+      const s = sessionsWith(script((turn) => {
+        // Attempt 1, on a1: one write at 0 s, then a model step that never answers, so the backstop ends it.
+        if (turn === 1) return toolCalls([{ callId: 'w1', name: 'write_file', args: { path: 'src/a.ts', content: 'a' } }]);
+        if (turn === 2) return hanging(NEVER);
+        // Attempt 2, on f1 from 40 s: another write, and a read that completes 1 s before this attempt's limit.
+        if (turn === 3) return toolCalls([{ callId: 'w2', name: 'write_file', args: { path: 'src/b.ts', content: 'b' } }, { callId: 'r1', name: 'read_file', args: { path: 'gate' } }]);
+        return held(h.p, 'halfway');
+      }), { catalogue, roleFallback: F1, childTimeoutMs: 10_000, childStallTimeoutMs: 2_000, delegation: true, tool: fileTools({ gate: g.p }) });
+      const sid = (s.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      clock.advance(10_000); await tick(); // attempt 1's limit: its only call completed 10 s before — not progress
+      clock.advance(30_000); await tick(); // the landing backstop ends attempt 1; the retry starts at 40 s
+      clock.advance(9_000); g.open(); await tick(); // the read completes at 49 s
+      clock.advance(1_000); // attempt 2's limit, at 50 s
+      h.open();
+      expect((await s.sessions.running(sid)!).status).toBe('completed');
+      expect(timeline(sid)).toContain('child_timeout_fallback');
+      expect(dal.childrenOf(sid)[0]!.state).toBe('failed');
+      const report = reportOf(sid);
+      expect(report.errors).toEqual(expect.arrayContaining([{ type: 'timeout', message: 'Child timed out after 10s' }]));
+      expect(report.cut_off?.statement).toBe('Cut off while making progress: this child completed a tool call within the final 2s before its 10s limit expired.');
+      expect(report.cut_off?.changed_paths).toEqual(['src/a.ts', 'src/b.ts']);
+    });
+
+    it('PD-ORCH-004 / REQ-ORCH-088: progress is read at the expiry of the attempt that ended failed — attempt 1 progressing and attempt 2 not gives REQ-ORCH-088\'s report alone', async () => {
+      const g1 = gate(); const g2 = gate(); const h = gate();
+      const s = sessionsWith(script((turn) => {
+        // Attempt 1: a write and a read completing 1 s before its limit — progressing at ITS expiry.
+        if (turn === 1) return toolCalls([{ callId: 'w1', name: 'write_file', args: { path: 'src/a.ts', content: 'a' } }, { callId: 'r1', name: 'read_file', args: { path: 'gate1' } }]);
+        if (turn === 2) return hanging(NEVER);
+        // Attempt 2, from 40 s: a read completing at 41 s, 9 s before its limit, then silence.
+        if (turn === 3) return toolCalls([{ callId: 'r2', name: 'read_file', args: { path: 'gate2' } }]);
+        return held(h.p, 'still reading');
+      }), { catalogue, roleFallback: F1, childTimeoutMs: 10_000, childStallTimeoutMs: 2_000, delegation: true, tool: fileTools({ gate1: g1.p, gate2: g2.p }) });
+      const sid = (s.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      clock.advance(9_000); g1.open(); await tick();
+      clock.advance(1_000); await tick(); // attempt 1's limit, 1 s after its read: progressing
+      clock.advance(30_000); await tick(); // the backstop; the retry starts at 40 s
+      clock.advance(1_000); g2.open(); await tick();
+      clock.advance(9_000); // attempt 2's limit, at 50 s, 9 s after its read: not progressing
+      h.open();
+      expect((await s.sessions.running(sid)!).status).toBe('completed');
+      expect(timeline(sid)).toContain('child_timeout_fallback');
+      expect(dal.childrenOf(sid)[0]!.state).toBe('failed');
+      const report = reportOf(sid);
+      expect(report.errors).toEqual(expect.arrayContaining([{ type: 'timeout', message: 'Child timed out after 10s' }]));
+      expect(report.cut_off).toBeUndefined();
+    });
+
+    it('PD-ORCH-004: a call that completes during the landing grace, after the limit expired, is not progress', async () => {
+      const g1 = gate(); const g2 = gate();
+      const s = sessionsWith(script((turn) => {
+        if (turn === 1) return toolCalls([{ callId: 'r1', name: 'read_file', args: { path: 'gate1' } }]);
+        // Dispatched at 1 s, it completes only at 15 s — 5 s into the landing grace.
+        if (turn === 2) return toolCalls([{ callId: 'r2', name: 'read_file', args: { path: 'gate2' } }]);
+        return answer('never reached: the landing stops the turn before its next model step');
+      }), { childTimeoutMs: 10_000, childStallTimeoutMs: 2_000, delegation: true, tool: fileTools({ gate1: g1.p, gate2: g2.p }) });
+      const sid = (s.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      clock.advance(1_000); g1.open(); await tick();
+      clock.advance(9_000); await tick(); // the limit, at 10 s: the last completion was 9 s before
+      clock.advance(5_000); g2.open(); // the held read completes at 15 s, inside the grace
+      expect((await s.sessions.running(sid)!).status).toBe('completed');
+      const row = dal.childrenOf(sid)[0]!;
+      expect(row.state).toBe('failed');
+      expect(row.tool_calls).toBe(2);
+      const report = reportOf(sid);
+      expect(report.errors).toEqual(expect.arrayContaining([{ type: 'timeout', message: 'Child timed out after 10s' }]));
+      expect(report.cut_off).toBeUndefined();
+    });
+
+    it('PD-ORCH-004 / REQ-CONFIG-108: a role\'s stall_timeout substitutes for runtime.child_stall_timeout as the window', async () => {
+      /** One child whose only call completes 3 s before its limit, under a run window of 5 s and the role window given. */
+      const cutOffUnder = async (roleStallTimeoutMs: number | undefined) => {
+        const g = gate(); const h = gate();
+        const s = sessionsWith(script((turn) => (turn === 1 ? toolCalls([{ callId: 'r1', name: 'read_file', args: { path: 'gate' } }]) : held(h.p, 'reading on'))),
+          { childTimeoutMs: 10_000, childStallTimeoutMs: 5_000, ...(roleStallTimeoutMs === undefined ? {} : { roleStallTimeoutMs }), delegation: true, tool: fileTools({ gate: g.p }) });
+        const sid = (s.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await tick();
+        clock.advance(7_000); g.open(); await tick();
+        clock.advance(3_000); // the limit, 3 s after the call
+        h.open();
+        expect((await s.sessions.running(sid)!).status).toBe('completed');
+        return reportOf(sid).cut_off;
+      };
+      // The run's 5 s window alone: 3 s before the expiry is inside it (the positive control).
+      expect((await cutOffUnder(undefined))?.statement).toMatch(/within the final 5s before its 10s limit/);
+      // A role window of 2 s replaces it: the same call is outside.
+      expect(await cutOffUnder(2_000)).toBeUndefined();
+      // A role window of 3 s replaces it too, and the bound stays inclusive.
+      expect((await cutOffUnder(3_000))?.statement).toMatch(/within the final 3s before its 10s limit/);
+    });
   });
 
   it('REQ-ORCH-092: a 503 is retried once from the transient budget and a 401 fails the agent at once; a validation failure uses its own budget', async () => {

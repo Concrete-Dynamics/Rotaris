@@ -36,6 +36,11 @@
  *                 files on disk, from `git diff`, and by running `node --test` again in this script. The work is
  *                 split between two children writing IN PARALLEL, each under a declared write scope (PD-TOOLS-006):
  *                 both delegated with a scope, live at once, told the live scopes at start, and any refusal named.
+ *   3b. resume  — PD-ORCH-005 against a real model: a delegating run paused through the composer's own Pause while a
+ *                 child runs, the paused composer read, and the run continued through its own Continue. Asserted
+ *                 from the store and the traffic: the iteration left open and resumed, every paused child resumed
+ *                 under its task id with its record continuing across the pause, and its next request carrying
+ *                 what it recorded last; the notes it was asked for are read back from disk.
  *
  * Every scenario that reads a session also asserts its PRICE (PD-MONITOR-001 revision 2): at registered prices the
  * cost reads `configured` and equals the store's tokens times those prices exactly. One run, several mechanisms —
@@ -58,9 +63,10 @@
  *                 so the ladder half costs nothing but retries.
  *   8. terminal  — the TERMINAL under duress, one run, six named shapes replayed from the record: a
  *                 multi-line here-string, forty lines of long output, a wedge with no `timeout` supplied,
- *                 an exit-0 output carrying the word FAILED, a `git diff` with differences exiting 1, and a
- *                 read-only git pipeline through a pipe. Asserted from `tool_calls`, never from the model's
- *                 prose; a shape the model never attempted is a NOTE, not a failure.
+ *                 an exit-0 output carrying docker's lower-case `failed to connect` line, a `git diff` with
+ *                 differences exiting 1, and a read-only git pipeline through a pipe. Asserted from
+ *                 `tool_calls`, never from the model's prose; a shape the model never attempted is a NOTE,
+ *                 not a failure.
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
@@ -76,7 +82,8 @@
  * the newest, `--keep-runs` (default 10) prunes the oldest — with `results.json` and the copied `workspace.db` at
  * its root and one directory per scenario holding:
  *
- *   app.log            the launch verbatim, key substituted out and asserted free of a bearer
+ *   app.log            the launch verbatim, key substituted out and asserted free of a bearer, at `--app-log-level`
+ *                      (default: the product's own, `info`)
  *   app.filtered.log   the same log without a child MCP server's stderr, consecutive repeats collapsed, the
  *                      sandbox path shortened — two thirds of a launch log is one language server booting
  *   autopsy.txt        `apps/desktop/scripts/autopsy.mjs` over this scenario's session
@@ -101,9 +108,9 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
-import { cleanEnvironment, configDirFor, findDatabases, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
-import { LONG_OUTPUT_LINES, diagnosticOf, longOutputReading, terminalShapes } from './lib/terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -161,6 +168,19 @@ const KEEP_RUNS = Math.max(1, Number(value('keep-runs', '10')));
  */
 const SESSION_LOG_LEVEL = value('session-log-level', 'INFO');
 /**
+ * The APPLICATION log's threshold, the one `session_log_level` never reaches (PD-MONITOR-002). The product reads it
+ * from `ROTARIS_APP_LOG_LEVEL` alone, and `cleanEnvironment()` strips that name from every launch, so an exported
+ * variable never gets through: this flag is how a live run asks for `debug` — a child MCP server's stderr among it.
+ * Unnamed, nothing is set and the launch keeps the product's default, `info`. The value is checked against the
+ * directive's four words here, because the product answers a word it does not know by recording `info` and
+ * writing one warning line, which a pack read afterwards would show as a run that quietly did not ask.
+ */
+const APP_LOG_LEVEL = value('app-log-level', null);
+if (APP_LOG_LEVEL !== null && !/^(?:debug|info|warning|error)$/i.test(APP_LOG_LEVEL)) {
+  console.error(`--app-log-level=${APP_LOG_LEVEL}: expected debug, info, warning or error (PD-MONITOR-002)`);
+  process.exit(2);
+}
+/**
  * `--no-record-traffic`: talk to the endpoint directly instead of through the recording proxy.
  *
  * The proxy is on by default because what the model was sent and what it answered is the one thing no pack has
@@ -185,7 +205,7 @@ const RUN_WAIT_MS = Number(process.env['LIVE_RUN_WAIT_MS'] ?? 420_000);
  * work, and the prompt closes the detour.
  */
 const EDIT_WAIT_MS = Number(process.env['LIVE_RUN_EDIT_WAIT_MS'] ?? RUN_WAIT_MS * 2);
-const OPTIONAL = ['ask', 'edit', 'requirements', 'shell', 'frictions', 'faults', 'terminal'];
+const OPTIONAL = ['ask', 'edit', 'resume', 'requirements', 'shell', 'frictions', 'faults', 'terminal'];
 /**
  * Scenarios that `--only` accepts and the default set never contains.
  *
@@ -394,6 +414,8 @@ const USAGE = `pnpm live-run — the application against a real model endpoint, 
   --duress-fixture=<dir>  the workspace duress opens (default: the same small todo-app the others use)
   --keep-runs=<n>      evidence packs to keep under .live-run/runs (default 10; the oldest are pruned)
   --session-log-level=<lvl>  the sandbox's session_log_level (default INFO; WARNING is the product's own default)
+  --app-log-level=<lvl>      the application log's threshold, ROTARIS_APP_LOG_LEVEL (debug|info|warning|error;
+                             default: unset, the product's own info)
   --no-record-traffic  talk to the endpoint directly; do not record request and response bodies
   --gui                show the window each scenario drives, to watch it (hidden by default; nothing else changes)
   --keep               keep the sandbox workspace instead of deleting it
@@ -637,10 +659,12 @@ function scenarioDir(name) {
  * recoverable, so nothing here is a substitute for `app.log`, only a way to read it.
  *
  * Three reductions, in order of how much they take:
- *   1. a child MCP server's stderr, forwarded into the application log by `packages/mcp/src/transport.ts`. Two
- *      thirds of a live launch log is one language server's boot noise (190 of 288 lines, measured on the
- *      2026-09-21 pack; 141 of 195 measured independently on 2026-09-16). OQ-63 rules that the application log
- *      keeps every level, so this is the READER filtering, never the product — which is why `app.log` stays.
+ *   1. a child MCP server's stderr, forwarded into the application log at `debug` by `packages/mcp/src/transport.ts`.
+ *      Two thirds of a live launch log was one language server's boot noise (190 of 288 lines, measured on the
+ *      2026-09-21 pack; 141 of 195 measured independently on 2026-09-16). Since PD-MONITOR-002 the product records
+ *      `info` and above unless `ROTARIS_APP_LOG_LEVEL` says otherwise, and `cleanEnvironment()` strips that name from
+ *      this launch, so those lines are absent from `app.log` unless `--app-log-level=debug` or a scenario's own
+ *      `extra` sets it to `debug`.
  *   2. consecutive repeats of one line, collapsed to the line and a count, the shape `transport.ts` already uses.
  *   3. the sandbox's absolute path, which prefixes most lines at about ninety characters, shortened to `<sandbox>`.
  */
@@ -654,7 +678,7 @@ function filterLog(text, sandboxPath) {
     if (previous !== null && run > 1) { out.push(`  … the line above repeated ${run} times`); dropped.repeats += run - 1; }
   };
   for (const raw of text.split('\n')) {
-    if (/ (?:run host|workspace service) debug: mcp \S+ stderr: /.test(raw)) { dropped.mcpStderr += 1; continue; }
+    if (/\] debug +(?:run host|workspace service): mcp \S+ stderr: /.test(raw)) { dropped.mcpStderr += 1; continue; }
     const body = short(raw).replace(/^\[[^\]]*\] /, '');
     if (body === previous) { run += 1; continue; }
     flush();
@@ -727,12 +751,14 @@ async function launch(name, extra, timeoutMs = 180_000) {
   const paced = budget > 0 && extra['ROTARIS_CAPTURE_PNG_AT'] === undefined
     ? { ROTARIS_CAPTURE_PNG_AT: `${join(dir, `${name}.early.png`)}@${Math.round(budget * 0.2)};;${join(dir, `${name}.mid.png`)}@${Math.round(budget * 0.6)}` }
     : {};
-  const result = await runElectron([join(app, 'out', 'main', 'index.js'), workspace], {
+  const result = await runElectron([join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     timeout: timeoutMs,
     env: {
       ...cleanEnvironment(),
       ...proofIsolationEnv({ profileRoot: sandbox, local, preferences: join(sandbox, 'preferences') }),
       ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+      // `--app-log-level`, ahead of `extra` so a scenario that names its own threshold keeps it.
+      ...(APP_LOG_LEVEL === null ? {} : { ROTARIS_APP_LOG_LEVEL: APP_LOG_LEVEL }),
       ...paced,
       ...extra,
     },
@@ -930,7 +956,7 @@ function finish(code) {
   // A red names the assertion, never the run.
   for (const c of checks) console.log(`  ${c.noted ? 'NOTE' : c.passed ? 'PASS' : 'FAIL'}  ${c.what}${c.detail === null ? '' : `  — ${c.detail}`}`);
   const tokens = results.tokens ? `${results.tokens.input} in / ${results.tokens.output} out` : 'none recorded';
-  console.log(`\nspend: ${typeof results.spentUsd === 'number' ? `${results.spentUsd.toFixed(4)} USD (${accountingKind === 'provider' ? "the provider's figure" : 'estimated from the registered prices'}) of the ${BUDGET.toFixed(2)} USD ceiling` : `no money figure for this endpoint; ${tokens} of the ${MAX_TOKENS} token ceiling`}`);
+  console.log(`\nspend: ${typeof results.spentUsd === 'number' ? `${results.spentUsd.toFixed(4)} USD (${accountingKind === 'provider' ? "the provider's figure" : 'estimated from the registered prices'}) of the ${BUDGET.toFixed(2)} USD ceiling` : accountingKind === 'unmetered' ? `no money figure for this endpoint; ${tokens}, no ceiling (registered unmetered)` : `no money figure for this endpoint; ${tokens} of the ${MAX_TOKENS} token ceiling`}`);
   console.log(`evidence: ${output}`);
   const packed = Object.entries(scenarioEvidence).filter(([, e]) => Array.isArray(e.wrote) && e.wrote.length > 0);
   if (packed.length > 0) console.log(`autopsy:  ${packed.map(([name, e]) => `${name} (${e.wrote.join(', ')})`).join('; ')}`);
@@ -1022,6 +1048,9 @@ if (!inCatalogue || typeof endpoint.contextTokens === 'number') {
 // `session_log_level` is the one level knob the product actually honours (REQ-SESSION-142; the APPLICATION log
 // filters on nothing, which is OQ-63's open question). It governs `<store>/sessions/<id>/session.log`, which
 // `preserveRun` copies into the pack.
+// No longer true since 2026-09-27: OQ-63 was ruled as PD-MONITOR-002 and built. The application log records `info`
+// and above, and its one switch is the environment variable ROTARIS_APP_LOG_LEVEL, never a configuration key —
+// `session_log_level` is still the only level knob in `agents.yaml`, and it still reaches the session log alone.
 if (!agents.includes('permission_mode:')) agents += `runtime:\n  permission_mode: autonomous\n  allow_unsandboxed_autonomous: true\n  max_iterations: ${MAX_ITERATIONS}\n  session_log_level: ${SESSION_LOG_LEVEL}\n`;
 writeFileSync(agentsFile, agents);
 cpSync(agentsFile, join(output, 'agents.yaml'));
@@ -1133,6 +1162,91 @@ if (wanted.includes('edit')) {
   cpSync(join(workspace, 'src'), join(scenarioDir('edit'), 'changed'), { recursive: true });
   results.scenarios.edit = { writeScopes: { scopedChildren: scopedIds.length, overlapped, told: told.length, refusals: refusals.length }, cost: { total: read?.session.cost ?? null, qualifier: read?.session.cost_qualifier ?? null }, status: read?.session.execution_status, iterations: read?.session.iterations_completed, tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output }, tools: names, toolCallTotal: read?.session.tool_calls ?? null, toolCallsByAgent: byAgent, diffstat: diff, suiteExit: suiteRun.status };
   if (read) preserveRun('edit', read.session.session_id);
+  await budgetGate();
+}
+
+// ── 3b. A paused run resumes every agent from its own record ────────────────────────────────────────────────
+/*
+ * PD-ORCH-005, measured against a real model. A delegating run is paused through the composer's own Pause as soon as
+ * a child is running, and continued through the composer's own Continue as soon as the paused composer has been
+ * read. What is asserted comes from the store and the recorded traffic, never from the model's prose:
+ * - the pause left the iteration open and its unfinished children `paused` by `pause` (clauses 2 and 3), and the
+ *   composer drew them `paused` with the Continue action's count (clauses 6, 13 and 19);
+ * - the continue resumed that same iteration and every child it paused, under the same task ids (clause 4);
+ * - each resumed child carried on from its own record: entries before the pause and after it under one task id, and
+ *   the first request after the continue carried what that child had recorded last (clauses 1 and 4);
+ * - the run finished the work, read back from the files on disk.
+ */
+if (wanted.includes('resume')) {
+  const PAUSE = '.workspace:has(.agent-row[data-state="running"]) button[aria-label="Pause the run"]';
+  // Read the paused composer once, and mark the read on <body> so the Continue press waits for it.
+  const READ_PAUSED = "(document.body.dataset.pausedRead = '1', JSON.stringify({ paused: document.querySelectorAll('.agent-row[data-state=\"paused\"]').length, count: document.getElementById('composer-resume-count')?.textContent ?? null, run: document.querySelector('[data-testid=\"run-header\"]')?.dataset.state ?? null }))";
+  const CONTINUE = 'body[data-paused-read="1"] button[aria-label="Continue run"]';
+  const log = await launch('resume', {
+    ROTARIS_CAPTURE_PROMPT: 'Write two short notes in parallel. In ONE turn, delegate two coding-agent children in the background: one reads src/todos.js and then writes docs/notes-functions.md listing each exported function with one sentence on what it does; the other reads src/todos.test.js and then writes docs/notes-tests.md listing each test with one sentence on what it checks. Wait for both with wait_for_tasks, then reply with the two file names. Delegate nothing else.',
+    ROTARIS_CAPTURE_CLICKS: [`${PAUSE}@~${EDIT_WAIT_MS}`, `${CONTINUE}@~${EDIT_WAIT_MS}`].join(';;'),
+    ROTARIS_CAPTURE_EVAL_AT: `${READ_PAUSED}>>button[aria-label="Continue run"]@~${EDIT_WAIT_MS}`,
+    ROTARIS_CAPTURE_WAIT: `js:document.querySelector('[data-testid="run-header"]')?.dataset.state === 'completed'`,
+    ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
+  }, EDIT_WAIT_MS + 90_000);
+  check(/capture: clicked ".*Pause the run/.test(log), 'the composer\'s Pause was pressed while a child was running');
+  check(/capture: clicked ".*Continue run/.test(log), 'the paused composer\'s Continue was pressed');
+  check(!/capture: wait for js timed out|capture: wait for .* timed out/.test(log), 'the resumed run completed inside the wait');
+  const shown = (() => { try { return JSON.parse(JSON.parse(/capture: eval-at \S+ .* → (".*")$/m.exec(log)?.[1] ?? 'null')); } catch { return null; } })();
+  check(shown !== null && shown.paused > 0, 'the paused composer drew its paused children as `paused` (clause 13)', JSON.stringify(shown));
+  check(shown !== null && /agents? will resume/.test(shown.count ?? ''), 'the paused composer stated the Continue action\'s count (clauses 6 and 19)', shown?.count ?? 'no count');
+  const read = readSession();
+  checkPricing('resume', read?.session);
+  check(read?.session.execution_status === 'completed', 'the session completed', `${read?.session.execution_status} (${read?.session.stop_reason})`);
+  const Database = require('better-sqlite3');
+  const db = new Database(oneDatabase(), { readonly: true });
+  let rest = null;
+  try {
+    const sid = read?.session.session_id ?? '';
+    const timeline = db.prepare("SELECT ordinal, at, name, metadata FROM timeline WHERE session_id = ? AND name IN ('iteration_paused', 'iteration_resumed', 'child_paused', 'child_resumed') ORDER BY ordinal").all(sid)
+      .map((t) => ({ ...t, meta: JSON.parse(t.metadata) }));
+    const iterationPaused = timeline.find((t) => t.name === 'iteration_paused' && t.meta.interruption === 'pause');
+    const iterationResumed = timeline.find((t) => t.name === 'iteration_resumed' && t.ordinal > (iterationPaused?.ordinal ?? Infinity));
+    check(iterationPaused !== undefined, 'the pause left the iteration open, recorded as paused by the pause (clause 2)', iterationPaused ? `iteration ${iterationPaused.meta.iteration}, ${iterationPaused.meta.paused_agents} agent(s)` : 'no iteration_paused entry');
+    check(iterationResumed !== undefined && iterationResumed.meta.iteration === iterationPaused?.meta.iteration, 'the continue resumed that same iteration (clause 4)', iterationResumed ? `iteration ${iterationResumed.meta.iteration}` : 'no iteration_resumed entry after the pause');
+    const pausedChildren = timeline.filter((t) => t.name === 'child_paused' && t.meta.interruption === 'pause').map((t) => t.meta.task_id);
+    const resumedChildren = new Set(timeline.filter((t) => t.name === 'child_resumed').map((t) => t.meta.task_id));
+    check(pausedChildren.length > 0, 'the pause left at least one child `paused` (clause 3)', pausedChildren.join(', ') || 'none');
+    check(pausedChildren.every((id) => resumedChildren.has(id)), 'every paused child resumed under its own task id (clause 4)', `${pausedChildren.length} paused, ${pausedChildren.filter((id) => resumedChildren.has(id)).length} resumed`);
+    const iterations = db.prepare('SELECT iteration, state, outcome, interruption FROM iterations WHERE session_id = ? ORDER BY iteration').all(sid);
+    check(iterations.length > 0 && iterations.every((it) => it.state === 'closed') && iterations.some((it) => it.outcome === 'succeeded'), 'the resumed iteration closed succeeded', JSON.stringify(iterations));
+    // Each resumed child carried on from its own record: entries on both sides of the pause, under one task id.
+    const pausedAt = iterationPaused?.at ?? '';
+    const records = pausedChildren.map((id) => {
+      const entries = db.prepare('SELECT seq, kind, body, at FROM agent_messages WHERE session_id = ? AND task_id = ? ORDER BY seq').all(sid, id);
+      return { id, before: entries.filter((e) => e.at <= pausedAt), after: entries.filter((e) => e.at > pausedAt) };
+    });
+    check(records.length > 0 && records.every((r) => r.before.length > 0 && r.after.length > 0), 'each resumed child\'s record continues across the pause (clause 1)', records.map((r) => `${r.id}: ${r.before.length} before, ${r.after.length} after`).join('; '));
+    /*
+     * What the model was sent. The last entry a child recorded before the pause can only reach a request made after
+     * it, and the pause stops every agent before its next model step (clause 15), so a request carrying it is the
+     * resumed step. A fragment is looked for as the request body spells it: plain words, no quote, backslash or line.
+     */
+    const traffic = readTraffic('resume').filter((r) => String(r.path ?? '').includes('/chat/completions'));
+    const carried = records.map((r) => {
+      const last = r.before.at(-1);
+      let text = '';
+      try {
+        const message = JSON.parse(last?.body ?? '{}');
+        text = (message.content ?? []).map((part) => part.kind === 'text' ? part.text : part.kind === 'tool-result' ? part.result : part.kind === 'tool-call' ? JSON.stringify(part.args ?? {}) : '').join(' ');
+      } catch { /* an entry that will not parse offers no fragment */ }
+      const fragment = (text.match(/[A-Za-z0-9 ,.:()_-]{24,}/g) ?? []).sort((a, b) => b.length - a.length)[0]?.slice(0, 48) ?? null;
+      return { id: r.id, fragment, sent: fragment === null ? null : traffic.some((t) => String(t.requestBody ?? '').includes(fragment)) };
+    });
+    const unreadable = carried.filter((c) => c.fragment === null);
+    check(carried.filter((c) => c.fragment !== null).every((c) => c.sent), 'each resumed child\'s next request carried what it recorded before the pause (clause 4)', carried.map((c) => `${c.id}: ${c.fragment === null ? 'no plain fragment' : c.sent ? 'carried' : 'NOT carried'}`).join('; '));
+    if (unreadable.length > 0) noted('children whose last entry offered no plain fragment to look for', unreadable.map((c) => c.id).join(', '));
+    rest = { pausedChildren: pausedChildren.length, iteration: iterationPaused?.meta.iteration ?? null, records: records.map((r) => ({ id: r.id, before: r.before.length, after: r.after.length })), carried, shown, iterations };
+  } finally { db.close(); }
+  const notes = ['notes-functions.md', 'notes-tests.md'].map((name) => ({ name, text: existsSync(join(workspace, 'docs', name)) ? readFileSync(join(workspace, 'docs', name), 'utf8') : '' }));
+  check(notes.every((n) => n.text.trim() !== ''), 'both notes were written after the continue', notes.map((n) => `${n.name}: ${n.text.length} chars`).join(', '));
+  results.scenarios.resume = { ...rest, status: read?.session.execution_status, tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output } };
+  if (read) preserveRun('resume', read.session.session_id);
   await budgetGate();
 }
 
@@ -1537,14 +1651,14 @@ if (wanted.includes('faults')) {
  * | `here-string`   | a multi-line command lost its newlines in the PTY, so a here-string never terminated |
  * | `long-output`   | the concatenation above, and the agent's capture VT-stripped where the window's was not |
  * | `wedge`         | `hardMs` passed and read nowhere: a call supplying no `timeout` had the soft pause and no hard cap (REQ-TOOLS-097) |
- * | `failed-word`   | `exit-0-output-flagged-on-the-word-failed-twice.md` — fired as REQ-TOOLS-113 specifies, recorded for cost |
+ * | `failed-word`   | `exit-0-output-flagged-on-the-word-failed-twice.md` — PD-TOOLS-003's capitals-only marker, and a real regression guard |
  * | `diff-exit-1`   | `git-diff-with-differences-read-as-a-failure.md` — ESC-41's carve-out, and a real regression guard |
  * | `pipe-to-shell` | `a-read-only-git-pipeline-was-withheld-by-the-pipe-to-shell-rule.md` — also cost, not contradiction |
  *
- * **A shape the model never attempted is a NOTE, not a failure.** Three of these are cost observations whose
- * behaviour is faithful to a requirement, and reporting them as faults would train a reader to ignore this
- * scenario — the mistake the board scenario made twice. Only `here-string`, `long-output`, `diff-exit-1` and the
- * marker leak are asserted as product facts.
+ * **A shape the model never attempted is a NOTE, not a failure.** `pipe-to-shell` is a cost observation whose
+ * behaviour is faithful to a requirement, and reporting it as a fault would train a reader to ignore this
+ * scenario — the mistake the board scenario made twice. `here-string`, `long-output`, the wedge's bound,
+ * `failed-word`, `diff-exit-1` and the marker leak are asserted as product facts.
  */
 if (wanted.includes('terminal')) {
   /*
@@ -1585,7 +1699,11 @@ if (wanted.includes('terminal')) {
     // delimiter that never comes and the call dies on its timeout rather than on its own last line.
     check(String(hereString.args.command ?? '').includes('\n'), 'the multi-line command reached the tool with its newlines', `${String(hereString.args.command ?? '').split('\n').length} line(s) in args.command`);
     check(d?.timeout !== true && d?.exit_code === 0, 'the here-string terminated rather than hanging on a lost delimiter', `exit ${d?.exit_code ?? 'none'}${d?.timeout ? ', timed out' : ''}`);
-    check(/alpha-one/.test(hereString.result) && /beta-two/.test(hereString.result), 'both lines of the here-string came back', hereString.result.includes('alpha-one') ? 'alpha-one present' : 'alpha-one absent');
+    // Read from the OUTPUT section alone (`hereStringLinesReturned`): the diagnostic repeats the command, which carries
+    // both words, so the whole result matched whether or not the shell printed anything — the 2026-09-22 pass was not
+    // evidence (`docs/defects/fixed/the-here-string-check-reads-its-own-command-back.md`).
+    const printedLines = outputOf(hereString.result) ?? '';
+    check(hereStringLinesReturned(hereString.result), 'both lines of the here-string came back, in the output the shell printed', `alpha-one ${/alpha-one/.test(printedLines) ? 'present' : 'absent'}, beta-two ${/beta-two/.test(printedLines) ? 'present' : 'absent'} in the output section`);
   }
 
   const longOutput = attempted('long-output')[0];
@@ -1617,12 +1735,20 @@ if (wanted.includes('terminal')) {
   }
 
   const failedWord = attempted('failed-word')[0];
-  if (failedWord === undefined) noted('the exit-0 FAILED command was not attempted', 'no terminal call carried it');
+  if (failedWord === undefined) noted('the docker line was not attempted', 'no terminal call carried it; PD-TOOLS-003 is unasked');
   else {
     const d = diagnosticOf(failedWord.result);
-    // REQ-TOOLS-113 searches literal markers case-insensitively and this output carries one. The warning is
-    // FAITHFUL; what the record wanted measured is what it costs — an agent explaining a false positive away.
-    noted('an exit-0 output carrying the word FAILED', `exit ${d?.exit_code ?? 'none'}, outcome ${d?.outcome_kind ?? 'none'}, warnings: ${(d?.warnings ?? []).join(' ') || 'none'}`);
+    // PD-TOOLS-003: REQ-TOOLS-113's `FAILED ` marker matches in capitals only. This is the lower-case docker line
+    // that warned in run `2e21e324` and cost the agent a second pass to explain it away — a real regression guard,
+    // not a cost note. Its positive half reads the output alone: the diagnostic repeats the command, and with the
+    // line absent from the output, "no marker warning" would pass for nothing.
+    const printed = /failed to connect to the docker API/.test(outputOf(failedWord.result) ?? '');
+    check(d?.exit_code === 0 && printed, 'the docker line was printed and exited 0, as the shape needs', `exit ${d?.exit_code ?? 'none'}, line ${printed ? 'present' : 'absent'} in the output`);
+    if (d?.exit_code === 0 && printed) {
+      const warnings = d.warnings ?? [];
+      check(d.outcome_kind !== 'suspicious_success', 'a lower-case failed at exit 0 was not classified suspicious_success', `outcome ${d.outcome_kind ?? 'none'}`);
+      check(!warnings.some((w) => /failure marker/.test(w)), 'no failure-marker warning on the lower-case line', `warnings: ${warnings.join(' ') || 'none'}`);
+    }
   }
 
   const diffExitOne = attempted('diff-exit-1')[0];

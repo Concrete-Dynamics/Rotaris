@@ -1,5 +1,5 @@
 import { createContext, useContext, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import type { ImageAttachment, TranscriptRow } from '@rotaris/contracts';
+import { parseSkillListing, type ImageAttachment, type ParsedSkillListing, type SkillListingSpan, type TranscriptRow } from '@rotaris/contracts';
 import { Markdown } from '../markdown/Markdown.js';
 import { linkifyBare, type Span } from '../markdown/parse.js';
 import { markMotionStart } from '../motion.js';
@@ -35,7 +35,7 @@ import { FACT_SEPARATOR, activitySpanMs, activitySummary, groupSeverity, groupSu
 // approval dialog needs. Re-exported so a consumer of this module still sees the vocabulary it draws.
 export type { TrailerRow, DisplayRow, RowRenderProps } from './types.js';
 import type { TrailerRow, DisplayRow, RowRenderProps } from './types.js';
-import { Button as DesignButton } from '../design-system/index.js';
+import { Button as DesignButton, layoutContractAttributes, type UiLayoutContract } from '../design-system/index.js';
 import { QuestionSummaryCard } from '../QuestionStepper.js';
 
 /**
@@ -357,14 +357,69 @@ export function trailerText(t: TrailerRow): string {
  * one agent, and recorded as `docs/defects/group-header-claims-the-role-gutter.md`.
  */
 export function placements(displays: readonly DisplayRow[]): readonly RowPlace[] {
-  const roles = displays.map((d) => (d.shape === 'row' ? rowRole(d.row) : d.shape === 'group' ? d.role : `trailer:${d.trailer.sort}`));
-  const toolIndexes: number[] = [];
-  displays.forEach((d, i) => { if (d.shape === 'row' && d.row.kind === 'tool') toolIndexes.push(i); });
-  const recent = new Set(toolIndexes.length < 2 ? toolIndexes : toolIndexes.slice(-2));
-  return displays.map((d, i) => ({
-    blockStart: i === 0 || roles[i] !== roles[i - 1] || d.shape === 'trailer',
-    recentTool: recent.has(i),
-  }));
+  return placementsFrom(null, displays).places;
+}
+
+/** What `placementsFrom` carries from one displayed array to the next. */
+export interface Placed {
+  readonly display: readonly DisplayRow[];
+  readonly places: readonly RowPlace[];
+  /** The positions of the tool rows in `display`, ascending: REQ-CHAT-067's "most recent pair" is their last two. */
+  readonly tools: readonly number[];
+}
+
+/** The role a block is broken on (REQ-CHAT-057): an activity line's is its agent's, and a trailer's is its own. */
+function blockRole(d: DisplayRow): string {
+  return d.shape === 'row' ? rowRole(d.row) : d.shape === 'group' ? d.role : `trailer:${d.trailer.sort}`;
+}
+
+const isToolRow = (d: DisplayRow): boolean => d.shape === 'row' && d.row.kind === 'tool';
+
+/**
+ * `placements(display)`, built from `previous` — the places of the array the pane showed before — rather than from
+ * nothing. A position before the first one whose displayed-row OBJECT changed keeps its place object: its role and the
+ * role above it are the same, so its block start is, and its recency changes only where it enters or leaves the last
+ * two tool rows, which are the only places rebuilt there. From the first changed position on, the places are computed.
+ * Step 4's bounded form hands the pane the previous projection's prefix itself, so an increment rebuilds the places of
+ * the rows it changed and of at most two tool rows above them.
+ *
+ * REQ-CHAT-055 (the work of an update depends on the rows that changed, not the rows held): the first form computed
+ * every place once per projection — a role, a tool test and a new object for each of a thousand rows — and V8's CPU
+ * profile of the built app (2026-09-29, the defect note's "CPU profile" section) named it among the loaded side's extra
+ * script. The places are the ones `placements` computes, value for value (`rows.test.ts`, `projector.test.ts`).
+ */
+export function placementsFrom(previous: Placed | null, display: readonly DisplayRow[]): Placed {
+  let first = 0;
+  let tools: number[] = [];
+  let places: RowPlace[] = [];
+  if (previous !== null) {
+    const before = previous.display;
+    const shared = Math.min(before.length, display.length);
+    while (first < shared && before[first] === display[first]) first += 1;
+    // The tool rows above `first` are where they were; the list is ascending, so the part above is a prefix of it.
+    let kept = 0;
+    let hi = previous.tools.length;
+    while (kept < hi) { const mid = (kept + hi) >> 1; if (previous.tools[mid]! < first) kept = mid + 1; else hi = mid; }
+    tools = previous.tools.slice(0, kept);
+    places = previous.places.slice(0, first);
+  }
+  for (let i = first; i < display.length; i += 1) if (isToolRow(display[i]!)) tools.push(i);
+  const recent = new Set(tools.slice(-2));
+  // Above `first`, only a row entering or leaving the most recent pair changes place.
+  if (previous !== null) {
+    for (const at of [...previous.tools.slice(-2), ...recent]) {
+      if (at >= first || places[at]!.recentTool === recent.has(at)) continue;
+      places[at] = { blockStart: places[at]!.blockStart, recentTool: recent.has(at) };
+    }
+  }
+  let above = first > 0 ? blockRole(display[first - 1]!) : '';
+  for (let i = first; i < display.length; i += 1) {
+    const d = display[i]!;
+    const role = blockRole(d);
+    places.push({ blockStart: i === 0 || role !== above || d.shape === 'trailer', recentTool: recent.has(i) });
+    above = role;
+  }
+  return { display, places, tools };
 }
 
 /**
@@ -539,6 +594,65 @@ function depthStyle(surface: TranscriptSurface, row: Pick<TranscriptRow, 'name' 
  */
 const NON_MESSAGE_KINDS = new Set(['user', 'system', 'tool', 'thinking', 'reasoning', 'verifier', 'diff', 'intent', 'question', 'approval', 'delegation']);
 export function isMessageRow(row: Pick<TranscriptRow, 'kind'>): boolean { return !NON_MESSAGE_KINDS.has(row.kind); }
+
+/**
+ * REQ-CHAT-162 — the `/skills` listing: a **system notice** (REQ-CHAT-046's category, REQ-CHAT-047's `system` role)
+ * whose text is the listing, drawn as one. `contracts/skills.ts` fixes that text and reads it back; a system row it
+ * does not accept is drawn as the plain notice it also is, so nothing here decides what a listing is.
+ *
+ * Craft from the mockup's transcript column, read for craft and never for structure: a revealed block on the
+ * surface with a hairline border and the medium radius (the artifact and tool cards), one entry per skill whose
+ * name is the title — text colour, medium weight, the mono face, since it is also a name the composer types —
+ * with its facts after it in the tertiary ink joined by the row vocabulary's `·`, the description beneath in the
+ * secondary prose size, and the path last, smallest and quietest, wrapping anywhere so a long one never widens the
+ * block. The count is the row's own text line, as every system notice's is. No in-context indicator is drawn:
+ * ESC-37, ruled, and REQ-CHAT-162 as amended forbid one on this and every other surface.
+ *
+ * Search paints onto the fields: a match's offsets are into the row text, and each field knows where it sits there.
+ * The text's own punctuation between fields (`- `, the brackets round the scope, ` triggers: `) is not drawn, so a
+ * match that falls only there selects the row (REQ-CHAT-074 searches the row's text) and paints nothing in it.
+ *
+ * REQ-CHAT-076: every field is drawn through `PlainText`, so a bare `http(s)` URL in a skill's description — or in
+ * any other field — is the same clickable link, trailing punctuation left out, that it was while every system row
+ * went through `PlainText` whole; and on PlainText's own terms, so a field holding a link draws the link rather than
+ * a match painted across it.
+ */
+const SKILL_LISTING_LAYOUT = { id: 'skill-listing', relations: [{ kind: 'text-fit', axis: 'x' }] } satisfies UiLayoutContract;
+
+function spanMatch(match: RowRenderProps['match'], span: SkillListingSpan): { start: number; end: number } | null {
+  if (!match) return null;
+  const end = span.start + span.text.length;
+  const from = Math.max(match.start, span.start);
+  const to = Math.min(match.end, end);
+  return from < to ? { start: from - span.start, end: to - span.start } : null;
+}
+
+function SkillListingBlock({ listing, match, onOpenLink }: { listing: ParsedSkillListing; match: RowRenderProps['match']; onOpenLink: ((href: string) => void) | undefined }) {
+  const field = (span: SkillListingSpan) => <PlainText text={span.text} match={spanMatch(match, span)} onOpenLink={onOpenLink} />;
+  return (
+    <div className="row__body skill-listing" data-testid="skill-listing" data-count={listing.count} data-names={listing.skills.map((s) => s.name.text).join(',')} {...layoutContractAttributes(SKILL_LISTING_LAYOUT)}>
+      <div className="skill-listing__count">{field(listing.header)}</div>
+      {listing.skills.length > 0 && (
+        <ol className="skill-listing__skills" aria-label="Listed skills">
+          {listing.skills.map((s) => (
+            <li key={s.name.start} className="skill-listing__skill" data-testid="skill-listing-entry"
+              data-name={s.name.text} data-scope={s.scope.text} data-triggers={s.triggers?.text ?? ''} data-description={s.description.text} data-path={s.path.text}>
+              <div className="skill-listing__line mono">
+                <span className="skill-listing__name">{field(s.name)}</span>
+                <span className="skill-listing__facts">
+                  {FACT_SEPARATOR}{field(s.scope)}
+                  {s.triggers !== null && <>{FACT_SEPARATOR}<span className="skill-listing__label">triggers </span>{field(s.triggers)}</>}
+                </span>
+              </div>
+              {s.description.text !== '' && <div className="skill-listing__description">{field(s.description)}</div>}
+              <div className="skill-listing__path mono" title={s.path.text}>{field(s.path)}</div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
 
 export function Row(p: RowProps) {
   const surface = useTranscriptSurface();
@@ -751,6 +865,8 @@ export function Row(p: RowProps) {
 
   // Every other category. REQ-CHAT-056's Markdown on the agent-message category only.
   const markdown = isMessageRow(row);
+  // REQ-CHAT-162: a system notice whose text is the `/skills` listing is drawn as the listing.
+  const listing = row.kind === 'system' ? parseSkillListing(row.body) : null;
   return (
     <article {...common} className={`row row--${row.kind}${live ? ' row--streaming' : ''}${blockStartClass}`} style={depthStyle(surface, row)} data-index={row.index} data-settled={row.settled} data-agent={row.name} data-testid={`row-${row.kind}`}>
       <div className="row__grid">
@@ -758,7 +874,9 @@ export function Row(p: RowProps) {
         <div className="row__main">
           {markdown
             ? <Markdown source={row.body} onOpenLink={surface.openLink} className="row__body row__body--md" testId="row-markdown" />
-            : <div className={`row__body${row.kind === 'diff' ? ' mono row__body--diff' : ''}`}><PlainText text={row.body} match={match} onOpenLink={surface.openLink} /></div>}
+            : listing !== null
+              ? <SkillListingBlock listing={listing} match={match} onOpenLink={surface.openLink} />
+              : <div className={`row__body${row.kind === 'diff' ? ' mono row__body--diff' : ''}`}><PlainText text={row.body} match={match} onOpenLink={surface.openLink} /></div>}
           {row.attachments && row.attachments.length > 0 && (
             <ol className="row__attachments" aria-label="Image attachments">
               {row.attachments.map((attachment, index) => (

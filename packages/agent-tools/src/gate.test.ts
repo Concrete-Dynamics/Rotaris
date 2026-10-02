@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -7,11 +7,13 @@ import { FakeClock } from '@rotaris/kernel';
 import type { ApprovalPayload } from '@rotaris/contracts';
 import { PendingApprovals, PresenterRegistry, type PresenterPort } from './approvals.js';
 import type { ToolHooks } from './gate.js';
-import { completeTruncatedJson, Gate, repairPayload, simpleExecutor, type GateDeps, type GateSink, type ToolCall } from './gate.js';
+import { anySchema, completeTruncatedJson, Gate, repairPayload, simpleExecutor, type GateDeps, type GateSink, type ToolCall } from './gate.js';
 import { buildPolicy, PolicyContext } from './policy.js';
 import { terminalTool, TERMINAL_DEFAULTS, type TerminalManager } from './terminal/index.js';
 import { askQuestionsTool, PendingQuestions } from './tools/questions.js';
+import { realPathOf } from './tools/fence.js';
 import { FileToolState, haetEditTool, writeFileTool } from './tools/files.js';
+import { INTERRUPTED_FAILURE_KIND } from './tools/types.js';
 
 const ROOT = 'D:/ws';
 
@@ -60,11 +62,11 @@ function recordingSink() {
   return { sink, decisions, requested, issues, timeline, opens, settles, pending, warnings };
 }
 
-function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null; planGateHeld?: boolean; planGateWithheldNames?: readonly string[]; writeClaimFor?: GateDeps['writeClaimFor']; root?: string } = {}) {
+function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null; planGateHeld?: boolean; planGateWithheldNames?: readonly string[]; writeClaimFor?: GateDeps['writeClaimFor']; root?: string; publicTool?: GateDeps['publicTool']; resolvePath?: GateDeps['resolvePath']; presence?: GateDeps['presence'] } = {}) {
   const clock = new FakeClock();
   const rec = recordingSink();
   const approvals = new PendingApprovals(clock);
-  const policy = new PolicyContext(buildPolicy({ preset: opts.preset ?? 'ask', workspaceRoot: ROOT }));
+  const policy = new PolicyContext(buildPolicy({ preset: opts.preset ?? 'ask', workspaceRoot: opts.root ?? ROOT }));
   const executed: Record<string, unknown>[] = [];
   const executors = new Map();
   executors.set('write_file', simpleExecutor('write_file', 'w', z.object({ operation: z.string(), path: z.string() }), async (a) => { executed.push(a); return { text: `wrote ${a.path}`, isError: false, diff: 'd' }; }));
@@ -75,12 +77,13 @@ function harness(opts: { preset?: string; attended?: boolean; presenter?: Presen
   let seq = 0;
   const gate = new Gate({
     sessionId: 'S1', workspaceRoot: opts.root ?? ROOT, policy, approvals, attended: () => opts.attended ?? true, presenter: opts.presenter === undefined ? { present: async () => ({ ok: true }), close: () => undefined } : opts.presenter,
-    headlessPolicy: opts.headless ?? 'deny', abortHook: opts.abortHook ?? null, approvalTimeoutMs: opts.timeoutMs ?? 300_000, executors, resolvePath: (p) => (p.startsWith('D:/') ? p : `${ROOT}/${p}`),
+    headlessPolicy: opts.headless ?? 'deny', abortHook: opts.abortHook ?? null, approvalTimeoutMs: opts.timeoutMs ?? 300_000, executors, resolvePath: opts.resolvePath ?? ((p) => (p.startsWith('D:/') ? p : `${ROOT}/${p}`)), publicTool: opts.publicTool ?? (() => true),
     monotonic: clock, wall: clock, timers: clock, sink: rec.sink, nextSequence: () => ++seq, newRequestId: () => `req${++seq}`,
     hooks: opts.hooks ?? null,
     planGateHeld: () => opts.planGateHeld ?? false,
     planGateWithheldNames: () => new Set(opts.planGateWithheldNames ?? []),
     ...(opts.writeClaimFor ? { writeClaimFor: opts.writeClaimFor } : {}),
+    ...(opts.presence ? { presence: opts.presence } : {}),
   });
   const call = (name: string, args: unknown): ToolCall => ({ callId: `c-${name}`, name, rawArgs: typeof args === 'string' ? args : (args as Record<string, unknown>), persona: 'orchestrator', agentId: 'orchestrator', agentName: 'orchestrator' });
   return { gate, clock, rec, approvals, policy, executed, call };
@@ -138,6 +141,90 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     expect(h.rec.decisions[1]).toMatchObject({ source: 'session-rule', rule_id: 'session:allow:1' });
   });
 
+  it('PD-TOOLS-004: approve for session on an edit covers the retry loop on that path through the gate, for that persona only', async () => {
+    const edits: Record<string, unknown>[] = [];
+    const haet = simpleExecutor('haet_edit', 'e', anySchema, async (a) => { edits.push(a); return { text: 'edited', isError: false }; });
+    const h = harness({ extraExecutors: [['haet_edit', haet], ['haet', haet]] });
+    const s = new AbortController().signal;
+    const first = h.gate.dispatch(h.call('haet_edit', { path: 'specs/index.md', content_hash: '1'.repeat(64), old_string: 'a (b', new_string: 'c' }), s);
+    await Promise.resolve();
+    h.approvals.resolve('req1', 'session');
+    expect((await first).status).toBe('ok');
+    expect(h.rec.decisions[0]).toMatchObject({ source: 'user-session', rule_id: 'approval:session' });
+    expect(h.rec.decisions[0]!['reason']).toBe("The user approved 'haet_edit' for this session (rule 'preset:ask' asked); session rule 'session:allow:1' added.");
+    // the retries: another old_string, another hash, the alias — no approval is asked for any of them
+    expect((await h.gate.dispatch(h.call('haet_edit', { path: 'specs/index.md', content_hash: '2'.repeat(64), old_string: 'a', new_string: 'c' }), s)).status).toBe('ok');
+    expect((await h.gate.dispatch(h.call('haet', { path: './specs/index.md', content_hash: '3'.repeat(64), old_string: 'b', new_string: 'c' }), s)).status).toBe('ok');
+    expect(h.rec.requested).toHaveLength(1);
+    expect(h.rec.decisions.slice(1).map((d) => d['rule_id'])).toEqual(['session:allow:1', 'session:allow:1']);
+    // the same edit from another persona, and another path from this one, each ask again
+    const coder = h.gate.dispatch({ ...h.call('haet_edit', { path: 'specs/index.md', content_hash: '2'.repeat(64), old_string: 'a', new_string: 'c' }), persona: 'coder' }, s);
+    await Promise.resolve();
+    expect(h.rec.requested).toHaveLength(2);
+    h.approvals.resolve(String(h.rec.requested[1]!['request_id']), 'deny');
+    expect((await coder).status).toBe('blocked');
+    const other = h.gate.dispatch(h.call('haet_edit', { path: 'specs/other.md', content_hash: '2'.repeat(64), old_string: 'a', new_string: 'c' }), s);
+    await Promise.resolve();
+    expect(h.rec.requested).toHaveLength(3);
+    h.approvals.resolve(String(h.rec.requested[2]!['request_id']), 'deny');
+    expect((await other).status).toBe('blocked');
+    expect(edits).toHaveLength(3);
+  });
+
+  it('REQ-TOOLS-018 through the gate with the run host\'s resolver: a workspace-relative read under restricted is allowed, with the process directory elsewhere', async () => {
+    // The harness's own resolver joins the root itself, which is how the path scope resolving the raw argument against
+    // the process directory hid until 2026-09-28; this case takes a real root and `realPathOf`, as `run-host/tools.ts` does.
+    const ws = realPathOf(mkdtempSync(join(tmpdir(), 'gate-req-tools-018-')));
+    try {
+      mkdirSync(join(ws, 'specs'));
+      writeFileSync(join(ws, 'specs', 'index.md'), 'x\n');
+      expect(realPathOf(process.cwd()).startsWith(ws)).toBe(false);
+      const reads: unknown[] = [];
+      const readFile = simpleExecutor('read_file', 'r', z.object({ path: z.string() }), async (a) => { reads.push(a); return { text: 'x', isError: false }; });
+      const h = harness({ preset: 'restricted', root: ws, resolvePath: (p) => { try { return realPathOf(p); } catch { return null; } }, extraExecutors: [['read_file', readFile]] });
+      const s = new AbortController().signal;
+      const inside = h.gate.dispatch(h.call('read_file', { path: 'specs/index.md' }), s);
+      await Promise.resolve();
+      // A regression asks under restricted:read-outside-workspace; answer it so the case fails rather than waits.
+      for (const q of h.rec.requested) h.approvals.resolve(String(q['request_id']), 'deny');
+      expect((await inside).status).toBe('ok');
+      expect(h.rec.decisions[0]).toMatchObject({ decision: 'allow', rule_id: 'restricted:read-only-tool' });
+      expect(reads).toEqual([{ path: 'specs/index.md' }]);
+      // and a path outside the root still asks, as REQ-TOOLS-018 makes it
+      const outside = h.gate.dispatch(h.call('read_file', { path: join(tmpdir(), 'not-in-this-workspace.md') }), s);
+      await Promise.resolve();
+      expect(h.rec.requested).toHaveLength(1);
+      expect(h.rec.requested[0]).toMatchObject({ rule_id: 'restricted:read-outside-workspace' });
+      h.approvals.resolve(String(h.rec.requested[0]!['request_id']), 'deny');
+      expect((await outside).status).toBe('blocked');
+      expect(reads).toHaveLength(1);
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('PD-TOOLS-004: an MCP tool the surface offers as write_file keeps the exact match — another content on the same path asks again', async () => {
+    const writes: Record<string, unknown>[] = [];
+    const serverWrite = simpleExecutor('write_file', 'a server\'s write_file', anySchema, async (a) => { writes.push(a); return { text: 'written', isError: false }; });
+    const h = harness({ extraExecutors: [['write_file', serverWrite]], publicTool: (name) => name !== 'write_file' });
+    const s = new AbortController().signal;
+    const first = h.gate.dispatch(h.call('write_file', { path: 'specs/index.md', content: 'one' }), s);
+    await Promise.resolve();
+    h.approvals.resolve('req1', 'session');
+    expect((await first).status).toBe('ok');
+    expect(h.policy.sessionApprovals[0]!.paths).toBeNull();
+    // the identical call is covered, as REQ-TOOLS-024 covers it
+    expect((await h.gate.dispatch(h.call('write_file', { content: 'one', path: 'specs/index.md' }), s)).status).toBe('ok');
+    expect(h.rec.requested).toHaveLength(1);
+    // another content on the same path is not: the server's tool was never scoped by path
+    const other = h.gate.dispatch(h.call('write_file', { path: 'specs/index.md', content: 'two' }), s);
+    await Promise.resolve();
+    expect(h.rec.requested).toHaveLength(2);
+    h.approvals.resolve(String(h.rec.requested[1]!['request_id']), 'deny');
+    expect((await other).status).toBe('blocked');
+    expect(writes).toEqual([{ path: 'specs/index.md', content: 'one' }, { content: 'one', path: 'specs/index.md' }]);
+  });
+
   it('ask → deny, timeout, cancel: the three deny sources with their reason clauses', async () => {
     const h = harness({ timeoutMs: 5_000 });
     const s = new AbortController().signal;
@@ -161,6 +248,36 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     expect((await c).status).toBe('blocked');
     expect(h.rec.decisions[2]).toMatchObject({ source: 'cancelled' });
     expect(String(h.rec.decisions[2]!['reason'])).toMatch(/the approval request was cancelled\.$/);
+  });
+
+  it('PD-ORCH-005 clause 9: an approval withdrawn by a rest is never a denial — nothing is audited or raised, the timeline names the interruption, the call settles blocked, interrupted and never run, and asked again it asks afresh', async () => {
+    const h = harness();
+    const s = new AbortController().signal;
+    const a = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), s);
+    await Promise.resolve();
+    expect(h.approvals.withdrawAll('stop')).toBe(1);
+    const r = await a;
+    expect(r).toMatchObject({ status: 'blocked', isError: true, interrupted: true, decision: null, text: 'The approval this call was waiting on was withdrawn by the stop; the call was not run.' });
+    expect(h.executed).toEqual([]);
+    expect(h.rec.decisions).toEqual([]);
+    expect(h.rec.issues).toEqual([]);
+    expect(h.rec.timeline).toEqual(['approval_withdrawn']);
+    expect(h.rec.pending.at(-1)).toEqual([]);
+    expect(h.rec.settles.at(-1)).toMatchObject({ failure_kind: 'interrupted' });
+    const again = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), s);
+    await Promise.resolve();
+    expect(h.rec.requested).toHaveLength(2);
+    expect(h.approvals.resolve(h.approvals.pending()[0]!.request_id, 'once')).toBe(true);
+    expect(await again).toMatchObject({ status: 'ok' });
+    expect(h.executed).toHaveLength(1);
+  });
+
+  it('PD-ORCH-005: an executor that reports its rest cut it short (the interrupted failure kind) settles the call interrupted', async () => {
+    const h = harness({ preset: 'autonomous', extraExecutors: [['todo', simpleExecutor('todo', 'todo', z.object({ operation: z.string() }), async () => ({ text: 'released by the pause', isError: true, failureKind: INTERRUPTED_FAILURE_KIND }))]] });
+    const r = await h.gate.dispatch(h.call('todo', { operation: 'list' }), new AbortController().signal);
+    expect(r).toMatchObject({ status: 'failed', interrupted: true, text: 'released by the pause' });
+    const plain = harness({ preset: 'autonomous', extraExecutors: [['todo', simpleExecutor('todo', 'todo', z.object({ operation: z.string() }), async () => ({ text: 'broke', isError: true, failureKind: 'execution_error' }))]] });
+    expect((await plain.gate.dispatch(plain.call('todo', { operation: 'list' }), new AbortController().signal)).interrupted).toBeUndefined();
   });
 
   it('REQ-TOOLS-055: a timeout of 0 registers no deadline; only an answer or a cancellation releases the wait', async () => {
@@ -196,6 +313,37 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     expect(r.status).toBe('blocked');
     expect(h.rec.decisions[0]).toMatchObject({ source: 'presenter-error' });
     expect(h.approvals.size).toBe(0);
+  });
+
+  /*
+   * REQ-TOOLS-063: a request queued behind another dialog is shown only when that dialog closes, so its presentation
+   * may never come. A timeout or a cancellation while it is queued drops it unshown, and it counts as cancelled
+   * (REQ-TOOLS-054). An answer given elsewhere while it is queued is honoured. Before the gate raced the presentation
+   * against its own wait, a presenter that never confirmed held the call until the presenter's bound denied it.
+   */
+  it('REQ-TOOLS-063/054: a queued request whose wait times out is dropped unshown and counts as cancelled', async () => {
+    const closed: string[] = [];
+    const h = harness({ timeoutMs: 1_000, presenter: { present: () => new Promise(() => undefined), close: (id) => { closed.push(id); } } });
+    const p = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
+    await vi.waitFor(() => expect(h.approvals.size).toBe(1));
+    h.clock.advance(1_000);
+    const r = await p;
+    expect(r.status).toBe('blocked');
+    expect(h.rec.decisions[0]).toMatchObject({ source: 'cancelled', request_id: 'req1' });
+    expect(closed).toEqual(['req1']);
+    expect(h.approvals.size).toBe(0);
+    expect(h.executed).toHaveLength(0);
+  });
+
+  it('REQ-TOOLS-063: a queued request answered elsewhere before it is shown is honoured', async () => {
+    const h = harness({ presenter: { present: () => new Promise(() => undefined), close: () => undefined } });
+    const p = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
+    await vi.waitFor(() => expect(h.approvals.size).toBe(1));
+    expect(h.approvals.resolve('req1', 'once')).toBe(true);
+    const r = await p;
+    expect(r.status).toBe('ok');
+    expect(h.rec.decisions[0]).toMatchObject({ source: 'user-once', request_id: 'req1' });
+    expect(h.executed).toHaveLength(1);
   });
 
   it('REQ-TOOLS-026: approval resolution that raises denies with source fail-closed', async () => {
@@ -340,6 +488,17 @@ describe('the two hook slots (ADR-0015, REQ-HOOKS-004/005/047/068/071/072/074)',
     expect(bad.followUp).toBe("Hook 'P' reported after the call: noted");
     expect(rh.calls[3]!.call.results).toEqual([{ kind: 'error', text: bad.text }]);
   });
+  it('PD-ORCH-005 clause 9 (found by phase 3\'s second review): a question the rest withdrew never ran — blocked, recorded as withdrawn, no post_tool hook and no tool error', async () => {
+    const rh = recordingHooks();
+    const withdrawn = simpleExecutor('ask_questions', 'q', anySchema, async () => ({ text: 'The questions were withdrawn by the pause.', isError: true, failureKind: INTERRUPTED_FAILURE_KIND, withdrawnBy: 'pause' as const }));
+    const h = harness({ preset: 'autonomous', hooks: rh.hooks, extraExecutors: [['ask_questions', withdrawn]] });
+    const r = await h.gate.dispatch(h.call('ask_questions', {}), new AbortController().signal);
+    expect(r).toMatchObject({ status: 'blocked', interrupted: true, blockedReason: 'The questions were withdrawn by the pause.' });
+    expect(rh.calls.map((c) => c.slot)).toEqual(['pre']);
+    expect(h.rec.timeline).toContain('question_withdrawn');
+    expect(h.rec.issues).toEqual([]);
+  });
+
   it('REQ-HOOKS-004/068: a call the policy denies starts no hook; no hook port means one lookup and nothing more', async () => {
     const rh = recordingHooks();
     const h = harness({ preset: 'autonomous', hooks: rh.hooks });
@@ -383,6 +542,25 @@ describe('the plan gate at dispatch (REQ-ORCH-153, ADR-0062)', () => {
     expect(rh.slots).toEqual([]);
     // No permission decision is taken either: nothing was permitted, so nothing is audited as permitted.
     expect(h.rec.decisions).toEqual([]);
+  });
+
+  it('withholds a server\'s tool offered under a public read-only name — the declaration is the tool\'s, not the name\'s (REQ-TOOLS-001, ADR-0016)', async () => {
+    const reads: unknown[] = [];
+    const serverRead = simpleExecutor('read_file', 'a server\'s read_file', anySchema, async (a) => { reads.push(a); return { text: 'read', isError: false }; });
+    const h = harness({ preset: 'autonomous', planGateHeld: true, extraExecutors: [['read_file', serverRead]], publicTool: (name) => name !== 'read_file' });
+    const r = await h.gate.dispatch(h.call('read_file', { path: 'a.ts' }), new AbortController().signal);
+    expect(r).toMatchObject({ status: 'blocked', isError: true });
+    expect(r.text).toContain('held at the plan gate');
+    expect(h.rec.settles[0]).toMatchObject({ failure_kind: 'plan_gate_withheld' });
+    expect(reads).toEqual([]);
+    // the public tool of that name is what the requirement leaves a held run
+    const pub = harness({ preset: 'autonomous', planGateHeld: true, extraExecutors: [['read_file', simpleExecutor('read_file', 'r', anySchema, async () => ({ text: 'read', isError: false }))]] });
+    expect((await pub.gate.dispatch(pub.call('read_file', { path: 'a.ts' }), new AbortController().signal)).status).toBe('ok');
+    // a public read-only name the port never offered is still no tool here: no approval could make it exist
+    const none = harness({ preset: 'autonomous', planGateHeld: true, publicTool: () => false });
+    const u = await none.gate.dispatch(none.call('read_file', { path: 'a.ts' }), new AbortController().signal);
+    expect(u.status).toBe('failed');
+    expect(u.text).toContain("Unknown tool 'read_file'");
   });
 
   it('refuses a name this port never offered — an MCP tool reaching the role by another route', async () => {
@@ -481,5 +659,145 @@ describe('write scopes at dispatch (PD-TOOLS-006)', () => {
     await h.gate.dispatch(h.call('terminal', { command: 'echo src/api/users.ts' }), new AbortController().signal);
     await h.gate.dispatch(h.call('todo', { operation: 'list' }), new AbortController().signal);
     expect(claims.asked).toEqual(['src/ui/view.ts']);
+  });
+});
+
+/**
+ * PD-TOOLS-005: after one approval wait ends by timeout, the run treats the user as away and every further ask that
+ * would prompt resolves at once under the headless policy, until the user's next input. The holder is the engine's
+ * (one per run, on every agent's port); here it is a stand-in with the same two methods, so each clause is decided
+ * against the gate alone.
+ */
+describe('PD-TOOLS-005: after one unanswered approval, a run treats the user as away', () => {
+  const presence = () => {
+    let mark: { afterSeconds: number } | null = null;
+    return { away: () => mark, markAway: (afterSeconds: number) => { mark ??= { afterSeconds }; }, returned: () => { mark = null; } };
+  };
+  const write = (h: ReturnType<typeof harness>, path: string, s = new AbortController().signal) => h.gate.dispatch(h.call('write_file', { operation: 'create', path }), s);
+  const ASKED = "No rule matched; permission mode 'ask' defaults to ask.";
+
+  it('the first ask waits the full timeout with REQ-TOOLS-052\'s reason and marks the user away with that timeout; the second resolves at once with the directive\'s reason', async () => {
+    const p = presence();
+    const h = harness({ timeoutMs: 5_000, presence: p });
+    const first = write(h, 'a.txt');
+    await Promise.resolve();
+    expect(h.rec.requested[0]).toMatchObject({ resolver: 'brokered', timeout_seconds: 5, unattended_reason: '' });
+    // Not a second early: the full wait is paid, and the user is not away while it runs.
+    h.clock.advance(4_999);
+    expect(h.approvals.size).toBe(1);
+    expect(p.away()).toBeNull();
+    h.clock.advance(1);
+    const r1 = await first;
+    expect(r1.status).toBe('blocked');
+    expect(h.rec.decisions[0]).toMatchObject({ source: 'timeout', request_id: 'req1' });
+    expect(h.rec.decisions[0]!['reason']).toBe(`${ASKED} Denied because no answer arrived within 5 seconds.`);
+    expect(p.away()).toEqual({ afterSeconds: 5 });
+
+    // The second ask: no wait is created, nothing is presented, the decision is the headless policy's with the away reason.
+    const r2 = await write(h, 'b.txt');
+    expect(r2.status).toBe('blocked');
+    expect(h.approvals.size).toBe(0);
+    expect(h.rec.requested).toHaveLength(2);
+    expect(h.rec.requested[1]).toMatchObject({ resolver: 'headless', timeout_seconds: null, unattended_reason: 'headless-policy' });
+    expect(h.rec.decisions[1]).toMatchObject({ decision: 'deny', source: 'headless-policy', rule_id: 'preset:ask', request_id: h.rec.requested[1]!['request_id'] });
+    expect(h.rec.decisions[1]!['reason']).toBe(`${ASKED} The user is treated as away because an earlier approval in this run went unanswered for 5 seconds, so the request was denied.`);
+    expect(String(h.rec.decisions[1]!['reason'])).not.toMatch(/No approval UI/);
+    expect(r2.blockedReason).toBe(h.rec.decisions[1]!['reason']);
+    // The autopsy reads the cause from the permission_denied issue the deny records.
+    expect(h.rec.issues.at(-1)).toMatchObject({ kind: 'permission_denied' });
+    expect(String(h.rec.issues.at(-1)!['message'])).toContain('treated as away');
+    expect(h.executed).toHaveLength(0);
+
+    // The user returns (the engine clears the holder on their input): the next ask is brokered and waits again.
+    p.returned();
+    const third = write(h, 'c.txt');
+    await Promise.resolve();
+    expect(h.rec.requested[2]).toMatchObject({ resolver: 'brokered', timeout_seconds: 5 });
+    expect(h.approvals.size).toBe(1);
+    h.approvals.resolve(String(h.rec.requested[2]!['request_id']), 'once');
+    expect((await third).status).toBe('ok');
+  });
+
+  it('under `abort` the away ask is refused, the abort hook is invoked, and the reason says so without claiming no approval UI exists', async () => {
+    const p = presence();
+    p.markAway(300);
+    let aborted = 0;
+    const h = harness({ headless: 'abort', abortHook: () => { aborted += 1; }, presence: p });
+    const r = await write(h, 'a.txt');
+    expect(r.status).toBe('blocked');
+    expect(aborted).toBe(1);
+    expect(h.rec.decisions[0]).toMatchObject({ source: 'headless-policy' });
+    expect(h.rec.decisions[0]!['reason']).toBe(`${ASKED} The user is treated as away because an earlier approval in this run went unanswered for 300 seconds, so the request was denied and the headless approval policy aborts the run.`);
+    // No hook registered: REQ-TOOLS-065's degrade to deny, with the away reason.
+    const h2 = harness({ headless: 'abort', presence: p });
+    const r2 = await write(h2, 'a.txt');
+    expect(r2.blockedReason).toBe(`${ASKED} The user is treated as away because an earlier approval in this run went unanswered for 300 seconds, so the request was denied.`);
+    expect(h2.rec.warnings[0]).toMatch(/degrading to deny/);
+  });
+
+  it('a timeout of 0 waits without limit and never marks the user away (REQ-TOOLS-055)', async () => {
+    const p = presence();
+    const h = harness({ timeoutMs: 0, presence: p });
+    const first = write(h, 'a.txt');
+    await Promise.resolve();
+    h.clock.advance(24 * 3_600_000);
+    expect(h.approvals.size).toBe(1);
+    expect(p.away()).toBeNull();
+    // Released by a cancellation, as before: still not a timeout, still not away.
+    expect(h.approvals.cancelAll()).toBe(1);
+    expect((await first).status).toBe('blocked');
+    expect(h.rec.decisions[0]).toMatchObject({ source: 'cancelled' });
+    expect(p.away()).toBeNull();
+    const second = write(h, 'b.txt');
+    await Promise.resolve();
+    expect(h.rec.requested[1]).toMatchObject({ resolver: 'brokered', timeout_seconds: 0 });
+    expect(h.approvals.size).toBe(1);
+    h.approvals.resolve(String(h.rec.requested[1]!['request_id']), 'once');
+    expect((await second).status).toBe('ok');
+  });
+
+  it('a question still prompts and waits while the user is away (REQ-TOOLS-158/178), and asks a rule resolves without prompting are unaffected', async () => {
+    const p = presence();
+    p.markAway(300);
+    const questions = new PendingQuestions(new FakeClock());
+    const ask = askQuestionsTool({ pending: questions, conversationId: 'root', agentId: 'orchestrator', timeoutMs: 300_000, publish: () => true });
+    const h = harness({ presence: p, extraExecutors: [['ask_questions', ask]] });
+    // A question whose call is permitted reaches its executor and WAITS on the user-prompt channel, untouched by the
+    // away state: under `autonomous` nothing asks, so the call is permitted outright.
+    const h2 = harness({ preset: 'autonomous', presence: p, extraExecutors: [['ask_questions', ask]] });
+    const pending = h2.gate.dispatch(h2.call('ask_questions', { steps: [{ id: 'a', title: 'A', options: [{ id: 'x', label: 'X' }] }] }), new AbortController().signal);
+    await Promise.resolve(); await Promise.resolve();
+    expect(questions.pending()).toHaveLength(1);
+    expect(h2.rec.requested).toHaveLength(0);
+    const id = questions.pending()[0]!.request_id;
+    expect(questions.resolve(id, { a: { selected_option: 'x', freeform_text: null } })).toBe(true);
+    const answered = await pending;
+    expect(answered.status).toBe('ok');
+    expect(answered.text).toContain('## User Answers');
+    // A rule that allows: the read-only class executes without an approval and without the away state being consulted.
+    const g = await h.gate.dispatch(h.call('grep', { pattern: 'x' }), new AbortController().signal);
+    expect(g.status).toBe('failed'); // the stand-in executor throws — it RAN, which is the point
+    expect(h.rec.decisions.at(-1)).toMatchObject({ decision: 'allow', rule_id: 'ask:read-only-tool' });
+    // A rule that denies: the rule's own source and reason, not the headless policy's.
+    const d = await h.gate.dispatch(h.call('terminal', { command: 'rm -rf build' }), new AbortController().signal);
+    expect(d.status).toBe('blocked');
+    expect(h.rec.decisions.at(-1)).toMatchObject({ decision: 'deny', rule_id: 'starter:deny-recursive-delete', source: 'rule' });
+    expect(h.rec.requested).toHaveLength(0);
+    // The reading taken, raised as OQ-77: `ask_questions` is outside REQ-TOOLS-007's read-only class, so under the
+    // `ask` preset its own dispatch is an APPROVAL ask, and that ask is one the away state resolves at once — the
+    // question is never put to the user. The directive's "questions still prompt" clause governs the question the
+    // executor raises, and is reachable only where the call itself is permitted.
+    const q = await h.gate.dispatch(h.call('ask_questions', { steps: [{ id: 'b', title: 'B' }] }), new AbortController().signal);
+    expect(q.status).toBe('blocked');
+    expect(q.blockedReason).toBe(`${ASKED} The user is treated as away because an earlier approval in this run went unanswered for 300 seconds, so the request was denied.`);
+    expect(questions.pending()).toHaveLength(0);
+  });
+
+  it('a session with no presenter is still reported as such: REQ-TOOLS-065\'s reason, not the away one', async () => {
+    const p = presence();
+    p.markAway(300);
+    const h = harness({ attended: false, presence: p });
+    const r = await write(h, 'a.txt');
+    expect(r.blockedReason).toBe(`${ASKED} No approval UI is available in this host, so the request was denied.`);
   });
 });

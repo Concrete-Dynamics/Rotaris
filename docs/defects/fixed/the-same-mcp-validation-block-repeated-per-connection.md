@@ -25,3 +25,8 @@ Noticed 2026-09-18 by the run-autopsy of run `cc6191a2`; repaired on the same br
 *Confirmed landed and filed 2026-09-22: the repeat counter and its flush are in
 `packages/mcp/src/transport.ts:152-165`, and `stderrTail` is kept whatever the log does with the line.
 The note recorded its own repair and was never moved.*
+
+*Superseded in part 2026-09-27: "OQ-63's ruling stands — no level is filtered" is no longer true. OQ-63 was ruled on
+2026-09-23 as [`PD-MONITOR-002`](../../product/directives.md#pd-monitor-002) and built, so the application log records
+`info` and above unless `ROTARIS_APP_LOG_LEVEL` restores `debug`, and a child's stderr — `debug` — is not written at the
+default. The collapse and the truncation above still shape what a `debug` log holds; `stderrTail` is unchanged.*

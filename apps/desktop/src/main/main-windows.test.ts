@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  guardClose,
   MainWindows,
+  type GuardedWindow,
   type MainWindowAdapter,
   type MainWindowsDependencies,
   type MainWindowTimer,
@@ -15,6 +17,7 @@ interface MemoryWindow {
   closeAllowed: boolean;
   readonly focusListeners: (() => void)[];
   readonly closedListeners: (() => void)[];
+  readonly shownListeners: (() => void)[];
 }
 
 interface PendingTimer {
@@ -26,6 +29,7 @@ function harness(options: {
   readonly cwd?: string;
   readonly remembered?: string;
   readonly failLoads?: ReadonlySet<number>;
+  readonly postShowActivation?: (wcId: number) => void;
 } = {}) {
   const actions: string[] = [];
   const notices: { windowId: number; title: string; action?: string }[] = [];
@@ -41,7 +45,7 @@ function harness(options: {
     create: async ({ workspace, origin }) => {
       const win: MemoryWindow = {
         id: nextId++, workspace, destroyed: false, visible: false, minimized: false, closeAllowed: true,
-        focusListeners: [], closedListeners: [],
+        focusListeners: [], closedListeners: [], shownListeners: [],
       };
       windows.set(win.id, win);
       actions.push(`build:${workspace}:${origin}`);
@@ -59,7 +63,7 @@ function harness(options: {
     isDestroyed: (win) => win.destroyed,
     isMinimized: (win) => win.minimized,
     isVisible: (win) => win.visible,
-    show: (win) => { win.visible = true; actions.push(`show:${win.workspace}`); },
+    show: (win) => { win.visible = true; actions.push(`show:${win.workspace}`); for (const listener of win.shownListeners.splice(0)) listener(); },
     focus: (win) => { actions.push(`focus:${win.workspace}`); for (const listener of win.focusListeners) listener(); },
     restore: (win) => { win.minimized = false; actions.push(`restore:${win.workspace}`); },
     close: async (win) => {
@@ -77,6 +81,7 @@ function harness(options: {
     },
     onFocus: (win, listener) => { win.focusListeners.push(listener); },
     onClosed: (win, listener) => { win.closedListeners.push(listener); },
+    onShown: (win, listener) => { win.shownListeners.push(listener); },
     ownsAuxiliary: (_personaWindows, terminalWindows, senderId) => terminalWindows === `terminal:${senderId - 100}`,
     disposeResources: (_win, _wcId, personaWindows, terminalWindows) => actions.push(`dispose:${personaWindows}:${terminalWindows}`),
   };
@@ -87,7 +92,7 @@ function harness(options: {
     return { cancel: () => { pending.cancelled = true; } };
   };
 
-  const dependencies: MainWindowsDependencies<MemoryWindow, string, string> = {
+  const dependencies: MainWindowsDependencies<MemoryWindow, string, string, string> = {
     adapter,
     timers: { after },
     currentDirectory: () => options.cwd ?? 'C:/cwd',
@@ -110,9 +115,11 @@ function harness(options: {
     },
     reportFailure: (windowId, title) => notices.push({ windowId, title }),
     log: (message) => actions.push(`log:${message}`),
+    unshownApprovals: (approvals) => { actions.push(`unshown:${approvals.join(',')}`); },
+    ...(options.postShowActivation === undefined ? {} : { postShowActivation: (window) => { actions.push(`activate:${window.workspace}`); options.postShowActivation!(window.wcId); } }),
   };
 
-  const mainWindows = new MainWindows(dependencies);
+  const mainWindows = new MainWindows<MemoryWindow, string, string, string, string>(dependencies);
   return {
     mainWindows, actions, notices, folders, windows, openFailures,
     deferOpens: () => { deferOpens = true; },
@@ -122,6 +129,29 @@ function harness(options: {
 }
 
 describe('MainWindows', () => {
+  it('runs the post-show activation once per window, after the window is shown and never during construction (REQ-STARTUP-043, REQ-STARTUP-114, REQ-STARTUP-047)', async () => {
+    const activated: number[] = [];
+    const h = harness({ postShowActivation: (wcId) => activated.push(wcId) });
+    const first = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    // Built and loaded, not shown: nothing has been activated.
+    expect(activated).toEqual([]);
+    expect(h.actions.filter((a) => a.startsWith('activate:'))).toEqual([]);
+    const win = h.windows.get(first.wcId)!;
+    win.visible = true;
+    for (const listener of win.shownListeners.splice(0)) listener();
+    expect(activated).toEqual([first.wcId]);
+    // A second show of the same window activates nothing again.
+    for (const listener of win.shownListeners.splice(0)) listener();
+    expect(activated).toEqual([first.wcId]);
+    // A replacement window goes through the same activation — a fresh check for that window (REQ-STARTUP-047).
+    await h.mainWindows.open(first.wcId, 'C:/a');
+    h.folders.push('C:/b');
+    await h.mainWindows.choose(first.wcId, { newWindow: false });
+    expect(activated).toHaveLength(2);
+    expect(activated[1]).not.toBe(first.wcId);
+    expect(h.actions.indexOf('show:C:/b')).toBeLessThan(h.actions.indexOf('activate:C:/b'));
+  });
+
   it('tracks focus order, removes closed windows, and attributes senders', async () => {
     const h = harness();
     const first = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
@@ -257,11 +287,96 @@ describe('MainWindows', () => {
     expect(h.notices.map((notice) => notice.windowId)).toEqual([first.wcId, second.wcId]);
   });
 
+  it('REQ-TOOLS-063: answers whether a queued approval waits behind an open dialog or requests ahead of it', async () => {
+    const h = harness();
+    const win = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    expect(h.mainWindows.enqueueApproval(win.wcId, 'first')).toBe(false);
+    h.mainWindows.takeApproval(win.wcId, () => 0);
+    h.mainWindows.setOpenDialog(win.wcId, 'dialog of first');
+    expect(h.mainWindows.enqueueApproval(win.wcId, 'second')).toBe(true);
+    h.mainWindows.setOpenDialog(win.wcId, null);
+    expect(h.mainWindows.enqueueApproval(win.wcId, 'third')).toBe(true);
+    expect(h.mainWindows.enqueueApproval(win.wcId + 999, 'nobody')).toBe(false);
+  });
+
+  it('REQ-TOOLS-063/064: a closing window hands over the requests still queued for its dialog, so none is left to hang', async () => {
+    const h = harness();
+    const first = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    const second = await h.mainWindows.build({ workspace: 'C:/b', origin: 'open-request' });
+    h.mainWindows.enqueueApproval(first.wcId, 'shown');
+    h.mainWindows.takeApproval(first.wcId, () => 0);
+    h.mainWindows.setOpenDialog(first.wcId, 'dialog of shown');
+    h.mainWindows.enqueueApproval(first.wcId, 'queued-1');
+    h.mainWindows.enqueueApproval(first.wcId, 'queued-2');
+    h.windows.get(first.wcId)!.destroyed = true;
+    h.windows.get(first.wcId)!.closedListeners[0]!();
+    expect(h.actions.filter((action) => action.startsWith('unshown:'))).toEqual(['unshown:queued-1,queued-2']);
+    expect(h.mainWindows.approvalQueue(first.wcId)).toEqual([]);
+    // A window that closes with nothing queued hands over nothing.
+    h.windows.get(second.wcId)!.destroyed = true;
+    h.windows.get(second.wcId)!.closedListeners[0]!();
+    expect(h.actions.filter((action) => action.startsWith('unshown:'))).toHaveLength(1);
+  });
+
   it('destroys and cleans up a window if loading fails after registration', async () => {
     const h = harness({ failLoads: new Set([1]) });
     await expect(h.mainWindows.build({ workspace: 'C:/broken', origin: 'launch' })).rejects.toThrow('load-failed:1');
     expect(h.mainWindows.ordered()).toHaveLength(0);
     expect(h.actions).toContain('destroy:C:/broken');
     expect(h.actions).toContain('dispose:personas:1:terminal:1');
+  });
+});
+describe('the main window\'s close guard reports a confirmed close before it closes (PD-ORCH-005 clause 9)', () => {
+  function fakeWindow(log: string[]) {
+    let listener: ((event: { preventDefault(): void }) => void) | null = null;
+    const win: GuardedWindow & { attempt(): void } = {
+      on: (_event, l) => { listener = l; },
+      isDestroyed: () => false,
+      close: () => { log.push('close'); win.attempt(); },
+      attempt: () => { let prevented = false; listener?.({ preventDefault: () => { prevented = true; } }); log.push(prevented ? 'held' : 'passed'); },
+    };
+    return win;
+  }
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it('a close the guard allows is reported, then made, and passes', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    guardClose(win, async () => true, () => log.push('confirmed'));
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['held', 'confirmed', 'close', 'passed']);
+  });
+
+  it('a close the guard refuses is never reported, and the window stays', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    guardClose(win, async () => false, () => log.push('confirmed'));
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['held']);
+  });
+
+  it('a guard that cannot answer lets the close through, reported first', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    guardClose(win, async () => { throw new Error('the renderer is gone'); }, () => log.push('confirmed'));
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['held', 'confirmed', 'close', 'passed']);
+  });
+});
+
+describe('a main window\'s close guard, as the application\'s quit drives it (PD-ORCH-005 clause 9)', () => {
+  it('asking closes nothing; a confirmed guard lets the window\'s next close pass, and one that cannot answer allows', async () => {
+    const log: string[] = [];
+    let listener: ((event: { preventDefault(): void }) => void) | null = null;
+    const win: GuardedWindow = { on: (_e, l) => { listener = l; }, isDestroyed: () => false, close: () => { log.push('close'); let held = false; listener?.({ preventDefault: () => { held = true; } }); log.push(held ? 'held' : 'passed'); } };
+    const guard = guardClose(win, async () => { throw new Error('gone'); }, () => log.push('confirmed'));
+    expect(await guard.ask()).toBe(true);
+    expect(log).toEqual([]);
+    guard.confirm();
+    guard.close();
+    expect(log).toEqual(['confirmed', 'close', 'passed']);
   });
 });

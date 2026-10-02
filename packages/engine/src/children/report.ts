@@ -1,6 +1,7 @@
 import { millis, type Millis, type Timers } from '@rotaris/kernel';
 import { normaliseReportStatus, type ReportStatus } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
+import type { CutOff } from './cut-off.js';
 
 /**
  * REQ-ORCH-108..112: every terminal child produces a machine-readable report before its parent resumes.
@@ -32,6 +33,12 @@ export interface ChildReport {
   readonly errors: readonly { type: string; message: string }[];
   readonly next_actions: readonly string[];
   readonly tags: readonly string[];
+  /**
+   * PD-ORCH-004: present only on a child that REQ-ORCH-088's limit cut off while it was making progress — the
+   * statement, the paths it changed and, unless it is itself a continuation, the continuation offer. Runner-owned:
+   * no summarising pass writes it, and every other report carries no such field.
+   */
+  readonly cut_off?: CutOff;
 }
 
 export interface ReportInput {
@@ -90,6 +97,15 @@ export function transcriptText(messages: readonly ChatMessage[]): string {
 
 /** `REQ-TOOLS-001`: `haet` resolves to the same tool as `haet_edit`; all three write to a path. */
 const WRITE_TOOLS: ReadonlySet<string> = new Set(['write_file', 'haet_edit', 'haet']);
+
+/**
+ * Whether a call of `toolName` writes a file at the path its arguments name — the one list the report and PD-ORCH-004's
+ * path list share. Compared in lower case, as REQ-TOOLS-024 compares a tool's name, so both readers agree on a call
+ * dispatched under another casing.
+ */
+export function isFileWritingTool(toolName: string): boolean {
+  return WRITE_TOOLS.has(toolName.toLowerCase());
+}
 /** `REQ-TOOLS-100`: every terminal observation ends with this block, sorted, with null-valued keys DROPPED. */
 const DIAGNOSTIC = '[terminal_diagnostic] ';
 
@@ -156,7 +172,7 @@ export function editedFilesFrom(messages: readonly ChatMessage[], reported: read
   for (const m of messages) {
     if (m.role !== 'assistant') continue;
     for (const p of m.content) {
-      if (p.kind !== 'tool-call' || !WRITE_TOOLS.has(p.name)) continue;
+      if (p.kind !== 'tool-call' || !isFileWritingTool(p.name)) continue;
       const a = jsonObject(p.args);
       add(asText(a?.['path']) || asText(a?.['file_path']));
     }
@@ -221,15 +237,21 @@ function shape(raw: unknown, input: ReportInput): ChildReport | null {
   };
 }
 
-/** The bounded pass: two attempts, a timeout, a report whatever happens. */
-export async function produceReport(input: ReportInput, s: SummariserDeps | null, signal: AbortSignal): Promise<ChildReport> {
+/**
+ * The bounded pass: two attempts, a timeout, a report whatever happens — unless the pass is cut short. `unsummarised`:
+ * why no summariser is passed, when one is withheld on purpose (PD-ORCH-005: a run coming to rest). Null is the pass cut
+ * short: `signal` aborted it (a cancel, a stop, a quit), or `halted` — PD-ORCH-005 clause 2, the run coming to rest —
+ * allowed no second attempt. No model call is made once either holds (found by phase 3's second review).
+ */
+export async function produceReport(input: ReportInput, s: SummariserDeps | null, signal: AbortSignal, unsummarised = 'no summariser is configured', halted: () => boolean = () => false): Promise<ChildReport | null> {
   const tester = deterministicTesterReport(input);
   if (tester) return tester;
-  if (!s) return fallbackReport(input, 'no summariser is configured');
+  if (!s) return fallbackReport(input, unsummarised);
   const transcript = transcriptText(input.messages);
   const timeout = s.timeoutMs ?? SUMMARY_TIMEOUT_MS;
   let complaint = '';
   for (let attempt = 1; attempt <= 2; attempt += 1) {
+    if (signal.aborted || (attempt > 1 && halted())) return null;
     const controller = new AbortController();
     const onAbort = () => controller.abort();
     signal.addEventListener('abort', onAbort, { once: true });
@@ -255,7 +277,7 @@ export async function produceReport(input: ReportInput, s: SummariserDeps | null
       signal.removeEventListener('abort', onAbort);
     }
     if (controller.signal.aborted && !signal.aborted) return fallbackReport(input, `the summarising pass exceeded ${timeout / 1000} s`);
-    if (signal.aborted) return fallbackReport(input, 'the run was cancelled during the summarising pass');
   }
+  if (signal.aborted) return null;
   return fallbackReport(input, `two attempts produced no usable report (${complaint})`);
 }

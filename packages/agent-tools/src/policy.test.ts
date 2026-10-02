@@ -1,17 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { PUBLIC_TOOL_NAMES } from '@rotaris/contracts';
 import { canonicalizeHost, classify, compileHostPattern, isLocal, matchHostPattern } from './egress.js';
 import {
   argumentSummary, buildPolicy, canonicalArgument, effectiveMode, evaluate, type EvaluationEnv, NETWORK_COMMAND_PATTERNS, permissionRequest, PolicyContext,
-  requestSummary, selectRequestedMode, UNRESTRICTED_POLICY, validatePolicy,
+  requestSummary, resolvedPathSet, selectRequestedMode, UNRESTRICTED_POLICY, validatePolicy,
 } from './policy.js';
 import {
   COORDINATOR_REMOVES, DECLARATIONS, expandDeclared, grantsOn, narrow, NETWORK_CLASS, READ_ONLY_CLASS, removeUnmet, resolveToolSet, validateDeclared, withholdsOn,
 } from './registry.js';
 import { decompose, escalationMatcherFires, patternMatcherFires, pipeToShellMatcherFires, tokenizePattern, tokensMatch } from './scanner.js';
+import { realPathOf } from './tools/fence.js';
 
 const ROOT = 'D:/ws';
-const env: EvaluationEnv = { attended: true, workspaceRoot: ROOT, resolvePath: (p) => (p.startsWith('D:/') ? p : `${ROOT}/${p}`) };
+/** A stand-in for an MCP edit tool such as the code-intelligence server's, whose own name is written only in its manifest (REQ-MCP-116). */
+const MCP_EDIT_TOOL = 'mcp_edit_in_file';
+const env: EvaluationEnv = { attended: true, workspaceRoot: ROOT, resolvePath: (p) => (p.startsWith('D:/') ? p : `${ROOT}/${p}`), publicTool: () => true };
 
 describe('registry (ADR-0016, REQ-TOOLS-001/004/005/006/007)', () => {
   it('declares every public name exactly once and the classes stay consistent with the declaration', () => {
@@ -256,16 +262,39 @@ describe('policy (ADR-0017, REQ-TOOLS-011..029, 039..047)', () => {
     expect(evaluate(p, [], permissionRequest('fetch', 'o', { url: 'http://169.254.169.254/' }), env).ruleId).toBe('ask:fetch-remote-host');
   });
 
-  it('REQ-TOOLS-018: path scope over the seven keys; unresolvable counts as outside; no path key never fires', () => {
-    const p = buildPolicy({ preset: 'restricted', workspaceRoot: ROOT });
-    expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'src/a.ts' }), env).ruleId).toBe('restricted:read-only-tool');
-    expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'D:/elsewhere/a.ts' }), env).ruleId).toBe('restricted:read-outside-workspace');
-    expect(evaluate(p, [], permissionRequest('grep', 'o', { paths: ['src', 'D:/elsewhere'] }), env).ruleId).toBe('restricted:read-outside-workspace');
-    const unresolvable: EvaluationEnv = { ...env, resolvePath: (x) => (x === ROOT ? ROOT : null) };
-    expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'src/a.ts' }), unresolvable).ruleId).toBe('restricted:read-outside-workspace');
-    expect(evaluate(p, [], permissionRequest('read_file', 'o', { offset: 1 }), env).ruleId).toBe('restricted:read-only-tool');
-    // REQ-TOOLS-044: autonomous never carries a path-scoped ask
-    expect(evaluate(buildPolicy({ preset: 'autonomous', workspaceRoot: ROOT }), [], permissionRequest('read_file', 'o', { path: 'D:/elsewhere' }), env).decision).toBe('allow');
+  it('REQ-TOOLS-018: path scope over the seven keys; a relative path resolves against the workspace root, not the process directory; unresolvable counts as outside; no path key never fires', () => {
+    /*
+     * A real directory and the run host's own resolver (`realPathOf`, a throw read as unresolvable). Until 2026-09-28
+     * this case ran over `D:/ws` with a resolver that joined the root itself, which is how the path scope handing the
+     * resolver the RAW argument hid: in the run host that argument resolved against the process directory, and this
+     * process's directory is not the workspace (`docs/defects/fixed/path-scope-resolves-a-relative-path-against-the-process-directory.md`).
+     */
+    const ws = realPathOf(mkdtempSync(join(tmpdir(), 'req-tools-018-')));
+    const elsewhere = realPathOf(mkdtempSync(join(tmpdir(), 'req-tools-018-elsewhere-')));
+    try {
+      mkdirSync(join(ws, 'src'));
+      writeFileSync(join(ws, 'src', 'a.ts'), 'x\n');
+      expect(realPathOf(process.cwd()).startsWith(ws)).toBe(false);
+      const fs: EvaluationEnv = { attended: true, workspaceRoot: ws, resolvePath: (x) => { try { return realPathOf(x); } catch { return null; } }, publicTool: () => true };
+      const p = buildPolicy({ preset: 'restricted', workspaceRoot: ws });
+      // a workspace-relative path: an existing file, one that does not exist yet, a list, and a directory
+      expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'src/a.ts' }), fs).ruleId).toBe('restricted:read-only-tool');
+      expect(evaluate(p, [], permissionRequest('read_file', 'o', { file_path: 'src/new.ts' }), fs).ruleId).toBe('restricted:read-only-tool');
+      expect(evaluate(p, [], permissionRequest('grep', 'o', { paths: ['src', 'src/a.ts'] }), fs).ruleId).toBe('restricted:read-only-tool');
+      expect(evaluate(p, [], permissionRequest('glob', 'o', { dir: '.' }), fs).ruleId).toBe('restricted:read-only-tool');
+      // one path escaping is enough, absolute or relative
+      expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: join(elsewhere, 'a.ts') }), fs).ruleId).toBe('restricted:read-outside-workspace');
+      expect(evaluate(p, [], permissionRequest('grep', 'o', { paths: ['src', elsewhere] }), fs).ruleId).toBe('restricted:read-outside-workspace');
+      expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: '../escaped.ts' }), fs).ruleId).toBe('restricted:read-outside-workspace');
+      const unresolvable: EvaluationEnv = { ...fs, resolvePath: (x) => (x === ws ? ws : null) };
+      expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'src/a.ts' }), unresolvable).ruleId).toBe('restricted:read-outside-workspace');
+      expect(evaluate(p, [], permissionRequest('read_file', 'o', { offset: 1 }), fs).ruleId).toBe('restricted:read-only-tool');
+      // REQ-TOOLS-044: autonomous never carries a path-scoped ask
+      expect(evaluate(buildPolicy({ preset: 'autonomous', workspaceRoot: ws }), [], permissionRequest('read_file', 'o', { path: elsewhere }), fs).decision).toBe('allow');
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
+      rmSync(elsewhere, { recursive: true, force: true });
+    }
   });
 
   it('REQ-TOOLS-023/024/025: session approvals first, most recent first, exact facet or exact args, surviving replacement', () => {
@@ -273,17 +302,18 @@ describe('policy (ADR-0017, REQ-TOOLS-011..029, 039..047)', () => {
     const push = permissionRequest('terminal', 'o', { command: 'git push origin main' });
     const before = ctx.evaluate(push, env);
     expect(before).toMatchObject({ decision: 'ask', ruleId: 'ask:network-command' });
-    const a = ctx.grant(push);
+    const a = ctx.grant(push, env);
     expect(a.id).toBe('session:allow:1');
     expect(a.description).toBe('Approved for this session: terminal: git push origin main');
     expect(ctx.evaluate(push, env)).toMatchObject({ decision: 'allow', ruleId: 'session:allow:1', source: 'session-rule' });
     expect(ctx.evaluate(permissionRequest('terminal', 'o', { command: 'git push origin release' }), env).decision).toBe('ask');
     expect(ctx.evaluate(permissionRequest('terminal', 'other', { command: 'git push origin main' }), env).decision).toBe('ask');
     expect(ctx.evaluate(permissionRequest('TERMINAL', 'o', { command: 'git push origin main' }), env).decision).toBe('allow');
-    const w = permissionRequest('write_file', 'o', { operation: 'create', path: 'a', n: 1 });
-    ctx.grant(w);
-    expect(ctx.evaluate(permissionRequest('write_file', 'o', { path: 'a', operation: 'create', n: 1.0 }), env).ruleId).toBe('session:allow:2');
-    expect(ctx.evaluate(permissionRequest('write_file', 'o', { path: 'a', operation: 'create', n: 1, extra: true }), env).decision).toBe('ask');
+    // The exact argument set, on a tool REQ-TOOLS-024 still governs alone (an MCP edit tool): until PD-TOOLS-004 this was `write_file`.
+    const w = permissionRequest(MCP_EDIT_TOOL, 'o', { operation: 'create', path: 'a', n: 1 });
+    ctx.grant(w, env);
+    expect(ctx.evaluate(permissionRequest(MCP_EDIT_TOOL, 'o', { path: 'a', operation: 'create', n: 1.0 }), env).ruleId).toBe('session:allow:2');
+    expect(ctx.evaluate(permissionRequest(MCP_EDIT_TOOL, 'o', { path: 'a', operation: 'create', n: 1, extra: true }), env).decision).toBe('ask');
     ctx.replace(buildPolicy({ preset: 'restricted', workspaceRoot: ROOT }));
     expect(ctx.evaluate(push, env).ruleId).toBe('session:allow:1');
     expect(ctx.evaluate(permissionRequest('terminal', 'o', { command: 'curl x' }), env)).toMatchObject({ decision: 'deny', ruleId: 'restricted:network-command' });
@@ -311,5 +341,203 @@ describe('policy (ADR-0017, REQ-TOOLS-011..029, 039..047)', () => {
     expect(effectiveMode({ requested: 'autonomous', attended: true, sandboxed: false, allowUnsandboxedAutonomous: false }).downgraded).toBe(false);
     expect(effectiveMode({ requested: 'autonomous', attended: false, sandboxed: false, allowUnsandboxedAutonomous: true }).downgraded).toBe(false);
     expect(effectiveMode({ requested: 'ask', attended: false, sandboxed: false, allowUnsandboxedAutonomous: false }).downgraded).toBe(false);
+  });
+});
+
+/**
+ * A persona's MCP surface prefixes a server's tool only when its name is already taken, so a server's `read_file` or
+ * `fetch` reaches a persona whose public set lacks one under the plain name; `publicTool` is what tells the two apart.
+ * REQ-TOOLS-007's classes are classes of public tools, and a tool outside the registry carries no declaration and has
+ * none inferred from its name (REQ-TOOLS-001 as ADR-0016 reads it) — so no class rule fires for it.
+ */
+describe('an MCP tool offered under a public name is not the public tool (REQ-TOOLS-001, REQ-TOOLS-043, REQ-TOOLS-045)', () => {
+  const server: EvaluationEnv = { ...env, publicTool: () => false };
+
+  it('ask:read-only-tool (REQ-TOOLS-043) allows the public read-only class alone; the preset default decides a server\'s tool of the same name', () => {
+    const p = buildPolicy({ preset: 'ask', workspaceRoot: ROOT });
+    expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'D:/elsewhere/secrets' }), env).ruleId).toBe('ask:read-only-tool');
+    expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'D:/elsewhere/secrets' }), server)).toMatchObject({ decision: 'ask', ruleId: 'preset:ask', source: 'preset' });
+    // case and alias make no difference: the name is not what decides
+    expect(evaluate(p, [], permissionRequest('Read_File', 'o', { path: 'a' }), server).ruleId).toBe('preset:ask');
+    expect(evaluate(p, [], permissionRequest('haet_read', 'o', { path: 'a' }), server).ruleId).toBe('preset:ask');
+  });
+
+  it('the fetch pair (REQ-TOOLS-045) reads the network class, which is the public fetch alone', () => {
+    const p = buildPolicy({ preset: 'ask', workspaceRoot: ROOT });
+    expect(evaluate(p, [], permissionRequest('fetch', 'o', { url: 'http://localhost:3000' }), env).ruleId).toBe('ask:fetch-local-host');
+    expect(evaluate(p, [], permissionRequest('fetch', 'o', { url: 'http://localhost:3000' }), server).ruleId).toBe('preset:ask');
+    expect(evaluate(p, [], permissionRequest('fetch', 'o', { url: 'https://example.com' }), server).ruleId).toBe('preset:ask');
+  });
+
+  it('under restricted neither read rule fires for it and the default denies — a rule that grants sees nothing declared (ADR-0016)', () => {
+    const p = buildPolicy({ preset: 'restricted', workspaceRoot: ROOT });
+    expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'src/a.ts' }), server)).toMatchObject({ decision: 'deny', ruleId: 'preset:restricted' });
+    expect(evaluate(p, [], permissionRequest('glob', 'o', { pattern: '**' }), server)).toMatchObject({ decision: 'deny', ruleId: 'preset:restricted' });
+    expect(evaluate(p, [], permissionRequest('fetch', 'o', { url: 'http://localhost:3000' }), server)).toMatchObject({ decision: 'deny', ruleId: 'preset:restricted' });
+  });
+
+  it('the rules that name no tool set still decide it, and a session approval still covers it (REQ-TOOLS-024)', () => {
+    const p = buildPolicy({ preset: 'ask', workspaceRoot: ROOT });
+    expect(evaluate(p, [], permissionRequest('read_file', 'o', { command: 'rm -rf /' }), server).ruleId).toBe('starter:deny-recursive-delete');
+    const ctx = new PolicyContext(p);
+    const call = permissionRequest('read_file', 'o', { path: 'a' });
+    expect(ctx.evaluate(call, server).ruleId).toBe('preset:ask');
+    ctx.grant(call, server);
+    expect(ctx.evaluate(call, server).ruleId).toBe('session:allow:1');
+    expect(ctx.evaluate(permissionRequest('read_file', 'o', { path: 'b' }), server).ruleId).toBe('preset:ask');
+  });
+});
+
+describe('PD-TOOLS-004: a session approval of a file write covers that path (narrows REQ-TOOLS-024)', () => {
+  let ws: string;
+  let fsEnv: EvaluationEnv;
+  const HASH_1 = '1'.repeat(64);
+  const HASH_2 = '2'.repeat(64);
+  beforeEach(() => {
+    ws = realPathOf(mkdtempSync(join(tmpdir(), 'pd-tools-004-')));
+    mkdirSync(join(ws, 'specs'));
+    writeFileSync(join(ws, 'specs', 'index.md'), 'x\n');
+    writeFileSync(join(ws, 'specs', 'other.md'), 'y\n');
+    // The production resolver (run-host/tools.ts): the real path, a throw read as unresolvable.
+    fsEnv = { attended: true, workspaceRoot: ws, resolvePath: (p) => { try { return realPathOf(p); } catch { return null; } }, publicTool: () => true };
+  });
+  afterEach(() => rmSync(ws, { recursive: true, force: true }));
+  const ctxOf = () => new PolicyContext(buildPolicy({ preset: 'ask', workspaceRoot: ws }));
+  const edit = (tool: string, persona: string, args: Record<string, unknown>) => permissionRequest(tool, persona, args);
+
+  it('the retry loop of the defect: one approval covers a retry with a different old_string and hash', () => {
+    const ctx = ctxOf();
+    const first = edit('haet_edit', 'o', { path: 'specs/index.md', content_hash: HASH_1, old_string: 'a (b', new_string: 'c' });
+    expect(ctx.evaluate(first, fsEnv).decision).toBe('ask');
+    const a = ctx.grant(first, fsEnv);
+    expect(a.paths).toEqual([join(ws, 'specs', 'index.md')]);
+    expect(a.description).toBe('Approved for this session: haet_edit(content_hash, new_string, old_string, path)');
+    const retry = edit('haet_edit', 'o', { path: 'specs/index.md', content_hash: HASH_2, old_string: 'a', new_string: 'c', replace_all: true });
+    expect(ctx.evaluate(retry, fsEnv)).toMatchObject({ decision: 'allow', ruleId: 'session:allow:1', source: 'session-rule' });
+    expect(ctx.evaluate(retry, fsEnv).reason).toBe(`Rule 'session:allow:1' (Approved for this session: haet_edit(content_hash, new_string, old_string, path)) resolved 'haet_edit' to allow.`);
+  });
+
+  it('the write_file operation is not part of the match: an edit approval covers overwrite, insert and undo of the same path', () => {
+    const ctx = ctxOf();
+    ctx.grant(edit('write_file', 'o', { operation: 'edit', path: 'specs/index.md', old_string: 'x', new_string: 'z' }), fsEnv);
+    for (const later of [
+      { operation: 'overwrite', path: 'specs/index.md', content: 'whole file' },
+      { operation: 'insert', path: 'specs/index.md', insert_line: 0, new_string: 'top' },
+      { operation: 'undo', path: 'specs/index.md' },
+      // the same set of paths, spelled another way
+      { operation: 'undo', path: './specs/../specs/index.md' },
+      { operation: 'undo', path: join(ws, 'specs', 'index.md') },
+      { operation: 'undo', file_path: 'specs/index.md' },
+      { operation: 'undo', path: 'specs/index.md', file_path: 'specs/index.md' },
+    ]) expect(ctx.evaluate(edit('write_file', 'o', later), fsEnv).ruleId, JSON.stringify(later)).toBe('session:allow:1');
+  });
+
+  it('a different path, persona or tool is not covered', () => {
+    const ctx = ctxOf();
+    ctx.grant(edit('write_file', 'o', { operation: 'edit', path: 'specs/index.md', old_string: 'x', new_string: 'z' }), fsEnv);
+    expect(ctx.evaluate(edit('write_file', 'o', { operation: 'edit', path: 'specs/other.md', old_string: 'x', new_string: 'z' }), fsEnv).decision).toBe('ask');
+    expect(ctx.evaluate(edit('write_file', 'o', { operation: 'create', path: 'specs/new.md', content: 'n' }), fsEnv).decision).toBe('ask');
+    expect(ctx.evaluate(edit('write_file', 'other', { operation: 'edit', path: 'specs/index.md', old_string: 'x', new_string: 'z' }), fsEnv).decision).toBe('ask');
+    expect(ctx.evaluate(edit('haet_edit', 'o', { path: 'specs/index.md', content_hash: HASH_1, old_string: 'x', new_string: 'z' }), fsEnv).decision).toBe('ask');
+    // REQ-TOOLS-024's case-insensitive tool name still holds
+    expect(ctx.evaluate(edit('WRITE_FILE', 'o', { operation: 'undo', path: 'specs/index.md' }), fsEnv).ruleId).toBe('session:allow:1');
+  });
+
+  it('exactly the same set: a superset or a subset of the approved paths is not covered', () => {
+    const ctx = ctxOf();
+    ctx.grant(edit('write_file', 'o', { operation: 'edit', path: 'specs/index.md', file_path: 'specs/other.md' }), fsEnv);
+    expect(ctx.evaluate(edit('write_file', 'o', { operation: 'undo', path: 'specs/other.md', file_path: 'specs/index.md' }), fsEnv).ruleId).toBe('session:allow:1');
+    expect(ctx.evaluate(edit('write_file', 'o', { operation: 'undo', path: 'specs/index.md' }), fsEnv).decision).toBe('ask');
+    expect(ctx.evaluate(edit('write_file', 'o', { operation: 'undo', path: 'specs/index.md', paths: ['specs/other.md', 'specs/new.md'] }), fsEnv).decision).toBe('ask');
+    const one = ctxOf();
+    one.grant(edit('write_file', 'o', { operation: 'edit', path: 'specs/index.md' }), fsEnv);
+    expect(one.evaluate(edit('write_file', 'o', { operation: 'edit', path: 'specs/index.md', paths: ['specs/other.md'] }), fsEnv).decision).toBe('ask');
+    expect(one.evaluate(edit('write_file', 'o', { operation: 'edit', path: 'specs/index.md', paths: ['specs/index.md'] }), fsEnv).ruleId).toBe('session:allow:1');
+  });
+
+  it('an unresolvable path never matches, on either side of the grant', () => {
+    const ctx = ctxOf();
+    const blind: EvaluationEnv = { ...fsEnv, resolvePath: (p) => (p.endsWith('lost.md') ? null : fsEnv.resolvePath(p)) };
+    ctx.grant(edit('write_file', 'o', { operation: 'edit', path: 'specs/index.md' }), blind);
+    expect(ctx.evaluate(edit('write_file', 'o', { operation: 'edit', path: 'specs/index.md', file_path: 'specs/lost.md' }), blind).decision).toBe('ask');
+    expect(ctx.evaluate(edit('write_file', 'o', { operation: 'edit', path: 42 }), blind).decision).toBe('ask');
+    expect(ctx.evaluate(edit('write_file', 'o', { operation: 'edit', path: 'specs/index.md', paths: ['specs/index.md', 7] }), blind).decision).toBe('ask');
+    const throwing: EvaluationEnv = { ...fsEnv, resolvePath: () => { throw new Error('EACCES'); } };
+    expect(ctx.evaluate(edit('write_file', 'o', { operation: 'edit', path: 'specs/index.md' }), throwing).decision).toBe('ask');
+    // an approval whose own path did not resolve covers nothing — not even the identical call
+    const lost = ctxOf();
+    const lostCall = edit('write_file', 'o', { operation: 'edit', path: 'specs/lost.md' });
+    expect(lost.grant(lostCall, blind).paths).toBe('unresolvable');
+    expect(lost.evaluate(lostCall, blind).decision).toBe('ask');
+    expect(resolvedPathSet({ path: null }, fsEnv)).toBe('unresolvable');
+  });
+
+  it('a call carrying no path key falls back to the exact argument set of REQ-TOOLS-024', () => {
+    const ctx = ctxOf();
+    const bare = edit('write_file', 'o', { operation: 'undo', content: 'c' });
+    expect(ctx.grant(bare, fsEnv).paths).toBeNull();
+    expect(ctx.evaluate(edit('write_file', 'o', { content: 'c', operation: 'undo' }), fsEnv).ruleId).toBe('session:allow:1');
+    expect(ctx.evaluate(edit('write_file', 'o', { operation: 'undo', content: 'd' }), fsEnv).decision).toBe('ask');
+    expect(ctx.evaluate(edit('write_file', 'o', { operation: 'undo', content: 'c', path: 'specs/index.md' }), fsEnv).decision).toBe('ask');
+    const pathed = ctxOf();
+    pathed.grant(edit('write_file', 'o', { operation: 'edit', path: 'specs/index.md' }), fsEnv);
+    expect(pathed.evaluate(edit('write_file', 'o', { operation: 'undo' }), fsEnv).decision).toBe('ask');
+  });
+
+  it('the alias haet counts as haet_edit, in either direction and in any case', () => {
+    const ctx = ctxOf();
+    ctx.grant(edit('haet', 'o', { path: 'specs/index.md', content_hash: HASH_1, old_string: 'a', new_string: 'b' }), fsEnv);
+    for (const tool of ['haet', 'haet_edit', 'HAET_EDIT', 'Haet']) {
+      expect(ctx.evaluate(edit(tool, 'o', { path: 'specs/index.md', content_hash: HASH_2, old_string: 'q', new_string: 'r' }), fsEnv).ruleId, tool).toBe('session:allow:1');
+    }
+    const other = ctxOf();
+    other.grant(edit('haet_edit', 'o', { file_path: 'specs/index.md', content_hash: HASH_1, old_string: 'a', new_string: 'b' }), fsEnv);
+    expect(other.evaluate(edit('haet', 'o', { path: 'specs/index.md', content_hash: HASH_2, old_string: 'q', new_string: 'r' }), fsEnv).ruleId).toBe('session:allow:1');
+    expect(other.evaluate(edit('write_file', 'o', { operation: 'edit', path: 'specs/index.md' }), fsEnv).decision).toBe('ask');
+  });
+
+  it('the paths are resolved when the grant is made: a link to the file matches, a link retargeted later does not', () => {
+    let linked = true;
+    try { symlinkSync(join(ws, 'specs', 'index.md'), join(ws, 'link.md')); } catch { linked = false; }
+    if (!linked) return; // a host that may not create links has nothing to show here
+    const ctx = ctxOf();
+    ctx.grant(edit('write_file', 'o', { operation: 'edit', path: 'link.md' }), fsEnv);
+    expect(ctx.evaluate(edit('write_file', 'o', { operation: 'edit', path: 'specs/index.md' }), fsEnv).ruleId).toBe('session:allow:1');
+    unlinkSync(join(ws, 'link.md'));
+    symlinkSync(join(ws, 'specs', 'other.md'), join(ws, 'link.md'));
+    expect(ctx.evaluate(edit('write_file', 'o', { operation: 'edit', path: 'link.md' }), fsEnv).decision).toBe('ask');
+  });
+
+  it('every other tool keeps REQ-TOOLS-024: an MCP edit tool, git_commit and terminal are matched exactly, and grants outlive replacement', () => {
+    const ctx = ctxOf();
+    ctx.grant(edit(MCP_EDIT_TOOL, 'o', { relative_path: 'specs/index.md', needle: 'a (b', repl: 'c', mode: 'literal' }), fsEnv);
+    expect(ctx.evaluate(edit(MCP_EDIT_TOOL, 'o', { relative_path: 'specs/index.md', needle: 'a', repl: 'c', mode: 'literal' }), fsEnv).decision).toBe('ask');
+    ctx.grant(edit('git_commit', 'o', { message: 'one', paths: ['specs/index.md'] }), fsEnv);
+    expect(ctx.evaluate(edit('git_commit', 'o', { message: 'two', paths: ['specs/index.md'] }), fsEnv).decision).toBe('ask');
+    expect(ctx.evaluate(edit('git_commit', 'o', { message: 'one', paths: ['specs/index.md'] }), fsEnv).ruleId).toBe('session:allow:2');
+    ctx.grant(edit('terminal', 'o', { command: 'cat specs/index.md', path: 'specs/index.md' }), fsEnv);
+    expect(ctx.evaluate(edit('terminal', 'o', { command: 'rm specs/index.md', path: 'specs/index.md' }), fsEnv).decision).toBe('ask');
+    ctx.grant(edit('write_file', 'o', { operation: 'edit', path: 'specs/index.md' }), fsEnv);
+    ctx.replace(buildPolicy({ preset: 'restricted', workspaceRoot: ws }));
+    expect(ctx.evaluate(edit('write_file', 'o', { operation: 'overwrite', path: 'specs/index.md', content: 'n' }), fsEnv).ruleId).toBe('session:allow:4');
+    expect(ctx.evaluate(edit('write_file', 'o', { operation: 'overwrite', path: 'specs/other.md', content: 'n' }), fsEnv).ruleId).toBe('preset:restricted');
+  });
+
+  it('an MCP tool offered under a public name keeps REQ-TOOLS-024: only the public write_file and haet_edit are scoped by path', () => {
+    // A filesystem-style server's own `write_file`, offered as plain `write_file` to a persona whose public set lacks one.
+    const mcpWrite: EvaluationEnv = { ...fsEnv, publicTool: (name) => name.toLowerCase() !== 'write_file' };
+    const ctx = ctxOf();
+    const first = edit('write_file', 'o', { path: 'specs/index.md', content: 'one' });
+    expect(ctx.grant(first, mcpWrite).paths).toBeNull();
+    expect(ctx.evaluate(edit('write_file', 'o', { path: 'specs/index.md', content: 'two' }), mcpWrite).decision).toBe('ask');
+    expect(ctx.evaluate(edit('write_file', 'o', { content: 'one', path: 'specs/index.md' }), mcpWrite).ruleId).toBe('session:allow:1');
+    // A public haet_edit grant does not reach a server's `haet` through the alias, and the server's `haet` grant is exact.
+    const mcpHaet: EvaluationEnv = { ...fsEnv, publicTool: (name) => name.toLowerCase() !== 'haet' };
+    const alias = ctxOf();
+    expect(alias.grant(edit('haet_edit', 'o', { path: 'specs/index.md', content_hash: HASH_1, old_string: 'a', new_string: 'b' }), mcpHaet).paths).toEqual([join(ws, 'specs', 'index.md')]);
+    expect(alias.evaluate(edit('haet', 'o', { path: 'specs/index.md', content_hash: HASH_2, old_string: 'q', new_string: 'r' }), mcpHaet).decision).toBe('ask');
+    expect(alias.evaluate(edit('haet_edit', 'o', { path: 'specs/index.md', content_hash: HASH_2, old_string: 'q', new_string: 'r' }), mcpHaet).ruleId).toBe('session:allow:1');
+    expect(alias.grant(edit('haet', 'o', { path: 'specs/index.md', content_hash: HASH_1, old_string: 'a', new_string: 'b' }), mcpHaet).paths).toBeNull();
+    expect(alias.evaluate(edit('haet', 'o', { path: 'specs/index.md', content_hash: HASH_2, old_string: 'a', new_string: 'b' }), mcpHaet).decision).toBe('ask');
   });
 });

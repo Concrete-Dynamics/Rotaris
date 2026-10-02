@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
-import { checkFence, type FenceConfig } from './fence.js';
+import { checkFence, realPathOf, type FenceConfig } from './fence.js';
 import { renderDiff } from './diff.js';
 import { FileToolState, haetEditTool, haetReadTool, matchEdit, readFileTool, sha256, writeFileTool } from './files.js';
 import { globToRegExp, globTool, grepTool, parseGitignore, ignoredBy } from './search.js';
@@ -42,6 +42,22 @@ describe('the path fence (REQ-TOOLS-129/130/132)', () => {
     const ro = { ...fence, additionalReadOnlyRoots: [outside] };
     expect(checkFence(ro, join(outside, 'x.txt'), 'read')).toMatchObject({ ok: true, readOnlyRoot: true });
     expect(checkFence({ ...ro, allowOutsideWorkspace: true }, join(outside, 'x.txt'), 'write').ok).toBe(false);
+  });
+
+  it('realPathOf rebuilds the missing tail of a relative path whole — REQ-TOOLS-129 rests on it answering rightly for every input', () => {
+    // Until 2026-09-28 the walk that reached `.` dropped the first character of the first segment: `specs/index.md`
+    // came back as `<cwd>/pecs/index.md` and `D:/ws` on POSIX as `<cwd>/:/ws` (docs/defects/fixed/realpathof-drops-a-character-from-a-relative-path.md).
+    const cwd = realpathSync.native(process.cwd());
+    expect(realPathOf(join('zz-absent-9f3c', 'child', 'index.md'))).toBe(join(cwd, 'zz-absent-9f3c', 'child', 'index.md'));
+    expect(realPathOf('zz-absent-9f3c')).toBe(join(cwd, 'zz-absent-9f3c'));
+    expect(realPathOf('.')).toBe(cwd);
+    // an absolute path under an existing directory: the existing part is its real path, the rest is appended as given
+    expect(realPathOf(join(root, 'src', 'absent', 'deep.ts'))).toBe(join(realpathSync.native(root), 'src', 'absent', 'deep.ts'));
+    expect(realPathOf(join(root, 'src', 'a.ts'))).toBe(join(realpathSync.native(root), 'src', 'a.ts'));
+    // the fence, over the same input: a workspace-relative path that does not exist yet is inside, and a root spelled relative is one directory, not another
+    expect(checkFence(fence, 'src/absent/deep.ts', 'write')).toMatchObject({ ok: true, inside: true, rel: 'src/absent/deep.ts' });
+    const rel = { ...fence, workspaceRoot: 'zz-absent-9f3c/ws' };
+    expect(checkFence(rel, 'a.ts', 'read')).toMatchObject({ ok: true, inside: true, rel: 'a.ts' });
   });
 });
 
@@ -114,15 +130,11 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
   it('create refuses an existing file; edit needs a prior read; edits match at four levels; multiple occurrences are reported; undo pops', async () => {
     const w = writeFileTool(state, fence);
     const r = readFileTool(state, fence);
-    // The refusal names the file, its size, and whether THIS agent has read it — the fact that separates
-    // "a file I forgot writing" from "a sibling wrote this while I worked", which cost a turn to discover
-    // by hand in run `2e21e324`. It quotes no content, which the last assertion here pins.
+    // REQ-TOOLS-135's text exactly. It says nothing about who read or wrote the file, because the read record is
+    // the workspace's, shared by every agent (REQ-TOOLS-133), and cannot answer for the caller.
     const clash = await w.execute({ operation: 'create', path: 'src/a.ts', content: 'x', replace_all: false }, ctx());
     expect(clash.isError).toBe(true);
-    expect(clash.text).toContain('File already exists: src/a.ts');
-    expect(clash.text).toContain('You have NOT read it in this session');
-    expect(clash.text).toContain("use 'overwrite' or 'edit'");
-    expect(clash.text).not.toContain('const a = 1;');
+    expect(clash.text).toBe("File already exists: src/a.ts. Use 'overwrite' or 'edit'.");
     const gated = await w.execute({ operation: 'edit', path: 'src/a.ts', old_string: 'const a = 1;', new_string: 'const a = 10;', replace_all: false }, ctx());
     expect(gated.text).toBe('You must read src/a.ts before editing it. Call read_file(path="src/a.ts") first, then retry your edit.');
     await r.execute({ path: 'src/a.ts', offset: 1, limit: 2000, grep_context: 3 }, ctx());

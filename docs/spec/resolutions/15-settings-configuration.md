@@ -8,6 +8,16 @@ status: resolved
 # Open-Question Resolutions — Settings and Configuration
 
 
+> ## Amendment, 2026-09-27 — the Skills table has seven columns (ESC-38)
+>
+> `REQ-CONFIG-343` counts seven columns instead of five: Skill, Source, Path, Trigger, Invocation, Load,
+> Description. The description tooltip and the empty state are unchanged.
+>
+> **Why this is an amendment.** `REQ-WORKSPACE-067` was amended by domain 13's resolution round to add the
+> `Path` column and a per-row invocation selector, and this domain was not amended alongside it, so its count
+> went stale. The approved mockup draws the selector as a column between Skill and Load. The owner ruled
+> ESC-38 as it recommended ([R-052](../../product/requests.md#r-052)); `owner-decisions.md` holds the ruling.
+
 > ## Amendment, 2026-09-23 — per-token prices are decimals (OQ-21)
 >
 > `REQ-CONFIG-088` types the two price fields as decimal ≥ 0 instead of float ≥ 0. A price may still be

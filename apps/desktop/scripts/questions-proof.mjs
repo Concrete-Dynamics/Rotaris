@@ -24,7 +24,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cleanEnvironment, findDatabases, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -58,7 +58,7 @@ const PROBES = [
 
 function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
@@ -78,7 +78,8 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000)
     if (end) { try { probes[end[1]] = JSON.parse(end[2]); } catch { probes[end[1]] = []; } continue; }
     // `probe-at <n>` is a sampled instant; `probe-at ~<n>` is a wait-until logged with the REQUESTED ms
     // (main strips the tilde when acting but keeps it in the label, so a reader can tell the two apart).
-    const at = /^\[main (\S+)\] capture: probe-at ~?(\d+) (.+?) → (\[.*\])\s*$/.exec(line);
+    // PD-MONITOR-002: the stamp, then the level column (`info` — main's own line), then the message.
+    const at = /^\[main (\S+)\] info +capture: probe-at ~?(\d+) (.+?) → (\[.*\])\s*$/.exec(line);
     if (at) { try { timed.push({ wall: Date.parse(at[1]), at: Number(at[2]), selector: at[3], found: JSON.parse(at[4]) }); } catch { /* an unreadable probe is no probe */ } continue; }
     const ins = /capture: inspect-at ~?(\d+) (.+?) → (\{.*\})\s*$/.exec(line);
     if (ins) { try { inspected.push({ at: Number(ins[1]), selector: ins[2], ...JSON.parse(ins[3]) }); } catch { /* an unreadable inspection is none */ } }

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { err, maskArguments, ok, redactRowString, toIsoUtc, type Instant, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
-import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type CheckpointRow, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
-import { isLegalChildMove, isTerminalChildState, type ChildState, type ImageAttachment, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
+import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type AgentTerminalRow, type CheckpointRow, type IterationInsert, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
+import { interruptionPhrase, isLegalChildMove, isResumeState, isTerminalChildState, type ChildState, type ImageAttachment, type Interruption, type ResumeState, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus, summarise } from './run/stop-conditions.js';
 import { AgentActivity } from './children/activity.js';
@@ -292,6 +292,21 @@ export function toTranscriptRow(r: TranscriptRowRecord): TranscriptRow {
   });
 }
 
+/**
+ * REQ-SESSION-047/083/112: claim a session's lock, reaping it once when its holder is a process of this machine that no
+ * longer exists (a pid that is no positive integer is never reaped). The one copy of the rule: `SessionWriter.open` claims
+ * through it, and so does PD-ORCH-005 clause 16's cancel while the session rests (`Sessions`, OQ-101).
+ */
+export function claimLockReaping(dal: StoreDal, sessionId: SessionId, pid: number, host: MachineId, now: string, isProcessAlive: (pid: number) => boolean): ReturnType<StoreDal['claimLock']> {
+  const claimed = dal.claimLock(sessionId, pid, host, now);
+  if (claimed.claimed) return claimed;
+  const holder = claimed.holder;
+  const locallyReapable = holder.host === host && Number.isInteger(holder.pid) && holder.pid > 0 && !isProcessAlive(holder.pid);
+  if (!locallyReapable) return claimed;
+  dal.releaseLock(sessionId, holder.pid, host);
+  return dal.claimLock(sessionId, pid, host, now);
+}
+
 export class SessionWriter {
   /** One quarantine per open database, shared across all session writers using it. */
   private static readonly storeFailures = new WeakMap<StoreDal['db'], string>();
@@ -426,15 +441,7 @@ export class SessionWriter {
     if (!dal.getSession(sessionId)) return err({ code: 'no-session', sessionId });
     const now = toIsoUtc(wall.instant());
     try {
-      let claimed = dal.claimLock(sessionId, args.pid, args.host, now);
-      if (!claimed.claimed) {
-        const holder = claimed.holder;
-        const locallyReapable = holder.host === args.host && Number.isInteger(holder.pid) && holder.pid > 0 && !args.isProcessAlive(holder.pid);
-        if (locallyReapable) {
-          dal.releaseLock(sessionId, holder.pid, args.host);
-          claimed = dal.claimLock(sessionId, args.pid, args.host, now);
-        }
-      }
+      const claimed = claimLockReaping(dal, sessionId, args.pid, args.host, now, args.isProcessAlive);
       if (!claimed.claimed) return err({ code: 'lock-held', holder: { pid: claimed.holder.pid, host: claimed.holder.host, acquiredAt: claimed.holder.acquired_at } });
       return ok(new SessionWriter(deps));
     } catch (cause) {
@@ -646,8 +653,14 @@ export class SessionWriter {
     try {
       dal.transaction(() => {
         removed = dal.clearTranscriptRows(sessionId);
+        // PD-ORCH-005 clause 12: "Clearing the transcript clears the record of closed iterations only; an open
+        // iteration's record is kept until the iteration closes." One transaction with the rows, so a reader never sees
+        // the transcript gone and a closed iteration's record still standing, or the other way round.
+        const records = dal.clearClosedAgentMessages(sessionId);
+        // PD-ORCH-005 revision 4 clause 14: the fingerprint is part of the agent's record, so it goes with it.
+        const fingerprints = dal.clearClosedAgentFingerprints(sessionId);
         const ordinal = dal.nextTimelineOrdinal(sessionId);
-        dal.insertTimeline(sessionId, ordinal, at, 'transcript_cleared', 'user', `The transcript was cleared: ${removed} row(s) removed. Agent state, artifacts and Git changes were kept.`, JSON.stringify({ removed, next_index: this.nextIndex }), id, 'info');
+        dal.insertTimeline(sessionId, ordinal, at, 'transcript_cleared', 'user', `The transcript was cleared: ${removed} row(s) removed. Agent state, artifacts and Git changes were kept.`, JSON.stringify({ removed, next_index: this.nextIndex, records_removed: records, fingerprints_removed: fingerprints }), id, 'info');
         dal.touchSession(sessionId, this.status, at);
       });
     } catch (cause) {
@@ -657,6 +670,100 @@ export class SessionWriter {
     this.messageRows.clear();
     this.deps.onCommitted({ kind: 'clear' });
     return ok({ removed });
+  }
+
+  /**
+   * PD-ORCH-005 clause 1: an execution iteration begins, recorded open with its root's task id. Its own transaction; a
+   * plan cycle is not an iteration and is never opened here (REQ-ORCH-153's ruling).
+   */
+  openIteration(row: Omit<IterationInsert, 'session_id' | 'opened_at'>): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    try {
+      /*
+       * `false`, and nothing written, when the number is taken or another iteration is still open. The caller numbers
+       * past every recorded iteration and closes a left-open one first, so this is a defect's shape and not a race: a
+       * conflict here must never become a store failure, which would refuse every session of the workspace (found by
+       * phase 2's review, with a crashed iteration's number reused by the next run).
+       */
+      return ok(dal.transaction(() => {
+        if (dal.getIteration(sessionId, row.iteration) !== undefined || dal.openIterationOf(sessionId) !== undefined) return false;
+        dal.insertIteration({ ...row, session_id: sessionId, opened_at: toIsoUtc(wall.instant()) });
+        return true;
+      }));
+    } catch (cause) {
+      return this.fail(cause);
+    }
+  }
+
+  /**
+   * PD-ORCH-005: the iteration ends — `iteration.end` recorded and the iteration's row closed with its outcome, in ONE
+   * transaction, so a process death cannot leave an ended iteration open. The row's close is `false` when it was not
+   * open (a run with no store row for it); the event is recorded either way. `todo`, when given, is the session's todo
+   * with the iteration's task already closed (REQ-ORCH-072/073/074/135), stored in the same transaction, so a death
+   * after the close cannot leave that task in progress with nothing open to hold it (the repair of
+   * `an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`). Published with the next save.
+   */
+  endIteration(iteration: number, payload: Record<string, unknown>, outcome: string, todo?: string): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const ev = this.envelope('iteration.end', at, { ...payload, iteration });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event iteration.end could not be serialised and was not recorded: ${line.error.reason}`);
+    const ordinal = this.nextOrdinal;
+    let closed = false;
+    try {
+      dal.transaction(() => {
+        if (line.ok) dal.insertEvent(sessionId, ordinal, 'iteration.end', at, EVENT_SCHEMA_VERSION, iteration, line.value);
+        closed = dal.closeIteration(sessionId, iteration, outcome, at);
+        if (todo !== undefined) dal.updateSessionRun(sessionId, { todo });
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (line.ok) {
+      this.nextOrdinal += 1;
+      this.deps.onCommitted({ kind: 'event', ordinal, events: [{ ordinal, event: ev, line: line.value }] });
+      this.trimIfOverflowed(at);
+    }
+    return ok(closed);
+  }
+
+  /**
+   * PD-ORCH-005 clauses 1 and 12: one entry of an agent's conversation record, appended as it happens under the agent's
+   * task id — a `message` the model was sent or answered, or a `replacement`, the whole conversation a compression put
+   * in place of the one before. Its own transaction, and nothing is published: the record is read by a resume, never
+   * drawn. A body that cannot be serialised fails the recording like any other write, because a record that silently
+   * skipped a message would resume an agent into a conversation it never had.
+   */
+  recordAgentMessage(taskId: string, iteration: number, kind: 'message' | 'replacement', body: unknown): Result<void, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    try {
+      const text = JSON.stringify(body);
+      dal.transaction(() => dal.insertAgentMessage({ session_id: sessionId, task_id: taskId, iteration, kind, body: text, at: toIsoUtc(wall.instant()) }));
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    return ok(undefined);
+  }
+
+  /**
+   * PD-ORCH-005 revision 4 clause 14: the fingerprint of the system instructions and the tool definitions an agent started
+   * with, recorded beside its conversation under its task id. The first is kept: `false` when one was already recorded.
+   * Its own transaction, and nothing is published — a resume reads it, nothing draws it.
+   */
+  recordAgentFingerprint(taskId: string, iteration: number, instructions: string, tools: string): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    let recorded = false;
+    try {
+      dal.transaction(() => { recorded = dal.insertAgentFingerprint({ session_id: sessionId, task_id: taskId, iteration, instructions, tools, at: toIsoUtc(wall.instant()) }); });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    return ok(recorded);
   }
 
   /**
@@ -933,6 +1040,101 @@ export class SessionWriter {
     if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
     this.trimIfOverflowed(at);
     return ok(dal.getChild(sessionId, taskId)!);
+  }
+
+  /**
+   * PD-ORCH-005 clauses 2 and 3: an unfinished child comes to rest — `paused`, with what interrupted it and the state it
+   * resumes into, its tool-call count kept, `child.transition` and a `child_paused` timeline entry, in ONE transaction,
+   * so no reader sees a paused child without its interruption. The move is REQ-MONITOR-300's (narrowed), validated like
+   * any other; a paused child is not terminal, so no completion time is stamped and nothing settles.
+   */
+  restChild(taskId: string, interruption: Interruption, resumeState: ResumeState, toolCalls: number | null = null): Result<ChildRow, WriteFailure | { code: 'illegal-move'; from: string; to: string; reason: string }> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const current = dal.getChild(sessionId, taskId);
+    if (!current) return err({ code: 'illegal-move', from: '(none)', to: 'paused', reason: `child ${taskId} does not exist in session ${sessionId}` });
+    const from = current.state as ChildState;
+    if (!isLegalChildMove(from, 'paused')) {
+      return err({ code: 'illegal-move', from, to: 'paused', reason: `child ${taskId} is in state '${from}' and cannot move to 'paused' (REQ-MONITOR-300, PD-ORCH-005)` });
+    }
+    const at = toIsoUtc(wall.instant());
+    const ev = this.envelope('child.transition', at, { child_id: taskId, from_state: from, to_state: 'paused' });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event child.transition could not be serialised and was not recorded: ${line.error.reason}`);
+    try {
+      dal.transaction(() => {
+        dal.setChildState(sessionId, taskId, 'paused', null);
+        dal.setChildRest(sessionId, taskId, interruption, resumeState);
+        if (toolCalls !== null) dal.setChildTodo(sessionId, taskId, current.todo, Math.max(current.tool_calls, toolCalls));
+        if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'child.transition', at, EVENT_SCHEMA_VERSION, null, line.value);
+        dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, 'child_paused', 'rotaris', `Child ${current.canonical_name} (${taskId}) was paused by ${interruptionPhrase(interruption)}; it resumes ${resumeState === 'running' ? 'running' : `as ${resumeState}`} when the session is continued.`, JSON.stringify({ task_id: taskId, interruption, from_state: from, resume_state: resumeState }), timelineId(), 'info');
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    // A paused agent runs nothing, so it carries no active tool chip (REQ-MONITOR-211's rule, applied to a rest).
+    this.activity.clearActive(current.canonical_name);
+    if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
+    this.trimIfOverflowed(at);
+    return ok(dal.getChild(sessionId, taskId)!);
+  }
+
+  /**
+   * PD-ORCH-005 clause 4: "a `paused` agent moves back to the state it resumes into". The move, the rest columns cleared,
+   * `child.transition` and a `child_resumed` timeline entry, in ONE transaction. Refused unless the child is `paused`
+   * with a resume state recorded.
+   */
+  resumeChild(taskId: string, override?: 'running'): Result<ChildRow, WriteFailure | { code: 'illegal-move'; from: string; to: string; reason: string }> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const current = dal.getChild(sessionId, taskId);
+    if (!current || current.state !== 'paused' || !isResumeState(current.resume_state)) {
+      return err({ code: 'illegal-move', from: current?.state ?? '(none)', to: current?.resume_state ?? '(none)', reason: `child ${taskId} is not paused with a state to resume into (PD-ORCH-005)` });
+    }
+    // `override`: a child that will take a step at its resume moves back `running` whatever it had reached (clause 10).
+    const into = override ?? current.resume_state;
+    const at = toIsoUtc(wall.instant());
+    const ev = this.envelope('child.transition', at, { child_id: taskId, from_state: 'paused', to_state: into });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event child.transition could not be serialised and was not recorded: ${line.error.reason}`);
+    try {
+      dal.transaction(() => {
+        dal.setChildState(sessionId, taskId, into, null);
+        dal.setChildRest(sessionId, taskId, null, null);
+        if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'child.transition', at, EVENT_SCHEMA_VERSION, null, line.value);
+        dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, 'child_resumed', 'rotaris', `Child ${current.canonical_name} (${taskId}), paused by ${interruptionPhrase(current.interruption ?? '')}, resumed ${into === 'running' ? 'running' : `as ${into}`}.`, JSON.stringify({ task_id: taskId, interruption: current.interruption, resume_state: into }), timelineId(), 'info');
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
+    this.trimIfOverflowed(at);
+    return ok(dal.getChild(sessionId, taskId)!);
+  }
+
+  /** PD-ORCH-005: the interruption that left the open iteration open, or NULL when it resumes. Its own transaction. */
+  recordIterationInterruption(iteration: number, interruption: Interruption | null): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId } = this.deps;
+    try {
+      return ok(dal.transaction(() => dal.setIterationInterruption(sessionId, iteration, interruption)));
+    } catch (cause) {
+      return this.fail(cause);
+    }
+  }
+
+  /**
+   * PD-ORCH-005 clause 10: a background terminal session an agent started, or what became of it — its state, exit code
+   * and last output. Its own transaction; `false` when the id names another agent's terminal (left as it was).
+   */
+  recordAgentTerminal(row: Omit<AgentTerminalRow, 'session_id' | 'updated_at'>): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    try {
+      return ok(dal.transaction(() => dal.upsertAgentTerminal({ ...row, session_id: sessionId, updated_at: toIsoUtc(wall.instant()) })));
+    } catch (cause) {
+      return this.fail(cause);
+    }
   }
 
   /**

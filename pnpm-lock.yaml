@@ -180,6 +180,9 @@ importers:
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
 
   packages/contracts:
     dependencies:
@@ -366,6 +369,22 @@ importers:
         version: link:../store
 
   tools/eslint-rules: {}
+
+  tools/release-guard:
+    dependencies:
+      '@rotaris/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@rotaris/release-naming':
+        specifier: workspace:*
+        version: link:../release-naming
+      vite:
+        specifier: ^8.2.2
+        version: 8.2.2(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.0)
+    devDependencies:
+      '@rotaris/platform':
+        specifier: workspace:*
+        version: link:../../packages/platform
 
   tools/release-naming: {}
 

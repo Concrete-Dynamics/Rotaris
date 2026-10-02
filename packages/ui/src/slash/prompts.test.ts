@@ -67,7 +67,7 @@ describe('slash/prompts — registration on the catalogue\'s registry', () => {
 
   it('a built-in keeps its name; the prefixed form registers; the entry carries kind prompt, the description and the hint; a re-registration replaces its own names only', async () => {
     const registry = createSlashRegistry();
-    registry.register({ name: 'stop', description: 'Cancel the active run', kind: 'action', availability: () => ({ ok: true }), run: async () => ({ kind: 'executed' }) });
+    registry.register({ name: 'stop', description: 'Stop the active run', kind: 'action', availability: () => ({ ok: true }), run: async () => ({ kind: 'executed' }) });
     const result: PromptsRootsResult = { files: [file('workspace', 'Stop', 'Hello $1', { description: 'Greets', argumentHint: '<name>' }), file('home', 'greet', 'Hi $ARGUMENTS')], skipped: [{ path: 'home/bad.md', reason: 'malformed frontmatter' }] };
     const first = registerPromptCommands(registry, result);
     expect(first.names).toEqual(['prompts:stop', 'prompts:greet', 'greet']);
@@ -148,7 +148,7 @@ describe('slash/prompts — the catalogue carries what the reader answered (defe
     expect(registry.lookup('greet-me')?.kind).toBe('prompt');
     expect(registry.lookup('prompts:greet-me')?.kind).toBe('prompt');
     // REQ-CHAT-160: the built-in keeps its name — `/stop` is the run control, never a prompt file called stop.md.
-    expect(registry.lookup('stop')!.description).toBe('Cancel the active run');
+    expect(registry.lookup('stop')!.description).toBe('Stop the active run'); // PD-ORCH-005 clause 15
     expect(registry.lookup('prompts:stop')?.kind).toBe('prompt');
     bindPromptRootsReader(null);
   });

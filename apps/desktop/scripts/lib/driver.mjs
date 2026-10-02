@@ -12,7 +12,8 @@ import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } 
 import { connect as connectSocket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
-import { app as appDirectory, cleanEnvironment, electron, mainEntry, proofIsolationEnv } from './harness.mjs';
+import { app as appDirectory, cleanEnvironment, electron, hostSwitches, mainEntry, proofIsolationEnv } from './harness.mjs';
+import { endedHow, endOverrun, exitWithin, hasExited, logTail } from './bounded-launch.mjs';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -122,7 +123,7 @@ export async function startApp({ root, workspace, extra = {}, electronArgs = [],
   mkdirSync(preferences, { recursive: true });
 
   const out = openSync(logFile, 'a');
-  const child = spawn(electron, [mainEntry, ...electronArgs, ...(workspace ? [workspace] : [])], {
+  const child = spawn(electron, [mainEntry, ...hostSwitches, ...electronArgs, ...(workspace ? [workspace] : [])], {
     cwd: appDirectory,
     detached,
     windowsHide: false,
@@ -139,9 +140,115 @@ export async function startApp({ root, workspace, extra = {}, electronArgs = [],
   if (detached) child.unref();
   writeFileSync(join(root, 'app.pid'), `${child.pid}\n`);
 
-  const driver = await connect(endpointFile, { timeoutMs }).catch((cause) => {
-    const tail = existsSync(logFile) ? readFileSync(logFile, 'utf8').split('\n').slice(-20).join('\n') : '(no log)';
-    throw new Error(`${cause.message}\n--- the app's last words ---\n${tail}`);
-  });
+  const driver = await connectOrEnd(child, endpointFile, logFile, { timeoutMs, group: detached });
   return { child, driver, endpointFile, logFile, local, preferences };
+}
+
+/**
+ * Connect to a launch's driver, or END the launch and say so. A launch whose driver never answers is not left running:
+ * a non-detached child holds the proof's event loop open, so the proof would hang at its end with the application
+ * still up beside it. `endOverrun` ends it (SIGTERM, `graceMs`, SIGKILL — to its group when `group`) before the
+ * failure is thrown, and the failure carries what ended it and the log's last lines.
+ */
+export async function connectOrEnd(child, endpointFile, logFile, { timeoutMs = 60_000, graceMs = 10_000, group = false } = {}) {
+  try {
+    return await connect(endpointFile, { timeoutMs });
+  } catch (cause) {
+    const ended = hasExited(child) ? null : await endOverrun(child, { graceMs, group });
+    const fate = ended
+      ? `the launch was ended: ${endedHow(ended)}`
+      : `the launch had already exited ${child.exitCode ?? child.signalCode}`;
+    const tail = existsSync(logFile) ? logTail(readFileSync(logFile, 'utf8'), 20) : '(no log)';
+    throw new Error(`${cause.message}; ${fate}\n--- the app's last words ---\n${tail}`);
+  }
+}
+
+/**
+ * `{ value }` or `{ error }` once `pending` settles, or `null` when `ms` passes first — a bound on one driver request,
+ * whose socket may be connected to a main process that no longer answers.
+ */
+export function within(pending, ms) {
+  let timer;
+  return Promise.race([
+    Promise.resolve(pending).then((value) => ({ value }), (error) => ({ error })),
+    new Promise((resolve) => { timer = setTimeout(() => resolve(null), ms); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * End a driven launch within a bound, whatever the main process does. With `screenshot`, the closing picture is asked
+ * for first, at most `quitMs`; then the driver's `quit`, at most `quitMs`; then at most `graceMs` for the process to
+ * exit. One that has not exited by then — because it did not answer, or answered and stayed — is ENDED (`endOverrun`:
+ * SIGTERM, the same grace, SIGKILL) and the result says so: a proof reports `overran` as a failure
+ * (`stopOverrunMessage`) rather than moving on with an application still running beside the next launch. No step here
+ * waits without a bound, so the whole ending is at most `2 × quitMs + 2 × graceMs` and the SIGKILL's reaping.
+ */
+export async function stopApp(started, { graceMs = 15_000, quitMs = 10_000, screenshot } = {}) {
+  let pictured = null;
+  if (screenshot) {
+    const shot = await within(started.driver.screenshot(screenshot), quitMs);
+    pictured = shot === null ? `unanswered within ${quitMs} ms` : shot.error ? `refused: ${shot.error.message ?? shot.error}` : 'taken';
+  }
+  const quit = await within(started.driver.quit(), quitMs);
+  started.driver.close();
+  const quitAnswered = quit !== null;
+  const exit = await exitWithin(started.child, graceMs);
+  if (exit) return { exit, overran: null, quitAnswered, screenshot: pictured };
+  const ended = await endOverrun(started.child, { graceMs });
+  return { exit: ended.exit, overran: { quitAnswered, quitMs, afterQuitMs: graceMs, ...ended }, quitAnswered, screenshot: pictured };
+}
+
+/** The sentence a proof throws for a driven launch `stopApp` had to end: what the quit did, what ended it, its last words. */
+export function stopOverrunMessage(name, stopped, log) {
+  const o = stopped.overran;
+  const quit = o.quitAnswered
+    ? `did not exit within ${o.afterQuitMs} ms of the driver's quit`
+    : `did not answer the driver's quit within ${o.quitMs} ms, nor exit ${o.afterQuitMs} ms after it`;
+  return `${name} ${quit}: ${endedHow(o)}.\n--- the launch's last words ---\n${logTail(log)}`;
+}
+
+/**
+ * Poll `probe` (async, any value) until `accept(value)` holds, or throw at `timeoutMs` naming `what` and the last value
+ * seen — the waiting primitive for a condition that is not one selector: a store row, a probe's attribute, an absence.
+ * An aborted `signal` ends the wait at its next poll, so a caller that has given up on a launch does not leave it polling.
+ */
+export async function until(probe, accept, { timeoutMs = 15_000, intervalMs = 150, what = 'the condition', signal } = {}) {
+  const started = Date.now();
+  let last;
+  for (;;) {
+    if (signal?.aborted) throw new Error(`${what}: abandoned (${signal.reason instanceof Error ? signal.reason.message : String(signal.reason ?? 'aborted')})`);
+    try { last = await probe(); } catch (cause) { last = { error: cause instanceof Error ? cause.message : String(cause) }; }
+    if (accept(last)) return last;
+    if (Date.now() - started > timeoutMs) throw new Error(`${what} did not hold within ${timeoutMs} ms; last seen ${JSON.stringify(last)?.slice(0, 600)}`);
+    await sleep(intervalMs);
+  }
+}
+
+/**
+ * Choose `value` in the control at `selector`, whichever of the product's two chooser kinds it is — waiting for it
+ * first. A native `<select>` takes the value through the prototype setter and a `change` event (what React listens
+ * to), and the choice is confirmed once the control shows it; the design system's `SearchableSelect` is a button and a listbox, so it is driven as a person drives it: a real
+ * click on the trigger, then a real click on the `[role="option"]` carrying the wanted `data-value`, each waiting for
+ * its control. Resolves with the kind driven; rejects when the control, or the option, never appears.
+ */
+export async function choose(driver, selector, value, { timeoutMs = 15_000 } = {}) {
+  await driver.waitFor(selector, { timeoutMs });
+  const kind = await driver.eval(`document.querySelector(${JSON.stringify(selector)}) instanceof HTMLSelectElement ? 'native' : 'design-system'`);
+  if (kind === 'native') {
+    const chosen = await driver.eval(`(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (![...el.options].some((o) => o.value === ${JSON.stringify(value)})) return 'no such option';
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(el, ${JSON.stringify(value)});
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return 'dispatched';
+    })()`);
+    if (chosen !== 'dispatched') throw new Error(`${selector} offers no ${JSON.stringify(value)}`);
+    // A CONTROLLED select snaps back to its prop on the same turn and shows the choice only once the product's own
+    // state has taken it — so the choice is confirmed by waiting for that, not by reading the element straight away.
+    await until(() => driver.eval(`document.querySelector(${JSON.stringify(selector)})?.value ?? null`), (v) => v === value, { timeoutMs, what: `${selector} showing ${JSON.stringify(value)}` });
+    return { kind, value };
+  }
+  await driver.click(selector, { timeoutMs });
+  await driver.click(`[role="option"][data-value=${JSON.stringify(value)}]`, { timeoutMs });
+  return { kind, value };
 }

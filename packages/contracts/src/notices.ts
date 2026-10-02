@@ -92,6 +92,11 @@ export type NoticeActionKind = NoticeAction['kind'];
  * REQ-NOTIFY-023: the persistent notice. `message` and `detail` may be empty (REQ-NOTIFY-037 draws only the non-empty
  * rows); `persistent` decides the dismiss control and nothing else (REQ-NOTIFY-040); ONE action, label plus the
  * member it invokes (REQ-SHELL-114); `sessionId` empty means the focused run (REQ-NOTIFY-028).
+ *
+ * `action.disabled` (2026-09-28, the updater — first-release-plan.md §4.6): REQ-SHELL-118 has the update offer's
+ * `Update now` action DISABLED for the length of the download, "so the same download cannot be started twice, and its
+ * accessible description SHALL say why it is disabled". The value is that description; its presence is the disabled
+ * state. No other notice sets it, and it widens no vocabulary: the action member is the same closed union.
  */
 export const NoticeSchema = z.object({
   id: z.number().int().positive(),
@@ -100,7 +105,7 @@ export const NoticeSchema = z.object({
   message: z.string(),
   detail: z.string(),
   persistent: z.boolean(),
-  action: z.object({ label: z.string().min(1), action: NoticeActionSchema }).optional(),
+  action: z.object({ label: z.string().min(1), action: NoticeActionSchema, disabled: z.string().min(1).optional() }).optional(),
   sessionId: z.string(),
 });
 export type Notice = z.infer<typeof NoticeSchema>;

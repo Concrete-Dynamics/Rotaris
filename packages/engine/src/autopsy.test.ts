@@ -28,7 +28,7 @@ describe('R-043 — the run-autopsy snapshot', () => {
   const plant = (raw: string, status: string): SessionId => {
     const sid = asSessionId(raw);
     dal.upsertSession({ session_id: raw, execution_status: status, workspace_root: WS, created_at: '2026-09-05T10:00:00.000Z', updated_at: '2026-09-05T10:05:00.000Z' });
-    dal.updateSessionRun(sid, { tokens_input: 1500, tokens_output: 60, cost: '0', tool_calls: 4, stop_reason: 'user_cancelled', summary_text: 'The run came to rest because a person stopped it.' });
+    dal.updateSessionRun(sid, { tokens_input: 1500, tokens_output: 60, cost: '0', tool_calls: 4, stop_reason: 'user_cancelled', summary_text: "The run came to rest at the user's request." });
     return sid;
   };
 

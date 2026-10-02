@@ -323,16 +323,86 @@ function spanOf(members: readonly TranscriptRow[]): { startedAt: string; endedAt
 
 /**
  * Hygiene, per row (REQ-CHAT-048, REQ-CHAT-049) plus the caps (REQ-CHAT-166). Returns null where the row projects
- * to zero rows. `previousThinking` is the immediately previous thinking row of the same agent, which is the only
- * context REQ-CHAT-048 needs and therefore the only lookback the incremental bound has to preserve.
+ * to zero rows. `previousThinking` is the immediately previous thinking row OF THE ROW'S OWN AGENT
+ * (`previousThinkingByAgent`): REQ-CHAT-048's "per agent" is read as scoping the whole rule, so another agent's reasoning
+ * between two equal bursts does not keep the second (OQ-91 names the other reading; the repair is recorded in
+ * docs/defects/fixed/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md). It is the
+ * only lookback the incremental bound has to preserve.
  */
 function hygiene(row: TranscriptRow, previousThinking: TranscriptRow | null, o: ProjectOptions, expanded: boolean): TranscriptRow | null {
-  // REQ-CHAT-048: per agent, an unstamped thinking row equal to the immediately previous one projects to zero rows.
-  if (row.kind === 'thinking' && row.durationMs === undefined && previousThinking !== null
-    && (previousThinking.name ?? '') === (row.name ?? '') && previousThinking.body === row.body) return null;
+  if (repeatsReasoning(row, previousThinking)) return null;
+  let out = settle(row, o.running);
+  if (out.kind === 'diff') out = { ...out, body: capDiff(out.body) };
 
+  // REQ-CHAT-166: the caps affect only what is DRAWN, and expansion shows the untruncated value whatever they say.
+  if (!expanded && (out.input !== undefined || out.output !== undefined)) {
+    const input = out.input === undefined ? undefined : o.caps.show_tool_inputs ? capLines(out.input, o.caps.tool_input_lines) : '';
+    const output = out.output === undefined ? undefined : o.caps.show_tool_results ? capLines(out.output, o.caps.tool_result_lines) : '';
+    out = { ...out, ...(input === undefined ? {} : { input }), ...(output === undefined ? {} : { output }) };
+  }
+  return out;
+}
+
+/**
+ * REQ-CHAT-048: per agent, an unstamped thinking row equal to that agent's immediately previous thinking row projects
+ * to zero rows. The caller hands the previous thinking row of the row's own agent; the name is compared again so a
+ * caller that hands another agent's row can only keep a row, never drop one.
+ */
+function repeatsReasoning(row: TranscriptRow, previousThinking: TranscriptRow | null): boolean {
+  return isUnstampedThinking(row) && previousThinking !== null
+    && thinkingAgent(previousThinking) === thinkingAgent(row) && previousThinking.body === row.body;
+}
+
+/** The only rows REQ-CHAT-048 can drop — and so the only rows whose agent's previous thinking row is ever looked up. */
+function isUnstampedThinking(row: TranscriptRow): boolean {
+  return row.kind === 'thinking' && row.durationMs === undefined;
+}
+
+/** Whose reasoning a thinking row is, for REQ-CHAT-048's "per agent": the agent the row names, as the rule always compared. */
+function thinkingAgent(row: TranscriptRow): string {
+  return row.name ?? '';
+}
+
+/**
+ * Per agent, the immediately previous thinking row, as a walk forward from `from` meets the rows. What lies below
+ * `from` is read lazily and once per agent — only for an agent whose unstamped thinking row the walk asks about —
+ * so a suffix with no reasoning in it looks nothing up, and a lookup reads at most back to that agent's own
+ * previous thinking row (to the window's start when it has none, as the single any-agent lookback did before it).
+ */
+function previousThinkingByAgent(rows: readonly TranscriptRow[], from: number): { of(row: TranscriptRow): TranscriptRow | null; saw(row: TranscriptRow): void } {
+  const byAgent = new Map<string, TranscriptRow | null>();
+  return {
+    of(row) {
+      if (!isUnstampedThinking(row)) return null;
+      const agent = thinkingAgent(row);
+      if (!byAgent.has(agent)) byAgent.set(agent, lastThinkingOf(rows, from, agent));
+      return byAgent.get(agent) ?? null;
+    },
+    saw(row) {
+      if (row.kind === 'thinking') byAgent.set(thinkingAgent(row), row);
+    },
+  };
+}
+
+/**
+ * Whether `settle` can answer differently for this row with a run in progress and without one — the only way step 4
+ * reads `running`. A row it answers for identically either way projects identically either way, which is what lets a
+ * change of `running` take the bounded form from the first row that settles with it (`projector.ts`'s `changedFrom`).
+ * It errs toward yes: a thinking row that could go stale counts whether or not it has.
+ */
+export function settlesWithRunning(row: TranscriptRow): boolean {
+  if (row.toolStatus === 'running') return true;
+  return row.kind === 'thinking' && (row.durationMs === undefined || (!row.settled && row.startedAt !== undefined));
+}
+
+/**
+ * REQ-CHAT-049 and REQ-CHAT-062's settling — the part of hygiene that decides whether a streamed row is still live,
+ * and therefore (REQ-CHAT-066) whether it may fold. Split from the caps so `cleanCut` can read runs exactly as
+ * `foldRuns` will form them without paying for the caps, which no run reads.
+ */
+function settle(row: TranscriptRow, running: boolean): TranscriptRow {
   let out: TranscriptRow = row;
-  if (!o.running) {
+  if (!running) {
     // REQ-CHAT-049: an unstamped thinking row does not present as live, and a row still marked running shows no
     // status and no live timer, so a session with no run never appears to be in the middle of a tool call.
     if (out.kind === 'thinking' && out.durationMs === undefined) {
@@ -349,15 +419,6 @@ function hygiene(row: TranscriptRow, previousThinking: TranscriptRow | null, o: 
     const started = Date.parse(out.startedAt);
     const last = Date.parse(out.at);
     if (Number.isFinite(started) && Number.isFinite(last) && (last - started) / 1000 > THINKING_STALE_SECONDS) out = { ...out, settled: true };
-  }
-
-  if (out.kind === 'diff') out = { ...out, body: capDiff(out.body) };
-
-  // REQ-CHAT-166: the caps affect only what is DRAWN, and expansion shows the untruncated value whatever they say.
-  if (!expanded && (out.input !== undefined || out.output !== undefined)) {
-    const input = out.input === undefined ? undefined : o.caps.show_tool_inputs ? capLines(out.input, o.caps.tool_input_lines) : '';
-    const output = out.output === undefined ? undefined : o.caps.show_tool_results ? capLines(out.output, o.caps.tool_result_lines) : '';
-    out = { ...out, ...(input === undefined ? {} : { input }), ...(output === undefined ? {} : { output }) };
   }
   return out;
 }
@@ -514,25 +575,41 @@ export function trailerRows(o: Pick<ProjectOptions, 'pendingQuestions' | 'pendin
  * a row whose run reaches the cut drags the cut down to itself, a row whose run ended above it does not, and
  * a row that closes an agent's run starts that agent again from the row before. A row naming no agent closes
  * every run, so nothing before it can cross and the walk stops there.
+ *
+ * **Both passes read the rows as `foldRuns` will see them**: a row REQ-CHAT-048 projects to zero rows is skipped, and
+ * each row is settled by REQ-CHAT-049 / REQ-CHAT-062 before `runnable` asks whether it is still live. The first form
+ * read the raw rows, and a live reasoning row that repeats its agent's previous one — never foldable raw, absent once
+ * cleaned — closed that agent's run here while the fold joined the rows on either side of it: an append after it drew
+ * `[group 1,2 · row 4]` where the whole projection draws `[group 1,2,4]` (R-062's fix round 2, `projector.test.ts`).
  */
-function cleanCut(rows: readonly TranscriptRow[], b: number, showReasoning: boolean): number {
+function cleanCut(rows: readonly TranscriptRow[], b: number, o: Pick<ProjectOptions, 'running' | 'showReasoning'>): number {
   const reach = new Map<string, number>();
   const closedAbove = new Set<string>();
+  const thinking = previousThinkingByAgent(rows, b);
   for (let i = b; i < rows.length; i += 1) {
-    const row = rows[i]!;
+    const raw = rows[i]!;
+    const repeat = repeatsReasoning(raw, thinking.of(raw));
+    thinking.saw(raw);
+    if (repeat) continue;
+    const row = settle(raw, o.running);
     if (closesEveryRun(row)) break;
     const key = agentKey(row);
-    if (!runnable(row, showReasoning)) { closedAbove.add(key); continue; }
+    if (!runnable(row, o.showReasoning)) { closedAbove.add(key); continue; }
     // An agent whose first event in the suffix is runnable has a run that may reach back past `b`.
     if (!closedAbove.has(key) && !reach.has(key)) reach.set(key, b);
   }
 
   let cut = b;
   for (let i = b - 1; i >= 0; i -= 1) {
-    const row = rows[i]!;
+    const raw = rows[i]!;
+    // The lookback is taken only for an unstamped thinking row, and each one ends at the same agent's next thinking
+    // row down, so one agent's lookbacks cover disjoint stretches: bounded, per agent, by the walk plus one stretch
+    // below it.
+    if (isUnstampedThinking(raw) && repeatsReasoning(raw, lastThinkingOf(rows, i, thinkingAgent(raw)))) continue;
+    const row = settle(raw, o.running);
     if (closesEveryRun(row)) break;
     const key = agentKey(row);
-    if (!runnable(row, showReasoning)) { reach.delete(key); continue; }
+    if (!runnable(row, o.showReasoning)) { reach.delete(key); continue; }
     // The highest index this agent's current run is known to reach. Unset means this row is its highest.
     const highest = reach.get(key) ?? i;
     reach.set(key, highest);
@@ -555,33 +632,117 @@ export function projectDisplay(o: ProjectOptions, incremental?: { readonly previ
   const deduped = dropRepeatedDiffs(o.rows);
 
   let startRow = 0;
-  let prefix: DisplayRow[] = [];
+  let prefix: readonly DisplayRow[] = [];
   if (incremental) {
-    let b = deduped.findIndex((r) => r.index >= incremental.from);
-    if (b === -1) b = deduped.length;
-    startRow = cleanCut(deduped, b, o.showReasoning);
+    const b = firstAtOrAfter(deduped, incremental.from);
+    startRow = cleanCut(deduped, b, o);
     // The ROW INDEX of the clean cut, which is where re-projection begins — not `b`'s, which a run open at
-    // `b` may reach back past. REQ-CHAT-048 needs the immediately previous thinking row, kept below.
-    const boundaryIndex = deduped[startRow]?.index ?? Number.POSITIVE_INFINITY;
-    prefix = incremental.previous.filter((d) => d.shape !== 'trailer' && lastIndexOf(d) < boundaryIndex);
-    // A reusable prefix must be a prefix: stop at the first displayed row that is not below the boundary.
-    const cut = incremental.previous.findIndex((d) => d.shape === 'trailer' || lastIndexOf(d) >= boundaryIndex);
-    if (cut !== -1) prefix = incremental.previous.slice(0, cut) as DisplayRow[];
+    // `b` may reach back past. REQ-CHAT-048 needs each agent's immediately previous thinking row, looked up below.
+    //
+    // Never above `from`. Where every row at and after `from` is gone from `deduped` — REQ-CHAT-050's repeated diff
+    // re-sent at its own index with the rows behind it removed — the cut lands past the end, and the first form read
+    // that as +Infinity and reused the whole previous display, removed rows included (R-062's fix round 2). The rows
+    // from `from` on are the changed ones by definition, so nothing displayed for them before is reusable.
+    const boundaryIndex = Math.min(deduped[startRow]?.index ?? Number.POSITIVE_INFINITY, incremental.from);
+    // A reusable prefix must be a prefix: stop at the first displayed row that is not below the boundary — a trailer,
+    // or a row reaching the boundary. When there is none, the whole previous display is the prefix.
+    //
+    // Found by bisection over the previous display's REACH (`reachOf`: the highest row index any displayed row up to a
+    // position covers), which a bounded projection carries forward from the display it was built on. The first form
+    // FILTERED the previous display down to the rows below the boundary, then searched it again from the start for the
+    // same position and replaced the filter's result with the slice above it: two passes over every displayed row an
+    // increment, asking each where it ends. V8's CPU profile of the built app named them (`lastIndexOf` and the
+    // projection's own time, 2026-09-29, the defect note's "CPU profile" section; REQ-CHAT-055).
+    const cut = firstReaching(reachOf(incremental.previous), boundaryIndex);
+    prefix = cut === -1 ? incremental.previous : incremental.previous.slice(0, cut);
+    // `cleanCut` reads the runs of the NEW rows. A previous run could still reach across the boundary when a row it
+    // held was replaced in place by one that does not join it (a tool row become prose): its members below the
+    // boundary would be neither reused (the header reaches past it) nor re-projected (they sit before it). The
+    // bounded form cannot take that change, so it projects the window instead. Found when the pane began taking the
+    // bounded form (R-062's fix round 1, `projector.test.ts`); unreachable by an append or a settle, whose previous
+    // runs the new rows still hold.
+    if (cut !== -1 && incremental.previous.slice(cut).some((d) => d.shape === 'group' && d.members[0]!.index < boundaryIndex)) {
+      startRow = 0;
+      prefix = [];
+    }
   }
 
   const suffix = deduped.slice(startRow);
   const cleaned: TranscriptRow[] = [];
-  let previousThinking: TranscriptRow | null = startRow > 0 ? lastThinkingBefore(deduped, startRow) : null;
+  const thinking = previousThinkingByAgent(deduped, startRow);
   for (const row of suffix) {
-    const out = hygiene(row, previousThinking, o, o.expanded.has(rowKey(row)));
-    if (row.kind === 'thinking') previousThinking = row;
+    const out = hygiene(row, thinking.of(row), o, o.expanded.has(rowKey(row)));
+    thinking.saw(row);
     if (out !== null) cleaned.push(out);
   }
-  return [...prefix, ...foldRuns(cleaned, o.groupTools, o.showReasoning), ...trailerRows(o)];
+  const display = [...prefix, ...foldRuns(cleaned, o.groupTools, o.showReasoning), ...trailerRows(o)];
+  // The next bounded projection will search this display's reach; its prefix's is the previous display's, unchanged.
+  if (incremental && prefix.length > 0) reaches.set(display, extendReach(reachOf(incremental.previous), prefix.length, display));
+  return display;
 }
 
-function lastThinkingBefore(rows: readonly TranscriptRow[], before: number): TranscriptRow | null {
-  for (let i = before - 1; i >= 0; i -= 1) if (rows[i]!.kind === 'thinking') return rows[i]!;
+/**
+ * The REACH of a displayed array: at each position, the highest row index covered by any displayed row at or before it
+ * (`lastIndexOf`), a trailer covering every index. It never decreases, so the first position reaching a row index is a
+ * bisection rather than a pass. Held against the array it describes; a bounded projection's is its prefix's, copied,
+ * and the rest computed, and any other array's is computed whole the first time it is asked for.
+ */
+const reaches = new WeakMap<readonly DisplayRow[], Float64Array>();
+
+function extendReach(previous: Float64Array | null, keep: number, display: readonly DisplayRow[]): Float64Array {
+  const reach = new Float64Array(display.length);
+  if (previous !== null && keep > 0) reach.set(previous.subarray(0, keep));
+  let highest = keep > 0 ? reach[keep - 1]! : Number.NEGATIVE_INFINITY;
+  for (let p = keep; p < display.length; p += 1) {
+    const d = display[p]!;
+    const last = d.shape === 'trailer' ? Number.POSITIVE_INFINITY : lastIndexOf(d);
+    if (last > highest) highest = last;
+    reach[p] = highest;
+  }
+  return reach;
+}
+
+function reachOf(display: readonly DisplayRow[]): Float64Array {
+  let reach = reaches.get(display);
+  if (reach === undefined) {
+    reach = extendReach(null, 0, display);
+    reaches.set(display, reach);
+  }
+  return reach;
+}
+
+/** The first position whose reach is at least `index`, or -1: the first displayed row that is a trailer or reaches it. */
+function firstReaching(reach: Float64Array, index: number): number {
+  let lo = 0;
+  let hi = reach.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (reach[mid]! < index) lo = mid + 1; else hi = mid;
+  }
+  return lo === reach.length ? -1 : lo;
+}
+
+/**
+ * The position of the first row whose index is at least `index`, or `rows.length` — by bisection, because the resident
+ * window is in index order (`ProjectOptions.rows`) and `dropRepeatedDiffs` keeps that order. The bounded form's first
+ * form searched it from the start, a pass over every row held for a position an increment puts near the end.
+ */
+function firstAtOrAfter(rows: readonly TranscriptRow[], index: number): number {
+  let lo = 0;
+  let hi = rows.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (rows[mid]!.index < index) lo = mid + 1; else hi = mid;
+  }
+  return lo;
+}
+
+/** REQ-CHAT-048's lookback: the nearest thinking row below `before` that `agent` wrote, or null. */
+function lastThinkingOf(rows: readonly TranscriptRow[], before: number, agent: string): TranscriptRow | null {
+  for (let i = before - 1; i >= 0; i -= 1) {
+    const row = rows[i]!;
+    if (row.kind === 'thinking' && thinkingAgent(row) === agent) return row;
+  }
   return null;
 }
 

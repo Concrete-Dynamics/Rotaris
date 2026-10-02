@@ -23,6 +23,13 @@ _Avoid_: build (a build is what produces an artifact), version (a version is a v
 `v<major>.<minor>.<patch>` with an optional prerelease suffix. Plain versions are `stable`; suffixed
 ones are `prerelease`. — `REQ-STARTUP-027`, `REQ-STARTUP-029`
 
+**Pre-build guard**:
+The one stage, before any platform is built, that stops a release when the tag's version differs from
+a product version the build declares, or when the setup manifest's package pins disagree with the
+built-in default configuration's. Either failure stops every platform. — `REQ-STARTUP-028`,
+`REQ-STARTUP-059`, `REQ-STARTUP-149`
+_Avoid_: version check (it checks the pins too), preflight
+
 **Artifact**:
 One published file of a release, named by the single authority that fixes the four names. There is
 no console-archive kind. — `REQ-STARTUP-031`
@@ -46,12 +53,69 @@ produced; nothing at run time adds to, replaces or disables that set. — `REQ-S
 _Avoid_: code signature — the artifacts carry none, and what the manifest signature establishes is
 **who published a release**, which checksums alone never did
 
+**Notices file**:
+`THIRD-PARTY-LICENSES.txt`, inside every standalone artifact: one entry per dependency of the shipped closure with its
+version, licence identifier and full licence text, the bundled fonts' and icon set's licences, the tools provisioned
+after installation, and a header giving the LGPL corresponding-sources address. The About & Legal surface opens this
+same file. — `REQ-STARTUP-141`, `REQ-STARTUP-142`
+_Avoid_: notices on its own — the desktop shell's notices are the [Shell](../ui/CONTEXT.md) context's. The surface
+calls the same file the third-party license bundle (`REQ-SHELL-142`).
+
+**Shipped closure**:
+Every dependency present in the shipped artifact, and nothing used only for development or CI, and no component of
+the product's own build. — `REQ-STARTUP-142`, `REQ-STARTUP-143`
+
+**Notices validation**:
+The check run per platform before freezing that fails the platform's release job, naming the offending component or
+path, when the shipped closure or the notices header is incomplete. — `REQ-STARTUP-037`, `REQ-STARTUP-143`
+
+**Maintainer-review table**:
+The version-controlled, dated table of reviewed exceptions beside the notices generator, each entry letting one
+dependency without licence text pass validation for a version range until its expiry. — `REQ-STARTUP-143`
+_Avoid_: allow-list, waiver
+
+**Bundled asset**:
+A file shipped inside the installed build, which the product reads from there. The desktop shell's are the notices
+file, the text asset holding the [Shell](../ui/CONTEXT.md) context's **build identifier**, the vector brand mark and
+the three font families (`docs/spec/12-desktop-shell-windows.md`, "Bundled assets read by the shell"). REQ-STARTUP-143's
+clause on "a bundled asset's license file" concerns those that carry a third-party licence, whose texts REQ-STARTUP-142
+names: the three font families and the Phosphor Icons set. — `REQ-SHELL-140`, `REQ-SHELL-142`, `REQ-STARTUP-141`,
+`REQ-STARTUP-142`, `REQ-STARTUP-143`
+
 **Release feed**:
 The product's public source of the latest release, consulted exactly once per launch of a supported
 standalone build, after the window is visible. — `REQ-STARTUP` update check
 
 **Banner**:
 The dismissible, non-blocking surface offering a newer release. — `REQ-STARTUP` update notification
+
+**Update offer**:
+The one latest release the check found strictly newer than the running version and carrying this flavour's
+artifact under its exact name, held by the desktop until it is installed or waved off. — `REQ-STARTUP-107`,
+`REQ-STARTUP-108`, `REQ-STARTUP-116`
+
+**Waved-off version**:
+The single version string a dismissal of the update notice remembers, so that version stays silent and any
+newer one notifies again. Never a list, and recorded by that notice alone. — `REQ-STARTUP-116`,
+`REQ-STARTUP-117`
+
+**Staging**:
+The fresh temporary directory, its name prefixed `rotaris-update-`, an asset is streamed into and verified in
+before anything of the installation is touched. — `REQ-STARTUP-122`, `REQ-STARTUP-124`
+
+**Hand-off**:
+An apply outcome in which the application yields to another installer — the setup executable, or the
+platform's file browser — before the replacement is in place, so its message describes the hand-off rather
+than telling the user to restart. — `REQ-STARTUP-119`, `REQ-STARTUP-127`
+_Avoid_: hand-over, which is the passing of a launch, or of the single-instance record, between instances
+
+**Successor**:
+The updated installation an instance starts on `Restart now`, to which the single-instance record passes
+rather than being released; the one case in which the product starts the application while an instance is
+running. — `REQ-STARTUP-121`
+_Avoid_: update offer for the first step of passing the record to it. ADR-0055 names that step the record's *offer*:
+the instance offers the record, and the successor acknowledges it before the record passes. It is not the
+**Update offer**, which is the release the check found.
 
 ### Launching
 
@@ -98,7 +162,8 @@ The pinned declaration of what setup provisions — per tool a probe, a version,
 artifacts with their hashes, a licence and the capabilities it enables. — `REQ-STARTUP-058`
 
 **Platform key**:
-The per-platform selector a manifest's artifacts are chosen by. — `REQ-STARTUP-059`
+The per-platform selector shared by release artifact naming, updater asset selection and manifest artifact
+selection — one of the three fixed keys, or a raw fallback for anything else. — `REQ-STARTUP-060`
 
 **Probe**:
 Running a tool's declared command to learn whether it is present and at what version. —

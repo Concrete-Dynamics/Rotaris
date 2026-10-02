@@ -135,8 +135,12 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   /** REQ-CHAT-173: thumbnail bytes are fetched on demand and never join a transcript snapshot. */
   z.object({ kind: z.literal('session.readAttachment'), sessionId: z.string().min(1), path: z.string().min(1), digest: z.string().regex(/^[0-9a-f]{64}$/) }),
-  /** REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause or continue a paused session. */
-  z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(PAUSE_RESOLUTIONS) }),
+  /**
+   * REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause, or continue a paused session or one a crash left (PD-ORCH-005
+   * clause 18). `withoutPaused` is clause 6's "continue without them": the agents the rest or the crash left end
+   * `cancelled` instead of resuming.
+   */
+  z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(PAUSE_RESOLUTIONS), withoutPaused: z.boolean().optional() }),
   /**
    * REQ-ORCH-153/154 (ADR-0062): the plan gate's two entries. A session command and not a control operation —
    * the run is PARKED at the gate, so there is no live run to control and the answer must reach a session whose
@@ -163,6 +167,16 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.control'), request: ControlRequestSchema }),
   /** REQ-NOTIFY-026: compare-and-clear with an id; no id clears whatever notice is current (Part V). */
   z.object({ kind: z.literal('notice.acknowledge'), noticeId: z.number().int().optional() }),
+  /**
+   * The updater (first-release-plan.md §4.6, 2026-09-28) — the two notice actions REQ-NOTIFY-044 named with no target
+   * until now. `update.install` is `Update now` on the offer notice and `Try again` on the failure notice
+   * (REQ-STARTUP-116, REQ-STARTUP-120): main holds the offer, runs REQ-STARTUP-122's sequence and reports through the
+   * same notice; the renderer names no version, no asset and no URL. `update.restart` is `Restart now` on the
+   * `Update installed` notice and on no other (REQ-STARTUP-121): the hand-over of the instance record to the updated
+   * installation. Both are refused, never queued, while an update operation is in flight (REQ-STARTUP-114).
+   */
+  z.object({ kind: z.literal('update.install') }),
+  z.object({ kind: z.literal('update.restart') }),
   /** REQ-SESSION-201: main supplies the dialogs and nothing else; the work runs in the workspace service (ADR-0002 c.7). */
   z.object({ kind: z.literal('workspace.backup') }),
   z.object({ kind: z.literal('workspace.restore') }),

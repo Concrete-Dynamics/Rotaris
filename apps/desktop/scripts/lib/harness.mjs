@@ -27,6 +27,11 @@ export const app = join(repo, 'apps', 'desktop');
 export const electron = process.platform === 'win32'
   ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe')
   : join(repo, 'node_modules', 'electron', 'dist', 'electron');
+/**
+ * The switches this host needs on every launch of `electron`. Chromium refuses to start as root with its sandbox on
+ * (crbug.com/638180), and a Linux container runs everything as root; on any other host the list is empty.
+ */
+export const hostSwitches = process.getuid?.() === 0 ? ['--no-sandbox'] : [];
 /** The built main entry the proofs launch (never the packaged binary; `pnpm package` has its own probe). */
 export const mainEntry = join(app, 'out', 'main', 'index.js');
 
@@ -72,13 +77,17 @@ function toPosix(path) {
  * answer as a literal and so could only find a store on Windows
  * (`docs/defects/fixed/the-packaged-load-check-reads-its-store-at-a-windows-shaped-path.md`).
  *
+ * On `darwin` the product reads neither variable pair: it composes every directory from the home directory
+ * (`~/Library/Application Support/rotaris`, and `data` below it), so the answer there is rooted at the scratch
+ * home the launch was given — `home`, which defaults to the one `proofIsolationEnv` sets when its caller names none.
+ *
  * This is a COPY of a rule the product owns, because `harness.mjs` is plain JavaScript run straight from
  * the repository and cannot import a TypeScript package. `proof-isolation.test.ts` asserts the copy
- * against `resolveUserDirs`/`dataLayout` themselves on both platforms, which is what keeps it from
+ * against `resolveUserDirs`/`dataLayout` themselves on all three platforms, which is what keeps it from
  * drifting — a drift is a failed test, not a proof that quietly finds nothing.
  */
-export function workspacesRootFor(local, platform = process.platform) {
-  return dataSubdirFor(local, 'workspaces', platform);
+export function workspacesRootFor(local, platform = process.platform, home = scratchHomeFor(local)) {
+  return dataSubdirFor(local, 'workspaces', platform, home);
 }
 
 /**
@@ -87,25 +96,60 @@ export function workspacesRootFor(local, platform = process.platform) {
  * writes `<XDG_DATA_HOME>/rotaris/tokens`, so sign-in timed out, and `dropCredentials` removed a directory that never
  * held the key — the key's own directory survived a `--keep`. Found by the first live run on Linux, 2026-09-24.
  */
-export function tokensDirFor(local, platform = process.platform) {
-  return dataSubdirFor(local, 'tokens', platform);
+export function tokensDirFor(local, platform = process.platform, home = scratchHomeFor(local)) {
+  return dataSubdirFor(local, 'tokens', platform, home);
 }
 
 /**
- * The configuration directory (`resolveUserDirs().config`) below `local`, by the same copied rule: on Windows
- * `local/rotaris/config`, elsewhere `<XDG_CONFIG_HOME>/rotaris`. The live run read the discovery snapshot
- * (`project_settings.yaml`) at the Windows spelling on every platform, so on Linux it reported the authenticated
- * provider missing from a file it never opened. Found by the Linux live run, 2026-09-24.
+ * The machine identifier's file (`dataLayout().machineId`, REQ-SESSION-046: minted once per machine "in the machine-local
+ * location the store lives in") below `local`, by the same copied rule. `sessions-proof` read it at the Windows spelling
+ * `local/rotaris/data/machine-id` on every platform. On Linux the app writes `<XDG_DATA_HOME>/rotaris/machine-id`, so
+ * planting a lock that names this machine crashed with ENOENT, and `repair-all` and every launch after it went
+ * unmeasured (`docs/defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`).
  */
-export function configDirFor(local, platform = process.platform) {
+export function machineIdFileFor(local, platform = process.platform, home = scratchHomeFor(local)) {
+  return dataSubdirFor(local, 'machine-id', platform, home);
+}
+
+/**
+ * The configuration directory (`resolveUserDirs().config`) of a launch isolated at `local`, by the same copied rule:
+ * on Windows `local/rotaris/config`, on macOS `<home>/Library/Application Support/rotaris`, elsewhere
+ * `<XDG_CONFIG_HOME>/rotaris`. The live run read the discovery snapshot (`project_settings.yaml`) at the Windows
+ * spelling on every platform, so on Linux it reported the authenticated provider missing from a file it never
+ * opened. Found by the Linux live run, 2026-09-24.
+ *
+ * `home` is the scratch home the launch was given. The macOS answer is composed from it and from nothing else,
+ * because the product reads no `XDG_*` variable there; until 2026-09-28 this copy gave `darwin` the `XDG` answer,
+ * a directory the product never reads on macOS
+ * (`docs/defects/fixed/config-dir-for-answers-the-linux-directory-on-macos.md`). A caller that hands its launch a
+ * home of its own passes the same one here; one that does not takes the default `proofIsolationEnv` sets.
+ */
+export function configDirFor(local, platform = process.platform, home = scratchHomeFor(local)) {
   if (platform === 'win32') return win32.join(local, 'rotaris', 'config');
+  if (platform === 'darwin') return macosApplicationSupport(home);
   return posix.join(toPosix(local), 'rotaris', 'config', 'rotaris');
 }
 
-function dataSubdirFor(local, leaf, platform) {
+function dataSubdirFor(local, leaf, platform, home) {
   if (platform === 'win32') return win32.join(local, 'rotaris', 'data', leaf);
+  if (platform === 'darwin') return posix.join(macosApplicationSupport(home), 'data', leaf);
   const data = posix.join(toPosix(local), 'rotaris', 'data');
   return posix.join(data, 'rotaris', leaf);
+}
+
+/** `resolveUserDirs`'s `darwin` configuration directory below a home, spelled for the platform that reads it. */
+function macosApplicationSupport(home) {
+  return posix.join(toPosix(home), 'Library', 'Application Support', 'rotaris');
+}
+
+/**
+ * The scratch home a POSIX launch isolated at `local` is given when its caller names none: `home` beside `local`
+ * in the scratch profile, the sibling convention `roaming` already follows. Derived from `local` alone so that the
+ * directory rules above (`configDirFor`, `workspacesRootFor`, `tokensDirFor`) can compose the macOS answer from the
+ * same argument every caller already passes them.
+ */
+export function scratchHomeFor(local) {
+  return posix.join(toPosix(local), '..', 'home');
 }
 
 /** The one store below `local`, or a thrown error naming how many there were — a proof that opened the wrong store is the defect this refuses to become. */
@@ -140,12 +184,14 @@ export function buildDesktop(output) {
 
 /**
  * The environment every launch shares — the clean base, the scratch profile's three roots and the scripted
- * dialect. A caller adds its own seams on top; nothing here presumes a capture.
+ * dialect. A caller adds its own seams on top; nothing here presumes a capture. `home` is `proofIsolationEnv`'s,
+ * passed through: a POSIX caller may name its scratch home there (every POSIX launch gets one either way), and a
+ * Windows launch never sets `HOME` whatever it is passed (see below).
  */
-export function launchOptions({ local, preferences, extra = {} }) {
+export function launchOptions({ local, preferences, home, extra = {} }) {
   return {
     ...cleanEnvironment(),
-    ...proofIsolationEnv({ local, preferences }),
+    ...proofIsolationEnv({ local, preferences, home }),
     ROTARIS_MODEL_DIALECT: 'scripted',
     ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
     ...extra,
@@ -164,11 +210,14 @@ export function launchOptions({ local, preferences, extra = {} }) {
  * own fallback discipline is untestable this way — a launch that must exercise the fallback clears the pair
  * after spreading this object.
  *
- * The `home` argument exists for the same reason. `dirs.ts` falls back to the operator's home when neither
- * XDG variable is set, so a launch that sets the data root but leaves `HOME`/`USERPROFILE` alone is isolated
- * only for the two directories the product reads first. `skills-proof` keeps its own scratch home through
- * `ROTARIS_CAPTURE_SKILLS_HOME` (overriding the real home kills Electron before it paints on Windows) and so
- * does not take this half; every other POSIX launch takes it.
+ * `HOME` is set for the same reason, on every POSIX launch. `dirs.ts` falls back to the operator's home when
+ * neither XDG variable is set, and on macOS it reads no XDG variable at all — every per-user directory is composed
+ * from the home — so a macOS launch that leaves `HOME` alone writes the operator's own
+ * `~/Library/Application Support/rotaris`. The value is the caller's `home` when it names one, and
+ * `scratchHomeFor(local)` otherwise, which is what lets `configDirFor` and the data rules answer the macOS
+ * directory from `local` alone. A Windows launch never takes it: overriding the real home there kills Electron
+ * before it paints, and Windows reads `LOCALAPPDATA`, not the home. `platform` is the platform the launch runs on,
+ * a parameter for the same reason `resolveUserDirs` takes one: so the answer is decidable from any host.
  *
  * The short `XDG_RUNTIME_DIR` is the socket's half of the same defect. The single-instance claim listens on a
  * unix socket under the data directory, and a unix socket path is capped at 108 bytes — a data root nested
@@ -176,7 +225,7 @@ export function launchOptions({ local, preferences, extra = {} }) {
  * temporary directory keeps the path short whatever the profile's depth; the product never reads this
  * variable, so nothing but the claim's socket moves (see `packages/platform/src/instance.ts`).
  */
-export function proofIsolationEnv({ profileRoot, local, preferences, home }) {
+export function proofIsolationEnv({ profileRoot, local, preferences, home, platform = process.platform }) {
   // The POSIX pair is spelled with POSIX separators even when the harness runs on Windows: a POSIX launch
   // reads these values, and a Windows-spelled value is a path no POSIX machine would resolve. `dirs.ts`
   // reads them as opaque strings (the platform parameter supplies the separator), so spelling them here
@@ -200,7 +249,7 @@ export function proofIsolationEnv({ profileRoot, local, preferences, home }) {
   // which opens a preference store). Naming the key with no value would put the string "undefined" in the
   // child's environment on Windows, which is a path.
   if (preferences !== undefined) env.ROTARIS_PREFERENCES_ROOT = preferences;
-  if (home !== undefined) env.HOME = home;
+  if (platform !== 'win32') env.HOME = home ?? scratchHomeFor(local);
   return env;
 }
 

@@ -1,9 +1,9 @@
 import type { SessionId } from '@rotaris/kernel';
-import { isTerminalChildState, type ChildState, type RootExecutionRecord, type SettlingPath } from '@rotaris/contracts';
+import { isTerminalChildState, type ChildState, type Interruption, type ResumeState, type RootExecutionRecord, type SettlingPath } from '@rotaris/contracts';
 import type { ChildInsert, ChildRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
 import type { ArtifactStore } from '../artifacts/store.js';
-import { canonicaliseName, mintTaskId, uniqueUnderParent } from './naming.js';
+import { canonicaliseName, mintTaskId, takenTaskIds, uniqueUnderParent } from './naming.js';
 import { EMPTY_MCP_EVIDENCE, knownRolesMessage, resolveRole, type Persona, type PersonaResolver } from './personas.js';
 import type { RanCommand } from '../artifacts/record.js';
 
@@ -27,10 +27,51 @@ export function commandsForArtifact(v: unknown): RanCommand[] {
 }
 
 /**
+ * REQ-ORCH-133 / REQ-MONITOR-128: what the user's cancel of one child writes for each agent it ends — the report and the
+ * timeline entry — shared by the live cancel (`IterationChildren.cancel`) and PD-ORCH-005 clause 16's cancel while the
+ * session rests (`Sessions`, OQ-101), so the two cannot drift. `whileResting` adds that clause's words to the entry.
+ */
+export function userCancellation(t: Pick<ChildRow, 'task_id' | 'canonical_name' | 'persona'>, chosen: Pick<ChildRow, 'task_id' | 'canonical_name'>, whileResting = false): { readonly report: Record<string, unknown>; readonly message: string; readonly metadata: Record<string, unknown> } {
+  const own = t.task_id === chosen.task_id;
+  return {
+    report: { agent_name: t.canonical_name, role: t.persona, status: 'cancelled', summary: own ? 'The user cancelled this child.' : `Cancelled with ${chosen.canonical_name}, which the user cancelled.`, key_findings: [], last_response: '', final_response: '', errors: [] },
+    message: `The user cancelled child ${t.canonical_name} (${t.task_id})${own ? '' : ` with ${chosen.canonical_name}`}${whileResting ? ' while the session rested' : ''}.`,
+    metadata: { task_id: t.task_id, ...(own ? {} : { cancelled_with: chosen.task_id }) },
+  };
+}
+
+/**
+ * REQ-LIBRARY-092: EVERY terminal child report is materialised as an artifact. The materialisation lives beside the one
+ * write every stored report passes through — the ledger's own reports, the scheduler's cancellation, the user's cancel,
+ * the settle of a child a previous run left (REQ-ORCH-053) and the decline of a resumable iteration (PD-ORCH-005
+ * clause 6) — so no caller can store a report without one, exactly as the adjacent-duplicate rule lives beside its
+ * insert rather than in a caller. A child REQ-ORCH-048's cascade blocks gets no report at all
+ * (`docs/defects/a-child-blocked-by-its-dependency-gets-no-report.md`). The last two wrote the report alone until 2026-09-27
+ * (`docs/defects/fixed/a-stale-settled-childs-report-is-never-an-artifact.md`). The row names the artifact; without
+ * one, the report is stored and no artifact is made.
+ */
+export function storeChildReport(deps: { readonly writer: SessionWriter; readonly artifacts?: ArtifactStore | undefined; readonly warn: (m: string) => void }, taskId: string, row: ChildRow | undefined, report: Record<string, unknown>): void {
+  const r = deps.writer.storeChildReport(taskId, report);
+  if (!r.ok) deps.warn(`the report for child ${taskId} could not be stored: ${r.error.code}`);
+  const artifacts = deps.artifacts;
+  if (!artifacts || !row) return;
+  const list = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+  const text = (v: unknown): string => (typeof v === 'string' ? v : '');
+  const m = artifacts.materialiseChildReport({
+    taskId, canonicalName: row.canonical_name, persona: row.persona,
+    status: text(report['status']) || row.state, summary: text(report['summary']),
+    keyFindings: list(report['key_findings']), editedFiles: list(report['edited_files']), createdFiles: list(report['created_files']),
+    commands: commandsForArtifact(report['commands']),
+    highlightPaths: [], snippets: [], tags: list(report['tags']), conversationId: taskId,
+  });
+  if (!m.ok) deps.warn(`the report for child ${taskId} could not be materialised as an artifact: ${m.error.reason}`);
+}
+
+/**
  * ADR-0012: the ledger is the primary representation — one row per child, written through the session
  * writer, every state change one transaction with its event, every query carrying the session id
  * (REQ-ORCH-151). This class is the engine's view of it: admission (REQ-ORCH-046's five checks in order,
- * REQ-ORCH-038's rejections, REQ-ORCH-034's aliases, REQ-ORCH-044/045's naming), the transition function
+ * REQ-ORCH-038's rejections, REQ-ORCH-034's aliases, REQ-TOOLS-152's inherited-context rule, REQ-ORCH-044/045's naming), the transition function
  * (the writer's, the sole implementation of REQ-MONITOR-300), the start claim, the report.
  */
 export interface Budget {
@@ -59,6 +100,10 @@ export interface SpawnInput {
   readonly background: boolean;
   readonly modelKey: string;
   readonly grantedTools: readonly string[];
+  /** PD-ORCH-004: the child this one continues, admitted by the caller before the spawn; absent for ordinary work. */
+  readonly continuationOf?: string | undefined;
+  /** PD-TOOLS-006 revision 2: the validated patterns the child declared, stored with its record; absent means none. */
+  readonly writeScope?: readonly string[] | undefined;
 }
 
 export type SpawnRejection = { readonly reason: string };
@@ -69,6 +114,11 @@ export interface Spawned {
   readonly aliasResolved: string | null;
   /** REQ-ORCH-050: held behind the per-model cap at creation. */
   readonly held: boolean;
+  /**
+   * REQ-TOOLS-152: the siblings named in `inherited_context` that had completed with their report stored when the
+   * call was made, in the caller's order and once each; the ids naming a failed or unfinished sibling are not here.
+   */
+  readonly inherited: readonly ChildRow[];
 }
 
 export class ChildLedger {
@@ -89,8 +139,7 @@ export class ChildLedger {
     if (deps.rootRecord) {
       this.root = deps.rootRecord;
     } else {
-      const taken = new Set(deps.dal.childrenOf(deps.sessionId).map((c) => c.task_id));
-      const taskId = mintTaskId(taken);
+      const taskId = mintTaskId(takenTaskIds(deps.dal, deps.sessionId));
       this.root = {
         taskId,
         canonicalName: 'orchestrator',
@@ -124,9 +173,17 @@ export class ChildLedger {
   enqueueSlot(modelKey: string, taskId: string): void {
     this.deps.dal.enqueueSlot(this.deps.sessionId, modelKey, taskId);
   }
-  /** REQ-ORCH-065/072: one ledger per iteration — every child this iteration created. */
+  /**
+   * REQ-ORCH-065/072: one ledger per iteration — every child this iteration created, which is every child descending from
+   * this iteration's ROOT. The iteration number alone is not that set: every plan cycle is numbered 0, and a run host
+   * that died mid-iteration left its children under a number the next run reused
+   * (`a-crashed-iteration-number-is-reused-by-the-next-run.md`), so a ledger scoped by number read another root's
+   * children into its limits, its dependencies and its credited child. The tree is walked from the root, since children
+   * spawned in one instant are ordered by task id and a child can be read before its parent; the result keeps the
+   * store's spawn order.
+   */
   all(): ChildRow[] {
-    return this.deps.dal.childrenOfIteration(this.deps.sessionId, this.deps.iteration);
+    return treeOf(this.deps.dal.childrenOfIteration(this.deps.sessionId, this.deps.iteration), (id) => this.isRoot(id));
   }
   get(taskId: string): ChildRow | undefined {
     return this.deps.dal.getChild(this.deps.sessionId, taskId);
@@ -182,16 +239,42 @@ export class ChildLedger {
       seen.add(from);
       return (edges.get(from) ?? []).some((d) => reaches(d, target));
     };
-    for (const inh of input.inheritedContext) if (inh.trim() === '') return { ok: false, error: { reason: 'A malformed inherited-context entry (empty) was rejected' } };
-    const taken = new Set(all.map((c) => c.task_id));
+    /*
+     * REQ-TOOLS-152: "an id in `inherited_context` that names no task at all refuses the call, an id … naming a task
+     * that failed or has not finished is ignored without refusing". Existence is asked of the whole session and the
+     * root execution record, which shares the children's id namespace (REQ-ORCH-072: a lookup naming the root resolves
+     * to it rather than reporting it unknown), so only an id no task has is refused as referring to nothing. A task that
+     * exists and has not completed — the root, the caller's own task, a sibling or any other task that failed, was
+     * cancelled or is still under way — is ignored. "Completed" is REQ-ORCH-047's notion: `succeeded` with the report
+     * stored, since it is the report that is carried. A completed task that is not the caller's own child (another
+     * parent's, or an earlier iteration's) is not a sibling; it is refused, for ownership and never as nonexistent, as
+     * the `depends_on` check above refuses one — that reading is OQ-81. This runs after the dependency checks and before
+     * the cycle check (5). A refusal creates no record and issues no id (REQ-TOOLS-153).
+     */
+    const siblings = this.childrenOf(input.parentId);
+    const inherited: ChildRow[] = [];
+    for (const inh of input.inheritedContext) {
+      if (inh.trim() === '') return { ok: false, error: { reason: 'A malformed inherited-context entry (empty) was rejected' } };
+      if (this.isRoot(inh)) continue;
+      const named = this.get(inh);
+      if (!named) return { ok: false, error: { reason: `inherited_context id '${inh}' refers to nothing: no task has that id` } };
+      if (named.state !== 'succeeded' || named.report_stored !== 1) continue;
+      if (!siblings.some((c) => c.task_id === inh)) {
+        const caller = this.isRoot(input.parentId) ? this.root.taskId : input.parentId;
+        return { ok: false, error: { reason: `inherited_context id '${inh}' is not a sibling's: it is owned by parent '${named.parent_id}', not '${caller}'` } };
+      }
+      if (!inherited.some((c) => c.task_id === inh)) inherited.push(named);
+    }
+    // REQ-ORCH-036: unique within the SESSION — every child's and every recorded root's id (PD-ORCH-005), not this iteration's.
+    const taken = takenTaskIds(this.deps.dal, this.deps.sessionId);
     taken.add(this.root.taskId);
     const taskId = mintTaskId(taken);
     for (const dep of input.dependsOn) if (reaches(dep, taskId)) return { ok: false, error: { reason: 'Dependency cycle detected' } };
-    const siblings = new Set(this.childrenOf(input.parentId).map((c) => c.canonical_name));
+    const siblingNames = new Set(siblings.map((c) => c.canonical_name));
     if (this.isRoot(input.parentId)) {
-      siblings.add(this.root.canonicalName);
+      siblingNames.add(this.root.canonicalName);
     }
-    const canonical = uniqueUnderParent(canonicaliseName(input.taskName), siblings);
+    const canonical = uniqueUnderParent(canonicaliseName(input.taskName), siblingNames);
     const held = input.dependsOn.length === 0 && !this.slotFree(input.modelKey);
     const state: ChildState = input.dependsOn.length > 0 ? 'waiting_on_dependencies' : held ? 'waiting_on_model_slot' : 'queued';
     const effectiveParentId = this.isRoot(input.parentId) ? this.root.taskId : input.parentId;
@@ -201,11 +284,15 @@ export class ChildLedger {
       depends_on: JSON.stringify(input.dependsOn), inherited_context: JSON.stringify(input.inheritedContext), granted_tools: JSON.stringify(input.grantedTools),
       // REQ-MCP-065 / REQ-MCP-114 (Part S): the grant evidence at spawn — `{ granted: {server: [tool…]}, servers: [{name, transport, origin, fate, reason?}] }` — from the persona's resolver; `{}` was written until then.
       granted_mcp: JSON.stringify(role.persona.mcpEvidence?.() ?? EMPTY_MCP_EVIDENCE),
+      // PD-ORCH-004: "A child delegated as a continuation carries that relationship in its record."
+      continuation_of: input.continuationOf ?? null,
+      // PD-TOOLS-006 revision 2: "the `write_scope` a child declared is stored with its record".
+      write_scope: JSON.stringify(input.writeScope ?? []),
     };
     const r = this.deps.writer.spawnChild(row);
     if (!r.ok) return { ok: false, error: { reason: `The child could not be recorded: ${r.error.code}` } };
     if (held) this.deps.dal.enqueueSlot(this.deps.sessionId, input.modelKey, taskId);
-    return { ok: true, value: { row: r.value, persona: role.persona, aliasResolved: role.alias, held } };
+    return { ok: true, value: { row: r.value, persona: role.persona, aliasResolved: role.alias, held, inherited } };
   }
 
   /** The one transition function; a refusal names both states and leaves the record untouched. */
@@ -214,34 +301,29 @@ export class ChildLedger {
     if (r.ok) return { ok: true, row: r.value };
     return { ok: false, reason: r.error.code === 'illegal-move' ? r.error.reason : `recording failed: ${r.error.code}` };
   }
+  /**
+   * PD-ORCH-005 clauses 2 and 3: the child comes to rest in `paused`, recording what interrupted it, the state it resumes
+   * into and its tool-call count so far — the writer's one transaction. A refusal names both states and changes nothing.
+   */
+  rest(taskId: string, interruption: Interruption, resumeState: ResumeState, toolCalls: number | null = null): { ok: true; row: ChildRow } | { ok: false; reason: string } {
+    const r = this.deps.writer.restChild(taskId, interruption, resumeState, toolCalls);
+    if (r.ok) return { ok: true, row: r.value };
+    return { ok: false, reason: r.error.code === 'illegal-move' ? r.error.reason : `recording failed: ${r.error.code}` };
+  }
+  /** PD-ORCH-005 clause 4: a `paused` child moves back to the state it resumes into — the writer's one transaction. */
+  resume(taskId: string, into?: 'running'): { ok: true; row: ChildRow } | { ok: false; reason: string } {
+    const r = this.deps.writer.resumeChild(taskId, into);
+    if (r.ok) return { ok: true, row: r.value };
+    return { ok: false, reason: r.error.code === 'illegal-move' ? r.error.reason : `recording failed: ${r.error.code}` };
+  }
   claimStart(taskId: string): boolean {
     const row = this.get(taskId);
     const r = this.deps.writer.claimChildStart(taskId, row?.canonical_name ?? taskId);
     return r.ok && r.value;
   }
-  /**
-   * REQ-LIBRARY-092: EVERY terminal child report is materialised as an artifact. The materialisation lives
-   * here, beside the one write every report passes through — the ordinary path, the scheduler's cancellation
-   * and the user's cancel all call this — so no third caller can store a report without one, exactly as the
-   * adjacent-duplicate rule lives beside its insert rather than in a caller.
-   */
+  /** REQ-LIBRARY-092: every report the ledger stores goes through `storeChildReport`, which materialises its artifact. */
   storeReport(taskId: string, report: Record<string, unknown>): void {
-    const r = this.deps.writer.storeChildReport(taskId, report);
-    if (!r.ok) this.deps.warn(`the report for child ${taskId} could not be stored: ${r.error.code}`);
-    const artifacts = this.deps.artifacts;
-    if (!artifacts) return;
-    const row = this.get(taskId);
-    if (!row) return;
-    const list = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
-    const text = (v: unknown): string => (typeof v === 'string' ? v : '');
-    const m = artifacts.materialiseChildReport({
-      taskId, canonicalName: row.canonical_name, persona: row.persona,
-      status: text(report['status']) || row.state, summary: text(report['summary']),
-      keyFindings: list(report['key_findings']), editedFiles: list(report['edited_files']), createdFiles: list(report['created_files']),
-      commands: commandsForArtifact(report['commands']),
-      highlightPaths: [], snippets: [], tags: list(report['tags']), conversationId: taskId,
-    });
-    if (!m.ok) this.deps.warn(`the report for child ${taskId} could not be materialised as an artifact: ${m.error.reason}`);
+    storeChildReport(this.deps, taskId, this.get(taskId), report);
   }
   markObserved(taskId: string): void {
     this.deps.dal.setChildObserved(this.deps.sessionId, taskId);
@@ -261,4 +343,24 @@ export class ChildLedger {
   slotQueue(modelKey: string): string[] {
     return this.deps.dal.slotQueueOf(this.deps.sessionId, modelKey);
   }
+}
+
+/**
+ * The children of `rows` that descend from a root `isRoot` recognises, in the order `rows` holds them. The tree is
+ * walked to a fixpoint, since children spawned in one instant are ordered by task id and a child can be read before
+ * its parent. The live ledger reads its iteration through it, and so does a stored iteration's crash record and its
+ * decline (PD-ORCH-005), which have no ledger.
+ */
+export function treeOf(rows: readonly ChildRow[], isRoot: (id: string) => boolean): ChildRow[] {
+  const tree = new Set<string>();
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const c of rows) {
+      if (tree.has(c.task_id) || !(isRoot(c.parent_id) || tree.has(c.parent_id))) continue;
+      tree.add(c.task_id);
+      grew = true;
+    }
+  }
+  return rows.filter((c) => tree.has(c.task_id));
 }

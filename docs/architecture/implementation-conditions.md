@@ -2,8 +2,9 @@
 
 Created 2026-09-02 by owner ruling GD-3. **Extended 2026-09-03 by the Architecture Gate**, which added
 IC-4, IC-5 and IC-6 under its decision 2 and recorded its decision 3 at the end of this file. **IC-7 was proposed
-2026-09-06 by ADR-0035's first execution and adopted by the owner the same day (ESC-32, option 2)**; it stays on the
-release until both halves of that option are shown.
+2026-09-06 by ADR-0035's first execution and adopted by the owner the same day (ESC-32, option 2)**; it stayed on the
+release until both halves of that option were shown, and **the second half was shown on 2026-09-27** by the notices
+generator's first execution (see its entry).
 
 This file holds obligations that are **not** conditions of the Architecture Gate but **are** conditions on
 building the thing they name. It exists because the alternative to holding a whole gate for one mechanism's
@@ -375,7 +376,39 @@ ninth defect of decision 3's pattern was a blank packaged window, React twice in
 the unpackaged build shared and no test rendered. Owed and stated: the portable and its stub (ADR-0054),
 signing, `REQ-STARTUP-156`'s gate, an icon, and the per-runner half (IC-3 item 3).
 
-## IC-7 — the bundled code-intelligence runtime fetches its language servers; the release is bound until the owner decides (ADOPTED 2026-09-06, option 2 — half discharged)
+## IC-7 — the bundled code-intelligence runtime fetches its language servers; the release is bound until the owner decides (ADOPTED 2026-09-06, option 2 — DISCHARGED 2026-09-27, the pipeline's evidence owed)
+
+> **DISCHARGED 2026-09-27 — the second half, by the notices generator's first execution** (`first-release-plan.md`
+> §4.3; `tools/notices/`, `pnpm notices`). The criterion option 2 set — "the specification carries the amendment and
+> the notices generator lists them" — is met. The generator writes the `Tools provisioned after installation` section
+> from the setup manifest this build carries (`apps/desktop/scripts/code-intelligence/pins.json`). Under a sub-heading
+> naming the runtime (`serena-agent 1.7.0`), it lists `typescript` 5.9.3 (Apache-2.0,
+> https://registry.npmjs.org/typescript), `typescript-language-server` 5.1.3 (MIT,
+> https://registry.npmjs.org/typescript-language-server) and `pyright` 1.1.403 (MIT, https://pypi.org/project/pyright/),
+> each with its language. It states that the runtime downloads each at the first use of that language, that none is
+> contained in the artifact, and that a further language obtains its server by the same route and is not declared.
+> Rendered over this tree and asserted by `tools/notices/notices.test.ts`, both over a fixture and over the real
+> manifest. A manifest that cannot be read or parsed, or a package missing any of the four fields, fails validation.
+> *Corrected the same day by the gate review's second round: that sentence was false for one input.* A manifest
+> holding only `null`, `false`, `0` or `""` parsed without complaint. Over an otherwise valid fixture the step exited
+> 0 and printed "0 language servers", and this section's list was empty. Every input the generator reads must now be
+> a JSON object, or it fails as unparsable. A package field that is only whitespace also counts as missing.
+> `notices.test.ts` covers each case.
+> **What this does not show, stated so it is not read as shown:** a notices file frozen into a release. The first run
+> wrote none, because REQ-STARTUP-143's validation failed on six things IC-7 does not own: the LGPL address (O-3),
+> `dotenv` 0.9.9's missing identifier (OQ-74), and three npm packages and one Python distribution that carry no
+> licence text and await a maintainer's review (O-11). *Corrected the same day by the gate review: fourteen things.*
+> Eight more components carry only a file that refers to their licence without carrying its text: six npm packages
+> (`@workflow/serde`, `ai` and four `@ai-sdk` packages) and two Python distributions (`certifi`, `mslex`). The first
+> run had counted such a file as the text (OQ-75). O-11 is now twelve reviews. That binds every release by itself, so
+> IC-7 no longer binds anything REQ-STARTUP-143 does not. The machine tools this section also names in
+> REQ-STARTUP-142 are OQ-73's, not IC-7's. Of the three records this entry is "discharged into", the notes on
+> ADR-0035 and ADR-0054 are written in place. **The third, the release pipeline's evidence, is owed**: no pipeline
+> exists yet (first-release-plan.md §4.2). Its first run must show this section in a frozen file.
+> *Pointer added 2026-09-27 (first-release-plan.md §4.4): `electron-builder.yml`'s `extraResources` now carries the
+> file into the artifact, and `afterPack`'s "assets" rule compares it byte for byte with the one in the source tree. No
+> Windows package has run since, so the first one to pass validation freezes this section for the first time and runs
+> that rule for the first time too (ADR-0054, "The two bundled assets").*
 
 > **ADOPTED 2026-09-06 by the owner — option 2, ESC-32 (`owner-decisions.md`).** The language servers are tools
 > provisioned after installation, like Git and ripgrep. **Shown so far, the same day:** `REQ-STARTUP-159`, `058`,
@@ -484,3 +517,60 @@ downgrade it while doing the work.
 extending `REQ-SANDBOX-127`'s obligation to a further continuous-integration platform as the real
 cost of admitting one. If the owner wants the renderers proven rather than written, that is the same
 hardware decision, and it is theirs.
+
+### First execution on Linux — 2026-09-28 (R-062): the six effects held; the absent-subpath residue that the third one cites failed REQ-SANDBOX-077
+
+**Not discharged, and this measurement cannot discharge it.** IC-8 requires the six effects on a real macOS host
+**and** a real Linux host. This section covers Linux only, and one of the checks failed. The condition stands as
+written above.
+
+**What ran.** `pnpm sandbox-proof` scenario 6 was added for this measurement
+([`the fixed note`](../defects/fixed/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md)). Each effect is
+one `terminal` call from a scripted agent in an unattended run with `sandbox_mode: workspace-write`. That call goes
+through ADR-0022's enforcement point in the built application, exactly as a model's call would. Every verdict is read
+from the **host** side after the run: what exists on disk, and what a listener in a separate host process accepted.
+The confined command's own report is kept only as the explanation. There were two launches. In the first,
+`sandbox_allow_network: false` and `.git` was absent beforehand. In the second, `sandbox_allow_network: true` and
+`.git` was present beforehand. `.rotaris` was present in both.
+
+**The host.** Ubuntu 24.04.4 in a virtual machine (kernel `6.18.44-fc-v37`), running as **root** under Xvfb, Node 24. bubblewrap
+0.9.0 was installed through the proxy for this measurement. It was not on the host before, and without it the
+product correctly reported the launcher-missing verdict and refused the confined run. The product's own trial
+reported `confinement: available (bubblewrap)`, and so did the proof's independent trial.
+
+| REQ-SANDBOX-127 effect | network denied, `.git` absent | network allowed, `.git` present |
+| --- | --- | --- |
+| a write inside the effective writable root succeeds | held | held |
+| a write outside every root and every temporary location is refused | held (`exit=2`, nothing on the host) | held |
+| a write under `<root>/.git` is refused | held (`exit=2`, nothing under the name) | held |
+| a write under `<root>/.rotaris` is refused (present before) | held | held |
+| a read outside every writable root succeeds | held | held |
+| an outbound socket is refused while the network is off, and succeeds while it is on | held (`ECONNREFUSED`; the host listener accepted 0) | held (`pong`; the host listener accepted 1) |
+| the working directory the command observes is unchanged | held | held |
+| REQ-SANDBOX-077 (c): an absent protected subpath is still absent afterwards | **FAILED**: an empty `.git` directory remained on the host | not applicable (present before) |
+
+**What it found.** One defect, in the product. To mount case (c)'s tmpfs, bubblewrap creates the mountpoint, and it
+creates it through the writable bind, so it lands on the host. The write under the name was refused, which means a
+hook cannot be planted. But the name now exists on the host, and REQ-SANDBOX-077 says in so many words that it must
+not. The renderer's comment says both options "leave nothing on the host". That reason is falsified and is kept where
+it stands until the repair replaces it:
+[`the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`](../defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md).
+The proof stays red on a Linux host with `bwrap` until the defect is repaired.
+
+**What it could not show, stated so it is not read as shown.**
+
+- **macOS.** Nothing here touches Seatbelt.
+- **An unprivileged user.** The run was as root, so bubblewrap needed no unprivileged user namespace. This does not
+  measure the AppArmor userns restriction that Ubuntu 24.04 applies to ordinary users, which is the path most Linux
+  users meet. That path is REQ-SANDBOX-073's trial-failure verdict, and it was not reached.
+- **`read-only` mode.** Only `workspace-write` ran.
+- **Configured writable roots beyond the workspace.**
+- **`.rotaris` absent beforehand.** The configuration lives there, so it was present in both launches. Case (c) was
+  measured on `.git` only.
+- **The network effect against a destination off the machine.** The listener was on the host's loopback. The
+  "denied" reading shows a separate network namespace, and the "allowed" reading shows the host's own. Outbound
+  traffic from this VM goes through a proxy, so a remote destination would have measured the proxy.
+
+**What the proof checks on every host.** It now reads the host's own verdict and checks the product against it:
+`win32`, launcher missing, trial failed, or available. So `pnpm sandbox-proof` is the check this condition names on
+Linux and on macOS, and on win32 it is still ESC-6's path.

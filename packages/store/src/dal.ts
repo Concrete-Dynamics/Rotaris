@@ -249,8 +249,81 @@ export interface ChildRow {
   readonly observed: number;
   readonly context_injected: number;
   readonly tool_calls: number;
+  /** v22 — PD-ORCH-004: the task id of the child this one was delegated to continue; null for every other child. */
+  readonly continuation_of: string | null;
+  /** v23 — PD-ORCH-005: what left this child `paused` (`pause | stop | quit | crash`); null while it is not paused. */
+  readonly interruption: string | null;
+  /** v23 — PD-ORCH-005: the state a `paused` child moves back into when its iteration resumes; null while it is not paused. */
+  readonly resume_state: string | null;
+  /** v23 — PD-TOOLS-006 revision 2: the child's declared write scope, a JSON array of patterns; `'[]'` when it declared none. */
+  readonly write_scope: string;
 }
-export type ChildInsert = Omit<ChildRow, 'completed_at' | 'report' | 'report_stored' | 'observed' | 'context_injected' | 'tool_calls' | 'launch_generation' | 'todo'> & { readonly todo?: string | null };
+export type ChildInsert = Omit<ChildRow, 'completed_at' | 'report' | 'report_stored' | 'observed' | 'context_injected' | 'tool_calls' | 'launch_generation' | 'todo' | 'continuation_of' | 'interruption' | 'resume_state' | 'write_scope'> & { readonly todo?: string | null; readonly continuation_of?: string | null; readonly write_scope?: string };
+
+/**
+ * v23 — PD-ORCH-005 clause 1: one execution iteration and the task id of its root, open from the moment it begins until it
+ * closes. A pause, a stop, a quit and a crash leave it open; that open row is what a continue resumes.
+ */
+export interface IterationRow {
+  readonly session_id: string;
+  readonly iteration: number;
+  readonly root_task_id: string;
+  readonly root_canonical_name: string;
+  readonly root_persona: string;
+  /** The todo item the iteration works on (a todo id, not a child's `bg_` task id), and the text its root was given. */
+  readonly todo_task_id: string;
+  readonly task: string;
+  readonly state: 'open' | 'closed';
+  /** REQ-ORCH-073/135's outcome at close; null while open. */
+  readonly outcome: string | null;
+  /** The last interruption that left it open; null for one never interrupted, and cleared when it resumes. */
+  readonly interruption: string | null;
+  readonly opened_at: string;
+  readonly closed_at: string | null;
+}
+export type IterationInsert = Pick<IterationRow, 'session_id' | 'iteration' | 'root_task_id' | 'root_canonical_name' | 'root_persona' | 'todo_task_id' | 'task' | 'opened_at'>;
+
+/**
+ * v23 — PD-ORCH-005 clauses 1 and 12: one entry of an agent's recorded conversation. `message` is one message as the
+ * model saw it; `replacement` is a compression, whose body is the whole conversation that replaced the one before.
+ */
+export interface AgentMessageRow {
+  readonly session_id: string;
+  readonly task_id: string;
+  readonly seq: number;
+  readonly iteration: number;
+  readonly kind: 'message' | 'replacement';
+  /** JSON: a message, or an array of messages for a replacement. */
+  readonly body: string;
+  readonly at: string;
+}
+
+/**
+ * v24 — PD-ORCH-005 revision 4 clause 14: the fingerprint of the system instructions and the tool definitions an agent
+ * started with, each a SHA-256 digest in hex.
+ */
+export interface AgentFingerprintRow {
+  readonly session_id: string;
+  readonly task_id: string;
+  readonly iteration: number;
+  readonly instructions: string;
+  readonly tools: string;
+  readonly at: string;
+}
+
+/** v23 — PD-ORCH-005 clause 10: a background terminal session an agent started, and what became of it. */
+export interface AgentTerminalRow {
+  readonly session_id: string;
+  readonly terminal_id: string;
+  readonly task_id: string;
+  readonly command: string;
+  readonly started_at: string;
+  /** REQ-TOOLS-109's status (`running`, `completed`, `failed`, `killed`, `timeout`), or the rest that ended it: a stop, a quit or a crash. */
+  readonly state: 'running' | 'completed' | 'failed' | 'killed' | 'timeout' | 'stop' | 'quit' | 'crash';
+  readonly exit_code: number | null;
+  readonly output_tail: string;
+  readonly updated_at: string;
+}
 
 export interface IssueRow {
   readonly session_id: string;
@@ -456,11 +529,13 @@ export class StoreDal {
       issuesOf: db.prepare('SELECT * FROM issues WHERE session_id = ? ORDER BY ordinal'),
 
       // ADR-0012: the child ledger. Every statement carries session_id (REQ-ORCH-151, asserted by a test over this text).
-      insertChild: db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, todo, spawned_at)
-        VALUES (@session_id, @task_id, @canonical_name, @given_name, @persona, @state, @parent_id, @depth, @iteration, @model_key, @category, @background, @task, @depends_on, @inherited_context, @granted_tools, @granted_mcp, @todo, @spawned_at)`),
+      insertChild: db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, todo, spawned_at, continuation_of, write_scope)
+        VALUES (@session_id, @task_id, @canonical_name, @given_name, @persona, @state, @parent_id, @depth, @iteration, @model_key, @category, @background, @task, @depends_on, @inherited_context, @granted_tools, @granted_mcp, @todo, @spawned_at, @continuation_of, @write_scope)`),
       getChild: db.prepare('SELECT * FROM children WHERE session_id = ? AND task_id = ?'),
-      childrenOf: db.prepare('SELECT * FROM children WHERE session_id = ? ORDER BY spawned_at, task_id'),
-      childrenOfIteration: db.prepare('SELECT * FROM children WHERE session_id = ? AND iteration = ? ORDER BY spawned_at, task_id'),
+      // Acceptance order: children accepted in the same millisecond keep the order they were inserted in, which the
+      // resume's re-claim of their write scopes depends on (PD-TOOLS-006 revision 2; found by phase 4's review).
+      childrenOf: db.prepare('SELECT * FROM children WHERE session_id = ? ORDER BY spawned_at, rowid'),
+      childrenOfIteration: db.prepare('SELECT * FROM children WHERE session_id = ? AND iteration = ? ORDER BY spawned_at, rowid'),
       // The transition's one write: state and, on a terminal state, the completion timestamp (REQ-MONITOR-017).
       setChildState: db.prepare('UPDATE children SET state = ?, completed_at = coalesce(?, completed_at) WHERE session_id = ? AND task_id = ?'),
       // REQ-ORCH-049: the start claim is ONE conditional update; its affected-row count is the claim's outcome.
@@ -469,6 +544,43 @@ export class StoreDal {
       setChildObserved: db.prepare('UPDATE children SET observed = 1 WHERE session_id = ? AND task_id = ?'),
       setChildContextInjected: db.prepare('UPDATE children SET context_injected = 1 WHERE session_id = ? AND task_id = ?'),
       setChildTodo: db.prepare('UPDATE children SET todo = ?, tool_calls = ? WHERE session_id = ? AND task_id = ?'),
+      // PD-ORCH-005: the two facts a rest records beside the move to `paused`, and their clearing when the child resumes.
+      setChildRest: db.prepare('UPDATE children SET interruption = ?, resume_state = ? WHERE session_id = ? AND task_id = ?'),
+      pausedChildrenOfIteration: db.prepare("SELECT * FROM children WHERE session_id = ? AND iteration = ? AND state = 'paused' ORDER BY spawned_at, rowid"),
+
+      // v23 — PD-ORCH-005: the iterations, each carrying its root's task id.
+      insertIteration: db.prepare(`INSERT INTO iterations (session_id, iteration, root_task_id, root_canonical_name, root_persona, todo_task_id, task, state, opened_at)
+        VALUES (@session_id, @iteration, @root_task_id, @root_canonical_name, @root_persona, @todo_task_id, @task, 'open', @opened_at)`),
+      getIteration: db.prepare('SELECT * FROM iterations WHERE session_id = ? AND iteration = ?'),
+      openIterationOf: db.prepare("SELECT * FROM iterations WHERE session_id = ? AND state = 'open' ORDER BY iteration DESC LIMIT 1"),
+      iterationsOf: db.prepare('SELECT * FROM iterations WHERE session_id = ? ORDER BY iteration'),
+      closeIteration: db.prepare("UPDATE iterations SET state = 'closed', outcome = ?, closed_at = ? WHERE session_id = ? AND iteration = ? AND state = 'open'"),
+      setIterationInterruption: db.prepare("UPDATE iterations SET interruption = ? WHERE session_id = ? AND iteration = ? AND state = 'open'"),
+
+      // v23 — PD-ORCH-005: the agents' conversations. The sequence is per agent and taken inside the insert, as the slot queue's is.
+      insertAgentMessage: db.prepare(`INSERT INTO agent_messages (session_id, task_id, seq, iteration, kind, body, at)
+        VALUES (@session_id, @task_id, (SELECT coalesce(max(seq), 0) + 1 FROM agent_messages WHERE session_id = @session_id AND task_id = @task_id), @iteration, @kind, @body, @at)`),
+      // A resume reads from the agent's last replacement forward: the compressed conversation, then what followed it.
+      agentConversation: db.prepare(`SELECT * FROM agent_messages WHERE session_id = ? AND task_id = ?
+        AND seq >= coalesce((SELECT max(seq) FROM agent_messages WHERE session_id = ? AND task_id = ? AND kind = 'replacement'), 0) ORDER BY seq`),
+      agentMessagesOf: db.prepare('SELECT * FROM agent_messages WHERE session_id = ? AND task_id = ? ORDER BY seq'),
+      recordedTaskIds: db.prepare('SELECT DISTINCT task_id FROM agent_messages WHERE session_id = ?'),
+      // Clause 12: the transcript clear removes the records of closed iterations and keeps the open one's.
+      clearClosedAgentMessages: db.prepare("DELETE FROM agent_messages WHERE session_id = ? AND iteration NOT IN (SELECT iteration FROM iterations WHERE session_id = ? AND state = 'open')"),
+
+      // v24 — PD-ORCH-005 revision 4 clause 14: the fingerprint an agent started with. The first is kept, so a second write is ignored.
+      insertAgentFingerprint: db.prepare(`INSERT OR IGNORE INTO agent_fingerprints (session_id, task_id, iteration, instructions, tools, at)
+        VALUES (@session_id, @task_id, @iteration, @instructions, @tools, @at)`),
+      agentFingerprintOf: db.prepare('SELECT * FROM agent_fingerprints WHERE session_id = ? AND task_id = ?'),
+      // Clause 12, as for the conversation: the fingerprints of closed iterations go with their records.
+      clearClosedAgentFingerprints: db.prepare("DELETE FROM agent_fingerprints WHERE session_id = ? AND iteration NOT IN (SELECT iteration FROM iterations WHERE session_id = ? AND state = 'open')"),
+
+      // v23 — PD-ORCH-005 clause 10: the background terminal sessions agents started.
+      upsertAgentTerminal: db.prepare(`INSERT INTO agent_terminals (session_id, terminal_id, task_id, command, started_at, state, exit_code, output_tail, updated_at)
+        VALUES (@session_id, @terminal_id, @task_id, @command, @started_at, @state, @exit_code, @output_tail, @updated_at)
+        ON CONFLICT (session_id, terminal_id) DO UPDATE SET state = excluded.state, exit_code = excluded.exit_code, output_tail = excluded.output_tail, updated_at = excluded.updated_at
+        WHERE agent_terminals.task_id = excluded.task_id AND agent_terminals.command = excluded.command AND agent_terminals.state = 'running'`),
+      agentTerminalsOf: db.prepare('SELECT * FROM agent_terminals WHERE session_id = ? ORDER BY started_at, terminal_id'),
       enqueueSlot: db.prepare('INSERT INTO model_slot_queue (session_id, model_key, position, task_id) VALUES (?, ?, (SELECT coalesce(max(position), 0) + 1 FROM model_slot_queue WHERE session_id = ? AND model_key = ?), ?)'),
       slotQueueOf: db.prepare('SELECT task_id FROM model_slot_queue WHERE session_id = ? AND model_key = ? ORDER BY position'),
       dequeueSlot: db.prepare('DELETE FROM model_slot_queue WHERE session_id = ? AND model_key = ? AND task_id = ?'),
@@ -552,7 +664,7 @@ export class StoreDal {
   }
 
   insertChild(row: ChildInsert): void {
-    this.stmts['insertChild']!.run({ ...row, todo: row.todo ?? null });
+    this.stmts['insertChild']!.run({ ...row, todo: row.todo ?? null, continuation_of: row.continuation_of ?? null, write_scope: row.write_scope ?? '[]' });
   }
   getChild(id: SessionId, taskId: string): ChildRow | undefined {
     return this.stmts['getChild']!.get(id, taskId) as ChildRow | undefined;
@@ -581,6 +693,79 @@ export class StoreDal {
   }
   setChildTodo(id: SessionId, taskId: string, todo: string | null, toolCalls: number): void {
     this.stmts['setChildTodo']!.run(todo, toolCalls, id, taskId);
+  }
+  /** PD-ORCH-005: the interruption and the resume state a rest records, or both cleared (null) when the child resumes. */
+  setChildRest(id: SessionId, taskId: string, interruption: string | null, resumeState: string | null): void {
+    this.stmts['setChildRest']!.run(interruption, resumeState, id, taskId);
+  }
+  pausedChildrenOfIteration(id: SessionId, iteration: number): ChildRow[] {
+    return this.stmts['pausedChildrenOfIteration']!.all(id, iteration) as ChildRow[];
+  }
+
+  // ---- v23 — PD-ORCH-005: the iterations, the conversations, the background terminals -----------------------
+
+  insertIteration(row: IterationInsert): void {
+    this.stmts['insertIteration']!.run(row);
+  }
+  getIteration(id: SessionId, iteration: number): IterationRow | undefined {
+    return this.stmts['getIteration']!.get(id, iteration) as IterationRow | undefined;
+  }
+  /** The open iteration a continue resumes; at most one per session (`iterations_one_open` enforces it). */
+  openIterationOf(id: SessionId): IterationRow | undefined {
+    return this.stmts['openIterationOf']!.get(id) as IterationRow | undefined;
+  }
+  iterationsOf(id: SessionId): IterationRow[] {
+    return this.stmts['iterationsOf']!.all(id) as IterationRow[];
+  }
+  /** True when an open iteration was closed; closing a closed or unknown iteration changes nothing. */
+  closeIteration(id: SessionId, iteration: number, outcome: string, closedAt: string): boolean {
+    return this.stmts['closeIteration']!.run(outcome, closedAt, id, iteration).changes === 1;
+  }
+  /** The rest that left an open iteration open; a resume sets it back to NULL, so a later crash is not read as the earlier rest. */
+  setIterationInterruption(id: SessionId, iteration: number, interruption: string | null): boolean {
+    return this.stmts['setIterationInterruption']!.run(interruption, id, iteration).changes === 1;
+  }
+  insertAgentMessage(row: Omit<AgentMessageRow, 'seq'>): void {
+    this.stmts['insertAgentMessage']!.run(row);
+  }
+  /** The conversation a resume sends: from the agent's last replacement forward, in order. */
+  agentConversation(id: SessionId, taskId: string): AgentMessageRow[] {
+    return this.stmts['agentConversation']!.all(id, taskId, id, taskId) as AgentMessageRow[];
+  }
+  /** Every entry of an agent's record, replacements included, in order. */
+  agentMessagesOf(id: SessionId, taskId: string): AgentMessageRow[] {
+    return this.stmts['agentMessagesOf']!.all(id, taskId) as AgentMessageRow[];
+  }
+  /** PD-ORCH-005: every task id the session holds a conversation record under. */
+  recordedTaskIds(id: SessionId): string[] {
+    return (this.stmts['recordedTaskIds']!.all(id) as { task_id: string }[]).map((r) => r.task_id);
+  }
+  /** Clause 12: the records of every closed iteration removed, an open iteration's kept; the count removed. */
+  clearClosedAgentMessages(id: SessionId): number {
+    return this.stmts['clearClosedAgentMessages']!.run(id, id).changes;
+  }
+  /** PD-ORCH-005 revision 4 clause 14: the agent's fingerprint, recorded once; `false` when one is already recorded, which is kept. */
+  insertAgentFingerprint(row: AgentFingerprintRow): boolean {
+    return this.stmts['insertAgentFingerprint']!.run(row).changes === 1;
+  }
+  /** The fingerprint the agent started with; undefined for an agent that never took a model step, or one recorded before v24. */
+  agentFingerprintOf(id: SessionId, taskId: string): AgentFingerprintRow | undefined {
+    return this.stmts['agentFingerprintOf']!.get(id, taskId) as AgentFingerprintRow | undefined;
+  }
+  /** Clause 12: the fingerprints of every closed iteration's agents removed, an open iteration's kept; the count removed. */
+  clearClosedAgentFingerprints(id: SessionId): number {
+    return this.stmts['clearClosedAgentFingerprints']!.run(id, id).changes;
+  }
+  /**
+   * A new terminal, or the state, exit code and tail of a recorded one that is still `running`; `false` when the id names
+   * a terminal another agent started with another command (an id collision across two managers), or one already recorded
+   * as ended — an end is recorded once, so the kill a stop sends is not later overwritten by the exit it causes.
+   */
+  upsertAgentTerminal(row: AgentTerminalRow): boolean {
+    return this.stmts['upsertAgentTerminal']!.run(row).changes === 1;
+  }
+  agentTerminalsOf(id: SessionId): AgentTerminalRow[] {
+    return this.stmts['agentTerminalsOf']!.all(id) as AgentTerminalRow[];
   }
   enqueueSlot(id: SessionId, modelKey: string, taskId: string): void {
     this.stmts['enqueueSlot']!.run(id, modelKey, id, modelKey, taskId);

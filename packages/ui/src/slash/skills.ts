@@ -17,10 +17,10 @@ import type { SlashCommand, SlashContext, SlashOutcome, SlashRegistry } from './
  * trimmed. A declared name reducing to the empty string yields no entry at all.
  *
  * It is NOT REQ-WORKSPACE-054's skill normal form, which replaces every non-alphanumeric run with a hyphen
- * rather than deleting the characters: `c++ build` is the skill `c-build` and the command `/cbuild`. The two
- * disagree, that disagreement is **ESC-39**, and until it is ruled the skill's own form stays its identity
- * everywhere (the policy maps, the catalog block, the table) while this form names the typed command alone —
- * which is what REQ-SHELL-056 says it contributes.
+ * rather than deleting the characters: `c++/build` is the skill `c-build` and the command `/cbuild`. ESC-39,
+ * ruled 2026-09-27, keeps the two forms deliberately apart: the skill's own form is its identity everywhere
+ * (the policy maps, the catalog block, the table) while this form names the typed command alone — which is
+ * what REQ-SHELL-056 says it contributes and what the amended REQ-CHAT-034 cites.
  */
 export function catalogueNormalForm(declared: string): string {
   return declared.toLowerCase().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/^-+|-+$/g, '');
@@ -36,9 +36,8 @@ export function triggerCommandName(keyword: string): string {
  * name is taken is offered under the first free `-2`, `-3`, … so that a skill is never silently unreachable
  * and a built-in never changes meaning because a skill was installed.
  *
- * REQ-CHAT-034 states the opposite — the registration "is skipped" — and that is **ESC-39**. Suffixing is the
- * reading built: under it the command holding the name does keep it, which is REQ-CHAT-034's own first
- * clause, whereas under skipping REQ-SHELL-056's "never silently unreachable" is simply false.
+ * REQ-CHAT-034 once skipped the registration instead. ESC-39 ruled for suffixing on 2026-09-27 and
+ * REQ-CHAT-034 now cites this rule: the command holding the name keeps it, and no skill is unreachable.
  */
 export function freeName(name: string, taken: (candidate: string) => boolean): string {
   if (!taken(name)) return name;
@@ -163,15 +162,6 @@ export function readSkills(): Promise<SkillsState> | null {
 }
 
 /**
- * Register every user-invocable skill on the catalogue's registry. A name a built-in or a palette mirror holds
- * is kept by its holder and the skill takes a suffixed one (REQ-SHELL-056); names a previous call of THIS
- * function claimed are replaced in place, so a re-read after a rescan does not mistake its own work for
- * somebody else's holder — the same rule `registerPromptCommands` follows and for the same reason.
- *
- * With `skills.enabled` false the state carries no user-invocable skill, so nothing registers: REQ-CHAT-034's
- * "skills are turned off" case needs no branch here.
- */
-/**
  * REQ-CHAT-162's second half — `/skill <path>`, loading a skill from a path. It follows REQ-WORKSPACE-057's
  * rules, surfaces a load failure without registering anything, and on success re-registers the skill commands
  * and reports the loaded skill's name.
@@ -180,15 +170,7 @@ export function readSkills(): Promise<SkillsState> | null {
  * file chooser on Windows and Linux because no platform dialog there offers "a file or a directory" (OQ-59);
  * a typed path needs no dialog, so the capability the specification states is not lost — only the dialog is
  * narrower on two of three hosts.
- *
- * REQ-CHAT-162's FIRST half — a `/skills` command listing the catalog into the transcript as one saved system
- * row — is **not built**, and `SKILLS_LISTING_NOT_BUILT` says so where it would be registered. It needs a row
- * written through the session writer, which is the run host's and reaches no renderer today; every fact that
- * listing would carry is in the Settings Skills tab, which REQ-CHAT-162 requires anyway ("Both capabilities
- * MUST also be reachable from the settings surface that manages skills").
  */
-export const SKILLS_LISTING_NOT_BUILT = 'The /skills listing (REQ-CHAT-162) is not built: it writes a saved system row, which only the run host can do and no renderer command reaches. The same catalog is read in Settings › Skills, which that requirement requires as well.';
-
 export const SKILL_COMMAND_NAME = 'skill';
 export const skillLoadUsage = (): string => 'Usage: /skill <path to a SKILL.md file or a directory containing one>';
 
@@ -216,8 +198,67 @@ export function skillPathCommand(load: (path: string) => Promise<{ ok: true; nam
   };
 }
 
+/**
+ * REQ-CHAT-162's FIRST half — `/skills`, listing the discovered skills into the transcript as **one saved system
+ * row**. The row is written by the run host through the followed session's own writer, so it is saved with the
+ * session and drawn in every window following it by the same publication every other row takes; the composer only
+ * asks and reports a refusal. What the row carries, and how it reads back, is `contracts/skills.ts`'s.
+ *
+ * Replaced `SKILLS_LISTING_NOT_BUILT` (2026-09-27, `first-release-plan.md` §2.2), which said the listing needed a
+ * row "only the run host can do and no renderer command reaches" — `skills.list` is that command. It takes no
+ * argument; like `/clear`, text after the name is not read.
+ */
+export const SKILLS_LIST_COMMAND_NAME = 'skills';
+export const SKILLS_LIST_DESCRIPTION = 'List the discovered skills in the transcript';
+
+export function skillsListCommand(list: () => Promise<{ ok: true; count: number } | { ok: false; reason: string }>): SlashCommand {
+  return {
+    name: SKILLS_LIST_COMMAND_NAME,
+    description: SKILLS_LIST_DESCRIPTION,
+    kind: 'skill',
+    availability: () => ({ ok: true }),
+    run: async (): Promise<SlashOutcome> => {
+      try {
+        const r = await list();
+        // The row that appears IS the report — it states how many skills it lists (REQ-CHAT-162) — so success adds
+        // no toast of its own; a refusal (no session, a session not loaded, a store failure) comes back as `failed`.
+        return r.ok ? { kind: 'executed' } : { kind: 'failed', message: r.reason };
+      } catch (cause) {
+        return { kind: 'failed', message: cause instanceof Error ? cause.message : String(cause) };
+      }
+    },
+  };
+}
+
+/**
+ * REQ-SHELL-056: "Built-in commands SHALL always win a name collision." `/skill` and `/skills` are catalogue
+ * commands (REQ-CHAT-162), and they carry the `skill` kind badge — which is exactly what the generated entries
+ * carry, so the registrar's "a holder of kind `skill` is mine" rule cannot tell them apart. Named here so a skill
+ * declaring either name is offered `-2`, whatever order the two registrations happen to run in.
+ *
+ * Found by building `/skills` (2026-09-27): before this, a skill named `skill` REPLACED `/skill <path>` when the
+ * generated commands registered after it, and was itself silently replaced when they registered before —
+ * `docs/defects/fixed/a-skill-named-skill-takes-the-skill-command.md`.
+ *
+ * The prompt-file registrar holds the same two names for the same reason (REQ-CHAT-160: "the command already
+ * holding it keeps it"): both fixed commands register by effect, after the prompt files have already been put on a
+ * rebuilt registry, and a re-read took the name back from them —
+ * `docs/defects/fixed/a-prompt-file-named-skills-takes-the-skills-command.md`.
+ */
+export const FIXED_SKILL_COMMAND_NAMES: ReadonlySet<string> = new Set([SKILL_COMMAND_NAME, SKILLS_LIST_COMMAND_NAME]);
+
+/**
+ * Register every user-invocable skill on the catalogue's registry. A name a built-in or a palette mirror holds
+ * is kept by its holder and the skill takes a suffixed one (REQ-SHELL-056); names a previous call of THIS
+ * function claimed are replaced in place, so a re-read after a rescan does not mistake its own work for
+ * somebody else's holder — the same rule `registerPromptCommands` follows and for the same reason.
+ *
+ * With `skills.enabled` false the state carries no user-invocable skill, so nothing registers: REQ-CHAT-034's
+ * "skills are turned off" case needs no branch here.
+ */
 export function registerSkillCommands(registry: SlashRegistry, state: SkillsState, previouslyRegistered: ReadonlySet<string> = new Set()): { names: string[]; skipped: { name: string; reason: string }[] } {
   const { registrations, skipped } = skillRegistrations(state.skills, (name) => {
+    if (FIXED_SKILL_COMMAND_NAMES.has(name)) return true;
     const holder = registry.lookup(name);
     return holder !== undefined && holder.kind !== 'skill' && !previouslyRegistered.has(name);
   });

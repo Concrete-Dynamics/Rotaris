@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { SkillRow, SkillsState } from '@rotaris/contracts';
+import type { PromptFile, PromptsRootsResult, SkillRow, SkillsState } from '@rotaris/contracts';
 import { buildCatalogue, type CatalogueOptions } from './catalogue.js';
+import { registerPromptCommands } from './prompts.js';
 import { createSlashRegistry } from './registry.js';
 import {
   bindSkillsReader, cachedSkills, catalogueNormalForm, freeName, readSkills, registerSkillCommands,
-  skillCommandDescription, skillRegistrations, triggerCommandName,
+  skillCommandDescription, skillPathCommand, skillRegistrations, skillsListCommand, triggerCommandName,
+  SKILLS_LIST_COMMAND_NAME, SKILLS_LIST_DESCRIPTION,
 } from './skills.js';
 
 const row = (over: Partial<SkillRow> = {}): SkillRow => ({
@@ -13,12 +15,13 @@ const row = (over: Partial<SkillRow> = {}): SkillRow => ({
   ...over,
 });
 const state = (skills: SkillRow[], enabled = true): SkillsState => ({ enabled, skills, skipped: [] });
+const prompt = (stem: string): PromptFile => ({ root: 'workspace', path: `/ws/.agents/prompts/${stem}.md`, stem, body: 'body' });
 
 describe('REQ-SHELL-056 — the catalogue normal form a generated entry takes', () => {
   it('lower-cases, collapses whitespace and underscore runs to one hyphen, and REMOVES everything else', () => {
     expect(catalogueNormalForm('Build UI')).toBe('build-ui');
     expect(catalogueNormalForm('build__ui')).toBe('build-ui');
-    // The difference from REQ-WORKSPACE-054's form, which is ESC-39: `+` is deleted here and hyphenated there.
+    // The difference from REQ-WORKSPACE-054's form, kept apart by ESC-39: `+` is deleted here and hyphenated there.
     expect(catalogueNormalForm('c++ build')).toBe('c-build');
     expect(catalogueNormalForm('--x--')).toBe('x');
   });
@@ -32,7 +35,7 @@ describe('REQ-SHELL-056 — the catalogue normal form a generated entry takes', 
   });
 });
 
-describe('REQ-SHELL-056 — collisions are suffixed, never skipped (ESC-39)', () => {
+describe('REQ-SHELL-056 — collisions are suffixed, never skipped (ESC-39, ruled)', () => {
   it('takes the first free -2, -3 … and leaves the holder its name', () => {
     const taken = new Set(['stop', 'stop-2']);
     expect(freeName('stop', (n) => taken.has(n))).toBe('stop-3');
@@ -160,5 +163,95 @@ describe('slash/skills — the reader keeps what it has and what it is waiting f
     bindSkillsReader(null);
     expect(cachedSkills()).toBeNull();
     expect(readSkills()).toBeNull();
+  });
+});
+
+describe('REQ-CHAT-162 — `/skills`, the listing written as one saved system row', () => {
+  it('is a catalogue command of the `skill` kind that takes no argument', () => {
+    const command = skillsListCommand(async () => ({ ok: true, count: 0 }));
+    expect(command.name).toBe(SKILLS_LIST_COMMAND_NAME);
+    expect(command.kind).toBe('skill');
+    expect(command.description).toBe(SKILLS_LIST_DESCRIPTION);
+    expect(command.argumentHint).toBeUndefined();
+    expect(command.availability({} as never)).toEqual({ ok: true });
+  });
+
+  it('asks once, and the row that appears is the report — no toast of its own', async () => {
+    let asked = 0;
+    const notices: string[] = [];
+    const command = skillsListCommand(async () => { asked += 1; return { ok: true, count: 3 }; });
+    expect(await command.run('ignored words', { notify: (t: string) => notices.push(t) } as never)).toEqual({ kind: 'executed' });
+    expect(asked).toBe(1);
+    expect(notices).toEqual([]);
+  });
+
+  it('surfaces a refusal, and a throw, as `failed` with the reason', async () => {
+    expect(await skillsListCommand(async () => ({ ok: false, reason: 'Open or start a session first.' })).run('', {} as never))
+      .toEqual({ kind: 'failed', message: 'Open or start a session first.' });
+    expect(await skillsListCommand(async () => { throw new Error('the bridge went away'); }).run('', {} as never))
+      .toEqual({ kind: 'failed', message: 'the bridge went away' });
+  });
+});
+
+describe('REQ-SHELL-056 — `/skill` and `/skills` are built-ins and keep their names against a generated entry', () => {
+  const fixed = (registry: ReturnType<typeof createSlashRegistry>) => {
+    registry.register(skillPathCommand(async () => ({ ok: true, name: 'x' }), () => undefined));
+    registry.register(skillsListCommand(async () => ({ ok: true, count: 0 })));
+  };
+  const named = state([row({ name: 'skill', declaredName: 'skill' }), row({ name: 'skills', declaredName: 'Skills' })]);
+
+  it('the fixed commands registered FIRST: each skill is offered -2, and the fixed commands are untouched', () => {
+    const registry = createSlashRegistry();
+    fixed(registry);
+    const r = registerSkillCommands(registry, named);
+    expect(r.names).toEqual(['skill-2', 'skills-2']);
+    expect(registry.lookup('skill')!.argumentHint).toBe('<path>');
+    expect(registry.lookup('skills')!.description).toBe(SKILLS_LIST_DESCRIPTION);
+    expect(registry.lookup('skill-2')!.description).toContain('(skill: skill)');
+  });
+
+  it('the generated commands registered FIRST: the same names, so neither registration order loses a command', () => {
+    // The defect this rule repairs: a holder of kind `skill` read as the registrar's own work, so the generated
+    // `skill` took the name here and the fixed `/skill` then replaced it — the skill silently unreachable.
+    const registry = createSlashRegistry();
+    const r = registerSkillCommands(registry, named);
+    fixed(registry);
+    expect(r.names).toEqual(['skill-2', 'skills-2']);
+    expect(registry.lookup('skill-2')!.kind).toBe('skill');
+    expect(registry.lookup('skill')!.argumentHint).toBe('<path>');
+    expect(registry.lookup('skills')!.description).toBe(SKILLS_LIST_DESCRIPTION);
+  });
+
+  it('a rescan never removes a fixed command, even one a skill of that name once stood beside', () => {
+    const registry = createSlashRegistry();
+    fixed(registry);
+    const first = registerSkillCommands(registry, named);
+    registerSkillCommands(registry, state([]), new Set(first.names));
+    expect(registry.lookup('skill')).toBeDefined();
+    expect(registry.lookup('skills')).toBeDefined();
+    expect(registry.lookup('skill-2')).toBeUndefined();
+  });
+
+  it('REQ-CHAT-160: a prompt file named `skills.md` or `skill.md` never takes either name, in the order the composer mounts', () => {
+    // The sequence the window runs: `buildCatalogue` applies the cached prompt roots to a fresh registry, the registrar's
+    // mount effect applies them again and records its names, the fixed commands' effects register, and the next re-read
+    // (the configuration key's, or any composer focus) applies a fresh answer with the names it recorded. Before the fix
+    // the bare stems were free at the first step, recorded as the registrar's own at the second, and taken back from the
+    // fixed commands at the fourth — `/skills` then ran the prompt, not the listing.
+    const prompts: PromptsRootsResult = { files: [prompt('skills'), prompt('skill')], skipped: [] };
+    const registry = createSlashRegistry();
+    registerPromptCommands(registry, prompts);
+    const mounted = registerPromptCommands(registry, prompts, new Set());
+    fixed(registry);
+    const reread = registerPromptCommands(registry, prompts, new Set(mounted.names));
+    for (const r of [mounted, reread]) {
+      expect(r.names).toEqual(['prompts:skills', 'prompts:skill']);
+      expect(r.skipped.map((s) => s.path)).toEqual([]);
+    }
+    expect(registry.lookup('skills')!.description).toBe(SKILLS_LIST_DESCRIPTION);
+    expect(registry.lookup('skill')!.argumentHint).toBe('<path>');
+    // The files stay reachable under REQ-CHAT-160's prefixed names, which is all the requirement promises a held stem.
+    expect(registry.lookup('prompts:skills')!.kind).toBe('prompt');
+    expect(registry.lookup('prompts:skill')!.kind).toBe('prompt');
   });
 });

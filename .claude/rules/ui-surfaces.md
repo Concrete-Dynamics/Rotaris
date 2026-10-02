@@ -17,7 +17,8 @@ craft only. Where the two disagree, the specification wins. `docs/design/README.
   counterfactuals that must stay red, and OQ-56 keeps one finding red on `rotaris-dim` **by decision** —
   do not "fix" the disabled token.
 - **Publish a layout contract on the root** — `layoutContractAttributes` from
-  `design-system/layout-contract.ts`. `pnpm ui-audit` evaluates live geometry against it, and
+  `design-system/layout-contract.ts`, and never a hand-written `data-ui-contract` (`pnpm lint` refuses one
+  anywhere in the drawing roots; the audit iterates the relations array the publisher writes). `pnpm ui-audit` evaluates live geometry against it, and
   `shrunkBoxes` guards UIR-014's whole class: a box standing smaller than its content on an axis that
   does not scroll. `flex-shrink` on a page header was the original.
 - **One row renderer** (`transcript/Row.tsx`, a pure function of its props — Part Z's pool rebinds slots)

@@ -13,7 +13,7 @@ No requirement contradicted — the hash guard and the create-guard each held; r
 
 Noticed 2026-09-20 by the run-autopsy of run `2e21e324`.
 
-**Raised with the owner, 2026-09-22 — [R-047](../product/requests.md#r-047).** Repairing this note means
+**Raised with the owner, 2026-09-22 — [R-047](../../product/requests.md#r-047).** Repairing this note means
 changing behaviour a live requirement states exactly, which `docs/product/README.md` sends to a `PD` and
 an implementer may not mint. The request is logged with the requirements a directive would have to name,
 so the decision is in front of the owner rather than waiting in a defect note.
@@ -40,10 +40,10 @@ The read-state is already known at the guard and costs nothing to say. No conten
 **What is not repaired, and why it may not be here.** Which calls are refused is unchanged, and it is the
 right refusal: the create-guard and the hash guard both held, which is what the note recorded. Making
 siblings in one checkout aware of each other — a claim, a lease, a partition of the tree — is behaviour
-no requirement states, so it is a `PD` and it is logged at [R-047](../product/requests.md#r-047) with the
+no requirement states, so it is a `PD` and it is logged at [R-047](../../product/requests.md#r-047) with the
 requirements a directive would have to name.
 
-**Proposed 2026-09-23, not ruled — [R-048](../product/requests.md#r-048).** Put to the owner and held back from the ruling: `delegate` takes an
+**Proposed 2026-09-23, not ruled — [R-048](../../product/requests.md#r-048).** Put to the owner and held back from the ruling: `delegate` takes an
 optional **write scope** (path globs the child will write), and a child writing into a path inside a live
 sibling's declared scope is refused with a message naming that sibling; a child spawned without a scope
 behaves as today. It would be a new directive, since no requirement covers sibling writers. A separate
@@ -79,7 +79,7 @@ Directive it would become: `PD-TOOLS-006`. It would narrow REQ-TOOLS-152 and REQ
 Related: [`the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md`](the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md),
 found while designing this. The "Improved 2026-09-22" message above answers wrongly in exactly this note's case.
 
-**Ruled 2026-09-23 — [`PD-TOOLS-006`](../product/directives.md#pd-tools-006), [R-049](../product/requests.md#r-049).**
+**Ruled 2026-09-23 — [`PD-TOOLS-006`](../../product/directives.md#pd-tools-006), [R-049](../../product/requests.md#r-049).**
 The design above is approved as proposed, with both forks as recommended: declared scopes, and the parent and
 the entry agent refused too. The note stays open until the directive is built.
 
@@ -98,5 +98,8 @@ Evidence: `children.test.ts` (*PD-TOOLS-006: write scopes*, three end-to-end cas
 `write-scope.test.ts`, `gate.test.ts` (*write scopes at dispatch*), and `run-host/tools.test.ts` (the predicate
 reaching the gate through a real port).
 
-The create-guard's message about whose file it is remains a separate open note,
-[`the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md`](../the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md).
+The create-guard's message about whose file it is was a separate note,
+[`the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md`](the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md).
+It was repaired 2026-09-27 by returning the refusal to REQ-TOOLS-135's text, the first block quoted above. The
+2026-09-22 improvement read a workspace-wide record as the caller's own, so its second sentence was false in
+exactly the sibling case it was written for; PD-TOOLS-006's write scopes carry that case now.

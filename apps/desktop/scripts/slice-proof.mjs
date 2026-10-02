@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { cleanEnvironment, findDatabases, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 
 /**
  * The vertical slice's proof (Part K.4): sign in to OpenRouter through the product and complete one run on a
@@ -79,12 +79,13 @@ mkdirSync(workspace, { recursive: true });
 mkdirSync(local, { recursive: true });
 writeFileSync(join(workspace, 'README.md'), '# Slice proof workspace\n\nThis file exists so the agent has something to read.\n');
 const tokensFile = join(local, 'rotaris', 'data', 'tokens', `${PROVIDER_ID}.json`);
-const snapshotFile = join(local, 'rotaris', 'config', 'project_settings.yaml');
+// The discovery snapshot where the product writes it on THIS platform (`configDirFor`), not the Windows spelling alone.
+const snapshotFile = join(configDirFor(local), 'project_settings.yaml');
 const agentsFile = join(workspace, '.rotaris', 'agents.yaml');
 
 function launch(name, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(),
@@ -234,7 +235,9 @@ for (const [i, c] of INTENTS.entries()) {
     ROTARIS_CAPTURE_PROMPT: c.prompt, ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '1500',
   }, RUN_WAIT_MS + 60_000);
   assertNoCredential(log, name);
-  const line = log.split('\n').find((l) => /run host info: intent: /.test(l)) ?? '';
+  // PD-MONITOR-002 moved the level out of the message (`… info    run host: intent: …`); a log replayed from before it
+  // still reads `run host info: intent: …`, so both are the run host's `info` intent line.
+  const line = log.split('\n').find((l) => /\] info +run host: intent: |run host info: intent: /.test(l)) ?? '';
   const m = /intent: ([a-z_]+)(?: \(([^)]*)\))?(?: via (json_schema|json_object|text))?/.exec(line);
   if (!m) throw new Error(`${name}: no intent line in the log`);
   const [, category, detail, rung] = m;

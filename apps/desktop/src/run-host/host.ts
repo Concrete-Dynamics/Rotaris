@@ -1,8 +1,8 @@
 import { CONTRACT_SCHEMA_VERSION, type ImprovementArtifactRecord, type ProcessMessage, type ProcessReply, type ServiceAsk, type ServiceAskEnvelope } from '@rotaris/contracts';
 import { millis, toIsoUtc, type Millis } from '@rotaris/kernel';
-import { dataLayout, environmentWithout, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
+import { dataLayout, environmentWithout, installedProductVersion, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import type { PromptLists, StoreDal, StoreHandle } from '@rotaris/store';
-import { captureImprovementJob, RefusalLease, RungMemory, Sessions, SUPERVISOR_DEFAULTS } from '@rotaris/engine';
+import { captureImprovementJob, meteredBackend, RefusalLease, RungMemory, Sessions, SUPERVISOR_DEFAULTS } from '@rotaris/engine';
 import { ConfinementService, PresenterRegistry, renderUnavailability, spawnTrial, type AvailabilityVerdict, STREAM_SETTINGS_DEFAULTS, withheldUnderPlanGate, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, RunHostPresenter, terminalManagerFromHost } from './tools.js';
 import { createTerminalHost } from './terminal.js';
@@ -11,14 +11,16 @@ import { runPreflight } from './intent.js';
 import { createLoopClassifier } from './loop.js';
 import { createCheckpointPort } from './checkpoints.js';
 import { McpHost } from './mcp.js';
-import { CHECKPOINTS_DEFAULTS, INSTRUCTIONS_DEFAULTS, loadConfiguration, RUNTIME_DEFAULTS, SKILLS_DEFAULTS, type LiveState, CODE_INTELLIGENCE_TOKEN } from '@rotaris/config';
+import { CHECKPOINTS_DEFAULTS, INSTRUCTIONS_DEFAULTS, loadConfiguration, RUNTIME_DEFAULTS, SKILLS_DEFAULTS, type LiveState } from '@rotaris/config';
+import { codeIntelligenceLaunchFor } from './code-intelligence-launch.js';
 import { SkillHost } from './skills.js'; // ADR-0063
 import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, type ConfiguredRun } from './configuration.js';
 import { leaseForContinuation, LeaseReportLog } from './launch.js';
 import { randomUUID } from 'node:crypto';
+import { appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 // The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network.
-import { scriptedClient } from './scripted-client.js';
+import { scriptedClient, type ScriptedCallRecord } from './scripted-client.js';
 
 /**
  * RUN HOST — one utilityProcess, forked after `app.ready`, living exactly as
@@ -136,17 +138,16 @@ export function createRunHost() {
   // ADR-0034 (Part S): the one MCP holder of the application — discovery memo, probes, session connections, the override, the sink.
   const mcp = new McpHost({
     clocks, log: (m, level) => log(m, level ?? 'info'), parentEnv: hostEnv,
+    // REQ-STARTUP-158: this bundle sits in out/main beside main's, so this is the one file main's About reads too.
+    productVersion: installedProductVersion(import.meta.dirname),
     // Part V: REQ-MCP-044's warning is a transient on the acknowledgement channel (REQ-NOTIFY-040 forbids the timed clear it had) — and the issue record it also writes.
     acknowledge: (a) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'acknowledgement.publish', kindOf: a.kind, title: a.title, ...(a.body === undefined ? {} : { body: a.body }) } }),
     // Part AS (ADR-0064): every step and the end, pushed — what ADR-0064's task runner follows instead of a cadence.
     publishSetup: (workspaceRoot, status) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'mcp.setupStatus', workspaceRoot, status } }),
   });
-  // REQ-MCP-033 / ADR-0035 (Part T): what the reserved token launches — THIS application's own executable (a utility process
-  // runs the same binary) with the token first and `--` second (the branch's separator, measured in
-  // spikes/code-intelligence-branch.md); in development Electron's binary with the main bundle before them, which is the
-  // interpreted installation's "own language runtime" of REQ-MCP-033. Packaged is read off this bundle's own location.
-  const packaged = import.meta.dirname.includes('app.asar');
-  const codeIntelligenceLaunch = { command: process.execPath, args: packaged ? [CODE_INTELLIGENCE_TOKEN, '--'] : [join(import.meta.dirname, 'index.js'), CODE_INTELLIGENCE_TOKEN, '--'] };
+  // REQ-MCP-033 / ADR-0035 (Part T): what the reserved token launches — this application's own executable, built in
+  // `code-intelligence-launch.ts`; the sandbox switch main forked this process with rides along (OQ-82's reading).
+  const { packaged, ...codeIntelligenceLaunch } = codeIntelligenceLaunchFor({ execPath: process.execPath, bundleDir: import.meta.dirname, argv: process.argv });
   log(`mcp: the reserved token launches ${codeIntelligenceLaunch.command} ${codeIntelligenceLaunch.args.join(' ')} (${packaged ? 'packaged' : 'development'})`);
   /**
    * ADR-0022's availability service, owned at application lifetime (REQ-SANDBOX-067): one probe per
@@ -178,8 +179,18 @@ export function createRunHost() {
     if (first) log(`confinement: ${verdict.available ? `available (${verdict.backend})` : `unavailable — ${renderUnavailability(verdict).replace(/\n/g, ' ')}`}`);
     return verdict;
   };
+  /*
+   * Verification only, and compiled out of a packaged build (`__ROTARIS_SEAMS__`): `ROTARIS_CAPTURE_MODEL_REQUESTS`
+   * names a file the scripted client appends one JSON line to per call — what the model port RECEIVED, system text
+   * included — which is how the injection proof reads the merged context an agent was actually given rather than a
+   * log line saying it was built. The scripted client is the only writer, so no real provider's traffic can reach it.
+   */
+  const modelCallFile = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_MODEL_REQUESTS'] : undefined;
+  const recordModelCall = modelCallFile === undefined || modelCallFile === '' ? undefined : (call: ScriptedCallRecord): void => {
+    try { appendFileSync(modelCallFile, `${JSON.stringify(call)}\n`); } catch (cause) { log(`capture: the model call could not be recorded (${String(cause)})`, 'warn'); }
+  };
   const configurationDeps = {
-    clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks, log), codeIntelligenceLaunch,
+    clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks, log, recordModelCall), codeIntelligenceLaunch,
     onRequest: (i: { method: string; url: string; headers: Record<string, string> }) => log(`model request ${i.method} ${i.url}${i.headers['authorization'] ? '' : ' (no authorization header)'}`),
     log: (m: string) => log(m), liveState: () => liveState, bearers: (root: string) => leased.get(root) ?? {},
     mcpEvidence: (cfg: ConfiguredRun['cfg'], root: string, role: string) => mcp.evidenceFor(cfg, root, role),
@@ -195,6 +206,7 @@ export function createRunHost() {
    * the `fetch` tool's per-call policy read (REQ-SANDBOX-038) is the existing precedent for that. A load that
    * fails leaves the shipped defaults standing — a broken configuration must not silently switch skills off.
    */
+  const machineDir = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_SKILLS_MACHINE'] ?? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE'] : undefined;
   const skills = new SkillHost({
     log: (m, level) => log(m, level ?? 'info'),
     monotonic: clocks.monotonic,
@@ -214,6 +226,16 @@ export function createRunHost() {
     ...(process.env['ROTARIS_CAPTURE_SKILLS_HOME'] ?? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_HOME']
       ? { home: (process.env['ROTARIS_CAPTURE_SKILLS_HOME'] ?? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_HOME'])! }
       : {}),
+    /*
+     * `ROTARIS_CAPTURE_SKILLS_MACHINE` and `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE` are the same seam for the machine-wide
+     * directory (`/etc/codex`): the skill search's fourth user-scope root is its `skills` child and the instruction
+     * base is the directory itself, so one value moves both, as one `home` serves both discoveries above. The
+     * instructions variable is read in the workspace service as well, for the reason above: a proof that lays a file
+     * down at every base must not write into the machine's own `/etc`, and one that isolated only the inventory would
+     * still inject whatever is there — an instruction file or a skill. Unlike the two above they are compiled out of a
+     * packaged build.
+     */
+    ...(machineDir === undefined || machineDir === '' ? {} : { machineDir }),
     section: (workspaceRoot) => {
       const loaded = loadConfiguration({ globalDir: configDir, workspaceRoot });
       if (loaded.ok) return loaded.value.skills;
@@ -235,8 +257,8 @@ export function createRunHost() {
     },
   });
 
-  const configure = (workspaceRoot: string, attended: boolean) => {
-    const r = configureRun(workspaceRoot, attended, configurationDeps);
+  const configure = (workspaceRoot: string, attended: boolean, entryPersona?: string) => {
+    const r = configureRun(workspaceRoot, attended, configurationDeps, entryPersona === undefined ? undefined : { entryPersona });
     if (r.ok) { configured.set(workspaceRoot, r.value); mcp.newConfiguration(r.value.cfg); }
     return r;
   };
@@ -294,11 +316,13 @@ export function createRunHost() {
     // REQ-CONFIG-473: the loaded `event_retention_per_session` per run; this is the shipped default behind it.
     retentionCap: RUNTIME_DEFAULTS.event_retention_per_session,
     warn: (m) => log(m, 'warn'),
+    // REQ-HOOKS-138 / PD-MONITOR-002: the hook port's `log` — a `log` event at `info`, which main's default threshold keeps.
+    log: (m) => log(m),
     mintSessionId: () => randomUUID(),
     model: null,
     // ADR-0036/0037: the files, the live state, the loader's passes — once per run start.
     configure: (workspaceRoot, ctx) => {
-      const r = configure(workspaceRoot, ctx.attended);
+      const r = configure(workspaceRoot, ctx.attended, ctx.entryPersona);
       if (r.ok) { configuredRuns.set(ctx.sessionId, r.value); runBearers.set(ctx.sessionId, leased.get(workspaceRoot) ?? {}); }
       // REQ-WORKSPACE-060: the units as a GETTER, read at every agent construction, so a skill invoked between
       // prompts reaches the next agent built and never retracts one already running (REQ-CONFIG-166).
@@ -373,6 +397,15 @@ export function createRunHost() {
       },
     }),
     backgroundSessions: () => terminal?.runningBackground ?? 0,
+    // PD-ORCH-005 clause 10: the background sessions a session's agents started, as this process holds them, and ending
+    // them (REQ-TOOLS-109's end). Read through `terminal` at each call, since the manager arrives after the host starts.
+    terminals: (sessionId) => ({
+      list: () => (terminal?.backgroundOwnedBy(sessionId) ?? []).map((b) => ({ id: b.id, taskId: b.owner?.taskId ?? '', command: b.command, startedAt: b.startedAt, status: b.status, exitCode: b.exitCode, tail: b.tail() })),
+      end: async (ids) => {
+        const wanted = new Set(ids);
+        await Promise.all((terminal?.backgroundOwnedBy(sessionId) ?? []).filter((b) => wanted.has(b.id)).map((b) => b.end('killed')));
+      },
+    }),
     attended: () => presenters.attended,
     sessionLogAppender: (dal, sid) => fileAppender(join(dirname(dal.db.name), 'sessions', sid, 'session.log')),
     // ADR-0015: the hook set per run from the two file scopes; the hook process inherits this process's environment (REQ-HOOKS-032).
@@ -385,14 +418,15 @@ export function createRunHost() {
     // failure notices with a COPYABLE detail block (REQ-MONITOR-094, REQ-NOTIFY-037/038) through main's one persistent slot.
     acknowledge: (kind, title, body) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'acknowledgement.publish', kindOf: kind, title, ...(body === undefined ? {} : { body }) } }),
     report: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', severity: n.severity, title: n.title, message: n.message, detail: n.detail, sessionId: n.sessionId, persistent: true } }),
-    supervisor: (_workspaceRoot, sessionId) => {
+    supervisor: (_workspaceRoot, sessionId, countUsage) => {
       const run = configuredRuns.get(sessionId);
       if (!run) return null;
       const cb = run.cfg.circuitBreaker;
       if (!cb.enabled || process.env['ROTARIS_CIRCUIT_BREAKER'] === 'off') return null;
       const timeoutMs = Math.round(run.runtime.loopClassificationTimeoutS * 1_000);
       const classifier = createLoopClassifier({
-        backend: run.model.backend, runModel: run.model.config.model, thinking: run.model.config.thinking, credentialFor: run.model.config.credentialFor,
+        // REQ-EVENTS-053: each classification is a request of the run, counted against it.
+        backend: meteredBackend(run.model.backend, countUsage), runModel: run.model.config.model, thinking: run.model.config.thinking, credentialFor: run.model.config.credentialFor,
         memory: rungMemory, configuredModel: modelRefOf(run.cfg, cb.model, run.scripted), slots: classifierSlotsOf(run.cfg, run.scripted, runBearers.get(sessionId), (m) => log(m, 'warn')), modelTimeoutMs: timeoutMs,
       });
       return classifier ? {

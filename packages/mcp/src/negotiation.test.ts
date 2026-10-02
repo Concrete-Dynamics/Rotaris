@@ -21,6 +21,8 @@ import type { McpLog, StdioDescription } from './types.js';
 const FIXTURE = resolve(fileURLToPath(import.meta.url), '..', '..', '..', '..', 'apps', 'desktop', 'scripts', 'fixtures', 'mcp-fixture-server.mjs');
 const clocks = nodeClocks();
 const quiet: McpLog = { info: () => undefined, warn: () => undefined, debug: () => undefined };
+/** What a composition root hands down as the product version (REQ-STARTUP-158); distinctive, so a literal cannot pass for it. */
+const clientVersion = '9.8.7rc6';
 const MODES: Record<string, VersionNegotiationOptions> = { legacy: { mode: 'legacy' }, auto: { mode: 'auto' }, pin2026: { mode: { pin: '2026-07-28' } } };
 const ERAS = ['2025', '2025-strict', '2026', '2026-only'] as const;
 
@@ -32,7 +34,7 @@ async function connectOnce(era: string, mode: string, dir: string): Promise<Cell
   const description: StdioDescription = { transport: 'stdio', command: process.execPath, args: [FIXTURE, '--era', era, '--pid-file', pidFile], env: { ...process.env as Record<string, string> }, cwd: dir };
   const started = clocks.monotonic.now();
   try {
-    const opened = await openClient({ description, label: `${era}/${mode}`, timers: clocks.timers, monotonic: clocks.monotonic, log: quiet, connectTimeoutMs: millis(8_000), negotiation: MODES[mode]! });
+    const opened = await openClient({ clientVersion, description, label: `${era}/${mode}`, timers: clocks.timers, monotonic: clocks.monotonic, log: quiet, connectTimeoutMs: millis(8_000), negotiation: MODES[mode]! });
     const tools = await listTools(opened.client, millis(5_000));
     const version = opened.negotiatedVersion();
     await opened.close();
@@ -54,14 +56,14 @@ describe('the era a server already told us (ADR-0033, first execution against a 
     const methods = () => readFileSync(requests, 'utf8').split('\n').filter((l) => l.trim() !== '');
     for (const label of ['discovery', 'session', 'probe']) {
       // No `negotiation`: exactly what ToolDiscovery, SessionConnections and HealthProbe pass.
-      const opened = await openClient({ description, label, timers: clocks.timers, monotonic: clocks.monotonic, log: quiet, connectTimeoutMs: millis(8_000) });
+      const opened = await openClient({ clientVersion, description, label, timers: clocks.timers, monotonic: clocks.monotonic, log: quiet, connectTimeoutMs: millis(8_000) });
       expect(opened.negotiatedVersion()).toBe('2025-11-25');
       await opened.close();
     }
     expect(methods().filter((m) => m === 'server/discover')).toHaveLength(1);
     expect(methods().filter((m) => m === 'initialize')).toHaveLength(3);
     // A caller that asks for a mode still gets it; the memory is a default, not an override.
-    const pinned = openClient({ description, label: 'pinned', timers: clocks.timers, monotonic: clocks.monotonic, log: quiet, connectTimeoutMs: millis(8_000), negotiation: { mode: { pin: '2026-07-28' } } });
+    const pinned = openClient({ clientVersion, description, label: 'pinned', timers: clocks.timers, monotonic: clocks.monotonic, log: quiet, connectTimeoutMs: millis(8_000), negotiation: { mode: { pin: '2026-07-28' } } });
     await expect(pinned).rejects.toThrow();
     expect(methods().filter((m) => m === 'server/discover')).toHaveLength(2);
     forgetNegotiatedEras();

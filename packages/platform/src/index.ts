@@ -6,4 +6,7 @@ export * from './machine-id.js';
 export * from './canonical.js';
 export * from './instance.js';
 export * from './spawn.js';
+export * from './artifact-environment.js';
 export * from './preferences.js';
+export * from './version.js';
+export * from './chromium-switches.js';

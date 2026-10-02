@@ -5,7 +5,9 @@
  * denial and a rename, one stored secret, and nine launches against one scratch profile:
  *
  *   1. discovery   — the prompt's MCP section character-exact and equal to the callable set; the inert grant reported
- *                    once; gamma's unknown key warned once per load; the discovery file byte-identical after the run.
+ *                    once; gamma's unknown key warned once per load; the discovery file byte-identical after the run;
+ *                    every handshake tells the server `rotaris` at the version `apps/desktop/package.json` declares
+ *                    (REQ-STARTUP-158 — the client carried a literal `0.1.0` until 2026-09-27).
  *   2. call        — `echo` end to end (tool.start before tool.finish, the result text, the row succeeded); `slow` beyond
  *                    `request_timeout: 2` fails naming the server and the connection serves the following `echo` (003/069).
  *   3. one process — two children calling alpha concurrently share one connection and one fixture process; a third
@@ -14,21 +16,25 @@
  *   5. crash       — `--crash-after` fails the call in flight, one warning issue, the next call re-establishes (069).
  *   6. drop rules  — an unknown server, an unavailable command, `enabled: false`, and a session toggle off from the
  *                    Settings category → absent from the run, the row's wording, the child's recorded evidence; a
- *                    relaunch shows the override gone (115).
+ *                    relaunch shows the override gone (115). Driven: each step waits for its condition.
  *   7. settings    — Check status → checking then healthy/unreachable, the button disabled while probing, probed twice
- *                    → the fixture contacted twice (054); the secrets card masked and scoped; the PNG.
+ *                    → the fixture contacted twice (054); the secrets card masked and scoped; the PNG. The `.cmd`
+ *                    runner's health (REQ-MCP-113's wrap) is asserted on win32 only and stated not applicable elsewhere.
+ *                    Driven, as 6 is.
  *   8. fatal YAML  — a stdio entry without a command and a bad request_timeout: both reported, the load rejected; the
  *                    same defects in `.mcp.json` drop the entries and the run proceeds.
  *   9. exit bound  — a server that never answers initialize: discovery returns empty at ≤ 35 s and the application exits.
  *
- * Evidence under `.proof/mcp-proof/`: one log and PNG per launch, `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/mcp-proof/`: one log and PNG per launch, `<name>.steps.json` for each driven launch (every
+ * step, when it ran, what it answered), `results.json`. `--skip-build` skips the build.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { choose, startApp, stopApp, stopOverrunMessage, until } from './lib/driver.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -53,7 +59,10 @@ if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${ele
 const root = join(output, 'profile');
 const workspace = join(root, 'workspace');
 const local = join(root, 'local');
-const configDir = join(local, 'rotaris', 'config');
+// By the platform that reads it (`configDirFor`), never the Windows spelling alone: off Windows the product reads
+// `<XDG_CONFIG_HOME>/rotaris`, so a file written at `<local>/rotaris/config` was never opened and launch 1 failed on
+// the shipped grant (`docs/defects/fixed/mcp-proof-writes-its-global-configuration-where-posix-never-reads-it.md`).
+const configDir = configDirFor(local);
 const preferences = join(root, 'preferences');
 const pids = join(output, 'pids');
 mkdirSync(join(workspace, '.rotaris'), { recursive: true });
@@ -117,12 +126,15 @@ function launch(name, extra, { files = {}, timeout = 150_000 } = {}) {
   resetPids();
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     cwd: app, encoding: 'utf8', timeout, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', ROTARIS_CAPTURE_PNG: png,
       PROOF_SHELL_VALUE: 'from-the-shell', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+      // PD-MONITOR-002: a child's stderr is `debug`, which the application log leaves out at its `info` default. This
+      // proof counts those lines and asserts no stored secret reaches ANY log line, so it records every level.
+      ROTARIS_APP_LOG_LEVEL: 'debug',
       ...extra,
     },
   });
@@ -144,11 +156,140 @@ function eventOrdinals(db, sessionId, kind) {
 }
 const results = {};
 
+/**
+ * Launches 6 and 7 are DRIVEN (`lib/driver.mjs`), not scheduled: every click, choice and read waits for the condition
+ * it needs. Their first form fired `ROTARIS_CAPTURE_CLICKS`/`_PROBE_AT`/`_SELECT` at fixed offsets from the window's
+ * load, and on a loaded host the drop-rules launch clicked a toggle that was not on screen yet and read `[]` at
+ * 3,200 ms, then — on another run — probed the relaunch's row at 2,500 ms before it was drawn: two reds about
+ * REQ-MCP-115 the product had not earned
+ * (`docs/defects/fixed/mcp-proofs-drop-rules-launch-clicks-at-a-fixed-offset.md`). The assertions are the same ones.
+ *
+ * Each step is recorded in `<name>.steps.json` beside the launch's log — when it began (`at`), how long it took (`ms`)
+ * and what it answered — so a red names the step that did not happen. The launch is bounded (`boundMs`) and ended by
+ * `stopApp`, whose closing picture and quit are each bounded and which ends (SIGTERM, a grace, SIGKILL) and reports an
+ * application that does not exit on the driver's quit rather than leaving it running beside the next launch; a launch
+ * whose driver never answers is ended by `startApp` itself.
+ */
+const SETTLED = new Set(['completed', 'failed', 'stopped', 'interrupted', 'paused', 'paused_message_limit']);
+async function drivenLaunch(name, extra, { files = {}, boundMs = 150_000 } = {}, steps) {
+  writeFileSync(join(configDir, 'agents.yaml'), files.global ?? globalYaml());
+  writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), files.workspace ?? WORKSPACE);
+  writeFileSync(join(workspace, '.mcp.json'), files.mcpJson ?? MCP_JSON);
+  resetPids();
+  const png = join(output, `${name}.png`);
+  const appLog = join(root, 'app.log');
+  rmSync(appLog, { force: true });
+  const trail = [];
+  const started = Date.now();
+  const launched = await startApp({
+    root, workspace, timeoutMs: 60_000,
+    extra: {
+      ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', PROOF_SHELL_VALUE: 'from-the-shell',
+      // As `launch` above: every level, because this proof asserts no stored secret reaches ANY log line (PD-MONITOR-002).
+      ROTARIS_APP_LOG_LEVEL: 'debug',
+      ...extra,
+    },
+  });
+  const step = async (label, pending) => {
+    const at = Date.now() - started;
+    try {
+      const value = await pending;
+      trail.push({ at, ms: Date.now() - started - at, label, value });
+      return value;
+    } catch (cause) {
+      trail.push({ at, ms: Date.now() - started - at, label, error: cause instanceof Error ? cause.message : String(cause) });
+      throw cause;
+    }
+  };
+  let value;
+  let failure = null;
+  let bound;
+  try {
+    value = await Promise.race([
+      steps(launched.driver, step),
+      new Promise((_, reject) => { bound = setTimeout(() => reject(new Error(`the steps did not finish within ${boundMs} ms`)), boundMs); }),
+    ]);
+  } catch (cause) {
+    failure = cause;
+  } finally {
+    clearTimeout(bound);
+  }
+  // The closing picture and the quit are each bounded inside `stopApp`: a main process that stopped answering its
+  // driver is ended (SIGTERM, a grace, SIGKILL), not waited on.
+  const stopped = await stopApp(launched, { screenshot: png });
+  const log = existsSync(appLog) ? readFileSync(appLog, 'utf8') : '';
+  writeFileSync(join(output, `${name}.log`), log);
+  writeFileSync(join(output, `${name}.steps.json`), `${JSON.stringify(trail, null, 2)}\n`);
+  if (failure) throw new Error(`${name}: ${failure.message}; see ${name}.log and ${name}.steps.json`);
+  if (stopped.overran) throw new Error(`${stopOverrunMessage(name, stopped, log)}\n(see ${name}.log)`);
+  if (stopped.exit.code !== 0) throw new Error(`${name} exited ${stopped.exit.code ?? stopped.exit.signal} on the driver's quit; see ${name}.log`);
+  return { log, value, elapsedMs: Date.now() - started, png };
+}
+/** Settings → MCP Servers as a person reaches it: Ctrl+7 (REQ-SHELL-049), then the category by its name. */
+async function openMcpSettings(d, step) {
+  await step('the shell', d.waitFor('.app-shell', { timeoutMs: 60_000 }));
+  await step('Ctrl+7', d.chord('Ctrl+7'));
+  await step('the Settings view', d.waitFor('.app-shell[data-view="settings"]'));
+  await step('the MCP Servers category', d.click('.nav-list__item', { text: 'MCP Servers' }));
+  await step('the configured servers card', d.waitFor('[data-mcp-servers]'));
+}
+/** The prompt as the packaged prompt seam types it — Ctrl+2, Ctrl+L, the text, Enter — each once its condition holds. */
+async function typePrompt(d, step, prompt) {
+  await step('Ctrl+2', d.chord('Ctrl+2'));
+  await step('the composer', d.waitFor('.composer__input'));
+  await step('Ctrl+L', d.chord('Ctrl+L'));
+  await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus' }));
+  await step('the prompt', d.type(prompt, { enter: true }));
+}
+/** The newest session's id, or null — read before a prompt, so the wait below cannot mistake an earlier launch's run for this one. */
+function latestSessionId() {
+  const [path] = findDatabases(local);
+  if (!path) return null;
+  const db = new Database(path, { readonly: true });
+  try { return latestSession(db)?.session_id ?? null; } finally { db.close(); }
+}
+/** The newest session when it is not `before`, else null. */
+function sessionAfter(before) {
+  const [path] = findDatabases(local);
+  if (!path) return null;
+  const db = new Database(path, { readonly: true });
+  try {
+    const s = latestSession(db);
+    return s && s.session_id !== before ? s : null;
+  } finally { db.close(); }
+}
+/**
+ * The probing state in ONE renderer turn, once the button says it is probing: the button's text and state and every
+ * row's health text, together. Bounded at 15 s; a timeout is answered, not thrown, so the assertion names what it saw.
+ */
+const PROBING_SNAPSHOT = `new Promise((resolve) => {
+  const started = performance.now();
+  const tick = () => {
+    const b = document.querySelector('button[data-action="check-status"]');
+    const text = (b?.textContent || '').trim();
+    if (text === 'Checking…') {
+      resolve(JSON.stringify({ button: text, disabled: b.disabled, rows: [...document.querySelectorAll('tr[data-mcp-server] [data-health-text]')].map((x) => (x.textContent || '').trim()), waitedMs: Math.round(performance.now() - started) }));
+      return;
+    }
+    if (performance.now() - started > 15000) { resolve(JSON.stringify({ timeout: true, button: text })); return; }
+    setTimeout(tick, 20);
+  };
+  tick();
+})`;
+/** A probe round is over when the button is enabled and reads `Check status` again and no row still says `Checking…`. */
+const ROUND_OVER = `(() => {
+  const b = document.querySelector('button[data-action="check-status"]');
+  if (!b || b.disabled || b.textContent.trim() !== 'Check status') return false;
+  return ![...document.querySelectorAll('tr[data-mcp-server] [data-health-text]')].some((x) => (x.textContent || '').trim() === 'Checking…');
+})()`;
+
 // ---- 1. Discovery and the prompt -----------------------------------------------------------------------------
 {
   writeFileSync(join(workspace, '.mcp.json'), MCP_JSON);
   const before = sha(join(workspace, '.mcp.json'));
-  const r = launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'call echo on alpha', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000' });
+  const clients = join(output, 'alpha.clients.jsonl');
+  writeFileSync(clients, '');
+  const r = launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'call echo on alpha', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000' }, { files: { global: globalYaml({ alphaFlags: ['--client-file', clients] }) } });
   if (sha(join(workspace, '.mcp.json')) !== before) throw new Error('the discovery file changed across the load (REQ-MCP-027)');
   const surface = lines(r.log, /mcp: surface for orchestrator/);
   if (surface.length === 0) throw new Error(`no surface line:\n${r.log}`);
@@ -176,7 +317,11 @@ const results = {};
   if (s.execution_status !== 'completed') throw new Error(`the run ended ${s.execution_status}`);
   if (echo.length !== 1 || echo[0].status !== 'ok' || !String(echo[0].entry.result ?? '').includes('hello from the scripted agent')) throw new Error(`echo did not succeed: ${JSON.stringify(echo)}`);
   const env = lines(r.log, /stderr/);
-  results.discovery = { section, callable, inertReports: inert.length, loads, unknownKeyWarnings: weird, discoveryMs: Object.fromEntries(disc.map((l) => [/discovery of '(\w+)'/.exec(l)[1], Number(/in (\d+) ms/.exec(l)?.[1])])), fileByteIdentical: true, stderrLines: env.length };
+  // REQ-STARTUP-158: the run host's handshakes (the discovery and the session's connection) name the declared version.
+  const declared = JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).version;
+  const told = readFileSync(clients, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l));
+  if (told.length < 2 || told.some((c) => c?.name !== 'rotaris' || c?.version !== declared)) throw new Error(`the MCP handshakes did not name rotaris ${declared} (REQ-STARTUP-158): ${JSON.stringify(told)}`);
+  results.discovery = { section, callable, inertReports: inert.length, loads, unknownKeyWarnings: weird, discoveryMs: Object.fromEntries(disc.map((l) => [/discovery of '(\w+)'/.exec(l)[1], Number(/in (\d+) ms/.exec(l)?.[1])])), fileByteIdentical: true, stderrLines: env.length, clientInfo: told };
 }
 
 // ---- 2. A call end to end, and the allowance ------------------------------------------------------------------
@@ -256,20 +401,26 @@ const results = {};
 // ---- 6. Drop rules, the session toggle, the relaunch --------------------------------------------------------
 {
   const global6 = globalYaml({ personas: { 'coding-agent': '{ mcp_servers: [alpha, beta, nope, ghost, off] }' } }).replace('  orchestrator: { mcp_servers: [alpha, beta, gamma], mcp_tools: { beta: [echo, nothing, extra] } }', '  orchestrator: { mcp_servers: [alpha, beta, nope, ghost, off] }');
-  const r = launch('drop-rules', {
-    ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'MCP Servers',
-    ROTARIS_CAPTURE_CLICKS: 'button[aria-label="Enable beta for this session"]@2200',
-    ROTARIS_CAPTURE_PROBE_AT: 'tr[data-mcp-server="beta"] [data-enablement]@3200',
-    ROTARIS_CAPTURE_PROMPT: 'delegate once', ROTARIS_CAPTURE_PROMPT_MS: '3600', ROTARIS_SCRIPT: 'delegate:coding-agent:one,answer', ROTARIS_CHILD_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_INTENT_SCRIPT: 'moderate_feature',
-    ROTARIS_CAPTURE_AFTER_MS: '14000',
-  }, { files: { global: global6, workspace: WORKSPACE.replace('  delegation_strategy: single\n', '  delegation_strategy: orchestrator\n') } });
-  const wording = lines(r.log, /probe-at 3200/)[0] ?? '';
+  const r = await drivenLaunch('drop-rules', { ROTARIS_SCRIPT: 'delegate:coding-agent:one,answer', ROTARIS_CHILD_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_INTENT_SCRIPT: 'moderate_feature' }, { files: { global: global6, workspace: WORKSPACE.replace('  delegation_strategy: single\n', '  delegation_strategy: orchestrator\n') } }, async (d, step) => {
+    await openMcpSettings(d, step);
+    const before = latestSessionId();
+    // REQ-MCP-115: the session toggle, clicked once its row is on screen; the wording is read once the row SAYS it is
+    // overridden, not at an offset that hoped the click had landed (the red of 2026-09-28 read `[]` at 3,200 ms).
+    await step('toggle beta off for this session', d.click('button[aria-label="Enable beta for this session"]'));
+    await step('beta reports the override', d.waitFor('tr[data-mcp-server="beta"][data-overridden="yes"]'));
+    const enablement = await step('the overridden row\'s wording', d.probe('tr[data-mcp-server="beta"] [data-enablement]'));
+    await typePrompt(d, step, 'delegate once');
+    const session = await step('the run settled', until(() => sessionAfter(before), (s) => s !== null && SETTLED.has(s.execution_status), { timeoutMs: 90_000, what: 'a new session settling' }));
+    return { wording: enablement[0]?.text ?? '', session };
+  });
+  const wording = r.value.wording;
   if (!/Overridden for this session/.test(wording) || !/not persistent/.test(wording) || !/enabled in the configuration file/.test(wording)) throw new Error(`the overridden row's wording is wrong: ${wording}`);
   const db = new Database(oneDatabase(), { readonly: true });
-  const s = latestSession(db);
+  const s = r.value.session;
   const children = db.prepare('SELECT canonical_name, granted_mcp FROM children WHERE session_id = ?').all(s.session_id);
   const issues = db.prepare("SELECT message FROM issues WHERE session_id = ? AND kind = 'mcp_config'").all(s.session_id).map((i) => i.message);
   db.close();
+  if (children.length === 0) throw new Error(`the run ${s.session_id} (${s.execution_status}) recorded no child`);
   const evidence = JSON.parse(children[0].granted_mcp);
   const fates = Object.fromEntries(evidence.servers.map((x) => [x.name, x.reason ?? x.fate]));
   if (fates.alpha !== 'connected' || fates.beta !== 'disabled' || fates.nope !== 'not-configured' || fates.ghost !== 'unavailable' || fates.off !== 'disabled') throw new Error(`the recorded fates are wrong: ${JSON.stringify(fates)}`);
@@ -281,51 +432,73 @@ const results = {};
   const perPersona = lines(r.log, /'ghost' is unavailable/).length;
   if (detailed !== 1) throw new Error(`the detailed unavailable line appeared ${detailed} times in one process (once expected)`);
   if (perPersona < 2) throw new Error(`the per-persona warning appeared ${perPersona} times (two personas resolved)`);
-  // Relaunch: the override is gone (REQ-MCP-115).
-  const again = launch('drop-rules-relaunch', { ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'MCP Servers', ROTARIS_CAPTURE_PROBE: 'tr[data-mcp-server="beta"]', ROTARIS_CAPTURE_AFTER_MS: '2500' }, { files: { global: global6 } });
-  const probe = lines(again.log, /capture: probe tr\[data-mcp-server="beta"\]/)[0] ?? '';
-  if (!/"data-overridden":"no"/.test(probe) || !/"data-enabled":"yes"/.test(probe)) throw new Error(`after a relaunch beta should be back to its configured value: ${probe}`);
-  results.dropRules = { fates, granted: evidence.granted, issues, detailedLineCount: detailed, perPersonaWarnings: perPersona, overriddenWording: wording.slice(wording.indexOf('→') + 1).trim().slice(0, 200), relaunchOverrideGone: true };
+  // Relaunch: the override is gone (REQ-MCP-115). The row is read once it is on screen, not at 2,500 ms.
+  const again = await drivenLaunch('drop-rules-relaunch', {}, { files: { global: global6 } }, async (d, step) => {
+    await openMcpSettings(d, step);
+    await step('the beta row', d.waitFor('tr[data-mcp-server="beta"]'));
+    return step('beta after the relaunch', d.probe('tr[data-mcp-server="beta"]'));
+  });
+  const row = again.value[0]?.data ?? {};
+  if (row['data-overridden'] !== 'no' || row['data-enabled'] !== 'yes') throw new Error(`after a relaunch beta should be back to its configured value: ${JSON.stringify(again.value)}`);
+  results.dropRules = { fates, granted: evidence.granted, issues, detailedLineCount: detailed, perPersonaWarnings: perPersona, overriddenWording: wording.slice(0, 200), sessionStatus: s.execution_status, relaunchOverrideGone: true, relaunchRow: row };
 }
 
 // ---- 7. The Settings category ---------------------------------------------------------------------------------
 {
-  const r = launch('settings', {
-    ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'MCP Servers',
-    // Part T (2026-09-06): the shipped `code_intelligence` row is probed too (available unconditionally, REQ-MCP-037) and the
-    // bundled runtime answers in ~4.2 s, so a probe round takes ~5 s; the second click and the capture wait for it.
-    ROTARIS_CAPTURE_CLICKS: 'button[data-action="check-status"]@1800;;button[data-action="check-status"]@12000',
-    ROTARIS_CAPTURE_SELECT: 'select[aria-label="Secrets for"]>>alpha@9000',
-    ROTARIS_CAPTURE_PROBE_AT: 'button[data-action="check-status"]@2000;;tr[data-mcp-server] [data-health-text]@2000',
-    ROTARIS_CAPTURE_PROBE: 'tr[data-mcp-server];;tr[data-mcp-server] [data-health-text];;button[data-action="check-status"];;[data-secret-row];;[data-mask];;[data-expected];;[data-scope];;[data-line]',
-    ROTARIS_CAPTURE_AFTER_MS: '19000',
+  const r = await drivenLaunch('settings', {}, {}, async (d, step) => {
+    await openMcpSettings(d, step);
+    // The button is drawn disabled until the rows are listed (`rows.length === 0`), and a click on a disabled button is
+    // no press at all — so the first click waits for the fixtures' rows as well as for the button.
+    await step('the fixture rows', d.waitFor('tr[data-mcp-server="gamma"]'));
+    await step('Check status enabled', until(() => d.eval(`(() => { const b = document.querySelector('button[data-action="check-status"]'); return b !== null && !b.disabled && b.textContent.trim() === 'Check status'; })()`), (v) => v === true, { what: 'an enabled Check status' }));
+    await step('Check status (first round)', d.click('button[data-action="check-status"]', { text: 'Check status' }));
+    // REQ-MCP-054: the probing state, read in ONE renderer turn once the button says so, so the button and the rows
+    // are the same moment — the fixed 2,000 ms read of the first form sampled whatever the machine had reached by then.
+    const during = JSON.parse(await step('the probing state', d.eval(PROBING_SNAPSHOT)));
+    await step('the first round finished', until(() => d.eval(ROUND_OVER), (v) => v === true, { timeoutMs: 60_000, what: 'the first probe round finishing' }));
+    const chosen = await step('the secrets select → alpha', choose(d, 'select[aria-label="Secrets for"]', 'alpha'));
+    await step('the masked secret', d.waitFor('[data-mask]'));
+    await step('Check status (second round)', d.click('button[data-action="check-status"]', { text: 'Check status' }));
+    await step('the second round started', d.waitFor('button[data-action="check-status"]', { text: 'Checking…' }));
+    await step('the second round finished', until(() => d.eval(ROUND_OVER), (v) => v === true, { timeoutMs: 60_000, what: 'the second probe round finishing' }));
+    const probed = {};
+    for (const selector of ['tr[data-mcp-server]', 'tr[data-mcp-server] [data-health-text]', 'button[data-action="check-status"]', '[data-secret-row]', '[data-mask]', '[data-expected]', '[data-scope]', '[data-line]']) {
+      probed[selector] = await step(`probe ${selector}`, d.probe(selector));
+    }
+    return { during, chosen, probed };
   });
-  const during = lines(r.log, /probe-at 2000 button/)[0] ?? '';
-  if (!/Checking…/.test(during)) throw new Error(`the button did not read Checking… while probing: ${during}`);
-  const duringRows = lines(r.log, /probe-at 2000 tr\[data-mcp-server\] \[data-health-text\]/)[0] ?? '';
-  if (!/Checking…/.test(duringRows)) throw new Error(`no row showed checking during the probe: ${duringRows}`);
-  const rows = JSON.parse((lines(r.log, /capture: probe tr\[data-mcp-server\] →/)[0] ?? '').split(' → ')[1] ?? '[]');
+  const { during, probed } = r.value;
+  if (during.timeout || during.button !== 'Checking…') throw new Error(`the button did not read Checking… while probing: ${JSON.stringify(during)}`);
+  if (!during.rows.some((t) => /Checking…/.test(t))) throw new Error(`no row showed checking during the probe: ${JSON.stringify(during.rows)}`);
+  const rows = probed['tr[data-mcp-server]'];
   const health = Object.fromEntries(rows.map((x) => [x.data['data-mcp-server'], x.data['data-health']]));
   if (health.alpha !== 'healthy' || health.beta !== 'healthy' || health.gamma !== 'healthy') throw new Error(`the fixtures should be healthy: ${JSON.stringify(health)}`);
   // REQ-MCP-113 through the built application: the `.cmd` runner standing in for `browser` is reached through cmd.exe and answers.
-  if (health.browser !== 'healthy') throw new Error(`the .cmd runner standing in for browser should probe healthy through the wrap: ${JSON.stringify(health)}`);
+  // The wrap is a Windows rule (a `.cmd` runner is what `npx` is there, and cmd.exe is what runs it), so off win32 this one
+  // check is NOT APPLICABLE and is stated so rather than failed: a POSIX kernel cannot execute `runner.cmd`, the row's health
+  // is recorded as observed, and the rest of the launch — the probing states, the masked secret, its scope — is measured.
+  const cmdRunner = process.platform === 'win32'
+    ? { applicable: true, health: health.browser }
+    : { applicable: false, health: health.browser, reason: `not applicable on ${process.platform}: REQ-MCP-113's .cmd wrap is a Windows rule and cmd.exe does not exist here; the row's health is recorded, not asserted` };
+  if (cmdRunner.applicable && health.browser !== 'healthy') throw new Error(`the .cmd runner standing in for browser should probe healthy through the wrap: ${JSON.stringify(health)}`);
+  if (!cmdRunner.applicable) console.log(`[mcp-proof] 7 settings: the .cmd runner check is ${cmdRunner.reason} (observed: ${health.browser})`);
   if (health.ghost !== 'unreachable' || health.off !== 'unreachable') throw new Error(`the unavailable and the not-installed servers should be unreachable: ${JSON.stringify(health)}`);
-  const texts = JSON.parse((lines(r.log, /capture: probe tr\[data-mcp-server\] \[data-health-text\] →/)[0] ?? '').split(' → ')[1] ?? '[]').map((x) => x.text);
+  const texts = probed['tr[data-mcp-server] [data-health-text]'].map((x) => x.text);
   if (!texts.some((t) => /Healthy · 5 tools/.test(t))) throw new Error(`no healthy row shows its tool count: ${JSON.stringify(texts)}`);
-  const button = JSON.parse((lines(r.log, /capture: probe button\[data-action="check-status"\] →/)[0] ?? '').split(' → ')[1] ?? '[]')[0];
+  const button = probed['button[data-action="check-status"]'][0];
   if (!button || button.text !== 'Check status') throw new Error(`the button did not re-enable: ${JSON.stringify(button)}`);
   if (pidLines('alpha').length !== 2) throw new Error(`alpha was contacted ${pidLines('alpha').length} times by two probes (REQ-MCP-054)`);
-  const masks = JSON.parse((lines(r.log, /capture: probe \[data-mask\] →/)[0] ?? '').split(' → ')[1] ?? '[]').map((x) => x.text);
+  const masks = probed['[data-mask]'].map((x) => x.text);
   if (masks.length !== 1 || masks[0] !== '***') throw new Error(`the secret is not masked with the one marker: ${JSON.stringify(masks)}`);
-  const scopes = JSON.parse((lines(r.log, /capture: probe \[data-scope\] →/)[0] ?? '').split(' → ')[1] ?? '[]').map((x) => x.text);
-  const expected = JSON.parse((lines(r.log, /capture: probe \[data-expected\] →/)[0] ?? '').split(' → ')[1] ?? '[]').map((x) => `${x.data['data-expected']}:${x.data['data-satisfied']}`);
+  const scopes = probed['[data-scope]'].map((x) => x.text);
+  const expected = probed['[data-expected]'].map((x) => `${x.data['data-expected']}:${x.data['data-satisfied']}`);
   if (scopes[0] !== 'Global') throw new Error(`the secret's scope is wrong: ${JSON.stringify(scopes)}`);
   if (expected.join(',') !== 'ALPHA_KEY:yes,FROM_SHELL:no') throw new Error(`the expected-keys hint is wrong: ${JSON.stringify(expected)}`);
-  const linesShown = JSON.parse((lines(r.log, /capture: probe \[data-line\] →/)[0] ?? '').split(' → ')[1] ?? '[]').map((x) => x.text);
+  const linesShown = probed['[data-line]'].map((x) => x.text);
   if (linesShown.some((l) => /sk-proof-secret/.test(l))) throw new Error('a stored secret value reached a rendered line');
   if (/sk-proof-secret-value-1234/.test(r.log)) throw new Error('the stored secret value appeared in a log line');
   const unreachable = rows.find((x) => x.data['data-mcp-server'] === 'ghost');
-  results.settings = { health, healthTexts: texts, probesPerServer: pidLines('alpha').length, mask: masks[0], scope: scopes[0], expected, ghostDetail: unreachable?.text?.slice(0, 160) ?? '', png: r.png };
+  results.settings = { health, cmdRunner, during, secretsChooser: r.value.chosen.kind, healthTexts: texts, probesPerServer: pidLines('alpha').length, mask: masks[0], scope: scopes[0], expected, ghostDetail: unreachable?.text?.slice(0, 160) ?? '', png: r.png };
 }
 
 // ---- 8. Fatal YAML defects; the same in the discovery file --------------------------------------------------

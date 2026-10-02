@@ -11,6 +11,7 @@
     "@rotaris/contracts": "workspace:*",
     "@rotaris/kernel": "workspace:*",
     "@rotaris/platform": "workspace:*",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.0",
+    "zod": "^4.5.4"
   }
 }

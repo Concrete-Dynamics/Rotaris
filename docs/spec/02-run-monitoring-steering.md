@@ -50,6 +50,9 @@ While a task run is executing, a user must be able to watch what every agent is 
 ### 3. Agent (child task) lifecycle
 
 **REQ-MONITOR-014** — A delegated agent occupies exactly one of these states at a time: `queued`, `starting`, `running`, `summarizing`, `waiting_on_dependencies`, `waiting_on_model_slot`, `succeeded`, `failed`, `cancelled`, `blocked`. `succeeded`, `failed`, `cancelled`, and `blocked` are terminal; the remaining six are not. `summarizing` is a state of the agent itself and not a display decoration: it is counted by the per-model cap (REQ-MONITOR-020) and mapped like any other engine state (REQ-MONITOR-046).
+  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 4, 2026-09-28.** The list gains one
+  > non-terminal state, `paused`, which a run leaves an unfinished agent in when it comes to rest (clauses 2 and 3)
+  > and which it leaves when it resumes. The ten states and the four terminal ones are otherwise as stated.
 
 **REQ-MONITOR-015** — An agent counts against the concurrent-agent budget only when it is neither terminal nor waiting for a model slot; an agent parked for a model slot must not consume the active-agent allowance.
 
@@ -70,6 +73,7 @@ While a task run is executing, a user must be able to watch what every agent is 
 **REQ-MONITOR-023** — When a background agent reaches a terminal state, a completion notification must be emitted carrying its task id, canonical name, description, terminal state, duration in seconds, the number of background agents still running, and the ids of artifacts it produced.
 
 **REQ-MONITOR-300** — The legal-transition table judged by REQ-MONITOR-016 is exactly this, and nothing outside it is legal. An agent is created in `waiting_on_dependencies` when it declares dependencies, in `waiting_on_model_slot` when its model is already at its per-model cap (REQ-MONITOR-020), and in `queued` otherwise. From `waiting_on_dependencies`: to `queued` when every dependency has ended in `succeeded`, and to `blocked` as soon as any dependency ends in `failed`, `cancelled`, or `blocked` (REQ-MONITOR-019). From `queued`: to `starting`; to `waiting_on_model_slot` when the cap is reached at scheduling time; and to `blocked` as soon as any dependency it declared ends in `failed`, `cancelled`, or `blocked` (REQ-ORCH-048). From `waiting_on_model_slot`: to `queued` when a slot frees (REQ-MONITOR-020), and to `blocked` on that same dependency condition (REQ-ORCH-048). From `starting`: to `running`, and to `failed`. From `running`: to `summarizing`; to `succeeded` directly, and only where the agent has already published an authored artifact (REQ-MONITOR-018); and to `failed`. From `summarizing`: to `succeeded` and to `failed`. No transition leaves a terminal state, so `succeeded`, `failed`, `cancelled`, and `blocked` are absorbing. `blocked` is reachable from exactly three states — `waiting_on_dependencies`, `queued`, and `waiting_on_model_slot` — and from no other. The condition is the same in all three, and admitting it from all three is deliberate: the dependency-failure cascade of REQ-ORCH-048 must be able to settle a dependent wherever it stands before it has started, with no source state left for which the move it demands would be illegal. A dependent that has already reached `starting`, `running`, or `summarizing` is not blocked by that cascade and runs on. Two settling paths are legal from every non-terminal state in addition to the above and are the only way a state may be reached that this table does not otherwise allow: cancellation settles any non-terminal agent to `cancelled` (REQ-MONITOR-209), and run reconciliation settles any non-terminal agent to the terminal state the run's own outcome dictates (REQ-MONITOR-211). Every settling transition stamps a completion timestamp exactly as an ordinary terminal transition does (REQ-MONITOR-017). This requirement, over the state set of REQ-MONITOR-014, is the product's single definition of the delegated-child state machine: a document that needs to name a child's state, its terminal subset, or a move between states cites this identifier rather than restating any part of the machine — the state set and its terminal subset, the transition table and the rejection of a move outside it, the legality of the dependency-failure cascade into `blocked`, and the `from_state`/`to_state` pair a child-transition event carries alike. The budget accounting of REQ-MONITOR-015 and REQ-MONITOR-020 is cited the same way. A state or a transition needed by another domain is added here rather than described there.
+  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005), 2026-09-27 (revision 2).** The table gains one state, `paused`: every non-terminal state may move to it when the run comes to rest by a pause, a stop, a quit or a crash, and it moves back to the state it resumes into when the iteration resumes. Since revision 5 (2026-09-29, clause 22), a settled child that its parent follows up by `session_id` also leaves its terminal state for the state it resumes into; no other transition leaves a terminal state.
 
 ### 4. Run-level status and terminal result
 
@@ -124,6 +128,9 @@ While a task run is executing, a user must be able to watch what every agent is 
 **REQ-MONITOR-045** — Context percentage is the used-tokens fraction of the limit, rounded to a whole percent, and is 0 when the limit is zero or negative. An agent is "live" exactly when its presentation state is running.
 
 **REQ-MONITOR-046** — Engine agent states map to presentation states as: succeeded→done; running→running; summarizing→running; waiting_on_dependencies→waiting; waiting_on_model_slot→waiting; failed→failed; cancelled→cancelled; blocked→failed; anything else→queued.
+  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 4, 2026-09-28.** Clause 13:
+  > `paused` maps to a presentation state of its own, `paused`, and never to the catch-all `queued`. Every other
+  > mapping is as stated.
 
 **REQ-MONITOR-047** — An agent's activity text is its delegation task description truncated to the first 180 characters.
 
@@ -162,6 +169,9 @@ While a task run is executing, a user must be able to watch what every agent is 
 **REQ-MONITOR-062** — When only the state of tool chips changes (`active` / `used` / `not used`), the chips shown and their order must not change; only the state marks change, and no chip may flicker, reorder, or lose focus. Updating a chip strip that carries an agent's whole granted tool set must complete inside the 250 ms visibility budget.
 
 **REQ-MONITOR-063** — Steer is enabled exactly when the shown agent is running or waiting. Cancel is enabled exactly when the shown agent is running, waiting, or queued. Pop out is always enabled for a shown agent.
+  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 4, 2026-09-28.** Clause 16: Cancel
+  > is also enabled for a `paused` child of a session at rest, confirmed as REQ-MONITOR-128 requires. Steer and Pop
+  > out are as stated.
 
 **REQ-MONITOR-064** — When the shown agent has live (running, waiting, or queued) descendants, a cascade note states that cancelling cascades to that number of descendants; otherwise the note is empty.
 
@@ -298,10 +308,14 @@ While a task run is executing, a user must be able to watch what every agent is 
 ### 14. Pause, cancel, and shutdown
 
 **REQ-MONITOR-123** — Pause is graceful and applies to the whole run only: the run finishes its current step and then stops. A pause request naming any agent other than the run itself must be refused; there is no per-agent pause.
+  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005), 2026-09-27 (revision 2).** Pause still applies to the whole run only; in-flight tool calls finish, then every agent stops where it stands and is left `paused`, and continuing resumes it from there.
 
 **REQ-MONITOR-124** — Given an accepted pause, the session status becomes `pausing` and a message states that the current step will finish first. Given a refused pause, an error message states that pause is unavailable because no active run exists.
 
 **REQ-MONITOR-125** — While a run is paused, run controls state that the run must be continued before they can be used. A paused session persists with an interruption message and can be resumed from the composer.
+  > **Extended by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 4, 2026-09-28.** Clause 18: a
+  > session a crash left, `interrupted` or in REQ-CHAT-008's recovery state, is also continued from the composer,
+  > with the same count and "continue without them" as a paused one. This requirement still governs in full.
 
 **REQ-MONITOR-126** — Cancelling a run requires confirmation stating that cancellation cannot be undone in this session, describing the impact as cancelling the active run and every active task agent, with an explicit confirm label.
 
@@ -312,6 +326,9 @@ While a task run is executing, a user must be able to watch what every agent is 
 **REQ-MONITOR-129** — Cancelling a run must signal the run's graceful-stop path rather than aborting its execution, so the run still produces and reports a terminal result. A graceful stop that is not honored within 30 seconds is force-cancelled as a backstop.
 
 **REQ-MONITOR-130** — Cancelling a run must leave identical observable state whichever surface asked for it (the run header, the mission view, an auxiliary window, or a background-run row) and however the run was started (REQ-MONITOR-299): the same persisted execution status, the same terminal run result (REQ-MONITOR-028), every non-terminal agent settled to `cancelled` (REQ-MONITOR-209, REQ-MONITOR-211), the session lock released (REQ-MONITOR-240), and queued follow-up prompts left in the same condition. No host may hold a resource another has released.
+  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 4, 2026-09-28.** Clause 15: the
+  > cancelling of a run this requirement names is the explicit cancel (REQ-MONITOR-126), which still leaves
+  > identical state from every surface. A stop, from any surface, leaves its agents `paused` (clause 3).
 
 **REQ-MONITOR-131** — Application shutdown produces these effects, in this order, each of which an observer can check: every periodic activity the application still performs stops; the run is cancelled, with anything blocked on a human answer released first (REQ-MONITOR-012); queued follow-up jobs are cleared; and the process does not exit until the run has reported its terminal result and finished writing session state. A restart that is not a shutdown waits at most 5 seconds for the previous run to finish before proceeding. Shutdown carries a force-exit backstop of 30 seconds from the quit request, the same allowance as the cancellation grace of REQ-MONITOR-129 and composing with it exactly: the graceful stop is requested first, the 30-second grace force-cancels a run that has not honored it, and at the same instant the process force-exits if teardown has still not completed. A second quit request made while that allowance is running force-exits immediately (REQ-MONITOR-283). A force exit is the only case in which the ordered effects above may be left incomplete, and it must be reported as such on the next start. A launch of the application that arrives while that allowance is running is refused until the process has ended and is honoured afterwards, on the terms REQ-SHELL-169 fixes; this requirement holds no copy of them.
 
@@ -513,10 +530,16 @@ While a task run is executing, a user must be able to watch what every agent is 
 **REQ-MONITOR-210** — The interface must offer the repair and announce that it happened. A repair attempt on a session whose process is alive must be refused with a reason, and the refusal must distinguish "the process could not be confirmed dead" from "the process is running".
 
 **REQ-MONITOR-211** — Given an execution status that neither claims a live run nor is `idle`, every running, waiting, or queued agent must be settled to the run's own outcome: completed / succeeded / done→done; failed / error→failed; anything else (paused, cancelled, interrupted)→cancelled. Their activity is replaced with a statement that they ended with the run, and their active tool chips are cleared.
+  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 4, 2026-09-28.** Clause 13: a
+  > session at rest never settles a `paused` agent to the run's outcome; it keeps its state and its last activity
+  > until it resumes or ends. Every other running, waiting or queued agent is settled as stated.
 
 **REQ-MONITOR-212** — The `idle` status is deliberately exempt from that reconciliation, because a run that never began has no outcome for its agents to inherit.
 
 **REQ-MONITOR-213** — Once reconciliation (REQ-MONITOR-211) has settled an agent, every surface — agent tree, live counters, dashboard, mission graph, persona windows, inspector — must show that agent in the settled state and its cleared activity. No surface may still present it as running, waiting, or queued, and no surface may apply a settling rule of its own or exempt itself from the outcome.
+  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 4, 2026-09-28.** Clause 13: every
+  > surface shows a `paused` agent as `paused`, the one state REQ-MONITOR-211's reconciliation leaves as it is.
+  > Every settled agent is shown as stated.
 
 ### 24. Live update transport, timing, and ordering
 
@@ -621,6 +644,7 @@ The failure this prevents is invisible to every other detector this document has
 **REQ-MONITOR-255** — Shutdown must request every run handle to stop before waiting on any of them.
 
 **REQ-MONITOR-256** — Continuing a session must never inherit the previous run's live agents. Resuming a base-workspace session must be refused while a run is active there.
+  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005), 2026-09-27 (revision 2).** A continued session never inherits a live agent; the agents its last run left `paused` are restored from their recorded conversation, with their identity, unless the user declines.
 
 **REQ-MONITOR-257** — Changing focus re-binds every per-session surface: sandbox indicator, terminal streams (an open terminal window re-opens onto the newly focused session's terminals, because the intent is to keep a terminal in view, and after the switch it is the newly focused session's terminals that matter), composer submission target, and recovery state. Notices carry their session id so cross-session news survives a focus change.
 

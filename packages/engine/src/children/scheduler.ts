@@ -26,6 +26,8 @@ export class Scheduler {
   private readonly waiters = new Set<{ readonly ids: ReadonlySet<string>; readonly resolve: () => void }>();
   private readonly terminalListeners = new Set<(row: ChildRow) => void>();
   private cancelled = false;
+  /** PD-ORCH-005 clause 2: the run is coming to rest — nothing more is admitted, promoted or started. */
+  private resting = false;
   private passing = false;
   private again = false;
 
@@ -36,8 +38,22 @@ export class Scheduler {
     return () => this.terminalListeners.delete(fn);
   }
 
+  /**
+   * PD-ORCH-005 clause 2: the run is coming to rest. "No queued child starts": every later pass does nothing, so no child
+   * is admitted, promoted or started and no pre-start child is moved — each is left exactly where it stood, to be paused
+   * there. Every waiter is released; the waits resolve and their callers read the rest for themselves.
+   */
+  hold(): void {
+    this.resting = true;
+    for (const w of [...this.waiters]) { this.waiters.delete(w); w.resolve(); }
+  }
+  get isResting(): boolean {
+    return this.resting;
+  }
+
   /** The pass, re-entrant-safe: a change during a pass schedules exactly one more pass. */
   pass(): void {
+    if (this.resting) return;
     if (this.passing) { this.again = true; return; }
     this.passing = true;
     try {
@@ -150,7 +166,7 @@ export class Scheduler {
   /** REQ-TOOLS-156: resolves when every task in the set is terminal, or on cancellation; never on a deadline. */
   waitFor(ids: readonly string[]): Promise<void> {
     const set = new Set(ids);
-    if (this.cancelled || [...set].every((id) => { const r = this.deps.ledger.get(id); return !r || isTerminalChildState(r.state); })) return Promise.resolve();
+    if (this.cancelled || this.resting || [...set].every((id) => { const r = this.deps.ledger.get(id); return !r || isTerminalChildState(r.state); })) return Promise.resolve();
     return new Promise<void>((resolve) => { this.waiters.add({ ids: set, resolve }); });
   }
 

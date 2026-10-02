@@ -45,7 +45,560 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
-**Project initialization across a workspace switch (R-052).** The run host's code-intelligence setup state is keyed by workspace root. Its `mcp.setupStatus` event names the root so main routes progress to the matching task and window. Closing a workspace window cancels its setup; the replacement starts independently. The process view's initialization paragraph names the new event shape.
+**Project initialization across a workspace switch (R-068).** The run host's code-intelligence setup state is keyed by workspace root. Its `mcp.setupStatus` event names the root so main routes progress to the matching task and window. Closing a workspace window cancels its setup; the replacement starts independently. The process view's initialization paragraph names the new event shape.
+
+**A continue in the process that ran the session takes the lock back (ADR-0005, REQ-SESSION-047/048/083, 2026-09-29,
+R-067).** `prompt`, `continueSession` and `planDecision` claim the session's lock before their first write
+(`holdForContinue`, through the one claim `claimHold` the at-rest cancel's `lockForWrite` now shares), and the run each
+launches holds it until its teardown; a continue that launches none gives back what it took, and a live holder in
+another process refuses it with REQ-SESSION-048's words. This repairs
+`a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md` and
+`a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`. The **runtime view**'s §6 gains the paragraph and
+its §7 `session_locks` row the writers; the **state-ownership view**'s lock row names the continue. No package, edge,
+process, channel, message kind or store column changed.
+
+**Every iteration is sent its own task (REQ-CHAT-040, REQ-ORCH-004 / REQ-ORCH-135, 2026-09-29, R-067).** The launch
+content stays the base of every execution iteration's first message, and the todo task the iteration selected, when it
+is not the run's own and its text is not the launch content's request, follows it as the task to work on
+(`Run.takenUp`, `takenUpText`, `Run.firstMessage`) — a queued prompt, a task put back, an improvement run's proposal,
+the task after a plan decision's gated one; PD-ORCH-005 clause 17's message keeps its own words. The handoff is not
+rebuilt per iteration (OQ-104, OQ-106). This repairs `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`.
+The **runtime view**'s §2 gains the paragraph. No package, edge, process, channel, message kind or store column changed.
+
+**An iteration's close commits the todo it leaves (REQ-ORCH-072/073/074/135, 2026-09-29, R-067).** `iterate()` and
+`closeOpenIteration` close their task and held messages first and pass the todo to `SessionWriter.endIteration`, which
+stores it in the transaction that records `iteration.end` and closes the row, ahead of the capture and the hooks. What
+an earlier build's death left is settled when a run is built and when a continue is judged (`settleClosedIterations`:
+`Todo.releaseStale`, and `Todo.settleStranded` for an iteration's own task, from the latest row naming it). This repairs
+`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`. The **runtime view**'s §2 says so. No
+package, edge, process, channel, message kind or store column changed.
+
+**A request queued behind an open approval dialog waits for its turn (REQ-TOOLS-063, 2026-09-28).** Main answers a
+present-request that waits behind the dialog already open in its window, or behind requests queued ahead of it, with
+the new run-host request `approval.queued` (`MainWindows.enqueueApproval` answers which). `RunHostPresenter` then stops
+bounding the wait for `approval.shown`. The gate races the presentation against its own wait, so a queued request that
+times out or is cancelled is dropped unshown and counts as cancelled (REQ-TOOLS-054). A window that closes while the
+application stays hands its queued requests to main (`MainWindows`' `unshownApprovals`), which answers each not shown
+(REQ-TOOLS-058), so none hangs; during a quit it answers nothing. The **process view**'s request list and the
+**sequences view**'s approval diagram and bullets name it; no package, edge or store table changes.
+
+**Each agent's record keeps the fingerprint it started with (`PD-ORCH-005` revision 4 clause 14, 2026-09-28, R-065).**
+Store **v24** appends `agent_fingerprints`: per agent, the SHA-256 of the system prompt and of the tool definitions its
+first model request carried. `runTurn` hands both to `TurnDeps.fingerprint` just before a step goes out; the check
+(`ConversationRecord.fingerprint`, built once per execution by `turn()` and `execute()`) records the first and, on a
+resume, states a changed one as a `resumed_under_changed_instructions` warning issue and a transcript `system` row
+naming the agent (OQ-105). The transcript clear removes closed iterations' fingerprints. The **runtime view**'s record
+paragraph and §7 table and the **state-ownership view** gain the table, and the **sequences view**'s resume bullet names
+the warning; no package, edge, process, channel or command changes.
+
+**The handoff's artifact is the root's own (`PD-ORCH-005` revision 4 clause 20, 2026-09-28, R-065).**
+`latestArtifactText` takes the latest artifact the most recent recorded iteration's root published that nothing
+supersedes, known by the root's task id as the record's `conversation_id`, and falls back to the latest of any kind
+(OQ-106) — also when a plan cycle opened its gate after that iteration, so the plan gate's approve and revise never hand
+over an earlier piece of work's document ahead of the plan cycle's; the plan cycle `PD-ORCH-003` revision 2 holds after
+a resumed iteration is taken the same way, so there the resumed root's document counts only as "of any kind" (OQ-106). It
+is read once, at the continue: a later iteration of the same run, and the plan cycle held after a resumed iteration,
+are re-sent it as it stood then (OQ-104). The **runtime view**'s
+continuation paragraph is updated. No package, edge, process, channel, command or store table changes, so the other
+views are not.
+
+**One paused child is cancellable while its session rests (`PD-ORCH-005` clause 16, revision 4, 2026-09-28, R-065).**
+`session.control`'s `cancelAgent` reaches `Sessions.cancelPausedAtRest` when no run is behind the session: the child and
+each `paused` descendant end `cancelled` with the live cancel's report, timeline entry and artifact, the iteration stays
+open, and `resumable` drops. A child a crash not yet recorded left unfinished, and each such descendant, is cancelled
+from the state it is stored in, its calls the crash cut off answered as interrupted; the crash itself is left for the
+next repair or continue to record (clauses 3 and 8, OQ-101). It runs no scheduler pass, so an agent whose `depends_on`
+names a cancelled child stays counted and is blocked by the resumed run's first pass (REQ-ORCH-048, OQ-101). It is
+refused under a store failure, as every continue is (OQ-103). The cancel writes under the session's lock, taken for the
+write and given back, a dead local holder reaped by the `claimLockReaping` that `SessionWriter.open` claims through, and
+is refused while another live process holds it (`lockForWrite`); the refusals that say nothing of the agent carry
+`ControlRefusal` codes of their own — `session_locked` for that holder, `store_failed` for a store failure, a lock the
+store could not read or take, and a chosen child's move it could not write — whose message the renderer's `cancelAgent`
+(through the `control` helper) states rather than "not cancellable"; a target it refuses outright is judged before the
+lock is taken. Every confirmation and cascade note names
+each unfinished descendant a cancel ends, live or paused (`cancelCascade`; OQ-100 and OQ-101 record the departure from
+REQ-MONITOR-064's live count), and both cancels write through one `userCancellation`. The surfaces offer a paused
+child's Cancel while its session rests (`cancelOffered(agent, runActive, resting)`, `resting` being `runLevelResting`,
+the predicate the composer's count and the resting root share) and confirm by `cancelConfirmation` — the Workspace and a
+persona window through `AgentCancelConfirm` (`packages/ui/src/AgentCancelConfirm.tsx`), which also confirms the run's
+cancel on the Workspace, takes no label of its own and has its call sites pinned by a source test, and the Mission view
+through `missionConfirmation`. The **runtime view**'s `cancelAgent` and `children` rows and its crash paragraph, the
+**state-ownership view**'s rest and session-lock rows and the **sequences view**'s crash note name the new writer; the
+`iterations` and `agent_terminals` rows say only that the crash record is written at a repair or a continue, which the
+cancel is not. The **process view**'s `control.result` paragraph lists the two new refusal codes. No package, edge,
+process, channel or command changes; `CONTROL_REFUSAL_CODES` gains the two refusals above.
+
+**A paused agent presents as paused on every agent surface (`PD-ORCH-005` clause 13, revision 4, 2026-09-28, R-065).**
+`PRESENTATION_CHILD_STATES` gains `paused` and `presentationChildState` maps the child state to it, so `AgentRecord`'s
+`presentationState` widens on the existing session-record channel. `toAgentRecord` presents the agents a crash left
+unfinished, before the crash is recorded, as the record will leave them (`crashLeftOf`, asked once per projection;
+OQ-100's departure from clause 13's last sentence) — never for a session a store failure left busy, which is not one a
+crash left and states nothing to resume (`Sessions.restingOf`, OQ-103); `runLevelAgent` presents the resting root
+`paused`, the Workspace, the Mission view and a persona window asking it and `runLevelResting` through one call
+(`restingView`, whose recovery argument, like `runLevelAgent`'s and `runLevelResting`'s, is required) with
+REQ-CHAT-008's recovery state (`useNeedsRecovery`, moved to `renderer/session-view.ts`; the two renderer roots' wiring
+is pinned by `renderer/recovery-wiring.test.ts`, with the props that carry it and what `restingView` answers to the
+Workspace, the Mission view and a persona window), and the Mission view, handed that fact as `recovery`, reads no run
+active in it, so it offers no Pause beside the root it draws `paused` and labels the run REQ-CHAT-008's "Run needs
+recovery" rather than "Running"
+(`docs/defects/fixed/the-mission-view-offers-pause-and-cancel-with-no-run-behind-the-session.md`). The Overview counts
+paused agents on their own, and the transcript's "This task" reads a paused agent's state without its elapsed time — a
+paused agent's only; every other agent keeps it (`scopeDetail`, OQ-100). The **runtime view**'s eleventh-state and
+projection paragraphs and the **state-ownership view**'s rest row are updated; no package, edge, process, channel or
+command changes.
+
+**A quit ends a board run as a quit, and clause 15's audit re-cites the stop and the cancel (`PD-ORCH-005` clauses 15
+and 19, `PD-CHAT-001` revision 4, `PD-CHAT-002` revision 2, 2026-09-28, R-065).** Main's board coordinator ends its runs
+at the last window's close with the application's quit (`quitAll` → `announceShutdown`), not the stop control's
+`cancel`, so a board run rests by `quit` (`docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). The
+**process view**'s board paragraph, the **runtime view**'s rest paragraph and §5 rows and the **sequences view**'s
+approval note now cite the rulings in place of OQ-96; readings in OQ-108. A stop or a quit during a plan cycle now
+withdraws what waits on a person rather than cancelling it (`Run.waitsWithdrawnBy`, which reads the stop request alone
+and never the plan hold; clause 15's last bullet and `PD-CHAT-002` revision 2): the **runtime view**'s rest paragraph
+and `cancelQuestions` row and the **sequences view**'s approval note say so. No package, edge, process, channel or
+command changes.
+
+**A crash offers the same choice as a pause (`PD-ORCH-005` clause 18, 2026-09-28, R-065).** `Sessions.continueSession`
+accepts a session a crash left — `interrupted`, or persisted busy and `not-live` (REQ-CHAT-008's recovery state) —
+beside `paused`, and refuses a busy one whose process may still be running it (`run-active`) and, first, any session
+whose store has failed (`store-failed`, as the continue by message is: a run ended on a recording failure is not a
+crash, OQ-42; a `paused` session under a store failure is refused the same way). The composer draws the two continues on
+it (`crashLeft`) in the send pill's place, which `PD-CHAT-001` revision 4 prescribes on a paused session only (OQ-103's
+reading), and the count and "Continue without them" wherever the session rests with an iteration open
+(`resumable`, `runLevelResting`), the same count as a paused session's; either choice records the crash first, in
+`launchContinuation`. Readings in OQ-103. The **runtime view**'s §5 Continue paragraph and the **process view**'s
+`session.continue` note are updated; the command's shape does not change, and no package, edge, process or channel does.
+A declined crash-left iteration's `iteration.end` summary names the decline and the crash, as its agents' reports do
+(`closeLeftOpenIteration` writes the decline's summary whatever left the iteration open; every run that reaches it was
+told to decline); the **runtime view**'s declined-iteration paragraph says so.
+
+**`/stop` is offered as the stop, and the paused continue by message reads `Send` (`PD-ORCH-005` clause 15,
+`PD-CHAT-001` revision 4, 2026-09-28, R-065).** The slash catalogue describes `/stop` as "Stop the active run"; it still
+sends the stop's `cancel` op and never the explicit cancel. The paused strip's second continue shows `Send`, named
+`Continue with a message`. The **runtime view**'s §5 `cancel` row and Continue paragraph are updated; no package, edge,
+process, channel or command changes.
+
+**A later iteration's root is told the open offers (`PD-ORCH-004` revision 4, 2026-09-28, R-065).** The offers list and
+its reader (`openOffersText`, `offersToldIn`) move from `sessions.ts` to `run/offers.ts`, re-exported where they were,
+so the run can use them without importing the session manager. `Run.turn()` adds to every execution iteration root's
+first message the offers that message does not already hold (`offersForFirstMessage`); a plan cycle is told none. The
+offers a handoff covers are passed to the run (`RunDeps.handoffOffers`), an offer a held list elided counts as told, and
+the continue that resumes a root counts an offer its lists left out as held (`offersHeldIn`). REQ-SESSION-194's cut is
+one function, `run/cut.ts`, shared by the handoff, the offers list and the plan cycle's pending tasks. Readings in
+OQ-107. The **runtime view**'s continuation paragraph and the **state-ownership view**'s record row say so. No package,
+edge, process, channel, message kind or store column changed.
+
+**The plan gate meets a resumed iteration (`PD-ORCH-003` revision 2, 2026-09-28, R-065).** A run that resumes an open
+iteration runs it unheld; when the gate would hold the run, the loop sets the hold once that iteration has closed and
+work is left, and parks before the first new iteration (`parkAtPlanGate(resumed)`, its plan cycle told the pending tasks
+by `resumedWorkSection`, that the iteration was left open, and what became of every message it held, `Todo.heldIds`),
+then the launch content the continue built before that iteration ran, whose handoff therefore predates the close
+(OQ-104). The message an iteration takes up is sent only to an execution root (`Run.firstMessage`), never to that plan
+cycle. The message limit, checked as the resumed iteration closes, wins over the hold and leaves the continue's message
+`complete` with nothing open, and its resolution appends it again (OQ-103). A plan decision's relaunch appends no task
+(`RunDeps.appendsTask: false`), which also repairs the approved prompt being worked twice. Readings in OQ-104. The
+**runtime view**'s start order, plan gate and resume paragraphs say so; ADR-0062 decision 1 carries the amendment. No
+package, edge, process, channel, message kind or store column changed.
+
+**A continue's message is also a task (`PD-ORCH-005` clause 17, 2026-09-28, R-065).** A continue by message that
+resumes an open iteration appends its message to the planner todo as a task that iteration holds (`Todo.appendHeld`,
+`heldBy` in the todo document), marked as a message for good (`Task.message`), which closes with it
+(`Todo.releaseHeld`): done when it succeeds, pending on any other close. A message left pending is taken up by the next
+iteration (`Task.nextUp`, `Todo.selectNext`), which is sent its text after the launch content when that names another
+request (`Run.firstMessage`; since 2026-09-29 every selected task that is not the run's own is, as the entry above
+records). A held message a death left stale closes as the record says its iteration did
+(`Todo.releaseStale`, against `succeededIterationsOf`, which the run's constructor shares). A continue that delivers no
+message — the Continue action, "continue without them", and the message-limit resolution's 'continue' and 'double' —
+judges the todo after that settle, and appends no task while the todo holds the last request unfinished — a task of
+that text pending, or in progress and held by the open iteration
+(`Todo.holdsUnfinished`, `launchContinuation`): OQ-102's reading, beyond what clause 17 governs, which repairs
+`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`. `RunDeps.openIteration` gains
+`delivered`. Readings in OQ-102. The **runtime view**'s §2 gains the paragraph; the
+phase 4 paragraph below keeps "no todo task is appended" as it was built then. No package, edge, process, channel,
+message kind or store column changed.
+
+**A quit answers nothing for a person, and every stored report is an artifact (`PD-ORCH-005` phase 7, 2026-09-27,
+R-063).** Main tells the application's quit apart (`QuitState`, `main/exit.ts`). That covers the immediate exit, every
+main window's close confirmed by its guard (`guardClose`), and a quit Electron starts on its own account, which
+`before-quit` turns into the guarded close of every main window, all or none (`closeThroughGuards`). While the quit is
+under way, an approval dialog's close sends no Deny and the question dock's cancellation is held back. The run host's
+`shutdown` withdraws both instead (clause 9, OQ-96). The report write and its artifact are one function in the engine
+(`storeChildReport`), which the stale settle and the decline now use. The **process view**'s quit paragraph, the
+**sequences view**'s approval notes and the **runtime view**'s settle line are updated. The **seams view** is not:
+`CommandContext` gains `quitting`, and no package, edge, process or channel changes.
+
+**The Continue action states what it resumes and offers to continue without it (`PD-ORCH-005` phase 5, 2026-09-27,
+R-060/R-061).** `SessionRecord.resumable` (`ResumableSchema`: the open iteration and how many agents will resume — its
+root and every unfinished agent of it) is read from the store by `resumableOf`, as the plan gate is. On a `paused` or
+`interrupted` session the composer's notices row states the count, which describes the continues, and on a `paused` one
+offers "Continue without them" behind a confirmation — the strip keeps its one band (found by phase 5's review);
+`session.continue` gains an optional `withoutPaused`, carried from the renderer through main and the run host to
+`Sessions.continueSession`. Readings in OQ-98. The **runtime view**'s §5 Continue paragraph and the **state-ownership
+view**'s rest row name the projection; the command's shape changes and no package, edge, process or channel does.
+
+**A continue resumes the open iteration from every agent's record (`PD-ORCH-005` phase 4, 2026-09-27, R-060/R-061).**
+Every continue — a new message, the Continue action, a plan decision — resumes the iteration a rest or a crash left open
+before anything else runs: the same number, root and task (`iterate(openRow)`, `iteration_resumed`, no second
+`iteration.start`), not held at the plan gate. Each paused child moves back to the state it resumes into
+(`resumeChild`, `child_resumed`), re-claims its stored write scope (PD-TOOLS-006 revision 2) and carries on from its
+record under a fresh `child_timeout`; the root carries on from its own; an agent whose record ends on its own answer
+resumes into waiting (`run/resume.ts`). A resumed agent is told of its background sessions (clause 10) and the root is
+handed a continue's new message, each recorded as its next message; no todo task is appended. Declining is
+`continueSession`'s `withoutPaused` option. Readings in OQ-97. The **runtime view**'s §2 gains the resume paragraph and
+diagram arm and its declined paragraph, §4, §5's Continue paragraph and §7's two rows move; the **state-ownership
+view** names the resume as the record's reader; the **sequences view**'s §4 closes with the resume. No package, edge,
+process, channel or message kind changed.
+
+**A pause, a stop, a quit and a crash leave every unfinished agent paused (`PD-ORCH-005` phase 3, 2026-09-27, R-060/R-061).**
+A run comes to rest by a pause, a stop or a quit (`Run.restCause`); the reserved run id's cancel is final
+(`StopRequest.final`). A pause is refused at the plan gate, withdraws every approval and question (the gate's and
+`ask_questions`' new `withdrawn` outcome, recorded interrupted and never denied), arms REQ-ORCH-134's tool deadline from
+`runtime.graceful_pause_tool_deadline`, and holds the scheduler; every agent stops before its next model step, and the
+turn records every call of the step it stopped in. Each unfinished child is left `paused` with its interruption and
+the state it resumes into, the root execution record `paused`, and the iteration open with its interruption. Background
+terminal sessions are attributed to their agent and recorded in `agent_terminals` (a pause leaves them running; a stop
+and a quit end them). A crash is recorded from the store at the next repair or continue (`run/crash.ts`); loading a
+session no longer settles anything, so `session.resumed` loses its settled count. Cancelling one child aborts its
+execution and its descendants'. Until the resume lands, a continue declines the open iteration. **Repaired by the
+phase's two adversarial reviews (same date):** a finished but unreported child leaves its parent unfinished; no model
+call follows the pause (the turn re-checks after supervision and compression, the ladder lets the step's report stand,
+the waits are released, the summariser makes no second attempt, the manual compression is refused); the status reads
+`pausing` until the run rests; the explicit cancel is final in the rest's window and in teardown's; a withdrawn question
+settles blocked with `question_withdrawn`; a stop waits within its 30 s grace and an execution it gave up on writes
+nothing afterwards; a pause refused at the plan gate takes its tool deadline with it. Repairs
+`a-pause-settles-children-instead-of-holding-them.md` and `cancelling-one-child-does-not-stop-it.md`. The **runtime
+view** gains §2's rest and crash paragraphs and diagram arm, §4's and §5's rows move, §6's teardown and §7's four rows'
+writers; the **state-ownership view** gains the rest's runtime and durable facts and the background session's owner;
+the **sequences view** gains §4. The process protocol's `session.resumed` message drops `settledChildren`; no package,
+edge, process or channel changed.
+
+**Every agent's conversation is recorded as it happens (`PD-ORCH-005` phase 2, 2026-09-27, R-060).** A `Conversation`
+now carries a recorder (the spike's seam), so each `push` is one `agent_messages` entry under the agent's task id and
+each `replace` — a compression — one replacement entry; the root records under the iteration's root task id and a
+child under its own, and REQ-ORCH-088's fallback retry writes an empty replacement before its second attempt; a turn
+closes its conversation when it ends, so a late manual compression records nothing. The run opens an `iterations` row
+with the root's task id when an execution iteration's root is minted and closes it with `iteration.end` in one
+transaction; the transcript clear removes closed iterations' records in its own transaction (clause 12). Repairing
+`a-crashed-iteration-number-is-reused-by-the-next-run.md`: a run closes an iteration a dead run left open before its
+first iteration and numbers past it, the ledger holds its own root's tree, and task ids are minted against every
+recorded root's id. The **runtime view** gains a §2 paragraph, a §3 paragraph and two §7 rows' writers; the
+**state-ownership view** gains the record as a durable fact. No package, edge, process, channel or message kind changed.
+
+**The record a paused run resumes from, in contracts and the store (`PD-ORCH-005` phase 1, 2026-09-27, R-060/R-061).**
+The child machine gains its eleventh state, `paused` (`contracts/children.ts`: every non-terminal state may move to it,
+and it moves back to the state the child resumes into), with the `Interruption` vocabulary (`pause | stop | quit |
+crash`); it presents as `queued`, REQ-MONITOR-046's catch-all, and the agent projection never settles it for display
+(OQ-94 records the departure from REQ-MONITOR-211/213). Store **v23** appends `children.interruption`,
+`children.resume_state` and `children.write_scope` (PD-TOOLS-006 revision 2, written at spawn), and three
+session-scoped tables that cascade with their session: `iterations` (each execution iteration with its root's task id,
+open or closed, one open per session), `agent_messages` (every agent's conversation, a compression written as a
+replacement) and `agent_terminals` (the background sessions an agent started). The **runtime view** moves: §7's heading
+and four rows, and §4's write-scope, paused-state and projection paragraphs; the **state-ownership view**'s write-scope
+row says the declared patterns are now stored. No package, edge, process, channel or message kind changed.
+
+**REQ-CHAT-055's CPU-profile round: an increment re-reads only the rows it changed (2026-09-29, R-048's order continued
+under R-062).** V8's CPU profile of the built app named the loaded side's extra script per increment as the transcript's
+own passes over every displayed row. `ui/transcript/pool.ts` gains `reuseOffsets` and the `MeasureLedger` the pane rebuilds
+the offset table from (only the rows that changed, or whose identity the measurement pass re-measured — the caches report
+evictions to it through `cache.ts`'s new `onEvict`), and `updateShape` compares keys only past the shared rows;
+`Row.tsx` gains `placementsFrom`, which the projector carries the places forward with; `project.ts` finds the reusable prefix
+by bisection over a carried reach and exports `settlesWithRunning`, which lets `projector.ts`'s `changedFrom` bound a run
+beginning or ending. The **runtime view**'s step-4 and step-5 rows and its pool paragraph, and the **component view**'s
+`pool.ts` entry, say so. The proof's side is `transcript-proof.mjs` and `lib/trace-summary.mjs` (the CPU profile's
+attribution), which no view describes. No package, edge, process, channel, message kind, store column or owner of state
+changed.
+
+**The notices generator reads the shipped setup manifest (2026-09-28, R-062).** `tools/notices/notices.mjs` reads
+`apps/desktop/resources/setup-manifest.json` rather than `pins.json` as REQ-STARTUP-142's manifest, by a copy of
+`SetupManifestSchema`'s field names that `notices.test.ts` holds to the schema; `pins.json` is read for the runtime's
+name only. The **component view**'s notices-generator and setup-manifest sections say so, and name the second test that
+crosses into a package. No package, edge, process, channel, message kind, store column or owner of state changed.
+
+**A session's lock ends with the application that held it (ADR-0014, 2026-09-28, R-062).** Main is gone only after
+the run host: the orderly quit waits, bounded, for the run host's exit after its `shutdown` and ends it if it has not
+come, and an immediate exit (`exitCleanly`) ends it at once (`endBeforeMain`, `main/exit.ts`). The **runtime view**'s §6
+gains *The application's end*; the **state-ownership view**'s lock row and the **process view**'s quit paragraph say
+so. No package, edge, process, channel, message kind or store column changed.
+
+**The artifact variables stay with the launch they describe (REQ-STARTUP-106/147, ADR-0054 "The updater" item 6,
+2026-09-28, R-062).** Main's first statement takes `APPIMAGE` and `ROTARIS_PORTABLE_ARTIFACT` out of its own
+environment and hands them to the updater's classification alone (`takeArtifactVariables` in `platform`), so the run
+host, the workspace services and everything the run host starts inherit neither. The **process view** gains *The
+environment a child is started with* beside the ownership table, and main's updater clause says where the classification's
+two variables come from. No package, edge, process, channel, message kind or store column changed; `platform` gains
+`artifact-environment.ts`.
+
+**REQ-CHAT-048's duplicate-reasoning hygiene compares per agent (2026-09-28, R-062; OQ-91).** Step 4 kept one lookback —
+the previous thinking row of any agent — so an agent's repeated burst survived whenever another agent reasoned between
+the copies. `ui/transcript/project.ts` now keeps each agent's own previous thinking row, and the bounded form looks one
+up below its cut only for an agent whose unstamped reasoning is in the suffix. The **runtime view**'s step-4 row says so.
+No package, edge, process, channel, message kind, store column or owner of state changed.
+
+**The layout contract has one publisher, and `ui-audit` survives a thrown expression (2026-09-28, R-062).** The window
+controls (`PD-SHELL-003`) wrote their `data-ui-contract` by hand as an object; the audit's CONTRACTS sweep iterates the
+relations array, threw in the renderer on every view carrying the title bar, and the script died on the driver's
+`{ error }` answer before any evidence pack. The controls and the Proposals tab now publish through
+`layoutContractAttributes`; `tools/check-ui-language.mjs` refuses a hand-written `data-ui-contract` anywhere in the drawing
+roots (`tools/ui-contract-publisher.mjs`); `ui-audit` reports a thrown audit expression as an `AUDIT-ERROR` finding and
+a non-array contract as a `schema` finding, and moves on. The **seams view** §8 steps 4 and 6 and the **component view**'s
+design-system paragraph say so. No package, edge, process, channel, message kind, store column or owner of state changed.
+
+**The update restart's record passes in two steps (REQ-STARTUP-121, REQ-STARTUP-161; ADR-0055 *Amended 2026-09-28*,
+R-062).** `packages/platform/src/instance.ts` now offers the record, waits on the timer port for the successor's
+acknowledgement within the hand-over interval, and rewrites it only then, so a successor that stopped waiting is never
+named by it. The **sequences view**'s `Restart now` diagram and prose gain the offer, the acknowledgement and the
+refusals they add. The ordinary hand-over of a second launch is unchanged. No package, edge, process, channel, command,
+store column or owner of state changed.
+
+**The runtime makes no request of its own (REQ-STARTUP-160, REQ-SHELL-005; repaired 2026-09-28 under R-062).** The
+connection `pnpm updater-proof` recorded at launch was Electron's spellchecker fetching a Hunspell dictionary, not
+Chromium's component updater; main now empties each session's dictionary list and turns its spellchecker off in
+`session-created` (`main/runtime-requests.ts`). The **process view** gains a paragraph under its diagram saying that
+Electron and Chromium add no host of their own to the ones the product reaches, and why — not that the endpoints drawn
+are all of those hosts, which they are not (corrected at verification). No package, edge, process, channel, message kind, store
+column or owner of state changed; OQ-93 raised (OQ-91 on its branch).
+
+**REQ-CHAT-055's measurement round: the transcript projects once per change, not once per render (2026-09-28, R-048's
+order under R-062).** The built app was traced appending to an empty transcript and to one of 1,200 rows, and the extra
+time at depth was script — three to four synchronous renders per increment, each re-running ADR-0046 step 4 over the
+whole resident window and each re-rendering every bound row through a context value rebuilt per render — not layout,
+paint or the `ResizeObserver` pass. `ui/transcript/projector.ts` now keys step 4 on every input it reads, takes the
+bounded form when the rows alone changed (the earliest-changed row read off the two arrays, no prop across the seam;
+only for an append or a row replaced at its own index — the fix round found a removal and a scope switch taken wrongly;
+fix round 2 found the bounded cut reading runs on raw rows where the fold reads the rows hygiene keeps, and repaired it),
+and the pane holds one (`TranscriptPane.tsx`); the offset table and the surface value rows read are built once per
+change of what they carry. The
+**runtime view**'s step-4 row and the **component view**'s `ui/transcript` module list gain the projector. The proof's
+side of the round is `apps/desktop/scripts/transcript-proof.mjs` and `lib/trace-summary.mjs`, which no view describes.
+No package, edge, process, channel, message kind, store column or owner of state changed.
+
+**The setup manifest (REQ-STARTUP-058/059, `first-release-plan.md` §4.1, built 2026-09-28).**
+`apps/desktop/resources/setup-manifest.json` exists — Git and ripgrep as the requirement pins them, the `@playwright/mcp`
+pin the guard checks, the language servers as `pins.json` declares them — and `electron-builder.yml` packs it. Its schema
+is `config`'s `setup-manifest.ts`, read by the pre-build guard now and by the machine-setup flow when that is built. The
+**component view** gains a section and its `config` node names the schema; the **process view**'s files-on-disk table gains
+the file's row (`process.resourcesPath/setup-manifest.json`, read by the guard and by nothing in the product yet). No package, edge, process, channel, message
+kind or store column changed; `config` gains the `zod` dependency `contracts` already carries.
+
+**The updater (first-release-plan.md §4.6, ADR-0054; built 2026-09-28, R-062).** ADR-0054's bespoke main-process
+updater exists: `apps/desktop/src/main/updater/` — the flavour classified once from the artifact the launch started
+from (REQ-STARTUP-106), the one endpoint and the offer rule (105/107–110/112), the compiled-in key set — EMPTY until
+O-2 — and the Ed25519 detached-signature format (167/168), REQ-STARTUP-122's strict sequence with the signature verified
+before the manifest is parsed, the 1 MiB download into a `rotaris-update-` staging directory (118/124), the portable
+and installer strategies (115/125/126; the dmg and AppImage ones wait for `PD-STARTUP-001`'s withdrawal), and the
+orchestrator holding the one offer and the one operation in flight (114/116–121, REQ-STARTUP-046). The **process view**
+gains the updater in main's row, the feed as an endpoint in the diagram, the `update.install`/`update.restart`
+commands, and three rows in the file table (the staging directory, the portable's `.update`/`.old` siblings, the
+`updates/dismissedVersion` key); the **sequences view**'s launch gains the post-show activation the check rides and a
+new section for `Update now` and `Restart now`, the latter ADR-0055's hand-over of the record to a successor started on
+the sentinel branch (`builtin:update-successor`, `inheritInstance`); the **runtime view**'s §8 states what no
+configuration tier reaches (REQ-STARTUP-111); the **state-ownership view** gains the held offer, the classification, the
+waved-off version and the key set; the **component view** names the `app-main → release-naming` edge as the updater's.
+`MainWindows` gains a post-show activation hook (REQ-STARTUP-043), the notice store an `update` in place (REQ-SHELL-118),
+the notice action a `disabled` description, and the preference table `updates/dismissedVersion`. No package, edge,
+process, channel or store column changed; two command kinds were added. Three questions were raised (OQ-83, OQ-84,
+OQ-85 — OQ-76 to OQ-78 on the branch, renumbered at the merge) and one defect noticed beside the mechanism (`redirector.gvt1.com`). **Repaired at verification the same day:**
+the **state-ownership view**'s instance-record row and the **sequences view**'s `Restart now` now say the record passes
+only while a restart this instance started waits for its successor (`acceptSuccessor`, REQ-STARTUP-161); the sequences
+view's launch and the process view's `.old` row say the backup cleanup runs at a launch's first check only and that an
+update already installed in this process is not offered again (REQ-STARTUP-115/119); OQ-86 raised (OQ-79 on the branch, renumbered at the merge). **Repaired at the
+second verification:** the **process view**'s main row names `updater/successor.ts`; the **sequences view**'s `Restart now` and the **state-ownership view**'s instance-record row
+say that an accepted successor the record cannot be passed to fails the waiting restart (`onRecordPassFailed`,
+`updater/successor.ts`, REQ-STARTUP-121) and that a refusal answers with its reason; the **seams view**'s §6 names the
+notice store's `update` in place and `action.disabled` as REQ-SHELL-118's exception to "a second notice replaces".
+
+**The reserved token's launch carries the parent's sandbox switch (2026-09-28, R-062).** Three defect notes repaired
+in `apps/desktop` and `packages/ui`; one moved a process fact. The reserved token's launch of the application's own
+executable (REQ-MCP-033) now carries `--no-sandbox` when the parent was started with it, between the token and `--`
+(the token stays first; a first build that put it before the token is superseded), and main forks the run host with the
+same switch so the launch builder reads it off its own argv; the sentinel drops it before the separator. `@rotaris/platform` gains `chromium-switches.ts` (no new edge: main and the run host already import
+platform). **OQ-82** holds the reading (OQ-76 on its branch, renumbered at the merge). The **process view**'s bundled-runtime paragraph names it; no package, channel,
+message kind, command or store column changed. The About caption's type token and `settings-proof`'s computed-size
+probe changed no view.
+
+**`inherited_context` reaches the child (REQ-TOOLS-152, REQ-TOOLS-154 item (5), REQ-ORCH-032; repaired 2026-09-28,
+R-062).** A `delegate` call's `inherited_context` ids were stored on the child's row and read by nothing. `ChildLedger.spawn`
+now resolves them: an id no task in the session has (the root execution record included, REQ-ORCH-072) refuses the call
+with no record (REQ-TOOLS-153's `rejected`), one naming a task that has not completed — the root, the caller's own task, a
+failed, cancelled, unfinished or report-less one — is ignored, and the caller's completed children come back on
+`Spawned.inherited`. `IterationChildren.delegate` renders their `reportBlock`s under one heading
+(`notify.ts`'s `inheritedContextBlock`) and remembers the text per task id on `attached`'s terms; `childPayload` takes it
+as a sixth argument and places it as item (5), after the artifact blocks and before the task. The **runtime view** §4
+gains a paragraph; the **state-ownership view** gains the remembered block as a volatile fact. Another parent's completed
+child refused for ownership is OQ-81 (OQ-76 on its branch, renumbered at the merge). No package, edge, process, channel, message kind or store column changed.
+
+**A prerelease's installer is named from the declared version (2026-09-28, R-062).** `pnpm package` now reads the manifest's
+`version` as written (`0.1.0rc1`), renders the installer's name through `tools/release-naming` and writes it as a literal into
+the configuration electron-builder runs with (`release/electron-builder.package.yml`); `electron-builder.yml` carries no
+`artifactName`, whose `${version}` was the normalised `0.1.0-rc1`. `build-hooks.cjs` compares the configured names and, in a
+new `artifactBuildCompleted` hook, the produced file against the same text. The **process view**'s row for the manifest's
+`version` gains `pnpm package` among its readers, and the **component view**'s section on the scripts' shared modules gains
+`scripts/lib/artifact-names.mjs`, which both scripts load and which reaches `tools/release-naming`. No package, edge,
+process, channel, message kind or store column changed.
+The installer's own Windows metadata stays normalised — OQ-80.
+
+**One machine-wide directory for both discoveries, and a strict decode at the port (REQ-WORKSPACE-045, 051, 053; built
+2026-09-28, R-062).** `SkillRootsEnv` gains `machineDir`, so REQ-WORKSPACE-051's fourth user-scope root is
+`<machineDir>/skills` where it was the literal `/etc/codex/skills`; the literal now lives once, in
+`config/src/skills/roots.ts` (`MACHINE_CODEX_DIR`, `machineCodexDir`), and `PD-WORKSPACE-002`'s instruction base reads
+it from there. The run host's existing `SkillHostDeps.machineDir` now reaches `discoverSkills` too, fed by
+`ROTARIS_CAPTURE_SKILLS_MACHINE ?? ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE` under `__ROTARIS_SEAMS__`. `NODE_DISCOVERY_PORTS.readFile`
+decodes with a fatal `TextDecoder`, so a file that is not UTF-8 reaches the unreadable-file arm of every walk that shares
+the port (OQ-79 for a `SKILL.md`). The **runtime view**'s §1 passage on the machine-wide base and its §7 Instructions
+bullet name both. No package, edge, process, channel, command, message kind or store column changed.
+
+**After one unanswered approval, a run treats the user as away (`PD-TOOLS-005`, built 2026-09-28, R-062).** One holder
+per run, `UserPresence` (`engine/run/presence.ts`), installed by `Sessions.start` and every continuation beside the mode
+override and handed to every agent's port through `ToolPortContext.presence`, a delegated child's included. The gate
+(`GateDeps.presence`, passed by `run-host/tools.ts`) marks it when a brokered wait ends by timeout and, while it is
+marked, resolves every ask that would prompt at once under the headless policy with a reason naming the timeout that
+expired; the user returns on the first input to the run's session, wired at the top of `Sessions.control` and in its
+`clearTranscript` branch, in `controlAsync` and in the id-routed answers. The **runtime view** gains a clause in §3 and a
+paragraph after §5's table; the **sequences view** gains one bullet in §2; the **state-ownership view** gains a volatile
+row for the run's away mark — owned by the run host, set only by the gate's timeout arm, cleared only by `Sessions`'
+input arms, never persisted. No package, edge, process, channel, message kind or store column changed;
+the two transitions are session-log lines because the timeline vocabulary has no word for them (OQ-76).
+
+**Hook faults reach the application log (defect repair, 2026-09-28, R-062).** `HookPortContext.log` and `HookSinks.log`
+were documented "the application log only" and wired by `Sessions` to the per-session log at `INFO`, where the
+`WARNING` default of `session_log_level` dropped them, so a hook fault that reduces to a log entry (REQ-HOOKS-079/128/129)
+and the run host's account of an unresolvable hook set (REQ-HOOKS-085) were recorded nowhere at the default
+configuration. `SessionsDeps` gains `log`, the application log at `info` (PD-MONITOR-002), which the run host fills with
+its `log` event; both hook-port construction sites write through it. `CheckpointPortContext.log` is decided the other
+way and says so: it stays the per-session log, since `run-host/checkpoints.ts` already writes every checkpoint line to
+the application log through `CheckpointRootDeps.log` as well. The **process view**'s application-log paragraph gains
+the sentence. No package, edge, process, channel, message kind or store column changed.
+**Three permission-gate defects repaired (2026-09-28, R-062).** The path scope of REQ-TOOLS-018 joins each path argument
+to the workspace root before the resolver, so a workspace-relative read no longer resolves against the run host's process
+directory; `realPathOf` rebuilds a relative path's missing tail with `basename` and drops no character; and PD-TOOLS-004's
+`publicTool` predicate now decides whether a rule's tool set holds a call (`toolSetHolds` in `agent-tools/src/policy.ts`)
+and whether the plan gate withholds it (`withheldUnderPlanGate(name, isPublicTool)`, passed `false` by the run host's MCP
+loop and by the gate for a name it serves with something other than the public tool or removed itself), so an MCP tool
+offered under a public name is ruled as the undeclared tool it is. The **sequences view** §2 gains two sentences on the
+approval bullet and the **runtime view**'s MCP-surface passage one clause; no package, edge, process, channel, message
+kind or store column changed.
+
+
+**A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by
+"approve for session" on a call of the public `write_file` or `haet_edit` (`haet` folded in) now stores the set of
+paths its REQ-TOOLS-018 path arguments resolved to, against the workspace root, when it was made, and matches a later
+call of that tool from that persona whose set is exactly that one, whatever its other arguments and its
+`write_file` operation. An unresolvable path never matches; a call carrying no path key falls back to REQ-TOOLS-024's exact
+match, which every other tool keeps — an MCP tool offered under the name `write_file` or `haet` included, since a
+server's tool is prefixed only when its name is taken. The rule is `resolvedPathSet` and `approvalMatches` in
+`agent-tools/src/policy.ts`; `PolicyContext.grant` now takes the root, the resolver and `publicTool`, which the gate
+passes from its new `GateDeps.publicTool`, and `run-host/tools.ts` supplies that predicate: true when the callable map
+holds the very executor `executorsFor` built for the name. The **sequences view** gains one bullet on the grant in §2;
+no package, edge, process, channel, message kind or store column changed.
+
+**`PD-ORCH-004` repaired after review (2026-09-27, R-057).** One behaviour moved: a file-writing call is recognised by
+its lower-cased name, as the gate's own fallback dispatches `Write_File` to `write_file`, so such a write is now listed
+among a cut-off child's changed paths. The rest is record: four end-to-end cases in `run/ladder.test.ts` pin the paths
+across REQ-ORCH-088's retry, the rule read at the failing attempt's expiry, the landing grace and a role's
+`stall_timeout`. The `delegate` field `continuation_of` is raised as **OQ-66** against REQ-TOOLS-152. The **runtime
+view**'s child-timeout passage names the lower-case match and the lexical resolution, and its continuation paragraph
+names the same-iteration limit and OQ-66. No package, edge, process, channel, message kind or store column changed.
+
+**A child cut off while making progress hands its work back (`PD-ORCH-004`, built 2026-09-27, R-057).** REQ-ORCH-088's
+expiry path is unchanged; at the expiry instant a child's `ProgressLog` (`engine/children/cut-off.ts`, fed by the turn's
+new `onToolCompleted`) answers whether it completed a tool call within the final stall window, and if it did, its failed
+report gains a runner-owned `cut_off`: the statement, the workspace paths its own file-writing calls changed, and —
+unless it is a continuation — the offer. `delegate` takes `continuation_of`; `IterationChildren.delegate` refuses it
+before a record exists unless it names the caller's own child that made the offer and was not yet continued.
+`runtime.child_stall_timeout` and a role's `stall_timeout` reach the run for the first time. The **runtime view** moves:
+the child-timeout passage, a §4 paragraph, and §7 names v22 and `children.continuation_of`; the **state-ownership view**
+gains the progress log. No package, edge, process, channel or message kind changed; one store column was appended.
+
+**The application log keeps `info` and above (`PD-MONITOR-002`, built 2026-09-27, R-055).** Main's standard output
+carried the level of a forwarded line as text inside it and none on main's own, and recorded every level. Each line now
+carries its level in a column of its own, and a line below the threshold is not written; the threshold is `info`, moved
+only by `ROTARIS_APP_LOG_LEVEL`, read once at start. Main's own reports of a loss are `error` — a `shutdown` a child
+refused or left unanswered while still running among them, since an exit of 0 does not prove one — so a crash is still
+recorded at a higher threshold. The quit races each child's `shutdown` against its exit (`main/exit.ts`), so an answer
+lost to the exit neither stalls the quit for the bound nor writes that line. The level, the predicate and the line are
+the new `main/app-log.ts`; `index.ts` keeps the wiring. The **process view** gains a paragraph on the application log,
+the `log` event names its fields, and the MCP-child paragraph says `debug` is now a filter; the **state-ownership view**
+gains the threshold as a fact nobody writes after start. No package, edge, process, channel, message kind or store
+column changed.
+
+**The `FAILED ` marker matches in capitals only (`PD-TOOLS-003`, built 2026-09-27, R-055).** Of REQ-TOOLS-113's five
+literal failure markers, `FAILED ` alone is now matched case-sensitively; the other four, the error count, the banner
+and the pipeline check keep their casing. The rule lives in the marker list in `agent-tools/src/terminal/classify.ts`,
+and the search and the quoted line share one predicate. No view states the terminal's marker rule at this depth, so
+no view changes beyond this entry; no package, edge, process, channel, message kind or store column changed.
+
+**The run's model calls outside an agent's turn are counted (defect round, 2026-09-27, R-054).** Compression, the
+child-report summariser, the intent classifier and the loop supervisor's classifier discarded the usage their
+requests reported, so the run's tokens, its cost and `usage.update` missed them (REQ-EVENTS-053, PD-MONITOR-001).
+Each now calls through `meteredBackend` (`engine/run/metered.ts`), a decorator on the `AgentBackend` port that hands
+every completed request to the new `Run.countUsage`. `PreflightContext` gains `countUsage` and the `Sessions`
+`supervisor` factory a third argument, so the run host's two classifiers are wrapped where they are built. The
+**runtime view** moves: one passage in "What a step costs". No package, edge, process, channel, message kind or
+store column changed.
+
+**The `/skills` listing (REQ-CHAT-162, `first-release-plan.md` §2.2, built 2026-09-27).** One renderer command,
+`skills.list`, relayed by main's skills facet to the run host with the followed session named by main (a window
+following none is refused there, OQ-67); the run host writes the listing as ONE `system` row through that session's
+own writer (`run-host/skills.ts`'s `writeSkillListing`), and the one row renderer draws a system row whose text is
+the listing as the listing (`transcript/Row.tsx`, the text fixed once in `contracts/skills.ts`). The **process view**
+gains the command and its reply, and the run host's row says it writes the listing; the **component view**'s skills
+row names the three places; the **runtime view**'s `transcript_rows` line says the listing is a row like any other.
+No package, edge, channel, store column or state owner changed. The two repairs its gate asked for — the listing's
+fields drawn through the plain-text path so a URL stays a link, and the prompt-file registrar holding `/skill` and
+`/skills` — are below the depth any view describes, so no view changes beyond this entry.
+
+**Workspace-context injection, measured and proven in the built app (first-release-plan §3.2 and §3.3, 2026-09-27).**
+`SkillHost.workspaceContext` times its cold path on the monotonic clock port. It covers the policy read, the
+discovery and the merge, and logs one line, which is REQ-WORKSPACE-049's figure. The policy read moved **out** of
+the discovery step into its two callers, `workspaceContext` and `instructionFiles`, so that it can be timed apart;
+`enabledUnder`, a private step, now takes a policy already read. The machine-wide instruction base's directory is
+injectable (`machineDir`, `/etc/codex` when absent). Two verification seams, both compiled out of a packaged build,
+reach the built app: `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, read by the run host and the workspace service, and
+`ROTARIS_CAPTURE_MODEL_REQUESTS`, through which the scripted client alone appends what each call received. The
+**runtime view** gains the timing and the injectable base. The **process view**'s file table gains the instruction
+files, which it had never listed, and the capture file. No package, edge, process, channel, message kind or owner
+of state changed.
+
+**The version guard and the reported version (first-release plan §4.1, built 2026-09-27).** `tools/release-guard` is a
+new build-time package — `pnpm release:guard <tag>`, the pre-build guard of REQ-STARTUP-028 over the product version and
+REQ-STARTUP-059's package pins — and `tools/release-naming` gains the release-tag grammar (REQ-STARTUP-027/029). Tools sit
+outside the component view's runtime matrix (`boundaries/ignore` covers `tools/**`), so `module-map.md` names the package
+and no edge moves. In main, `shell.hello`'s version now comes from `main/version.ts`, which reads the application
+manifest beside the bundle, rather than from `app.getVersion()`, which answered Electron's own version for the unpacked
+entry. The gate round that reviewed it moved the reader into `@rotaris/platform` (`version.ts`, an existing edge for
+both roots) because the **run host** reads the same file: the MCP client's `clientInfo.version`, a literal `0.1.0`
+until then, is now the declared version on all three connection paths. The **process view** says so in the About
+paragraph and gains the manifest as a file main and the run host read; the **runtime view**'s MCP paragraph names who
+the client says it is. No process, channel, message kind or state owner changed.
+
+**The two bundled assets (first-release-plan.md §4.4, built 2026-09-27).** `tools/build-id/` joins `tools/notices/` as a
+build-time tool: `pnpm build-id` writes `apps/desktop/resources/build-id.txt`. `pnpm package` runs both tools before
+freezing, and `electron-builder.yml` carries both files to the root of `process.resourcesPath`. It leaves the tool
+server's dist-info licence out of the artifact (REQ-STARTUP-015). The **component view** gains a section for the writer
+and the two script modules, and the **process view** gains the identifier's row in "Files and directories on disk", an
+updated notices row and a corrected About paragraph. No package, edge, process, channel, command or message kind
+changed. `about.ts` reads what it read before. The gate review later that day renamed `lib/bundled-assets.mjs` to
+`lib/about-assets.mjs`, ~~because REQ-STARTUP-143's "bundled asset" is a font family or the icon set~~ because
+`tools/notices/bundled-assets.json` already holds the bundled assets that carry a licence file. It moved
+`package.mjs`'s closing lines into a third script module, `lib/package-verdict.mjs`. The **component view**'s section
+says both. The scripts now import two constants and `normalize` from the tools, which is not an edge the boundary rule
+governs. Nothing else in the views moved. *The review's second round struck the reason: the specification counts both
+About files among its bundled assets (domain 12's appendix, REQ-SHELL-140). The component view's sentence saying
+otherwise is corrected, and the section now names the flag's usage check and the proof's use of the writer's list of
+git's redirecting variables. The stash's ledger and removal branch stay inside its module. Nothing else in the views
+moved.*
+
+**The notices generator, and the About page's lookup (first-release-plan.md §4.3, built 2026-09-27).** `tools/notices/`
+is a build-time tool, not a package: `pnpm notices` computes the shipped closure offline and writes
+`apps/desktop/resources/THIRD-PARTY-LICENSES.txt` only when REQ-STARTUP-143's validation passes. Main's About reader now
+looks for the file under REQ-STARTUP-141's name; it had looked for a lowercase name. The **component view** gains a
+section for the tool, and the **process view** gains the file's row in "Files and directories on disk" and a corrected
+About paragraph. No package, edge, process, channel, command or message kind changed. The gate review later that day
+changed two things inside the tool. A licence file that only refers to the licence, or only attributes, is no longer
+counted as the text (OQ-75). The LGPL address must now have an address's shape. No view changed for either: both
+are internal to `notices.mjs`, and it still reads and writes what the component view says. The review's second round
+changed three more things inside the tool. The address check refuses the placeholders it still accepted. An input that
+is not a JSON object fails as unparsable. A directory where the output goes is a handled error. No view changed.
 
 **Product-drawn main-window chrome (`PD-SHELL-003`, built and revised 2026-09-24).** On Windows, Linux and macOS the main
 `BrowserWindow` is frameless with its native menu hidden. The existing title bar now ends in minimize,

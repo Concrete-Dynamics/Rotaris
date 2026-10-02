@@ -484,3 +484,27 @@ repository's namespace (gone from there). The worktree directory of an isolated 
 it is the user's tree under `REQ-GIT-111`'s removal, not the session's record — and the proof records it left in place.
 
 **Found: nothing in this record.**
+
+## The first execution's proof on Linux: the stale-session repair and the lock its live launch left — 2026-09-28 (R-062)
+
+`pnpm checkpoint-proof` failed once in the Linux sweep of 2026-09-28, on tree `392f681`. It stopped at step (d),
+`repaired`, with "the stale session reads running, not interrupted", and passed on a lone re-run. **The repair of
+REQ-GIT-094 behaved as written.** The session's lock named the `live` launch's run host. On that tree, main still
+left before its run host, and Electron's teardown of the run host took up to 1.8 s. The `repaired` launch was
+claimed 0.22 s after main's exit, while the holder's pid still answered, so the listing read the session as live
+(REQ-GIT-093). A live session is not stale, and nothing was repaired. That window is the defect recorded and
+repaired in `459e7c8`: main is now gone only after its run host
+([`a-session-lock-outlives-…`](../../defects/fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md)).
+On `main` the proof passed at once.
+
+What was wrong in this record's proof is that it named the wrong mechanism. Its header promised "a
+persisted-running session with a dead lock", but step (c) never checked that the lock was dead. Step (c) now probes
+the lock's pid the moment the `live` launch returns (`lib/lock-holder.mjs`). A holder still alive fails there,
+naming REQ-SESSION-047/056. Step (d)'s assertions are unchanged. Recorded and repaired in
+[`checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`](../../defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md).
+
+In three consecutive runs on Linux as root under Xvfb, the pid was dead at the first probe each time, and the
+repair was logged 1.48 to 1.81 s after the previous main's exit. All twelve scenarios passed.
+
+**What it could not show:** the check firing on the built app. It would need the window `459e7c8` closed, and that
+was not reopened; the failing path is pinned by `lock-holder.test.ts` only. Windows and macOS were not run (IC-3).

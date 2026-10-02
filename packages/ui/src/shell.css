@@ -408,6 +408,11 @@
 .composer__dock .composer__input:focus-visible { border-color: transparent; outline: none; }
 .composer__strip { display: flex; align-items: center; gap: var(--rt-space-1); min-height: 34px; padding: var(--rt-space-1) var(--rt-space-2); border-top: var(--rt-hairline-width) solid var(--rt-divider); background: var(--rt-chrome); overflow-x: auto; scrollbar-width: none; }
 .composer__strip::-webkit-scrollbar { display: none; }
+/* PD-ORCH-005 clause 6: what the continue resumes, and the decline, as one notices line that wraps rather than widen the strip. */
+.composer__resume { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-2); }
+.composer__resume > .composer__hint { margin-right: 0; }
+/* The paused strip's two continues keep one line each; the narrow density shortens their labels instead (PD-CHAT-001). */
+.composer__continue { flex: none; white-space: nowrap; }
 .strip-control { display: inline-flex; align-items: center; flex: none; min-width: 0; }
 .strip-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--rt-space-1); min-height: 26px; min-width: var(--rt-control-height-compact); padding: 0 var(--rt-space-1); border: 0; border-radius: var(--rt-radius-sm); background: transparent; color: var(--rt-text-secondary); font-family: inherit; font-size: var(--rt-text-xs); font-weight: var(--rt-weight-medium); cursor: pointer; white-space: nowrap; }
 .strip-btn:hover { background: var(--rt-hover); color: var(--rt-text); }
@@ -435,17 +440,25 @@
  * widens the dock, and no second estimate is ever drawn. What never shortens: attach, stash,
  * steer, pause and the send pill — an action without a visible label is a control without a name.
  */
-.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-reasoning'] .strip-btn__value,
-.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-reasoning'] .strip-btn__caret,
-.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-run-start-mode'] .strip-btn__value,
-.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-run-start-mode'] .strip-btn__caret,
-.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-mode'] .strip-btn__value,
-.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-mode'] .strip-btn__caret,
-.composer__strip[data-compact='tight'] [data-testid='composer-estimate-strip'],
+/*
+ * `narrow` shortens "additionally": it keeps every `tight` rule and adds persona and model. The rules named `tight` alone
+ * until 2026-09-27, so a narrow dock drew the four small values and the estimate again and scrolled the strip
+ * (found by PD-ORCH-005 phase 5's review; `docs/defects/fixed/a-narrow-strip-draws-the-values-tight-hides.md`).
+ */
+.composer__strip:is([data-compact='tight'], [data-compact='narrow']) .strip-control[data-testid='chip-reasoning'] .strip-btn__value,
+.composer__strip:is([data-compact='tight'], [data-compact='narrow']) .strip-control[data-testid='chip-reasoning'] .strip-btn__caret,
+.composer__strip:is([data-compact='tight'], [data-compact='narrow']) .strip-control[data-testid='chip-run-start-mode'] .strip-btn__value,
+.composer__strip:is([data-compact='tight'], [data-compact='narrow']) .strip-control[data-testid='chip-run-start-mode'] .strip-btn__caret,
+.composer__strip:is([data-compact='tight'], [data-compact='narrow']) .strip-control[data-testid='chip-mode'] .strip-btn__value,
+.composer__strip:is([data-compact='tight'], [data-compact='narrow']) .strip-control[data-testid='chip-mode'] .strip-btn__caret,
+.composer__strip:is([data-compact='tight'], [data-compact='narrow']) [data-testid='composer-estimate-strip'],
 .composer__strip[data-compact='narrow'] .strip-control[data-testid='chip-persona'] .strip-btn__value,
 .composer__strip[data-compact='narrow'] .strip-control[data-testid='chip-persona'] .strip-btn__caret,
 .composer__strip[data-compact='narrow'] .strip-control[data-testid='chip-model'] .strip-btn__value,
 .composer__strip[data-compact='narrow'] .strip-control[data-testid='chip-model'] .strip-btn__caret { display: none; }
+/* The estimate's auto margin is what pushes the strip's actions to its end; hidden, it hands that margin on to the
+ * control after it, so the actions stay at the end of a compact strip too (found by PD-ORCH-005 phase 5's review). */
+.composer__strip:is([data-compact='tight'], [data-compact='narrow']) [data-testid='composer-estimate-strip'] + * { margin-inline-start: auto; }
 /*
  * The strip's send: the primary button's own fill as a short pill (the system's ONE filled control,
  * design §1.7), carrying the mode's short label visible and the spec's own wording as its accessible
@@ -493,6 +506,20 @@
  * pattern the design already fixed (§1, G1: a rule and a glyph, never a filled background). */
 .row--system { border-left: var(--rt-notice-rule-width, 2px) solid var(--rt-border-strong); border-radius: 0; color: var(--rt-text-secondary); }
 .row--system .row__body { color: var(--rt-text-secondary); font-size: var(--rt-text-xs, 12px); }
+/* REQ-CHAT-162 — the `/skills` listing: a system notice drawn as the listing its text is. The count is the notice's
+   own line; beneath it the design's revealed block (the artifact and tool cards: the surface, a hairline border, the
+   medium radius) holding one entry per skill — the name as the entry's title, its facts after it in the tertiary
+   ink, the description as secondary prose, the path last and quietest, wrapping anywhere so it never widens the
+   block. No rail colour of its own: the notice's rule is already the row's. Tokens only, no literal geometry. */
+.skill-listing { display: flex; flex-direction: column; gap: var(--rt-space-2); white-space: normal; }
+.skill-listing__skills { display: flex; flex-direction: column; gap: var(--rt-space-2); margin: 0; padding: var(--rt-space-2) var(--rt-space-3); list-style: none; background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-md); }
+.skill-listing__skill { display: flex; flex-direction: column; gap: var(--rt-space-1); min-width: 0; }
+.skill-listing__skill + .skill-listing__skill { padding-top: var(--rt-space-2); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
+.skill-listing__line { overflow-wrap: anywhere; }
+.skill-listing__name { color: var(--rt-text); font-weight: var(--rt-weight-medium); }
+.skill-listing__facts, .skill-listing__label { color: var(--rt-text-tertiary); }
+.skill-listing__description { color: var(--rt-text-secondary); }
+.skill-listing__path { font-size: var(--rt-text-2xs); color: var(--rt-text-tertiary); overflow-wrap: anywhere; }
 /* PD-CHAT-006: a row still being written draws no animated indicator of its own. The falsified rules, kept beside
    their replacement — there is no replacement, which is the point; the row's own growth says it is being written:
      .row__streaming { color: var(--rt-accent-300); font-size: var(--rt-text-2xs, 10px); animation: rt-pulse …; }
@@ -771,6 +798,8 @@
 .agent-row__dot--done { background: var(--rt-ok); }
 .agent-row__dot--failed { background: var(--rt-danger-300); }
 .agent-row__dot--cancelled { background: var(--rt-warn); }
+/* PD-ORCH-005 clause 13: a paused agent's dot is REQ-SHELL-036's waiting family, never pulsing; its state text says `paused` (no design). */
+.agent-row__dot--paused { background: var(--rt-wait); }
 .agent-row__main { display: flex; flex-direction: column; min-width: 0; }
 .agent-row__persona { font-weight: var(--rt-weight-medium, 500); }
 .agent-row__task { color: var(--rt-text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1893,6 +1922,9 @@
 /* Part AG — REQ-SHELL-140/142: About's rows and its licence line are selectable text, since a user copies a
    version, a build identifier or a security address out of them. Tokens by name (docs/design/system). */
 .about__value { user-select: text; color: var(--rt-text); font-size: var(--rt-text-sm, 13px); }
+/* REQ-SHELL-142's caption: the licence line's own type token (`.about__value`'s), in the secondary ink — never the browser's
+   default size; no literal fallback, since the lint's literal-debt ratchet counts one. Its margins are the base rhythm's (`p` in base.css). */
+.about__caption { color: var(--rt-text-secondary); font-size: var(--rt-text-sm); }
 /* REQ-SHELL-141: the five documents read as one row of links, in the order the requirement gives them. */
 .about__links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-4, 16px); margin-top: var(--rt-space-2, 8px); }
 .about__links .btn-link { padding: 0; }

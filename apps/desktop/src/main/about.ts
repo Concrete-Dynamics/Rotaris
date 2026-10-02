@@ -7,14 +7,23 @@ import { join } from 'node:path';
  * `extraResources`), else the source tree's `apps/desktop/resources/`, so the development entry and the
  * packaged binary run one code path (the same rule `sentinel.ts` states for the code-intelligence runtime).
  *
- * **Neither asset is produced by any build today**, so both readers take their absent branch and the About page
- * shows what the requirements say it shows then: an em dash for Build, and REQ-SHELL-142's caption for the
- * licence bundle. That is the requirement met on the branch that reaches, not a stub — emitting the two assets
- * belongs to the packaging part (ADR-0054) and changes nothing here when it lands.
+ * Each reader has both branches, and a build decides which one runs. `pnpm build-id` (`tools/build-id/`) writes the build
+ * identifier and `pnpm notices` (`tools/notices/`) the licence bundle into `apps/desktop/resources/`; `pnpm package`
+ * runs both before freezing and `electron-builder.yml` carries both to the root of `process.resourcesPath`
+ * (first-release-plan.md §4.4, 2026-09-27). Where a file is absent — a development package built without notices, or a
+ * source tree nobody has written them into — the About page shows what the requirements say it shows then: an em dash
+ * for Build, and REQ-SHELL-142's caption for the licence bundle. `pnpm settings-proof` measures both branches of both.
  */
 
 export const BUILD_ID_ASSET = 'build-id.txt';
-export const THIRD_PARTY_LICENSES_ASSET = 'third-party-licenses.txt';
+/**
+ * REQ-STARTUP-141 fixes the name, case included: `THIRD-PARTY-LICENSES.txt`. It was written in lower case until
+ * 2026-09-27, which a case-insensitive filesystem forgives and a Linux one does not — the About page there would have
+ * shown the absent caption beside a bundle that is present (`docs/defects/fixed/the-about-page-looks-for-the-licence-
+ * bundle-under-a-lowercase-name.md`). The generator writes the same literal (`tools/notices/notices.mjs`, `NOTICES_FILE`),
+ * and `about.test.ts` holds the two equal.
+ */
+export const THIRD_PARTY_LICENSES_ASSET = 'THIRD-PARTY-LICENSES.txt';
 
 function candidates(name: string): readonly string[] {
   const out: string[] = [];

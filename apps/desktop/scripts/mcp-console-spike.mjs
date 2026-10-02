@@ -2,10 +2,11 @@
  * Spike 4 (ADR-0033 consequence 3, REQ-MCP-113): console-window suppression, measured on the PACKAGED build.
  *
  * `pnpm package` must have produced `apps/desktop/release/win-unpacked/Rotaris.exe` (ROTARIS_PACKAGE_DIR_ONLY=1
- * ROTARIS_PACKAGE_SKIP_APP=1 are enough). The packaged application — a graphical process owning no console — runs a
- * scripted session whose persona carries two servers: `console`, declared as `cmd.exe /c node <fixture>` (a console
- * application launched through a console application, the worst case), and `token`, declared with the reserved
- * `builtin:code-intelligence` command (expected to fail until ADR-0035 exists — the launch error, not a window).
+ * ROTARIS_PACKAGE_SKIP_APP=1 are enough, with ROTARIS_PACKAGE_WITHOUT_NOTICES=1 while `pnpm notices` refuses). The
+ * packaged application — a graphical process owning no console — runs a scripted session whose persona carries two
+ * servers: `console`, declared as `cmd.exe /c node <fixture>` (a console application launched through a console
+ * application, the worst case), and `token`, declared with the reserved `builtin:code-intelligence` command (expected
+ * to fail until ADR-0035 exists — the launch error, not a window).
  * While it runs, this script samples every 200 ms with PowerShell: every `cmd`, `node`, `conhost` process started after
  * the launch, its `MainWindowHandle` and `MainWindowTitle`, and `tasklist /v` window titles. The verdict is that no
  * sampled process ever had a window handle other than 0, no `conhost.exe` appeared, and no console-shaped window
@@ -17,14 +18,14 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { proofIsolationEnv } from './lib/harness.mjs';
+import { configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const exe = join(app, 'release', 'win-unpacked', 'Rotaris.exe');
-if (!existsSync(exe)) throw new Error(`the packaged application is absent: ${exe} (run pnpm package with ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1 first)`);
+if (!existsSync(exe)) throw new Error(`the packaged application is absent: ${exe} (run pnpm package with ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1 first, and ROTARIS_PACKAGE_WITHOUT_NOTICES=1 while pnpm notices refuses)`);
 const fixture = join(app, 'scripts', 'fixtures', 'mcp-fixture-server.mjs');
 const output = resolve(repo, '.proof', 'mcp-proof', 'console-spike');
 rmSync(output, { recursive: true, force: true });
@@ -32,7 +33,8 @@ mkdirSync(output, { recursive: true });
 const root = join(output, 'profile');
 const workspace = join(root, 'workspace');
 const local = join(root, 'local');
-const configDir = join(local, 'rotaris', 'config');
+// The global configuration directory by the platform that reads it (`configDirFor`), not the Windows spelling alone.
+const configDir = configDirFor(local);
 mkdirSync(join(workspace, '.rotaris'), { recursive: true });
 mkdirSync(configDir, { recursive: true });
 writeFileSync(join(workspace, 'README.md'), '# console spike\n');
@@ -52,7 +54,7 @@ writeFileSync(join(output, 'console.pids'), '');
 const env = { ...process.env };
 for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
 const launchedAt = new Date();
-const child = spawn(exe, [workspace], {
+const child = spawn(exe, [...hostSwitches, workspace], {
   cwd: dirname(exe), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
   env: { ...env, ...proofIsolationEnv({ local, preferences: join(root, 'preferences') }), ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', ROTARIS_CAPTURE_PNG: join(output, 'window.png'), ROTARIS_CAPTURE_PROMPT: 'echo through cmd', ROTARIS_SCRIPT: 'mcp:console.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '12000', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' },
 });

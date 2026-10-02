@@ -1154,7 +1154,9 @@ capability switched off.
   manifest's declaration checked against the runtime, and the disclosure with its proof are the first half.
   The second — the notices generator listing the servers under `REQ-STARTUP-142` — waits on that generator,
   which is not built (`REQ-STARTUP-141/142/143`; ADR-0054). The entry in `implementation-conditions.md`
-  says so; no condition is downgraded by the person doing the work.
+  says so; no condition is downgraded by the person doing the work. *2026-09-27: the second half is shown. The
+  notices generator lists the servers, and IC-7 is recorded as discharged there. The release pipeline's evidence
+  of the section is still owed (`first-release-plan.md` §4.3).*
 - `REQ-STARTUP-064`'s reason for exempting the reserved token from cache warm-up — "what it resolves to
   ships inside the artifact" — was true of the runtime and false of its servers. The outcome (no warm-up
   step) stands; the reason is qualified in place and kept beside its qualification, under GD-10.
@@ -1300,7 +1302,7 @@ section) would need minting in both domains and is named only to be complete.
 
 ### ESC-37 — what invoking a skill delivers: REQ-CHAT-034/162's attached payload against REQ-WORKSPACE-062/073's force-loaded block
 
-**Raised 2026-09-14, not yet ruled.** Raised while planning portable-skill discovery (ADR-0063), on
+**Raised 2026-09-14. RULED 2026-09-27: domain 13 stands** (see "Rulings after the gate — 2026-09-27" below). Raised while planning portable-skill discovery (ADR-0063), on
 reading what happens after a user invokes a skill's command. Two live requirements describe two
 different mechanisms, and the difference is observable to a user.
 
@@ -1346,7 +1348,7 @@ in-context column, and REQ-WORKSPACE-067's two prohibitions amended.
 
 ### ESC-38 — the Skills table's columns: REQ-CONFIG-343's five against REQ-WORKSPACE-067's amended seven
 
-**Raised 2026-09-14, not yet ruled.** Raised by the same planning pass. Both requirements fix the
+**Raised 2026-09-14. RULED 2026-09-27: seven columns** (see "Rulings after the gate — 2026-09-27" below). Raised by the same planning pass. Both requirements fix the
 column set of one table and neither cites the other.
 
 - **REQ-CONFIG-343** (domain 15): "The skill table has **five** columns: Skill, Source, Trigger, Load,
@@ -1371,7 +1373,7 @@ amendment made three weeks earlier for a stated reason.
 
 ### ESC-39 — a skill whose command name is taken: REQ-CHAT-034 skips it, REQ-SHELL-056 renames it
 
-**Raised 2026-09-14, not yet ruled.** Raised by the same planning pass, on the one rule that decides
+**Raised 2026-09-14. RULED 2026-09-27: suffixed** (see "Rulings after the gate — 2026-09-27" below). Raised by the same planning pass, on the one rule that decides
 whether a discovered skill can be silently unreachable.
 
 - **REQ-CHAT-034** (domain 03): "Where such a name is already taken, the command already holding it
@@ -1515,6 +1517,9 @@ shape the question named.
 **What this ruling does not do.** It builds nothing. Until the directive is built the log keeps every level,
 and the directive owes its first execution into `first-executions.md` when it is.
 
+**Built 2026-09-27 (R-055).** The first execution is reported under `PD-MONITOR-002` in `docs/product/directives.md`
+and has its row in `first-executions.md`.
+
 ### OQ-21 — per-token prices are decimal strings, ruled; OQ-62's configured-rate branch with it
 
 **Ruled 2026-09-23 (R-049).** The owner approved the design recorded on
@@ -1540,3 +1545,189 @@ and the directive owes its first execution into `first-executions.md` when it is
 until the revision is built, and its first execution reports into `first-executions.md`, ADR-0031 and the
 directive.
 
+## Rulings after the gate — 2026-09-27
+
+*Ruled together from the first release plan's O-1 ([R-052](../product/requests.md#r-052)). The owner took
+each recommendation as written in `first-release-plan.md` §2.1 and §3.1. Each recommendation was the reading
+already built, so the rulings change requirement text and no behaviour.*
+
+### ESC-37, ESC-38, ESC-39 — the three portable-skill escalations, ruled
+
+- **ESC-37: domain 13 stands.** Invoking a skill's command loads it for the current session and delivers it
+  as `REQ-WORKSPACE-062`'s force-loaded block, carrying `REQ-CHAT-162`'s three identifying facts and the
+  verbatim body. No in-context indicator and no composer chip exist anywhere. Amended: `REQ-CHAT-034`
+  (delivery) and `REQ-CHAT-162` (the listing's in-context column and the "mark it as in context" sentence).
+- **ESC-38: seven columns.** Skill, Source, Path, Trigger, Invocation, Load, Description. Amended:
+  `REQ-CONFIG-343`'s count.
+- **ESC-39: suffixed.** A taken command name is offered under `REQ-SHELL-056`'s first free `-2`, `-3`, …,
+  with the description naming the skill. The command takes the catalogue normal form, and the skill's
+  identity stays `REQ-WORKSPACE-054`'s normalized name, deliberately two forms. Amended: `REQ-CHAT-034`'s
+  collision clause.
+
+Each amended requirement carries an inline amendment mark, and the resolution records of domains 03 and 15
+carry the amendment notes. ADR-0063's rulings table now reads as ruled.
+
+**What these rulings change for the first release.** The `/skills` listing (`first-release-plan.md` §2.2) is
+built without an in-context column.
+
+### OQ-64 — an instruction override suppresses its base only while it is switched on, ruled
+
+**Ruled 2026-09-27 (R-052), as built.** Suppression is computed over the enabled set: switching an override
+off returns its base to the merge, and the Instructions inventory gains no *suppressed* row state.
+`PD-WORKSPACE-002`'s injection paragraph states the ruling in place, since that directive governs
+`REQ-WORKSPACE-042`. The injection proof (`first-release-plan.md` §3.3) asserts this reading.
+
+### The updater ships in the first release, ruled
+
+**Ruled 2026-09-27 (R-052).** The first release carries the updater of `REQ-STARTUP-107..124`, built to
+`REQ-STARTUP-122`'s strict sequence with the installer and portable apply strategies. This is scheduling
+within live requirements, so nothing is amended. `first-release-plan.md` §4.6 schedules it.
+
+
+## Escalations after the gate — 2026-09-28
+
+### ESC-42 — the money rule against the property it is said to guarantee: REQ-SHELL-045's "never rendered as zero" under REQ-PROVIDER-121's four places
+
+**Raised 2026-09-28. RULED 2026-09-29 ([R-067](../product/requests.md#r-067)): option (b), the floor.** Found while moving `money.ts` into `kernel` for R-049 and recorded as the
+open defect note
+[`a-cost-below-five-hundred-thousandths-renders-as-zero.md`](../defects/a-cost-below-five-hundred-thousandths-renders-as-zero.md);
+raised here under [R-062](../product/requests.md#r-062). Two live requirements state the product's one money
+rule, and one of them also states a property the rule cannot deliver.
+
+- **REQ-PROVIDER-121** (domain 04), the rule alone: "Amounts are computed and rendered in exact decimal
+  arithmetic, never in binary floating point: a balance is rounded down (toward negative infinity), every
+  other amount is rounded half-up, both to 2 decimal places, or to 4 when the magnitude is below $0.01. …
+  This is the one money rule for this domain: every monetary amount the domain computes or displays is
+  produced under it".
+- **REQ-SHELL-045** (domain 12), the rule and a property in one sentence: "The figure is rendered by the
+  product's single money rule (REQ-PROVIDER-121) and by no other: exact decimal arithmetic rather than binary
+  floating point, rounded half-up, to two decimal places — or to four when the magnitude is below $0.01, **so a
+  cost that is small but not nothing is never rendered as zero**."
+- Domain 12's resolution record (item 22) repeats the property as the reason the rule was chosen: "two decimal
+  places, or four when the magnitude is below $0.01 **so that a small non-zero cost is never rendered as
+  zero**".
+
+**Why both cannot hold.** Half-up rounding to four places maps every amount greater than zero and below
+0.00005 to `0.0000`. The rule REQ-SHELL-045 cites is therefore the rule that renders such a cost as zero, and
+the clause that follows "so" is not a consequence of the rule but a claim against it. The case is reachable,
+not hypothetical: under `PD-MONITOR-001` revision 2 a request is priced from configured per-token rates, and
+50 tokens at a configured `0.0000001` cost `0.000005`, whose label reads `0.0000 at configured rates` — a
+figure that says it was priced and reads as nothing. `REQ-MONITOR-166`'s cost label and `PD-MONITOR-001`'s
+label table (`<amount> at configured rates`, `<amount> reported by the provider`, `at least <amount>; some
+requests have no price`) all carry the rendered figure, so whatever the rule renders is what every consumer
+shows. `REQ-UIBENCH-031` takes the label as an already-rendered string and performs no arithmetic on it, so
+it bears on none of the options.
+
+**What the build proceeds under.** REQ-PROVIDER-121's rule as written: `formatAmount`
+(`packages/kernel/src/money.ts`) rounds half-up to two places, or four below one hundredth, and
+`money.test.ts` pins `formatAmount('0.000001')` at `0.0000`. The module's comment states the contradiction
+and cites the defect note; the property of REQ-SHELL-045 is **not implemented and is not treated as a defect
+of the code** — it is treated as this escalation. The one rendering site is `formatAmount`, which
+`rotaris/money-only-in-money-ts` guarantees (arithmetic on an amount fails `pnpm lint` anywhere else), so
+every option below changes one function and the requirements that describe it.
+
+**The options, with their costs.**
+
+- **(a) Amend REQ-SHELL-045 to claim only what the rule delivers.** Strike the "so a cost that is small but
+  not nothing is never rendered as zero" clause, or replace it with what the four-place band actually buys
+  ("so a cost below one cent keeps two more places"), and correct domain 12's resolution record item 22 with
+  it. **Cost:** one amendment round touching one requirement and one resolution record; no code changes, the
+  test's name loses the word "never", and the `money.ts` comment cites the ruling instead of the note.
+  **What it gives up:** the intent. A run that cost something keeps reading `0.0000 at configured rates`,
+  which is the shape of the figure that started R-026 (`cost` = `"0"` beside a metered run), now with a
+  qualifier asserting it was priced.
+- **(b) Change the rule: a non-zero amount that would round to zero renders as a stated floor.** An amount
+  that is not a balance, is not zero, and rounds half-up to `0.0000` renders as `< 0.0001` — with the symbol
+  where the currency is known (`< $0.0001`), bare where it is not, per `PD-MONITOR-001`'s narrowing. Zero
+  itself still renders `0.00`, so nothing and a small something stay distinguishable at the surface, which is
+  the property's whole content. **Cost:** one amendment round touching REQ-PROVIDER-121 (the rule gains the
+  floor sentence) and REQ-SHELL-045 (the property stays, and now cites the floor that delivers it), plus
+  domain 12's resolution record; `PD-MONITOR-001` takes a **revision 3** for the one label the floor reads
+  badly in — `at least <amount>; some requests have no price` becomes `at least < 0.0001` — which the ruling
+  fixes with a wording for that cell, and `REQ-MONITOR-166`'s qualifiers are otherwise untouched, since they
+  name what a figure *is*, not how it prints. **Code:** the floor branch in `formatAmount`, its test, and a
+  case for `sessions.ts`'s `costLabelOf` in `packages/engine/src/run/token-samples.test.ts`, where that function is tested; nothing in the store, since the exact figure is what is
+  persisted and the floor is rendering only. **What it gives up:** the rule stops being "round to N places"
+  alone, and a balance (rounded down) is deliberately outside the floor — a reading the ruling should say.
+- **(c) Extend the rule's own device.** REQ-PROVIDER-121 already answers this problem one order of magnitude
+  higher by adding two places below $0.01; repeating it — six places below $0.0001, eight below $0.000001 —
+  delivers the property for every amount `money.ts` can carry, because the scaled representation keeps
+  whatever scale the operands had. **Cost:** the same amendment round as (b) on REQ-PROVIDER-121 and
+  REQ-SHELL-045, but no `PD-MONITOR-001` revision, since every label still shows a plain amount. **What it
+  gives up:** bounded width. A configured price of `0.000000001` per token prices one token at nine places,
+  and the 26 px status strip (REQ-SHELL-038, REQ-SHELL-047's responsive hiding) and the tokens card were
+  drawn for `0.0024`, not `0.000000001`; a cap on the places reintroduces (b)'s floor at a smaller magnitude,
+  so (c) is (b) with a wider band and the same open end.
+
+**Recommendation: (b).** The corpus records the property as the *reason* the four-place band exists (domain
+12, item 22), so amending the property away under (a) keeps a rule whose stated purpose is gone and leaves
+the R-026 shape — a priced run reading as nothing — in the product; and (c) buys the property only until a
+cap, at which point it is (b). The floor is what the property asked for, its rendering site is one function
+under a lint rule that guarantees it stays one, and its whole record cost is two amended requirements, one
+resolution-record correction and one directive revision for one label cell. A rounding-to-zero amount was
+never a figure anyone could act on; `< 0.0001` is at least true.
+
+**What the ruling decides.** Whether REQ-SHELL-045's property is withdrawn (a) or delivered (b or c); if
+delivered, the exact floor text and its symbol placement, the `incomplete` label's wording under the floor,
+and whether a balance rounded down to `0.0000` is inside or outside it. The amendment round the ruling costs
+is one round in the shape `specification-gate.md` records: each amended requirement gains an inline amendment
+mark, the owning domain's resolution record carries the note, `pnpm symbols` checks the identifiers, and the
+built reading reports its first execution into this entry and `first-executions.md`. Until it is ruled the
+defect note stays open in `docs/defects/`.
+
+**RULED 2026-09-29 ([R-067](../product/requests.md#r-067)): option (b), as the escalation recommends.** The owner accepted the
+recommendation with seven others ("Accept all eight (Recommended)").
+
+- **The floor.** An amount that is not a balance, is greater than zero, and that REQ-PROVIDER-121's rounding — half-up,
+  two decimal places, four when the magnitude is below $0.01 — would render as zero renders as `< 0.0001`. The symbol
+  stands where the rule already puts it: `< $0.0001`, `< €0.0001`, `< £0.0001`; any other named currency `< 0.0001 <CODE>`;
+  and an amount whose currency the provider does not name (`PD-MONITOR-001`'s narrowing) bare, `< 0.0001`. Zero itself
+  still renders `0.00`, so nothing and a small something stay distinguishable at every surface.
+- **What option (b) left open, read so that every existing label table stays true.** Option (b) fixes the floor's text
+  and its symbol placement; it leaves four details to the ruling, each taken as follows.
+  - *A balance is outside the floor*, as option (b) states it ("an amount that is not a balance"). A balance keeps
+    REQ-PROVIDER-121's rounding down, so a balance below 0.0001 reads `0.0000`. The credit tile's renderings
+    (REQ-PROVIDER-120) are unchanged.
+  - *An amount below zero is outside it.* The ruling's words are "greater than zero"; a negative amount is rounded as
+    before.
+  - *The `incomplete` label keeps its template.* Option (b) had that cell read `at least < 0.0001` and asked the ruling
+    for a wording. The reading that keeps `PD-MONITOR-001`'s label table true is the table as written: `<amount>` takes
+    the rendered figure, the floor included, so the label reads `at least < 0.0001; some requests have no price`. That is
+    true — the priced part is greater than zero and below 0.0001, and the total is at least the priced part — and it
+    changes no cell, so `REQ-MONITOR-166`'s qualifiers and the directive's four rows stand as written. `PD-MONITOR-001`
+    revision 3 carries the floor into the one sentence that restated the rounding, and nothing else.
+  - *The floor is rendering only.* The exact figure is what is persisted, summed and exported; the floor is applied by
+    `formatAmount` and nowhere else, which `rotaris/money-only-in-money-ts` keeps true.
+- **The amendment round.** `REQ-PROVIDER-121` gains the floor sentence, and domain 04's rendering-formats line with it;
+  `REQ-SHELL-045`'s property stays and now cites the floor that delivers it; domain 12's resolution item 22 is corrected
+  in place, its stated reason kept beside the correction. Each amended requirement carries the inline mark "accepted
+  amendment 2026-09-29, ESC-42", and the resolution records of domains 04 and 12 carry the note. `PD-MONITOR-001` takes
+  revision 3, with its back-pointer at `REQ-PROVIDER-121` amended in place.
+- **What the ruling does not do.** It builds nothing. `formatAmount` renders `0.0000` for such an amount until the
+  repair of [`a-cost-below-five-hundred-thousandths-renders-as-zero.md`](../defects/a-cost-below-five-hundred-thousandths-renders-as-zero.md),
+  whose first execution reports into this entry, into `PD-MONITOR-001` and into `first-executions.md`.
+
+## Rulings after the gate — 2026-09-29
+
+*Ruled together under [R-067](../product/requests.md#r-067). The owner was asked to rule eight open decisions as
+recommended and chose "Accept all eight (Recommended)". ESC-42 is ruled above, in its own entry. The other seven are
+recorded where each was raised, and are listed here so that one place names all eight.*
+
+- **The status a graceful stop persists — `paused`, as built.** `PD-ORCH-005` revision 5 (clause 21) names
+  `REQ-SESSION-186` among what it narrows, with `REQ-SESSION-073`, whose vocabulary glosses `stopped` with the user's
+  stop; recorded under OQ-96 in `open-questions.md`.
+- **A cancel in flight when the host died — clause 3 governs.** The explicit cancel is made durable when it is accepted,
+  and the next repair or continue ends its agents `cancelled`; recorded under OQ-103.
+- **REQ-LIBRARY-092's fallback — only for a record with no task id.** Raised and ruled as OQ-113, answered by amending
+  `REQ-LIBRARY-092`.
+- **`delegate`'s `session_id` — the caller's own settled child, resumed from its record.** OQ-66's open part, ruled by
+  `PD-ORCH-005` revision 5 (clause 22) and `PD-TOOLS-006` revision 3.
+- **The two retry layers — as the specification states them.** Raised and ruled as OQ-110; the 2026-09-22 row of
+  `first-executions.md` is corrected in place.
+- **What the child-report summariser reads — the start and the most recent part, and the report's deterministic
+  facts.** Raised and ruled as OQ-111.
+- **A `write_scope` for a persona with no file-writing tool — refused.** Raised and ruled as OQ-112, by `PD-TOOLS-006`
+  revision 3.
+
+**What these rulings do not do.** They build nothing. Each ruling's repair is owed to the defect note it settles or
+names, and reports its first execution into the record that decided it.

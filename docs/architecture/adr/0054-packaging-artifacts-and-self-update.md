@@ -1074,10 +1074,13 @@ payload moved first paint by about 10 ms" measurement above is not re-taken: the
 `implementation-conditions.md`) binds the release this artifact would be: the runtime is self-contained, its language
 servers are not — measured on the packaged binary with outbound blocked (`pnpm code-intel-proof` launch 7: `npm install
 typescript@5.9.3` attempted and failed). The licence text the bundle carries is one copy under the distribution's
-dist-info; the notices generator (`REQ-STARTUP-141/142`) is still not built.
+dist-info; the notices generator (`REQ-STARTUP-141/142`) is still not built. *2026-09-27: no longer the copy the artifact
+carries. The notices file reproduces the same text, and REQ-STARTUP-142 requires it there, so the dist-info copy is
+filtered out of the artifact and kept in the source tree for the generator. See "The two bundled assets" below.*
 **IC-7 adopted 2026-09-06 (ESC-32, option 2):** the language servers are tools provisioned after installation;
 `REQ-STARTUP-142`'s section now lists them after Git and ripgrep, from the same manifest, and the generator that
-will write that section is the one still owed here — IC-7's second half is discharged when it does.
+will write that section is the one still owed here — IC-7's second half is discharged when it does. *It did, on
+2026-09-27: see "The notices generator" below.*
 
 ## Two assets the About page asks this record for — 2026-09-08 (Part AG)
 
@@ -1087,4 +1090,697 @@ absent branch — an em dash for Build, and the caption "This build does not car
 branches are built and exercised (`pnpm settings-proof`, launch 1), so nothing here is a stub: what is owed is the two
 assets, not the surface. Main resolves them the way every other bundled resource is resolved — `process.resourcesPath`
 for a packaged build, else `apps/desktop/resources/` — in `apps/desktop/src/main/about.ts`, which is where a packaging
-change would land them. `shell.openThirdPartyLicenses` answers `licenses.absent` until then.
+change would land them. `shell.openThirdPartyLicenses` answers `licenses.absent` until then. *2026-09-27: the notices
+file now has a generator (below), and the reader's name was corrected to `THIRD-PARTY-LICENSES.txt` in the same change —
+it had looked for the name in lower case, which only a case-insensitive filesystem forgives
+(`../../defects/fixed/the-about-page-looks-for-the-licence-bundle-under-a-lowercase-name.md`). Carrying the two assets
+into the artifact is `first-release-plan.md` §4.4.* *2026-09-27, later: §4.4 is built — see "The two bundled assets"
+below. Nothing in this section changes: the readers and both absent branches stand as written, and the proof now
+measures the present branch of each.*
+
+## One version and the pre-build guard — first execution, 2026-09-27 (first-release plan §4.1)
+
+*Reported in place under the standing policy; row in `../first-executions.md`.* `pnpm release:guard <tag>`
+(`tools/release-guard`) is `REQ-STARTUP-028`'s guard. It is one stage with two halves, which report together and
+share one exit code (`REQ-STARTUP-149`: 0, or 1 with `error: …` on stderr, or 2 for usage). The **version half**
+compares the tag's version with every place the build declares one (`REQ-STARTUP-158`). The **package-pin half**
+compares the setup manifest with the packages the built-in default configuration launches through `npx`/`uvx`
+(`REQ-STARTUP-059`). The tag is parsed by `REQ-STARTUP-027`'s grammar, which now lives in `tools/release-naming` beside
+the names it renders (`parseReleaseTag`, with `REQ-STARTUP-029`'s channel), so the updater's comparison
+(`REQ-STARTUP-109`) can read the same one.
+
+**Which places declare the product version — decided here: one, `apps/desktop/package.json`.** electron-builder
+renders it into each artifact's name and into the installer's metadata and packs the file into `app.asar`, and
+everything the running product reports as its version is **read back** from that packed copy through one reader,
+`@rotaris/platform`'s `installedProductVersion`: main's About surface, and the run host's MCP client, which sends it as
+`clientInfo.version` in every handshake. The other three values the plan listed are not product versions:
+
+- The **workspace root** (`0.0.0`) belongs to a private manifest that no build reads for a version, so its `version`
+  field is **removed**. It looked like a second declaration and disagreed with the first.
+- **`tools/release-naming`** (`0.0.0`) and every other `@rotaris/*` package are private workspace packages. They are the
+  desktop's devDependencies, compiled into its bundles from source and never packed as packages, so their `0.0.0` is
+  package-manager bookkeeping. They are left as they are and not checked. A place that ever comes to carry the version
+  into an artifact joins `PRODUCT_VERSION_PLACES`: the portable stub's identity token (§4.5) is the obvious candidate.
+  electron-builder's `extraMetadata.version` and `buildVersion` are deliberately unset; either one would be a second
+  place.
+
+`0.1.0` already agrees with the planned `v0.1.0`. A prerelease tag needs the declaration to be the tag's text
+**exactly**, for example `0.1.0rc1`. Equality is exact text because that text is what every artifact name renders.
+
+*The falsified reason, kept beside its replacement.* This note first said the manifest was "the only version an
+artifact carries", and that every other `version` in the workspace belonged to a package no artifact carries. The gate
+round that reviewed the guard found that false: `@rotaris/mcp`, compiled into the run host, declared
+`CLIENT_INFO = { name: 'rotaris', version: '0.1.0' }` as a literal and told every MCP server that version during
+`initialize`, so declaring `0.2.0` and tagging `v0.2.0` would have passed the guard and still reported `0.1.0` to every
+tool server — against `REQ-STARTUP-158`'s "SHALL report at run time, that same version". It was not made a second place
+for the guard to check; it was made a reader. `OpenOptions.clientVersion`, and the `clientVersion` of `ToolDiscovery`,
+`HealthProbe` and `SessionConnections`, are required and have no default; `McpHost` is handed the product version by the
+run host's composition root, which reads it from `import.meta.dirname` — `out/main/`, the directory main's bundle sits
+in too — so one file answers both processes. Measured on the built app: with the manifest temporarily declaring
+`0.2.0rc1`, both of alpha's handshakes in `mcp-proof`'s discovery launch named `rotaris 0.2.0rc1`; the old literal
+would have said `0.1.0`. The note is `../../defects/fixed/the-mcp-client-reports-a-literal-product-version.md`.
+
+**What the version half found: the running app did not report the declared version.** `shell.hello` answered with
+`app.getVersion()`, and Electron answers that with **its own** version for a runtime started with a file. That is the
+development entry and every proof: `settings-proof` read `v44.1.1` and passed on a `/^v\d/` check. The packaged build
+was right only because `app.asar` is a package. Repaired in the same change: main reads
+`out/main/../../package.json`, which is the same place the guard reads in both entries, and answers `dev` when that
+file declares nothing. `REQ-STARTUP-007` says `dev` there and `REQ-STARTUP-004` says `0+unknown`; the two disagree,
+and `dev` is **OQ-71**'s reading. `settings-proof` now requires the exact `v0.1.0`, and it was measured failing on the
+old build. The note is `../../defects/fixed/the-unpacked-build-reports-electrons-version-as-the-products.md`.
+
+**What it found about prereleases, not repaired here.** electron-builder 26.15.3 rewrites `0.1.0rc1` to `0.1.0-rc1`
+when it normalises the package metadata (loose SemVer, measured). So a prerelease built from this configuration would
+be named `Rotaris-0.1.0-rc1-…`, which is not `REQ-STARTUP-031`'s name, and `build-hooks.cjs`'s naming check compares
+against the normalised value and cannot see the difference. The repair belongs to §4.2/§4.5, where the name must be
+rendered from the tag's version through `tools/release-naming`:
+`../../defects/a-prerelease-version-reaches-the-installer-hyphenated.md` — *repaired 2026-09-28, the note now under
+`../../defects/fixed/`; the report is "The prerelease naming repair" below.*
+
+**What the pin half found: the manifest it checks does not exist.** No setup manifest of `REQ-STARTUP-058` is in the
+tree. The one `npx`/`uvx` launch among the defaults is `browser`'s `npx -y @playwright/mcp@0.0.80 --headless`. It is
+resolved through the product's own `resolveCommand`, so shorthands count. It is counted although it ships
+`enabled: false`: `REQ-MCP-095` requires its pin whatever the switch says, and `REQ-STARTUP-064`'s "nothing will ever
+launch it" pulls the other way. That is **OQ-69**. So on this tree `pnpm release:guard v0.1.0` **exits 1 on the pin half
+alone**, naming `@playwright/mcp`, `0.0.80`, both files and the missing manifest. That is the requirement working. It
+also means **no release is publishable until the manifest exists**, and no step of the plan builds it (the plan's §4.1
+now says so). The guard reads it at `apps/desktop/resources/setup-manifest.json` (`SETUP_MANIFEST_LOCATION`, one
+constant) and needs two fields: `schemaVersion: 1` and `toolServerPackages: [{ name, version }]`. It enforces the
+manifest's own discipline: complete version strings and one entry per package. The rest of `REQ-STARTUP-058`'s schema
+is left to whoever builds the manifest, and so is the choice of location if they want another. **That builder inherits
+two constraints.** `toolServerPackages` is the guard's reading — `REQ-STARTUP-058` says only "exact MCP package pins" —
+so a different field name moves `TOOL_SERVER_PACKAGES_FIELD` with it. And `apps/desktop/resources/` is
+electron-builder's `buildResources` directory, which is not packed (`extraResources` carries only
+`resources/code-intelligence`), so a file there is not yet "the machine-tool manifest a build ships" (`REQ-STARTUP-059`):
+the step that writes it must also add it to `extraResources`, where `REQ-STARTUP-143` and `about.ts`'s pattern would
+read it.
+
+**How it runs, and why that way.** The guard is TypeScript and imports `SHIPPED_MCP_SERVERS` and `resolveCommand`
+from `@rotaris/config`, so it reads the configuration the build ships rather than a copy of it. `@rotaris/config`'s
+import graph uses parameter properties, which Node's type stripping refuses (measured on `kernel/src/time.ts`). So
+`cli.mjs` loads the guard through Vite's `runnerImport`, the compiler the desktop build already runs on. Vite marks that
+API experimental, and the lockfile pins it. `guard.test.ts` spawns the script, so a change in that API fails
+`pnpm check` before it can fail a release. `@rotaris/config` imports `@rotaris/kernel`, whose index re-exports the
+generated (gitignored) requirement symbols, so **the tag workflow must run `pnpm symbols` before the guard** (§4.2); a
+checkout that skips it fails closed, `error: the release guard could not run`, exit 1. One reading was taken in the
+grammar: numbers are canonical decimals, so `v01.2.3` is refused (**OQ-70**).
+
+The grammar lives in `tools/release-naming/src/index.ts` itself, not a second module. The packaging hook's naming check
+(`build-hooks.cjs`, `checkNaming`, inside `afterPack`) imports that file with plain Node, whose type stripping neither
+resolves a `./tag.js` specifier to `tag.ts` nor accepts parameter properties. The grammar first arrived as `tag.ts`,
+re-exported with both, and the gate round measured `checkNaming('0.1.0')` failing with `ERR_MODULE_NOT_FOUND` — which
+`afterPack` turns into `[ic6] BUILD REFUSED` for every installer — while `pnpm check` stayed green. It is one file of
+erasable syntax now, and `naming.test.ts` calls the hook's own `checkNaming` in a child `node`, so either shape fails
+the tests (both mutations measured).
+
+**Measured:** at the first build, 36 new unit cases in the two tools (31 in `tools/release-guard`, 5 for the tag
+grammar) and 3 for main's reader. After the gate round: 35 in `tools/release-guard` (the reader pinned to the guard's
+place from the tool side, an empty place list failing, a leading `--`, a linear-time pin check), 6 for the grammar and
+the hook's plain-Node load, 3 for the reader in `@rotaris/platform` and 1 in main, and 1 for the handshake identity on
+all three MCP paths.
+The two comparisons were mutated and the tests failed each time. The real script ran against this tree: `v0.1.0` gave
+exit 1 on the pin half only; `v0.2.0rc1` and `vlatest` gave exit 1; no argument gave exit 2. With a scratch manifest
+pinning `0.0.80`, `v0.1.0` passed with exit 0. **Not done here:** `.github/workflows/release.yml` (§4.2), the setup
+manifest, and the prerelease naming repair.
+
+## The setup manifest — first execution, 2026-09-28 (first-release plan §4.1)
+
+*Reported in place under the standing policy; row in `../first-executions.md`.* `REQ-STARTUP-058`'s manifest exists:
+`apps/desktop/resources/setup-manifest.json`, schema version 1, **committed rather than generated** — every value in it
+is a pin a person chose, and a generator would only have moved the choosing — and carried by `electron-builder.yml`'s
+`extraResources` to the root of the artifact's resources beside the two About files, which is where the guard's note
+above said it had to land. The pin half of `pnpm release:guard` reads it at the location that note fixed, under the field
+name that note fixed (`toolServerPackages`), so neither constant moved.
+
+**What it pins, and how each figure was taken.** Git and ripgrep exactly as `REQ-STARTUP-058` states them, plus the
+source URL `REQ-STARTUP-142` wants beside the name, version and licence:
+
+| Tool | Probe | Minimum | Provisioned | Platform key | Archive | SHA-256 |
+|---|---|---|---|---|---|---|
+| `git` | `git --version` | none | 2.55.0 | `windows-x64` | `…/git-for-windows/git/releases/download/v2.55.0.windows.1/MinGit-2.55.0-64-bit.zip` | `31497e7968196332263459ee319d2524e3ebc5786ab895e2abad34ffdd4f4ebf` |
+| `ripgrep` | `rg --version` | 14.1.0 | 15.2.0 | `windows-x64` | `…/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip` | `71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5` |
+| | | | | `macos-arm64` | `…/ripgrep-15.2.0-aarch64-apple-darwin.tar.gz` | `3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4` |
+| | | | | `linux-x86_64` | `…/ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz` | `33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c` |
+
+Each digest was **computed here, from the bytes**: `curl -sS -L -o <file> <url>` through the session's egress proxy
+(TLS verified against its bundle), then `sha256sum <file>`; none was copied from a page. ripgrep publishes a `.sha256`
+sidecar beside each asset, and all three agree with the computed digests. **Git for Windows publishes no per-asset
+sidecar**, so MinGit's digest rests on this one download; a second download on another host before the first release is
+cheap corroboration and is owed to whoever runs §5's gate. Git's licence is `GPL-2.0-only` and its capabilities
+`worktrees` and `checkpoints`; ripgrep's `Unlicense OR MIT` and `search`, the words the requirement uses. Licences for
+the two tools and for `@playwright/mcp` (`Apache-2.0`) were read from what the upstream declares — the registry's
+record for `@playwright/mcp@0.0.80` says `Apache-2.0` — not inferred.
+
+**Which Git archive.** `REQ-STARTUP-058` asks for "a Windows-x64-only archive from the upstream Git-for-Windows release
+line". That line publishes, per release, an installer (an executable), `PortableGit` (a self-extracting 7-Zip archive)
+and `MinGit` (a plain zip, in a full and a busybox variant). `REQ-STARTUP-085` accepts `zip`, `tar.gz` and `tar.xz` and
+nothing else, so MinGit is the one form the extraction can take; the full variant is pinned because the busybox one is a
+smaller Git nobody asked for. Its entries sit at the archive root (`cmd/git.exe`, `mingw64/bin/git.exe` — both declared
+as expected executables); ripgrep's sit under one directory named after the archive (`ripgrep-15.2.0-<triple>/rg`).
+`REQ-STARTUP-058` says "archive layout" and says nowhere what a layout is, and `REQ-STARTUP-086` names no base for the
+expected executables' paths. Both are **OQ-87** (OQ-76 on its branch, renumbered at the merge), and the manifest is built under the reading it states: `layout` is the
+format and the top-level directory (or `null`), and executables are relative to that directory.
+
+**The other two lists.** `toolServerPackages` pins `@playwright/mcp` 0.0.80, the one package the built-in defaults launch
+through a runner — counted although the `browser` entry ships `enabled: false`, which is **OQ-69**'s reading, the one the
+guard already built — with `source` and `license` beside `name` and `version`, mirroring the language servers' four fields
+(a reading; the guard reads two of the four). `languageServers` is `pins.json`'s list **verbatim**: the runtime's pins are
+the one source of truth (the bundle step checks them against the runtime's own defaults, IC-7), and
+`setup-manifest.test.ts` holds the shipped manifest's list equal to `pins.json` and to `CODE_INTELLIGENCE_LANGUAGE_SERVERS`,
+so a change to one file without the other fails `pnpm check`. The file carries no `$comment` on purpose: the fingerprint
+of `REQ-STARTUP-061` is over the whole canonical JSON, so an edited comment would set every installation up again.
+
+**Where the schema lives, and why there.** `packages/config/src/setup-manifest.ts`: `SetupManifestSchema` (zod, strict —
+a key the schema does not name refuses the file, at any level), the platform keys of `REQ-STARTUP-060`, the three archive
+formats of `REQ-STARTUP-085`, the two provisioner families, the complete-version pattern (`REQ-STARTUP-059`'s discipline,
+now imported by the guard's `isCompleteVersion` so the two admit the same strings) and `readSetupManifest`, which names
+every problem by its JSON path and reports them all at once. **The platform keys are a second copy, bound by a test.**
+`REQ-STARTUP-060` has one set of keys shared by artifact naming, updater asset selection and manifest artifact
+selection, and `tools/release-naming`'s `PLATFORM_KEYS` is the authority for the first two; `config` has no edge to that
+package, so the schema carries its own literal, and `tools/release-guard/src/pins.test.ts` — the guard imports both —
+holds the two equal key for key and in order, and every archive the shipped manifest carries under one of them (found by
+the independent verification of this item: the first build had the second literal and nothing binding it). The raw
+`<os>-<machine>` fallback key of the same requirement is read as a key a host may compute, never one a manifest archive
+is written under — the schema refuses it, so a fallback host finds no archive to select; what machine setup then does is
+the consumer's, not built. The reading is raised as **OQ-88** (OQ-77 on its branch, renumbered at the merge) rather than settled here. `config` is the one package both readers may import:
+the guard (`tools/**`, outside the boundary matrix) already reads `SHIPPED_MCP_SERVERS` and `resolveCommand` there, and
+the product's reader — the machine-setup flow, main's by `REQ-STARTUP-089` — has `config` in main's allowed edges; and
+`config` already owns both things the manifest is cross-checked against. `zod` is `config`'s first use of it, a dependency
+`contracts` already carries. The schema refuses: text that is not JSON; a non-object; a schema version other than 1; a
+missing list; a version that is a range, a partial, a floating tag or a prefixed spec; a digest that is not 64 lower-case
+hex characters; a URL that is not `https://` (`REQ-STARTUP-082`); an archive format outside the three; a top-level
+directory written as a path; an executable path that is absolute (a leading `/`, or a drive letter — `C:/git.exe`, added
+after the independent verification found the pattern let it through), has a `..` component or a backslash
+(`REQ-STARTUP-085`'s refusals, so the manifest never names one); an archive with no executable; a tool with no platform
+key or an unknown one; a provisioner outside `npm` and `uvx`; an empty capability list; a name listed twice in any list.
+
+**What the first execution found.** (1) **The guard passes.** `pnpm release:guard v0.1.0` exits 0 with
+`version: tag v0.1.0 is stable version 0.1.0, which apps/desktop/package.json ("version") declares` and
+`package pins: @playwright/mcp 0.0.80 (server "browser") — apps/desktop/resources/setup-manifest.json agrees`. With
+the pin mutated to `0.0.81` it exits 1 naming both files, and `setup-manifest.test.ts` and `pins.test.ts` go red with it.
+(2) **`guard.test.ts` had encoded the manifest's absence twice.** One case accepted exit 0 *or* 1 for the declared
+version, and one expected `server "browser" launches …` on stderr — a line only the missing manifest had put there. Both
+now require the pass; the second requires exactly one error and no mention of the manifest. (3) **The notices file now
+says something false of the tree.** The generator reads `pins.json` as its manifest and writes "The setup manifest of
+this build pins no machine tools"; the manifest pins two. `REQ-STARTUP-142` wants that section generated from the setup
+manifest and listing Git and ripgrep. Recorded and not repaired — the build was told to leave what the notices file lists
+alone while **OQ-73** is open, and OQ-73's gate-review addendum already says the generator's reader follows the shape
+machine setup decides (`../../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`).
+*Repaired 2026-09-28 under R-062, OQ-73 still open:* the generator now reads this manifest in `SetupManifestSchema`'s
+shape (a copy of the field names, held to the schema by `notices.test.ts`, because `tools/notices` imports nothing from
+`packages/`) and lists Git 2.55.0 and ripgrep 15.2.0 with their four fields. It states that machine setup, which would
+download them, is not yet in the build. It lists `@playwright/mcp` 0.0.80 under a third sub-heading for
+`REQ-STARTUP-152`, a placement OQ-92 raises. That first reading of the real manifest found the generator's assumed
+shape wrong on one field (`version` where the manifest says `provisionedVersion`), and the runtime's name absent from
+the manifest, so the sub-heading still reads it from `pins.json`. `pnpm notices` refuses on the same eleven problems as
+before. (4) **Nothing
+in the product reads the file.** The machine-setup flow (`REQ-STARTUP-060` onward, `REQ-MCP-112`'s setup half), the
+fingerprint (`REQ-STARTUP-061`), the probe, the download and the promotion are not built and are not in the first-release
+plan; the manifest is what they will read, and `SETUP_MANIFEST_FILE` is the name main would resolve the way `about.ts`
+resolves the two About files. (5) **`afterPack` does not assert the manifest inside `win-unpacked`.** The yml entry is
+tested through electron-builder's own `copyFiles` over a fixture (`about-assets.test.ts`), which is the step of a real
+pack that places the file; the "assets" rule was left to its two files, and the artifact check is owed to the next
+Windows package (IC-3), as the two About files' is.
+
+**Measured:** 14 cases in `setup-manifest.test.ts` (6 over the shipped file, 8 over malformed shapes); 4 new cases in
+`pins.test.ts` (the shipped manifest against the shipped defaults; the two platform-key lists equal, every shipped archive
+under a naming key, a fallback-keyed archive refused — a key renamed in the schema's copy alone turns the first two red) and the guard's constant now equal to the schema's; 2
+cases in `guard.test.ts` tightened; 1 new case in `about-assets.test.ts` (the manifest copied byte for byte). Three
+mutations of the shipped file were run and each turned the tests red: the browser pin (`0.0.81` — 2 tests and the
+guard), a language-server version drifting from `pins.json` (`typescript` 5.9.4 — the equality case), a digest in upper
+case (the schema case and four that read through it). **Not done here:** the consumer, the notices reader's move, the
+`afterPack` assertion, and any download of a pinned archive by the product.
+
+## The notices generator — 2026-09-27, first execution (`first-release-plan.md` §4.3)
+
+*REQ-STARTUP-037, REQ-STARTUP-141..143, REQ-STARTUP-149; IC-7's second half.* `pnpm notices` (`tools/notices/generate.mjs`
+over `notices.mjs`) is the licence-inventory generation and validation step this record's pipeline runs per platform
+before freezing. It writes `apps/desktop/resources/THIRD-PARTY-LICENSES.txt` (git-ignored) only when validation passes.
+A failure exits 1 with one `error:` line per problem naming the component or path, and it removes any earlier file so a
+stale one cannot be frozen in its place. The closure is computed offline, from what is installed:
+
+- the desktop application's production `dependencies` and those of every workspace package it builds from, never a
+  development dependency and never a product package;
+- Electron as one component, with its own credits reproduced beneath it (OQ-72);
+- SQLite and winpty (win32 only), which this build compiles into its native modules from vendored sources whose
+  licence files the `files` patterns above strip from the archive;
+- the bundled runtime's interpreter and every distribution in it;
+- the fonts and the icon set, from a table beside the generator that must name every face `packages/ui/src/fonts.css`
+  bundles.
+
+The inputs a person owns are three version-controlled files beside the generator:
+
+- the maintainer-review table (`reviewed-exceptions.json`, empty);
+- the release inputs (`release-inputs.json`), where the owner writes O-3's LGPL address;
+- the fonts table (`bundled-assets.json`), with the upstream OFL texts under `licenses/`.
+
+**What the first run over this tree found.** The file renders 20.4 MB, 19.8 MB of it Electron's 779 credited
+components. There are 40 application components on win32 (38 npm packages including Electron, plus SQLite 3.53.4 and
+winpty 0.4.4-dev), 74 runtime components on the Linux bundle, and 4 fonts and icon sets. **Validation refused, on
+six problems, each correctly:**
+
+1. the LGPL address is empty (O-3, owed by design);
+2. `@ai-sdk/provider-utils` 5.0.36 carries no licence text in its npm package;
+3. `@xterm/addon-serialize` 0.14.0, the same;
+4. `@xterm/headless` 6.0.0, the same;
+5. `proxy_tools` 0.1.0, in the runtime, the same;
+6. `dotenv` 0.9.9, in the runtime, declares no licence identifier.
+
+Four of those wait on a maintainer's reviewed exception, which only a maintainer may write (plan §6, O-11). The sixth
+has no reviewed route under REQ-STARTUP-143 as worded (OQ-74).
+
+*Corrected 2026-09-27 by the gate review: the list above is short by eight.* The generator had counted any non-empty
+licence-named file as the component's licence text. `@workflow/serde` 4.1.0 is inlined into the main bundle. Its only
+licence file reads "Apache License 2.0" and then "See the LICENSE file in the root of this repository", and the
+package ships no such file. The generator now reads a file that only names the licence, or only sends the reader
+elsewhere for it, as a reference. It reads a NOTICE or an authors list as an attribution. Neither counts as the text,
+and both are still reproduced (OQ-75). **Run again, validation refuses on fourteen problems:**
+
+- O-3;
+- `dotenv`;
+- the four components above that ship no licence file;
+- eight that ship only a reference:
+  - `@workflow/serde` 4.1.0;
+  - `ai` 7.0.92 and `@ai-sdk/gateway`, `@ai-sdk/openai`, `@ai-sdk/openai-compatible` and `@ai-sdk/provider`, each
+    with Apache-2.0's per-file notice only;
+  - in the runtime, `certifi` 2026.7.22, with MPL-2.0's Exhibit A only;
+  - in the runtime, `mslex` 1.3.0, with the Apache-2.0 notice and an `AUTHORS.rst`.
+
+O-11 names twelve reviews.
+
+**Validation fails on more than REQ-STARTUP-143's five conditions.** These are the generator's own integrity guards.
+Each fails closed and names what it found:
+
+- a font's licence file that lacks the font's own copyright notice;
+- an installed Electron runtime whose `dist/version` differs from its `package.json`;
+- Electron credits whose product count does not match what could be read;
+- a malformed or future-dated reviewed exception, even when no component needs it;
+- a required dependency that is not installed;
+- an input file that is not a JSON object.
+
+Only the rule that Electron, the interpreter, a compiled-in library and a bundled asset must carry their text is a
+reading of the requirement (OQ-75). The rest guard the generator's own inputs.
+
+*Corrected 2026-09-27 by the gate review's second round, on two points.* First, an input that parsed to `null`, `false`,
+`0` or `""` had been read as having nothing to report. Over an otherwise valid fixture, a `release-inputs.json` holding
+`null` exited 0 with "(no address)" in the header. A `bundled-assets.json` holding `null` dropped every font and icon
+text, and a `pins.json` holding `null` dropped every language server. Second, the address check still accepted the
+plan's own example `Name <sources@domain.tld>`, `test@test.com`, `noreply@…`, two addresses in one value, and the
+stock postal templates. Both are repaired. What the check refuses, and its limits as a word-and-shape heuristic, are
+stated in the plan's §4.3.
+
+Two premises of REQ-STARTUP-142 are not true of this
+build: Manrope is named and not bundled, and no setup manifest pins a machine tool (OQ-73). **Nothing in this record
+changes.** The step sits where REQ-STARTUP-037 puts it, before freezing. The `extraResources` entry
+that carries the file into the artifact, and `package.mjs`'s call to the step, are §4.4's, with `build-id.txt`.
+*Both landed 2026-09-27; see the next section.*
+
+## The two bundled assets — 2026-09-27, first execution (`first-release-plan.md` §4.4)
+
+*REQ-SHELL-140, REQ-SHELL-142, REQ-STARTUP-015, REQ-STARTUP-037, REQ-STARTUP-141, REQ-STARTUP-143, REQ-STARTUP-149.* The
+packaged build now carries both files the About page asks this record for at the root of `process.resourcesPath`, where
+`apps/desktop/src/main/about.ts` already looked. Four decisions were taken here, each recorded with its reason.
+
+**1. What the build identifier is.** `pnpm build-id` (`tools/build-id/`) writes `apps/desktop/resources/build-id.txt`
+(git-ignored) as one line: the full object name of the commit HEAD names, with `-dirty` appended when git reports a
+change the commit does not hold — a modified, staged, deleted or untracked file that is not ignored (`git describe
+--dirty`'s word). REQ-SHELL-140 fixes only that the value comes from a bundled text asset, and the specification's
+appendix that the asset is one stripped line. The rest follows from what an identifier is for:
+
+- Two builds of one commit from a clean tree carry the same identifier on every machine, and an identifier never
+  names a commit the build did not come from.
+- The full name, not an abbreviation: the length git abbreviates to grows with the clone's object count, so it is not
+  a property of the commit.
+- No tag and no `git describe`: whether a clone fetched its tags is not a property of the commit either.
+- It reads the local repository only and never reaches the network. A tree git cannot name a commit for fails the step
+  (exit 1, one `error:` line) and removes any earlier file, so a stale identifier is never frozen in its place.
+- A build for a tag is not refused for `-dirty`. The specification does not forbid it, the identifier says it, and a
+  release job's checkout is clean: `.gitattributes` forces LF and every file the build generates is ignored. *Decided
+  2026-09-27, at the gate review's suggestion to record the choice.*
+
+**2. `pnpm package` runs both steps before freezing, notices first.** After the code-intelligence bundle, because the
+notices generator reads the runtime, and before `electron-vite build`, because a refusal should cost seconds. Both
+files go to the root of the artifact's resources through two `extraResources` entries.
+
+**3. What a local `pnpm package` does while O-3 is owed.** It fails. `pnpm notices` refuses until the owner writes O-3's
+address, a maintainer signs O-11's twelve reviews and OQ-74 is ruled, and the package refuses with it, exiting 1 and
+naming the flag below (REQ-STARTUP-143). This was measured: `REFUSED` at the notices step in 6.2 s, with the notices
+step's fourteen `error:` lines above it. **`ROTARIS_PACKAGE_WITHOUT_NOTICES=1` is the one explicit way on.** Only the
+value `1` sets it, and it passes over exit 1 only, never a usage error ~~or a crash~~ or a signal. ~~What it makes is a
+development package with no notices file, because the refused step has already removed any earlier one.~~ Exit 1 is also
+what a crash exits with: Node exits 1 on an uncaught exception, and the step makes exit 1 of an exception it catches.
+So the flag passes over a crash as well, and an uncaught one removes nothing. `package.mjs` therefore removes any notices file
+itself when it goes on without one (`settleNoticesStep`), and what it makes is a development package with no notices
+file whatever ended the step. *Corrected 2026-09-27 by the gate review: the struck text claimed the flag never passed
+over a crash, and it did, with a stale notices file left for `electron-builder` to carry and `afterPack` to accept.*
+*A value other than `1` or empty is a usage error, and `pnpm package` exits 2 on it before any step runs
+(REQ-STARTUP-149, `flagUsage`). Added 2026-09-27 by the review's second round: before it, such a value was found only
+after the notices step, and the package exited 1 as though validation had refused.*
+Such a package:
+
+- shows REQ-SHELL-142's caption on its About page;
+- carries no licence text for its shipped closure, and so not the tool server's (REQ-STARTUP-015/141/142);
+- is announced as not releasable, in the step's line and again as the script's last line;
+- carries a release artifact's name all the same. Its installer is `Rotaris-<version>-windows-x64-setup.exe`,
+  REQ-STARTUP-031's name, and nothing on the file tells it from a release. Only `package.mjs`'s lines and
+  `release/load-proof.json` do. What keeps it out of a release is the tag refusal below, because §4.2's workflow is the
+  only route to one.
+
+A build for a tag refuses the flag: `GITHUB_REF_TYPE=tag`, or `GITHUB_REF` under `refs/tags/`. §4.2's workflow therefore
+cannot take this route even if it sets the flag. Only GitHub's variables are read, so a release built by any other route
+is not recognised as one. `afterPack` refuses an artifact without the notices file unless the flag is set, and on a
+build for a tag even when it is. So calling `electron-builder` directly does not get past either refusal. *The tag
+half was added 2026-09-27 by the gate review. Before it, `afterPack` accepted the flag on a tag build.*
+
+**4. Which copy of the tool server's licence text stands (plan §4.4's second fact).** REQ-STARTUP-015 wants exactly one
+copy inside the bundle and cites REQ-STARTUP-142. REQ-STARTUP-142 requires the notices file to carry every shipped
+dependency's full licence text, and `serena-agent` is one. So the copy REQ-STARTUP-142 compels is the one that stands,
+and the copy this record named on 2026-09-06, under the distribution's `dist-info`, is the second. `electron-builder.yml`
+filters it out of the artifact (`!runtime/**/serena_agent-*.dist-info/licenses/LICENSE`). The source tree keeps it,
+because that is where the generator reads it. Nothing reads it at run time: the product never does, and `afterPack`'s
+interpreter check reads `METADATA`. The requirements decide this between them, so no question is raised. On this tree's
+real inputs the rendered notices text carries `serena-agent`'s MIT text exactly once (20.4 MB rendered, 1 occurrence).
+The distribution's `RECORD` still lists the file it no longer carries in the artifact. Nothing in the artifact reads
+`RECORD`; a tool that checks an installed distribution against it, as `pip uninstall` does, would find the file missing.
+*Noted 2026-09-27 by the review's second round.*
+
+**The evidence, and what it does not cover.**
+
+- `afterPack` gains an "assets" rule (`apps/desktop/scripts/lib/about-assets.mjs`; *named `bundled-assets.mjs` until the
+  gate review, which found the name taken: ~~REQ-STARTUP-143's "bundled asset" is a font family or the icon set~~
+  `tools/notices/bundled-assets.json` already holds the bundled assets that carry a licence file, the three font
+  families and the icon set. Corrected 2026-09-27 by the review's second round: the struck clause read REQ-STARTUP-143's
+  licence-file clause as a definition. The specification lists both of this module's files among the bundled assets
+  the shell reads (`docs/spec/12-desktop-shell-windows.md`, "Bundled assets read by the shell"; REQ-SHELL-140's
+  "bundled text asset"), and the Distribution glossary now says so. The name stands: it says which surface the module
+  serves*), which checks the artifact:
+  - `build-id.txt` is one line, byte-identical to the file the step wrote, and names the tree being packed
+    (`identifyBuild`, asked again at `afterPack`), so an identifier an earlier build left cannot be carried by an
+    `electron-builder` called directly;
+  - the notices file is byte-identical to ~~the one validation passed~~ the one in the source tree, or is absent only
+    under the flag and never for a tag. *Corrected 2026-09-27 by the review's second round: `afterPack` does not run
+    validation again, and nothing ties that file to the tree being packed as `identifyBuild` ties the identifier. On
+    `pnpm package`'s path the file is this tree's, because the notices step has just regenerated or removed it; an
+    `electron-builder` called directly carries whatever an earlier passing run left;*
+  - no copy of the tool server's licence remains under its `dist-info`;
+  - the notices file carries that licence text exactly once, read by the generator's own `normalize`.
+
+  It fails the build naming each problem, including the case where a renamed distribution stops matching the filter.
+  The count looks for a second copy at the `dist-info` path only, not across the rest of the artifact. On this tree
+  the runtime carries the tool server's copyright line in that one file and no other.
+- `about-assets.test.ts` runs the repository's own `electron-builder.yml` through electron-builder's own
+  `getFileMatchers` and `copyFiles` (app-builder-lib 26.15.3, the yml parsed by the `js-yaml` it loads). The fixture
+  tree is in both runtime layouts, with and without the notices file. Removing the filter or the build-id entry fails
+  those cases.
+- **No Windows package was run.** IC-3 bars a Linux artifact, and the Windows pack needs its own host. The "assets"
+  rule's first run against a real `win-unpacked` is still owed, and it happens at the next `pnpm package` on Windows.
+- `pnpm settings-proof` gains launch 1′, the present branch of each asset in the built app:
+  - the Build row reads the identifier `pnpm build-id` wrote over this tree (`<HEAD>-dirty` while the change was
+    uncommitted);
+  - no caption stands under the licensing control;
+  - the control opens `apps/desktop/resources/THIRD-PARTY-LICENSES.txt`.
+
+  That notices file is a fixture, because `pnpm notices` refuses. The proof moves any real file aside first and gives
+  it back byte for byte (`lib/staged-resources.mjs`). A run killed mid-launch is repaired by the next run. Both were
+  measured: with real files present, with none, and after a `SIGKILL` during 1′.
+
+  *Corrected 2026-09-27 by the gate review, on two points.* First, the repair could clobber a real file. If a real
+  `pnpm build-id` or `pnpm notices` ran between a killed run and the next, the next run's restore put the stale file
+  back over the new identifier, and deleted the new notices file. The stash's ledger now records each file the proof
+  wrote by SHA-256 and modification time. A file that does not match is kept as newer, and the stashed one is dropped.
+  The time is compared because `pnpm build-id` over the same tree writes the same bytes. Measured in the built app: a
+  real identifier was staged, the proof was sent `SIGKILL` during 1′, and `pnpm build-id` then ran. The next run kept
+  the new file, dropped the stashed one, removed the notices fixture, and passed. Second, the proof caught SIGINT and
+  SIGTERM to give the files back. Node runs such a handler only after `spawnSync` returns. A script holding the same
+  handler around a `spawnSync` showed that a SIGTERM during a launch was held until the launch ended, then ignored,
+  and the script exited 0. The handlers are gone. `finally` covers a launch whose Electron dies, and the next run
+  covers the proof's own death.
+
+  *Corrected again 2026-09-27 by the review's second round, on two more points, each confirmed by its probe.* First,
+  when the proof's fixture had been removed by another writer, the next run put the older stashed file back: a
+  `pnpm notices` that refused after a killed run removed the fixture, and the notices file of an earlier passing run
+  returned. A removal is now newer than the stash, like a write, so the name is left empty and the stashed file dropped.
+  `restore` moves the stashed file over the proof's instead of removing the proof's first, so it never makes that state
+  itself. Measured in the built app: a real identifier and an older notices file were staged, the proof was sent
+  `SIGKILL` during 1′, and `pnpm notices` then refused and removed the fixture. The next run left the notices name
+  empty, dropped the older file, put the identifier back byte for byte, and passed. Second, the ledger was written in
+  place, and a kill during that write left it unreadable, so the fixture was kept and the real file dropped. The ledger
+  is now written beside itself and renamed over. Two windows stay open, both while the proof has written nothing under
+  a name, and `lib/staged-resources.mjs` names them: a write killed part-way, and a refusal during the absent-branch
+  launch, which leaves no trace for the next run to read. *The same round added two smaller repairs: `package.mjs`
+  reports a step it could not start as that, not as a signal, and `settings-proof` asks git for HEAD without the
+  variables of an enclosing git process, as the writer does.*
+
+**What this found.** No defect in the mechanism the record decided. It found one false statement nearby: `package.mjs`
+said "`out/` now holds a SEAM-FREE build" after every run, including one refused before the build. That line now
+prints only when the build ran (`docs/defects/fixed/pnpm-package-announced-a-seam-free-build-it-had-not-made.md`; the
+closing lines are `scripts/lib/package-verdict.mjs`'s, tested). With it, a refusal writes an `error:` line to stderr
+(REQ-STARTUP-149), and a counterfactual that ended before `electron-builder` is reported as not exercised. It also
+found one craft note on the About page, recorded in `docs/defects/`. **Nothing in this record's decision changes.**
+The gate review's corrections above change how decision 3 is carried out. They do not change the decision.
+
+## The prerelease naming repair — 2026-09-28, first execution (R-062; first-release plan §4.1/§4.2/§4.5)
+
+*Reported in place under the standing policy; row in `../first-executions.md`. The note is
+`../../defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md`.* The decision above says the artifact names
+are one module shared by the build configuration and the updater, "with per-target `artifactName` templates producing their
+exact names". The templates were `Rotaris-${version}-windows-x64-setup.${ext}`, and `${version}` is not the declared text:
+electron-builder normalises the manifest's version through loose SemVer when it reads it, and renders the normalised value
+(`0.1.0rc1` → `0.1.0-rc1`). **The decision stands; how it is carried out changes.** The names are still the naming module's,
+but they reach electron-builder as **literals**, rendered from the declared text, and never through its macro:
+
+- `pnpm package` (`scripts/package.mjs`) reads the declared text from `apps/desktop/package.json` — the one place §4.1
+  decided — through `scripts/lib/artifact-names.mjs` (`declaredProductVersion`, validated by REQ-STARTUP-029's grammar; a
+  text outside it renders no REQ-STARTUP-031 name and stops the package), renders `artifactName(declared, 'setup')`, and
+  **writes the yml it would have run with, `win.artifactName` and `nsis.artifactName` set to that literal**, as
+  `release/electron-builder.package.yml`, which is what `electron-builder --win --config …` then loads. `electron-builder.yml`
+  carries no `artifactName` at all any more, and `configurationWithNames` refuses to overwrite one that reappears there.
+- **A `-c.win.artifactName=…` command-line override was measured and refused.** Beside `--config <file>` electron-builder
+  turns the two into `{ extends: <file>, win: {…} }` and, with no path left to load, also reads the project's default
+  `electron-builder.yml`: the yml is merged twice (`files` and `extraResources` doubled), and the keep-prebuild
+  counterfactual's variant (`package.mjs`, IC-6) is merged *over* the base rather than in place of it, so the base's
+  prebuild exclusions stay in force and the counterfactual stops being one. The written configuration keeps a single load,
+  measured through app-builder-lib's own `getConfig` (`artifact-names.test.ts`).
+- `build-hooks.cjs`'s `checkNaming` (afterPack) takes the declared text and **the names electron-builder is configured to
+  produce**, each configured pattern expanded by electron-builder's own `expandMacro` with the values it will use — so the
+  old template renders `Rotaris-0.1.0-rc1-…` and is refused with a line saying the version reached electron-builder
+  hyphenated, and a configuration with no name is refused too (a bare `electron-builder --win` would fall back to
+  electron-builder's own `${productName} Setup ${version}.exe`). A new **`artifactBuildCompleted`** hook refuses any produced
+  file whose name is not the declared version's installer or its block map, so the rule holds after the fact as well as
+  before it. afterPack's report now records both `declared` and electron-builder's `normalised`.
+- The block map is accepted because electron-builder emits it for an NSIS target whatever `publish` says, as the first
+  execution of 2026-09-04 above already recorded against this decision's "no … block-map files are emitted". It is named
+  after the installer, so it carries the declared text; whether the pipeline publishes it is §4.7's and REQ-STARTUP-152's
+  business, not the build's.
+
+**What stays normalised, and the question it raises (OQ-80).** The installer's own Windows metadata is still written from
+electron-builder's `appInfo.version`: the NSIS `VERSION` define, which becomes REQ-STARTUP-018's `DisplayVersion` and the
+uninstall display name `Rotaris 0.1.0-rc1`; the `ProductVersion` version key; and `VIProductVersion`, four numbers by
+Windows' own rule (`0.1.0.0`), which no spelling could carry a suffix in. `extraMetadata.version` would have forced the
+declared text through — electron-builder deep-assigns it *after* normalising — and was not used, because §4.1 decided that
+either it or `buildVersion` is a second place a version is declared. Whether REQ-STARTUP-158 reaches that metadata is
+**OQ-80**; the build proceeds with it as electron-builder writes it, said in `electron-builder.yml`'s header.
+
+**Measured.** 26 new unit cases: `apps/desktop/scripts/lib/artifact-names.test.ts` (15 — the names for `0.1.0`, `0.1.0rc1`,
+`0.1.0a2`, `0.1.0b3`; `0.1.0-rc1` and `0.1.0dev1` refused by the grammar; the manifest read raw for all four and refused
+without a version or outside the grammar; the produced-name rule over the declared installer, its block map, the hyphenated
+installer and electron-builder's own pattern; the written configuration loaded by app-builder-lib's `getConfig` with both
+keys literal, the three hooks and the targets kept, `extraResources` and `files` once; the bare yml loading with no name;
+a template already in the configuration refused; the keep-prebuild variant named with its own files list),
+`apps/desktop/scripts/build-hooks.test.ts` (10 — `checkNaming` passing the declared name and refusing the hyphenated one,
+one wrong key among right ones, no name, and a declared text outside the grammar; `configuredArtifactNames` through
+electron-builder's real `expandMacro` over a normalised `0.1.0-rc1` rendering the defect's exact name and being refused, the
+literal surviving, the stable case identical either way; `artifactBuildCompleted` over this tree's declared version) and
+one more in `tools/release-naming/src/naming.test.ts` (the hook's plain-Node load refusing the hyphenated name, beside the
+passing case rewritten to the new signature); counted from `pnpm vitest run … --reporter=verbose` over the three files,
+30 cases in all, 4 of them `naming.test.ts`'s older ones. *Corrected 2026-09-28 by the review round: the first report
+said 16, 11 and 32 new, which no run shows.* `pnpm check` and `pnpm build` green under Node 24.
+
+**Not shown here — IC-3.** No Windows package can run on this host, so the repaired path has produced no installer. The
+**next Windows `pnpm package`** must show, with the manifest temporarily declaring `0.1.0rc1`: the line
+a line beginning `[package] declared 0.1.0rc1 → Rotaris-0.1.0rc1-windows-x64-setup.exe, written into release` (the
+separator Windows prints, then `electron-builder.package.yml (from electron-builder.yml)`);
+afterPack's `[ic6] naming: declared 0.1.0rc1, electron-builder's normalised 0.1.0-rc1; configured to produce
+Rotaris-0.1.0rc1-windows-x64-setup.exe, Rotaris-0.1.0rc1-windows-x64-setup.exe`; `[ic6] naming: produced
+Rotaris-0.1.0rc1-windows-x64-setup.exe` and the same for its `.blockmap`; the file by that name under `release/`; and the
+installer's `DisplayVersion` read back from `HKCU\…\Uninstall\Rotaris` after a scratch install, for OQ-80's record. With
+`0.1.0` declared it must package exactly as the 2026-09-04 execution did. The "assets" rule's first real run, owed above,
+happens at the same package.
+
+## The updater — 2026-09-28, first execution (`first-release-plan.md` §4.6; O-10, R-062)
+
+*REQ-STARTUP-043, 046, 057, 105–126, 146, 150, 161–164, 167, 168; REQ-SHELL-114, 118, 121; `PD-STARTUP-001`;
+`PD-MONITOR-002`. Reported in place under the standing policy; row in `../first-executions.md`.* The bespoke main-process
+updater this record decided is built, in the shape the Decision fixed: `apps/desktop/src/main/updater/` — `classify.ts`
+(106), `feed.ts` (105, 107–110, 112), `keys.ts` (167, 168), `download.ts` (118, 124), `install.ts` (122, 123),
+`strategies.ts` (115, 125, 126), `updater.ts` (the orchestrator: 114, 116–121, 046) and `electron.ts`, the one file of
+it that touches Electron (`net.fetch`, so the system proxy and certificate store apply), the disk, `reg.exe` and a
+process. Everything else is pure over ports and decided by the tests beside it. The names and the order come from the
+one naming authority, which gained REQ-STARTUP-109's order and the manifest format for it (`tools/release-naming`), so
+the exact-string lookup the Decision requires is structural. Four things the record left open were decided here, each
+stated so a reader can check the design against the requirement.
+
+**1. Where the key set lives, and its form.** `RELEASE_SIGNING_KEYS` in `apps/desktop/src/main/updater/keys.ts`,
+compiled into main's bundle: resolved from within what was installed (REQ-STARTUP-159), reachable from no configuration
+value, preference, environment variable, control or download (REQ-STARTUP-167). The signature is **Ed25519** (RFC 8032)
+through Node's `crypto`: `SHA256SUMS.txt.sig` holds the **raw 64-byte signature over the manifest's exact published
+bytes**, and a key is an **SPKI PEM** text block — what `openssl genpkey -algorithm ed25519` and `openssl pkey -pubout`
+produce, and what `openssl pkeyutl -sign -rawin` signs with. The specification leaves both forms to the implementation
+(domain 11's Data & Formats: "the form of a key, the form of a signature, and how many keys a build carries are
+implementation choices"); **OQ-83** asks whether the record should fix them so the pipeline (§4.7) cannot choose
+differently, and the build proceeds under this reading. **What O-2 must add, and where:** one element in that array —
+the public half of the release signing key as an SPKI PEM block, between `-----BEGIN PUBLIC KEY-----` and
+`-----END PUBLIC KEY-----`. The private half is the pipeline's secret and never enters the repository. A rotation
+appends the incoming key while the outgoing one is still carried (168 (a)); a withdrawal removes it so no later build
+carries it (168 (d)); the pipeline's key record (§4.7, 168 (b)) starts with the first build that carries a key, and
+this build carries none. **The set ships EMPTY on this tree.** With no key, `verifyDetachedSignature` answers `no-key`,
+the install step refuses every manifest with one sentence saying the build carries no verification key, and nothing is
+downloaded — measured in `install.test.ts`: the manifest and its signature fetched, no third request, no staging
+directory. That is REQ-STARTUP-122/123's outcome for an unverifiable release, not a stub.
+
+**2. The launcher's variable is named.** The record decided the launcher "publishes its own declared variable" and did
+not name it. It is **`ROTARIS_PORTABLE_ARTIFACT`** (`classify.ts`), the variable REQ-STARTUP-147 admits as "the variable
+by which that form names the artifact file a launch started from", a file path and nothing else. Two obligations on the
+portable stub (§4.5, not built), recorded here so its spike inherits them: it must publish that variable with the
+artifact's absolute path, and it must **forward its own arguments to the payload**, because the successor launch below
+carries a token the payload has to see.
+
+**3. The classification's residue.** A packaged Windows build with neither a registry match nor the variable — the
+payload run directly out of a preparation, or an installed tree copied elsewhere — is **not updatable** here, this
+record's reading ("absent variable → not updatable … the requirement's own default"). REQ-STARTUP-106's copied-tree
+sentence reads the same case as portable, with the running executable replaced by a single-file portable. The two texts
+disagree; the build follows this record, the launch performs no check, and its log line names the reason. **OQ-84.**
+
+**4. The offer notice under two requirements.** REQ-STARTUP-118 gives the download a non-persistent notice titled
+`Downloading Rotaris {version}` with a fixed message; REQ-SHELL-118 keeps the offer's title and identity, updated in
+place, with a message conveying two things and no more, and re-enables the action "ready to install" when the download
+completes — where REQ-STARTUP-122 runs download → verify → apply without a pause. Built: the **identity is kept and the
+notice updated in place** (REQ-SHELL-118, and this record's "the same notice by identity, never by replacement"), through
+a new `update` on the notice store; the **title and the message are REQ-STARTUP-118's** (Distribution owns the words,
+Shell the surface — `CONTEXT-MAP.md`'s relationship); **not persistent while downloading**, so no dismissal can wave off
+a version whose install is in flight; the action **disabled** with `The download is in progress; the same download
+cannot be started twice.` as its accessible description (the notice contract's new `action.disabled`, drawn by
+`Notice.tsx`); and **the apply follows the verified download without a second click**, so REQ-SHELL-118's "ready to
+install" state stands only for the length of the apply. A failure becomes the `Update not installed` error notice in
+place (REQ-STARTUP-120; REQ-SHELL-118's "SHALL become"), recorded before it is rendered (REQ-NOTIFY-268). **OQ-85** asks
+which requirement governs the title, the persistence and the pause.
+
+**The restart, built on ADR-0055's decision.** `Restart now` starts the target — the updated portable — with
+`builtin:update-successor -- <this instance's hand-over endpoint>` on the sentinel branch (OQ-43 covers the composition,
+as ADR-0055 says it should); the successor performs no claim and no hand-over attempt, opens its own endpoint and
+announces its record over the predecessor's (`inheritInstance`, `packages/platform/src/instance.ts`); the predecessor
+replaces the record's contents with the successor's fields in one atomic replacement (`replaceDocument`: a sibling
+renamed over), answers, and only then destroys its windows and quits through the ordinary path — its `close` at quit
+leaves a record that no longer names it. A successor that cannot be started surfaces through `Update not installed` and
+nothing closes; one that never signals leaves the predecessor as it was, with no timeout of its own (ADR-0055). The
+successor's own wait for the predecessor's answer is bounded by the hand-over interval, because the predecessor answers
+at once and a successor left unanswered must not become a rival: it ends quietly. `instance.test.ts` drives the pass in
+one process: the record names the successor afterwards, the predecessor's close leaves it, a third launch is handed to
+the successor, a successor with no answer is refused within the interval and changes nothing, and a successor from
+another machine is not accepted.
+
+**What was executed, and what was not.** Unit: 145 cases in 14 files — the seven updater modules, the notice store's
+`update`, the instance record's pass, `MainWindows`' post-show activation, the two commands, the naming authority's
+order and manifest format — under `pnpm vitest run`. Built application, on Linux under Xvfb (`pnpm updater-proof`,
+7 checks, all green): the source-tree launch is classified not updatable, writes exactly one `update check:` line at
+`info` for its one main window naming REQ-STARTUP-106, records no request, quits cleanly with nothing in flight, and a
+proxy sink that every request of Chromium's stack would reach (`--proxy-server=127.0.0.1:<port>`) saw no connection for
+`github.com`. **Not executed here, and not faked:** a check that goes out to the endpoint; an offer on screen; a
+download; the installer and portable apply against a real artifact; the restart between two real processes. Every one
+of them needs a packaged Windows artifact launched from its install directory or through its launcher, which IC-3
+places on the Windows host; their first execution is owed to the next `pnpm package` on Windows, with the "assets"
+rule's. **The proof found one thing beside the mechanism:** the sink recorded `CONNECT redirector.gvt1.com:443` —
+Chromium's own component updater reaching out from the built application, a request no requirement names and
+REQ-STARTUP-160's disclosure cannot carry — filed as
+`../../defects/fixed/the-built-app-opens-a-connection-to-chromiums-component-updater.md`, not repaired here.
+*Corrected 2026-09-28 by the repair (R-062): the cause named in that sentence was wrong.* A net-log of the same launch
+named the request as Electron's spellchecker downloading a Hunspell dictionary
+(`https://redirector.gvt1.com/edgedl/chrome/dict/en-us-10-1.bdic`), not the component updater, and
+`--disable-component-update` was measured to change nothing. `apps/desktop/src/main/runtime-requests.ts` empties each
+session's dictionary list and turns the spellchecker off in `session-created`, the one point measured to prevent the
+download; `pnpm updater-proof` now asserts **zero** connections at the sink from launch to first paint and an orderly
+quit (9 checks), beside its `github.com` check. OQ-93 asks whether any text field is spell-checked.
+
+**Readings stated rather than left in code.** REQ-STARTUP-123's two hash outcomes follow the download as its sentences
+say ("the download was discarded"), so an asset the manifest does not list is downloaded and then discarded rather than
+refused before the download. A portable whose medium is gone since launch reads as "the directory holding it cannot be
+reached", in REQ-STARTUP-125's shape for that case, and only an artifact missing from a directory that is there reads as
+"not installed from a released artifact". The demo flavour (REQ-STARTUP-057) is a parameter of the activation, false
+for every window until the demo entry (REQ-SHELL-162) is built. Every line the updater writes is `info`
+(`PD-MONITOR-002`), a failed install `warning`, a successor that could not be started `error`. The installer's
+auto-close and the restart's close destroy the main windows rather than asking the close guard: the user chose the
+action, and after the record has passed the predecessor must not stay. That is a reading between two SHALLs —
+REQ-STARTUP-119's "the window SHALL auto-close" and REQ-STARTUP-121's close against REQ-STARTUP-046's confirmation
+"when a run is active" — and **OQ-86** asks which governs. **Nothing in this record's decision changes.**
+
+**Repaired at verification, 2026-09-28 (same item, R-062).** The independent verification found three defects in the
+build above, and writing the third's test found a fourth; each is repaired with a test beside it, and nothing in this
+record's decision moved. (1) *The classification order.* The AppImage test ran before the released-artifact test, so a
+`pnpm dev` inheriting `APPIMAGE` from an AppImage-hosted terminal was the appimage flavour and contacted the feed
+(reproduced in the built app), and the same variable on a packaged Windows build selected a flavour `PD-STARTUP-001`
+never offers. REQ-STARTUP-106's "before any other flavour test" orders the **flavour** tests; the released-artifact
+test is not one, and no variable overrides it. The packaged test now runs first and the AppImage test applies to a
+packaged Linux build alone (`classify.ts`); `pnpm updater-proof` launches with `APPIMAGE` and
+`ROTARIS_PORTABLE_ARTIFACT` set and still records no request. (2) *The record passed to anyone.* `passRecord` rewrote
+the record for any well-formed successor on this host, whether or not a restart was waiting, so an unsolicited
+`builtin:update-successor` launch became a second instance (REQ-STARTUP-161). The claim now takes `acceptSuccessor`, and
+main answers true only while its restart waits; it does not match the spawned pid, because the portable's launcher
+stands between that process and the one that announces itself. (3) *An installed update offered again.* A later
+window's check after `Update installed` re-offered the same version, replaced the notice and made `Restart now`
+unreachable; the check now stays silent while an update is applied or handed off for that version or a newer one.
+(4) *The cleanup ran per window.* REQ-STARTUP-115's `<name>.old` cleanup ran at every window's check and so deleted the
+backup the same process's apply had just made; it is launch-time, once per process. Also aligned: the copy port
+replaces `<name>.update`, the updater's own sibling, as its contract now says. Unit: 152 cases in the same 14 files;
+`pnpm updater-proof`: 8 checks, all green.
+
+**Repaired at the second verification, 2026-09-28 (same item, R-062).** (5) *A refused pass left the restart waiting
+for ever.* A successor that started and was accepted, but that the record could not be passed to — the record no
+longer named this instance (a REQ-STARTUP-164 (3) reclaim meanwhile), or its atomic replacement failed (on Windows, a
+scanner or indexer holding the file through the rename) — was answered not-passed and ended quietly, while main's wait
+stayed armed: `Update not installed` never surfaced and every later `Update now`, `Try again`, `Restart now` and window
+check answered `update.busy` for the rest of the process. REQ-STARTUP-121 puts that case on its failure branch, and it
+is not ADR-0055's "successor that never signals", because the predecessor sees the refusal itself. The claim now takes
+`onRecordPassFailed(successor, reason)`, fired only for an announcement `acceptSuccessor` accepted; main's wait
+(`updater/successor.ts`) settles exactly once — passed, the spawn failed, or the pass failed — so the restart raises
+`Update not installed` with the reason as its detail and the in-flight guard clears. The refusal's answer now carries
+its reason, and the successor's `launch refused` line names the check that refused it. Pinned by `instance.test.ts`
+(a failing replacement, and a record rewritten for another pid: the callback fires, the record is byte-for-byte
+unchanged; an announcement never accepted does not fire it), `successor.test.ts` and `updater.test.ts`. Still not
+decided here: an answer the successor no longer waits for — its 5 s bound expired while this process was blocked — is
+recorded in `../../defects/` as a defect, not repaired. Unit: 162 cases in 15 files.
+
+**Repaired — the two variables stay with the launch they describe, 2026-09-28 (same item, R-062).** (6) *A child
+inherited this artifact's path.* `classify.ts` read `APPIMAGE` and `ROTARIS_PORTABLE_ARTIFACT` from `process.env`, and
+both stayed there for the life of main, so every child of the product inherited them — the run host and the workspace
+services by `utilityProcess.fork`'s default, and from the run host every tool, terminal, hook, MCP server and
+code-intelligence branch. A packaged Rotaris started from a shell inside a portable Rotaris would have classified
+itself portable from the other artifact's path and aimed its rename-aside at that file; REQ-STARTUP-147 calls such a
+variable "set by the artifact's own runtime rather than by a user", and an inherited copy is neither. Observed before
+the repair in the built app (a scripted `terminal` call's shell carried both). **Repaired at one seam:** main's own
+environment, from which every child's is derived. The first statement of main's module body takes the two names out
+of `process.env` and returns what they held (`takeArtifactVariables`, `packages/platform/src/artifact-environment.ts`,
+where the names now live); the classification is handed that (`classifyThisInstallation(launchArtifact)`) and never
+reads `process.env`. Nothing else is removed — the AppImage runtime's `APPDIR`, `ARGV0` and `OWD` name nothing the
+product reads. What this record already decided is unchanged, and it is what makes one seam enough: the portable's
+successor is started from the launcher stub, which publishes its own variable (item 2 above), so no launch depends on
+inheriting one. Pinned by `artifact-environment.test.ts` and `apps/desktop/src/main/launch-artifact.test.ts` (the take
+precedes every fork and spawn in main's body; the classification reads what it took), and by `pnpm updater-proof`'s
+second stage — the built app launched with both variables set, one scripted `terminal` call writing its shell's
+environment: neither variable, the launch's other variables kept; 11 checks, all green. Not executed: a packaged build
+(IC-3); the hooks' and MCP servers' environments were not read separately — they are the run host's, which the
+terminal's reading measures. **Raised: OQ-90** — REQ-STARTUP-147 names the variables written for child processes and
+none removed from them, and REQ-HOOKS-032 says a run "sees exactly the environment the application itself was started
+with"; the build proceeds on this record's reading that a variable describing the artifact is not part of the
+environment a child is handed. The note: `../../defects/fixed/the-artifact-variables-reach-the-products-own-child-processes.md`.
+
+**Repaired 2026-09-28 (R-062): (7) the record passed to a successor that had stopped waiting.** The defect the
+paragraph above filed (`../../defects/fixed/the-record-can-pass-to-a-successor-that-stopped-waiting.md`) is repaired
+by making the pass two steps, as ADR-0055's restart section now records (*Amended 2026-09-28*). The predecessor offers
+the record. It rewrites the record only once the successor has acknowledged within the hand-over interval, on the
+timer port. A successor that closed first, or whose acknowledgement is late, leaves the record intact and fails the
+restart through `onRecordPassFailed`, so `Update not installed` surfaces and nothing closes. The updater's side is
+unchanged: `updater/successor.ts` already rejects on any pass failure. Pinned by `instance.test.ts`: the offer
+before the pass; a successor that closed before answering; an acknowledgement missing past the interval on a
+`FakeClock`, and a late one refused; a predecessor loop blocked past the successor's bound, red against the one-step
+pass; the successor's unbounded wait once it has acknowledged; its reading of the record when the predecessor ends
+without a last word; and the ordinary hand-over unchanged.

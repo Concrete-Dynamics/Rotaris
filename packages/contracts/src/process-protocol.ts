@@ -102,8 +102,8 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('config.liveState'), state: z.record(z.string(), z.unknown()) }),
   z.object({ kind: z.literal('session.list'), workspaceId: z.string() }),
   z.object({ kind: z.literal('session.resume'), workspaceId: z.string(), sessionId: z.string().min(1) }),
-  /** REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause (continue, double, cancel) or continue a manually paused session. */
-  z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(['continue', 'double', 'cancel']) }),
+  /** REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause (continue, double, cancel) or continue a manually paused session or one a crash left (PD-ORCH-005 clause 18); clause 6's `withoutPaused` declines the open iteration. */
+  z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(['continue', 'double', 'cancel']), withoutPaused: z.boolean().optional() }),
   /** REQ-ORCH-153/154 (ADR-0062) and PD-ORCH-003: the plan gate's three entries, forwarded to the run host that owns the session. */
   z.object({ kind: z.literal('session.planEdit'), sessionId: z.string().min(1), text: z.string() }),
   z.object({ kind: z.literal('session.planDecision'), sessionId: z.string().min(1), decision: z.enum(PLAN_DECISIONS), changes: z.string().optional() }),
@@ -130,6 +130,12 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('hooks.setToggle'), agent: z.enum(HOOK_AGENT_IDS), hookId: z.string().nullable(), on: z.boolean() }),
   z.object({ kind: z.literal('playbooks.catalogue') }),
   z.object({ kind: z.literal('approval.shown'), requestId: z.string().min(1), ok: z.boolean(), error: z.string().optional() }),
+  /**
+   * REQ-TOOLS-063: main has queued the request behind the dialog already open in its window. It is shown as soon as
+   * that dialog closes, so the run host stops bounding the wait for `approval.shown`; only a timeout or a cancellation
+   * drops it unshown.
+   */
+  z.object({ kind: z.literal('approval.queued'), requestId: z.string().min(1) }),
   /**
    * ADR-0039 (Part P): the rows live in the run host. `checkpoint.list` reads them with no Git (REQ-GIT-050), stamps
    * REQ-GIT-093's liveness verdict and runs REQ-GIT-094's stale-session repair; `checkpoint.recordSafety` writes the
@@ -232,6 +238,12 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('skills.rescan'), workspaceRoot: z.string(), sessionId: z.string().optional() }),
   z.object({ kind: z.literal('skills.forceLoad'), workspaceRoot: z.string(), sessionId: z.string().optional(), name: z.string().min(1) }),
   z.object({ kind: z.literal('skills.loadFile'), workspaceRoot: z.string(), sessionId: z.string().optional(), path: z.string().min(1) }),
+  /**
+   * REQ-CHAT-162 — `/skills`: the listing written into the session's transcript as one saved system row. The
+   * session is REQUIRED here, unlike the three above: a row has to be saved with a session, so there is no pending
+   * bucket to fall back to (OQ-67), and main refuses before it asks when the window follows none.
+   */
+  z.object({ kind: z.literal('skills.list'), workspaceRoot: z.string(), sessionId: z.string().min(1) }),
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
 
@@ -418,7 +430,7 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.attachment'), base64: z.string().min(1) }),
   z.object({ kind: z.literal('circuit_breaker.status'), enabled: z.boolean() }),
   z.object({ kind: z.literal('session.list'), sessions: z.array(SessionListItemSchema) }),
-  z.object({ kind: z.literal('session.resumed'), sessionId: z.string(), settledChildren: z.number().int().nonnegative() }),
+  z.object({ kind: z.literal('session.resumed'), sessionId: z.string() }),
   z.object({ kind: z.literal('config.snapshot'), snapshot: ConfigSnapshotSchema }),
   z.object({ kind: z.literal('session.continued'), sessionId: z.string(), resumed: z.boolean(), messageLimit: z.number().int().nullable() }),
   /** REQ-ORCH-154: the cycle the answer settled, and whether a further segment launched (approve and revise) or not (cancel). */
@@ -511,6 +523,8 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
    * `loaded` names the skill for the toast (REQ-WORKSPACE-073/151).
    */
   z.object({ kind: z.literal('skills.state'), state: SkillsStateSchema, loaded: z.string().optional() }),
+  /** REQ-CHAT-162: the listing row was committed — how many skills it lists and the transcript index it took. */
+  z.object({ kind: z.literal('skills.listed'), count: z.number().int().nonnegative(), index: z.number().int().nonnegative() }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 

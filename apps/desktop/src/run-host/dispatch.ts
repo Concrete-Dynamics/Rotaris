@@ -10,6 +10,7 @@ import { deleteSession, exportRecords, exportTrajectories, repairSessions, sessi
 import { CHECKPOINTS_DEFAULTS, type LiveState } from '@rotaris/config';
 import { improvementCollectorOf, retrospectiveOf } from './configuration.js';
 import { launchSession } from './launch.js';
+import { writeSkillListing } from './skills.js'; // REQ-CHAT-162
 import { randomUUID } from 'node:crypto';
 // The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network.
 
@@ -97,10 +98,11 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       return { kind: 'workspace.ack', workspaceId: req.workspaceId };
     }
     /*
-     * ADR-0063 — portable skills. All four answer with the same `skills.state` shape, so no caller has to ask
-     * again to redraw, and `loaded` names the skill for the toast. None persists anything: REQ-WORKSPACE-073
+     * ADR-0063 — portable skills. The first four answer with the same `skills.state` shape, so no caller has to
+     * ask again to redraw, and `loaded` names the skill for the toast. None persists anything: REQ-WORKSPACE-073
      * and REQ-WORKSPACE-151 both scope their effect to the session and leave `skills.overrides` exactly as it
-     * was, which is why the row a surface draws keeps showing the PERSISTED policy.
+     * was, which is why the row a surface draws keeps showing the PERSISTED policy. The fifth, `skills.list`
+     * (REQ-CHAT-162), persists exactly one thing — a transcript row — and changes no policy either.
      */
     case 'skills.read':
       return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId) };
@@ -122,6 +124,13 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       // REQ-WORKSPACE-151: a failure is reported with the reason REQ-WORKSPACE-057 gives and leaves the catalog unchanged.
       if (!r.ok) return { kind: 'refused', code: 'skills.load-failed', headline: r.reason };
       return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name };
+    }
+    case 'skills.list': {
+      // REQ-CHAT-162: one saved system row, through the followed session's own writer (`writeSkillListing` says why).
+      const r = writeSkillListing(sessions.writer(asSessionId(req.sessionId)), skills.state(req.workspaceRoot, req.sessionId));
+      if (!r.ok) return { kind: 'refused', code: r.code, headline: 'The skills could not be listed in the transcript', detail: r.reason };
+      log(`skills: listed ${r.count} skill(s) into session ${req.sessionId} as transcript row ${r.index}`);
+      return { kind: 'skills.listed', count: r.count, index: r.index };
     }
     case 'workspace.refuseRuns':
       lease.refuse(req.workspaceId as WorkspaceId, millis(req.leaseMs));
@@ -178,7 +187,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       sessionRoots.set(req.sessionId, s.root);
       const resumed = sessions.resume(s.dal, s.root, asSessionId(req.sessionId));
       if (!resumed.ok) return { kind: 'refused', code: `session.${resumed.error.code}`, headline: 'The session could not be loaded', detail: resumed.error.reason };
-      return { kind: 'session.resumed', sessionId: resumed.value.sessionId, settledChildren: resumed.value.settledChildren };
+      return { kind: 'session.resumed', sessionId: resumed.value.sessionId };
     }
     case 'session.start': {
       if (lease.isRefusing(req.workspaceId as WorkspaceId)) return { kind: 'refused', code: 'workspace.refusing', headline: 'New runs are refused for this workspace while a restore is under way' };
@@ -299,11 +308,17 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       return { kind: 'ack' };
     }
     case 'session.continue': {
-      // REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause or continue a paused session; nothing is appended.
+      // REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause, or continue a paused session or one a crash left
+      // (PD-ORCH-005 clause 18); no user row is appended. `continueSession` decides the todo: a session with nothing
+      // open whose last request finished — crash-left, `paused` by a pause, a stop or the application's quit accepted
+      // after its iteration closed, `paused` by a plan Cancel, a stop or a quit of the plan cycle held after a resumed
+      // iteration (PD-ORCH-003 revision 2, OQ-104), or `paused_message_limit` by a limit reached as the iteration that
+      // finished it closed — takes that request up again as a task (OQ-103).
       // REQ-PROVIDER-066 (the continuation lease): refresh the bearers before the run resolves its setup.
       const leaseRefusal = await continuationLeaseForSession(req.sessionId);
       if (leaseRefusal) return leaseRefusal;
-      const r = sessions.continueSession(asSessionId(req.sessionId), req.action);
+      // PD-ORCH-005 clause 6: resuming the open iteration is the default; `withoutPaused` declines it.
+      const r = sessions.continueSession(asSessionId(req.sessionId), req.action, { withoutPaused: req.withoutPaused === true });
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The session could not be continued', detail: r.error.reason };
       log(`session ${req.sessionId} ${req.action}: ${r.value.resumed ? 'a continuation run is executing' : 'left paused'}${r.value.messageLimit === null ? '' : ` (message limit ${r.value.messageLimit})`}`);
       return { kind: 'session.continued', sessionId: req.sessionId, resumed: r.value.resumed, messageLimit: r.value.messageLimit };
@@ -538,6 +553,8 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       return { kind: 'ack' };
     case 'approval.shown':
       return presenter.shown(req.requestId, req.ok, req.error) ? { kind: 'ack' } : { kind: 'refused', code: 'approval.unknown', headline: 'No present-request waits for that id' };
+    case 'approval.queued':
+      return presenter.queued(req.requestId) ? { kind: 'ack' } : { kind: 'refused', code: 'approval.unknown', headline: 'No present-request waits for that id' };
     case 'session.attach':
       return sessions.attach(asSessionId(req.sessionId)) ? { kind: 'ack' } : { kind: 'refused', code: 'session.not-live', headline: 'That session is not live' };
     case 'session.detach':

@@ -1,6 +1,7 @@
 import { BrowserWindow, app, nativeTheme, shell } from 'electron';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION } from '@rotaris/contracts';
 import { buildIdentifier, thirdPartyLicensesPath } from '../about.js';
+import { productVersion } from '../version.js';
 import { composerDraftKey } from '@rotaris/platform';
 import { homedir } from 'node:os';
 import { millis } from '@rotaris/kernel';
@@ -12,18 +13,19 @@ import { type CommandContext, type CommandHandlers } from './context.js';
  * external link lives here and nowhere else: transcript text is model-authored, so only http and https open.
  */
 export function shellCommands(
-  ctx: Pick<CommandContext, 'capturing' | 'currentTheme' | 'log' | 'notices' | 'preferences' | 'processes' | 'requirementsPreferenceKey' | 'runHost' | 'services' | 'setTheme' | 'themeBackground'>,
+  ctx: Pick<CommandContext, 'capturing' | 'currentTheme' | 'log' | 'notices' | 'preferences' | 'processes' | 'requirementsPreferenceKey' | 'runHost' | 'services' | 'setTheme' | 'themeBackground' | 'updater'>,
 ): Pick<CommandHandlers, 'shell.hello' | 'shell.openExternal' | 'shell.openThirdPartyLicenses' | 'theme.get' | 'theme.set' | 'prefs.get' | 'prefs.set' | 'composer.readDraft' | 'composer.writeDraft' | 'notice.acknowledge' | 'notice.report' | 'shell.switchView'> {
-  const { capturing, currentTheme, log, notices, preferences, processes, requirementsPreferenceKey, runHost, services, setTheme, themeBackground } = ctx;
+  const { capturing, currentTheme, log, notices, preferences, processes, requirementsPreferenceKey, runHost, services, setTheme, themeBackground, updater } = ctx;
   return {
     'shell.hello': async (_req, { w }) => {
       const cb = w.workspaceId
         ? await runHost.request({ kind: 'circuit_breaker.status', workspaceId: w.workspaceId }, millis(5_000))
         : { kind: 'circuit_breaker.status' as const, enabled: process.env['ROTARIS_CIRCUIT_BREAKER'] !== 'off' };
       // REQ-SHELL-140 (Part AG): the About page's product card reads its four local facts from here; it makes no
-      // request of its own and none of these leaves the machine (REQ-SHELL-139, REQ-CONFIG-398).
+      // request of its own and none of these leaves the machine (REQ-SHELL-139, REQ-CONFIG-398). The version is the
+      // application manifest's, never Electron's (REQ-STARTUP-007, REQ-STARTUP-158; `version.ts`).
       return { ok: true, value: {
-        version: app.getVersion(), workspace: w.workspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`),
+        version: productVersion(), workspace: w.workspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`),
         circuitBreakerArmed: cb.kind === 'circuit_breaker.status' && cb.enabled,
         build: buildIdentifier(), standalone: app.isPackaged, thirdPartyLicenses: thirdPartyLicensesPath() !== null,
         // Stage B — REQ-WORKSPACE-149 rule 1: home collapsing is a DISPLAY rule, so the renderer needs to know
@@ -141,6 +143,11 @@ export function shellCommands(
       return { ok: true };
     },
     'notice.acknowledge': async (req) => {
+      // REQ-STARTUP-116/117, REQ-SHELL-114/118: dismissing the update-offer notice FIRST records the offered version as
+      // waved off, and dismissing any other notice records nothing — the updater knows which notice is its own and
+      // answers before the clear, so the version is written before the notice naming it is gone.
+      const dismissing = req.noticeId ?? notices.current()?.id;
+      if (dismissing !== undefined) await updater.noticeDismissed(dismissing);
       // REQ-NOTIFY-026: with an identifier this is a compare-and-clear, so dismissing a notice already superseded
       // leaves its successor standing; without one it clears whatever is current.
       await notices.dismiss(req.noticeId);

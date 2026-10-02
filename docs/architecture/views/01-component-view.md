@@ -10,7 +10,7 @@ only places `electron` is imported.
 | adding a package, or asking which one work belongs in | [The packages](#the-packages) |
 | adding an import that crosses a package | [The allowed-edge matrix](#the-allowed-edge-matrix-the-lint-rule-verbatim) |
 | deciding where a responsibility sits | [Where the responsibilities sit](#where-the-responsibilities-sit) |
-| touching the transcript, the Library, MCP, the code-intelligence bundle or the design system | the `###` sections after it |
+| touching the transcript, the Library, MCP, the code-intelligence bundle, the notices generator, the build-identifier writer and the bundled assets, the setup manifest, or the design system | the `###` sections after it |
 
 ## The packages
 
@@ -40,7 +40,7 @@ flowchart TB
   end
 
   subgraph foundation["Foundation packages"]
-    config["config<br/>loader (merge classes, sections,<br/>slots, validate), writers, tiers,<br/>preferences, snapshot,<br/>skills/ (ADR-0063: discovery, policy, blocks),<br/>init/ (ADR-0064: the marker, the registry,<br/>the sets, classification, the gitignore grammar)"]
+    config["config<br/>loader (merge classes, sections,<br/>slots, validate), writers, tiers,<br/>preferences, snapshot,<br/>skills/ (ADR-0063: discovery, policy, blocks),<br/>init/ (ADR-0064: the marker, the registry,<br/>the sets, classification, the gitignore grammar),<br/>setup-manifest (REQ-STARTUP-058's schema)"]
     model["model<br/>ports, DefaultAgentBackend,<br/>AiSdkModelClient, ScriptedModelClient"]
     store["store<br/>schema (v16), delivery/, StoreDal, open/migrate,<br/>lock, rings,<br/>saved prompts, session artifacts"]
     platform["platform<br/>dirs, document (ADR-0004), instance,<br/>machine id, liveness, clocks, preferences"]
@@ -117,6 +117,12 @@ Edges worth knowing the reason for:
   bootstrap writer) but still no `store`.
 - **`ui` cannot import `config`**: the Settings screen reads `ConfigSnapshot` and emits a save, a per-field write
   or its live state (`contracts/src/config.ts`); the workspace service commits.
+- **`app-main` → `release-naming` is the updater's edge** (ADR-0054, built 2026-09-28): the asset name it asks the
+  feed for, the strict version order it compares by and the checksum-manifest format it parses are all the one naming
+  authority's (`tools/release-naming/src/index.ts`), so the pipeline that writes those names and that manifest and the
+  updater that reads them cannot disagree. The updater itself is `apps/desktop/src/main/updater/`, in the main root,
+  because it is the process that owns the windows, the notices and the instance record it needs; its ports over
+  Electron and the disk are one file (`electron.ts`) and everything else is pure.
 
 ## Where the responsibilities sit
 
@@ -147,7 +153,7 @@ Edges worth knowing the reason for:
 | The terminal stream: one emulator per stream, the frames, the flush, the controls, the audit line (ADR-0021, REQ-TOOLS-126/127/128, REQ-SHELL-103..107) | `agent-tools/src/terminal/streams.ts` (+ `engine` for the row's `streamId`) | run-host (`terminal.ts`, `tools.ts`); main (`terminal.ts` — the delivery bound across every window taken together, Part T″ 2026-09-11: one budget the windows share, never one each) |
 | The terminal display: the emulator port and its two adapters, the stream set, the input rules, the window and the preview (ADR-0047, REQ-SHELL-079..107); the renderer's third-party emulator is `@xterm/xterm` + `@xterm/headless` 6.0.0, pinned (agent-tools takes headless + `@xterm/addon-serialize`) | `ui/src/terminal/` (+ `host.tsx`, Part AL′: the per-renderer terminal host the pane, the persona card, the toolbar control and the palette entry read) | renderer (the main window's and each persona window's previews; the terminal window, `role=terminal` — Part AL′) |
 | The composer's slash catalogue: the parser, the registry, the built-ins and the palette mirror, the highlighting, the popup (REQ-CHAT-018..034, 159) | `ui/src/slash/`, `ui/src/RunHeader.tsx` | renderer (`main.tsx` passes the `slash` host) |
-| Portable skills: the two-scope search, the disable manifest, the `SKILL.md` grammar, the name normal form, the policy resolution, the two model-facing blocks (ADR-0063, REQ-WORKSPACE-051..066) | `config/src/skills/` (+ `config/src/sections/skills.ts`, `contracts/skills.ts`) | run-host (`run-host/skills.ts`, the `SkillHost`: the per-root cache cleared at session creation, the session state, the context units, the read roots); ui (`settings/SkillsSettings.tsx`, `slash/skills.ts`) |
+| Portable skills: the two-scope search, the disable manifest, the `SKILL.md` grammar, the name normal form, the policy resolution, the two model-facing blocks (ADR-0063, REQ-WORKSPACE-051..066) | `config/src/skills/` (+ `config/src/sections/skills.ts`, `contracts/skills.ts` — which also fixes the `/skills` listing's row text, written by the run host and read back by the renderer, REQ-CHAT-162) | run-host (`run-host/skills.ts`, the `SkillHost`: the per-root cache cleared at session creation, the session state, the context units, the read roots; `writeSkillListing`, the listing row through the session's writer); ui (`settings/SkillsSettings.tsx`, `slash/skills.ts`, `transcript/Row.tsx` drawing the listing) |
 | Project initialization: the persisted marker and its outcome patch, the task registry, the five set derivations, the nine values and their set-wise equality, one execution, and `code`/`non-code` classification with the full gitignore grammar (ADR-0064, REQ-WORKSPACE-078..115) | `config/src/init/` (+ `contracts/initialization.ts`); `agent-tools/src/tools/search.ts` re-exports the grammar and keeps no second reader | main (`main/initialization.ts`: one resolution per open, the ONE marker write through `config.setField`, the `code-intelligence-setup` runner over `mcp.setup`); run-host (classification and `McpSetupStatus.applicable`); ui (`ProjectSetupDialog.tsx`, `settings/project-init.ts`, the Project card, the sidebar section, the composer gate) |
 | The adopted design language, drawn once: the twenty-eight component briefs, their typed props, and the verification-only layout contracts (`docs/design/README.md` §2, §7) | `ui/src/design-system/` | renderer (every view and window imports through `@rotaris/ui`; nothing else in `ui` writes a design-equivalent control — `tools/check-ui-language.mjs` fails `pnpm lint` on one) |
 
@@ -157,9 +163,12 @@ The transcript engine, as its own module because it is the most intricate compon
 idioms are wrong inside it: `types.ts` (the `DisplayRow` / `RowRenderProps` seam, and the one statement of how
 REQ-CHAT-046's twelve row categories map onto three display shapes), `constants.ts` (`H_MAX`, the pool capacity, and
 **the product's ONE definition of `widgets` and `ui_objects`** — ADR-0045's closing obligation, cited from the proof
-and owed to ADR-0053 rather than restated by it), `project.ts` (ADR-0046 step 4, pure), `pool.ts` (the offset table,
-the visible span, the anchor, REQ-CHAT-053's four update shapes, pure), `cache.ts` (REQ-CHAT-058's two bounded LRU
-caches and the four-part reuse predicate), `search.ts` (REQ-CHAT-074, incremental), `TranscriptPane.tsx` (the fixed
+and owed to ADR-0053 rather than restated by it), `project.ts` (ADR-0046 step 4, pure), `pool.ts` (the offset table
+and, since 2026-09-29, the measurement ledger it is rebuilt from where it changed, the visible span, the anchor,
+REQ-CHAT-053's four update shapes, pure), `cache.ts` (REQ-CHAT-058's two bounded LRU
+caches and the four-part reuse predicate), `search.ts` (REQ-CHAT-074, incremental), `projector.ts` (2026-09-28: step 4
+run once per change of its inputs rather than once per render — the R-048 measurement round's repair, pure,
+`projector.test.ts` beside it), `TranscriptPane.tsx` (the fixed
 slot pool and step 5) and `Row.tsx` (Part AA's renderer, which the pane binds into each slot; Part Z's
 `PlaceholderRow.tsx` stood in for it until the two branches merged and is gone). **Edges unchanged** —
 `ui -> kernel, contracts, ui-core`. **`PD-CHAT-004` (2026-09-15) moved one decision inside this module and added
@@ -227,6 +236,77 @@ branch: `platform` for the per-user directory, nothing else), imported before an
 `electron-builder.yml` carries the tree as `extraResources` outside the asar (a Python tree cannot run from an
 archive); `build-hooks.cjs`'s `afterPack` asserts the interpreter answers from inside `win-unpacked`.
 
+### The notices generator (2026-09-27; `first-release-plan.md` §4.3, ADR-0054)
+
+Not a package — a **build-time tool** under `tools/notices/`, with no `package.json`, so the lockfile does not see it.
+It imports nothing from `packages/` or `apps/`, and nothing in the product imports it. `pnpm notices`
+(`generate.mjs`, a thin CLI over `notices.mjs`, typed by `notices.d.mts`) reads the installed tree: the desktop
+application's and the workspace packages' `package.json` production edges, `node_modules`, Electron's `dist/`, the
+bundled runtime under `apps/desktop/resources/code-intelligence/`, `packages/ui/src/fonts.css` and the font files it
+names, `apps/desktop/resources/setup-manifest.json` as the setup manifest (since 2026-09-28; its field names are a copy
+of `config`'s `SetupManifestSchema`, held to it by the test), and `apps/desktop/scripts/code-intelligence/pins.json` for
+the runtime's name only. It writes one file,
+`apps/desktop/resources/THIRD-PARTY-LICENSES.txt`, only when REQ-STARTUP-143's validation passes. Three
+version-controlled tables sit beside it, as REQ-STARTUP-143 asks of the first:
+
+- `reviewed-exceptions.json`, the maintainer-review table;
+- `release-inputs.json`, O-3's LGPL address;
+- `bundled-assets.json`, the fonts and the icon set, with their licence texts under `licenses/`.
+
+The product meets the tool at one literal: `main/about.ts`'s `THIRD_PARTY_LICENSES_ASSET` equals the generator's
+`NOTICES_FILE`, and `about.test.ts` holds them equal. **Edges unchanged**: `tools/**` is outside the boundary rule, and
+the two tests that cross are tests — `about.test.ts` into the tool, and (since 2026-09-28) `notices.test.ts` into
+`config`'s `setup-manifest.ts`, to hold the generator's copy of the manifest's field names to the schema.
+
+### The build-identifier writer and the About page's two files (2026-09-27; `first-release-plan.md` §4.4, ADR-0054)
+
+`tools/build-id/` is the notices generator's sibling: a **build-time tool** with no `package.json`, importing nothing
+from `packages/` or `apps/`. `pnpm build-id` (`write.mjs`, a thin CLI over `build-id.mjs`, typed by `build-id.d.mts`)
+asks the local git for HEAD's commit and whether the tree differs from it, and writes
+`apps/desktop/resources/build-id.txt`. The product meets it at one literal, as it meets the generator:
+`main/about.ts`'s `BUILD_ID_ASSET` equals `BUILD_ID_FILE`, held by `about.test.ts`.
+
+`apps/desktop/scripts/package.mjs` runs both tools before freezing. `electron-builder.yml`'s `extraResources` carries
+both files to the root of the artifact's resources, and leaves the tool server's dist-info licence out
+(REQ-STARTUP-015). `scripts/lib/about-assets.mjs` holds the rules `package.mjs` and `build-hooks.cjs`'s `afterPack`
+share: whether a refused notices step may be passed over (and, for `package.mjs` alone, whether the flag's value is one
+it understands), and what the artifact must carry. It takes the two names, and the generator's `normalize`, from the two
+tools, and `afterPack` asks `build-id.mjs`'s `identifyBuild` again for the tree being packed. Its two files are bundled
+assets in the specification's sense, as the fonts and the icon set are; `bundled-assets.json` above holds only those
+that carry a licence file (REQ-STARTUP-143), so this module is named for the surface it serves.
+`scripts/lib/package-verdict.mjs` holds the lines `package.mjs` closes on, each printed only when the steps that ran
+make it true. `scripts/lib/staged-resources.mjs` is `settings-proof`'s, for staging the two files and giving them back;
+the proof also takes the writer's list of git's redirecting variables from `build-id.mjs`. **Edges unchanged**:
+`apps/desktop/scripts/**` and `tools/**` are outside the boundary rule, the scripts reach the tools and never the
+reverse, and no product code imports either.
+
+*Added 2026-09-28 (R-062, ADR-0054 "The prerelease naming repair").* `scripts/lib/artifact-names.mjs` is a fourth
+shared module: the declared product version read as `apps/desktop/package.json` writes it (`declaredProductVersion`,
+validated through REQ-STARTUP-029's grammar), the installer names rendered from it (`packagingArtifactNames`), the
+configuration electron-builder is run with — the yml with `win.artifactName` and `nsis.artifactName` set to those
+literals (`configurationWithNames`, `namedConfigurationText`) — and the rule a produced file's name is held to
+(`producedNameProblem`). `package.mjs` imports it; `build-hooks.cjs` loads it by dynamic import in `afterPack`'s
+`checkNaming` and in `artifactBuildCompleted`; it imports `tools/release-naming/src/index.ts` by path, as the hook did
+before it. **Edges unchanged**: a script reaching a tool, as above.
+
+### The setup manifest and its schema (2026-09-28; `first-release-plan.md` §4.1, ADR-0054)
+
+`apps/desktop/resources/setup-manifest.json` is REQ-STARTUP-058's manifest: committed, not generated, and carried by
+`electron-builder.yml`'s `extraResources` to the root of the artifact's resources beside the two About files. Its shape
+lives in **`config`** — `setup-manifest.ts`, `SetupManifestSchema` (zod, strict, so a key it does not name refuses the
+file) — because both of its readers may import `config` and nothing lower could hold what it is cross-checked against:
+`SHIPPED_MCP_SERVERS` and `CODE_INTELLIGENCE_LANGUAGE_SERVERS` are `config`'s. The pre-build guard
+(`tools/release-guard`, outside the matrix) already read the defaults there and now takes the schema version and the
+complete-version pattern from the same module; the product's reader, the machine-setup flow, would be main's
+(REQ-STARTUP-089), and main imports `config`. **That flow is not built.** `setup-manifest.test.ts` validates the shipped
+file, refuses each malformed shape and holds its `languageServers` equal to `pins.json` and to
+`CODE_INTELLIGENCE_LANGUAGE_SERVERS`, so the two files cannot drift; `about-assets.test.ts` copies the file through
+electron-builder's own `copyFiles`. The schema's `PLATFORM_KEYS` (REQ-STARTUP-060) is a second literal of
+`tools/release-naming`'s, the naming authority — `config` has no edge to it — and `tools/release-guard`'s `pins.test.ts`,
+which imports both, holds the two lists equal and every shipped archive under one of them; the raw `<os>-<machine>`
+fallback key is refused as an archive key. The notices generator reads it as its manifest since 2026-09-28, by a copy of the field names rather than an import. **Edges
+unchanged**: `config` gains the `zod` dependency `contracts` already carries; no package edge moves.
+
 ### `ui/design-system` (2026-09-12)
 
 The adopted design language's **one** implementation, and the only place in `ui` where a design-equivalent control
@@ -247,7 +327,7 @@ class already carrying a requirement's visual contract is passed through rather 
 (`componentClass`).
 
 `layout-contract.ts` is **verification-only data, not behaviour**: a `UiLayoutContract` on a component root is
-serialised into `data-ui` / `data-ui-contract` and evaluated by `ui-audit` against live geometry after layout and
+serialised into `data-ui` / `data-ui-contract` — by `layoutContractAttributes` alone, which `tools/check-ui-language.mjs` enforces — and evaluated by `ui-audit` against live geometry after layout and
 animation settle (nine relations — `align-x`, `align-y`, `equal-width`, `equal-height`, `spacing-token`,
 `containment`, `text-fit`, `hit-test`, `viewport-scroll`). Nothing in the product reads it, so a contract can
 neither move a pixel nor hide a defect; it can only be wrong in public.

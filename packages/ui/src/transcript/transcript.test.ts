@@ -7,7 +7,10 @@ import {
   FACT_SEPARATOR, SEGMENT_SEPARATOR, type ProjectOptions,
 } from './project.js';
 import type { DisplayRow } from './types.js';
-import { buildOffsets, captureAnchor, estimateHeight, indexAt, newUpdatesLabel, restoreAnchor, updateShape, visibleRange } from './pool.js';
+import {
+  beginMeasuring, buildOffsets, captureAnchor, commitTable, createMeasureLedger, estimateHeight, forgetMeasured, indexAt, markMeasured,
+  newUpdatesLabel, remeasuredSince, restoreAnchor, reuseOffsets, updateShape, visibleRange,
+} from './pool.js';
 import { countLabel, indexAll, indexSuffix, matchRow, step } from './search.js';
 import { SCROLL_ORIGIN_EPSILON, isOwnScroll } from './scroll.js';
 import { LruCache, identityOf, measureKey, reuseKey } from './cache.js';
@@ -222,6 +225,169 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
   });
 });
 
+/**
+ * REQ-CHAT-055: "the work of painting and measuring MUST depend on how many rows are visible and how many rows changed,
+ * not on how many rows the transcript holds in total". V8's CPU profile of the built app (2026-09-29, the defect note
+ * `appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`, "CPU profile") named the loaded side's extra
+ * script per increment: passes over every displayed row in the pane's own code. These pin the two of them that live
+ * here — the offset table and the update shape — to the rows an increment changed, and to the answer the whole pass gave.
+ */
+describe('REQ-CHAT-055 — an increment re-reads only the rows it changed (the offset table and the update shape)', () => {
+  const displayed = (index: number, body = `row ${index}`): Extract<DisplayRow, { shape: 'row' }> => {
+    const r = row(index, { body });
+    return { shape: 'row', key: rowKey(r), row: r };
+  };
+  /** The pane's height, reduced to what it reads: the row, the width, the expansion and what was measured under the row's identity. */
+  const heights = (measured: ReadonlyMap<string, number>, width: number, expanded: ReadonlySet<string>) => (d: DisplayRow): number =>
+    (measured.get(d.key) ?? 30 + (d.shape === 'row' ? d.row.body.length % 7 : 0)) + (expanded.has(d.key) ? 50 : 0) + Math.floor(width / 100);
+
+  it('the offset table equals the table built from every height, over a seeded walk of appends, settles, removals, measurements, evictions, resizes and toggles', () => {
+    let seed = 0x0ff5e7;
+    const rand = () => { seed = (seed + 0x6d2b79f5) | 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const ledger = createMeasureLedger();
+    const measured = new Map<string, number>();
+    let display: Array<Extract<DisplayRow, { shape: 'row' }>> = Array.from({ length: 40 }, (_, i) => displayed(i));
+    let width = 800;
+    let expanded: ReadonlySet<string> = new Set();
+    let reused = 0;
+    for (let step = 0; step < 800; step += 1) {
+      const r = rand();
+      const top = display.length === 0 ? 0 : display[display.length - 1]!.row.index;
+      if (r < 0.35) display = [...display, ...Array.from({ length: 1 + Math.floor(rand() * 3) }, (_, k) => displayed(top + 1 + k))];
+      else if (r < 0.5 && display.length > 0) display = [...display.slice(0, -1), displayed(display[display.length - 1]!.row.index, `settled ${step}`)];
+      else if (r < 0.58 && display.length > 2) display = display.slice(0, display.length - 1 - Math.floor(rand() * 2));
+      else if (r < 0.63 && display.length > 4) { const at = Math.floor(rand() * display.length); display = [...display.slice(0, at), displayed(display[at]!.row.index, `changed ${step}`), ...display.slice(at + 1)]; }
+      else if (r < 0.85 && display.length > 0) {
+        // One delivery of the measurement pass: it re-measures a few identities, and a bound evicts one.
+        beginMeasuring(ledger);
+        for (let k = 0; k < 3; k += 1) { const d = display[Math.floor(rand() * display.length)]!; measured.set(d.key, 20 + Math.floor(rand() * 60)); markMeasured(ledger, d.key); }
+        if (rand() < 0.3 && measured.size > 0) { const gone = [...measured.keys()][0]!; measured.delete(gone); markMeasured(ledger, gone); }
+      }
+      else if (r < 0.9) width = 700 + Math.floor(rand() * 3) * 100;
+      else if (r < 0.95 && display.length > 0) expanded = new Set([display[Math.floor(rand() * display.length)]!.key]);
+      const heightOf = heights(measured, width, expanded);
+      const table = ledger.committed;
+      const next = reuseOffsets(table, { display, width, expanded, stamp: ledger.stamp }, (identity, since) => remeasuredSince(ledger, identity, since), heightOf);
+      const whole = buildOffsets(display.map(heightOf));
+      expect(next.offsets, `step ${step}`).toEqual(whole.offsets);
+      expect(next.total, `step ${step}`).toBe(whole.total);
+      if (table !== null && next.width === table.width && next.expanded === table.expanded) reused += 1;
+      // What the pane's layout effect does once React has committed the table.
+      commitTable(ledger, next);
+    }
+    expect(reused).toBeGreaterThan(400);
+  });
+
+  it('appending one row at 1,200 reads ONE height, and a measurement reads the rows it measured — never the transcript (fails on the whole pass)', () => {
+    const ledger = createMeasureLedger();
+    const measured = new Map<string, number>();
+    const expanded = new Set<string>();
+    let reads = 0;
+    const heightOf = (d: DisplayRow) => { reads += 1; return heights(measured, 800, expanded)(d); };
+    const remeasured = (identity: string, since: number) => remeasuredSince(ledger, identity, since);
+    let display = Array.from({ length: 1_200 }, (_, i) => displayed(i));
+    let table = reuseOffsets(null, { display, width: 800, expanded, stamp: ledger.stamp }, remeasured, heightOf);
+    expect(reads).toBe(1_200);
+
+    reads = 0;
+    display = [...display, displayed(1_200)];
+    table = reuseOffsets(table, { display, width: 800, expanded, stamp: ledger.stamp }, remeasured, heightOf);
+    // The first form — `buildOffsets(display.map(heightOf))` on every rebuild — read 1,201 here.
+    expect(reads).toBe(1);
+    expect(table.total).toBe(buildOffsets(display.map(heights(measured, 800, expanded))).total);
+
+    reads = 0;
+    beginMeasuring(ledger);
+    for (const at of [1_198, 1_199, 1_200]) { measured.set(display[at]!.key, 44); markMeasured(ledger, display[at]!.key); }
+    table = reuseOffsets(table, { display, width: 800, expanded, stamp: ledger.stamp }, remeasured, heightOf);
+    expect(reads).toBe(3);
+    expect(table.offsets).toEqual(buildOffsets(display.map(heights(measured, 800, expanded))).offsets);
+
+    // With nothing re-measured the pane passes no lookup at all, and an append still reads its own row alone.
+    reads = 0;
+    display = [...display, displayed(1_201)];
+    table = reuseOffsets(table, { display, width: 800, expanded, stamp: ledger.stamp }, null, heightOf);
+    expect(reads).toBe(1);
+    expect(table.offsets).toEqual(buildOffsets(display.map(heights(measured, 800, expanded))).offsets);
+
+    // A resize is not an increment: it reads every row again, as it must.
+    reads = 0;
+    reuseOffsets(table, { display, width: 900, expanded, stamp: ledger.stamp }, remeasured, heightOf);
+    expect(reads).toBe(1_202);
+  });
+
+  it('the ledger answers an identity re-measured after a stamp, and forgets what a committed table has read', () => {
+    const ledger = createMeasureLedger();
+    beginMeasuring(ledger);
+    markMeasured(ledger, 'row:1');
+    expect(remeasuredSince(ledger, 'row:1', 0)).toBe(true);
+    expect(remeasuredSince(ledger, 'row:1', 1)).toBe(false);
+    expect(remeasuredSince(ledger, 'row:2', 0)).toBe(false);
+    beginMeasuring(ledger);
+    markMeasured(ledger, 'row:2');
+    forgetMeasured(ledger, 1);
+    expect([...ledger.marked.keys()]).toEqual(['row:2']);
+    expect(remeasuredSince(ledger, 'row:2', 1)).toBe(true);
+    // Committing a table built at stamp 2 hands it to the next build and forgets what it read.
+    const table = reuseOffsets(null, { display: [], width: 800, expanded: new Set(), stamp: ledger.stamp }, () => false, () => 30);
+    commitTable(ledger, table);
+    expect(ledger.committed).toBe(table);
+    expect(ledger.marked.size).toBe(0);
+  });
+
+  it('a bounded measurement cache reports what it evicts or clears, so the table can re-read those rows', () => {
+    const evicted: string[] = [];
+    const cache = new LruCache<number>(2, Number.MAX_SAFE_INTEGER, (key) => evicted.push(key));
+    cache.set('a|1', 30, 0);
+    cache.set('b|1', 30, 0);
+    cache.set('c|1', 30, 0);
+    expect(evicted).toEqual(['a|1']);
+    cache.clear();
+    expect(evicted).toEqual(['a|1', 'b|1', 'c|1']);
+  });
+
+  it('the update shape reads the keys only past the rows both arrays share, and answers what comparing every key answered', () => {
+    let reads = 0;
+    const counted = (d: DisplayRow): DisplayRow => ({ shape: 'row', row: d.shape === 'row' ? d.row : row(0), get key() { reads += 1; return d.key; } });
+    const before = Array.from({ length: 1_200 }, (_, i) => counted(displayed(i)));
+    const after = [...before, counted(displayed(1_200))];
+    expect(updateShape(before, after)).toBe('append');
+    // The first form mapped both arrays to their keys: 2,401 reads for one appended row.
+    expect(reads).toBeLessThanOrEqual(4);
+
+    // Against the first form's answer, over pairs that share objects, share keys on new objects, and differ.
+    const oracle = (a: readonly DisplayRow[], b: readonly DisplayRow[]) => {
+      const x = a.map((d) => d.key);
+      const y = b.map((d) => d.key);
+      if (x.length === y.length && x.every((k, i) => k === y[i])) return 'replace';
+      const shared = Math.min(x.length, y.length);
+      let common = 0;
+      while (common < shared && x[common] === y[common]) common += 1;
+      if (common === x.length && y.length > x.length) return 'append';
+      if (common === y.length && x.length > y.length) return 'truncate';
+      if (x.length > 0 && common === x.length - 1 && y.length >= x.length && x[x.length - 1] === y[x.length - 1]) return 'extend';
+      return 'other';
+    };
+    let seed = 7;
+    const rand = () => { seed = (seed + 0x6d2b79f5) | 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const seen = new Set<string>();
+    for (let k = 0; k < 2_000; k += 1) {
+      const a = Array.from({ length: Math.floor(rand() * 6) }, (_, i) => displayed(i));
+      let b: DisplayRow[] = [...a];
+      const op = rand();
+      if (op < 0.25) b = [...b, displayed(a.length)];
+      else if (op < 0.4 && b.length > 0) b = b.slice(0, -1);
+      else if (op < 0.6 && b.length > 0) { const at = Math.floor(rand() * b.length); b[at] = displayed(at, 'same key, new object'); }
+      else if (op < 0.75 && b.length > 0) { const at = Math.floor(rand() * b.length); b[at] = displayed(100 + at); }
+      else if (op < 0.85) b = b.map((d, i) => (rand() < 0.5 ? displayed(i, 'copy') : d));
+      const expected = oracle(a, b);
+      seen.add(expected);
+      expect(updateShape(a, b), `pair ${k}`).toBe(expected);
+    }
+    expect([...seen].sort()).toEqual(['append', 'other', 'replace', 'truncate']);
+  });
+});
+
 describe('ADR-0046 step 3 — the row-level classification', () => {
   it('counts one insert per row added, one update per changed row, one remove per row removed', () => {
     const held = [row(0), row(1), row(2)];
@@ -325,6 +491,53 @@ describe('ADR-0046 step 4 — the projection', () => {
     expect(projectDisplay(options([think(0, 'x'), think(1, 'x', { durationMs: 10 })], { groupTools: false })).length).toBe(2);
     // The rule is per agent — and so is PD-CHAT-004's run, so two agents' rows never fold together either.
     expect(projectDisplay(options([think(0, 'x'), think(1, 'x', { name: 'other', persona: 'other' })])).length).toBe(2);
+  });
+
+  /**
+   * REQ-CHAT-048's "per agent" read as scoping the whole rule (OQ-91): the comparison is with the SAME agent's
+   * immediately previous thinking row, so another agent's reasoning between two equal bursts does not save the repeat.
+   * docs/defects/fixed/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md.
+   */
+  describe('REQ-CHAT-048 per agent, with two agents\' reasoning interleaved', () => {
+    const by = (name: string) => (i: number, body: string, over: Partial<TranscriptRow> = {}) =>
+      row(i, { kind: 'thinking', body, name, persona: name, ...over });
+    const A = by('A');
+    const B = by('B');
+    const bodies = (rows: readonly TranscriptRow[]) =>
+      projectDisplay(options(rows, { groupTools: false })).map((d) => { const r = asRow(d).row; return `${r.name}:${r.body}`; });
+
+    it('A, B, A-repeat: the repeat of A\'s own previous burst projects to zero rows, and B\'s equal burst is B\'s own', () => {
+      expect(bodies([A(0, 'x'), B(1, 'x'), A(2, 'x')])).toEqual(['A:x', 'B:x']);
+    });
+
+    it('a repeat with another agent\'s different reasoning between is still dropped', () => {
+      expect(bodies([A(0, 'x'), B(1, 'y'), A(2, 'x')])).toEqual(['A:x', 'B:y']);
+      // However much of the other agent's reasoning lies between.
+      expect(bodies([A(0, 'x'), B(1, 'y'), B(2, 'z'), A(3, 'x'), B(4, 'z')])).toEqual(['A:x', 'B:y', 'B:z']);
+    });
+
+    it('an agent\'s next burst that differs from its own previous one is kept, even where it equals another agent\'s', () => {
+      expect(bodies([A(0, 'x'), B(1, 'y'), A(2, 'z')])).toEqual(['A:x', 'B:y', 'A:z']);
+      expect(bodies([A(0, 'x'), B(1, 'y'), A(2, 'y')])).toEqual(['A:x', 'B:y', 'A:y']);
+      // A stamped repeat is a real second burst, per agent as before.
+      expect(bodies([A(0, 'x'), B(1, 'y'), A(2, 'x', { durationMs: 10 })])).toEqual(['A:x', 'B:y', 'A:x']);
+    });
+
+    it('the bounded projection over the same fixture equals the whole-state one at every append', () => {
+      const all = [row(0, { kind: 'user', name: undefined, persona: undefined }), A(1, 'x'), B(2, 'y'), row(3, { name: 'B', persona: 'B' }),
+        A(4, 'x'), B(5, 'y'), A(6, 'z'), B(7, 'x'), A(8, 'z', { durationMs: 5 }), A(9, 'z')];
+      for (const groupTools of [false, true]) {
+        for (let n = 2; n <= all.length; n += 1) {
+          const before = options(all.slice(0, n - 1), { groupTools });
+          const after = options(all.slice(0, n), { groupTools });
+          const bounded = projectDisplay(after, { previous: projectDisplay(before), from: n - 1 });
+          expect(bounded, `groupTools ${groupTools}, append of row ${n - 1}`).toEqual(projectDisplay(after));
+        }
+      }
+      // And what they agree on is the per-agent reading: 4 repeats A's 1 across B's 2 and 3, 5 repeats B's 2.
+      const kept = projectDisplay(options(all, { groupTools: false })).map((d) => asRow(d).row.index);
+      expect(kept).toEqual([0, 1, 2, 3, 6, 7, 8]);
+    });
   });
 
   it('REQ-CHAT-049: with no run in progress nothing presents as live', () => {
@@ -626,6 +839,33 @@ describe('ADR-0046 step 4 — the incremental bound', () => {
     // Walking back to the nearest group boundary: a change inside a fold recomputes that fold and nothing earlier.
     const inFold = [...rows]; inFold[2] = tool(2, 'read_file', { toolStatus: 'failed' });
     expect(projectDisplay(options(inFold), { previous: whole, from: 2 })).toEqual(projectDisplay(options(inFold)));
+  });
+
+  it('REQ-CHAT-055: an append at 1,200 rows finds its reusable prefix without asking the rows above it where they end', () => {
+    // V8's CPU profile of the built app (2026-09-29, the defect note's "CPU profile" section) named the bounded form's
+    // passes over the previous display — `lastIndexOf` — among the loaded side's extra script. The first form FILTERED
+    // the previous display to the rows below the boundary, then searched it again for the cut and replaced the filter's
+    // result with the slice above it: every displayed row asked twice where it ends (four reads of its shape), on every
+    // increment. Now a display a bounded projection built carries its reach, and the next one bisects it.
+    const held = Array.from({ length: 1_200 }, (_, i) => row(i, { kind: i === 0 ? 'user' : 'agent' }));
+    let reads = 0;
+    const counted = projectDisplay(options(held)).map((d) => {
+      const copy = { ...d };
+      Object.defineProperty(copy, 'shape', { get() { reads += 1; return d.shape; }, enumerable: true });
+      return copy;
+    });
+    // A display handed in from elsewhere has no reach yet: it is read once, to build it (two reads of each shape).
+    const once = [...held, row(1_200)];
+    const first = projectDisplay(options(once), { previous: counted, from: 1_200 });
+    expect(reads).toBeLessThanOrEqual(2 * counted.length + 8);
+    // The display that projection built carries its reach forward: the next append reads the rows above it not at all.
+    reads = 0;
+    const twice = [...once, row(1_201)];
+    const second = projectDisplay(options(twice), { previous: first, from: 1_201 });
+    const asked = reads;
+    expect(asked).toBeLessThanOrEqual(8);
+    expect(second).toEqual(projectDisplay(options(twice)));
+    expect(first).toEqual(projectDisplay(options(once)));
   });
 });
 

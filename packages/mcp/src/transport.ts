@@ -157,6 +157,9 @@ export class OwnedStdioTransport implements Transport {
       // the first occurrence is always written, so a line not written cannot be recovered — and a single
       // line longer than the cap is truncated with its length named. OQ-63's ruling stands: no level is
       // filtered, and the application log still keeps every level.
+      // No longer true since 2026-09-27: OQ-63 was ruled as PD-MONITOR-002 and built. The application log records
+      // `info` and above unless ROTARIS_APP_LOG_LEVEL restores `debug`, so at the default none of these lines is
+      // written; the collapse and the cap still shape what a `debug` log holds, and `stderrTail` is unaffected.
       let pending = '';
       let lastLine = '';
       let repeatCount = 0;

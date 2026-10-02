@@ -16,7 +16,7 @@ import type { CallOutcome, McpLog, ServerDescription, ToolInfo } from './types.j
  * REQ-MCP-067's process count stays literally one. `'legacy'` is the pin a caller may pass to reach a server that
  * dies on any pre-`initialize` request (the spike's finding; the fixture's `--era` cases).
  */
-export const CLIENT_INFO = { name: 'rotaris', version: '0.1.0' } as const;
+export const CLIENT_NAME = 'rotaris';
 export const DEFAULT_NEGOTIATION: VersionNegotiationOptions = { mode: 'auto' };
 
 export interface OpenOptions {
@@ -31,6 +31,12 @@ export interface OpenOptions {
   readonly signal?: AbortSignal;
   /** The parent environment a stdio child inherits under the server's map (OQ-22's reading); omitted = the map alone. */
   readonly parentEnv?: Readonly<Record<string, string>> | undefined;
+  /**
+   * `clientInfo.version` in the handshake: the product version the running desktop reports (REQ-STARTUP-007,
+   * REQ-STARTUP-158), handed down from the composition root, which reads it from the one declared place. Never a
+   * literal here — a literal was a second product version, invisible to the release guard, that every server was told.
+   */
+  readonly clientVersion: string;
 }
 
 export interface OpenedClient {
@@ -117,7 +123,7 @@ export async function openClient(opts: OpenOptions): Promise<OpenedClient> {
 
 async function openOnce(opts: OpenOptions, negotiation: VersionNegotiationOptions): Promise<OpenedClient> {
   const transport = transportFor(opts.description, { label: opts.label, timers: opts.timers, log: opts.log, parentEnv: opts.parentEnv });
-  const client = new Client(CLIENT_INFO, {
+  const client = new Client({ name: CLIENT_NAME, version: opts.clientVersion }, {
     versionNegotiation: negotiation,
     supportedProtocolVersions: [...SUPPORTED_PROTOCOL_VERSIONS],
     capabilities: {},

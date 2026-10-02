@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AgentRecord, SessionRecord, TranscriptRow } from '@rotaris/contracts';
 import { chipStates, countNoun, instancesOf, mcpFateText, resolvedTools, rowsOf } from './agents.js';
+import { AgentCancelConfirm } from './AgentCancelConfirm.js';
 import { elapsedLabel } from './AgentTree.js';
 import { ContextRing } from './ContextRing.js';
 import { RowList, type Acknowledger } from './TranscriptSurface.js';
@@ -72,6 +73,8 @@ export function PersonaWindow(props: PersonaWindowProps) {
   const shown = instances.find((a) => a.id === selectedAgentId) ?? instances[0] ?? null;
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // REQ-MONITOR-126 / REQ-MONITOR-128: the Cancel is confirmed first — the run instance's is the run's final cancel.
+  const [confirming, setConfirming] = useState<{ readonly id: string; readonly name: string } | null>(null);
   const steerBox = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { if (focusSteer !== undefined && focusSteer > 0) steerBox.current?.focus(); }, [focusSteer]);
   const send = async () => {
@@ -166,10 +169,14 @@ export function PersonaWindow(props: PersonaWindowProps) {
             {error && <div className="composer__error" role="alert" data-testid="persona-steer-error">{error}</div>}
             <div className="dialog-actions persona-window__steer-actions">
               <DesignButton type="button" className="btn btn-primary" data-testid="persona-send" onClick={() => { void send(); }}>Send steer</DesignButton>
-              <DesignButton type="button" className="btn btn-danger" data-testid="persona-cancel" onClick={() => { void onCancel(shown.id).then((r) => setError(r.ok ? null : r.reason)); }}>Cancel</DesignButton>
+              <DesignButton type="button" className="btn btn-danger" data-testid="persona-cancel" onClick={() => setConfirming({ id: shown.id, name: shown.name })}>Cancel</DesignButton>
             </div>
           </section>
         </div>
+      )}
+      {confirming && (
+        <AgentCancelConfirm agent={confirming} agents={agents} testId="persona-cancel-confirm" onCancel={() => setConfirming(null)}
+          onConfirm={() => { const target = confirming; setConfirming(null); void onCancel(target.id).then((r) => setError(r.ok ? null : r.reason)); }} />
       )}
     </div>
   );

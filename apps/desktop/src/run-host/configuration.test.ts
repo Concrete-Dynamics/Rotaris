@@ -3,9 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
-import { authProvidersOf, classifierSlotsOf, configureRun, credentialResolver, egressReader, entryTierOf } from './configuration.js';
+import { authProvidersOf, classifierSlotsOf, configureRun, credentialResolver, egressReader, entryTierOf, personaResolverFor, runtimeFromConfiguration } from './configuration.js';
 import { nodeClocks } from '@rotaris/platform';
-import type { ModelEntry } from '@rotaris/config';
+import { loadConfiguration, type ModelEntry } from '@rotaris/config';
 
 /**
  * ADR-0030 at the run-host root: a model naming an `auth_provider` resolves the bearer main leased, per request;
@@ -147,5 +147,85 @@ describe('the egress reader (ADR-0023, REQ-SANDBOX-038/118, REQ-TOOLS-089)', () 
     const r = await read();
     expect(r.ok && r.policy.defaultDisposition).toBe('ask');
     expect(r.ok && r.toolCallTimeoutS).toBe(30);
+  });
+});
+
+/**
+ * PD-ORCH-004's progress rule reads the stall window: `runtime.child_stall_timeout` reaches the run, and a role's own
+ * `stall_timeout` substitutes for it on that role's children and no others (REQ-CONFIG-108).
+ */
+describe('the stall window reaches the run (PD-ORCH-004, REQ-CONFIG-108, REQ-CONFIG-113)', () => {
+  it('the runtime key is handed over in milliseconds, and only the role that states its own carries it', () => {
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), `default_persona: coding-agent
+models:
+  selected:
+    provider: openai
+    model_id: first
+    api_key: k
+large_model: selected
+medium_model: selected
+small_model: selected
+personas:
+  coding-agent:
+    name: Coding agent
+    model: selected
+    stall_timeout: 30
+  tester:
+    name: Tester
+    model: selected
+runtime:
+  child_stall_timeout: 45
+  graceful_pause_tool_deadline: 12
+`);
+    const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: join(dir, 'ws') });
+    if (!loaded.ok) throw new Error('configuration');
+    expect(runtimeFromConfiguration(loaded.value).childStallTimeoutMs).toBe(45_000);
+    // REQ-ORCH-134 / PD-ORCH-005 clause 2: the pause's tool deadline reaches the run.
+    expect(runtimeFromConfiguration(loaded.value).pauseToolDeadlineMs).toBe(12_000);
+    const personas = personaResolverFor(loaded.value, true, () => undefined);
+    expect(personas.resolve('coding-agent')!.persona.stallTimeoutMs).toBe(30_000);
+    expect(personas.resolve('tester')!.persona.stallTimeoutMs).toBeUndefined();
+  });
+});
+
+/**
+ * PD-ORCH-005 clause 4: a continue that resumes an open iteration restores its root with its identity, persona
+ * included, so the run is set up as the persona that root ran as — even when `default_persona` has changed since.
+ */
+describe('a resumed root is set up as the persona it ran as (PD-ORCH-005 clause 4, found by phase 4\'s review)', () => {
+  const agents = `default_persona: coding-agent
+models:
+  selected:
+    provider: openai
+    model_id: first
+    api_key: k
+large_model: selected
+medium_model: selected
+small_model: selected
+personas:
+  coding-agent:
+    name: Coding agent
+    model: selected
+  tester:
+    name: Tester
+    model: selected
+`;
+
+  it('the entry persona given replaces default_persona for that run; absent, default_persona stands', () => {
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), agents);
+    const resumed = configureRun(join(dir, 'ws'), true, deps({}), { entryPersona: 'tester' });
+    expect(resumed.ok && resumed.value.model.config.persona).toBe('tester');
+    const fresh = configureRun(join(dir, 'ws'), true, deps({}));
+    expect(fresh.ok && fresh.value.model.config.persona).toBe('coding-agent');
+  });
+
+  it('a persona the configuration no longer knows cannot be restored: the run is set up as the entry role, and says so (found by phase 4\'s second review — a refusal left a crashed session no way on)', () => {
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), agents);
+    const r = configureRun(join(dir, 'ws'), true, deps({}), { entryPersona: 'gone-role' });
+    expect(r.ok && r.value.model.config.persona).toBe('coding-agent');
+    expect(r.ok && r.value.warnings).toContain("configuration: the open iteration's root ran as 'gone-role', which this configuration no longer knows; it resumes as the entry role 'coding-agent' (PD-ORCH-005).");
   });
 });

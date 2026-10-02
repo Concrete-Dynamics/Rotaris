@@ -424,6 +424,14 @@ For a session with no presenter the gate never posts anything: it publishes `app
 `runtime.headless_approval_policy`, and returns. **No wait is created at all**, which is what
 `REQ-TOOLS-061`'s "meaning no wait occurs" requires.
 
+**`PD-TOOLS-005` (built 2026-09-28) puts a third arm between the two.** A brokered wait that ends by
+timeout marks the run's user **away** (the engine's `UserPresence`, one holder per run, on every
+agent's port); while the mark stands, an ask that would otherwise be brokered takes the headless arm —
+the same event shape, no wait created, the decision `headless-policy` — with a reason that names the
+timeout that expired rather than the absence of a UI. The user's next input to the session clears the
+mark (`Sessions.control`, `controlAsync`, and the id-routed answers). A session with no presenter is
+still reported as such, ahead of the check.
+
 The timeout is an explicit deadline on the wait rather than a per-wait timer, with `0` meaning **no
 deadline registered** — the wait is then released only by an answer or by a cancellation. Bulk cancel
 walks the map and settles each waiter `cancelled`, which `REQ-TOOLS-052`'s mapping turns into `deny`
@@ -575,6 +583,18 @@ rather than amended.
 an `approval.present` event and awaits main's `approval.shown` request, bounded at 10 s; a late or absent
 confirmation is a presenter error. Main reports `ok: false` when no main window exists, which is the
 unattended case reached without a lapse.
+
+**The handshake's bound met a queued request (2026-09-28, the fourteenth review round of the merged revision 4 build of
+`PD-ORCH-005`).** *"A late or absent confirmation is a presenter error"* was false for a request queued behind an open
+dialog. Main confirmed only what it showed, so such a request was denied unshown once the open dialog had stayed up for
+10 s, although `REQ-TOOLS-063` drops a queued request only on a timeout or a cancellation
+(`docs/defects/fixed/a-queued-approval-is-denied-unshown-after-ten-seconds.md`). Main now acknowledges a request that
+waits behind the open dialog, or behind requests queued ahead of it, with `approval.queued`. The bound then no longer
+applies. A request main never acknowledges is still a presenter error at 10 s. The gate races the presentation against
+its own wait, so a queued request that times out or is cancelled is dropped unshown and counts as cancelled
+(`REQ-TOOLS-054`). A window that closes while the application stays hands its queued requests back to main, which
+answers each not shown (`REQ-TOOLS-058`), so a request the bound no longer covers never hangs (`REQ-TOOLS-064`). During
+the application's quit it answers nothing, and the shutdown withdraws them (`PD-ORCH-005` clause 9).
 
 **Second execution, 2026-09-03, with children.** `PendingApprovals` is per TOOL PORT, and with delegation every
 agent — the root and each child — holds its own port. A session-level route for an answer would have reached the

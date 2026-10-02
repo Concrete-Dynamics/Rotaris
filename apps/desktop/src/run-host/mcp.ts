@@ -41,6 +41,11 @@ export interface McpHostDeps {
   /** OQ-22's reading: the run host's own environment, which every stdio child inherits under its server's map. */
   readonly parentEnv: Readonly<Record<string, string>>;
   /**
+   * REQ-STARTUP-158 / REQ-STARTUP-007: the version the running desktop reports, read from the one declared place
+   * (`@rotaris/platform`'s `installedProductVersion`) — the `clientInfo.version` every server is told on all three paths.
+   */
+  readonly productVersion: string;
+  /**
    * Part AS (ADR-0064): the setup status, pushed on every change. ADR-0064's `code-intelligence-setup`
    * task follows a live setup through this, which is what lets REQ-WORKSPACE-109 show a step "at the
    * moment that step finishes" without main asking on a cadence (SR-3). Optional so the host stays
@@ -106,8 +111,8 @@ export class McpHost {
     // `debug` reached the log as `info` here, so a child's stderr burst was indistinguishable from the product's
     // own findings in the launch log. The wire has carried four levels all along (`process-protocol.ts`).
     this.mcpLog = { info: (m) => deps.log(m), warn: (m) => deps.log(m, 'warn'), debug: (m) => deps.log(m, 'debug') };
-    this.discovery = new ToolDiscovery({ clocks: deps.clocks, log: this.mcpLog, parentEnv: deps.parentEnv });
-    this.probe = new HealthProbe({ clocks: deps.clocks, log: this.mcpLog, parentEnv: deps.parentEnv });
+    this.discovery = new ToolDiscovery({ clocks: deps.clocks, log: this.mcpLog, parentEnv: deps.parentEnv, clientVersion: deps.productVersion });
+    this.probe = new HealthProbe({ clocks: deps.clocks, log: this.mcpLog, parentEnv: deps.parentEnv, clientVersion: deps.productVersion });
   }
 
   // ---- the sink -------------------------------------------------------------------------------------------------
@@ -243,7 +248,7 @@ export class McpHost {
     let s = this.sessions.get(sessionId);
     if (!s) {
       s = new SessionConnections({
-        clocks: this.deps.clocks, log: this.mcpLog, workspaceRoot, parentEnv: this.deps.parentEnv,
+        clocks: this.deps.clocks, log: this.mcpLog, workspaceRoot, parentEnv: this.deps.parentEnv, clientVersion: this.deps.productVersion,
         // REQ-MCP-069: once per server per session, through both channels.
         unreachable: (server, detail) => { this.deliver({ severity: 'warning', scope: 'session', key: `mcp.unreachable.${server}`, channels: 'user', message: `MCP server '${server}' became unreachable: ${redact(detail)}; the call failed and later calls will try again (REQ-MCP-069)`, server }, ctx); },
         // REQ-MCP-071 (ADR-0035, Part T): the binding probe's tool from the manifest; a failure warns through REQ-MCP-044 and changes nothing else.

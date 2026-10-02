@@ -68,6 +68,12 @@ export interface SummariserDeps {
   readonly timers: Timers;
   readonly credentialFor: (model: ModelRef) => () => Promise<string>;
   readonly timeoutMs?: Millis;
+  /**
+   * REQ-ORCH-091 (a)/(d) with REQ-MONITOR-194: the model and level each attempt calls — the configured ones carried through
+   * the session's overrides, read at the attempt, so a pair a wait's choice replaced is not called again (the repair of
+   * a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced). Absent means `model` and `thinking` as given.
+   */
+  readonly resolve?: (choice: { readonly model: ModelRef; readonly thinking: ThinkingLevel }) => { readonly model: ModelRef; readonly thinking: ThinkingLevel };
 }
 
 function cut(s: string, n: number): string {
@@ -370,8 +376,9 @@ export async function produceReport(input: ReportInput, s: SummariserDeps | null
     const timer = s.timers.after(timeout, () => controller.abort());
     try {
       const ask = `Condense the transcript below into a JSON object with exactly these keys: "summary" (one paragraph), "key_findings" (an array of short strings), "next_actions" (array of strings), "edited_files" (array of paths), "tags" (from: research, planning, implementation, review, verification, errors). Report only what happened; do not continue the task. The facts below are the run's own record of what the agent did, taken from its whole transcript: your summary must agree with them and never deny them. The transcript keeps its start (the task as given) and its most recent part; where its middle is marked omitted, what is not shown there is not evidence that it did not happen.${complaint ? `\n\nYour previous attempt was unusable: ${complaint}` : ''}\n\nFacts:\n${facts}\n\nTranscript:\n${transcript}`;
+      const choice = s.resolve ? s.resolve({ model: s.model, thinking: s.thinking }) : { model: s.model, thinking: s.thinking };
       const r = await s.backend.runTurn(
-        { persona: 'summariser', systemPrompt: 'You summarise a finished agent transcript. Output JSON only.', messages: [{ role: 'user', content: [{ kind: 'text', text: ask }] }], tools: [], model: s.model, thinking: s.thinking, timeoutMs: timeout, retries: 0, resolveCredential: s.credentialFor(s.model) },
+        { persona: 'summariser', systemPrompt: 'You summarise a finished agent transcript. Output JSON only.', messages: [{ role: 'user', content: [{ kind: 'text', text: ask }] }], tools: [], model: choice.model, thinking: choice.thinking, timeoutMs: timeout, retries: 0, resolveCredential: s.credentialFor(choice.model) },
         { delta: () => undefined, reasoning: () => undefined, usage: () => undefined },
         controller.signal,
       );

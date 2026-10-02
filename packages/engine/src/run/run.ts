@@ -1320,6 +1320,17 @@ export class Run {
     return this.todo.toDocument().phases.flatMap((phase) => phase.tasks.map((task) => `[${task.state}] ${phase.name} — ${taskLine(task)}`));
   }
 
+  /**
+   * The summariser, its model carried through the session's overrides at each call (REQ-ORCH-091 a/d, REQ-MONITOR-194), as
+   * every ladder cell's is (`followOverride`): it has no ladder of its own, and it called the configured pair a wait's
+   * choice had replaced (a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced).
+   */
+  private summariserDeps(): SummariserDeps | null {
+    const s = this.deps.summariser ?? null;
+    if (s === null) return null;
+    return { ...s, resolve: (c) => { const e = this.memory.effective(withSettings(this.catalogue, c), this.catalogue); return { model: e.model, thinking: e.thinking }; } };
+  }
+
   /** The per-agent ladder deps shared by the root and every child (the cell is the agent's own). */
   private resilienceFor(cell: AgentResilienceCell, unresponsiveBoundMs: number, switchPending?: () => boolean): TurnResilience {
     const { config } = this.deps;
@@ -1433,7 +1444,7 @@ export class Run {
         countToolCalls: (n, child) => { this.aggregates.addToolCalls(n); if (child) this.persistToolCalls({ children: [child] }); },
         // REQ-EVENTS-053, PD-MONITOR-001: a child's provider requests are the run's, counted where the entry agent's are.
         onRequestUsage: this.onRequestUsage,
-        summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), ...(this.deps.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: this.deps.childStallTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
+        summariser: this.summariserDeps(), hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), ...(this.deps.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: this.deps.childStallTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
         // REQ-WORKSPACE-060/065 (ADR-0063): a child is an agent, so it receives the SAME units the entry agent
         // does — the getter is passed through, not a copy, which is what makes "a skill can never be visible to
         // one persona and hidden from another" true by construction rather than by two call sites agreeing.

@@ -612,6 +612,40 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(meta('model_override')).toEqual([expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1', supersedes: true })]);
   });
 
+  /*
+   * The repair of a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced (the note's probe, made permanent): a
+   * child's "change model now" persists the override for the session (REQ-ORCH-091 d), and the pair it replaced is recorded
+   * out of quota, "neither retried automatically" for the rest of the session (REQ-MONITOR-194). The root, already on that
+   * pair, and the summariser, configured on it, call the override's model from their next call — the root resumes after its
+   * child in the same turn, so the root's next turn would be too late. Until this repair: child c1, child c1, summariser a1,
+   * root a1.
+   */
+  it('REQ-ORCH-091 (a)/(d) with REQ-MONITOR-194: a child\'s wait choice moves the root and the summariser off the replaced pair from their next call', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, [])];
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    const who = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => (/^You are the orchestrator/.test(systemOf(r)) ? 'root' : /summarise/i.test(systemOf(r)) ? 'summariser' : 'child');
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]) : answer(`root ${turn}`);
+      return turn === 1 ? failing(quota()) : answer('I did it.');
+    };
+    const { sessions, client, pub } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 10_000 });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+    // The child's call on a1 met insufficient quota with no same-tier candidate: it waits on a/a1, and the user chooses c1.
+    expect(lastWait(pub)).toMatchObject({ provider: 'a', model: 'a1', exhausted: true });
+    expect(lastWait(pub)!.agent).not.toBe('orchestrator');
+    const before = client.requests.length;
+    // The root's first call delegated and its second, on a1, ended its turn; the child's call on a1 failed.
+    expect(client.requests.map((r) => `${who(r)} ${r.model.modelId}`).sort()).toEqual(['child a1', 'root a1', 'root a1']);
+    expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const after = client.requests.slice(before);
+    // Every call after the choice — the child's, the summariser's and the root's — goes to c1; none returns to a1.
+    expect(after.map((r) => `${who(r)} ${r.model.modelId}`)).toEqual(after.map((r) => `${who(r)} c1`));
+    expect(new Set(after.map(who))).toEqual(new Set(['child', 'summariser', 'root']));
+  });
+
   describe('PD-MONITOR-001 revision 2: a request is priced at the ladder cell, by the model it was sent to', () => {
     const A_RATES = { input: '0.000003', output: '0.000015' };
     const B_RATES = { input: '0.0000001', output: '0.0000002' };

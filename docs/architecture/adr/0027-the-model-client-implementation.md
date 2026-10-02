@@ -354,3 +354,27 @@ the prompt. The recovery dialog's restart (`Sessions.restartAfterAuthFailure`, m
 writer of the session-wide override (`cause: authentication`, by the user's choice) and shares the relaunch. Pinned by the
 REQ-ORCH-154 cases in `ladder.test.ts` (red before) and shown by `resilience-proof`'s `auth-fallback-revise` (red on a
 build of the code before, green after).
+
+## Seventh execution — 2026-10-02, the session-wide override followed from every agent's next call (REQ-ORCH-091 a/d, REQ-MONITOR-194)
+
+*The repair of [`a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md`](../../defects/fixed/a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md).
+Found a defect in the third execution's mechanism.*
+
+The third execution said the session-wide memory is persisted "so a later run of the session never returns to an exhausted
+model and keeps the chosen one", and `setEntryModel` said the override is persisted "so later calls of the session never
+return to the exhausted pair". Both were true of an agent **built** after the choice and false of one already running:
+the overrides were read where a cell was made (`forChild`; `rootResilience` on a rebuild) and never by the ladder on a call.
+A child's wait choice therefore left the root — on the replaced pair, and resuming after that child's report inside the
+same turn — calling it, and the summariser, which has no ladder, called its configured pair whatever the session held. The
+reason is kept here beside its replacement: the cell now follows the overrides before **every** call (`followOverride` in
+`ladder.ts`), and the summariser's model is carried through them at each attempt (`SummariserDeps.resolve`). The move
+writes nothing new: the `model_override` entry already records the replacement, and the autopsy reader already read it as
+moving the root at once — which, until this repair, the run did not do.
+
+The rule follows any override reaching the cell's pair, a rate-limit wait's choice included, not only an exhausted
+pair's: REQ-ORCH-091 (d) persists both alike, and the run's own row says "the run resumes on it now and keeps it for the
+rest of the session". The instant is the next call rather than the root's next turn, because the root's next call after a
+child's wait is usually its resume inside the turn already running; REQ-MONITOR-194's "neither retried automatically"
+rules out that call. A switch of the entry model (REQ-MONITOR-142) is not an override and still applies from the next
+iteration, as OQ-177's reading says. Measured in `packages/engine/src/run/ladder.test.ts` with the note's probe: before,
+the requests after the choice were child `c1`, child `c1`, summariser `a1`, root `a1`; after, all four on `c1`.

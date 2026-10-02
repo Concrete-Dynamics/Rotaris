@@ -1,7 +1,7 @@
 import { millis, type Clocks } from '@rotaris/kernel';
 import type { TurnReport } from '@rotaris/model';
 import type { SessionWriter } from '../session-writer.js';
-import { classifyFailure, describeCondition, describeError, entryOf, localBackoffMs, pairKey, providerIdentity, retryAfterMs, sameTierCandidates, withSettings, type CatalogueEntry, type ModelChoice, type ResilienceMemory } from './resilience.js';
+import { classifyFailure, describeCondition, describeError, entryOf, localBackoffMs, pairKey, providerIdentity, retryAfterMs, sameRef, sameTierCandidates, withSettings, type CatalogueEntry, type ModelChoice, type ResilienceMemory } from './resilience.js';
 import type { WaitRegistry } from './waits.js';
 import { priceRequest, type PricedUsage } from './pricing.js';
 import { duringImposedWait, type ImposedWaitPort } from '../children/stall.js';
@@ -122,6 +122,24 @@ export function unresponsiveThreshold(r: TurnResilience): number | null {
   return r.llmResponseTimeoutMs < r.unresponsiveBoundMs ? r.llmResponseTimeoutMs : null;
 }
 
+/**
+ * REQ-ORCH-091 (a)/(d) with REQ-MONITOR-194: before every call the cell follows an override the session holds for the
+ * pair it is on — a wait's "change model now" (whichever agent was waiting), or an authentication pin (REQ-NOTIFY-070,
+ * OQ-182's pair-keyed reading) — so no agent's next call returns to a pair the session replaced "for the rest of the
+ * session". Until 2026-10-02 the overrides were read only where a cell was built (`forChild`, and `rootResilience` on a
+ * rebuild), so a root already on the replaced pair kept calling it, its resume after the waiting child's report included
+ * (a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced). The move needs no record of its own: the
+ * `model_override` entry already says the pair is replaced, and the autopsy reader reads it as moving every agent on it.
+ * The pair left is one this agent ran on, so the same-tier rule never offers it back (REQ-ORCH-091 b).
+ */
+function followOverride(r: TurnResilience): void {
+  const { cell, memory, catalogue } = r;
+  const followed = memory.effective(cell.model, catalogue);
+  if (sameRef(followed.model, cell.model.model)) return;
+  cell.attempted.add(pairKey(providerIdentity(catalogue, cell.model.model), cell.model.model.modelId));
+  cell.model = withSettings(catalogue, followed);
+}
+
 export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (choice: ModelChoice, unresponsiveMs: number | null) => Promise<StepOutcome>, signal: AbortSignal): Promise<TurnReport> {
   const { writer, clocks, agent } = deps;
   const { cell, memory, catalogue, waits } = r;
@@ -132,6 +150,7 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
   for (;;) {
     // PD-ORCH-005 clause 2: a rest accepted during a backoff, a condensation or a wait ends the step on what it has.
     if (last !== null && r.resting?.() === true) return last;
+    followOverride(r);
     const { report, unresponsive } = await call(cell.model, unresponsiveThreshold(r));
     last = report;
     // OQ-8: one observation per completed provider request, before the ladder decides what to do with it — priced at

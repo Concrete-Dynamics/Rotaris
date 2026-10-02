@@ -22,9 +22,35 @@ not this behaviour. So over this store the reader prints the root on `c1` while 
 the reader right. Changing the reader to match the run would encode the defect.
 
 Recorded 2026-10-02 (fin5, harness-readers, repair round 3). It was found while weighing the residual of
-[the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md](the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md),
+[the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md](../the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md),
 and it is not repaired. Whether the root's live cell should follow a child's wait choice at once, or at its next turn,
 is the requirement's to say, not this note's.
+
+## Outcome — repaired 2026-10-02 (fin8, ladder-overrides, task 1)
+
+Read as the requirements decide it: REQ-ORCH-091 (d) persists the override "in session state for the rest of the
+session", and REQ-MONITOR-194 says the replaced pair is "neither retried automatically" for the rest of the session, so no
+agent's next call goes to it. The root resumes after its children inside the same turn, so moving it at its next turn
+(`rootResilience`, `rebuildEntryFromMemory`) would not have repaired the probe; the instant is the next call.
+
+- `packages/engine/src/run/ladder.ts`: `followOverride`, called before every call of `resilientStep`, moves the cell to
+  `ResilienceMemory.effective(cell.model)` when the session holds an override for the pair it is on, and adds the pair it
+  leaves to the cell's attempted pairs (so REQ-ORCH-091 b never offers it back). Every agent follows it: the root, a child
+  built before the choice, and a child on the pair whichever agent waited. No new record: the `model_override` entry
+  already says the pair is replaced, and the autopsy reader reads it as moving the root at once, which is now what runs.
+- `packages/engine/src/children/report.ts` / `run.ts`: the summariser has no ladder, so its model is carried through the
+  same overrides at each attempt (`SummariserDeps.resolve`, `Run.summariserDeps`).
+- The rule follows any override reaching the pair, not only one whose pair is recorded exhausted (the triage's narrower
+  trigger): a rate-limit wait's choice is persisted by the same REQ-ORCH-091 (d), its row says "the run resumes on it now
+  and keeps it for the rest of the session", and the children and a rebuilt root already resolved every override
+  whatever the wait's cause. The authentication pin (REQ-NOTIFY-070) is set only after its run has ended, and OQ-182's
+  pair-keyed reading already moves every agent on the pair, so the rule is consistent with it.
+
+Pinned by the note's probe, made permanent in `packages/engine/src/run/ladder.test.ts` ("a child's wait choice moves the
+root and the summariser off the replaced pair from their next call"): red before, with exactly the probe's
+`child c1, child c1, summariser a1, root a1`; each half of the repair alone leaves its own agent red (the root on `a1`
+without `followOverride`, the summariser on `a1` without `resolve`). Recorded in
+[ADR-0027](../../architecture/adr/0027-the-model-client-implementation.md), "Seventh execution".
 
 ## Specs
 

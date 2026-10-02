@@ -22,7 +22,7 @@ reader can read it before the pending switch.
 Repair round 3 weighed that sketch and did not take it. Read before the switch as it stands, the choice would print its
 target whenever it replaced the pair the root was on before the switch, and children run on the root's model by
 default. The root's live cell never follows a child's choice, though
-([a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md](a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md)).
+([a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md](fixed/a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced.md)).
 So the sketch trades a key printed in between for another, in the commoner case. A repair here reads such a choice before
 the pending switch without printing it, so that it counts only through the switched cell's rebuild. Where the choice
 belongs once the root does follow it depends on how that product note is repaired, so this note waits on it.

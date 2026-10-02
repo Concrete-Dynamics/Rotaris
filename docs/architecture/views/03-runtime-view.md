@@ -545,7 +545,10 @@ reach that port and no other.
 **The ladder over every model step (Part Q — `run/ladder.ts`, `run/resilience.ts`, `run/waits.ts`; REQ-ORCH-088/090/091/092,
 REQ-NOTIFY-081..092/263).** It sits at the step, not the turn, so a retry re-issues the call over the conversation as it stands
 and never replays an executed tool call. Each agent (the root for the run, every child) has a **cell**: its current model
-choice (the session's override applied through `ResilienceMemory.effective`), its role's fallback (`personas.<role>.fallback_model`,
+choice (the session's override applied through `ResilienceMemory.effective` — where the cell is built, and again before
+**every call** (`followOverride`), so an agent already on a pair a wait's choice replaced leaves it at its next call, the
+root's resume after the waiting child's report included; the summariser, which has no ladder, carries its model through the
+same overrides at each attempt, `SummariserDeps.resolve`), its role's fallback (`personas.<role>.fallback_model`,
 else the run-level `fallback_model` slot, never its own model), and three once-only marks — the role fallback (shared by the
 unresponsive-model route and the hard child timeout, REQ-ORCH-144), the same-tier fallback, the wait attempt. On a failed step,
 `classifyFailure` decides in this order: **quota** (structured `insufficient_quota`, "exceeded your current quota", "check your plan

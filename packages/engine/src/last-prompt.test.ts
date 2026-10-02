@@ -1,22 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, RESIDENT_ROW_CAP, StoreDal } from '@rotaris/store';
-import { answer, DefaultAgentBackend, ScriptedModelClient, type ModelRequest, type ScriptedCall } from '@rotaris/model';
+import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, type RunConfig } from './index.js';
 import { persistAttachments } from './attachments.js';
 import { lastSubmittedPrompt } from './sessions.js';
 
 /*
- * REQ-NOTIFY-045 / REQ-NOTIFY-069 / REQ-SESSION-192 / REQ-ORCH-004: the session's last submitted prompt is read over every
+ * REQ-NOTIFY-045 / REQ-NOTIFY-069 / REQ-SESSION-192 / REQ-CHAT-173: the session's last submitted prompt is read over every
  * row, resident or released, by one helper (`lastSubmittedPrompt`) that the retry, the continue, the plan decision and the
- * authentication restarts share. Before the repair of
- * `docs/defects/fixed/the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md` and
- * `docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`, the engine searched the resident
- * rows only (falling back to the session id as the prompt's text) and the retry was the renderer's, over its replica's
- * window.
+ * authentication restarts share; the retry resubmits it with its images, read back from the session's directory and
+ * verified by digest. Before the repair of `docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`,
+ * `docs/defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md` and
+ * `docs/defects/fixed/the-continue-reads-the-last-prompt-from-the-resident-window-and-falls-back-to-the-session-id.md`, the
+ * engine searched the resident rows only (falling back to the session id as the prompt's text) and the retry was the
+ * renderer's, over its replica's window, re-sending the text alone.
  */
 const HOST = mintMachineId('0000000000000000000000000000000e') as MachineId;
 const WS = 'C:/ws';
@@ -53,8 +54,9 @@ describe('the session\'s last submitted prompt — one reading over every row, a
     });
     return { sessions, client };
   }
-  const userRows = (sid: SessionId) => dal.rowsBefore(sid, dal.nextRowIndex(sid), 1_000_000).filter((r) => r.kind === 'user').reverse();
   const text = (r: ModelRequest) => r.messages.flatMap((m) => m.content.map((p) => (p.kind === 'text' ? p.text : ''))).join('\n');
+  const images = (r: ModelRequest) => r.messages.flatMap((m) => m.content.filter((p) => p.kind === 'image'));
+  const userRows = (sid: SessionId) => dal.rowsBefore(sid, dal.nextRowIndex(sid), 1_000_000).filter((r) => r.kind === 'user').reverse();
 
   /**
    * A session a process left with its prompt (one PNG attached) and then more rows than the resident window holds, so the
@@ -91,7 +93,7 @@ describe('the session\'s last submitted prompt — one reading over every row, a
     expect(lastSubmittedPrompt(dal, asSessionId('R0'))).toBeNull();
   });
 
-  it('REQ-NOTIFY-045: the retry resubmits a released prompt — a second user row with the same text, and a run on it', async () => {
+  it('REQ-NOTIFY-045: the retry resubmits a released prompt with its image — the new user row carries the same digest, and the model is sent the bytes', async () => {
     const sid = plantReleased('R2', 'failed');
     const { sessions, client } = sessionsWith(() => answer('done'));
     expect(sessions.resume(dal, WS, sid).ok).toBe(true);
@@ -99,8 +101,61 @@ describe('the session\'s last submitted prompt — one reading over every row, a
     if (!retried.ok) throw new Error(retried.error.reason);
     expect(retried.value.body).toBe('the prompt that failed');
     expect((await sessions.running(sid)!).status).toBe('completed');
-    expect(userRows(sid).map((r) => r.body)).toEqual(['the prompt that failed', 'the prompt that failed']);
+    const users = userRows(sid);
+    expect(users.map((r) => r.body)).toEqual(['the prompt that failed', 'the prompt that failed']);
+    const digests = users.map((r) => (JSON.parse(r.attachments) as { digest: string }[]).map((a) => a.digest));
+    expect(digests[1]).toEqual(digests[0]);
+    expect(digests[1]).toHaveLength(1);
+    expect(images(client.requests[0]!)).toEqual([{ kind: 'image', mediaType: 'image/png', base64: PNG.toString('base64') }]);
     expect(text(client.requests[0]!)).toContain('the prompt that failed');
+  });
+
+  it('REQ-NOTIFY-045 with REQ-CHAT-011/173: a run that fails is retried with the image it was sent with, through the same path a prompt takes', async () => {
+    const { sessions, client } = sessionsWith((turn) => (turn === 1 ? { parts: [{ error: modelError({ code: 'http', status: 401, headline: 'Unauthorized', transient: false }) }] } : answer('done')));
+    const sid = (sessions.start(dal, WS, 'look at this', { attachments: [SHOT] }) as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('failed');
+    const retried = sessions.retry(sid);
+    if (!retried.ok) throw new Error(retried.error.reason);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const users = userRows(sid);
+    expect(users.map((r) => r.body)).toEqual(['look at this', 'look at this']);
+    expect(users.map((r) => (JSON.parse(r.attachments) as { digest: string }[])[0]!.digest)).toEqual([expect.stringMatching(/^[0-9a-f]{64}$/), (JSON.parse(users[0]!.attachments) as { digest: string }[])[0]!.digest]);
+    expect(images(client.requests.at(-1)!)).toEqual([{ kind: 'image', mediaType: 'image/png', base64: PNG.toString('base64') }]);
+  });
+
+  it('a missing or altered image refuses the retry, naming the image, and nothing is resubmitted; a model without image input refuses it too (REQ-CHAT-171, REQ-CHAT-173)', () => {
+    const gone = plantReleased('R3', 'failed');
+    unlinkSync(join(filesOf('R3'), lastSubmittedPrompt(dal, gone)!.attachments[0]!.path));
+    const one = sessionsWith(() => answer('never'));
+    expect(one.sessions.resume(dal, WS, gone).ok).toBe(true);
+    const refused = one.sessions.retry(gone);
+    expect(refused.ok).toBe(false);
+    if (refused.ok) return;
+    expect(refused.error.code).toBe('attachment-unavailable');
+    expect(refused.error.reason).toContain('shot.png');
+    expect(refused.error.reason).toContain('no longer available');
+    expect(userRows(gone)).toHaveLength(1);
+    expect(one.client.requests).toHaveLength(0);
+
+    const altered = plantReleased('R4', 'failed');
+    writeFileSync(join(filesOf('R4'), lastSubmittedPrompt(dal, altered)!.attachments[0]!.path), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 9, 9, 9]));
+    const two = sessionsWith(() => answer('never'));
+    expect(two.sessions.resume(dal, WS, altered).ok).toBe(true);
+    const mismatched = two.sessions.retry(altered);
+    expect(mismatched.ok).toBe(false);
+    if (mismatched.ok) return;
+    expect(mismatched.error.reason).toContain('shot.png');
+    expect(mismatched.error.reason).toContain('does not match its recorded digest');
+    expect(userRows(altered)).toHaveLength(1);
+
+    const textOnly = plantReleased('R5', 'failed');
+    const three = sessionsWith(() => answer('never'), { images: false });
+    expect(three.sessions.resume(dal, WS, textOnly).ok).toBe(true);
+    const gated = three.sessions.retry(textOnly);
+    expect(gated.ok).toBe(false);
+    if (gated.ok) return;
+    expect(gated.error.code).toBe('image-input-unsupported');
+    expect(userRows(textOnly)).toHaveLength(1);
   });
 
   it('nothing submitted is the only "no prompt" refusal; a live run is refused as a prompt is', async () => {

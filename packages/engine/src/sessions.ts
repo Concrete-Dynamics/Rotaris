@@ -33,7 +33,7 @@ import { isActiveStatus } from './run/stop-conditions.js';
 import type { HookPort, HookPortContext, RunNotice, ToolHookBridge } from './hooks-port.js';
 import { ArtifactStore } from './artifacts/store.js';
 import { toArtifactRecord } from './artifacts/record.js';
-import { decodeStoredAttachments, persistAttachments, projectAttachments, readAttachmentBody, validateAttachmentInputs, type StoredAttachment } from './attachments.js';
+import { decodeStoredAttachments, persistAttachments, projectAttachments, readAttachmentBody, readBackAttachments, validateAttachmentInputs, type StoredAttachment } from './attachments.js';
 import { artifactOps, type ArtifactOps } from './artifacts/port.js';
 import type { Preflight, PreflightContext } from './preflight.js';
 import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentStatus } from '@rotaris/contracts';
@@ -1462,11 +1462,15 @@ export class Sessions {
   }
 
   /**
-   * REQ-NOTIFY-045 with REQ-NOTIFY-030 (OQ-178): a notice's retry where the composer's draft is blank — the session's last
-   * submitted prompt (`lastSubmittedPrompt`, released rows included) resubmitted as `prompt` submits one, so the live-run
-   * refusal and the rest are `prompt`'s. Refused as having nothing to retry only where no prompt was ever submitted. Until
-   * 2026-10-02 the retry was the renderer's: it searched its replica's resident window and refused once the prompt had
-   * been released (`docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`).
+   * REQ-NOTIFY-045 with REQ-NOTIFY-030 and REQ-CHAT-173 (OQ-178): a notice's retry where the composer's draft is blank —
+   * the session's last submitted prompt (`lastSubmittedPrompt`, released rows included) resubmitted as `prompt` submits
+   * one, with the images it was sent with read back from the session's directory by path and verified by digest
+   * (`readBackAttachments`), so they never cross the command boundary a second time. A missing or altered image refuses
+   * the retry, naming it, rather than resubmitting less than was sent; REQ-CHAT-171's gate, the live-run refusal and the
+   * rest are `prompt`'s, against the model the retry runs on. Refused as having nothing to retry only where no prompt was
+   * ever submitted. Until 2026-10-02 the retry was the renderer's: it searched its replica's resident window and re-sent
+   * the text alone (`docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`,
+   * `docs/defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md`).
    */
   retry(sessionId: SessionId): Result<TranscriptRow, { code: string; reason: string }> {
     const s = this.live.get(sessionId);
@@ -1474,7 +1478,9 @@ export class Sessions {
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
     const last = lastSubmittedPrompt(s.dal, sessionId);
     if (last === null) return err({ code: 'no-prompt', reason: 'No prompt has been submitted in this session, so there is nothing to retry.' });
-    return this.prompt(sessionId, last.text, []);
+    const images = readBackAttachments(this.deps.sessionFilesDir(s.dal, sessionId), last.attachments);
+    if (!images.ok) return err({ code: 'attachment-unavailable', reason: `The last prompt was not retried, because its image ${images.name} could not be read back: ${images.reason}` });
+    return this.prompt(sessionId, last.text, images.inputs);
   }
 
   /** REQ-SESSION-114..116: append first, then continue through the ordinary Run lifecycle. */
@@ -2331,8 +2337,8 @@ export class Sessions {
    *
    * Main keeps the "first failure of the session" bookkeeping (`apps/desktop/src/main/auth-fallback.ts`); this answers for one restart.
    * The restart re-submits the prompt as `prompt` does, so the transcript shows it sent again; the last prompt's
-   * attachments are not re-sent (OQ-182's reading), though `lastSubmittedPrompt` — the reading it shares with the retry
-   * and the continue, over released rows too — returns them.
+   * attachments are not re-sent (OQ-182's reading), though `lastSubmittedPrompt` — the reading it shares with the retry,
+   * over released rows too — returns them, and the retry (`retry`) does re-send them.
    */
   restartOnFallback(sessionId: SessionId): Result<AuthFallbackRestart, { readonly code: string; readonly reason: string }> {
     const s = this.live.get(sessionId);

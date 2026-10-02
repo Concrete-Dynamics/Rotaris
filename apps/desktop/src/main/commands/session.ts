@@ -194,7 +194,7 @@ export function sessionCommands(
       return r.kind === 'ack' ? { ok: true } : refusal(r, 'The prompt could not be recorded');
     },
     'session.retry': async (req) => {
-      // REQ-NOTIFY-045 (OQ-178): the engine resubmits the last submitted prompt; a refusal carries its words.
+      // REQ-NOTIFY-045 (OQ-178): the engine resubmits the last submitted prompt with its images; a refusal carries its words.
       const r = await runHost.request({ kind: 'session.retry', sessionId: req.sessionId }, millis(10_000));
       // REQ-NOTIFY-061: a retry refused at the confinement gate never reached a run; it is reported as a prompt's is.
       if (r.kind === 'refused' && r.code === 'session.confinement') { void notices.report(confinementRefusalNotice(r)); log(`run refused: ${r.headline}${r.detail ? ` — ${r.detail}` : ''}`); }

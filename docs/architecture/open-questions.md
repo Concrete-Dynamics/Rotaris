@@ -8851,10 +8851,14 @@ last published it (REQ-CHAT-014), else as stored (REQ-NOTIFY-066), else — the 
 the session the window follows (REQ-NOTIFY-030), and is refused, with the reason in a warning notice, when no session
 is followed or there is nothing to resubmit. The composer keeps the draft: nothing outside the composer clears it. *Since
 2026-10-02 (fin8, the repair of
-[`the-retry-action-reads-the-last-prompt-from-the-resident-window.md`](../defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md)):*
+[`the-retry-action-reads-the-last-prompt-from-the-resident-window.md`](../defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md)
+and
+[`the-retry-action-resubmits-a-prompt-without-its-images.md`](../defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md)):*
 the blank-draft branch is the engine's (`session.retry`, `Sessions.retry`). It reads the last submitted prompt over every
 row, released ones included, where the window had searched its replica's resident window and refused once the prompt was
-released.
+released; and it resubmits the prompt's images with it, read back from the session's directory and verified by digest,
+where the window had re-sent the text alone. A missing or altered image refuses the retry, naming the image. A non-blank
+draft is still resubmitted as its text (OQ-183).
 
 **What a ruling decides.** Which notice carries the retry — REQ-NOTIFY-063's in place of, or beside, its model-settings
 action (which REQ-SHELL-114's single action would then have to allow), REQ-NOTIFY-064's, or none — and whether a draft a
@@ -9017,3 +9021,23 @@ the application; whether the pin covers every agent on the failed pair or the en
 with no usable fallback spends the session's automatic fallback; whether a session not on screen is restarted at once,
 in the background, or when it is focused; and whether "the same prompt" of a run a plan decision launched is that decision
 (as built) or the session's last prompt.
+
+**OQ-183 — Does REQ-NOTIFY-045's "current composer draft" include the images the composer holds?** *(REQ-NOTIFY-045,
+"resubmits the current composer draft"; REQ-NOTIFY-066, the draft stored under `composerDraft`; REQ-CHAT-014, the draft
+published to application state; REQ-CHAT-011/170/171/172, a submission's attachments and their gates. Raised 2026-10-02 by
+the repair of
+[`the-retry-action-resubmits-a-prompt-without-its-images.md`](../defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md)
+(fin8). Open.)*
+
+The retry resubmits "the current composer draft" where there is one. The composer holds images beside its text
+(REQ-CHAT-170..172), but the draft the specification stores and publishes (REQ-NOTIFY-066, REQ-CHAT-014) is text, and
+nothing says whether images held in the composer at the moment a notice's retry is activated belong to "the draft" the
+retry resubmits, or stay in the composer for the user's own submission.
+
+**What the build proceeds under** (`retryRun`, `apps/desktop/src/renderer/session-actions.ts`): a non-blank draft is
+resubmitted as its text alone, as the stored and published draft is text; images held in the composer are not sent by
+the retry and stay where they are. A blank draft resubmits the session's last submitted prompt with its images
+(`Sessions.retry`, OQ-178's reading since 2026-10-02).
+
+**What a ruling decides.** Whether a retry of a non-blank draft carries the images the composer holds (and so whether the
+composer publishes them to application state as it does its text), and whether they are then cleared from the composer.

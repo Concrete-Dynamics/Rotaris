@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { join, relative, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
@@ -25,6 +26,9 @@ import { backgroundSetupStarted, SETUP_ANSWERED } from './lib/initialization-mar
  *     it against come from two different processes, so only the built application proves they are the same string.
  *  7. The retry action reaches its target (REQ-NOTIFY-045, REQ-NOTIFY-030, OQ-178): activated on a failed session, it
  *     resubmits that session's last submitted prompt as a second run of that session.
+ *     And it resubmits the prompt the session sent, wherever its row is (REQ-SESSION-192) and with the image it carried
+ *     (REQ-CHAT-173): a failed session whose prompt — one PNG attached — has been released from the resident window is
+ *     reopened, and the retry sends the same text and the same image, digest for digest, to the model.
  *
  * Every assertion reads the application's own log, its store, or the rendered DOM.
  */
@@ -47,7 +51,7 @@ if (!process.argv.includes('--skip-build')) {
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
 
-function scenario(name, { globalHooks = null, workspaceHook = false } = {}) {
+function scenario(name, { globalHooks = null, workspaceHook = false, images = false } = {}) {
   const root = join(output, name);
   const workspace = join(root, 'workspace');
   const local = join(root, 'local');
@@ -56,7 +60,7 @@ function scenario(name, { globalHooks = null, workspaceHook = false } = {}) {
   writeFileSync(join(workspace, 'README.md'), '# notice proof workspace\n');
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
     '# scratch configuration written by the proof script',
-    'models:', '  scripted: { provider: scripted, model_id: scripted }',
+    'models:', `  scripted: { provider: scripted, model_id: scripted${images ? ', accepts_image_input: true' : ''} }`,
     'small_model: scripted', 'medium_model: scripted', 'large_model: scripted',
     // Part T's shipped code_intelligence entry costs about 4.5 s per run start; this proof measures notices.
     'mcp_servers:', '  code_intelligence: { enabled: false }',
@@ -344,6 +348,81 @@ const s5 = scenario('retry-action');
   results.retryAction = {
     actionLabel: action[0].text, member: action[0].attrs['data-action'], submittedPrompts: users,
     session: sessions[0], png: join(output, 'retry-action.png'), elapsedMs: r.elapsedMs,
+  };
+  expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
+}
+
+// 7b. REQ-NOTIFY-045 with REQ-SESSION-192 and REQ-CHAT-173: the retry resubmits the session's last prompt from the store,
+// image included. A first launch fails a prompt at its first model call; between the launches the proof gives that
+// prompt's row one stored PNG (the file under the session's directory, its digest on the row, as `persistAttachments`
+// writes them) and appends more rows after it than the resident window holds, releasing the oldest pages as the writer
+// does, so the prompt is no longer resident. The second launch reopens the session, and the retry action is clicked.
+// Before the repair of `docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md` the
+// window searched its replica, found no prompt and refused ("Nothing was retried"); before that of
+// `docs/defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md` it re-sent the text alone.
+const s6 = scenario('retry-image', { images: true });
+{
+  const step = (at, obj) => `${JSON.stringify(obj)}@${at}`;
+  const PROMPT = 'the prompt that failed with its image';
+  const RESIDENT_ROW_CAP = 5000;
+  const PAGE = 50;
+  const first = await launch('retry-image-first', s6, { ROTARIS_SCRIPT: 'fail:401', ROTARIS_CAPTURE_PROMPT: PROMPT, ROTARIS_CAPTURE_AFTER_MS: '9000' });
+  expect(first.errors.length === 0, `renderer errors: ${first.errors.join(' | ')}`);
+  const dbPath = oneDatabase(s6.local);
+  const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137]);
+  const digest = createHash('sha256').update(png).digest('hex');
+  let sid;
+  {
+    const db = new Database(dbPath);
+    const sessions = db.prepare('SELECT session_id, execution_status FROM sessions').all();
+    expect(sessions.length === 1 && sessions[0].execution_status === 'failed', `the first launch left ${JSON.stringify(sessions)}, not one failed session`);
+    sid = sessions[0].session_id;
+    const user = db.prepare("SELECT row_index FROM transcript_rows WHERE session_id = ? AND kind = 'user'").all(sid);
+    expect(user.length === 1, `the first launch recorded ${user.length} prompts`);
+    const rel = `attachments/${digest.slice(0, 16)}-shot.png`;
+    mkdirSync(join(dirname(dbPath), 'sessions', sid, 'attachments'), { recursive: true });
+    writeFileSync(join(dirname(dbPath), 'sessions', sid, rel), png);
+    db.prepare('UPDATE transcript_rows SET attachments = ? WHERE session_id = ? AND row_index = ?').run(JSON.stringify([{ name: 'shot.png', mediaType: 'image/png', size: png.length, path: rel, digest }]), sid, user[0].row_index);
+    const at = new Date().toISOString();
+    const insert = db.prepare(`INSERT INTO transcript_rows (session_id, row_index, kind, settled, body, at, ts, page, attachments) VALUES (?, ?, 'agent', 1, ?, ?, ?, NULL, '[]')`);
+    const release = db.prepare(`UPDATE transcript_rows SET page = ? WHERE rowid IN (SELECT rowid FROM transcript_rows WHERE session_id = ? AND page IS NULL ORDER BY row_index LIMIT ${PAGE})`);
+    db.transaction(() => {
+      let next = db.prepare('SELECT max(row_index) AS m FROM transcript_rows WHERE session_id = ?').get(sid).m + 1;
+      for (let i = 0; i < RESIDENT_ROW_CAP + PAGE; i += 1, next += 1) insert.run(sid, next, `a later row ${i}`, at, at.slice(11, 19));
+      while (db.prepare('SELECT count(*) AS c FROM transcript_rows WHERE session_id = ? AND page IS NULL').get(sid).c > RESIDENT_ROW_CAP) {
+        release.run((db.prepare('SELECT max(page) AS m FROM transcript_rows WHERE session_id = ?').get(sid).m ?? -1) + 1, sid);
+      }
+    })();
+    const prompt = db.prepare("SELECT page FROM transcript_rows WHERE session_id = ? AND kind = 'user'").get(sid);
+    expect(prompt.page !== null, 'the planted rows did not release the prompt from the resident window');
+    db.close();
+  }
+  const calls = join(output, 'retry-image-calls.jsonl');
+  const r = await launch('retry-image', s6, {
+    ROTARIS_CAPTURE_RESUME: sid,
+    ROTARIS_CAPTURE_MODEL_REQUESTS: calls,
+    ROTARIS_CAPTURE_NOTICES: step(9000, { op: 'report', severity: 'error', title: 'The run failed', message: 'Retry the failed run.', persistent: true, sessionId: sid, action: { label: 'Retry', action: { kind: 'retry-run' } } }),
+    ROTARIS_CAPTURE_INSPECT_AT: '.notice__action@9600',
+    ROTARIS_CAPTURE_CLICKS: '.notice__action>>Retry@10000',
+    ROTARIS_CAPTURE_AFTER_MS: '18000',
+  }, { timeout: 180_000 });
+  expect(new RegExp(`capture: opened session "${sid}"`).test(r.log), 'the failed session was not reopened — see retry-image.log');
+  expect(/capture: clicked "Retry"/.test(r.log), 'the retry action was not clicked — see retry-image.log');
+  expect(!/Nothing was retried/.test(r.log), 'the retry was refused — the window still looks for the prompt in its resident window');
+  const db = open(s6);
+  const session = db.prepare('SELECT session_id, execution_status, iterations_completed FROM sessions WHERE session_id = ?').get(sid);
+  const users = db.prepare("SELECT row_index, body, page, attachments FROM transcript_rows WHERE session_id = ? AND kind = 'user' ORDER BY row_index").all(sid);
+  db.close();
+  expect(users.length === 2 && users.every((u) => u.body === PROMPT), `the session's submitted prompts: ${JSON.stringify(users.map((u) => u.body))} — the retry did not resubmit the released prompt (REQ-NOTIFY-045, REQ-SESSION-192)`);
+  const resent = JSON.parse(users[1].attachments);
+  expect(resent.length === 1 && resent[0].digest === digest && resent[0].name === 'shot.png', `the retried prompt's row carries ${users[1].attachments}, not the image it was sent with (REQ-CHAT-173)`);
+  expect(session.iterations_completed === 2, `the retry started no second run of the session: ${JSON.stringify(session)}`);
+  const sent = existsSync(calls) ? readFileSync(calls, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
+  const withImage = sent.filter((c) => c.who === 'orchestrator' && c.images.includes(digest));
+  expect(withImage.length >= 1, `no model call after the retry carried the image: ${JSON.stringify(sent.map((c) => [c.who, c.images]))}`);
+  results.retryImage = {
+    releasedPromptPage: users[0].page, promptRowIndex: users[0].row_index, retriedRowIndex: users[1].row_index,
+    digest, retriedDigest: resent[0].digest, modelCallsWithImage: withImage.length, session, png: join(output, 'retry-image.png'), elapsedMs: r.elapsedMs,
   };
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);
 }

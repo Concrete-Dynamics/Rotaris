@@ -45,9 +45,10 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
-**The retry resubmits the session's last prompt from the store (REQ-NOTIFY-045, REQ-SESSION-192; fin8).** A notice's
-retry with a blank draft is one command, `session.retry`, renderer → main → run host (`Sessions.retry`), in place of the
-window's search of its replica; `lastSubmittedPrompt` (over `StoreDal.lastPromptRow`, resident and released rows alike)
+**The retry resubmits the session's last prompt from the store, images included (REQ-NOTIFY-045, REQ-SESSION-192,
+REQ-CHAT-173; fin8).** A notice's retry with a blank draft is one command, `session.retry`, renderer → main → run host
+(`Sessions.retry`), in place of the window's search of its replica, and the prompt's images go with it, read back from the
+session's directory and verified by digest (`readBackAttachments`); `lastSubmittedPrompt` (over `StoreDal.lastPromptRow`, resident and released rows alike)
 is the one reading of a session's last prompt the retry, the continue, the plan decision and the authentication restarts
 share. The **process view** lists the command on both boundaries, the **runtime view**'s continuation lease names it, and
 the **seams view** §6 says where a blank-draft retry lands. No package, edge, process, channel or store column changed.

@@ -8,7 +8,7 @@ the prompt is no longer resident. The retry then refuses with "There is no draft
 to retry.", which is untrue: the session has one, and the engine's own continue reads it from the store. Noticed by the
 verifier of `fin5-noticed-gaps` (repair round 1, optional finding) and recorded there. Not repaired: the repair is to
 ask the engine for the session's last prompt, which needs a command the renderer does not have. It is the same way back
-as [the-retry-action-resubmits-a-prompt-without-its-images.md](../the-retry-action-resubmits-a-prompt-without-its-images.md)
+as [the-retry-action-resubmits-a-prompt-without-its-images.md](the-retry-action-resubmits-a-prompt-without-its-images.md)
 needs, so both are best repaired together.
 
 ## Specs

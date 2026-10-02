@@ -137,8 +137,9 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   /** REQ-CHAT-173: thumbnail bytes are fetched on demand and never join a transcript snapshot. */
   /**
-   * REQ-NOTIFY-045 / REQ-NOTIFY-030 (OQ-178): a notice's retry with a blank draft — the engine resubmits the session's last
-   * submitted prompt, read over every row (`Sessions.retry`), so the renderer names the session and nothing else.
+   * REQ-NOTIFY-045 / REQ-NOTIFY-030 / REQ-CHAT-173 (OQ-178): a notice's retry with a blank draft — the engine resubmits the
+   * session's last submitted prompt with its images, read back from the session's directory (`Sessions.retry`), so the
+   * renderer names the session and nothing else: no prompt text and no image bytes cross the boundary again.
    */
   z.object({ kind: z.literal('session.retry'), sessionId: z.string().min(1) }),
   z.object({ kind: z.literal('session.readAttachment'), sessionId: z.string().min(1), path: z.string().min(1), digest: z.string().regex(/^[0-9a-f]{64}$/) }),

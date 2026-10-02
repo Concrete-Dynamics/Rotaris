@@ -239,11 +239,13 @@ export function createSessionActions({ bridge, replica, cancels, now = () => new
   /**
    * REQ-NOTIFY-045 with REQ-NOTIFY-030 and REQ-NOTIFY-066 (OQ-178): a notice's retry. It resubmits the current composer
    * draft through `submitPrompt`, the composer's own path; or — the draft blank — asks the engine to resubmit the followed
-   * session's last submitted prompt (`session.retry`), which it reads over every row, released ones included. Either way
-   * it reaches the session this window follows and never another's, and a refusal carries the engine's words. With no
-   * session followed there is no failed run to retry, so nothing is started. Until 2026-10-02 the blank-draft branch
-   * searched this window's replica, which holds the resident window only
-   * (`docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`).
+   * session's last submitted prompt (`session.retry`), which it reads over every row, released ones included, and sends
+   * with the images it carried, read back from the session's directory (REQ-CHAT-173). Either way it reaches the session
+   * this window follows and never another's, and a refusal carries the engine's words. With no session followed there is
+   * no failed run to retry, so nothing is started. Until 2026-10-02 the blank-draft branch searched this window's replica,
+   * which holds the resident window only, and re-sent the text alone
+   * (`docs/defects/fixed/the-retry-action-reads-the-last-prompt-from-the-resident-window.md`,
+   * `docs/defects/fixed/the-retry-action-resubmits-a-prompt-without-its-images.md`).
    */
   async function retryRun(draft: string): Promise<{ ok: true; resubmitted: 'draft' | 'last-prompt' } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;

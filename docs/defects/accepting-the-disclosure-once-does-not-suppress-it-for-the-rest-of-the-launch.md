@@ -18,6 +18,14 @@ Found by code reading on 2026-10-02 (a verifier's optional finding on bundle `fi
 following the preview, the standing disclosure and the board's accept path; not reproduced in the built app. The gap
 predates that bundle, which neither widened nor repaired it. Not repaired.
 
+**Amended 2026-10-02 (fifth triage of the open notes; reproduced in the built app the same day).** The triage reproduced
+it by code trace: main reads only the two preferences, and the board keeps nothing after a plain acceptance, so the next
+card's preview reads `due` and the dialog is shown again. Bundle `fin9-queue-dispatch-and-disclosure` then confirmed it
+in the built app with `requirements-proof`'s new `disclosure-launch` stage, before repairing: REQ-101 released and its
+disclosure accepted with "Start the run", then REQ-102 released in the same launch, and the disclosure was on screen
+again for REQ-102 ("Before this run starts", its worktree `…-req-102-u1`, the buttons "Abandon", "Start, and do not show
+this again" and "Start the run").
+
 ## Specs
 
 - `REQ-TRACE-472`: "Accepting SHALL suppress the disclosure for the remainder of that launch, and accepting it

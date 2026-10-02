@@ -78,6 +78,13 @@ interface PreviewWatch {
   emptyPreview: number;
   emptyPersona: number;
   firstEmpty: { readonly frame: number; readonly sample: number; readonly preview: readonly string[] | null; readonly persona: readonly string[] | null } | null;
+  /**
+   * Samples where a preview's last numbered line (`line N`) was below its own emulator's: the preview showing older output
+   * than the screen its surface had parsed, which a hold taken when the frame ARRIVED did through a backlog of deltas
+   * queued ahead of it (the fin7 verifier's finding; REQ-SHELL-102).
+   */
+  behindOwnScreen: number;
+  firstBehind: { readonly frame: number; readonly sample: number; readonly surface: 'preview' | 'persona'; readonly shown: number; readonly own: number } | null;
   /** Each closing frame's samples and the preview's line count at the first and the last of them. */
   frames: { samples: number; firstLines: number; lastLines: number; settled: boolean }[];
 }
@@ -176,6 +183,11 @@ function frameSummary(streamId: string) {
   };
 }
 
+function lastNumberedLine(lines: readonly string[]): number {
+  for (let i = lines.length - 1; i >= 0; i -= 1) { const m = /line (\d+)/.exec(lines[i]!); if (m) return Number(m[1]); }
+  return -1;
+}
+
 function watchClosingFrame(watch: PreviewWatch): void {
   const streamId = watch.streamId;
   const index = watch.closingFrames;
@@ -195,6 +207,13 @@ function watchClosingFrame(watch: PreviewWatch): void {
     if (previewEmpty) watch.emptyPreview += 1;
     if (personaEmpty) watch.emptyPersona += 1;
     if ((previewEmpty || personaEmpty) && watch.firstEmpty === null) watch.firstEmpty = { frame: index, sample: record.samples, preview, persona };
+    for (const [surface, set, shown] of [['preview', previewStreams, preview], ['persona', personaStreams, persona]] as const) {
+      const own = lastNumberedLine(set.get(streamId)?.emulator.snapshot().lines ?? []);
+      const seen = lastNumberedLine(shown ?? []);
+      if (own <= seen) continue;
+      watch.behindOwnScreen += 1;
+      if (watch.firstBehind === null) watch.firstBehind = { frame: index, sample: record.samples, surface, shown: seen, own };
+    }
   };
   sample();
   let done = false;
@@ -251,7 +270,7 @@ const api = {
   },
   /** Starts (or, with `null`, stops) sampling the two previews through each closing frame's parse; `previewWatched` reads it. */
   watchPreviews(streamId: string | null) {
-    previewWatch = streamId === null ? null : { streamId, closingFrames: 0, samples: 0, emptyPreview: 0, emptyPersona: 0, firstEmpty: null, frames: [] };
+    previewWatch = streamId === null ? null : { streamId, closingFrames: 0, samples: 0, emptyPreview: 0, emptyPersona: 0, firstEmpty: null, behindOwnScreen: 0, firstBehind: null, frames: [] };
   },
   previewWatched() { return previewWatch === null ? null : JSON.parse(JSON.stringify(previewWatch)) as PreviewWatch; },
   /** What the input fences read: cheaper than `state`, which copies the whole log. */

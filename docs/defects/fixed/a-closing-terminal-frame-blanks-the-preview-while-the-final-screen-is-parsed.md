@@ -39,27 +39,56 @@ Noticed 2026-10-01 while repairing
 
 ## Outcome (2026-10-02, fin7, repaired)
 
-The subscription point holds the previous screen for the previews while a `screen` frame is parsing.
-`TerminalStreamSet.apply` (`packages/ui/src/terminal/streams.ts`) reads, when a `screen` frame arrives, the stream's
-screen as parsed so far (the lines the previews showed a moment before), and `applyFrame`
-(`packages/ui/src/terminal/emulator.ts`) passes that frame's write a `parsed` callback. Until every pending screen frame
-of the stream has parsed, `previewOf` returns the held lines with the frame's own state (running, exit code, command), never
-the reset or half-written screen. When the last one has parsed the hold is released and the listeners are notified a
-second time with a new outcome, `parsed`, so a row preview or persona card drawn in the window is drawn again with the
-final screen. `clear()` drops every hold, and a hold released after its stream was cleared announces nothing. The grid
-reads its own emulator and is unchanged; deltas are never held.
+The subscription point holds, for the previews, the screen a `screen` frame's reset replaces, from the moment the parser
+reaches that reset until the frame's text has parsed, and only then. `applyFrame` (`packages/ui/src/terminal/emulator.ts`)
+takes two hooks for an applied `screen` frame: `resetReached`, an empty write queued just ahead of the reset (which is
+itself queued, RIS), so it runs once every delta queued before the frame has parsed; and `parsed`, the callback of the
+frame's text. `TerminalStreamSet.apply` (`packages/ui/src/terminal/streams.ts`) takes the emulator's snapshot in
+`resetReached` and holds it, and drops the hold in `parsed`. Until the reset is reached `previewOf` reads the emulator as
+it parses, so a backlog of deltas queued ahead of the closing frame still moves the preview forward at its surface's
+pace; inside the window it returns the held lines (the last complete screen) with the frame's own state (running, exit
+code, command), never the reset or half-written screen. The queue parses in order, so at most one screen frame per
+stream is inside its window at a time. When the hold is dropped the listeners are notified a second time with a new
+outcome, `parsed`. In the product today the only listener is the toolbar's counts (`useTerminalCounts`), which ignore
+it; a row preview or persona card is drawn again by the transcript's own renders (REQ-CHAT-063's refresh while the row is
+live, and the row's next publication). `clear()` drops every hold, and a hook whose stream was cleared or re-created since
+does nothing. The grid reads its own emulator and is unchanged, so inside the window the grid shows the reset or
+half-written screen while the previews show the screen it replaced: the two differ there by design, and the previews are
+never the older of the two. Deltas are never held.
+
+**The first form of this repair was wrong, and is kept here.** As first committed on this branch, the hold was taken
+when the `screen` frame ARRIVED and kept until every pending screen frame had parsed. Under load, the condition the
+defect needs, the parser is behind, and xterm parses the deltas still in its queue before the reset: the preview froze
+on the screen of the frame's arrival through the whole backlog while the grid's emulator moved on. That shows the user
+older output in the preview than in the grid, which REQ-SHELL-102 forbids. fin7's verifier showed it with
+`@xterm/headless`: after 200 queued deltas of 50 lines and the closing frame, the preview stayed at `line 0` while
+another set's emulator showed line 4300 and then 6300; on origin/main the preview moved forward (900, 2500). The hold
+now starts at the reset.
 
 Pinned by `packages/ui/src/terminal/terminal.test.ts`, "preview — a closing screen frame never blanks the preview while
-the final screen is parsed", three cases over an emulator whose parse completes one queued write per step: between the
-closing frame and its parse the preview reads the old lines while the emulator's own screen reads `[]` (red on the code
-before, which read `[]`), and the listeners see `applied` then `parsed`; two screen frames in a row hold the screen from
-before the first until both have parsed, while a later delta is read live; a stream cleared mid-parse announces nothing.
+the final screen is parsed", over an emulator whose parse completes one queued write per step, and one case over the real
+parser:
+- between the reset and the closing text the preview reads the old lines while the emulator's own screen reads `[]`, and
+  the listeners see `applied` then `parsed`;
+- two screen frames in a row: each holds only from its own reset, so the preview reads the first frame's screen once it
+  has parsed, then holds it through the second's window; a later delta is read live;
+- four deltas queued (not drained) ahead of a closing frame: the preview moves through each of them, is never `[]`, and
+  never has fewer lines than its own emulator's screen (red on the arrival hold: 1 line against 2);
+- the real parser (`@xterm/headless`), 10,000 queued lines and the closing frame behind them, sampled once per task: the
+  preview's last line is never below its own emulator's and never empty (red three runs of three on the arrival hold,
+  `0` against 800 to 1450);
+- a stream cleared mid-parse announces nothing.
+The first three are red on origin/main's code too (the preview read `[]` after the reset had parsed). The real-parser
+case passes there, three runs of three: origin/main reads its emulator live, so it is never behind it, and its samples
+never landed between the reset and the first rows of text.
 
-Shown by `pnpm terminal-proof` (`node apps/desktop/scripts/terminal-proof.mjs`, as root under Xvfb, Node 24, after
-`pnpm build`): the live section now samples both previews from each closing frame's arrival until every surface has
-parsed it, at once and on every task the page gets (`watchPreviews` / `previewWatched` in `proof-entry.tsx`), and
-`live.closingFrameNeverBlanksPreview` fails on an empty sample. Five runs on the repair passed 119 of 119 at load averages
-of 1.6 to 3.6 on 4 CPUs: one closing frame, three samples each, none empty, the preview reading the previous screen's 15
-lines and then the final 16. Five runs with only `streams.ts` and `emulator.ts` restored passed too, at 2.6 to 3.2: on
-this host, unloaded, the flood's closing text parsed within one task, so the proof's sampling did not open the window the
-note saw (run 16 of 20 at load 11.2). The test is the pin; the proof shows the repaired previews never blank.
+Shown by `terminal-proof` (`node apps/desktop/scripts/terminal-proof.mjs --skip-tests` after `pnpm build`, as root under
+Xvfb, Node 24): the live section samples both previews from each closing frame's arrival until every surface has parsed
+it, at once and on every task the page gets (`watchPreviews` / `previewWatched` in `proof-entry.tsx`).
+`live.closingFrameNeverBlanksPreview` fails on an empty sample, and `live.closingFramePreviewNeverBehindItsScreen` on a
+sample whose preview shows a lower `line N` than its own emulator. Three runs on the repair as now committed passed 120 of
+120 at load averages of 2.6 to 3.1 on 4 CPUs (one closing frame, three samples, none empty, none behind; the preview went
+from 15 lines to 16). Earlier, on the first form, five runs passed 119 of 119 at 1.6 to 3.6, and five with only
+`streams.ts` and `emulator.ts` restored passed too, at 2.6 to 3.2: on this host the flood's closing text parsed within one
+task and no delta was queued behind it, so the proof's sampling did not open the window the note saw (run 16 of 20 at
+load 11.2). The tests are the pin; the proof shows the repaired previews never blank and never fall behind.

@@ -517,8 +517,11 @@ describe('preview — a closing screen frame never blanks the preview while the 
     const seen: string[] = [];
     set.subscribe((_id, outcome) => seen.push(outcome));
     set.apply(frame(3, 'screen', 'line 1\nline 2\nline 3', { closing: true, meta: { ...META, running: false, exitCode: 0 } }));
-    // Nothing parsed yet, then the reset alone: the emulator's own screen is empty here, the preview is not.
+    // Nothing parsed yet, then the reset reached, then the reset alone: the emulator's own screen is empty there, the
+    // preview is not.
     expect(set.previewOf('fg:a')).toMatchObject({ lines: ['line 1', 'line 2'], running: false, exitCode: 0 });
+    slow.step();
+    expect(set.previewOf('fg:a')!.lines).toEqual(['line 1', 'line 2']);
     slow.step();
     expect(set.get('fg:a')!.emulator.snapshot().lines).toEqual([]);
     expect(set.previewOf('fg:a')!.lines).toEqual(['line 1', 'line 2']);
@@ -528,24 +531,77 @@ describe('preview — a closing screen frame never blanks the preview while the 
     // A second notification once the closing text has parsed, so a surface drawn in the window is drawn again.
     expect(seen).toEqual(['applied', 'parsed']);
   });
-  it('holds the screen from before the first of two screen frames until both have parsed, and reads deltas live otherwise', () => {
+  it('two screen frames: each holds only from its own reset, so the preview reads the first frame once it has parsed', () => {
     const slow = slowEmulators();
     const set = new TerminalStreamSet(slow.factory);
     set.apply(frame(1, 'delta', 'before'));
     slow.drain();
     set.apply(frame(2, 'screen', 'resync'));
     set.apply(frame(3, 'screen', 'final', { closing: true }));
-    slow.step(); slow.step(); slow.step();
-    expect(set.get('fg:a')!.emulator.snapshot().lines).toEqual([]);
-    expect(set.previewOf('fg:a')!.lines).toEqual(['before']);
-    slow.drain();
-    expect(set.previewOf('fg:a')!.lines).toEqual(['final']);
+    // Each step parses one queued write: [reset reached, reset, 'resync'] then the same for 'final'.
+    const previews: string[][] = [];
+    const screens: string[][] = [];
+    while (slow.step()) { previews.push([...set.previewOf('fg:a')!.lines]); screens.push([...set.get('fg:a')!.emulator.snapshot().lines]); }
+    expect(screens).toEqual([['before'], [], ['resync'], ['resync'], [], ['final']]);
+    expect(previews).toEqual([['before'], ['before'], ['resync'], ['resync'], ['resync'], ['final']]);
     // A delta is never held: the preview reads whatever has parsed, as before.
     set.apply(frame(4, 'meta', '', { meta: META }));
     set.apply(frame(5, 'delta', '\r\nmore'));
     expect(set.previewOf('fg:a')!.lines).toEqual(['final']);
     slow.drain();
     expect(set.previewOf('fg:a')!.lines).toEqual(['final', 'more']);
+  });
+  it('deltas queued ahead of a closing frame still move the preview forward; only the reset-to-text window is held', () => {
+    // The fin7 verifier's case: under load the parser is behind, and the screen when the closing frame ARRIVES is older
+    // than the one its reset replaces. A hold taken at arrival froze the preview on that older screen through the whole
+    // backlog while the grid's own emulator moved on (REQ-SHELL-102: never older output in one surface than the other).
+    const slow = slowEmulators();
+    const set = new TerminalStreamSet(slow.factory);
+    set.apply(frame(1, 'meta', '', { meta: META }));
+    set.apply(frame(2, 'delta', 'line 0'));
+    slow.drain();
+    for (let n = 1; n <= 4; n += 1) set.apply(frame(2 + n, 'delta', `\r\nline ${n}`));
+    set.apply(frame(7, 'screen', 'line 0\nline 1\nline 2\nline 3\nline 4\ndone', { closing: true, meta: { ...META, running: false, exitCode: 0 } }));
+    const previews: string[][] = [];
+    const screens: string[][] = [];
+    while (slow.step()) { previews.push([...set.previewOf('fg:a')!.lines]); screens.push([...set.get('fg:a')!.emulator.snapshot().lines]); }
+    // Never older than its own emulator's parsed screen, and never empty.
+    for (const [i, preview] of previews.entries()) {
+      expect(preview.length).toBeGreaterThan(0);
+      expect(preview.length).toBeGreaterThanOrEqual(screens[i]!.length);
+    }
+    const upTo = (n: number) => Array.from({ length: n + 1 }, (_, i) => `line ${i}`);
+    // Four deltas, the reset reached, the reset, the closing text.
+    expect(screens).toEqual([upTo(1), upTo(2), upTo(3), upTo(4), upTo(4), [], [...upTo(4), 'done']]);
+    expect(previews).toEqual([upTo(1), upTo(2), upTo(3), upTo(4), upTo(4), upTo(4), [...upTo(4), 'done']]);
+  });
+  it('with the real parser: a backlog of 10,000 queued lines and the closing frame behind it — never [], never behind its own screen', async () => {
+    // The fin7 verifier's scenario, over @xterm/headless sampled once per task: the preview is compared with its own
+    // emulator, so the check does not depend on how two emulators' parses interleave.
+    const set = new TerminalStreamSet(headlessEmulator);
+    const lastLine = (lines: readonly string[]): number => { for (let i = lines.length - 1; i >= 0; i -= 1) { const m = /line (\d+)/.exec(lines[i]!); if (m) return Number(m[1]); } return -1; };
+    set.apply(frame(1, 'meta', '', { meta: META }));
+    set.apply(frame(2, 'delta', 'line 0\r\n'));
+    await parsed(set.get('fg:a')!.emulator);
+    let seq = 3;
+    let text = 'line 0\n';
+    for (let c = 0; c < 200; c += 1) {
+      let chunk = '';
+      for (let i = 1; i <= 50; i += 1) { chunk += `line ${c * 50 + i}\r\n`; text += `line ${c * 50 + i}\n`; }
+      set.apply(frame(seq++, 'delta', chunk));
+    }
+    set.apply(frame(seq++, 'screen', text, { closing: true, meta: { ...META, running: false, exitCode: 0 } }));
+    let done = false;
+    void parsed(set.get('fg:a')!.emulator).then(() => { done = true; });
+    const samples: { preview: number; own: number }[] = [];
+    while (!done) {
+      const preview = set.previewOf('fg:a')!.lines;
+      expect(preview.length).toBeGreaterThan(0);
+      samples.push({ preview: lastLine(preview), own: lastLine(set.get('fg:a')!.emulator.snapshot().lines) });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    for (const sample of samples) expect(sample.preview).toBeGreaterThanOrEqual(sample.own);
+    expect(set.previewOf('fg:a')!.lines.at(-1)).toBe('line 10000');
   });
   it('a stream cleared while its screen frame parses announces nothing more', () => {
     const slow = slowEmulators();

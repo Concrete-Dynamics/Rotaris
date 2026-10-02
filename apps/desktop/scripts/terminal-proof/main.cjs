@@ -711,11 +711,14 @@ app.whenReady().then(async () => {
     expect('live.throughputEqualWindowClosedOrOpen', closed !== null && open !== null && closed.result.output === open.result.output && closed.result.exitCode === open.result.exitCode && open.result.exitCode === 3 && open.result.output.split('\n').length === 10000, live.throughput);
     const afterFlood = await state(LIVE);
     expect('live.floodPainted', afterFlood.stream.grid.lines.some((l) => l.includes('line 10000')) && afterFlood.stream.preview.lines.some((l) => l.includes('line 10000')), { grid: afterFlood.stream.grid.lines.slice(-3), preview: afterFlood.stream.preview.lines.slice(-3), waitedMs: floodPaintMs });
-    // The closing frame's window, sampled by the page: the previews hold the screen before it until it has parsed.
+    // The closing frame's window, sampled by the page: the previews hold the screen its reset replaced until its text has
+    // parsed, and read their emulator otherwise, so no sample is empty and none shows older output than its own surface
+    // had parsed (a hold taken on the frame's arrival froze it through a backlog of queued deltas; fin7's verifier).
     const watched = await exec('window.__terminalProof.previewWatched()');
     await exec('window.__terminalProof.watchPreviews(null)');
     live.closingFramePreviews = watched;
     expect('live.closingFrameNeverBlanksPreview', watched !== null && watched.closingFrames >= 1 && watched.frames.every((f) => f.settled && f.samples >= 2) && watched.emptyPreview === 0 && watched.emptyPersona === 0, watched);
+    expect('live.closingFramePreviewNeverBehindItsScreen', watched !== null && watched.closingFrames >= 1 && watched.behindOwnScreen === 0, watched);
     const finalStats = await ask('stats');
     live.delivery = { delivered: finalStats.delivered, limiter: finalStats.limiter, counters: finalStats.counters };
     live.harnessLog = harnessLog.slice(-20);

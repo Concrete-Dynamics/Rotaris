@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-10-02**
 
+**The ladder reads the exclusion before every call, a wait choice persists every waiting pair's override, and compression
+follows the agent's cell (REQ-MONITOR-194, REQ-ORCH-091, REQ-SESSION-026, REQ-MONITOR-078/080; fin10).** `resilientStep` reads
+the exclusion after `followOverride` and takes `limitPath` without calling (`pre_call: true`); `Run.overrideWaitingPairs` writes
+one `model_override` entry per waiting pair; `TurnCompression.compressor()`/`trigger()` are read at each pass from the pair the
+cell calls next. The **runtime view**'s ladder and compression paragraphs and its control table say so. No package, edge,
+process, channel, command, timeline name or store column changed.
+
 **The model chips name the override in force (REQ-CHAT-006, REQ-SESSION-026, REQ-NOTIFY-089; fin8).** The record gains
 `modelOverrides` (`overridesInForce` over the run's catalogue and the session's memory; for a session opened from the store,
 its workspace's catalogue read once where its timeline holds an override, through the side-effect-free

@@ -55,7 +55,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import Database from 'better-sqlite3';
-import { cleanEnvironment, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
 import { ABOUT_ASSETS } from './lib/about-assets.mjs';
 import { produce, put, restore, stage } from './lib/staged-resources.mjs';
@@ -541,8 +541,8 @@ const twoRoot = join(output, 'personas-two-scopes');
 const tWorkspace = join(twoRoot, 'workspace');
 const tLocal = join(twoRoot, 'local');
 const tPreferences = join(twoRoot, 'preferences');
-// `proofIsolationEnv` puts XDG_CONFIG_HOME at <local>/rotaris/config, and the global scope is its `rotaris` directory.
-const tGlobalDir = join(tLocal, 'rotaris', 'config', 'rotaris');
+// The global scope of a launch isolated at `tLocal`, by the harness's one rule for every platform (REQ-CONFIG-001).
+const tGlobalDir = configDirFor(tLocal);
 mkdirSync(join(tWorkspace, '.rotaris'), { recursive: true });
 mkdirSync(tGlobalDir, { recursive: true });
 const tWorkspaceFile = join(tWorkspace, '.rotaris', 'agents.yaml');

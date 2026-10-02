@@ -22,7 +22,7 @@ not this behaviour. So over this store the reader prints the root on `c1` while 
 the reader right. Changing the reader to match the run would encode the defect.
 
 Recorded 2026-10-02 (fin5, harness-readers, repair round 3). It was found while weighing the residual of
-[the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md](../the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md),
+[the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md](the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it.md),
 and it is not repaired. Whether the root's live cell should follow a child's wait choice at once, or at its next turn,
 is the requirement's to say, not this note's.
 

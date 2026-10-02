@@ -48,7 +48,9 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 **A session-wide override is followed from every agent's next call (REQ-ORCH-091 a/d, REQ-MONITOR-194; the repair of
 `a-childs-wait-choice-leaves-the-root-calling-the-pair-it-replaced`).** The ladder reads the session's overrides before
 every call (`followOverride`), not only where a cell is built, and the summariser's model is carried through them at each
-attempt. The **runtime view**'s ladder paragraph says so. No package, edge, process, channel, command or store column changed.
+attempt. The **runtime view**'s ladder paragraph says so. A child's wait choice records `switch_pending` on its
+`model_override`, which the autopsy reader places before a pending switch; the **runtime view**'s `setModel` row says so.
+No package, edge, process, channel, command or store column changed.
 
 **An authentication restart relaunches the failed run's own launch (REQ-NOTIFY-070, REQ-NOTIFY-074, REQ-ORCH-154; the
 401 note's part A, fourth repair round).** `Sessions.relaunchAfterAuthFailure` is the one restart path of the automatic

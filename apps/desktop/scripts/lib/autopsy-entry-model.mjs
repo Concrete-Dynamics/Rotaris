@@ -101,8 +101,8 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * records `rebuilds: false` on, onto the model the cell was last built from (a store recording no `rebuilds` reads as
  * rebuilt; since OQ-177 the run records `rebuilds: true` on every switch, so only older stores carry `false`). A switch or a wait choice that `supersedes` a switch the run had not applied yet reads the timeline as if
  * that switch were not recorded — the state before it, the key it printed taken back, every record since read again —
- * and a root move recording `switch_pending: true` is read before the pending switch, which applies after it (the
- * engine's copy says why; a store recording neither reads each record where it stands). A
+ * and a root move or a child's wait choice recording `switch_pending: true` is read before the pending switch, which
+ * applies after it (the engine's copy says why; a store recording neither reads each record where it stands). A
  * continuation recording no snapshot
  * returns the root to the last switched key, though a switch is held on its run alone and the new run starts on its
  * configuration's model (the engine's copy says so; the-autopsy-reader-keeps-a-switched-key-across-a-continuation-that-records-no-snapshot); and an entry naming a child alive at its instant is that child's,
@@ -194,6 +194,8 @@ export function entryModelKeys(launchAuditPayload, timeline, children) {
   for (const t of timeline) {
     const meta = t.name === 'entry_model_switched' || t.name === 'model_override' ? parseJson(t.metadata) : undefined;
     const move = rootMove(t);
+    // Where the record places it against a pending switch: a root move's `switch_pending`, or a child's wait choice's.
+    const placed = move !== null ? move.switch_pending : t.name === 'model_override' ? meta?.switch_pending : undefined;
     if (t.name === 'run_continuation_intent') {
       // A new run, whose root cell is its own: no switch of the run before it is pending in it.
       pending = null;
@@ -214,14 +216,15 @@ export function entryModelKeys(launchAuditPayload, timeline, children) {
       pending = null;
       s = clone(p.before);
       for (const r of [...p.ahead, ...p.after, t]) read(s, r);
-    } else if (move !== null && pending !== null && move.switch_pending === true) {
-      // `switch_pending`: the root moved on the cell from before the switch, which then applies after the move.
+    } else if (placed === true && pending !== null) {
+      // `switch_pending`: the root moved on the cell from before the switch (by the ladder, or by following a child's wait
+      // choice from its next call), and the switch then applies after it, its rebuild resolving through the choice.
       pending.ahead = [...pending.ahead, ...pending.after, t];
       pending.after = [];
       replay(pending);
     } else {
-      // `switch_pending: false`: the root's turn had applied the switch before this move, read as recorded.
-      if (move !== null && move.switch_pending === false) pending = null;
+      // `switch_pending: false`: the root's turn had applied the switch before this move or choice, read as recorded.
+      if (placed === false) pending = null;
       else pending?.after.push(t);
       read(s, t);
     }

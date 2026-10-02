@@ -1984,9 +1984,13 @@ export class Run {
       const choice = withSettings(this.catalogue, resolved.choice);
       for (const w of this.waits.all()) this.memory.setOverride(w.provider, w.model, { key, choice });
       // `supersedes`: the root's own wait choice replaces a switch recorded since its cell was last settled, which then
-      // never applies (`entrySwitchPending`); a child's wait leaves the root's switch as it stands.
+      // never applies (`entrySwitchPending`); a child's wait leaves the root's switch as it stands. A child's choice records
+      // instead whether such a switch is pending at it (`switch_pending`), as a ladder move of the root does: the root
+      // follows the override from its next call (`followOverride`), on the cell from before the switch, and the switch's
+      // rebuild then resolves through it, so the autopsy reader reads the choice before the switch
+      // (the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it).
       const root = waiting.agent === this.rootName;
-      writer.appendTimeline('model_override', 'user', `The user chose ${key} (${provider}/${choice.model.modelId}) during the wait on ${waiting.provider}/${waiting.model}; it stands for the rest of the session.`, { provider: waiting.provider, model: waiting.model, model_key: key, to_provider: provider, to_model: choice.model.modelId, supersedes: root && this.entrySwitchPending });
+      writer.appendTimeline('model_override', 'user', `The user chose ${key} (${provider}/${choice.model.modelId}) during the wait on ${waiting.provider}/${waiting.model}; it stands for the rest of the session.`, { provider: waiting.provider, model: waiting.model, model_key: key, to_provider: provider, to_model: choice.model.modelId, supersedes: root && this.entrySwitchPending, ...(root ? {} : { switch_pending: this.entrySwitchPending }) });
       writer.appendRow('system', `Model changed to ${key} during the wait; the run resumes on it now and keeps it for the rest of the session.`, true);
       if (root) { this.entryOverride = { ...this.entryOverride, model: choice.model }; this.entrySwitchPending = false; }
       this.waits.resolveWithModel(key, choice);

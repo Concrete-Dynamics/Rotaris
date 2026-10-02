@@ -646,6 +646,51 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(new Set(after.map(who))).toEqual(new Set(['child', 'summariser', 'root']));
   });
 
+  /*
+   * The repair of the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it: a
+   * child's wait choice records whether an entry switch is pending at it (`switch_pending`), as a ladder move of the root
+   * does, because the root follows the override from its next call on the cell from before that switch. Here the root's
+   * resume after the child runs on the choice (c1), and the switch (f1) applies at the next iteration's turn.
+   */
+  it('REQ-MONITOR-142 over REQ-MONITOR-303: a child\'s wait choice records whether an entry switch is pending at it, and the root runs on the choice before the switch applies', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('c1', 'c', C1, []), entry('f1', 'f', F1, [])];
+    const systemOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }) => r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text ?? '' : '')).join('') ?? '';
+    const runWith = async (switchFirst: boolean) => {
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const script = (persona: string, turn: number): ScriptedCall => {
+        if (persona === 'summariser') return answer('{"summary":"done"}');
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'side', task: 'TASK: side' } }]) : answer(`root ${turn}`);
+        // The child's call on a1 is held, then fails on quota with no same-tier candidate: it waits on a/a1.
+        return turn === 1 ? { parts: [{ hold: held }, { error: quota() }] } : answer('I did it.');
+      };
+      const { sessions, client, pub } = sessionsWith(script, { catalogue, delegation: true, childTimeoutMs: 10_000 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      for (let i = 0; i < 40 && client.requests.length < 3; i++) await tick();
+      expect(sessions.control({ op: 'editTodo', sessionId: sid, args: { op: 'add', id: 'second', text: 'a second task' } })).toEqual({ ok: true });
+      // No wait is open yet, so this is the entry switch: it applies at the root's next turn, the next iteration's.
+      if (switchFirst) expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'f1' } })).toEqual({ ok: true });
+      release();
+      for (let i = 0; i < 40 && lastWait(pub) === null; i++) await tick();
+      expect(lastWait(pub)!.agent).not.toBe('orchestrator');
+      expect(sessions.control({ op: 'setModel', sessionId: sid, args: { model: 'c1' } })).toEqual({ ok: true });
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      return {
+        override: dal.timelineOf(sid).filter((t) => t.name === 'model_override').map((t) => JSON.parse(t.metadata) as Record<string, unknown>),
+        root: client.requests.filter((r) => /^You are the orchestrator/.test(systemOf(r))).map((r) => r.model.modelId),
+      };
+    };
+    const control = await runWith(false);
+    expect(control.override).toEqual([expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1', supersedes: false, switch_pending: false })]);
+    expect(control.root.slice(0, 2)).toEqual(['a1', 'a1']);
+    expect(control.root.slice(2)).toEqual(control.root.slice(2).map(() => 'c1'));
+    const pending = await runWith(true);
+    expect(pending.override).toEqual([expect.objectContaining({ provider: 'a', model: 'a1', model_key: 'c1', supersedes: false, switch_pending: true })]);
+    // The iteration in flight: a1 until the choice, then c1 (its resume after the child); the next iteration: f1.
+    expect(pending.root.slice(0, 3)).toEqual(['a1', 'a1', 'c1']);
+    expect(pending.root.at(-1)).toBe('f1');
+  });
+
   describe('PD-MONITOR-001 revision 2: a request is priced at the ladder cell, by the model it was sent to', () => {
     const A_RATES = { input: '0.000003', output: '0.000015' };
     const B_RATES = { input: '0.0000001', output: '0.0000002' };

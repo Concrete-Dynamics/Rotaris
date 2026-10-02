@@ -275,10 +275,13 @@ export const ENTRY_KEY_UNDETERMINED = 'undetermined';
  * - on each ladder move of the root, whether a switch was pending at it (`switch_pending`): the move was made on the cell
  *   from before that switch, in the turn already running when it was made, so it is read before the switch, which then
  *   ends it at the next turn unless it records `rebuilds: false`. `switch_pending: false` says the switch had applied.
- * A store recording no `supersedes` reads each switch as applied; one recording no `switch_pending` reads each move where
- * it is recorded, until a switch that supersedes places it. A child's wait choice after a pending switch is read after
- * that switch as recorded, so a switched key it overrode before the root's next turn prints though the root never ran on it
- * (the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it).
+ * - on a child's wait choice, whether such a switch was pending at it (`switch_pending`, since 2026-10-02): every agent
+ *   on the replaced pair follows the override from its next call (`followOverride`), the root on the cell from before
+ *   the switch, and the switch's rebuild then resolves through it, so the choice is read before the switch and a switched
+ *   key it replaced is never printed (the repair of
+ *   the-autopsy-reader-can-print-a-switched-key-a-childs-wait-choice-overrode-before-the-root-ran-on-it).
+ * A store recording no `supersedes` reads each switch as applied; one recording no `switch_pending` reads each move and
+ * each child's choice where it is recorded, until a switch that supersedes places it.
  * One reading stays coarse: a switch is held on its run alone (`entryOverride`; a continuation is a new
  * `Run`), so a later continuation recording no snapshot starts on its configuration's model, while this keeps the
  * switched key as the configured one. Only snapshot-less runs reach it
@@ -399,6 +402,8 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
   for (const t of timeline) {
     const meta = t.name === 'entry_model_switched' || t.name === 'model_override' ? parseJson(t.metadata) : undefined;
     const move = rootMove(t);
+    // Where the record places it against a pending switch: a root move's `switch_pending`, or a child's wait choice's.
+    const placed = move !== null ? move.meta['switch_pending'] : t.name === 'model_override' ? meta?.['switch_pending'] : undefined;
     if (t.name === 'run_continuation_intent') {
       // A new run, whose root cell is its own: no switch of the run before it is pending in it.
       pending = null;
@@ -422,15 +427,17 @@ export function entryModelKeys(launchAuditPayload: string | undefined, timeline:
       pending = null;
       s = clone(p.before);
       for (const r of [...p.ahead, ...p.after, t]) read(s, r);
-    } else if (move !== null && pending !== null && move.meta['switch_pending'] === true) {
+    } else if (placed === true && pending !== null) {
       // `switch_pending`: the root moved in the turn that was running when the switch was made, on the cell from before
-      // it; the switch then applies at the next turn, after the move, and ends it unless it `rebuilds: false`.
+      // it; the switch then applies at the next turn, after the move, and ends it unless it `rebuilds: false`. A child's
+      // wait choice recording it moved the root the same way (the root follows an override from its next call), and the
+      // switch's rebuild then resolves through it, so a switched key it replaced is never printed.
       pending.ahead = [...pending.ahead, ...pending.after, t];
       pending.after = [];
       replay(pending);
     } else {
-      // `switch_pending: false`: the root's turn had applied the switch before this move, which is read as recorded.
-      if (move !== null && move.meta['switch_pending'] === false) pending = null;
+      // `switch_pending: false`: the root's turn had applied the switch before this move or choice, read as recorded.
+      if (placed === false) pending = null;
       else pending?.after.push(t);
       read(s, t);
     }
